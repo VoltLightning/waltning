@@ -349,6 +349,13 @@ export type JourneyHarnessProps = {
  */
 export function JourneyHarness({ controller, stub }: JourneyHarnessProps) {
   const route = useSyncExternalStore(stub.subscribe, stub.getRoute, stub.getRoute);
+  // S18 reads its two search params as props, because `app/settings/rates.tsx`
+  // is what calls `useLocalSearchParams` (a route composes). This harness
+  // stands in for that route, so it does the same read from the stub — without
+  // it, `pushWithParams("rates", { quote, date })` would silently produce an
+  // unparameterised visit and the capture-gate link would be undrivable at
+  // journey level.
+  const params = stub.useLocalSearchParams();
   return (
     <LedgerProvider controller={controller}>
       {route === "counterparty" ? (
@@ -356,7 +363,7 @@ export function JourneyHarness({ controller, stub }: JourneyHarnessProps) {
       ) : route === "transfer" ? (
         <Transfer />
       ) : route === "rates" ? (
-        <SettingsRatesScreen />
+        <SettingsRatesScreen quote={params["quote"]} date={params["date"]} />
       ) : (
         <TabsShell
           slot={route === "today" ? <Today /> : route === "debt" ? <Debt /> : <QuickAdd />}

@@ -91,6 +91,14 @@ type JourneyLedger = ReturnType<typeof createJourneyLedger>;
 const NOW = new Date("2026-09-10T09:00:00Z");
 
 const FRIDAY = "2026-09-04";
+/**
+ * A day the fixture leaves unrated — what a capture gate links to. Chosen
+ * **before** the screen's default 30-day window (which opens on 2026-08-12
+ * from this journey's `NOW`), because the point of the step below is that the
+ * link widens the range to contain its own day: land on a day inside the
+ * default window and the assertion proves nothing.
+ */
+const UNRATED = "2026-07-15";
 const SUNDAY = "2026-09-06";
 const MONDAY = "2026-09-07";
 
@@ -190,13 +198,10 @@ describe("J10 — currency and rates", () => {
     fireEvent.click(screen.getByRole("button", { name: /^Quote, against USD/ }));
     fireEvent.click(screen.getByRole("radio", { name: "PLN · Polish Złoty" }));
 
-    // The default 30-day range renders through a bare `FlatList`
-    // (`rate-table.tsx`'s own doc: "no virtualisation library"), which
-    // still only mounts its own initial window under jsdom — Sunday, 4
-    // days back, is well inside 30 rows but not inside that window. A
-    // tight custom range (`fx.rangeFrom`/`fx.rangeTo`) sidesteps the
-    // question entirely rather than asserting on `FlatList`'s own
-    // internals.
+    // A tight custom range (`fx.rangeFrom`/`fx.rangeTo`) rather than the
+    // default 30-day preset: this journey is about *which* rate Sunday's own
+    // row states, so it narrows to the four days it seeded rather than
+    // scanning thirty for one date.
     fireEvent.change(screen.getByRole("textbox", { name: "From" }), {
       target: { value: FRIDAY },
     });
@@ -247,5 +252,50 @@ describe("J10 — currency and rates", () => {
     // What S18 itself shows for Sunday's own date — the same text read
     // above, off the real screen.
     expect(pricedRate).toBe(formatRate(FRIDAY_RATE));
+  });
+
+  /**
+   * R1 M4 — the capture gate's own link, driven end to end through the real
+   * route contract: `/settings/rates?quote=PLN&date=<day>` lands on the
+   * editor for that pair and that single day, and one write prices it.
+   *
+   * Proves: screens/S18 §2 (*Search parameters*), §3.
+   *
+   * **Through the harness's own params, not a prop passed by hand.** S18
+   * reads both through `app/settings/rates.tsx`; `journey-harness.tsx` stands
+   * in for that route and does the same read, so this journey exercises the
+   * interface `B-rates.md` promises PRs C and D rather than a shortcut around
+   * it.
+   */
+  it("R1 M4 — ?quote=&date= lands on the editor for that day, and one write prices it", async () => {
+    const { ledger, stub } = setupJourney();
+    stub.pushWithParams("rates", { quote: "PLN", date: UNRATED });
+
+    render(<JourneyHarness controller={ledger.controller} stub={stub} />);
+    await settleLayout();
+
+    // The sheet is already open, on the linked pair and the linked day — no
+    // table to hunt through, which is the whole point of the link.
+    expect(screen.getByText(`Set PLN per USD, ${UNRATED} … ${UNRATED}`)).toBeDefined();
+
+    const LINKED_RATE = "4.3210";
+    fireEvent.change(screen.getByLabelText("Rate · PLN per USD"), {
+      target: { value: LINKED_RATE },
+    });
+    // No manual row exists for that one day, so the write lands on the first
+    // press — no "Overwrite and set".
+    fireEvent.click(screen.getByRole("button", { name: "Set rate" }));
+    await waitFor(() => expect(screen.queryByText(/^Set PLN per USD/)).toBeNull());
+
+    // And S18 shows it, on the page the link landed on — **without** driving
+    // the range by hand. The link widened the window to open on its own day
+    // (R2 M1), so the row it just wrote is the first one, inside `FlatList`'s
+    // own initial window under jsdom. Before that fix this assertion needed
+    // two `DateField` edits a person arriving from a link has no reason to
+    // make, which is what "a success that looks like nothing happened" means.
+    expect(screen.getByRole("textbox", { name: "From" })).toHaveProperty("value", UNRATED);
+
+    const row = screen.getByRole("button", { name: UNRATED });
+    expect(within(row).getByText(formatRate(LINKED_RATE))).toBeDefined();
   });
 });

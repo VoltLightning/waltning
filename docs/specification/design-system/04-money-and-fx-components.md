@@ -134,6 +134,20 @@ everything, deliberately."*
 The rate history for one pair, by date. Virtualized — 2,080 days per pair from
 2020-11, and growing daily.
 
+**And it is its screen's page scroller.** A virtualized list inside a page
+`ScrollView` is one scroller too many, so rather than give up either the
+windowing or the page scroll, the hosting screen hands its own content in
+through `header` and `footer` and this list carries the whole page. Both are
+nodes rather than components, so a `TextInput` a screen puts in its header
+keeps focus and its caret across a re-render.
+
+That is also why the table is **not carded**: a card that *is* the whole screen
+is what `design-system/05` §5.1 forbids. And why no caller needs to cap the
+range it hands over — a decade of days costs one window.
+
+The list renders even with **no pair to table**, because the header and footer
+still have to move.
+
 Columns: date · rate (4dp, tabular) · source · provenance marker. Each row's
 source is a `Tag`: `nbp` · `ecb` · `nbrb` · `nbg` render neutral;
 `carried_forward` renders neutral with its age; `manual` renders **amber** and
@@ -153,18 +167,51 @@ level 2). The range form is what makes a dead source recoverable by hand: RUB
 has had no published quote since 2022-03-11, and covering that day by day would
 be some 1,600 entries.
 
+**A write is capped at 366 days**, so a gap that long is a handful of range
+writes rather than one — and the worked example below stays inside the cap for
+that reason. The cap lives here, where the write is composed, and nowhere else:
+reading a wider range is not capped, and neither is clearing one.
+
+The example is **all absent**, and that is the point rather than a simplified
+picture: carry-forward is capped at 10 days (`SPEC.md` §7.7), so any carry from
+RUB's last published quote in 2022 expired ten days later. A source dead for
+years leaves gaps, not carried rows — which is exactly why the range form has
+to exist.
+
 Before writing, it states exactly what it will do — **which way the figure
 reads, always**: `fx_rates.rate` is units of the quote per one pivot (§4), so
-the title and every confirmation say `{quote} per {base}`, never a `→` arrow
+the heading and every confirmation say `{quote} per {base}`, never a `→` arrow
 (that reads as a conversion direction, and is exactly backwards for this
 figure — RUB per USD is roughly 96, not 0,0104).
 
-```
-  Set RUB per USD, 2022-03-12 … 2026-08-07
+**Hosted in a `BottomSheet`, whose header is that heading.** The sentence naming
+the pair and the range belongs to the host, not to a second line inside the
+component — a body-weight copy of it under a heading saying the same thing read
+as disabled chrome. And a sheet is where the row that opened it was: rendered
+below a table of up to a year of rows, this editor was 1,300 px away and a tap
+looked like it had done nothing.
 
-  1 610 days        1 464 currently absent
-                      146 currently carried forward
-                        0 currently manual
+**Every count declines.** The summary counts days, so *1 day* / *2 days*, never
+`1 days` and never a `(s)` in a sentence — plural forms in the catalogue, since
+Polish has four categories where English has two.
+
+**A refusal from the write is stated here**, in the sheet, rather than on a
+toast: the sheet is a modal, and a toast on the page behind it is a message
+nobody sees. It clears when the rate that caused it is retyped.
+
+**The rate field is first, and this component does not avoid the keyboard.**
+First because it is the only thing anyone opens this to type, and because a
+host that lifts its sheet keeps the top of the content reachable. Not avoiding
+it, because the **sheet** is the box that has to move: two nested
+keyboard-avoiding views each add the keyboard's height, and the content ends up
+twice as far off the bottom as it should be.
+
+```
+  Set RUB per USD, 2026-01-01 … 2026-08-07        ← the sheet's own header
+
+  219 days            219 days currently absent
+                        0 days currently carried forward
+                        0 days currently manual
                                         [ Cancel ]  [ Set rate ]
 ```
 

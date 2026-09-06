@@ -19,6 +19,23 @@
  * the breakdown this component shows before submitting is this component's
  * job, not a server round trip's.
  *
+ * **The sentence naming the pair and the range is the host's heading, not a
+ * line inside this component.** S18 opens this in a `BottomSheet` whose own
+ * header states *"Set PLN per USD, 2026-08-08 … 2026-08-08"* as a real
+ * heading; a second copy of it here was a body-weight line under a heading
+ * saying the same thing, which is how it came to read as disabled chrome
+ * rather than as the title of what is about to be written.
+ *
+ * **The rate field is first, and this component does not avoid the
+ * keyboard.** First, because it is the only thing anyone opens this to type,
+ * and because a host that lifts its sheet by the keyboard's height lifts the
+ * top of the content — so whatever is at the top is what stays reachable.
+ * Not avoiding it, because **the sheet is the box that has to move**: two
+ * nested keyboard-avoiding views each add the keyboard's height and the
+ * content ends up twice as far off the bottom as it should be. `BottomSheet`
+ * owns that, and until it does, an iOS `decimal-pad` (which has no return
+ * key) covers everything here below the host's header.
+ *
  * **Two submits, not two components.** The first press states the count and,
  * only when `manualCount > 0`, waits for a second press before calling
  * `onSubmit(true)` — the "second, explicit confirmation" the spec asks for,
@@ -44,7 +61,17 @@ export type RateEditorRow = {
   source: string;
 };
 
-/** L11 — `setManualRateInput`'s own cap, restated here so the range is refused before a submit round trip. */
+/**
+ * L11 — `setManualRateInput`'s own cap, restated here so the range is refused
+ * before a submit round trip.
+ *
+ * **Deliberately not exported, and deliberately not the screen's business.**
+ * This is the cap on a *write*, so it belongs where the write is composed.
+ * The range control on S18 picks what to *look at*, `clear_manual_rate` has
+ * no cap of its own, and a table that draws whatever range it is handed needs
+ * none — a second copy of this number gating either of those would refuse
+ * work the ledger accepts.
+ */
 const MAX_RANGE_DAYS = 366;
 
 export type RateEditorProps = {
@@ -62,6 +89,12 @@ export type RateEditorProps = {
   onSubmit: (overwriteManual: boolean) => void;
   onCancel: () => void;
   disabled?: boolean;
+  /**
+   * The host's own refusal — `set_manual_rate`'s first field error. It renders
+   * here rather than on a `Toast`, because this component lives inside a
+   * modal sheet: a toast on the page behind it is a message nobody can see.
+   */
+  error?: string;
 };
 
 export function RateEditor({
@@ -75,6 +108,7 @@ export function RateEditor({
   onSubmit,
   onCancel,
   disabled = false,
+  error,
 }: RateEditorProps) {
   const t = useT();
   const locale = useLocale();
@@ -109,8 +143,6 @@ export function RateEditor({
 
   return (
     <View style={styles.root}>
-      <Text style={styles.title}>{t("fx.rateEditorTitle", { quote, base, from, to })}</Text>
-
       <RateField
         label={t("fx.rateEditorRateLabel", { quote, base })}
         value={rate}
@@ -130,6 +162,8 @@ export function RateEditor({
           {t("fx.rateEditorManual", { count: counts.manual })}
         </Text>
       </View>
+
+      {error === undefined ? null : <Text style={styles.warning}>{error}</Text>}
 
       {rangeTooLong ? (
         <Text style={styles.warning}>
@@ -165,7 +199,6 @@ export function RateEditor({
 
 const useStyles = makeStyles((theme) => ({
   root: { gap: space.x3 },
-  title: { color: theme.text, ...text.ui("body", 600) },
   summary: { gap: space.xs },
   summaryLine: { color: theme.textMuted, ...text.ui("bodySm") },
   summaryManual: { color: theme.assertedText },

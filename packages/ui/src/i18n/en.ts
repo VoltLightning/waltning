@@ -1005,12 +1005,16 @@ export const en = {
   fx: {
     /** `CurrencyChip` — `04` §4.5's accessible name; the visible face is the codes themselves. */
     currencyChipLabel: "Display currency: {{currency}}. Tap to change.",
-    /** `CoverageTag` — S17 §6/§8. */
+    /**
+     * `CoverageStatus` — S17 §6/§8. A muted caption in sentence case, never a
+     * shouting pill: coverage is a fact about a currency, not a state anyone
+     * has to act on, and `Tag` upper-cases everything it is handed.
+     */
     coveragePct: "{{pct}}%",
     coverageBelow: "{{pct}}% · last quote {{date}}",
     coverageTitle: "Coverage",
     /** 0% — nothing held yet, S17 §2's own words, not a bare "0%". */
-    noRatesYet: "no rates yet · set one by hand",
+    noRatesYet: "No rates yet · set one by hand",
     /**
      * L7 — the only rows held are future-dated (M4 excludes them from
      * `days`): rates are set, just none due yet.
@@ -1023,12 +1027,12 @@ export const en = {
      * language with more grammar than English needs the same key set here,
      * even where English has nothing new to say for it.
      */
-    noRatesYetFuture_one: "no rates yet · {{count}} set for later",
-    noRatesYetFuture_few: "no rates yet · {{count}} set for later",
-    noRatesYetFuture_many: "no rates yet · {{count}} set for later",
-    noRatesYetFuture_other: "no rates yet · {{count}} set for later",
+    noRatesYetFuture_one: "No rates yet · {{count}} set for later",
+    noRatesYetFuture_few: "No rates yet · {{count}} set for later",
+    noRatesYetFuture_many: "No rates yet · {{count}} set for later",
+    noRatesYetFuture_other: "No rates yet · {{count}} set for later",
     /** H2 — rows held, but none a real quote (every one `carried_forward`): no date exists to state. */
-    noQuoteYet: "no quote yet",
+    noQuoteYet: "No quote yet",
     /** `RateField` — `03` §3.7. */
     rateFieldSynced: "Synced: {{rate}}",
     /** `parseRate`'s own refusal — 0, negative, or anything not a positive decimal. */
@@ -1053,12 +1057,37 @@ export const en = {
      */
     rateEditorTitle: "Set {{quote}} per {{base}}, {{from}} … {{to}}",
     rateEditorRateLabel: "Rate · {{quote}} per {{base}}",
-    rateEditorTotalDays: "{{count}} days",
-    rateEditorAbsent: "{{count}} currently absent",
-    rateEditorCarried: "{{count}} currently carried forward",
-    rateEditorManual: "{{count}} currently manual",
-    rateEditorConfirmOverwrite:
-      "This sets {{rate}} {{quote}} per {{base}}, replacing {{count}} manual rate(s) set by hand.",
+    /**
+     * Every line below counts days, so every line below declines — i18next's
+     * real `count`-driven suffixes, `noRatesYetFuture`'s own precedent. "1
+     * days" is the defect this replaces, and a `(s)` in a sentence is the
+     * same defect wearing a bracket: English collapses onto two forms here,
+     * Polish onto four, and only the suffixed keys can hold four.
+     */
+    rateEditorTotalDays_one: "{{count}} day",
+    rateEditorTotalDays_few: "{{count}} days",
+    rateEditorTotalDays_many: "{{count}} days",
+    rateEditorTotalDays_other: "{{count}} days",
+    rateEditorAbsent_one: "{{count}} day currently absent",
+    rateEditorAbsent_few: "{{count}} days currently absent",
+    rateEditorAbsent_many: "{{count}} days currently absent",
+    rateEditorAbsent_other: "{{count}} days currently absent",
+    rateEditorCarried_one: "{{count}} day currently carried forward",
+    rateEditorCarried_few: "{{count}} days currently carried forward",
+    rateEditorCarried_many: "{{count}} days currently carried forward",
+    rateEditorCarried_other: "{{count}} days currently carried forward",
+    rateEditorManual_one: "{{count}} day currently manual",
+    rateEditorManual_few: "{{count}} days currently manual",
+    rateEditorManual_many: "{{count}} days currently manual",
+    rateEditorManual_other: "{{count}} days currently manual",
+    rateEditorConfirmOverwrite_one:
+      "This sets {{rate}} {{quote}} per {{base}}, replacing {{count}} manual rate set by hand.",
+    rateEditorConfirmOverwrite_few:
+      "This sets {{rate}} {{quote}} per {{base}}, replacing {{count}} manual rates set by hand.",
+    rateEditorConfirmOverwrite_many:
+      "This sets {{rate}} {{quote}} per {{base}}, replacing {{count}} manual rates set by hand.",
+    rateEditorConfirmOverwrite_other:
+      "This sets {{rate}} {{quote}} per {{base}}, replacing {{count}} manual rates set by hand.",
     rateEditorSubmit: "Set rate",
     rateEditorConfirmSubmit: "Overwrite and set",
     /** L11 — `setManualRateInput`'s own cap, restated where the range is picked. */
@@ -1079,6 +1108,13 @@ export const en = {
     /** L8 — an unrecognised source, plainly, never the `manual` fallback it used to be. */
     sourceUnknown: "Unknown",
     archiveCurrency: "Archive",
+    /**
+     * S17's own link into S18, from a row's expanded detail — *"set one by
+     * hand"* is a place, not just a sentence. It sits beside the row's other
+     * actions rather than on the coverage line, so the line stays a plain,
+     * unpressable statement of fact.
+     */
+    viewRates: "Exchange rates",
     currencyArchiveRefused: "Couldn't archive this currency.",
     currencyWriteFailed: "That didn't save.",
     /** S17 §9.2 — a row's own symbol and decimals, and the sheet that edits them. */
@@ -1130,6 +1166,29 @@ export const en = {
     rangeTo: "To",
     setRange: "Set a range",
     clearManual: "Clear manual",
+    /**
+     * *Clear manual* removes every hand-set rate across whatever range is
+     * loaded — and after a deep link that range is one the link chose, not the
+     * reader. So the confirmation names the pair, the dates and how many days
+     * it spans, in the count forms every day-count on this screen uses.
+     */
+    clearManualConfirmTitle: "Clear the rates you set by hand?",
+    clearManualConfirmBody_one:
+      "This removes every rate set by hand for {{quote}} per {{base}} on {{count}} day, {{from}}. Rates from a source are left alone, and this cannot be undone.",
+    clearManualConfirmBody_few:
+      "This removes every rate set by hand for {{quote}} per {{base}} across {{count}} days, {{from}} … {{to}}. Rates from a source are left alone, and this cannot be undone.",
+    clearManualConfirmBody_many:
+      "This removes every rate set by hand for {{quote}} per {{base}} across {{count}} days, {{from}} … {{to}}. Rates from a source are left alone, and this cannot be undone.",
+    clearManualConfirmBody_other:
+      "This removes every rate set by hand for {{quote}} per {{base}} across {{count}} days, {{from}} … {{to}}. Rates from a source are left alone, and this cannot be undone.",
+    clearManualConfirmSubmit: "Yes, clear them",
+    /** Said out loud: the visible effect is otherwise rows in a scrolled-past part of the table. */
+    clearManualCleared_one: "Cleared {{count}} manual rate.",
+    clearManualCleared_few: "Cleared {{count}} manual rates.",
+    clearManualCleared_many: "Cleared {{count}} manual rates.",
+    clearManualCleared_other: "Cleared {{count}} manual rates.",
+    /** Its own sentence — "Cleared 0 manual rates" reads as a failure. */
+    clearManualNone: "No rates set by hand in that range.",
     rateWriteFailed: "That didn't save.",
     rerateNotOffered: "Re-rate from the desk once a server exists.",
   },

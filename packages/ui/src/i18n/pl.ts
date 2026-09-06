@@ -507,15 +507,15 @@ export const pl: Messages = {
     coveragePct: "{{pct}}%",
     coverageBelow: "{{pct}}% · ostatni kurs {{date}}",
     coverageTitle: "Pokrycie",
-    noRatesYet: "brak kursów · ustaw ręcznie",
+    noRatesYet: "Brak kursów · ustaw ręcznie",
     // 1 → ustawiony, 2–4 → ustawione, 5+ (and 0) → ustawionych. `futureRows`
     // is always a whole count, so `_other` (fractional) never actually
     // renders — it carries the `_many` form rather than invent an untested one.
-    noRatesYetFuture_one: "brak kursów · {{count}} ustawiony na później",
-    noRatesYetFuture_few: "brak kursów · {{count}} ustawione na później",
-    noRatesYetFuture_many: "brak kursów · {{count}} ustawionych na później",
-    noRatesYetFuture_other: "brak kursów · {{count}} ustawionych na później",
-    noQuoteYet: "brak kursu",
+    noRatesYetFuture_one: "Brak kursów · {{count}} ustawiony na później",
+    noRatesYetFuture_few: "Brak kursów · {{count}} ustawione na później",
+    noRatesYetFuture_many: "Brak kursów · {{count}} ustawionych na później",
+    noRatesYetFuture_other: "Brak kursów · {{count}} ustawionych na później",
+    noQuoteYet: "Brak kursu",
     rateFieldSynced: "Zsynchronizowany: {{rate}}",
     ratePositive: "Kurs musi być liczbą dodatnią.",
     rateTableGap: "Brak kursu",
@@ -528,11 +528,35 @@ export const pl: Messages = {
     rateTableCarriedUnknown: "Przeniesiony · wiek nie jest znany",
     rateEditorTitle: "Ustaw {{quote}} za {{base}}, {{from}} … {{to}}",
     rateEditorRateLabel: "Kurs · {{quote}} za {{base}}",
-    rateEditorTotalDays: "{{count}} dni",
-    rateEditorAbsent: "{{count}} obecnie brak",
-    rateEditorCarried: "{{count}} obecnie przeniesionych",
-    rateEditorManual: "{{count}} obecnie ręcznych",
-    rateEditorConfirmOverwrite:
+    // Two axes decline here, not one. The noun: 1 → dzień, 2–4 and 5+ → dni.
+    // And the adjective agreeing with it: `few` (2–4) takes the nominative
+    // plural (przeniesione, ręczne), `many` (5+ and 0) the genitive
+    // (przeniesionych, ręcznych) — the same split `noRatesYetFuture` above
+    // already makes. `_other` (fractional) never renders for a whole count
+    // and carries the `_many` form rather than invent an untested one.
+    rateEditorTotalDays_one: "{{count}} dzień",
+    rateEditorTotalDays_few: "{{count}} dni",
+    rateEditorTotalDays_many: "{{count}} dni",
+    rateEditorTotalDays_other: "{{count}} dni",
+    rateEditorAbsent_one: "{{count}} dzień obecnie bez kursu",
+    rateEditorAbsent_few: "{{count}} dni obecnie bez kursu",
+    rateEditorAbsent_many: "{{count}} dni obecnie bez kursu",
+    rateEditorAbsent_other: "{{count}} dni obecnie bez kursu",
+    rateEditorCarried_one: "{{count}} dzień obecnie przeniesiony",
+    rateEditorCarried_few: "{{count}} dni obecnie przeniesione",
+    rateEditorCarried_many: "{{count}} dni obecnie przeniesionych",
+    rateEditorCarried_other: "{{count}} dni obecnie przeniesionych",
+    rateEditorManual_one: "{{count}} dzień obecnie ręczny",
+    rateEditorManual_few: "{{count}} dni obecnie ręczne",
+    rateEditorManual_many: "{{count}} dni obecnie ręcznych",
+    rateEditorManual_other: "{{count}} dni obecnie ręcznych",
+    rateEditorConfirmOverwrite_one:
+      "To ustawi {{rate}} {{quote}} za {{base}}, zastępując {{count}} ręcznie ustawiony kurs.",
+    rateEditorConfirmOverwrite_few:
+      "To ustawi {{rate}} {{quote}} za {{base}}, zastępując {{count}} ręcznie ustawione kursy.",
+    rateEditorConfirmOverwrite_many:
+      "To ustawi {{rate}} {{quote}} za {{base}}, zastępując {{count}} ręcznie ustawionych kursów.",
+    rateEditorConfirmOverwrite_other:
       "To ustawi {{rate}} {{quote}} za {{base}}, zastępując {{count}} ręcznie ustawionych kursów.",
     rateEditorSubmit: "Ustaw kurs",
     rateEditorConfirmSubmit: "Zastąp i ustaw",
@@ -550,6 +574,7 @@ export const pl: Messages = {
     sourceManual: "Ręczny",
     sourceUnknown: "Nieznane",
     archiveCurrency: "Archiwizuj",
+    viewRates: "Kursy walut",
     currencyArchiveRefused: "Nie udało się zarchiwizować tej waluty.",
     currencyWriteFailed: "Nie udało się zapisać.",
     currencyDetail: "{{symbol}} · {{decimals}}dp",
@@ -589,6 +614,24 @@ export const pl: Messages = {
     rangeTo: "Do",
     setRange: "Ustaw zakres",
     clearManual: "Wyczyść ręczne",
+    clearManualConfirmTitle: "Usunąć kursy ustawione ręcznie?",
+    // 1 → dzień, 2–4 → dni, 5+ (and 0) → dni; the `_one` form names a single
+    // day, so it states one date rather than a range.
+    clearManualConfirmBody_one:
+      "To usunie każdy ręcznie ustawiony kurs {{quote}} za {{base}} z {{count}} dnia, {{from}}. Kursy ze źródła zostaną nietknięte, a tego nie można cofnąć.",
+    clearManualConfirmBody_few:
+      "To usunie każdy ręcznie ustawiony kurs {{quote}} za {{base}} z {{count}} dni, {{from}} … {{to}}. Kursy ze źródła zostaną nietknięte, a tego nie można cofnąć.",
+    clearManualConfirmBody_many:
+      "To usunie każdy ręcznie ustawiony kurs {{quote}} za {{base}} z {{count}} dni, {{from}} … {{to}}. Kursy ze źródła zostaną nietknięte, a tego nie można cofnąć.",
+    clearManualConfirmBody_other:
+      "To usunie każdy ręcznie ustawiony kurs {{quote}} za {{base}} z {{count}} dni, {{from}} … {{to}}. Kursy ze źródła zostaną nietknięte, a tego nie można cofnąć.",
+    clearManualConfirmSubmit: "Tak, wyczyść",
+    // 1 → kurs, 2–4 → kursy, 5+ (and 0) → kursów.
+    clearManualCleared_one: "Usunięto {{count}} ręczny kurs.",
+    clearManualCleared_few: "Usunięto {{count}} ręczne kursy.",
+    clearManualCleared_many: "Usunięto {{count}} ręcznych kursów.",
+    clearManualCleared_other: "Usunięto {{count}} ręcznych kursów.",
+    clearManualNone: "W tym zakresie nie ma ręcznie ustawionych kursów.",
     rateWriteFailed: "Nie udało się zapisać.",
     rerateNotOffered: "Przelicz ponownie z pulpitu, gdy powstanie serwer.",
   },

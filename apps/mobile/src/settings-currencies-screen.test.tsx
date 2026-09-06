@@ -105,6 +105,19 @@ function withLedger(overrides: Parameters<typeof fakeController>[0] = {}) {
   );
 }
 
+/**
+ * S17 §3 — a row is compact until it is tapped; its pinned toggle, rate
+ * source and actions live in the detail it expands. Every test below that
+ * touches one of those opens the row first, the way a person does.
+ */
+function expandRow(code: string) {
+  // A regex, deliberately: the row's accessible name is everything in it —
+  // code, name, symbol · decimals, coverage, pinned. An exact match on the
+  // bare code would pass only while the name is an override that silences all
+  // of that, which is the bug R1 M5 names.
+  fireEvent.click(screen.getByRole("button", { name: new RegExp(`^${code} · `) }));
+}
+
 beforeEach(() => {
   router.push.mockClear();
 });
@@ -131,9 +144,67 @@ it("renders no currency card when the pivot is the only currency, only the Add b
   expect(screen.getByText("Add currency")).toBeDefined();
 });
 
+/**
+ * The card carried the screen's own name, 40 px under a navigation header
+ * saying the same word. Broken once by putting `title` back on the `Card` —
+ * "Currencies" then renders twice on a screen that has one list.
+ */
+it("the list card carries no title of its own — the navigation header has that word", () => {
+  withLedger();
+  expect(screen.queryByText("Currencies")).toBeNull();
+});
+
+/**
+ * S17 §3 — the row is a row until it is asked to be an editor. Six rows each
+ * holding an open toggle, an open select and two buttons is what made this
+ * screen three screens tall.
+ */
+it("a row is compact until tapped, then expands its own controls in place", () => {
+  withLedger();
+  expect(screen.getByText("zł · 2dp")).toBeDefined();
+  expect(screen.queryByLabelText("Pinned")).toBeNull();
+  expect(screen.queryByText("Archive")).toBeNull();
+
+  expandRow("PLN");
+  expect(screen.getByLabelText("Pinned")).toBeDefined();
+  expect(screen.getByText("Archive")).toBeDefined();
+
+  // Tapping it again closes it — one row open at a time, and none is forced.
+  expandRow("PLN");
+  expect(screen.queryByLabelText("Pinned")).toBeNull();
+});
+
+it("opening a second row closes the first", () => {
+  const EUR = currencyCode("EUR");
+  withLedger({
+    listCurrencySettings: () => [
+      PLN_ROW,
+      {
+        code: EUR,
+        name: "Euro",
+        symbol: "€",
+        symbolPosition: "S",
+        decimals: 2,
+        rateSource: "ecb",
+        pinned: false,
+        isPivot: false,
+        version: 1,
+      },
+      USD_ROW,
+    ],
+  });
+
+  expandRow("PLN");
+  expect(screen.getByLabelText("Edit PLN")).toBeDefined();
+  expandRow("EUR");
+  expect(screen.getByLabelText("Edit EUR")).toBeDefined();
+  expect(screen.queryByLabelText("Edit PLN")).toBeNull();
+});
+
 it("toggling pinned calls set_pinned with the row's own version", () => {
   const setPinned = vi.fn(() => ({ code: "PLN" }));
   withLedger({ setPinned });
+  expandRow("PLN");
   fireEvent.click(screen.getByLabelText("Pinned"));
   expect(setPinned).toHaveBeenCalledWith(
     { code: "PLN", version: 3, pinned: false },
@@ -148,6 +219,7 @@ it("archiving a referenced currency is refused with the executor's reason, on a 
     throw new Error("PLN is still referenced by an account.");
   });
   withLedger({ archiveCurrency });
+  expandRow("PLN");
   fireEvent.click(screen.getByText("Archive"));
   expect(archiveCurrency).toHaveBeenCalledWith({ code: "PLN", version: 3 }, expect.anything());
   expect(screen.getByText("PLN is still referenced by an account.")).toBeDefined();
@@ -282,6 +354,7 @@ it("a row states its own symbol and decimals", () => {
 it("editing a row's symbol and decimals writes through update_currency", () => {
   const updateCurrency = vi.fn(() => ({ code: "PLN" }));
   withLedger({ updateCurrency });
+  expandRow("PLN");
   fireEvent.click(screen.getByLabelText("Edit PLN"));
   fireEvent.change(screen.getByLabelText("Symbol"), { target: { value: "PLN" } });
   fireEvent.click(screen.getByText("Save"));
@@ -291,7 +364,13 @@ it("editing a row's symbol and decimals writes through update_currency", () => {
   );
 });
 
-it("a currency with no rates yet says so, and opens S18 with the pair preselected", () => {
+/**
+ * S17 §6 — coverage is a measurement stated in sentence case, not a state
+ * wearing an upper-cased pill. The row's own *Exchange rates* action is where
+ * "set one by hand" becomes a place: the coverage line itself is plain text,
+ * because the row around it is the tap target now.
+ */
+it("a currency with no rates yet says so, as a plain caption and not a button", () => {
   withLedger({
     readCoverage: () => [
       {
@@ -307,10 +386,84 @@ it("a currency with no rates yet says so, and opens S18 with the pair preselecte
       },
     ],
   });
-  expect(screen.getByText("no rates yet · set one by hand")).toBeDefined();
-  fireEvent.click(screen.getByRole("button", { name: "no rates yet · set one by hand" }));
+  expect(screen.getByText("No rates yet · set one by hand")).toBeDefined();
+  expect(screen.queryByRole("button", { name: "No rates yet · set one by hand" })).toBeNull();
+});
+
+it("a row's Exchange rates action opens S18 with the pair preselected", () => {
+  withLedger();
+  expandRow("PLN");
+  fireEvent.click(screen.getByText("Exchange rates"));
   expect(router.push).toHaveBeenCalledWith({
     pathname: "/settings/rates",
     params: { quote: "PLN" },
   });
+});
+
+/**
+ * R1 M5 — `accessibilityLabel` **overrides** the name a reader would compose
+ * from a pressable's descendants. With the whole row header now a button, a
+ * bare `row.code` made the currency's name, its symbol and decimals, its
+ * coverage and its pinned state audible to nobody: a screen reader heard
+ * "PLN, button" and stopped. That is S17 §6's *"coverage is stated per
+ * currency"* stated to sighted users only.
+ *
+ * Broken once by putting `accessibilityLabel={row.code}` back — every
+ * assertion below fails at once.
+ */
+it("R1 M5 — the row's accessible name carries everything the row shows", () => {
+  withLedger({
+    readCoverage: () => [
+      {
+        code: PLN,
+        source: "nbp",
+        firstDate: accountingDate("2020-11-25"),
+        lastDate: accountingDate("2022-03-11"),
+        days: 23,
+        realDays: 23,
+        calendarDays: 100,
+        coveragePct: 23,
+        futureRows: 0,
+      },
+    ],
+  });
+
+  const row = screen.getByRole("button", { name: /^PLN · / });
+  const name = row.getAttribute("aria-label") ?? "";
+  expect(name).toContain("Polish Złoty");
+  expect(name).toContain("zł · 2dp");
+  expect(name).toContain("23% · last quote 2022-03-11");
+  // PLN_ROW is pinned.
+  expect(name).toContain("Pinned");
+});
+
+/**
+ * R1 L10 — *pinned* is a state the currency is in; coverage is a measurement
+ * of it. Rendering both as muted captions side by side said the opposite of
+ * the rule this screen's own spec states, so the state wears the `Tag` and the
+ * measurement does not.
+ */
+it("R1 L10 — pinned is tagged where coverage is a caption", () => {
+  withLedger();
+  const pinned = screen.getByText("Pinned");
+  expect(getComputedStyle(pinned).textTransform).toBe("uppercase");
+  expect(getComputedStyle(screen.getByText("100%")).textTransform).not.toBe("uppercase");
+});
+
+/**
+ * R2 L9 — the visible *Pinned* mark is hidden while the row is open, because
+ * the `Toggle` immediately below states the same fact and can change it. The
+ * accessible name said it regardless, so a screen-reader user got the exact
+ * duplication the sighted row avoids: "… Pinned" followed by "Pinned, on".
+ */
+it("R2 L9 — the accessible name drops Pinned once the Toggle below states it", () => {
+  withLedger();
+  const closed = screen.getByRole("button", { name: /^PLN · / });
+  expect(closed.getAttribute("aria-label")).toContain("Pinned");
+
+  expandRow("PLN");
+  const open = screen.getByRole("button", { name: /^PLN · / });
+  expect(open.getAttribute("aria-label")).not.toContain("Pinned");
+  // The Toggle is what states it now.
+  expect(screen.getByLabelText("Pinned")).toBeDefined();
 });

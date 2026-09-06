@@ -19,6 +19,53 @@ when a source has stopped working.
 | `FxStatusChip` | Any header, when stale or failed | Where you were |
 | S30 | *Re-run a backfill* | S30 |
 | S09 | A row's rate provenance | S09 |
+| S17 | A row's *Exchange rates* | S17 |
+| A capture that has no rate | *"{code} needs an exchange rate — set one"* | The capture |
+
+### Search parameters
+
+Both entries above are links, so both are parameters rather than screen state:
+
+| Parameter | Effect | Absent, or not resolvable |
+|---|---|---|
+| `quote` | Preselects the pair, when the code names one of this pivot's quote currencies | The first quote currency, as with no link — **and the editor does not open**, whatever `date` says |
+| `date` | Opens `RateEditor` on that single day, and **moves the range onto it** (the same 30-day span), so the fix is one field away and the write it makes is visible behind the sheet | The editor stays closed |
+
+**The editor opens on a pair the link named, or not at all** — which includes a
+`date` with no `quote` beside it, and a repeated `quote`, since an array names
+no pair. Both are links that never said which currency; opening on whichever
+one sorts first is the same wrong-pair write an unresolvable code would cause.
+
+A code this ledger does not quote — archived, renamed, or a gate that raced the
+ledger — must never fall through to whichever pair sorts first *with the editor
+already open on it*: two taps there write a manual rate for a pair nobody asked
+about, and the only thing between the reader and that write is a heading they
+arrived at by tapping a link naming a different currency.
+
+**The range follows the link, by moving rather than stretching.** Success is
+silent — the sheet closes and nothing else says so — so a write on a day the
+table does not show is a write that looks like nothing happened, and a
+backdated link lands outside the default window every time. The window opens on
+the linked day instead, at **the same 30-day span** it opens with unlinked.
+
+A span, never a stretch back to today, because a parameter that sets the size
+of what gets drawn is a parameter with no bound: `?date=1000-01-01` would ask
+the table to fill 375,001 calendar days, and would hand *Clear manual* a
+millennium to delete across. A bound, not a refusal — the link still lands on
+its own day, and a preset is one tap back toward the present.
+
+`date` is checked against the **calendar**, not only the `YYYY-MM-DD` shape — a
+parameter is whatever a link put in the address bar, and `2026-02-31` has the
+shape of a date without being one — and against **today**: §8 refuses a manual
+rate for a day that has not happened, so opening the editor on one would only
+stage a refusal.
+
+Both arrive as `string | string[]`; a repeated key is an array, and an array is
+not a currency code or a date.
+
+**The route reads them; the screen takes them as props.** A route composes, and
+a screen that is a function of its props is a screen its tests and the journey
+harness drive without a router to stand in for.
 
 ## 3. Layout
 
@@ -28,29 +75,76 @@ Pair selector and date range above a `RateTable`. `SyncLog` beneath, carrying
 **coverage per currency** rather than only events. Web places them side by side;
 mobile stacks.
 
-The pair selector, presets, date range and action buttons sit on the ground;
-`RateTable` is the one grouped-rows card, and the per-currency coverage list is
-a second, separate card. **With no quote currency to compare against the pivot
-there is no table, so there is no card** — the hint saying so is a hint, and
-renders on the ground where every other hint on this screen does.
+**`RateTable` is the page's one scroller, and everything else rides in it.**
+The table is virtualized, and a virtualized list inside a page `ScrollView` is
+one scroller too many — so the pair select, presets, range control and hint are
+handed to the table as its **list header**, and the action buttons, the re-rate
+note and the per-currency coverage list as its **list footer**. The whole page
+then scrolls, through the list, and clears the bottom inset. Neither half is
+given up: the table stays cheap for a 2,080-day pair, and the coverage list no
+longer runs off the bottom edge with no way to reach it.
 
-**One state decides both cards.** *No quote currency* is the same fact for the
-table and for the coverage list — the list holds exactly one row per quote
-currency — so the hint and the coverage card are drawn from one value rather
-than from two conditions that happen to agree. A date range that does not parse
-is a different state, and so is a ledger that names no pivot: each leaves
-nothing to table, so each drops the table card and draws **no hint** — neither
-may claim there is no quote currency when there is one. The coverage card is
-not theirs to drop: coverage is per currency, not per range and not per pivot,
-so its rows stay true and stay drawn.
+**There is one card on this screen, and it is the coverage list.** A card
+groups related rows — and the table's rows *are* the page, so carding them
+would make a card of the whole screen, which `design-system/05` §5.1 forbids.
+The table is drawn on the ground; the per-currency coverage list, a short group
+of rows inside the footer, is the card. Everything else — pair select, presets,
+date range, action buttons and every hint — sits on the ground too, in the
+list's header and footer.
+
+**With no quote currency to compare against the pivot there is no table and no
+card.** The coverage list holds exactly one row per quote currency, so the same
+absence empties both; the hint saying so is a hint, and renders on the ground
+where every other hint on this screen does.
+
+**The list still renders when there is nothing to table.** No quote currency,
+no pivot, a range that does not parse — the header and footer still have to
+move, and a screen whose scroller disappears in exactly the states that put a
+hint on it is a screen that cannot show the hint.
+
+**The range control stacks on a phone and pairs at desk width** (`useBreakpoint`,
+never a raw width read). Each date field carries its own row of relative-day
+chips, so *From* and *To* side by side is two fields and six chips across a
+390 px screen — the *To* field and half its chips ran off the right edge.
+
+**The range control caps nothing.** `set_manual_rate` caps a *write* at 366
+days and `RateEditor` states that where the write is composed — but
+`clear_manual_rate` has no cap at all, and a virtualized table draws whatever
+range it is handed for the cost of one window. A cap on the control would
+refuse work the ledger accepts: a pair whose manual rows are spread across six
+years would have to be cleared six times, by hand.
+
+**A typed date must be a real calendar day**, not merely the `YYYY-MM-DD`
+shape. `2026-02-31` has the shape, and the date helpers roll it into March, so
+the table would draw rows from a day three later than the one on screen while
+the reader filtered on the literal string. One field, one reading.
+
+**`RateEditor` opens in a `BottomSheet`, not below the table.** A tapped row is
+what opens it, and rendering it under a table of up to a year of rows put it
+some 1,300 px past the row that was tapped: on a phone, tapping a date looked
+like it did nothing at all. The sheet's own header states the sentence naming
+the pair and the range — *"Set PLN per USD, 2026-08-08 … 2026-08-08"* — so that
+title is a heading rather than a body line under one.
+
+**One state decides the table and the card.** *No quote currency* is the same
+fact for both — the coverage list holds exactly one row per quote currency — so
+the hint and the coverage card are drawn from one value rather than from two
+conditions that happen to agree. A date range that does not parse is a
+different state, and so is a ledger that names no pivot: each leaves nothing to
+table, so each drops the table and draws **no hint** — neither may claim there
+is no quote currency when there is one. The coverage card is not theirs to
+drop: coverage is per currency, not per range and not per pivot, so its rows
+stay true and stay drawn.
 
 ## 4. Components
 
 | Component | Notes |
 |---|---|
-| `Card` | Two — `RateTable` alone (only when there is a pair to table), and the per-currency coverage list. Everything else — pair select, presets, date range, action buttons, `RateEditor`, and the no-quote hint — sits on the ground |
-| `RateTable` | Virtualized. Gaps render as **explicit empty rows**, never as absence |
-| `RateEditor` | Single date **or a range**; states what it will overwrite before writing |
+| `Card` | **One** — the per-currency coverage list, a short group of rows riding in the table's footer. The table is the page and is drawn on the ground, as are the pair select, presets, date range, action buttons and the no-quote hint, in the list's header and footer |
+| `RateTable` | **Virtualized, and it is the page**: one row per calendar day, with this screen's own controls as its list header and its coverage card as its list footer. Gaps render as **explicit empty rows**, never as absence |
+| `RateEditor` | Single date **or a range**; states what it will overwrite before writing. Hosted in a `BottomSheet`, whose header carries the pair-and-range heading |
+| `BottomSheet` | The editor's host — a tapped row opens the editor where the tap was |
+| `ConfirmDialog` | *Clear manual* — the one irreversible act on this screen. Names the pair, the day count and the dates before deleting |
 | `SyncLog` | `succeeded` · `failed` · **`rate_limited`** — the third is distinct, because retrying a rate limit is futile |
 | `FxStatusChip` | Fresh · syncing · stale · failed |
 
@@ -68,7 +162,7 @@ so its rows stay true and stay drawn.
 |---|---|
 | Loading | Virtualized rows resolve as scrolled |
 | Populated | Fresh · stale · syncing · has overrides |
-| Empty | A pair with no rates at all — states the source and its last attempt. No quote currency at all: no table card, no coverage card, and the hint on the ground saying why. **No pivot**, or a custom range that does not parse: no table card and **no hint** either — there is a currency to compare against, so the hint would be false; the coverage card stays |
+| Empty | A pair with no rates at all — states the source and its last attempt. No quote currency at all: no table, no coverage card, and the hint on the ground saying why. **No pivot**, or a custom range that does not parse: no table and **no hint** either — there is a currency to compare against, so the hint would be false; the coverage card stays. The scroller stays in every one of these, because it is the page |
 | Error | Sync failed → `ErrorState(recoverable)`. **Rate-limited → paced retry**, not immediate |
 | Offline | Read-only from cache; overrides queue |
 | Gated | n/a |
@@ -78,6 +172,14 @@ so its rows stay true and stay drawn.
 Drag across dates in the table to select a range, which feeds `RateEditor`. A
 range write is one action producing many `manual` rows — the mechanism that
 makes RUB recoverable in one entry rather than 1,600.
+
+***Clear manual* names what it will delete, and then says what it did.** It is
+the one irreversible act on this screen: every hand-set rate across the loaded
+range, gone, with no undo. That range is not always one the reader chose — a
+deep link seeds it — so the confirmation states the **pair, the day count and
+the dates**, built from the same value the write receives, and the result is a
+toast carrying the count. Nothing found is its own sentence rather than a count
+of zero, which reads as a failure.
 
 ## 8. Rules this screen must obey
 
@@ -94,6 +196,20 @@ makes RUB recoverable in one entry rather than 1,600.
   by an older build still replays.
 - The rate **table** never holds an invented figure. Estimates live on the
   transaction (§7.6).
+- **Nothing deletes a range nobody chose.** *Clear manual* confirms first,
+  naming the pair and the day count, because a link can set that range and the
+  action's whole visible effect is otherwise rows in a scrolled-past part of
+  the table quietly changing source.
+- **A write refused inside the editor is stated inside the editor.** The sheet
+  is a modal; a toast on the page behind it is a refusal nobody can read. The
+  refusal clears the moment the rate that caused it is retyped.
+- **The sheet is the box that avoids the keyboard**, and it is the only one.
+  An iOS `decimal-pad` has no return key, so a sheet that does not lift puts
+  the rate field, the counts and both buttons behind the keyboard with no way
+  out but dismissing the sheet. `RateEditor` deliberately does not avoid the
+  keyboard itself — two nested keyboard-avoiding boxes each add the keyboard's
+  height — and puts the rate field first, because the top of the content is
+  what a lifted sheet keeps reachable.
 
 ## 9. Open questions
 
