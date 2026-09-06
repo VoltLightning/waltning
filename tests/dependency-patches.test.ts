@@ -188,9 +188,30 @@ refusal.code = 'SQLITE_BUSY';
 console.log(JSON.stringify({ success: await outcomeOf(null), failure: await outcomeOf(refusal) }));
 `;
 
-/** Plain Node ESM: every import under `wa-sqlite/` carries its `.js`. */
+/**
+ * Plain Node ESM: every import under `wa-sqlite/` carries its `.js`.
+ *
+ * One harness, three questions, chosen by environment so the fake OPFS
+ * directory is written once. It reports what the pool did rather than
+ * asserting anything itself, so each `it` below can say what it expects — and
+ * so a mutant of the patched file can be run through the same script by hand.
+ *
+ * - `REFUSE=1` — the middle file is still held by the document being replaced,
+ *   the way a browser refuses `createSyncAccessHandle`.
+ * - `FAIL_CREATE_AFTER=n` — the top-up gets `n` new files and then hits the
+ *   quota, the way `getFileHandle(create:true)` fails under storage pressure.
+ * - `FAIL_CLOSE=1` — the first handle's `close()` throws while a release is
+ *   already running.
+ */
 const accessHandlePoolProbe = `
 const { AccessHandlePoolVFS } = await import(process.env.VFS_URL);
+
+const FAIL_CREATE_AFTER = Number(process.env.FAIL_CREATE_AFTER ?? '-1');
+const FAIL_CLOSE = process.env.FAIL_CLOSE === '1';
+const REFUSE = process.env.REFUSE === '1';
+
+let created = 0;
+const handles = [];
 
 /** Enough of \`FileSystemSyncAccessHandle\` for the pool's own header reads. */
 class FakeAccessHandle {
@@ -224,17 +245,17 @@ class FakeAccessHandle {
     return this.file.bytes.length;
   }
   close() {
+    if (FAIL_CLOSE && handles.indexOf(this) === 0) throw new Error('close failed');
     this.closed = true;
   }
 }
 
 const files = [
   { name: 'aaa', bytes: new Uint8Array(0), refuse: false },
-  // Still held by the document being replaced.
-  { name: 'bbb', bytes: new Uint8Array(0), refuse: true },
+  // Still held by the document being replaced, when asked for.
+  { name: 'bbb', bytes: new Uint8Array(0), refuse: REFUSE },
   { name: 'ccc', bytes: new Uint8Array(0), refuse: false },
 ];
-const handles = [];
 
 function fileHandle(file) {
   return {
@@ -254,9 +275,15 @@ function fileHandle(file) {
 
 const directory = {
   kind: 'directory',
-  async getFileHandle(name) {
+  async getFileHandle(name, options) {
     let file = files.find((f) => f.name === name);
     if (!file) {
+      if (options && options.create && FAIL_CREATE_AFTER >= 0 && created >= FAIL_CREATE_AFTER) {
+        const error = new Error('quota');
+        error.name = 'QuotaExceededError';
+        throw error;
+      }
+      created += 1;
       file = { name, bytes: new Uint8Array(0), refuse: false };
       files.push(file);
     }
@@ -279,38 +306,36 @@ Object.defineProperty(globalThis, 'navigator', {
   configurable: true,
 });
 
-let refusal = null;
+let threw = null;
+let capacity = null;
 try {
-  await AccessHandlePoolVFS.create('expo-sqlite', {});
+  const vfs = await AccessHandlePoolVFS.create('expo-sqlite', {});
+  capacity = vfs.getCapacity();
 } catch (e) {
-  refusal = e;
-}
-if (!refusal) throw new Error('a held pool did not refuse the first acquisition');
-if (refusal.name !== 'NoModificationAllowedError') {
-  throw new Error('the refusal lost its identity: ' + refusal.name);
+  threw = e.name + ': ' + e.message;
 }
 
-const leaked = handles.filter((handle) => !handle.closed);
-if (leaked.length > 0) {
-  throw new Error(leaked.length + ' access handle(s) left open by a failed acquisition');
-}
-
-// The other document has gone. The pool must now be acquirable.
-files[1].refuse = false;
-const vfs = await AccessHandlePoolVFS.create('expo-sqlite', {});
-if (vfs == null) throw new Error('a second attempt did not build a VFS');
-
-// A slot is one OPFS file, and \`jOpen\` refuses a path it has no slot for
-// with \`SQLITE_CANTOPEN\` — permanently, since nothing tops the pool up
-// afterwards. Six was the upstream number and this app's own peak is six.
-if (vfs.getCapacity() < 16) {
-  throw new Error('pool capacity is ' + vfs.getCapacity() + ', below this app own peak plus room');
-}
-
-// An install created under the old capacity has to grow, not stay small: the
-// directory here already held three files before the first acquisition.
-if (files.length < 16) throw new Error('an existing pool directory was not topped up');
-console.log('ok');
+// After a *failure*, an open handle is one nothing can reach again; after a
+// success they are the pool, held on purpose.
+console.log(
+  JSON.stringify({
+    threw,
+    capacity,
+    filesInDir: files.length,
+    openHandles: handles.filter((handle) => !handle.closed).length,
+    // The second attempt, once the other document has gone.
+    recovered: await (async () => {
+      if (threw == null) return null;
+      files[1].refuse = false;
+      try {
+        const vfs = await AccessHandlePoolVFS.create('expo-sqlite', {});
+        return vfs.getCapacity();
+      } catch (e) {
+        return e.name + ': ' + e.message;
+      }
+    })(),
+  }),
+);
 `;
 
 describe("the Expo SQLite Drizzle patch", () => {
@@ -434,45 +459,123 @@ describe("the Expo SQLite web channel patch", () => {
  * so the next attempt was blocked by us rather than by whoever held the pool.
  */
 describe("the Expo SQLite pool-acquisition patch", () => {
-  /**
-   * A deterministic reproduction, against the real patched file: a fake OPFS
-   * directory of three files whose middle one refuses its access handle the
-   * way a browser does while another document holds it. Against the unpatched
-   * build the probe reports two handles left open.
-   */
-  it("releases what a failed acquisition took, and acquires on the next attempt", () => {
+  function pool(knobs: Record<string, string>): {
+    threw: string | null;
+    capacity: number | null;
+    filesInDir: number;
+    openHandles: number;
+    recovered: number | string | null;
+  } {
     const stdout = execFileSync(process.execPath, ["-e", accessHandlePoolProbe], {
       cwd: repoRoot,
-      env: { ...process.env, VFS_URL: `${expoSqliteUrl}/web/wa-sqlite/AccessHandlePoolVFS.js` },
+      env: {
+        ...process.env,
+        ...knobs,
+        VFS_URL: `${expoSqliteUrl}/web/wa-sqlite/AccessHandlePoolVFS.js`,
+      },
       stdio: "pipe",
       encoding: "utf8",
     });
+    return JSON.parse(stdout.trim());
+  }
 
-    expect(stdout.trim().endsWith("ok")).toBe(true);
+  /**
+   * A deterministic reproduction against the real patched file: a fake OPFS
+   * directory of three files whose middle one refuses its access handle the
+   * way a browser does while another document holds it. Reverting `allSettled`
+   * and the release makes this report two handles left open.
+   */
+  it("releases what a refused acquisition took, and acquires on the next attempt", () => {
+    const result = pool({ REFUSE: "1" });
+
+    expect(result.threw).toBe("NoModificationAllowedError: The access handle is already held.");
+    expect(result.openHandles).toBe(0);
+    expect(result.recovered).toBe(16);
   });
 
   /**
-   * `worker.ts` imports the wasm binary, so no probe under Node can reach it.
-   * The pin is the patch's text: the trio published only once all three
-   * exist, and every step *after* the pool is acquired inside a `try` that
-   * closes the VFS on the way out — `vfs_register` and `MemoryVFS.create` can
-   * both throw, and the handles a local holds are handles nothing else can
-   * give back.
+   * **The acquisition is what there is to lose, and the top-up runs after
+   * it.** `AccessHandlePoolVFS.create` is `isReady()`, which acquires every
+   * handle in the directory and *then* creates the missing slots — and
+   * `getFileHandle(create:true)` fails under an exhausted origin quota. A
+   * throw there rejects `create` with `vfs` still null in the caller, so the
+   * caller's own release closes nothing and this document ends up holding the
+   * pool against itself: the next attempt is refused with
+   * `NoModificationAllowedError`, which reads as another document holding it
+   * and offers a retry that can never succeed.
+   *
+   * Raising the capacity floor is what made this run on every install rather
+   * than only on a virgin directory, so the guard and the floor belong to the
+   * same change. Reverting the guard makes this report eight open handles.
+   */
+  it("releases the acquisition when the capacity top-up fails", () => {
+    const result = pool({ FAIL_CREATE_AFTER: "5" });
+
+    expect(result.threw).toBe("QuotaExceededError: quota");
+    expect(result.openHandles).toBe(0);
+  });
+
+  /**
+   * **The release runs while an exception is already in flight.** A handle
+   * whose `close()` throws would otherwise leave the rest open, leave the maps
+   * populated, and replace the propagating error — and the propagating error
+   * is the `NoModificationAllowedError` that `isPoolContention` reads to
+   * decide whether a retry is worth offering. Losing it classifies a pure
+   * contention failure as terminal.
+   *
+   * One handle stays open here because its own `close()` is the one that
+   * threw; what matters is that the other was closed and the refusal is what
+   * came out. Reverting the guard makes this throw `Error: close failed` with
+   * two handles open.
+   */
+  it("keeps releasing, and keeps the original refusal, when a close throws", () => {
+    const result = pool({ REFUSE: "1", FAIL_CLOSE: "1" });
+
+    expect(result.threw).toBe("NoModificationAllowedError: The access handle is already held.");
+    expect(result.openHandles).toBe(1);
+  });
+
+  /**
+   * A slot is one OPFS file and `jOpen` refuses a path it has no slot for, so
+   * the ceiling is a cliff: this app's peak is six, which is exactly what the
+   * library defaults to. The floor also has to be a *top-up* — an install with
+   * any files in its pool never reached `addCapacity` at all, so it kept
+   * whatever capacity it was created with.
+   */
+  it("sizes the pool above this app's own peak, and grows an older install", () => {
+    const result = pool({});
+
+    expect(result.capacity).toBe(16);
+    expect(result.filesInDir).toBe(16);
+  });
+
+  /**
+   * **The one hunk with no probe, read off the installed file rather than the
+   * patch.** `worker.ts` imports the wasm binary through a bundler-only
+   * specifier, so nothing under Node can *import* it — but it can be read, and
+   * what `apps/mobile` resolves is closer to the truth than what the patch
+   * claims. This is a text pin and says so; it is the weakest assertion in
+   * this file.
+   *
+   * What it holds: the trio published only once all three exist, and every
+   * step after the pool is acquired inside a `try` that closes the VFS on the
+   * way out — `vfs_register` and `MemoryVFS.create` can both throw, and the
+   * handles a local holds are handles nothing else can give back.
    */
   it("leaves no half-built VFS behind for the next attempt to trip over", () => {
-    const patch = readFileSync(sqlitePatch, "utf8");
+    const worker = readFileSync(join(fileURLToPath(expoSqliteUrl), "web/worker.ts"), "utf8");
 
     // The bug: `_sqlite3` assigned before the VFS that may throw.
-    expect(patch).toContain("-    _sqlite3 = SQLite.Factory(module) as SQLiteAPI;");
+    expect(worker).not.toContain("    _sqlite3 = SQLite.Factory(module) as SQLiteAPI;");
     // The fix: locals, published as a trio only once all three exist.
-    expect(patch).toContain("+  _sqlite3 = sqlite3;");
-    expect(patch).toContain("+  _vfs = vfs;");
-    expect(patch).toContain("+  _vfsMemory = vfsMemory;");
+    expect(worker).toContain("  _sqlite3 = sqlite3;\n  _vfs = vfs;\n  _vfsMemory = vfsMemory;");
     // And the acquisition is released on any throw that follows it.
-    expect(patch).toContain("+  let vfs: AccessHandlePoolVFS | null = null;");
-    expect(patch).toContain("+      await vfs?.close();");
+    expect(worker).toContain("let vfs: AccessHandlePoolVFS | null = null;");
+    expect(worker).toContain("await vfs?.close();");
     // The reachable partial state is the one guarded — no dead reset of a
-    // trio that is only ever all-null or all-set.
-    expect(patch).not.toContain("releaseVfsAsync");
+    // trio that is only ever all-null or all-set. A negative assertion passes
+    // trivially if the whole hunk is gone, which is what the positives above
+    // are for.
+    expect(worker).not.toContain("releaseVfsAsync");
   });
 });

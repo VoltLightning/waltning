@@ -33,8 +33,39 @@ describe("diagnostic errors", () => {
       },
     );
     expect(
-      describeDiagnosticError({ name: "WorkerError", message: "worker did not answer" }),
+      describeDiagnosticError({
+        name: "WorkerError",
+        message: "worker did not answer",
+        stack: "at invokeWorkerSync",
+      }),
     ).toEqual({ name: "WorkerError", message: "worker did not answer" });
+  });
+
+  /**
+   * A record can be called `name` and hold a counterparty, and a record can be
+   * called `message` and hold a sentence about someone's money. Without a
+   * `code` or a `stack` there is nothing to tell the two apart, so the value
+   * is described by its shape and neither field is read.
+   */
+  it("reads name and message only from a value that proves it is an error", () => {
+    const record = describeDiagnosticError({ name: "Acme Sp. z o.o.", balance: "1234.56" });
+
+    expect(record).toEqual({
+      name: "ThrownValue",
+      message: "[Object thrown with name, +1 other field(s)]",
+    });
+    expect(JSON.stringify(record)).not.toContain("Acme");
+
+    const sentence = describeDiagnosticError({ message: "duplicate for Acme, 1234.56" });
+
+    expect(sentence.message).toBe("[Object thrown with message]");
+    expect(JSON.stringify(sentence)).not.toContain("Acme");
+
+    // A `code` is proof enough on its own, and so is a `stack`.
+    expect(describeDiagnosticError({ name: "Acme", message: "x", code: 5 }).name).toBe("Acme");
+    expect(describeDiagnosticError({ name: "Acme", message: "x", stack: "at f" }).name).toBe(
+      "Acme",
+    );
   });
 
   /** A thrown string is its own message — there is no other field it could be. */

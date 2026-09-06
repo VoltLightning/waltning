@@ -123,7 +123,7 @@ index 7fba380845e3338b7d8d253013fbf73896070cde..9c12679ebfb16a7b41ed09dbbf4a9b14
    return result;
  }
 diff --git a/web/wa-sqlite/AccessHandlePoolVFS.js b/web/wa-sqlite/AccessHandlePoolVFS.js
-index 046fe6f2d119babd02e292e31a7dbdb24747e66a..cbb751597cff6e738fefabb6bc0a12cd2ec986c4 100644
+index 046fe6f2d119babd02e292e31a7dbdb24747e66a..a7bf8e3ab50379840eeea8bd28819bc3fe759c13 100644
 --- a/web/wa-sqlite/AccessHandlePoolVFS.js
 +++ b/web/wa-sqlite/AccessHandlePoolVFS.js
 @@ -22,7 +22,23 @@ const PERSISTENT_FILE_TYPES =
@@ -135,38 +135,52 @@ index 046fe6f2d119babd02e292e31a7dbdb24747e66a..cbb751597cff6e738fefabb6bc0a12cd
 + * **Sized for the application, not for a demonstration.**
 + *
 + * A slot is one OPFS file, and `jOpen` refuses a path it has no slot for with
-+ * `SQLITE_CANTOPEN` — permanently, because nothing calls `addCapacity` again
-+ * once the directory exists. Six was the upstream number and this app's own
++ * `SQLITE_CANTOPEN`. Six is the upstream number and the consuming app's own
 + * peak is six: two stores (`replica`, `outbox`), the two `.pre-migration`
-+ * copies the migrator takes, one rollback journal per store while a migration
-+ * runs, and the file the existence probe opens to answer `fs.exists`. The
-+ * seventh open in that window would brick the install with no way back but
-+ * clearing site data.
++ * copies the migrator takes — which do coexist, since a copy is discarded only
++ * once the session has opened cleanly — one rollback journal, because the
++ * stores migrate one after the other and only one write transaction is live at
++ * a time, and the file the existence probe opens to answer `fs.exists`. The
++ * seventh open in that window is refused until something frees a slot, and
++ * nothing on the startup path does.
 + *
-+ * Sixteen is that peak with room for the writes that follow it. The cost is
-+ * sixteen 4 KB headers and sixteen sync access handles held for the life of
-+ * the page.
++ * Sixteen is that peak with nine slots of headroom. The cost is sixteen 4 KB
++ * headers and sixteen sync access handles held for the life of the page.
 + */
 +const DEFAULT_CAPACITY = 16;
  
  /**
   * This VFS uses the updated Access Handle API with all synchronous methods
-@@ -230,8 +246,12 @@ export class AccessHandlePoolVFS extends FacadeVFS {
+@@ -230,8 +246,26 @@ export class AccessHandlePoolVFS extends FacadeVFS {
        this.#directoryHandle = handle;
  
        await this.#acquireAccessHandles();
 -      if (this.getCapacity() === 0) {
 -        await this.addCapacity(DEFAULT_CAPACITY);
-+      // Topped up to the floor rather than filled only when empty: an install
-+      // created under a smaller capacity keeps that capacity forever
-+      // otherwise, which is the same cliff on an older device.
-+      const missing = DEFAULT_CAPACITY - this.getCapacity();
-+      if (missing > 0) {
-+        await this.addCapacity(missing);
++      // **Everything past the acquisition is guarded, because the acquisition
++      // is what there is to lose.** `addCapacity` creates a file and takes a
++      // handle per missing slot, and `getFileHandle(create:true)` and the
++      // header write it does are both documented to fail under an exhausted
++      // origin quota. A throw there used to reject `create` with the handles
++      // `#acquireAccessHandles` had already won still open inside an instance
++      // nothing could reach — the document holding the pool against itself,
++      // which then reads as another document holding it and offers a retry
++      // that can never succeed.
++      try {
++        // Topped up to the floor rather than filled only when empty: an
++        // install created under a smaller capacity keeps that capacity
++        // forever otherwise, which is the same cliff on an older device.
++        const missing = DEFAULT_CAPACITY - this.getCapacity();
++        if (missing > 0) {
++          await this.addCapacity(missing);
++        }
++      } catch (e) {
++        this.#releaseAccessHandles();
++        throw e;
        }
      }
      return true;
-@@ -302,7 +322,17 @@ export class AccessHandlePoolVFS extends FacadeVFS {
+@@ -302,7 +336,17 @@ export class AccessHandlePoolVFS extends FacadeVFS {
      }
  
      // Open access handles in parallel, separating associated and unassociated.
@@ -185,7 +199,7 @@ index 046fe6f2d119babd02e292e31a7dbdb24747e66a..cbb751597cff6e738fefabb6bc0a12cd
        files.map(async ([name, handle]) => {
          const accessHandle = await handle.createSyncAccessHandle();
          this.#mapAccessHandleToName.set(accessHandle, name);
-@@ -314,6 +344,11 @@ export class AccessHandlePoolVFS extends FacadeVFS {
+@@ -314,11 +358,29 @@ export class AccessHandlePoolVFS extends FacadeVFS {
          }
        })
      );
@@ -196,7 +210,26 @@ index 046fe6f2d119babd02e292e31a7dbdb24747e66a..cbb751597cff6e738fefabb6bc0a12cd
 +    }
    }
  
++  /**
++   * **Every close is attempted, and a close that throws is not an error this
++   * function reports.** This is the path every failed acquisition routes
++   * through, and it runs while an exception is already in flight: a throw from
++   * the first handle would otherwise leave the rest open, leave the three maps
++   * populated, and replace the original failure — the
++   * `NoModificationAllowedError` that is the only signal saying another
++   * document holds the pool — with whatever `close()` threw.
++   */
    #releaseAccessHandles() {
+     for (const accessHandle of this.#mapAccessHandleToName.keys()) {
+-      accessHandle.close();
++      try {
++        accessHandle.close();
++      } catch (e) {
++        console.warn('failed to release an access handle', e);
++      }
+     }
+     this.#mapAccessHandleToName.clear();
+     this.#mapPathToAccessHandle.clear();
 diff --git a/web/worker.ts b/web/worker.ts
 index deaf7218f98add013b73876130f2c496ec3820fa..a995a84aed74165687ede3cea35da86d716988ed 100644
 --- a/web/worker.ts

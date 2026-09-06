@@ -122,13 +122,17 @@ durability rather than deciding whether the phone works:
   it.
 
   **The pool's capacity is a number this app owns.** A slot is one OPFS file
-  and a path with no slot is refused permanently, so the ceiling is a cliff
-  rather than a limit: the peak here is six — two stores, their two
-  pre-migration copies, a rollback journal per store during a migration, and
-  the file the existence probe opens — which is exactly what the library
-  defaults to. The fork raises it and tops up an install created under a
-  smaller one; `phone-ledger.web.ts` carries the arithmetic beside the paths
-  that drive it, because adding a third store changes the number.
+  and a path with no slot is refused until something frees one, which nothing
+  on the startup path does — so the ceiling is a cliff rather than a limit. The
+  peak here is six: two stores, their two pre-migration copies (both live at
+  once), one rollback journal, since the stores migrate one after the other,
+  and the file the existence probe opens. That is exactly what the library
+  defaults to, which leaves no room. The fork raises it and tops up an install
+  created under a smaller one, releasing the whole acquisition if the top-up
+  fails — it runs after every handle in the directory is already held, and a
+  document that drops them there holds the pool against itself.
+  `phone-ledger.web.ts` carries the arithmetic beside the paths that drive it,
+  because adding a third store changes the number.
 
   **Startup failure is therefore two claims, not one.** *Transient* means the
   cause can be named as one another attempt clears — the browser's refusal for

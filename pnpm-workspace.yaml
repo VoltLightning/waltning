@@ -61,10 +61,12 @@ patchedDependencies:
   #    exist, releases the pool if anything after the acquisition throws, and
   #    releases a partial acquisition inside the VFS itself.
   # 4. The pool holds six files and grows only on a virgin directory, while
-  #    this app's own peak is six (`apps/mobile/src/phone-ledger.web.ts` carries
-  #    the arithmetic) — so the next new file is `SQLITE_CANTOPEN` forever and
-  #    the install is bricked. The patch raises the capacity to sixteen and
-  #    tops up a directory created under a smaller one.
+  #    this app's own peak is also six (`apps/mobile/src/phone-ledger.web.ts`
+  #    carries the arithmetic) — so there is no room at all, and a seventh path
+  #    is `SQLITE_CANTOPEN` until something frees a slot. The patch raises the
+  #    capacity to sixteen and tops up a directory created under a smaller one,
+  #    releasing the whole acquisition if that top-up fails: it runs after
+  #    every handle in the directory is already held.
   expo-sqlite@57.0.1: patches/expo-sqlite@57.0.1.patch
 
 # Expo supports pnpm's isolated installs from SDK 54 onward, and Metro

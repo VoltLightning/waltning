@@ -52,14 +52,16 @@ import { displayCurrency, setLivePivotReader, setLivePivotSubscriber } from "./p
  * imply — the number the OPFS pool has to be sized for.
  *
  * A pool slot is one OPFS file, and the VFS refuses a path it has no slot for
- * with `SQLITE_CANTOPEN`, permanently: nothing tops the pool up afterwards, so
- * an install that hits the ceiling is bricked with no way back but clearing
- * site data. The peak here is six — `replica`, `outbox`, their two
- * `.pre-migration` copies, one rollback journal per store while a migration
- * runs, and the file `probeExists` opens to answer `fs.exists` — which is
- * exactly the upstream capacity. The fork raises it to sixteen
- * (`pnpm-workspace.yaml`, hunk 4) and tops up an install created under a
- * smaller one. Adding a third store here means checking that number.
+ * with `SQLITE_CANTOPEN` until something frees one — which nothing on the
+ * startup path does. The peak here is six: `replica`, `outbox`, their two
+ * `.pre-migration` copies (both live at once, since a copy is discarded only
+ * after the session opens cleanly), **one** rollback journal — the stores
+ * migrate one after the other, so only one write transaction is open at a
+ * time — and the file `probeExists` opens to answer `fs.exists`. Six is also
+ * exactly the upstream capacity, which leaves no room at all. The fork raises
+ * it to sixteen and tops up an install created under a smaller one
+ * (`pnpm-workspace.yaml`, defect 4). Adding a third store here means checking
+ * that number.
  */
 const LEDGER_PATHS = {
   replica: "waltning-replica.db",
@@ -94,9 +96,10 @@ const openHandles = new Map<string, SQLiteDatabase>();
  * retry only where the cause can be named.
  *
  * **An exhausted pool stays terminal, and the mitigation is capacity.** A
- * refused slot is refused on every later attempt, so a button would be a lie;
- * the answer is that the pool is sized for this app's own peak in the first
- * place (see `LEDGER_PATHS`), not that the failure is retried.
+ * refused slot is refused on every later attempt of the same open, so a button
+ * would be a lie; the answer is that the pool is sized well above this app's
+ * own peak in the first place (see `LEDGER_PATHS`), not that the failure is
+ * retried.
  */
 const POOL_CONTENTION = "NoModificationAllowedError";
 
@@ -204,7 +207,7 @@ export const PHONE_LEDGER_AVAILABLE = true as const;
  * timing condition, not a broken ledger.
  *
  * **This loop depends on two properties of the vendored driver that only the
- * fork provides** (`pnpm-workspace.yaml` states all four hunks and why):
+ * fork provides** (`pnpm-workspace.yaml` states all four defects and why):
  *
  * - **A refused acquisition leaves the worker able to try again** — the VFS
  *   trio is published only once all three exist, and a partial acquisition is

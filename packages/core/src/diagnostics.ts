@@ -74,12 +74,14 @@ export function describeDiagnosticError<Caught>(
  * nothing. Routing through `describeDiagnosticError` means one description of
  * a thrown value, used both by the logs and by whatever renders the failure.
  *
- * **The two platform ledgers, not every call site.** Nine other places still
- * write `String(error)`: `use-query.ts`, three readers in
- * `create-phone-ledger.ts`, `use-transaction-search.ts`, `recover.ts`,
- * `migrate.ts`, `db.ts` and `tools/e2e/src/smoke.ts`. Nothing lints for the
- * shape. This is the better default, not an enforced invariant, and sweeping
- * them is its own change.
+ * **The two platform ledgers, not every call site.** Eleven other places still
+ * write `String(error)`: `packages/client/src/query/use-query.ts`, three
+ * readers in `create-phone-ledger.ts`, `use-transaction-search.ts`,
+ * `packages/ledger/src/recover.ts`, `packages/ledger/src/migrate.ts`,
+ * `apps/api/src/infra/db.ts`, `tools/e2e/src/smoke.ts`,
+ * `tools/e2e/specs/00-smoke.spec.ts` and `packages/ui/visual/stories.spec.ts`.
+ * Nothing lints for the shape. This is the better default, not an enforced
+ * invariant, and sweeping them is its own change.
  *
  * **An `Error` is returned unchanged, except that it must say something.** An
  * empty `message` renders as an empty line on a failure screen — the tag, the
@@ -150,20 +152,40 @@ function describeThrownValue<Caught>(caught: Caught): DiagnosticError {
  * Read through `in` narrowing rather than an index signature or a cast: the
  * compiler gives each field its own narrowed type from the `typeof` beside it,
  * so no declaration here claims to know what a thrown value holds.
+ *
+ * **`name` and `message` are read only from a value that proves it is an
+ * error, and `code` or `stack` is the proof.** `describeShape` below declines
+ * to decide from a key's *syntax* whether it is schema or a label; a key's
+ * *spelling* is no better. A record can be called `name` and hold "Acme", and
+ * a record can be called `message` and hold a sentence about someone's money —
+ * so a plain object carrying only those two is indistinguishable from data and
+ * is described by its shape instead. A `code` (string or number) or a `stack`
+ * (string) is a field a ledger record does not have, and reading the pair
+ * behind it is reading an error.
+ *
+ * Nothing in this system is narrowed by that: every throw crossing the SQLite
+ * worker boundary is normalised to an `Error` and rebuilt as one on the far
+ * side, so this branch is for values from third-party code, and the cost of
+ * being wrong about one of those is a shape description instead of a sentence.
  */
 function describeThrownObject(caught: object): DiagnosticError {
-  const name =
-    "name" in caught && typeof caught.name === "string" && caught.name.length > 0
-      ? caught.name
-      : "ThrownValue";
-  const message =
-    "message" in caught && typeof caught.message === "string" && caught.message.length > 0
-      ? boundedMessage(caught.message)
-      : describeShape(caught);
   const code =
     "code" in caught && (typeof caught.code === "string" || typeof caught.code === "number")
       ? caught.code
       : undefined;
+  const errorShaped = code !== undefined || ("stack" in caught && typeof caught.stack === "string");
+
+  const name =
+    errorShaped && "name" in caught && typeof caught.name === "string" && caught.name.length > 0
+      ? caught.name
+      : "ThrownValue";
+  const message =
+    errorShaped &&
+    "message" in caught &&
+    typeof caught.message === "string" &&
+    caught.message.length > 0
+      ? boundedMessage(caught.message)
+      : describeShape(caught);
 
   return { name, message, ...(code !== undefined ? { code } : {}) };
 }

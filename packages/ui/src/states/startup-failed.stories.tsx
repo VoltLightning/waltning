@@ -50,7 +50,9 @@ export const Failed: Story = {};
 /**
  * The browser's transient failure: the SQLite worker still holds its files for
  * the document being replaced, which the next attempt usually clears — so this
- * one is `recoverable`, carries what it cost (nothing), and offers the button.
+ * one is `recoverable` and offers the button. No `cost` line on either story,
+ * because there is no claim about what was lost that holds on every path that
+ * reaches this screen (`startup-failed.tsx`).
  */
 export const Retryable: Story = {
   args: { error: new Error("placeholder failure reason"), onRetry: noop },
