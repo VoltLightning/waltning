@@ -83,31 +83,22 @@ export const setTransactionLinesExecutor = defineLocalExecutor<
       .where(eq(transactions.id, input.transactionId))
       .get();
     /**
-     * **A row this device does not hold is a refusal, not a skip.**
-     *
-     * The early return was `if (!current || ...) return`, which put back the
-     * entry this hook exists to keep out: an input naming an id the replica
-     * has never seen queued a real operation Postgres refuses forever, and
-     * `recover.ts` re-reads it at every launch while any sibling entry is
-     * `deferred`. The *deleted* branch is safe — `apply` refuses that with a
-     * message of its own — but the missing one fell through to the outbox.
-     *
-     * So only the scale check needs the row (it reads the currency's declared
-     * scale); the sign and the empty-set guard are judged without it, and
-     * `adjustment` — the one exemption — is a type an unknown row cannot have,
-     * since this operation mints nothing.
+     * **A row this device does not hold is skipped, not refused.** See
+     * `update-transaction.executor.ts`'s `validate` for the whole argument: an
+     * `adjustment` may legitimately sign, that exemption is a property of a
+     * row a deferred create has not materialised yet, and a refusal thrown
+     * here is `dependency: false` — which `recover.ts` blocks rather than
+     * defers, dropping the write. The rule is judged where the row is.
      */
-    if (current !== undefined && current.deletedAt !== null) return;
-    const type = current?.type ?? "unknown";
+    if (current === undefined || current.deletedAt !== null) return;
+    const type = current.type;
     if (input.amountOriginal !== undefined) {
-      if (current !== undefined) {
-        assertMoneyScale(
-          tx,
-          input.amountOriginal,
-          current.currency,
-          "set_transaction_lines: amount_original",
-        );
-      }
+      assertMoneyScale(
+        tx,
+        input.amountOriginal,
+        current.currency,
+        "set_transaction_lines: amount_original",
+      );
       assertAmountPositive("set_transaction_lines: amount_original", input.amountOriginal, type);
     }
     /**
@@ -126,14 +117,12 @@ export const setTransactionLinesExecutor = defineLocalExecutor<
     }
 
     for (const line of input.lines) {
-      if (current !== undefined) {
-        assertMoneyScale(
-          tx,
-          line.amount,
-          current.currency,
-          `set_transaction_lines: transaction_lines[${line.id}].amount`,
-        );
-      }
+      assertMoneyScale(
+        tx,
+        line.amount,
+        current.currency,
+        `set_transaction_lines: transaction_lines[${line.id}].amount`,
+      );
       /**
        * A line is a magnitude, and a `0.00` one is a row receipts print —
        * see `assertLineMagnitude` for why the parent's rule and this one are

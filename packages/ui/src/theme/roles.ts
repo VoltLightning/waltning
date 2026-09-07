@@ -79,6 +79,15 @@ export type Theme = {
   /** Secondary text: labels, captions, metadata, affixes. */
   textMuted: string;
   /**
+   * Decoration, never text a person reads to act — a chevron, a unit, a
+   * repeated line. Below even the relaxed secondary floor (2.05:1), which is
+   * why the census names it separately and refuses it anywhere `textMuted` is
+   * allowed.
+   */
+  textFaint: string;
+  /** A panel inside a card — Hearth's inner tile. */
+  insetFill: string;
+  /**
    * Text and icons sitting **on** `accent`. Not `surface` — see the header.
    * These coincide in light and must not be assumed to.
    */
@@ -99,7 +108,7 @@ export type Theme = {
    * The same ring, for a control on the shell. Green on green is 2.04:1 in
    * light — under 1.4.11's 3:1 for a boundary — and the band is the one ground
    * `focusRing` was never checked against, because it is not one of the six
-   * fills the census walks. Seven controls draw it, and the set is decided by
+   * fills that census walks. Seven controls draw it, and the set is decided by
    * what a component is drawn on rather than by which folder holds it —
    * `CurrencyChip` lives under `fx/` and was missed by the first pass for
    * exactly that reason. `IconButton tone="shell"`, `DeskBand`'s nav,
@@ -174,6 +183,15 @@ export type Theme = {
   shellText: string;
   /** Secondary text on the shell — the currency marker, the mine/ours line. */
   shellTextMuted: string;
+  /**
+   * A refusal drawn on the shell. `dangerText` is a page ink: on the band it
+   * measures **1.37:1**, and `CommandBar` — the desk's only capture
+   * affordance — drew its field errors in it, along with its hint, its reason
+   * line and its payee at 1.45:1. A bar with no fill of its own renders
+   * straight onto `theme.shell`, which is a ground the text census did not
+   * walk because "nothing else is drawn on it" had stopped being true.
+   */
+  shellDangerText: string;
   /** The fill behind the active control on the shell — `DeskBand`'s nav. */
   shellNavActiveFill: string;
   /** A recessed track on the shell — `DeskBand`'s scope `SegmentControl`. */
@@ -250,6 +268,8 @@ export const light: Theme = {
 
   text: color.ink,
   textMuted: color.muted,
+  textFaint: color.faint,
+  insetFill: color.inset,
   textOnAccent: color.surface,
 
   accent: color.accent,
@@ -281,6 +301,7 @@ export const light: Theme = {
   shell: color.shell,
   shellText: color.shellText,
   shellTextMuted: color.shellTextMuted,
+  shellDangerText: color.shellDangerText,
   shellNavActiveFill: color.shellNavActive,
   shellInsetTrackFill: color.shellInsetTrack,
   scrim: color.ink,
@@ -308,6 +329,8 @@ export const dark: Theme = {
 
   text: darkColor.ink,
   textMuted: darkColor.muted,
+  textFaint: darkColor.faint,
+  insetFill: darkColor.inset,
   textOnAccent: darkColor.textOnAccent,
 
   accent: darkColor.accent,
@@ -341,6 +364,7 @@ export const dark: Theme = {
   shell: darkColor.shell,
   shellText: darkColor.shellText,
   shellTextMuted: darkColor.shellTextMuted,
+  shellDangerText: darkColor.shellDangerText,
   // Not `darkColor.shellNavActive` — there is no such entry. The shell is the
   // one surface that does not repaint between themes (`tokens.ts`: "the
   // shell stays sage in both themes"), so its highlight does not either.

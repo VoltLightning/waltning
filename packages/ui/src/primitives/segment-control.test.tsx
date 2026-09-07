@@ -40,7 +40,7 @@ it("draws a count on the band in the band's muted ink", () => {
 
 /** The default is unchanged — every other caller sits on a card. */
 it("draws a count on a card in the page's muted ink", () => {
-  expect(countColour("surface")).toBe("rgb(104, 97, 84)");
+  expect(countColour("surface")).toBe("rgb(138, 132, 120)");
 });
 
 /**

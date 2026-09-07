@@ -41,7 +41,13 @@ export const color = {
    * interpolation between the existing anchors, so the new steps sit between
    * the old ones rather than beside them.
    */
-  /** Table headers, inset boxes, filled chips — quieter than `surface`. */
+  /**
+   * A panel inside a card — Hearth's inner tile, the step between `surface` and
+   * `subtle`. The two figures under "Kept so far" sit on this, and so does any
+   * box that groups content *within* a card rather than beside it.
+   */
+  inset: "#f8f4ec",
+  /** Table headers, tracks, filled chips — quieter than `surface`. */
   subtle: "#f1ebe0",
   /** The fill under a pointer, between `subtle` and `pressed`. */
   hover: "#ece5d7",
@@ -75,7 +81,28 @@ export const color = {
    */
   borderStrong: "#746e5f",
   ink: "#33302a",
-  muted: "#686154",
+  /**
+   * **Hearth's grey, at 3.45:1 on the page — a deliberate exception.**
+   *
+   * §2.1 held every ink to 4.5:1 and this one does not reach it. It is the
+   * colour the design was chosen on: labels, meta lines and the quiet half of
+   * every row. Adopting Hearth without it is adopting a different design, and
+   * darkening it to pass collapses it into `faint` — the two greys end up two
+   * hundredths apart and the two-level hierarchy Hearth reads by is gone.
+   *
+   * So the floor moves rather than the colour: **3:1 for secondary text, 4.5:1
+   * for anything load-bearing** — a figure, a control's own label, anything a
+   * person acts on. `theme.test.tsx` states which is which, by token, and a
+   * new token has to be classed before it can ship.
+   */
+  muted: "#8a8478",
+  /**
+   * The quieter half of Hearth's pair: a chevron, a unit, a line that repeats
+   * on every row. 2.05:1 — below even the relaxed floor, so it is **not for
+   * text a person reads to act**. Censused as decoration, and refused on
+   * anything the secondary class allows.
+   */
+  faint: "#b5aea0",
 
   /** A primary action's fill. Job 1. */
   accent: "#5c7357",
@@ -161,6 +188,8 @@ export const color = {
   shell: "#3c4f38",
   shellText: "#f2f0e7",
   shellTextMuted: "#b8c4ae",
+  /** A refusal on the band. `danger-text` is a page ink and reads 1.37:1 there. */
+  shellDangerText: "#f2b5a2",
   /**
    * The active state for a control that lives *on* the shell — `DeskBand`'s
    * nav today. A translucent white rather than a step off the shell's own
@@ -203,6 +232,8 @@ export const color = {
 export const darkColor = {
   ground: "#1c1a15",
   surface: "#26221b",
+  /** `inset`'s dark half — a panel inside a card, a step up from the card. */
+  inset: "#2b2620",
   subtle: "#2b2620",
   hover: "#302a23",
   pressed: "#363027",
@@ -211,6 +242,8 @@ export const darkColor = {
   borderStrong: "#918974",
   ink: "#f0ece3",
   muted: "#a59d8d",
+  /** `faint`'s dark half — the same role, the same exclusion from acted-on text. */
+  faint: "#6e675b",
   accent: "#5c7357",
   accentText: "#a4c297",
   accentIcon: "#8fae84",
@@ -235,6 +268,8 @@ export const darkColor = {
   shellText: "#f0f4ec",
   /** Tuned to this shell — 4.7:1 on it, over the 4.5 floor. */
   shellTextMuted: "#b3c2a9",
+  /** A refusal on the band — the band is one colour, so this is too. */
+  shellDangerText: "#f2b5a2",
 } as const;
 
 /* ── 2.2 Typography ──────────────────────────────────────────────────────── */

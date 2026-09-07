@@ -5,6 +5,8 @@ import { beforeEach, expect, it, vi } from "vitest";
 import { expectContainsOverscroll } from "../primitives/nested-scroll.test-support.ts";
 import type { SafeAreaInsets } from "../primitives/safe-area";
 import { SafeAreaProvider, WindowInsetsProvider } from "../primitives/safe-area";
+import { ThemeProvider } from "../theme/provider";
+import { light } from "../theme/roles.ts";
 
 /**
  * The composition the tab shell actually produces: the device's insets on the
@@ -231,4 +233,31 @@ it("ignores a layer that has re-provided the tab bar's height", () => {
 
   // 22 + the device's 34 — not 22 + the bar's 90.
   expect(screen.getByTestId("bottom-sheet").style.paddingBottom).toBe("56px");
+});
+
+/**
+ * **The scroller spans the sheet; the gutter rides on what it carries.**
+ *
+ * `paddingHorizontal` on the sheet put the body *inside* it: the scroll
+ * indicator ran in a channel indented from the sheet's edge, and a focused
+ * field's ring — drawn outside its own box — was clipped left and right by the
+ * padding it sat in. Asserted here rather than left to a screenshot, because
+ * the wrong version looks almost right until something is focused.
+ */
+it("puts no horizontal padding on the sheet itself", () => {
+  const view = render(
+    <ThemeProvider theme={light}>
+      <BottomSheet visible title="Filter" onDismiss={vi.fn()} footer={<span>Apply</span>}>
+        <span>Body</span>
+      </BottomSheet>
+    </ThemeProvider>,
+  );
+  const sheet = view.getByTestId("bottom-sheet");
+  const body = view.getByTestId("bottom-sheet-body");
+  for (const side of ["paddingLeft", "paddingRight"] as const) {
+    expect(getComputedStyle(sheet)[side], `sheet ${side}`).toBe("0px");
+    // The scroller itself is unpadded too — the inset is on its content.
+    expect(getComputedStyle(body)[side], `body ${side}`).toBe("0px");
+  }
+  view.unmount();
 });

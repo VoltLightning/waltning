@@ -42,9 +42,9 @@ import { groupByDay } from "@waltning/client/transactions/group-by-day";
 import { useLedgerTableSelection } from "@waltning/client/transactions/use-ledger-table-selection";
 import { useLedgerTableSort } from "@waltning/client/transactions/use-ledger-table-sort";
 import {
-  accountingDate,
   addDays,
-  isAccountingDate,
+  monthRange,
+  periodMonthOf,
   shiftMonth,
   type YearMonth,
   yearMonth,
@@ -55,7 +55,6 @@ import { Amount } from "@waltning/ui/fx/amount";
 import { decimalMark, monthLabel } from "@waltning/ui/i18n/locales";
 import { useLocale, useT } from "@waltning/ui/i18n/provider";
 import { Chip } from "@waltning/ui/primitives/chip";
-import { DateField } from "@waltning/ui/primitives/date-field";
 import { pageScrollProps } from "@waltning/ui/primitives/nested-scroll";
 import { SearchField } from "@waltning/ui/primitives/search-field";
 import { type Segment, SegmentControl } from "@waltning/ui/primitives/segment-control";
@@ -83,6 +82,7 @@ import {
   type LedgerTableRow,
   sortLedgerTableRows,
 } from "@waltning/ui/transactions/ledger-table";
+import { PeriodField } from "@waltning/ui/transactions/period-field";
 import { SwipeableRow } from "@waltning/ui/transactions/swipeable-row";
 import { TransactionRow } from "@waltning/ui/transactions/transaction-row";
 import { TransferRow } from "@waltning/ui/transactions/transfer-row";
@@ -229,40 +229,6 @@ function deskSelectionKind(rows: readonly PhoneSearchTransaction[]): DeskSelecti
     else if (kind !== row.type) return "mixed";
   }
   return kind;
-}
-
-/**
- * The desk rail's period label, derived from the filter rather than kept
- * beside it (H5, round 1).
- *
- * `periodMonth` used to be its own `useState`, coupled to `from`/`to` only
- * by the stepper's own handler — so the first paint read "September 2026"
- * over a table covering every transaction ever, and "Clear all filters" left
- * the label naming a month it no longer filtered. One state means the label
- * can only ever say what the query is actually doing: a whole calendar month
- * names the month, no range at all says so, and anything else prints its own
- * two ends.
- */
-function periodMonthOf(from: string, to: string): YearMonth | null {
-  if (!isAccountingDate(from) || !isAccountingDate(to)) return null;
-  const month = yearMonth(from.slice(0, 7));
-  const bounds = monthRange(month);
-  return from === bounds.from && to === bounds.to ? month : null;
-}
-
-/**
- * One calendar month as a filter range, inclusive on both ends. The month's
- * last day is "the day before the first of the next month" rather than a
- * table of lengths — `core/date`'s `shiftMonth`/`addDays` are the sanctioned
- * helpers, and they carry the year rollover and February in a leap year.
- * `periodMonthOf` is this function read backwards, which is why they sit
- * together: a range this built must be a range that one recognises.
- */
-function monthRange(month: YearMonth): { from: string; to: string } {
-  return {
-    from: `${month}-01`,
-    to: addDays(accountingDate(`${shiftMonth(month, 1)}-01`), -1),
-  };
 }
 
 function deskCategorizeConfirmState(
@@ -889,18 +855,7 @@ export default function Ledger() {
           value={filter.scope}
           onChange={filters.setScope}
         />
-        <DateField
-          label={t("transactions.filterFrom")}
-          value={filter.from}
-          onChange={filters.setFrom}
-          today={today}
-        />
-        <DateField
-          label={t("transactions.filterTo")}
-          value={filter.to}
-          onChange={filters.setTo}
-          today={today}
-        />
+        <PeriodField from={filter.from} to={filter.to} today={today} onChange={filters.setRange} />
       </BottomSheet>
 
       <CategorySheet

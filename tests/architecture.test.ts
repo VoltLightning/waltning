@@ -2630,6 +2630,164 @@ describe("a refusal is never reported as a success", () => {
  * the four that are genuinely areas are named here. A fifth would have to be
  * argued into this list in the open, which is the point.
  */
+/**
+ * **A component drawn on the band uses the band's inks.**
+ *
+ * `theme.shell` is a dark ground and the page's inks are tuned for a light
+ * one: `textMuted` measures **1.45:1** there and `dangerText` **1.37:1**.
+ * `Toast` recorded that number when it moved to `shellText`; `CommandBar` drew
+ * its hint, its reason line, its payee and its field errors in the page's inks
+ * anyway, because the pass that fixed the band's *rings* was looking for
+ * outlines. Both components render straight onto the band — neither has a fill
+ * of its own — so nothing composited in between, and no census walked it.
+ *
+ * The rule is per file rather than per style: a file that paints `theme.shell`
+ * anywhere, or is named here as a slot the band mounts, may not also name a
+ * page ink. Chips and cards *inside* such a component carry their own fill, so
+ * they are the exemptions — named, with the fill that saves them.
+ */
+/**
+ * **`textFaint` is decoration, and the palette's exception depends on it.**
+ *
+ * §2.1a buys Hearth's grey by splitting the floor: 4.5:1 for text a person
+ * acts on, 3:1 for secondary. `faint` is in neither — 2.05:1 in light — and it
+ * is only defensible while it stays on marks whose meaning survives not being
+ * read: a chevron, a unit, a rule between rows.
+ *
+ * A ratio cannot say that, because the ratio is the thing being excused. Only
+ * the *use* can, so it is checked here: `faint` may be a `borderColor`, an
+ * icon `stroke`, or the `color` of a style whose name says it is a mark. Any
+ * other `color:` is a person reading grey-on-grey at 2:1, and the exception
+ * has quietly become a licence.
+ */
+describe("faint ink stays decoration", () => {
+  /** Style names that are marks rather than text. Each earns its place by what it draws. */
+  const MARKS = /(chevron|caret|arrow|icon|glyph|rule|divider|dot|separator|unit|tick|handle)/i;
+
+  function offences(): string[] {
+    const found: string[] = [];
+    const files = ["packages/ui/src", "apps/mobile/src", "apps/mobile/app"]
+      .flatMap((root) => sourceFiles(join(repoRoot, root)))
+      .filter((file) => !/\.(test|stories)\.tsx?$/.test(file));
+
+    for (const file of files) {
+      const text = readFileSync(file, "utf8");
+      if (!text.includes("textFaint")) continue;
+      const source = ts.createSourceFile(
+        file,
+        text,
+        ts.ScriptTarget.Latest,
+        true,
+        ts.ScriptKind.TSX,
+      );
+      const walk = (node: ts.Node): void => {
+        if (ts.isPropertyAssignment(node) && ts.isObjectLiteralExpression(node.initializer)) {
+          const key = ts.isIdentifier(node.name) ? node.name.text : node.name.getText();
+          for (const property of node.initializer.properties) {
+            if (!ts.isPropertyAssignment(property)) continue;
+            const name = ts.isIdentifier(property.name)
+              ? property.name.text
+              : property.name.getText();
+            if (name !== "color") continue;
+            if (!/theme\.textFaint\b/.test(property.initializer.getText())) continue;
+            if (MARKS.test(key)) continue;
+            found.push(`${relative(repoRoot, file)}#${key}`);
+          }
+        }
+        ts.forEachChild(node, walk);
+      };
+      walk(source);
+    }
+    return found;
+  }
+
+  it("never colours acted-on text with faint ink", () => {
+    expect(
+      offences(),
+      "faint is 2.05:1 — use textMuted for anything read, or name the style for the mark it draws",
+    ).toEqual([]);
+  });
+});
+
+describe("a component on the band uses the band's inks", () => {
+  const PAGE_INKS = ["theme.textMuted", "theme.dangerText", "theme.text"];
+
+  /**
+   * The band's own components: they paint `theme.shell`, or `DeskBand` mounts
+   * them into a slot that does (`desk-band.tsx`'s `commandBar`, `currencySlot`
+   * — a slot is invisible to a grep for the fill).
+   */
+  const ON_THE_BAND = [
+    "packages/ui/src/shell/desk-band.tsx",
+    "packages/ui/src/shell/tab-bar.tsx",
+    "packages/ui/src/shell/shell.tsx",
+    "packages/ui/src/states/toast.tsx",
+    "packages/ui/src/transactions/command-bar.tsx",
+    "packages/ui/src/fx/currency-chip.tsx",
+  ];
+
+  /** A style that sits on a fill of its own, with the fill that puts it there. */
+  const ON_THEIR_OWN_FILL = new Map([
+    // `CommandBar` carries its own `surface` fill (see its `root`), so every
+    // ink inside it is on a page ground and the page's inks are correct.
+    ["packages/ui/src/transactions/command-bar.tsx#chipTextMuted", "on the bar's own surface"],
+    ["packages/ui/src/transactions/command-bar.tsx#chipText", "on the bar's own surface"],
+    ["packages/ui/src/transactions/command-bar.tsx#input", "on the bar's own surface"],
+    ["packages/ui/src/transactions/command-bar.tsx#hint", "on the bar's own surface"],
+    ["packages/ui/src/transactions/command-bar.tsx#payee", "on the bar's own surface"],
+    ["packages/ui/src/transactions/command-bar.tsx#reason", "on the bar's own surface"],
+    ["packages/ui/src/transactions/command-bar.tsx#trailCaption", "on the bar's own surface"],
+    ["packages/ui/src/transactions/command-bar.tsx#fieldError", "on the bar's own surface"],
+    ["packages/ui/src/shell/tab-bar.tsx#label", "the tab bar is a `surface`, not the band"],
+  ]);
+
+  function offences(): string[] {
+    const found: string[] = [];
+    for (const relative of ON_THE_BAND) {
+      const file = join(repoRoot, relative);
+      const source = ts.createSourceFile(
+        file,
+        readFileSync(file, "utf8"),
+        ts.ScriptTarget.Latest,
+        true,
+        ts.ScriptKind.TSX,
+      );
+      const walk = (node: ts.Node): void => {
+        if (ts.isPropertyAssignment(node) && ts.isObjectLiteralExpression(node.initializer)) {
+          const key = ts.isIdentifier(node.name) ? node.name.text : node.name.getText();
+          for (const property of node.initializer.properties) {
+            if (!ts.isPropertyAssignment(property)) continue;
+            const name = ts.isIdentifier(property.name)
+              ? property.name.text
+              : property.name.getText();
+            if (name !== "color") continue;
+            if (PAGE_INKS.includes(property.initializer.getText()))
+              found.push(`${relative}#${key}`);
+          }
+        }
+        ts.forEachChild(node, walk);
+      };
+      walk(source);
+    }
+    return found;
+  }
+
+  it("draws no page ink on the band", () => {
+    const offenders = offences().filter((id) => !ON_THEIR_OWN_FILL.has(id));
+    expect(
+      offenders,
+      "use shellText / shellTextMuted / shellDangerText, or name the fill this style sits on",
+    ).toEqual([]);
+  });
+
+  /** An exemption that outlives its style silently re-permits the next thing to take the name. */
+  it("names a style the rule actually finds, for every exemption", () => {
+    const found = new Set(offences());
+    const stale = [...ON_THEIR_OWN_FILL.keys()].filter((id) => !found.has(id));
+    expect(stale, "remove the exemption, or point it at the style that replaced it").toEqual([]);
+  });
+});
+
 describe("a control's edge is not the divider colour", () => {
   /**
    * Every style object that draws a full box in `theme.border` — the divider
@@ -2661,6 +2819,10 @@ describe("a control's edge is not the divider colour", () => {
     [
       "packages/ui/src/counterparties/settle-sheet.tsx#result",
       "a result box — read, never pressed",
+    ],
+    [
+      "packages/ui/src/transactions/command-bar.tsx#root",
+      "the bar's own surface on the band, not a control on it",
     ],
     // The four that reach the divider through `theme.elevation.<role>` — the
     // house idiom for a card's own 1px edge, and the alias that defeated the
@@ -2767,7 +2929,8 @@ describe("a control's edge is not the divider colour", () => {
         (node.propertyName ?? node.name).getText() === "border" &&
         node.parent.parent !== undefined &&
         ts.isVariableDeclaration(node.parent.parent) &&
-        node.parent.parent.initializer?.getText() === "theme"
+        // `theme`, and `useTheme()` — the same object under a call.
+        /^(theme|useTheme\(\))$/.test(node.parent.parent.initializer?.getText() ?? "")
       ) {
         locals.add(node.name.text);
       }
@@ -2807,8 +2970,15 @@ describe("a control's edge is not the divider colour", () => {
      * which is the use `02-tokens` §2.1 gives this colour. Nothing is guessed:
      * a partial box (two or three sides) counts as a box and is flagged.
      */
-    const statedSides = SIDE_WIDTHS.filter((side) => properties.has(side));
-    if (!properties.has("borderWidth") && statedSides.length === 1) return false;
+    // `borderWidth: 0` is React Native's ordinary reset beside a single side,
+    // and `has` reads presence rather than value — so the standard row rule,
+    // `{ borderWidth: 0, borderBottomWidth: 1, borderColor: theme.border }`,
+    // was flagged as a box. The value is what says whether a box is drawn.
+    const boxWidth = properties.get("borderWidth");
+    const statedSides = SIDE_WIDTHS.filter(
+      (side) => properties.has(side) && properties.get(side) !== "0",
+    );
+    if ((boxWidth === undefined || boxWidth === "0") && statedSides.length === 1) return false;
     return isDivider(colour, names);
   }
 
@@ -2820,11 +2990,13 @@ describe("a control's edge is not the divider colour", () => {
 
     for (const file of files) {
       const text = readFileSync(file, "utf8");
-      // A cheap skip, and safe against comments in the direction that matters:
-      // every real use contains this text, so a file it skips has none. A file
-      // that mentions the token only in prose costs one parse and finds
-      // nothing — `dividerLocals` reads the tree.
-      if (!/theme\.border\b|elevation\.\w+\.borderColor/.test(text)) continue;
+      // A cheap skip on `theme` alone, because the narrower one made the
+      // destructuring branch unreachable: a file whose only reference is
+      // `const { border } = theme` never contains the string `theme.border`,
+      // so it was skipped before it was parsed — and adding a *comment*
+      // containing that text turned the rule back on. A rule whose reach
+      // depends on prose is the thing the tree-walk was adopted to stop.
+      if (!/\btheme\b/.test(text)) continue;
       const source = ts.createSourceFile(
         file,
         text,

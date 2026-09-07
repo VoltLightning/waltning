@@ -2,7 +2,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ThemeProvider } from "../theme/provider";
-import { light } from "../theme/roles.ts";
+import { dark, light } from "../theme/roles.ts";
 import { Toast, UndoToast } from "./toast";
 
 const TOKEN = 1;
@@ -188,16 +188,21 @@ describe("UndoToast", () => {
  * forgot to test.**
  *
  * A toast paints `theme.shell` and its action is the only thing on it a
- * keyboard can reach. The green ring measures 2.04:1 there. Asserted against
- * the *shell*, not against a token name: `shellFocusRing` and `shellText` hold
- * the same string in both themes, so a name comparison could not tell a
- * correct ring from one that merely looks right — while a contrast assertion
- * catches the only thing a reader experiences, and would keep catching it if
- * either token moved.
+ * keyboard can reach; the page's green ring measures 2.04:1 there. Asserted
+ * two ways, because neither alone is enough: the **contrast** is what a reader
+ * experiences and survives either token moving, but in dark the green ring is
+ * 3.60:1 — over the floor — so a contrast test alone is blind to the dark
+ * instance of the very mistake it guards. The **identity** check closes that,
+ * and cannot stand alone either: `shellFocusRing` and `shellText` hold the
+ * same string, so a name comparison cannot tell a correct ring from one that
+ * merely looks right.
  */
-it("draws its action's ring readably against the band it paints", () => {
+it.each([
+  ["light", light],
+  ["dark", dark],
+])("draws its action's ring readably against the %s band it paints", (_name, theme) => {
   const view = render(
-    <ThemeProvider theme={light}>
+    <ThemeProvider theme={theme}>
       <UndoToast message="Row deleted" onUndo={vi.fn()} onDismiss={vi.fn()} token={TOKEN} />
     </ThemeProvider>,
   );
@@ -205,12 +210,18 @@ it("draws its action's ring readably against the band it paints", () => {
   fireEvent.focusIn(action);
   const ring = getComputedStyle(action).outlineColor;
   expect(ring, "the action draws a ring at all").not.toBe("rgba(0, 0, 0, 0)");
-  expect(contrastAgainstShell(ring), ring).toBeGreaterThanOrEqual(3);
+  expect(ring, "the page's ring, on the band").not.toBe(hexToRgb(theme.focusRing));
+  expect(contrastAgainst(ring, theme.shell), ring).toBeGreaterThanOrEqual(3);
   view.unmount();
 });
 
-/** WCAG's own formula, on an `rgb(r, g, b)` string against `light.shell`. */
-function contrastAgainstShell(rgb: string): number {
+function hexToRgb(hex: string): string {
+  const channel = (at: number) => Number.parseInt(hex.slice(at, at + 2), 16);
+  return `rgb(${channel(1)}, ${channel(3)}, ${channel(5)})`;
+}
+
+/** WCAG's own formula, on an `rgb(r, g, b)` string against a hex ground. */
+function contrastAgainst(rgb: string, ground: string): number {
   const parts = /^rgb\((\d+),\s*(\d+),\s*(\d+)\)$/.exec(rgb);
   if (parts === null) throw new Error(`not an rgb colour: ${rgb}`);
   const channel = (value: number) => {
@@ -220,6 +231,7 @@ function contrastAgainstShell(rgb: string): number {
   const luminance = (r: number, g: number, b: number) =>
     0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b);
   const ring = luminance(Number(parts[1]), Number(parts[2]), Number(parts[3]));
-  const shell = luminance(0x3c, 0x4f, 0x38);
-  return (Math.max(ring, shell) + 0.05) / (Math.min(ring, shell) + 0.05);
+  const hex = (at: number) => Number.parseInt(ground.slice(at, at + 2), 16);
+  const behind = luminance(hex(1), hex(3), hex(5));
+  return (Math.max(ring, behind) + 0.05) / (Math.min(ring, behind) + 0.05);
 }

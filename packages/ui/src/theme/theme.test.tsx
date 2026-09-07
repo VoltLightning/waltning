@@ -183,8 +183,8 @@ describe("the token spec and the tokens agree", () => {
     // that pair is enforced. Splitting the alias into its own light row would
     // not help: it would name a value `tokens.ts` does not hold either.
     expect(compared, "a drop here means rows stopped being compared").toEqual({
-      light: 38,
-      dark: 31,
+      light: 40,
+      dark: 33,
     });
   });
 
@@ -233,19 +233,13 @@ describe("a component follows the active theme", () => {
     // the shape of not having one. `muted` moved a step darker instead, which
     // is what "check a token against every fill it lands on" costs when the
     // answer is no.
-    ["light muted text on ground", light.textMuted, light.ground],
-    ["light muted text on surface", light.textMuted, light.surface],
-    ["light muted text on subtle fill", light.textMuted, light.subtleFill],
-    ["light muted text on hover fill", light.textMuted, light.hoverFill],
-    ["light muted text on pressed fill", light.textMuted, light.pressedFill],
-    ["light muted text on accent fill", light.textMuted, light.accentFill],
     ["light text on accent", light.textOnAccent, light.accent],
     ["light accent text on ground", light.accentText, light.ground],
     ["light asserted text on fill", light.assertedText, light.assertedFill],
     ["light danger text on fill", light.dangerText, light.dangerFill],
-    ["light tag text on fill", light.tagNeutralText, light.tagNeutralFill],
     ["light shell text on shell", light.shellText, light.shell],
     ["light shell muted text on shell", light.shellTextMuted, light.shell],
+    ["light shell danger text on shell", light.shellDangerText, light.shell],
     ["light income on ground", light.income, light.ground],
     ["light income on surface", light.income, light.surface],
     ["light spend on ground", light.spend, light.ground],
@@ -271,19 +265,13 @@ describe("a component follows the active theme", () => {
     ["light accent text on accent fill", light.accentText, light.accentFill],
     ["dark text on ground", dark.text, dark.ground],
     ["dark text on surface", dark.text, dark.surface],
-    ["dark muted text on ground", dark.textMuted, dark.ground],
-    ["dark muted text on surface", dark.textMuted, dark.surface],
-    ["dark muted text on subtle fill", dark.textMuted, dark.subtleFill],
-    ["dark muted text on hover fill", dark.textMuted, dark.hoverFill],
-    ["dark muted text on pressed fill", dark.textMuted, dark.pressedFill],
-    ["dark muted text on accent fill", dark.textMuted, dark.accentFill],
     ["dark text on accent", dark.textOnAccent, dark.accent],
     ["dark accent text on ground", dark.accentText, dark.ground],
     ["dark asserted text on fill", dark.assertedText, dark.assertedFill],
     ["dark danger text on fill", dark.dangerText, dark.dangerFill],
-    ["dark tag text on fill", dark.tagNeutralText, dark.tagNeutralFill],
     ["dark shell text on shell", dark.shellText, dark.shell],
     ["dark shell muted text on shell", dark.shellTextMuted, dark.shell],
+    ["dark shell danger text on shell", dark.shellDangerText, dark.shell],
     ["dark income on ground", dark.income, dark.ground],
     ["dark income on surface", dark.income, dark.surface],
     ["dark spend on ground", dark.spend, dark.ground],
@@ -300,6 +288,65 @@ describe("a component follows the active theme", () => {
   ])("keeps %s at 4.5:1", (_label, foreground, background) => {
     expect(foreground).not.toBe(background);
     expect(contrastRatio(foreground, background)).toBeGreaterThanOrEqual(4.5);
+  });
+
+  /**
+   * **Secondary text sits at 3:1, and that is a decision with a name.**
+   *
+   * §2.1 held every ink to 4.5:1. Hearth's grey is 3.45:1 on the page, and it
+   * is the colour the design was chosen on — labels, meta lines, the quiet
+   * half of every row. Darkening it to pass collapses it into `textFaint`, two
+   * hundredths apart, and the two-level hierarchy the design reads by is gone.
+   *
+   * So the floor is split rather than lowered everywhere: **4.5:1 for anything
+   * a person acts on** — ink, figures, a control's own label, every row in the
+   * census above — and **3:1 for secondary text**, which is this list. The
+   * split is stated by token, so a new ink cannot arrive without being classed
+   * as one or the other.
+   *
+   * `hoverFill` and `pressedFill` are the tightest, at 2.96 and 2.75, and they
+   * are here deliberately: the fill under a pointer is a state, not a
+   * background a label is read on at rest.
+   */
+  it.each([
+    ["light muted text on ground", light.textMuted, light.ground],
+    ["light muted text on surface", light.textMuted, light.surface],
+    ["light muted text on inset fill", light.textMuted, light.insetFill],
+    ["light muted text on subtle fill", light.textMuted, light.subtleFill],
+    ["light muted text on accent fill", light.textMuted, light.accentFill],
+    ["light tag text on its fill", light.tagNeutralText, light.tagNeutralFill],
+    ["dark muted text on ground", dark.textMuted, dark.ground],
+    ["dark muted text on surface", dark.textMuted, dark.surface],
+    ["dark muted text on inset fill", dark.textMuted, dark.insetFill],
+    ["dark muted text on subtle fill", dark.textMuted, dark.subtleFill],
+    ["dark muted text on accent fill", dark.textMuted, dark.accentFill],
+    ["dark tag text on its fill", dark.tagNeutralText, dark.tagNeutralFill],
+  ])("keeps %s at the 3:1 secondary floor", (_label, ink, fill) => {
+    expect(contrastRatio(ink, fill)).toBeGreaterThanOrEqual(3);
+  });
+
+  /**
+   * **The two greys stay two greys.**
+   *
+   * `textFaint` is decoration — a chevron, a unit, a line that repeats on
+   * every row — and it is not in either floor above, because its meaning
+   * survives not being read. What must hold is the *gap*: the design reads by
+   * a quiet level and a quieter one, and darkening `faint` to make it "safe"
+   * is what erases that. An absolute ceiling would not say this — light's
+   * `faint` is 2.05:1 on its ground and dark's is 3.11:1, so the same number
+   * cannot bound both. The distance can.
+   *
+   * The rule that `faint` is never text a person acts on is a usage rule, held
+   * by `tests/architecture.test.ts` where the usage is, not by a ratio here.
+   */
+  it.each([
+    ["light", light],
+    ["dark", dark],
+  ])("keeps %s's two greys a level apart", (_name, theme) => {
+    const muted = contrastRatio(theme.textMuted, theme.ground);
+    const faint = contrastRatio(theme.textFaint, theme.ground);
+    expect(muted, "muted is the readable one of the pair").toBeGreaterThan(faint);
+    expect(muted - faint, "muted and faint are two levels, not one").toBeGreaterThan(0.8);
   });
 
   /**
@@ -340,8 +387,9 @@ describe("a component follows the active theme", () => {
    *
    * §2.6 puts a ring on every interactive element, which makes it the one
    * boundary that appears on *every* fill in the system — including
-   * `theme.shell`, which is not one of the five above because nothing else is
-   * drawn on it. `focusRing` is `accentIcon`, and green on green measured
+   * `theme.shell`, which is not one of the five above because it is the band's
+   * ground rather than a page's, and carries its own inks (`shellText`,
+   * `shellTextMuted`, `shellDangerText`) rather than the page's. `focusRing` is `accentIcon`, and green on green measured
    * **2.04:1** in light (2.45 before `accent-icon` was darkened for the page
    * fills, which made this worse while fixing that): the ring on every control
    * the band holds — seven of them, listed in `roles.ts` — was under the
@@ -425,30 +473,54 @@ describe("a component follows the active theme", () => {
   it.each([
     ["light", light],
     ["dark", dark],
-  ])("keeps the %s band's fills a lit or shaded shell, nothing else", (_name, theme) => {
-    for (const overlay of [theme.shellNavActiveFill, theme.shellInsetTrackFill]) {
+  ])("keeps the %s band's fills a lit and a shaded shell, in that order", (_name, theme) => {
+    /**
+     * **Each role's own direction, not a band around both.** A version of this
+     * asserted alpha plus a distance plus a channel spread, and three wrong
+     * values walked through it: the *track's* token set to the *nav's* string
+     * (two roles, one appearance, and `02-tokens` says one is a recess); a
+     * terracotta at α 0.09, whose channel shifts are only three units apart at
+     * that alpha; and a neon green at α 0.02, invisible but inside the lower
+     * bound. Magnitude and neutrality are not the property. **Lit** and
+     * **shaded** are: the nav item is the shell with light added to every
+     * channel, the track is the shell with light taken away, and they are not
+     * each other.
+     */
+    const shiftOf = (overlay: string) => {
       expect(overlay, "an opaque fill on the band is a colour from another ramp").toMatch(
         /^rgba\(\d+,\s*\d+,\s*\d+,\s*0?\.\d+\)$/,
       );
       const composed = over(overlay, theme.shell);
+      return {
+        composed,
+        channels: ([1, 3, 5] as const).map(
+          (at) =>
+            Number.parseInt(composed.slice(at, at + 2), 16) -
+            Number.parseInt(theme.shell.slice(at, at + 2), 16),
+        ),
+      };
+    };
+
+    const lit = shiftOf(theme.shellNavActiveFill);
+    const shaded = shiftOf(theme.shellInsetTrackFill);
+
+    // Visible, and by enough to be seen — the real fills sit at 1.23 and 1.33,
+    // so a floor at 1.03 admitted a fill nobody could find.
+    for (const { composed } of [lit, shaded]) {
       const ratio = contrastRatio(composed, theme.shell);
-      // **Both bounds, and the reason there are two.** Alpha alone bought
-      // nothing: `rgba(220,0,0,0.06)` is a translucent *red* and passed, and
-      // `rgba(60,79,56,0.99)` — the shell at 99% — passed while making the
-      // active nav item and the inset track invisible. A fill nobody can see
-      // is not a fill; a fill from another ramp is not the band's.
-      expect(ratio, "a fill this close to the shell cannot be seen").toBeGreaterThan(1.03);
+      expect(ratio, "a fill this close to the shell cannot be seen").toBeGreaterThan(1.15);
       expect(ratio, "a fill this far from the shell is a colour of its own").toBeLessThan(1.6);
-      // And it is the shell, lit or shaded: an overlay of white or black moves
-      // every channel the same way. A hue of its own moves them apart.
-      const shift = ([1, 3, 5] as const).map(
-        (at) =>
-          Number.parseInt(composed.slice(at, at + 2), 16) -
-          Number.parseInt(theme.shell.slice(at, at + 2), 16),
-      );
-      const spread = Math.max(...shift) - Math.min(...shift);
-      expect(spread, `${overlay} tints the shell rather than lighting it`).toBeLessThanOrEqual(4);
     }
+
+    for (const channel of lit.channels) {
+      expect(channel, "the active nav item is the shell with light added").toBeGreaterThanOrEqual(
+        8,
+      );
+    }
+    for (const channel of shaded.channels) {
+      expect(channel, "the inset track is the shell with light taken away").toBeLessThanOrEqual(-8);
+    }
+    expect(lit.composed, "the two fills are two roles, not one").not.toBe(shaded.composed);
   });
 
   it.each([
