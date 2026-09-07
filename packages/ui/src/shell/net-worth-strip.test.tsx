@@ -54,3 +54,19 @@ it("says nothing about currencies when there is only one", () => {
   );
   expect(screen.queryByText(/Also held/)).toBeNull();
 });
+
+/**
+ * **Where it goes, on the target that drops hints.** `accessibilityHint` is
+ * announced on iOS and Android and `react-native-web` renders it nowhere — no
+ * `aria-describedby`, no `aria-description` — so on the web build the button
+ * said a figure and gave no clue what pressing it did. The destination is a
+ * zero-sized text node, which joins the computed name after the figure.
+ */
+it("says where it goes, on the web too", () => {
+  render(
+    <NetWorthStrip mine={money.toMoney("48620.84")} ours={null} currency="PLN" onPress={vi.fn()} />,
+  );
+  expect(screen.getByRole("button", { name: /Open your accounts/ })).toBeDefined();
+  // Still after the figure, never instead of it.
+  expect(screen.getByRole("button", { name: /48\s?620\.84/ })).toBeDefined();
+});

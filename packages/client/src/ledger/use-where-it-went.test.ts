@@ -7,20 +7,23 @@
 import { renderHook } from "@testing-library/react";
 import * as money from "@waltning/core/money";
 import { describe, expect, it } from "vitest";
-import type { PhoneCategoryNode, PhoneSpendByCategory } from "./create-phone-ledger.ts";
+import type { PhoneFullCategoryNode, PhoneSpendByCategory } from "./create-phone-ledger.ts";
 import { useWhereItWent } from "./use-where-it-went.ts";
 
 const LABELS = { uncategorized: "Uncategorized", other: "Other", removed: "Removed category" };
 
-function node(id: string, name: string): PhoneCategoryNode {
+function node(id: string, name: string, externalId: string | null = null): PhoneFullCategoryNode {
   return {
     id,
     parentId: null,
     name,
     kind: "expense",
     isLeaf: true,
-    externalId: null,
-  } as unknown as PhoneCategoryNode;
+    externalId,
+    archived: false,
+    depth: 0,
+    version: 1,
+  } as unknown as PhoneFullCategoryNode;
 }
 
 function bucket(categoryId: string | null, amount: string, currency = "PLN"): PhoneSpendByCategory {
@@ -34,7 +37,7 @@ function bucket(categoryId: string | null, amount: string, currency = "PLN"): Ph
 
 function rowsFor(
   buckets: readonly PhoneSpendByCategory[],
-  tree: readonly PhoneCategoryNode[],
+  tree: readonly PhoneFullCategoryNode[],
   currency = "PLN",
 ) {
   return renderHook(() => useWhereItWent(buckets, tree, currency, LABELS)).result.current;
@@ -117,5 +120,34 @@ describe("useWhereItWent", () => {
       useWhereItWent([bucket("groceries", "10.00")], [], undefined, LABELS),
     );
     expect(result.current).toEqual([]);
+  });
+
+  /**
+   * **The seed ships a real category called "Uncategorized"** (`TAXONOMY.md`,
+   * `externalId: "seed:uncategorized"`), so a ledger holding both it and money
+   * captured without any category produced two rows, one name, two amounts —
+   * the collision this model already claimed to prevent, from the direction it
+   * was not looking at. Matched on the tag: a name is translated and renameable.
+   */
+  it("folds the seed's own blank into the null bucket rather than beside it", () => {
+    const rows = rowsFor(
+      [bucket("seed-uncat", "10.00"), bucket(null, "5.00"), bucket("groceries", "1.00")],
+      [node("seed-uncat", "Uncategorized", "seed:uncategorized"), node("groceries", "Groceries")],
+    );
+    expect(rows.filter((row) => row.label === "Uncategorized")).toHaveLength(1);
+    expect(rows[0]).toEqual({
+      key: "uncategorized",
+      label: "Uncategorized",
+      amount: money.toMoney("15.00"),
+    });
+  });
+
+  /** A category merely *named* "Uncategorized" without the tag is an ordinary one. */
+  it("does not fold a category that only shares the name", () => {
+    const rows = rowsFor(
+      [bucket("mine", "10.00"), bucket(null, "5.00")],
+      [node("mine", "Uncategorized")],
+    );
+    expect(rows).toHaveLength(2);
   });
 });

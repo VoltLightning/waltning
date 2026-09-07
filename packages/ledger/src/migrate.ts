@@ -478,6 +478,48 @@ END`,
  * `objects` hook re-runs whenever its step does, so it must be idempotent on
  * its own terms rather than on the journal's.
  */
+/**
+ * §10.3 on the replica: a split's lines sum to their parent, checked from
+ * **both** directions — the replica's half of `packages/db`'s
+ * `transaction_lines_sum_matches` / `transactions_lines_sum_matches`.
+ *
+ * *"The parent transaction holds the total and every balance reads it, so a
+ * mis-summed split is a balance that disagrees with itself."* The lines' own
+ * direction was checked in `set_transaction_lines` and nowhere else, so
+ * patching `amount_original` on an already-split transaction moved the parent
+ * off its lines: every figure read *through* the lines (§6's spend by
+ * category) then disagreed with every figure read from the parent (§5's
+ * `periodSpend`), and S04 draws those two one above the other.
+ *
+ * **One trigger, on the parent — not the mirror pair Postgres has.** The
+ * lines' own direction cannot be a trigger here: Postgres defers its
+ * constraint to the end of the statement, SQLite has no deferred triggers, and
+ * `set_transaction_lines` writes a split one row at a time — so an `AFTER
+ * INSERT` on `transaction_lines` fires on the first of two lines and aborts on
+ * a sum that was always going to be partial. That direction keeps its service
+ * check, which is sound because `set_transaction_lines` is its only writer;
+ * this direction had neither, and `amount_original` is patchable from
+ * `update_transaction`, which anything may call.
+ *
+ * **Zero lines is legal** — an unsplit transaction — so the `WHEN` is gated on
+ * the split existing. The comparison is `CAST(... AS REAL)` rather than string
+ * equality: `numeric(20,8)` strings compare correctly as text only when both
+ * are at the same scale, which is true of every row this codebase writes and
+ * is not something a trigger should assume of a row it did not write.
+ */
+const LINE_SUM_TRIGGERS: readonly string[] = [
+  `CREATE TRIGGER IF NOT EXISTS \`transactions_lines_sum_matches_update\`
+AFTER UPDATE OF \`amount_original\` ON \`transactions\`
+WHEN EXISTS (SELECT 1 FROM \`transaction_lines\` WHERE \`transaction_id\` = NEW.\`id\`)
+BEGIN
+	SELECT RAISE(ABORT, 'transaction lines must sum to the transaction amount (§10.3)')
+	WHERE (
+		SELECT CAST(SUM(\`amount\`) AS REAL) FROM \`transaction_lines\`
+		WHERE \`transaction_id\` = NEW.\`id\`
+	) <> CAST(NEW.\`amount_original\` AS REAL);
+END`,
+];
+
 const CATEGORY_NOT_ARCHIVED_TRIGGERS: readonly string[] = [
   `CREATE TRIGGER IF NOT EXISTS \`transactions_category_not_archived_insert\`
 BEFORE INSERT ON \`transactions\`
@@ -614,6 +656,7 @@ export const REPLICA_BACKFILLS: Readonly<Record<string, Backfill>> = {
     objects: (tx) => {
       for (const statement of CATEGORY_NOT_ARCHIVED_TRIGGERS) tx.run(sql.raw(statement));
       for (const statement of CATEGORY_KIND_TRIGGERS) tx.run(sql.raw(statement));
+      for (const statement of LINE_SUM_TRIGGERS) tx.run(sql.raw(statement));
     },
   },
 };

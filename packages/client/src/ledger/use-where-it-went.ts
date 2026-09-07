@@ -28,11 +28,19 @@
  * `categoryId: null` is money that was captured without a category; *Other* is
  * the tail of ones that have them. Folding the first into the second would
  * hide the one bucket a person can act on.
+ *
+ * **And the seed's own "Uncategorized" is folded into it, by tag.** The seed
+ * ships a real category named exactly that (`externalId: "seed:uncategorized"`,
+ * `TAXONOMY.md`), so a ledger holding both it and genuinely uncategorised
+ * money produced two rows with one name and two amounts — the collision this
+ * model was already claiming to prevent, from a direction it was not looking
+ * at. Matched on the tag, never on the name: a name is translated, renamed and
+ * repeated, and `categories-screen.tsx` identifies the same row the same way.
  */
 
 import * as money from "@waltning/core/money";
 import { useMemo } from "react";
-import type { PhoneCategoryNode, PhoneSpendByCategory } from "./create-phone-ledger.ts";
+import type { PhoneFullCategoryNode, PhoneSpendByCategory } from "./create-phone-ledger.ts";
 
 export type WhereItWentRow = {
   /** `categoryId`, or the two sentinels — stable across renders for a list key. */
@@ -59,9 +67,19 @@ export type WhereItWentLabels = {
 /** Five named rows, then everything else in one. §7.2's own shape. */
 const TOP = 5;
 
+/** The seed's handle for the honest blank — `packages/db/src/seed/run.ts` writes `seed:<key>`. */
+const SEED_UNCATEGORIZED = "seed:uncategorized";
+
 export function useWhereItWent(
   rows: readonly PhoneSpendByCategory[],
-  categoryTree: readonly PhoneCategoryNode[],
+  /**
+   * **The archived-inclusive tree**, typed rather than asked for in prose.
+   * `PhoneCategoryNode` is structurally a subset, so the picker's own
+   * archived-excluded tree compiled here and silently relabelled last month's
+   * spending. `PhoneFullCategoryNode` carries `archived`, which that tree's
+   * rows do not, so passing the wrong one is now a compile error.
+   */
+  categoryTree: readonly PhoneFullCategoryNode[],
   currency: string | undefined,
   labels: WhereItWentLabels,
 ): readonly WhereItWentRow[] {
@@ -72,19 +90,35 @@ export function useWhereItWent(
     // keyed on the branded id would never match one.
     const names = new Map<string, string>(categoryTree.map((node) => [node.id, node.name]));
 
+    // The seed's own blank, if this tree carries one — its bucket merges into
+    // the null bucket rather than standing beside it under the same name.
+    const seededBlank = categoryTree.find((node) => node.externalId === SEED_UNCATEGORIZED)?.id;
+
     const named = rows
       .filter((row) => row.currency === currency)
       .map((row) => ({
-        key: row.categoryId ?? "uncategorized",
+        key:
+          row.categoryId === null || row.categoryId === seededBlank
+            ? "uncategorized"
+            : row.categoryId,
         // Three states, three labels. The caller passes the archived-inclusive
         // tree, so `unknown` is reached only by a category that is genuinely
         // gone rather than merely hidden.
         label:
-          row.categoryId === null
+          row.categoryId === null || row.categoryId === seededBlank
             ? labels.uncategorized
             : (names.get(row.categoryId) ?? labels.removed),
         amount: row.amount,
       }))
+      .reduce<WhereItWentRow[]>((rows, row) => {
+        // Summed, not merely sharing a key: the seed's blank and the null
+        // bucket are one fact, and two rows under one name is the defect
+        // whichever way they were produced.
+        const existing = rows.find((other) => other.key === row.key);
+        if (existing === undefined) return [...rows, row];
+        existing.amount = money.add(existing.amount, row.amount);
+        return rows;
+      }, [])
       .sort((a, b) => money.cmp(b.amount, a.amount));
 
     // `<= TOP + 1`, deliberately: at exactly six the tail is one row, and

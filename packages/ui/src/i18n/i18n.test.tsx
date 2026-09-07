@@ -175,7 +175,7 @@ describe("plural categories", () => {
 });
 
 /**
- * **Every counted string carries all four plural forms, in both catalogues.**
+ * **A key that declines, declines completely — in both catalogues.**
  *
  * Polish resolves `one`, `few`, `many` and `other`, and i18next falls back to
  * the *bare* key when the form it wants is missing — which holds the singular.
@@ -183,6 +183,16 @@ describe("plural categories", () => {
  * count from 2 up, and English only looks right because `one` happens to be
  * what the fallback holds. `filterExcludes` and the rate keys were already
  * written out in full; this makes that the rule rather than the habit.
+ *
+ * **What it does not check: a counted key with no forms at all.** Twenty-six
+ * of those exist, and most are deliberate — fourteen are this catalogue's own
+ * `…One`/`…Many` pairs, where the *caller* picks the form, and the rest
+ * interpolate a count into a sentence that does not decline around it
+ * (`showingOfTotal`, `archivedCount`). Telling those apart from a genuine
+ * omission needs a judgement per key rather than a rule, so this checks the
+ * half a rule can decide. `dashboard.flowRange` is the one to watch: it reads
+ * "{{count}} miesięcy", correct for its constant 6 and wrong the day that
+ * constant becomes 2.
  */
 describe("counted strings decline", () => {
   const FORMS = ["one", "few", "many", "other"] as const;

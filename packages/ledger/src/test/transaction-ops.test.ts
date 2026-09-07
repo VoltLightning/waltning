@@ -731,6 +731,67 @@ describe("set_transaction_lines", () => {
     expect(readLines()).toHaveLength(2);
   });
 
+  /**
+   * **The other direction, which nothing checked.** §10.3's invariant is about
+   * the pair, and only the lines' side was guarded — `amount_original` is a
+   * patchable field, so a split of 10 + 8 could have its parent moved to 50
+   * and every figure read *through* the lines then disagreed with every figure
+   * read from the parent. S04 renders both, one above the other: *went out*
+   * from `periodSpend`, *where it went* from §6's lines.
+   *
+   * Postgres has refused this from both directions since
+   * `0004_row_touch_and_line_sum`; the replica now does too, in the executor
+   * for the good error and in `transactions_lines_sum_matches_update` for when
+   * the code is wrong.
+   */
+  it("update_transaction refuses an amount that abandons the lines beneath it", () => {
+    const v = () => readTxn()?.version ?? 0;
+    writeLocally(stores.ledger, {
+      executor: setTransactionLinesExecutor,
+      registry: ledgerRegistry,
+      capture,
+      input: {
+        transactionId: TXN,
+        version: v(),
+        lines: [
+          {
+            id: id<"transactionLines">("00000000-0000-4000-8000-0000000000c1"),
+            description: "Espresso",
+            amount: "10",
+          },
+          {
+            id: id<"transactionLines">("00000000-0000-4000-8000-0000000000c2"),
+            description: "Croissant",
+            amount: "8",
+          },
+        ],
+      },
+    });
+
+    expect(() =>
+      writeLocally(stores.ledger, {
+        executor: updateTransactionExecutor,
+        registry: ledgerRegistry,
+        capture,
+        input: { id: TXN, version: v(), patch: { amountOriginal: "50" } },
+      }),
+    ).toThrow(/lines sum to 18.*patched amount is 50/s);
+
+    expect(readTxn()?.amountOriginal, "the refused write changed nothing").toBe("18.00000000");
+  });
+
+  /** The same patch with the lines removed is ordinary — an unsplit transaction has no sum to keep. */
+  it("update_transaction allows an amount change when there are no lines", () => {
+    const v = () => readTxn()?.version ?? 0;
+    writeLocally(stores.ledger, {
+      executor: updateTransactionExecutor,
+      registry: ledgerRegistry,
+      capture,
+      input: { id: TXN, version: v(), patch: { amountOriginal: "50" } },
+    });
+    expect(readTxn()?.amountOriginal).toBe("50.00000000");
+  });
+
   it("removes every line when handed an empty set, regardless of the transaction's amount", () => {
     const v = () => readTxn()?.version ?? 0;
     writeLocally(stores.ledger, {

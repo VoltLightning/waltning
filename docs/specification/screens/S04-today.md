@@ -175,13 +175,23 @@ happened*.
 | Reads | Writes |
 |---|---|
 | `get_balances` — scoped to *mine* and *ours* | — |
-| `spend_by_period` — current month, net | — |
+| `spend_by_period` — the shown month: `spend`, `inflow`, `net` | — |
+| `spend_by_category` — the same month, scope `mine` | — |
 | `search_transactions` — 5 most recent | — |
 | `find_unsettled` — clearing balances ≠ 0 | — |
 | FX sync state | `sync_fx_rates` on foreground (§7.6) |
 
 **S04 writes nothing.** Every mutation is a navigation away — which is what
 keeps it fast and what makes it safe to render from cache offline.
+
+**Both period figures are `mine` — own accounts only — and the screen has no
+scope control to say so.** `spend_by_period` has always been own-accounts
+(§5); `spend_by_category` is asked for the same scope so *where it went* breaks
+down the *went out* directly above it rather than a larger number. The cost is
+that a shared-account expense you paid appears in neither, on a screen with
+nothing to explain that. §6.7's named shared row is a desk figure (`S10`'s
+scope control, `S01`'s widgets); the phone shows the half it can total
+honestly, and S16 is where the shared accounts are.
 
 ## 6. States
 

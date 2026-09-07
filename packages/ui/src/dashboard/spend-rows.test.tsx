@@ -9,7 +9,14 @@
 import { render, screen } from "@testing-library/react";
 import * as money from "@waltning/core/money";
 import { describe, expect, it } from "vitest";
+import { light } from "../theme/roles.ts";
 import { SpendRows } from "./spend-rows";
+
+/** `getComputedStyle` reports a hex as `rgb(r, g, b)`; the token is a hex. */
+function rgb(hex: string): string {
+  const [r, g, b] = [1, 3, 5].map((at) => Number.parseInt(hex.slice(at, at + 2), 16));
+  return `rgb(${r}, ${g}, ${b})`;
+}
 
 function widthOf(label: string): string {
   const row = screen.getByText(label).parentElement;
@@ -78,10 +85,11 @@ describe("SpendRows", () => {
    * **Every bar is the same colour.** The first version ranked into
    * `chartRamp`, whose steps are measured against each other because they are
    * segments of one stacked bar; separate bars are each measured against the
-   * same track, where three of those five steps fall under 3:1 — and in dark
-   * the largest category's bar came out at 2.19:1. Length is the encoding.
+   * same track. Two of its five steps clear 3:1 in light and four do in dark —
+   * from the *other* end, so the largest category's bar came out at 2.19:1
+   * there and the smallest at 8.68:1. Length is the encoding.
    */
-  it("draws every bar in one colour", () => {
+  it("draws every bar in the theme's chart-bar colour", () => {
     const rows = Array.from({ length: 6 }, (_, i) => ({
       key: `k${i}`,
       label: `Row ${i}`,
@@ -95,6 +103,11 @@ describe("SpendRows", () => {
     };
     const colours = new Set(rows.map((row) => colourOf(row.label)));
     expect(colours.size).toBe(1);
-    expect([...colours][0]).not.toBe("");
+    // **The token, not merely "one colour".** A test that only counted
+    // distinct colours passed with the bars painted `accentFill` — 1.03:1
+    // against the track, an invisible bar — because the contrast assertion
+    // lives on the token in `theme.test.tsx` and nothing tied the component to
+    // it. Bound here, so the two cannot drift apart.
+    expect([...colours][0]).toBe(rgb(light.chartBar));
   });
 });

@@ -65,8 +65,14 @@ export function NetWorthStrip({
         accessible name computed from its content, so a screen reader announced
         "Open your accounts, button" and never read the figure — the headline
         number of the screen, which the plain `DualTotal` this replaced was
-        perfectly able to read out. The content is the name; where it goes is
-        a hint.
+        perfectly able to read out. The content is the name.
+
+        Where it goes is said twice, because one of the two says nothing on one
+        of the three targets: `accessibilityHint` is announced on iOS and
+        Android and `react-native-web` drops it entirely, so the web build
+        would have had a button whose destination was a bare chevron. The
+        `<Text>` below carries it in the tree — where it joins the computed
+        name, after the figure rather than instead of it.
       */
       accessibilityHint={t("shell.openAccounts")}
       onPress={onPress}
@@ -104,8 +110,11 @@ export function NetWorthStrip({
       {/*
         Two borders of a square, rotated — the disclosure mark drawn rather
         than typed, the spelling `SettingsMenu` established for the same reason
-        (a glyph depends on the face shipping it).
+        (a glyph depends on the face shipping it). It says nothing on its own,
+        so the destination is a text node beside it, sized to nothing: the web
+        has no hint, and a chevron is not a description.
       */}
+      <Text style={styles.destination}>{t("shell.openAccounts")}</Text>
       <View style={styles.chevron} />
     </Pressable>
   );
@@ -142,6 +151,13 @@ const useStyles = makeStyles((theme) => ({
   line: { flexDirection: "row", alignItems: "baseline", gap: space.md },
   kicker: { color: theme.textMuted, ...text.ui("kicker") },
   note: { color: theme.textMuted, ...text.ui("caption") },
+  /**
+   * In the accessibility tree and out of the layout. Not `display: none` and
+   * not `opacity: 0` — the first removes it from the tree, the second leaves a
+   * clickable ghost; a zero-size overflow-hidden box is the shape that keeps
+   * the text readable to a screen reader and paints nothing.
+   */
+  destination: { width: 0, height: 0, overflow: "hidden", color: theme.textMuted },
   chevron: {
     width: 8,
     height: 8,

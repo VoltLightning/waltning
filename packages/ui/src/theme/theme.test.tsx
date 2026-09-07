@@ -190,7 +190,15 @@ describe("a component follows the active theme", () => {
   it.each([
     ["light text on ground", light.text, light.ground],
     ["light text on surface", light.text, light.surface],
+    // **Muted text is not only ever on the page**, and it is the ink most
+    // often put on a fill: `NetWorthStrip` rests on `subtleFill` and hovers,
+    // every card's kicker sits on `surface`. `hoverFill` is the tight one —
+    // 4.47:1, which is why that strip hovers to `accentFill` instead, and why
+    // `button.tsx` gives its ghost variant a different ink there.
     ["light muted text on ground", light.textMuted, light.ground],
+    ["light muted text on surface", light.textMuted, light.surface],
+    ["light muted text on subtle fill", light.textMuted, light.subtleFill],
+    ["light muted text on accent fill", light.textMuted, light.accentFill],
     ["light text on accent", light.textOnAccent, light.accent],
     ["light accent text on ground", light.accentText, light.ground],
     ["light asserted text on fill", light.assertedText, light.assertedFill],
@@ -224,6 +232,9 @@ describe("a component follows the active theme", () => {
     ["dark text on ground", dark.text, dark.ground],
     ["dark text on surface", dark.text, dark.surface],
     ["dark muted text on ground", dark.textMuted, dark.ground],
+    ["dark muted text on surface", dark.textMuted, dark.surface],
+    ["dark muted text on subtle fill", dark.textMuted, dark.subtleFill],
+    ["dark muted text on accent fill", dark.textMuted, dark.accentFill],
     ["dark text on accent", dark.textOnAccent, dark.accent],
     ["dark accent text on ground", dark.accentText, dark.ground],
     ["dark asserted text on fill", dark.assertedText, dark.assertedFill],

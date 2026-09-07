@@ -14,11 +14,11 @@
  * that. Both are wrong here for the same reason: `chartRamp`'s steps are
  * measured against *each other*, because they are adjacent segments of one
  * stacked bar. Separate bars are each measured against the same track, and
- * only two of the five steps clear WCAG 1.4.11's 3:1 there — in dark, where
- * the ramp is the light one verbatim, the biggest category came out at 2.19:1
- * and the smallest at 8.68:1, so magnitude read as *invisible*. `chartBar` is
- * one value that clears the floor in both themes; the bar's length was always
- * the encoding.
+ * two of its five steps clear WCAG 1.4.11's 3:1 in light and four do in dark
+ * — from the *other* end, because the ramp is one set of values for both
+ * themes. So in dark the biggest category came out at 2.19:1 and the smallest
+ * at 8.68:1, and magnitude read as *invisible*. `chartBar` is one value that
+ * clears the floor in both; the bar's length was always the encoding.
  *
  * **Bars are proportional to the largest row, not to the total.** A share of
  * the total is what the stacked bar already says; here the useful comparison

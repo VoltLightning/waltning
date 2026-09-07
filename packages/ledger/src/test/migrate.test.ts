@@ -1756,6 +1756,46 @@ describe("a constraint declared in the schema is present on the device", () => {
       "transactions_category_kind_matches_type_update",
       "transactions_category_not_archived_insert",
       "transactions_category_not_archived_update",
+      "transactions_lines_sum_matches_update",
+    ]);
+  });
+
+  /**
+   * **The indexes a migrated device actually has.** The replica half of this
+   * file already pins tables and columns, and the outbox pins its own index
+   * list; the replica's were the gap — which matters because SQLite drops a
+   * table's indexes with the table, so a step that rebuilds `transactions`
+   * copy-rename-drop and forgets to re-declare one leaves the device scanning,
+   * with every test still green.
+   *
+   * **This pins the chain, not the schema.** A `packages/schema` declaration
+   * that was never regenerated is caught one step earlier, by
+   * `pnpm ledger:generate` writing a step and the diff being committed — a
+   * test cannot see an index that exists only in a source file the chain was
+   * not rebuilt from. What it does see is one that shipped and stopped
+   * shipping.
+   */
+  it("ships the whole index set the migration chain builds", () => {
+    const ledger = openAt("indexes");
+    migrateReplica(ledger.replica, { fs: realFs }).copy?.release();
+    ledger.close();
+
+    expect(
+      inspect(join(dir, "indexes-replica.db"), (db) => objects(db, "index")),
+      "regenerate the chain (`pnpm ledger:generate`) — a declared index that does not ship is worse than none",
+    ).toEqual([
+      // The four unique indexes are constraints wearing an index's clothes —
+      // drizzle emits a `unique()` as one, and `sqlite_master` cannot tell
+      // them apart from the plain ones. Listed together for that reason.
+      "counterparties_name_uq",
+      "counterparty_merges_loser_open_uq",
+      "dashboard_layouts_one_active",
+      "fx_rates_pk",
+      "transaction_lines_category_idx",
+      "transaction_lines_transaction_idx",
+      "transactions_category_idx",
+      "transactions_counterparty_idx",
+      "transactions_date_idx",
     ]);
   });
 });

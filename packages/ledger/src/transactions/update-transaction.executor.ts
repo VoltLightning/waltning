@@ -10,6 +10,7 @@
  */
 
 import { resolveBrandPatch } from "@waltning/core/brands/match";
+import * as money from "@waltning/core/money";
 import {
   transactionShapeIssues,
   type UpdateTransactionInput,
@@ -24,7 +25,7 @@ import {
   type LocalTransactionRow,
 } from "./create-transaction.executor.ts";
 
-const { transactions } = schema;
+const { transactionLines, transactions } = schema;
 
 /** See `accounts/create-account.executor.ts` for why `TRun` is `unknown` here. */
 type ReplicaTx = LocalTx<unknown, typeof schema>;
@@ -95,6 +96,42 @@ function patchTransaction(input: UpdateTransactionInput, tx: ReplicaTx): LocalTr
   // untouched category is not this write's to re-litigate.
   if ("categoryId" in input.patch) {
     assertCategoryNotArchived(tx, merged.categoryId, "update_transaction: category_id");
+  }
+
+  /**
+   * **A patched amount must still be the sum of its own lines.**
+   *
+   * §10.3: *"the parent transaction holds the total and every balance reads
+   * it, so a mis-summed split is a balance that disagrees with itself."*
+   * `set_transaction_lines` has always checked that from the lines' side.
+   * Nothing checked it from this side, and `amountOriginal` is patchable — so
+   * a split of 10 + 8 could have its parent moved to 50, and every figure read
+   * *through* the lines (§6's spend by category) then disagreed with every
+   * figure read from the parent (§5's `periodSpend`). S04 renders both, one
+   * above the other.
+   *
+   * Postgres refuses this from both directions already
+   * (`transactions_lines_sum_matches`, `AFTER UPDATE OF amount_original`), so
+   * the write was one the server would reject when the outbox drained — the
+   * device holding a row that cannot sync, which is what `architecture/14`
+   * §14.6 exists to prevent. `0014_database_objects` carries the same trigger
+   * on the replica, so this holds when the code is wrong.
+   */
+  if ("amountOriginal" in input.patch) {
+    const lines = tx
+      .select({ amount: transactionLines.amount })
+      .from(transactionLines)
+      .where(eq(transactionLines.transactionId, input.id))
+      .all();
+    if (lines.length > 0) {
+      const total = money.sum(lines.map((line) => line.amount));
+      const next = input.patch.amountOriginal ?? current.amountOriginal;
+      if (!money.eq(total, next)) {
+        throw new LocalRefusal(
+          `update_transaction: lines sum to ${total}, the patched amount is ${next}`,
+        );
+      }
+    }
   }
 
   /**

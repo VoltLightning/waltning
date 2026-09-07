@@ -128,9 +128,10 @@ export type Theme = {
    * **Not a step of `chartRamp`, because a ramp cannot do this job.** The ramp
    * tells *adjacent* segments of one stacked bar apart, so its steps are
    * measured against each other. A row per category measures every step
-   * against the same track instead, and only two of the five clear WCAG
-   * 1.4.11's 3:1 there — in dark the ramp is the light one verbatim, so the
-   * *largest* category's bar came out at 2.19:1 and the smallest at 8.68:1.
+   * against the same track instead. Two of the five clear WCAG 1.4.11's 3:1 in
+   * light and four in dark — from the *other* end, because the ramp is one set
+   * of values for both themes, so the *largest* category's bar came out at
+   * 2.19:1 in dark and the smallest at 8.68:1.
    * Magnitude is already the bar's length; colour was adding a second, worse
    * encoding of it. One value, 3.90:1 light and 3.24:1 dark.
    */
