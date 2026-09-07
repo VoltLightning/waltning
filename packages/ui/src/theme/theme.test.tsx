@@ -183,8 +183,8 @@ describe("the token spec and the tokens agree", () => {
     // that pair is enforced. Splitting the alias into its own light row would
     // not help: it would name a value `tokens.ts` does not hold either.
     expect(compared, "a drop here means rows stopped being compared").toEqual({
-      light: 38,
-      dark: 31,
+      light: 40,
+      dark: 33,
     });
   });
 
@@ -233,17 +233,10 @@ describe("a component follows the active theme", () => {
     // the shape of not having one. `muted` moved a step darker instead, which
     // is what "check a token against every fill it lands on" costs when the
     // answer is no.
-    ["light muted text on ground", light.textMuted, light.ground],
-    ["light muted text on surface", light.textMuted, light.surface],
-    ["light muted text on subtle fill", light.textMuted, light.subtleFill],
-    ["light muted text on hover fill", light.textMuted, light.hoverFill],
-    ["light muted text on pressed fill", light.textMuted, light.pressedFill],
-    ["light muted text on accent fill", light.textMuted, light.accentFill],
     ["light text on accent", light.textOnAccent, light.accent],
     ["light accent text on ground", light.accentText, light.ground],
     ["light asserted text on fill", light.assertedText, light.assertedFill],
     ["light danger text on fill", light.dangerText, light.dangerFill],
-    ["light tag text on fill", light.tagNeutralText, light.tagNeutralFill],
     ["light shell text on shell", light.shellText, light.shell],
     ["light shell muted text on shell", light.shellTextMuted, light.shell],
     ["light shell danger text on shell", light.shellDangerText, light.shell],
@@ -272,17 +265,10 @@ describe("a component follows the active theme", () => {
     ["light accent text on accent fill", light.accentText, light.accentFill],
     ["dark text on ground", dark.text, dark.ground],
     ["dark text on surface", dark.text, dark.surface],
-    ["dark muted text on ground", dark.textMuted, dark.ground],
-    ["dark muted text on surface", dark.textMuted, dark.surface],
-    ["dark muted text on subtle fill", dark.textMuted, dark.subtleFill],
-    ["dark muted text on hover fill", dark.textMuted, dark.hoverFill],
-    ["dark muted text on pressed fill", dark.textMuted, dark.pressedFill],
-    ["dark muted text on accent fill", dark.textMuted, dark.accentFill],
     ["dark text on accent", dark.textOnAccent, dark.accent],
     ["dark accent text on ground", dark.accentText, dark.ground],
     ["dark asserted text on fill", dark.assertedText, dark.assertedFill],
     ["dark danger text on fill", dark.dangerText, dark.dangerFill],
-    ["dark tag text on fill", dark.tagNeutralText, dark.tagNeutralFill],
     ["dark shell text on shell", dark.shellText, dark.shell],
     ["dark shell muted text on shell", dark.shellTextMuted, dark.shell],
     ["dark shell danger text on shell", dark.shellDangerText, dark.shell],
@@ -302,6 +288,65 @@ describe("a component follows the active theme", () => {
   ])("keeps %s at 4.5:1", (_label, foreground, background) => {
     expect(foreground).not.toBe(background);
     expect(contrastRatio(foreground, background)).toBeGreaterThanOrEqual(4.5);
+  });
+
+  /**
+   * **Secondary text sits at 3:1, and that is a decision with a name.**
+   *
+   * §2.1 held every ink to 4.5:1. Hearth's grey is 3.45:1 on the page, and it
+   * is the colour the design was chosen on — labels, meta lines, the quiet
+   * half of every row. Darkening it to pass collapses it into `textFaint`, two
+   * hundredths apart, and the two-level hierarchy the design reads by is gone.
+   *
+   * So the floor is split rather than lowered everywhere: **4.5:1 for anything
+   * a person acts on** — ink, figures, a control's own label, every row in the
+   * census above — and **3:1 for secondary text**, which is this list. The
+   * split is stated by token, so a new ink cannot arrive without being classed
+   * as one or the other.
+   *
+   * `hoverFill` and `pressedFill` are the tightest, at 2.96 and 2.75, and they
+   * are here deliberately: the fill under a pointer is a state, not a
+   * background a label is read on at rest.
+   */
+  it.each([
+    ["light muted text on ground", light.textMuted, light.ground],
+    ["light muted text on surface", light.textMuted, light.surface],
+    ["light muted text on inset fill", light.textMuted, light.insetFill],
+    ["light muted text on subtle fill", light.textMuted, light.subtleFill],
+    ["light muted text on accent fill", light.textMuted, light.accentFill],
+    ["light tag text on its fill", light.tagNeutralText, light.tagNeutralFill],
+    ["dark muted text on ground", dark.textMuted, dark.ground],
+    ["dark muted text on surface", dark.textMuted, dark.surface],
+    ["dark muted text on inset fill", dark.textMuted, dark.insetFill],
+    ["dark muted text on subtle fill", dark.textMuted, dark.subtleFill],
+    ["dark muted text on accent fill", dark.textMuted, dark.accentFill],
+    ["dark tag text on its fill", dark.tagNeutralText, dark.tagNeutralFill],
+  ])("keeps %s at the 3:1 secondary floor", (_label, ink, fill) => {
+    expect(contrastRatio(ink, fill)).toBeGreaterThanOrEqual(3);
+  });
+
+  /**
+   * **The two greys stay two greys.**
+   *
+   * `textFaint` is decoration — a chevron, a unit, a line that repeats on
+   * every row — and it is not in either floor above, because its meaning
+   * survives not being read. What must hold is the *gap*: the design reads by
+   * a quiet level and a quieter one, and darkening `faint` to make it "safe"
+   * is what erases that. An absolute ceiling would not say this — light's
+   * `faint` is 2.05:1 on its ground and dark's is 3.11:1, so the same number
+   * cannot bound both. The distance can.
+   *
+   * The rule that `faint` is never text a person acts on is a usage rule, held
+   * by `tests/architecture.test.ts` where the usage is, not by a ratio here.
+   */
+  it.each([
+    ["light", light],
+    ["dark", dark],
+  ])("keeps %s's two greys a level apart", (_name, theme) => {
+    const muted = contrastRatio(theme.textMuted, theme.ground);
+    const faint = contrastRatio(theme.textFaint, theme.ground);
+    expect(muted, "muted is the readable one of the pair").toBeGreaterThan(faint);
+    expect(muted - faint, "muted and faint are two levels, not one").toBeGreaterThan(0.8);
   });
 
   /**

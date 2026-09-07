@@ -79,6 +79,15 @@ export type Theme = {
   /** Secondary text: labels, captions, metadata, affixes. */
   textMuted: string;
   /**
+   * Decoration, never text a person reads to act — a chevron, a unit, a
+   * repeated line. Below even the relaxed secondary floor (2.05:1), which is
+   * why the census names it separately and refuses it anywhere `textMuted` is
+   * allowed.
+   */
+  textFaint: string;
+  /** A panel inside a card — Hearth's inner tile. */
+  insetFill: string;
+  /**
    * Text and icons sitting **on** `accent`. Not `surface` — see the header.
    * These coincide in light and must not be assumed to.
    */
@@ -259,6 +268,8 @@ export const light: Theme = {
 
   text: color.ink,
   textMuted: color.muted,
+  textFaint: color.faint,
+  insetFill: color.inset,
   textOnAccent: color.surface,
 
   accent: color.accent,
@@ -318,6 +329,8 @@ export const dark: Theme = {
 
   text: darkColor.ink,
   textMuted: darkColor.muted,
+  textFaint: darkColor.faint,
+  insetFill: darkColor.inset,
   textOnAccent: darkColor.textOnAccent,
 
   accent: darkColor.accent,

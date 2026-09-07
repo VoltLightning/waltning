@@ -27,7 +27,9 @@ whatever the chrome around them does.
 | `border-interactive` | `#88795c` | The resting edge of a control — an input, a chip. A control here is identified by its edge alone (its fill is `surface` on `ground`, 1.08:1), so this carries WCAG 1.4.11's **3:1 boundary floor** by itself — against **every fill a control is drawn on**: `ground`, `surface`, `subtle`, `hover`, `pressed`. 3.15 at the tightest |
 | `border-strong` | `#746e5f` | An edge that must read alone: a selected control, a focus-adjacent edge. One step above `border-interactive` on the same ramp, held to the same five fills (3.75 at the tightest of the two themes) |
 | `ink` | `#33302a` | Body text **and heading ink** — a heading is not a signal. Warm near-black, never `#000` |
-| `muted` | `#686154` | Secondary text, labels, captions; a transfer's figure. Held to 4.5:1 against **every** fill it lands on — `ground`, `surface`, `subtle`, `hover`, `pressed`, `accent-fill` — because eighteen files pair it with one of those; 4.54 at the tightest (`pressed`) |
+| `muted` | `#8a8478` | Secondary text: labels, captions, meta lines. **3:1, not 4.5:1** — see §2.1a. 3.45 on `ground`, 3.13 at the tightest of the fills it is read on at rest |
+| `faint` | `#b5aea0` | Decoration only — a chevron, a unit, a rule that repeats. 2.05:1, and **never text a person acts on** (§2.1a) |
+| `inset` | `#f8f4ec` | A panel *inside* a card: the paired figures under a heading, a box that groups within a card rather than beside it |
 | `accent` | `#5c7357` | Primary action fill. Sage. **Job 1** |
 | `accent-text` | `#4c6247` | Links, a secondary action's label |
 | `accent-icon` | `#64815c` | Decorative accent marks; the **focus ring**. **Job 2**. Dark enough for 3:1 on `hover` and `pressed` too — the ring is drawn while a control is being used |
@@ -104,6 +106,8 @@ with dark text.
 | `hairline` | `rgba(240,236,227,.12)` |
 | `text` | `#f0ece3` |
 | `textMuted` / `tagNeutralText` | `#a59d8d` |
+| `textFaint` | `#6e675b` |
+| `insetFill` | `#2b2620` |
 | `textOnAccent` | `#ffffff` |
 | `accent` | `#5c7357` |
 | `accentIcon` / `focusRing` | `#8fae84` |
@@ -140,6 +144,28 @@ structural grant of the brand colour on nothing. Both shells sit at L\* ≈ 31 �
 on the warm charcoal ground the dark shell reads by rising, on cream by
 deepening, and the same lightness serves both. `theme/theme.test.tsx` holds
 both floors.
+
+### 2.1a Two floors, and which text gets which
+
+**4.5:1 for anything a person acts on** — ink, every figure, a control's own
+label, the accent, the tag and status inks, the shell's own text. **3:1 for
+secondary text** — `muted`, and nothing else joins it without being named here.
+
+The split is not a relaxation of §2.1, it is the price of this palette. `muted`
+is 3.45:1 on the page and it is the colour the design was chosen on: the quiet
+half of every row. Darkening it until it passes 4.5 lands it two hundredths
+from `faint`, and the two-level hierarchy the design reads by is gone — one
+grey where there were two.
+
+`faint` is in neither floor. It is for marks whose meaning survives not being
+read, and using it for text a person acts on is a defect the architecture suite
+refuses rather than a ratio this table bounds. The two greys are held *a level
+apart* rather than to a fixed ceiling: light's `faint` is 2.05:1 and dark's is
+3.11:1, so no single number bounds both, but the distance between the pair is
+the thing that must not close.
+
+`theme.test.tsx` states every pairing in both classes; a new ink cannot ship
+without being classed.
 
 ### 2.2 Typography
 

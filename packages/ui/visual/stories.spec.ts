@@ -314,8 +314,37 @@ test.describe("contrast", () => {
               const results = await window.axe.run(target, {
                 runOnly: { type: "rule", values: ["color-contrast"] },
               });
+              /**
+               * **The secondary floor, applied where the second check lives.**
+               *
+               * `02-tokens` §2.1a splits the rule: 4.5:1 for text a person
+               * acts on, 3:1 for secondary text — which is `muted` and the
+               * tag ink that aliases it. axe has one floor and it is 4.5, so
+               * a run of it over this palette reports the exception on 294
+               * stories, and the only readings anyone would take from that
+               * are "turn the rule off" or "abandon the palette".
+               *
+               * So the exception is stated, narrowly: a violation is dropped
+               * only when its foreground is one of the two inks §2.1a names
+               * **and** it actually reaches 3:1. Every other pairing, every
+               * other colour, and any of these below 3:1 still fails — which
+               * is what keeps this a floor rather than a rule that was
+               * switched off. `theme.test.tsx` holds the same split by token;
+               * this holds it on rendered pixels, where an ad-hoc colour that
+               * never went through a token still gets caught.
+               */
+              const SECONDARY_INKS = ["#8a8478", "#a59d8d"];
               return results.violations.flatMap((v) =>
-                v.nodes.map((n) => `${v.id}: ${n.failureSummary ?? ""}`),
+                v.nodes
+                  .map((n) => `${v.id}: ${n.failureSummary ?? ""}`)
+                  .filter((summary) => {
+                    const measured =
+                      /color contrast of ([\d.]+) \(foreground color: (#[0-9a-f]{6})/.exec(summary);
+                    if (measured === null) return true;
+                    const ratio = Number(measured[1]);
+                    const foreground = measured[2] ?? "";
+                    return !(SECONDARY_INKS.includes(foreground) && ratio >= 3);
+                  }),
               );
             } catch (error) {
               if (attempt < 20 && String(error).includes("already running")) {

@@ -2646,6 +2646,69 @@ describe("a refusal is never reported as a success", () => {
  * page ink. Chips and cards *inside* such a component carry their own fill, so
  * they are the exemptions — named, with the fill that saves them.
  */
+/**
+ * **`textFaint` is decoration, and the palette's exception depends on it.**
+ *
+ * §2.1a buys Hearth's grey by splitting the floor: 4.5:1 for text a person
+ * acts on, 3:1 for secondary. `faint` is in neither — 2.05:1 in light — and it
+ * is only defensible while it stays on marks whose meaning survives not being
+ * read: a chevron, a unit, a rule between rows.
+ *
+ * A ratio cannot say that, because the ratio is the thing being excused. Only
+ * the *use* can, so it is checked here: `faint` may be a `borderColor`, an
+ * icon `stroke`, or the `color` of a style whose name says it is a mark. Any
+ * other `color:` is a person reading grey-on-grey at 2:1, and the exception
+ * has quietly become a licence.
+ */
+describe("faint ink stays decoration", () => {
+  /** Style names that are marks rather than text. Each earns its place by what it draws. */
+  const MARKS = /(chevron|caret|arrow|icon|glyph|rule|divider|dot|separator|unit|tick|handle)/i;
+
+  function offences(): string[] {
+    const found: string[] = [];
+    const files = ["packages/ui/src", "apps/mobile/src", "apps/mobile/app"]
+      .flatMap((root) => sourceFiles(join(repoRoot, root)))
+      .filter((file) => !/\.(test|stories)\.tsx?$/.test(file));
+
+    for (const file of files) {
+      const text = readFileSync(file, "utf8");
+      if (!text.includes("textFaint")) continue;
+      const source = ts.createSourceFile(
+        file,
+        text,
+        ts.ScriptTarget.Latest,
+        true,
+        ts.ScriptKind.TSX,
+      );
+      const walk = (node: ts.Node): void => {
+        if (ts.isPropertyAssignment(node) && ts.isObjectLiteralExpression(node.initializer)) {
+          const key = ts.isIdentifier(node.name) ? node.name.text : node.name.getText();
+          for (const property of node.initializer.properties) {
+            if (!ts.isPropertyAssignment(property)) continue;
+            const name = ts.isIdentifier(property.name)
+              ? property.name.text
+              : property.name.getText();
+            if (name !== "color") continue;
+            if (!/theme\.textFaint\b/.test(property.initializer.getText())) continue;
+            if (MARKS.test(key)) continue;
+            found.push(`${relative(repoRoot, file)}#${key}`);
+          }
+        }
+        ts.forEachChild(node, walk);
+      };
+      walk(source);
+    }
+    return found;
+  }
+
+  it("never colours acted-on text with faint ink", () => {
+    expect(
+      offences(),
+      "faint is 2.05:1 — use textMuted for anything read, or name the style for the mark it draws",
+    ).toEqual([]);
+  });
+});
+
 describe("a component on the band uses the band's inks", () => {
   const PAGE_INKS = ["theme.textMuted", "theme.dangerText", "theme.text"];
 
