@@ -2637,10 +2637,99 @@ describe("a refusal is never reported as a success", () => {
  * a helper it did not call. The compiler's own parser has no such edges, and
  * it is already a dependency of this repository.
  */
+/**
+ * **`border` is a divider. A control's edge is `border-interactive`.**
+ *
+ * `02-tokens` §2.1 gives `border` to "card edges and dividers" — a boundary
+ * between two *areas*, which WCAG sets no floor for, and at 1.19:1 on the
+ * ground it could not meet one. A control is different: `Button
+ * variant="secondary"`, `AmountField`, `RateField` and the picker cells all
+ * have no fill of their own, so the edge is the whole of what identifies them,
+ * and WCAG 1.4.11 asks 3:1 of it. Seven of them were drawn in the divider
+ * colour, including the amount field the whole capture flow turns on.
+ *
+ * **An allowlist, and each entry says why.** Whether an edge belongs to a
+ * control or to an area is not decidable from the source — a `Pressable` with
+ * a border might be the control or the card it sits in — so the rule flags
+ * every all-sides `borderColor: theme.border` in a file that renders one, and
+ * the four that are genuinely areas are named here. A fifth would have to be
+ * argued into this list in the open, which is the point.
+ */
+describe("a control's edge is not the divider colour", () => {
+  const AREA_EDGES = new Map([
+    [
+      "packages/ui/src/primitives/select.tsx#panel",
+      "the dropdown's own surface — a floating card, not the control that opens it",
+    ],
+    [
+      "packages/ui/src/primitives/toggle.tsx#thumb",
+      "identified by its fill against the track it rides on, never by this edge",
+    ],
+    [
+      "packages/ui/src/transactions/categorize-selection-confirm.tsx#root",
+      "a card: it carries `backgroundColor: theme.surface` and holds the controls",
+    ],
+    [
+      "packages/ui/src/counterparties/settle-sheet.tsx#result",
+      "a result box — read, never pressed",
+    ],
+  ]);
+
+  it("uses theme.border only where the edge belongs to an area", () => {
+    const offenders: string[] = [];
+    const files = ["packages/ui/src", "apps/mobile/src", "apps/mobile/app"]
+      .flatMap((root) => sourceFiles(join(repoRoot, root)))
+      .filter((file) => !/\.(test|stories)\.tsx?$/.test(file));
+
+    for (const file of files) {
+      const text = readFileSync(file, "utf8");
+      if (!/\b(Pressable|TextInput|TouchableOpacity)\b/.test(text)) continue;
+      const source = ts.createSourceFile(
+        file,
+        text,
+        ts.ScriptTarget.Latest,
+        true,
+        ts.ScriptKind.TS,
+      );
+      const walk = (node: ts.Node): void => {
+        if (ts.isPropertyAssignment(node) && ts.isObjectLiteralExpression(node.initializer)) {
+          const key = ts.isIdentifier(node.name) ? node.name.text : node.name.getText();
+          const body = node.initializer.getText();
+          const dividerEdge = /borderColor:\s*theme\.border\b/.test(body);
+          const allSides = /\bborderWidth:/.test(body);
+          if (dividerEdge && allSides) {
+            const id = `${relative(repoRoot, file)}#${key}`;
+            if (!AREA_EDGES.has(id)) offenders.push(id);
+          }
+        }
+        ts.forEachChild(node, walk);
+      };
+      walk(source);
+    }
+
+    expect(
+      offenders,
+      "a control with no fill is identified by its edge — use theme.borderInteractive, or name the area edge in AREA_EDGES with its reason",
+    ).toEqual([]);
+  });
+
+  it("names an existing style for every allowed area edge", () => {
+    // An allowlist that outlives the style it exempts is an allowlist that
+    // silently re-permits the next thing to take that name.
+    const stale = [...AREA_EDGES.keys()].filter((id) => {
+      const [file, key] = id.split("#");
+      const path = join(repoRoot, file ?? "");
+      if (!existsSync(path)) return true;
+      return !new RegExp(`\\b${key}:\\s*\\{`).test(readFileSync(path, "utf8"));
+    });
+    expect(stale, "remove the exemption, or point it at the style that replaced it").toEqual([]);
+  });
+});
+
 describe("every scroller declares which kind it is", () => {
   const SCROLLERS = new Set(["ScrollView", "FlatList", "SectionList", "VirtualizedList"]);
   const SPREAD_HELPERS = new Set(["nestedScrollProps", "horizontalScrollProps", "pageScrollProps"]);
-  const STYLE_HELPERS = new Set(["containOverscroll", "containOverscrollX"]);
+  const STYLE_HELPERS = new Set(["containOverscrollY", "containOverscrollX"]);
   const HELPER_FILE = join(repoRoot, "packages/ui/src/primitives/nested-scroll.ts");
 
   /**
@@ -2652,7 +2741,15 @@ describe("every scroller declares which kind it is", () => {
    */
   const ROOTS = ["packages/ui/src", "packages/client/src", "apps/mobile/src", "apps/mobile/app"];
 
-  type Found = { file: string; name: string; declared: boolean; overwritten: boolean };
+  type Found = {
+    file: string;
+    name: string;
+    /** Which scroller within the file, so three in one file are not interchangeable. */
+    index: number;
+    /** The helper it declared with, or `"none"`. */
+    via: string;
+    overwritten: boolean;
+  };
 
   /** The element's tag name, following `Animated.ScrollView` to its last part. */
   function tagName(node: ts.JsxOpeningLikeElement): string {
@@ -2672,6 +2769,19 @@ describe("every scroller declares which kind it is", () => {
    * the direct callee of a call that is exactly a spread attribute's
    * expression, or a style constant named inside this node's own `style`.
    */
+  /** The helper this element declared with, for the census line. */
+  function declaredVia(node: ts.JsxOpeningLikeElement): string {
+    const at = declaringAttribute(node);
+    if (at === -1) return "none";
+    const attribute = node.attributes.properties[at];
+    if (attribute !== undefined && ts.isJsxSpreadAttribute(attribute)) {
+      const call = attribute.expression;
+      if (ts.isCallExpression(call) && ts.isIdentifier(call.expression))
+        return call.expression.text;
+    }
+    return "containOverscroll";
+  }
+
   function declaringAttribute(node: ts.JsxOpeningLikeElement): number {
     return node.attributes.properties.findIndex((attribute) => {
       if (ts.isJsxSpreadAttribute(attribute)) {
@@ -2686,13 +2796,17 @@ describe("every scroller declares which kind it is", () => {
       if (!ts.isIdentifier(attribute.name) || attribute.name.text !== "style") return false;
       const initializer = attribute.initializer;
       if (initializer === undefined || !ts.isJsxExpression(initializer)) return false;
-      let named = false;
-      const walk = (n: ts.Node): void => {
-        if (ts.isIdentifier(n) && STYLE_HELPERS.has(n.text)) named = true;
-        else ts.forEachChild(n, walk);
-      };
-      if (initializer.expression !== undefined) walk(initializer.expression);
-      return named;
+      const expression = initializer.expression;
+      if (expression === undefined) return false;
+      // The identifier itself, or a *direct* element of the style array — not
+      // anything named `containOverscrollY` anywhere in the expression.
+      // Walking the subtree certified `style={holder.containOverscrollY}` (the
+      // name half of a property access) and, worse,
+      // `style={isDesk ? styles.desk : containOverscrollY}`, an ordinary
+      // spelling whose taken branch has no containment at all.
+      const isHelper = (n: ts.Node): boolean => ts.isIdentifier(n) && STYLE_HELPERS.has(n.text);
+      if (isHelper(expression)) return true;
+      return ts.isArrayLiteralExpression(expression) && expression.elements.some(isHelper);
     });
   }
 
@@ -2704,7 +2818,7 @@ describe("every scroller declares which kind it is", () => {
    * object literal this could inspect; `{...keyboardProps}` is a variable, and
    * resolving it would mean type-checking the repository from a test. JSX props
    * are last-write-wins, so a declaration that nothing follows cannot be
-   * overwritten, whatever the follower holds. `containOverscroll` is guarded
+   * overwritten, whatever the follower holds. `containOverscrollY` is guarded
    * the same way: it is a style attribute, and a later one replaces it.
    */
   function overwritesAfter(node: ts.JsxOpeningLikeElement, declaredAt: number): boolean {
@@ -2738,10 +2852,12 @@ describe("every scroller declares which kind it is", () => {
           const name = tagName(node);
           if (SCROLLERS.has(name)) {
             const declaredAt = declaringAttribute(node);
+            const rel = relative(repoRoot, file);
             found.push({
-              file: relative(repoRoot, file),
+              file: rel,
               name,
-              declared: declaredAt !== -1,
+              index: found.filter((other) => other.file === rel).length,
+              via: declaredVia(node),
               overwritten: overwritesAfter(node, declaredAt),
             });
           }
@@ -2763,30 +2879,30 @@ describe("every scroller declares which kind it is", () => {
    */
   it("finds every scroller in the repository", () => {
     const census = scrollers()
-      .map(({ file, name }) => `${file} → <${name}>`)
+      .map(({ file, name, index, via }) => `${file}#${index} <${name}> ${via}`)
       .sort();
 
     expect(census).toEqual([
-      "apps/mobile/src/ledger-screen.tsx → <FlatList>",
-      "packages/ui/src/accounts/account-picker.tsx → <ScrollView>",
-      "packages/ui/src/categories/category-sheet.tsx → <ScrollView>",
-      "packages/ui/src/categories/category-sheet.tsx → <ScrollView>",
-      "packages/ui/src/categories/category-sheet.tsx → <ScrollView>",
-      "packages/ui/src/counterparties/counterparty-picker.tsx → <ScrollView>",
-      "packages/ui/src/fx/rate-table.tsx → <FlatList>",
-      "packages/ui/src/primitives/select.tsx → <ScrollView>",
-      "packages/ui/src/shell/bottom-sheet.stories.tsx → <ScrollView>",
-      "packages/ui/src/shell/bottom-sheet.tsx → <ScrollView>",
-      "packages/ui/src/shell/card.tsx → <ScrollView>",
-      "packages/ui/src/transactions/ledger-filter-rail.tsx → <ScrollView>",
-      "packages/ui/src/transactions/ledger-table.tsx → <FlatList>",
+      "apps/mobile/src/ledger-screen.tsx#0 <FlatList> pageScrollProps",
+      "packages/ui/src/accounts/account-picker.tsx#0 <ScrollView> nestedScrollProps",
+      "packages/ui/src/categories/category-sheet.tsx#0 <ScrollView> horizontalScrollProps",
+      "packages/ui/src/categories/category-sheet.tsx#1 <ScrollView> nestedScrollProps",
+      "packages/ui/src/categories/category-sheet.tsx#2 <ScrollView> horizontalScrollProps",
+      "packages/ui/src/counterparties/counterparty-picker.tsx#0 <ScrollView> nestedScrollProps",
+      "packages/ui/src/fx/rate-table.tsx#0 <FlatList> pageScrollProps",
+      "packages/ui/src/primitives/select.tsx#0 <ScrollView> nestedScrollProps",
+      "packages/ui/src/shell/bottom-sheet.stories.tsx#0 <ScrollView> nestedScrollProps",
+      "packages/ui/src/shell/bottom-sheet.tsx#0 <ScrollView> containOverscroll",
+      "packages/ui/src/shell/card.tsx#0 <ScrollView> pageScrollProps",
+      "packages/ui/src/transactions/ledger-filter-rail.tsx#0 <ScrollView> nestedScrollProps",
+      "packages/ui/src/transactions/ledger-table.tsx#0 <FlatList> nestedScrollProps",
     ]);
   });
 
   it("spreads one of the nested-scroll helpers", () => {
     const offenders = scrollers()
-      .filter(({ declared }) => !declared)
-      .map(({ file, name }) => `${file} → <${name}>`);
+      .filter(({ via }) => via === "none")
+      .map(({ file, name, index }) => `${file}#${index} <${name}>`);
 
     expect(
       offenders,
@@ -2797,18 +2913,11 @@ describe("every scroller declares which kind it is", () => {
   it("lets nothing that sets style follow its declaration", () => {
     const offenders = scrollers()
       .filter(({ overwritten }) => overwritten)
-      .map(({ file, name }) => `${file} → <${name}>`);
+      .map(({ file, name, index }) => `${file}#${index} <${name}>`);
 
     expect(
       offenders,
       "move the declaration after every other style-bearing attribute — a later style prop or spread replaces it",
     ).toEqual([]);
-  });
-
-  it("keeps every half of containment in the helper", () => {
-    const text = readFileSync(HELPER_FILE, "utf8");
-    expect(text).toMatch(/nestedScrollEnabled: true/);
-    expect(text).toMatch(/overscrollBehavior: "contain"/);
-    expect(text).toMatch(/overscrollBehaviorX: "contain"/);
   });
 });

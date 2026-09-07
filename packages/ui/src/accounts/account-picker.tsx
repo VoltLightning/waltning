@@ -367,7 +367,7 @@ const useStyles = makeStyles((theme) => ({
     minHeight: touchTarget.min,
     gap: space.xs,
     borderWidth: 1,
-    borderColor: theme.border,
+    borderColor: theme.borderInteractive,
     borderRadius: radius.sm,
     // `theme.surface` — the fill the money inks (`spend`/`income`) are tuned
     // against (`02-tokens.md` §2.1). `subtleFill` cost the negative-balance

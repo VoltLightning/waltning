@@ -11,9 +11,12 @@
  * the palette is right. Those are different failures and want separating.
  */
 
+import { existsSync, readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { render, screen } from "@testing-library/react";
 import { useEffect, useRef } from "react";
 import { describe, expect, it } from "vitest";
+import { color, radius } from "../tokens.ts";
 import { ThemeProvider, useTheme } from "./provider";
 import { dark, light, themes } from "./roles.ts";
 import { makeStyles } from "./styles.ts";
@@ -55,6 +58,102 @@ function Swatch() {
     />
   );
 }
+
+/**
+ * **The spec table and the transcription of it, checked against each other.**
+ *
+ * `tokens.ts` opens by calling itself "a transcription, not a design" of
+ * `design-system/02` — a claim nothing checked. `radius.sm` went 8 → 10 and
+ * `radius.md` 12 → 14 while the table still said 8 and 12, and that disagreement
+ * survived three adversarial review rounds reading these very files: a spec
+ * stating the wrong corner radius for every button, input, chip and card in the
+ * system. Drift between a document and its transcription is invisible to every
+ * reader who trusts either one, which is the whole argument for asserting it.
+ *
+ * Colour and radius only. Spacing and type are stated in the table as prose
+ * rather than as one value per row, and a parser that had to interpret them
+ * would be the thing that broke.
+ */
+describe("the token spec and the tokens agree", () => {
+  /**
+   * Found by walking up from the working directory rather than from
+   * `import.meta.url`: under jsdom that is not a `file:` URL, and `vitest` is
+   * invoked from the repository root here and from `packages/ui` for the
+   * visual suite. Walking up answers both.
+   */
+  function specPath(): string {
+    let directory = process.cwd();
+    for (let depth = 0; depth < 6; depth++) {
+      const candidate = join(directory, "docs/specification/design-system/02-tokens.md");
+      if (existsSync(candidate)) return candidate;
+      directory = dirname(directory);
+    }
+    throw new Error("02-tokens.md not found above the working directory");
+  }
+
+  const SPEC = readFileSync(specPath(), "utf8");
+
+  /**
+   * Every `| \`name\` | \`#value\` |` row, keyed by name. The table spells the
+   * light palette in kebab-case (`border-interactive`) and the dark one in the
+   * camelCase the code uses, so both are folded to the code's spelling.
+   */
+  function rowsFrom(markdown: string): Map<string, string> {
+    const rows = new Map<string, string>();
+    for (const [, name, value] of markdown.matchAll(
+      /^\|\s*`([a-zA-Z][\w-]*)`\s*\|\s*`(#[0-9a-f]{6}|\d+(?:px)?)`\s*\|/gm,
+    )) {
+      if (name === undefined || value === undefined) continue;
+      const camel = name.replace(/-([a-z])/g, (_, c: string) => c.toUpperCase());
+      if (!rows.has(camel)) rows.set(camel, value);
+    }
+    return rows;
+  }
+
+  it("states the same hex for every colour it names", () => {
+    // The two tables repeat each other's names, so the file is split at the
+    // dark one's own header row. They also name different things: the light
+    // table lists **tokens** (`accent`, `border-interactive`) and the dark one
+    // lists **roles** (`subtleFill`, `text`), so each half is read against the
+    // object it actually describes.
+    const darkAt = SPEC.indexOf("| Role | Dark value |");
+    expect(darkAt, "the dark palette's table header, to split the two").toBeGreaterThan(0);
+    const lightRows = rowsFrom(SPEC.slice(0, darkAt));
+    const darkRows = rowsFrom(SPEC.slice(darkAt));
+
+    const disagreements: string[] = [];
+    for (const [rows, palette, label] of [
+      [lightRows, color, "light"],
+      [darkRows, dark, "dark"],
+    ] as const) {
+      for (const [name, stated] of rows) {
+        const actual = (palette as Record<string, unknown>)[name];
+        if (typeof actual !== "string" || !actual.startsWith("#")) continue;
+        if (actual !== stated)
+          disagreements.push(`${label} ${name}: spec ${stated}, code ${actual}`);
+      }
+    }
+
+    expect(disagreements, "change the spec in the same PR — CLAUDE.md's rule").toEqual([]);
+  });
+
+  it("states the same radius scale", () => {
+    const stated = rowsFrom(SPEC);
+    const disagreements: string[] = [];
+    for (const [key, value] of Object.entries(radius)) {
+      const row = stated.get(`radius${key.charAt(0).toUpperCase()}${key.slice(1)}`);
+      if (row === undefined) continue;
+      const px = Number.parseInt(row, 10);
+      if (px !== value) disagreements.push(`radius-${key}: spec ${px}, code ${value}`);
+    }
+    expect(disagreements).toEqual([]);
+  });
+
+  it("reads a table at all", () => {
+    // A regex that matched nothing would make both rules above vacuous.
+    expect(rowsFrom(SPEC).size).toBeGreaterThan(30);
+  });
+});
 
 describe("a component follows the active theme", () => {
   it("ships exactly light and dark", () => {

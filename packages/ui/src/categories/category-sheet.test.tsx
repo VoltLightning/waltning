@@ -191,6 +191,31 @@ it("offers Create scoped to the chosen group on a search miss inside it", () => 
   expect(onPick).toHaveBeenCalledWith("new-id");
 });
 
+/**
+ * The create row's own group chooser — the *second* chip row in this file, and
+ * the one the first version of these tests left uncovered. It could be turned
+ * back into a page scroller, or lose containment outright, with the whole
+ * suite green.
+ */
+it("the create row's group chooser contains its own axis", () => {
+  render(
+    <CategorySheet
+      visible
+      kind="expense"
+      tree={TREE}
+      onCreate={vi.fn(() => ({ id: "new-id" }))}
+      onPick={vi.fn()}
+      onDismiss={vi.fn()}
+    />,
+  );
+  // "New" without a group chip selected: with one chosen the chooser is
+  // locked away, and this row is exactly the state that hides it.
+  fireEvent.click(screen.getByRole("button", { name: "New" }));
+
+  const rows = screen.getAllByTestId("category-chip-row");
+  expectContainsOverscroll(rows[rows.length - 1] as HTMLElement, "horizontal");
+});
+
 /** `+ New`, group already narrowed — the row locks to it rather than re-asking (S06 §6). */
 it("creates a leaf under the chip-narrowed group from the pinned + New button", () => {
   const onCreate = vi.fn(() => ({ id: "new-id" }));

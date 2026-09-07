@@ -779,7 +779,7 @@ const useStyles = makeStyles((theme) => ({
     justifyContent: "space-between",
     gap: space.sm,
     borderWidth: 1,
-    borderColor: theme.border,
+    borderColor: theme.borderInteractive,
     borderRadius: radius.sm,
     paddingHorizontal: space.x2,
     paddingVertical: space.lg,

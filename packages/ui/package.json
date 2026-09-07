@@ -17,7 +17,6 @@
     "./primitives/*": "./src/primitives/*.tsx",
     "./primitives/use-breakpoint": "./src/primitives/use-breakpoint.ts",
     "./primitives/nested-scroll": "./src/primitives/nested-scroll.ts",
-    "./primitives/nested-scroll.test-support": "./src/primitives/nested-scroll.test-support.ts",
     "./review/*": "./src/review/*.tsx",
     "./settings/*": "./src/settings/*.tsx",
     "./shell/*": "./src/shell/*.tsx",

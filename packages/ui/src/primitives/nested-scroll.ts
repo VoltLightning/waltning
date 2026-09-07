@@ -16,15 +16,20 @@
  * has no equivalent for. The shipped app set the first alone on three pickers,
  * which is why the bug was only ever reported from a browser.
  *
- * **The axis is part of the answer.** `react-native-web` expands
- * `overscrollBehavior` to *both* axes, and gives a horizontal `ScrollView`
- * `overflow-y: hidden` — which still makes it a scroll container, so
- * `overscroll-behavior-y: contain` on a chip row stops a vertical drag that
- * starts on the row from scrolling the sheet it sits in. A horizontal scroller
- * therefore contains **x only**. Its Android half is unchanged:
- * `ReactHorizontalScrollViewManager` implements `nestedScrollEnabled` like its
- * vertical sibling, so the prop stays. Only the CSS is axis-specific, because
- * only the CSS applies to both axes at once.
+ * **A scroller contains the axis it scrolls, and only that one.**
+ * `react-native-web` expands the `overscrollBehavior` shorthand to *both*
+ * axes, and gives each `ScrollView` `overflow: hidden` on its cross axis —
+ * which still makes it a scroll container there, with nothing to scroll. So
+ * containing the cross axis blocks a drag that the element cannot use and an
+ * ancestor can: on a horizontal chip row inside a sheet, `overscroll-behavior-y:
+ * contain` swallows the vertical drag that should have moved the sheet. The
+ * same argument runs the other way, which is why the vertical helper leaves x
+ * alone rather than taking the shorthand.
+ *
+ * The Android half is the same on both: `ReactHorizontalScrollViewManager`
+ * implements `nestedScrollEnabled` exactly as its vertical sibling does, so
+ * every bounded scroller carries the prop. Only the CSS is axis-specific,
+ * because only the CSS applies to two axes at once.
  *
  * Each helper takes the scroller's style and returns it, so containment and
  * layout arrive as one value. That is a convenience, not a guarantee: JSX
@@ -50,8 +55,8 @@
  *
  * The one scroller that is none of these is `BottomSheet`'s body: bounded, so
  * it contains, but not a nested-scrolling child of anything (a `Modal` has
- * nothing behind it to be a child of). It spreads `containOverscroll` into its
- * own style instead.
+ * nothing behind it to be a child of). It spreads `containOverscrollY` into
+ * its own style instead.
  */
 
 import type { StyleProp, ViewStyle } from "react-native";
@@ -63,18 +68,18 @@ import type { StyleProp, ViewStyle } from "react-native";
  * properties are visible instead of hidden behind an assertion.
  */
 type OverscrollStyle = ViewStyle & {
-  overscrollBehavior?: "contain";
   overscrollBehaviorX?: "contain";
+  overscrollBehaviorY?: "contain";
 };
 
-/** Both axes — for a scroller whose whole travel is bounded. */
-export const containOverscroll: OverscrollStyle = { overscrollBehavior: "contain" };
-
 /**
- * The scrolling axis only, for a horizontal scroller. Leaves the cross axis
- * alone so a vertical drag starting on the row still reaches the page or sheet
- * that owns it.
+ * The vertical axis, for a scroller that scrolls vertically. `x` is left alone
+ * deliberately — see the axis note above; a horizontal drag this element
+ * cannot use belongs to whatever can.
  */
+export const containOverscrollY: OverscrollStyle = { overscrollBehaviorY: "contain" };
+
+/** The horizontal axis, for a chip row. Same argument, other way round. */
 export const containOverscrollX: OverscrollStyle = { overscrollBehaviorX: "contain" };
 
 /** A bounded vertical scroller inside something else. Android via the prop, web via the style. */
@@ -82,7 +87,7 @@ export function nestedScrollProps(style: StyleProp<ViewStyle>): {
   nestedScrollEnabled: true;
   style: StyleProp<ViewStyle>;
 } {
-  return { nestedScrollEnabled: true, style: [style, containOverscroll] };
+  return { nestedScrollEnabled: true, style: [style, containOverscrollY] };
 }
 
 /**

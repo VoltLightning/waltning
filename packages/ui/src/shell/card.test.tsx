@@ -123,6 +123,24 @@ it("the page scroller shows no scroll indicator", () => {
   expect(getComputedStyle(scroller).scrollbarWidth).toBe("none");
 });
 
+/**
+ * **And it contains nothing**, which is the other half of being the page.
+ * Containment is for a scroller with something behind it; this one *is* what
+ * is behind everything else, and containing here would stop the browser's own
+ * pull-to-refresh and rubber-band without anything asking it to. Asserted so
+ * that "declared as the page" cannot quietly become "declared and contained".
+ */
+it("the page scroller contains neither axis", () => {
+  render(
+    <GroundPanel>
+      <Text>hello</Text>
+    </GroundPanel>,
+  );
+  const style = getComputedStyle(screen.getByTestId("ground-panel-scroll"));
+  expect(style.getPropertyValue("overscroll-behavior-x")).not.toBe("contain");
+  expect(style.getPropertyValue("overscroll-behavior-y")).not.toBe("contain");
+});
+
 it("clearBottom (the default) adds the device's own bottom inset to the clearance", () => {
   render(
     <SafeAreaProvider insets={NOTCHED}>

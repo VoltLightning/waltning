@@ -41,7 +41,7 @@ whatever the chrome around them does.
 | `amber-border` | `#d9bd75` | Edge of an amber tag or chip |
 | `danger` | `#a33d26` | A destructive action, a refused write. **Never chrome** |
 | `danger-bg` | `#f8e8e2` | Fill behind a danger tag |
-| `danger-border` | `#c05e37` | Edge of a danger control — an outlined button, an errored input. A control with no fill is identified by its edge, so this carries the same **3:1** floor as `border-interactive`, in the danger hue (3.18) |
+| `danger-border` | `#c05e37` | Edge of a danger control — an outlined button, an errored input. A control with no fill is identified by its edge, so this carries the same **3:1** floor as `border-interactive`, in the danger hue (3.17 at the tightest of the two themes) |
 | `shell` | `#3c4f38` | The header shell. **One flat colour.** A deep sage at L\* 31 — see below |
 | `shell-text` | `#f2f0e7` | Text on the shell |
 | `shell-text-muted` | `#b8c4ae` | The currency marker, the mine/ours line |
@@ -384,7 +384,7 @@ and the sheet rise are all currently unbranched (§10).
 
 ### 2.9 The two moving parts of the screen
 
-Two behaviours are specified here because they are tokens of the *shell*
+Three behaviours are specified here because they are tokens of the *shell*
 rather than of any one screen, and because each has a rule a screen must not
 reinvent.
 
@@ -437,6 +437,20 @@ tapped — which opens the header without scrolling the list. The transition is
 while the compact figure rises in. Reduced motion gets an instant swap. The
 floating button is above the header in both states and never reflows when it
 folds. At desk width the threshold is larger; the behaviour is the same.
+
+**A page scroller draws no scroll bar; a pane does.** The whole screen moving
+is its own feedback, and the indicator only ever drew over the 22px gutter, so
+`GroundPanel`'s scroller and the two lists that stand in for it — the phone
+ledger and the rate table — set `showsVerticalScrollIndicator={false}` through
+`pageScrollProps`. **This holds on the web too**, where the platform would
+otherwise draw one: three targets ship the same screens, and a bar that appears
+on one of them is a fourth treatment of a thing this section exists to settle.
+
+The bar survives wherever a pane scrolls *independently of the page it sits
+on* — the desk filter rail, a bounded sheet body, a picker's list — because
+there the travel is the only thing saying the pane holds more. That is the same
+line `primitives/nested-scroll.ts` draws for overscroll containment, and for
+the same reason: a page and a pane are different objects.
 
 ### 2.10 The desk breakpoint
 

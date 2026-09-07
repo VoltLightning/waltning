@@ -18,22 +18,21 @@ import { screen } from "@testing-library/react";
 import { expect } from "vitest";
 
 /**
- * `contain` on the scrolling axis, and on the cross axis only for a vertical
- * scroller: a horizontal row inside a sheet must let a vertical drag through
- * to the sheet, which is what `overscroll-behavior-y: contain` would swallow.
+ * `contain` on the axis this scroller scrolls, and **not** on the other one: a
+ * `ScrollView` gets `overflow: hidden` on its cross axis, so containing there
+ * swallows a drag it cannot use and an ancestor can — a horizontal chip row
+ * inside a sheet must still let a vertical drag move the sheet.
  */
 export function expectContainsOverscroll(
   target: string | HTMLElement,
-  axis: "both" | "horizontal" = "both",
+  axis: "vertical" | "horizontal" = "vertical",
 ): void {
   // A testID for the usual case; an element for the one where a component
   // draws two of the same kind (`CategorySheet`'s chip rows) and the test has
   // to say which.
   const style = getComputedStyle(typeof target === "string" ? screen.getByTestId(target) : target);
-  expect(style.getPropertyValue("overscroll-behavior-x")).toBe("contain");
-  if (axis === "both") {
-    expect(style.getPropertyValue("overscroll-behavior-y")).toBe("contain");
-  } else {
-    expect(style.getPropertyValue("overscroll-behavior-y")).not.toBe("contain");
-  }
+  const scrolled = axis === "vertical" ? "y" : "x";
+  const cross = axis === "vertical" ? "x" : "y";
+  expect(style.getPropertyValue(`overscroll-behavior-${scrolled}`)).toBe("contain");
+  expect(style.getPropertyValue(`overscroll-behavior-${cross}`)).not.toBe("contain");
 }
