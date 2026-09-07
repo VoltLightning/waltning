@@ -255,9 +255,15 @@ const useStyles = makeStyles((theme) => ({
     borderRadius: radius.sm,
   },
   navItemActive: { backgroundColor: theme.shellNavActiveFill },
+  /**
+   * **The ring on the band is near-white, not green.** `focusRing` is
+   * `accentIcon`, which is 2.04:1 on `shell` in light — under 1.4.11's 3:1 for
+   * a boundary, and invisible on the one ground the contrast census does not
+   * walk. `shellFocusRing` is `shellText`: 7.77:1 light, 7.94:1 dark.
+   */
   navItemFocused: {
     outlineWidth: focus.width,
-    outlineColor: theme.focusRing,
+    outlineColor: theme.shellFocusRing,
     outlineOffset: focus.offset,
   },
   navLabel: { color: theme.shellTextMuted, ...text.ui("bodySm") },

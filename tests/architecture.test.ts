@@ -926,7 +926,7 @@ describe("a card groups rows or holds a figure — never a whole screen", () => 
    * is, because the rule then stops seeing every screen made of it — which
    * is the failure C1 was.
    */
-  const UI_CARD_COMPONENTS = ["SettingsMenu", "SharedGroup"];
+  const UI_CARD_COMPONENTS = ["MonthSummary", "SettingsMenu", "SharedGroup"];
 
   /** The text inside the bracket that opens at `at`, brackets counted. */
   function balanced(src: string, at: number): string | undefined {
@@ -2613,31 +2613,6 @@ describe("a refusal is never reported as a success", () => {
 });
 
 /**
- * **Every scroller declares which kind it is.**
- *
- * A scroller is the outermost one on its screen — the page, whose movement is
- * its own feedback — or a bounded one inside something else, whose end must be
- * its end. Nothing about a `<ScrollView>` says which, so each one spreads the
- * helper that matches (`primitives/nested-scroll.ts`), and this rule is what
- * makes "each one" true.
- *
- * **What this rule is and is not.** It is a census: every scroller has made a
- * declaration. It is *not* the guarantee — `primitives/nested-scroll.test.tsx`
- * asserts the rendered `overscroll-behavior` of each helper's output, in the
- * DOM, which is the only place the behaviour is real. Two earlier versions of
- * this check tried to be the guarantee by reading source, and both could be
- * spelled around while the page still chained.
- *
- * **Parsed with TypeScript, not with a regular expression.** The hand-rolled
- * slicer this replaces was defeated by three ordinary spellings — a `>` inside
- * a string attribute (`testID="a>b"`) ended the tag early, an unbalanced `}`
- * in one truncated the attribute list, and a generic `<FlatList<Row>>` made
- * the rule unsatisfiable. A trailing `// comment` inside an opening tag also
- * survived the line-start comment strip and could satisfy the check by naming
- * a helper it did not call. The compiler's own parser has no such edges, and
- * it is already a dependency of this repository.
- */
-/**
  * **`border` is a divider. A control's edge is `border-interactive`.**
  *
  * `02-tokens` §2.1 gives `border` to "card edges and dividers" — a boundary
@@ -2737,14 +2712,68 @@ describe("a control's edge is not the divider colour", () => {
     );
   }
 
-  /** Locals bound to `theme.border` in this file, for the indirection above. */
-  function dividerLocals(text: string): Set<string> {
+  /**
+   * Locals bound to `theme.border` in this file, for the indirection above.
+   *
+   * **From the tree, not the text.** A regex over the source counted a
+   * commented-out `const edge = theme.border` as a binding — and this
+   * repository's docblocks quote code constantly — so a live `borderColor:
+   * edge` naming a *different* local was reported at a line where nothing was
+   * wrong, while the reader went looking for a binding that had been deleted.
+   * The walk sees declarations only.
+   */
+  function dividerLocals(source: ts.SourceFile): Set<string> {
     const locals = new Set<string>();
-    for (const [, local] of text.matchAll(
-      /\b(?:const|let)\s+([A-Za-z_$][\w$]*)\s*=\s*theme\.border\b(?!\w)/g,
-    )) {
-      if (local !== undefined) locals.add(local);
-    }
+
+    /**
+     * **Any declaration whose initializer *mentions* `theme.border`.**
+     *
+     * The rule's two rewrites each lost a shape. The regex it started as
+     * (`= theme.border\b`) counted a commented-out declaration, so a live
+     * `borderColor: edge` naming a different local was reported at a line
+     * where nothing was wrong. Matching a *bare* `PropertyAccessExpression`
+     * instead fixed that and lost `theme.border as string`; unwrapping `as`,
+     * `satisfies`, parens and `!` fixed that and still lost
+     * `theme.border ?? theme.borderStrong` — a binary operand, a ternary
+     * branch, and every other position an expression can hold.
+     *
+     * Enumerating positions is the losing move. What is wanted is: does this
+     * declaration's own source name the divider colour? — asked of the
+     * initializer's text, which the parser has already stripped of comments,
+     * so the census keeps what the tree bought and drops the shape guessing.
+     * It over-collects a local bound to something merely *derived* from
+     * `theme.border`, which is the safe direction: the worst case is a style
+     * named in `AREA_EDGES` with its reason.
+     */
+    const walk = (node: ts.Node): void => {
+      if (
+        ts.isVariableDeclaration(node) &&
+        ts.isIdentifier(node.name) &&
+        node.initializer !== undefined &&
+        /(^|[^\w.])theme\.border(?![\w])/.test(node.initializer.getText())
+      ) {
+        locals.add(node.name.text);
+      }
+      /**
+       * **`const { border } = theme` — the one shape reading the initializer's
+       * text can never catch**, because the token never appears in it. The
+       * name is on the *left*, and `isIdentifier(node.name)` skipped the whole
+       * declaration before the text test ran. A file using only this form also
+       * fails the cheap `theme.border` skip, so it was invisible twice.
+       */
+      if (
+        ts.isBindingElement(node) &&
+        ts.isIdentifier(node.name) &&
+        (node.propertyName ?? node.name).getText() === "border" &&
+        node.parent.parent !== undefined &&
+        ts.isVariableDeclaration(node.parent.parent) &&
+        node.parent.parent.initializer?.getText() === "theme"
+      ) {
+        locals.add(node.name.text);
+      }
+      ts.forEachChild(node, walk);
+    };
+    walk(source);
     return locals;
   }
 
@@ -2758,11 +2787,28 @@ describe("a control's edge is not the divider colour", () => {
       const key = ts.isIdentifier(property.name) ? property.name.text : property.name.getText();
       properties.set(key, property.initializer.getText());
     }
-    const allSides =
-      properties.has("borderWidth") || SIDE_WIDTHS.every((side) => properties.has(side));
-    if (!allSides) return false;
     const colour = properties.get("borderColor");
     if (colour === undefined) return false;
+
+    /**
+     * **A width the same object does not state is a width stated elsewhere.**
+     *
+     * Requiring `borderWidth` (or all four sides) *here* was the shape-guessing
+     * this rule already dropped from `dividerLocals`, one function over — and
+     * it missed the dominant React Native split: `Chip` puts `borderWidth: 1`
+     * on its base style and `borderColor` on the `empty`/`filled` variant that
+     * composes with it, so a control edge at 1.19:1 on the ground left the
+     * suite green. So an object that states a colour and *no* width is flagged
+     * too: it cannot be read alone, and the thing it composes with is out of
+     * view.
+     *
+     * A **single side** with an explicit width is the one shape still let
+     * through, because that is what a divider *is* — a rule between two rows,
+     * which is the use `02-tokens` §2.1 gives this colour. Nothing is guessed:
+     * a partial box (two or three sides) counts as a box and is flagged.
+     */
+    const statedSides = SIDE_WIDTHS.filter((side) => properties.has(side));
+    if (!properties.has("borderWidth") && statedSides.length === 1) return false;
     return isDivider(colour, names);
   }
 
@@ -2774,8 +2820,11 @@ describe("a control's edge is not the divider colour", () => {
 
     for (const file of files) {
       const text = readFileSync(file, "utf8");
+      // A cheap skip, and safe against comments in the direction that matters:
+      // every real use contains this text, so a file it skips has none. A file
+      // that mentions the token only in prose costs one parse and finds
+      // nothing — `dividerLocals` reads the tree.
       if (!/theme\.border\b|elevation\.\w+\.borderColor/.test(text)) continue;
-      const names = dividerLocals(text);
       const source = ts.createSourceFile(
         file,
         text,
@@ -2783,6 +2832,7 @@ describe("a control's edge is not the divider colour", () => {
         true,
         ts.ScriptKind.TSX,
       );
+      const names = dividerLocals(source);
       let inlineAt = 0;
       const walk = (node: ts.Node): void => {
         // Every object literal, not only a property's initializer: an inline
@@ -2826,6 +2876,31 @@ describe("a control's edge is not the divider colour", () => {
   });
 });
 
+/**
+ * **Every scroller declares which kind it is.**
+ *
+ * A scroller is the outermost one on its screen — the page, whose movement is
+ * its own feedback — or a bounded one inside something else, whose end must be
+ * its end. Nothing about a `<ScrollView>` says which, so each one spreads the
+ * helper that matches (`primitives/nested-scroll.ts`), and this rule is what
+ * makes "each one" true.
+ *
+ * **What this rule is and is not.** It is a census: every scroller has made a
+ * declaration. It is *not* the guarantee — `primitives/nested-scroll.test.tsx`
+ * asserts the rendered `overscroll-behavior` of each helper's output, in the
+ * DOM, which is the only place the behaviour is real. Two earlier versions of
+ * this check tried to be the guarantee by reading source, and both could be
+ * spelled around while the page still chained.
+ *
+ * **Parsed with TypeScript, not with a regular expression.** The hand-rolled
+ * slicer this replaces was defeated by three ordinary spellings — a `>` inside
+ * a string attribute (`testID="a>b"`) ended the tag early, an unbalanced `}`
+ * in one truncated the attribute list, and a generic `<FlatList<Row>>` made
+ * the rule unsatisfiable. A trailing `// comment` inside an opening tag also
+ * survived the line-start comment strip and could satisfy the check by naming
+ * a helper it did not call. The compiler's own parser has no such edges, and
+ * it is already a dependency of this repository.
+ */
 describe("every scroller declares which kind it is", () => {
   const SCROLLERS = new Set(["ScrollView", "FlatList", "SectionList", "VirtualizedList"]);
   const SPREAD_HELPERS = new Set(["nestedScrollProps", "horizontalScrollProps", "pageScrollProps"]);

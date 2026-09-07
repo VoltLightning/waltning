@@ -1,7 +1,8 @@
 /**
- * The five tab glyphs, active and inactive side by side — the placeholder
- * set until §2.8's Phosphor install lands. Soft rectangles only (§2.4); the
- * ink follows the label the way `TabBar`'s own text does.
+ * The five tab glyphs, active and inactive side by side — §2.8's Phosphor
+ * duotone, drawn from the vendored paths in `phosphor.tsx`. No circles (§2.4);
+ * the ink follows the label the way `TabBar`'s own text does, and the tone
+ * layer is that ink at reduced opacity rather than a second colour.
  */
 
 import type { Meta, StoryObj } from "@storybook/react-native-web-vite";

@@ -209,6 +209,16 @@ export default function TransactionDetail() {
     [detail, ledger, refetch, t, transactionId],
   );
 
+  /**
+   * **A re-allocation, never a restatement — `LinesCard` cannot express one.**
+   * Its `Save` is disabled unless the draft sums to the total it was handed,
+   * so every set that reaches here already matches and there is no new amount
+   * to carry. The controller's fourth parameter exists for the restatement
+   * (§10.3's invariant runs both ways, and each operation on the device is its
+   * own transaction), and S06 will pass it the day the card grows an explicit
+   * "the total was N" affordance. Deriving it from the lines instead would
+   * rewrite a transaction's amount whenever a user mistyped one.
+   */
   const handleSaveLines = useCallback(
     (lines: readonly LinesCardDraftLine[]) => {
       if (!transactionId || !detail) return;

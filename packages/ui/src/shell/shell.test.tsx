@@ -147,7 +147,7 @@ describe("the frame clears the device's chrome", () => {
   function renderFrame(insets: SafeAreaInsets) {
     const { container } = render(
       <SafeAreaProvider insets={insets}>
-        <TodayFrame appearanceAction={null} total={null} body={null} />
+        <TodayFrame appearanceAction={null} date="Saturday, 5 September" body={null} />
       </SafeAreaProvider>,
     );
     const root = container.firstElementChild;
@@ -221,7 +221,7 @@ describe("the shell owns the strip it clears", () => {
     const { container } = render(
       <ThemeProvider name="light">
         <SafeAreaProvider insets={{ top: 59, right: 0, bottom: 34, left: 0 }}>
-          <TodayFrame appearanceAction={null} total={null} body={null} />
+          <TodayFrame appearanceAction={null} date="Saturday, 5 September" body={null} />
         </SafeAreaProvider>
       </ThemeProvider>,
     );

@@ -2,6 +2,8 @@
 
 import { fireEvent, render, screen } from "@testing-library/react";
 import { expect, it, vi } from "vitest";
+import { ThemeProvider } from "../theme/provider";
+import { light } from "../theme/roles.ts";
 import { CurrencyChip } from "./currency-chip";
 
 function noop() {}
@@ -66,4 +68,25 @@ it("marks the active currency with its own 2px accent bar, not weight alone", ()
   expect(getComputedStyle(active).borderBottomWidth).toBe("2px");
   expect(getComputedStyle(inactive).borderBottomColor).toBe("rgba(0, 0, 0, 0)");
   expect(getComputedStyle(active).borderBottomColor).not.toBe("rgba(0, 0, 0, 0)");
+});
+
+/**
+ * **The ring on the band, asserted where it renders.**
+ *
+ * `theme.test.tsx` proves `shellFocusRing` clears 3:1 on `shell` — a property
+ * of two hex strings. It cannot notice this component going back to the green
+ * one: the whole ring fix was deletable with 1,127 tests green, which is the
+ * same shape as the `tone` prop that shipped unasserted one round earlier. A
+ * ring is only real in a rendered outline.
+ */
+it("focuses with the band's ring, not the page's green one", () => {
+  const view = render(
+    <ThemeProvider theme={light}>
+      <CurrencyChip pinned={[{ code: "PLN" }, { code: "EUR" }]} active="PLN" onChange={noop} />
+    </ThemeProvider>,
+  );
+  const chip = view.getByRole("button");
+  fireEvent.focusIn(chip);
+  expect(getComputedStyle(chip).outlineColor).toBe("rgb(242, 240, 231)");
+  view.unmount();
 });

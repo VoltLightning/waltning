@@ -58,11 +58,27 @@ export function PeriodHeader({
   return (
     <View style={styles.root}>
       <View style={styles.stepper}>
-        <IconButton label={t("shell.periodPrevious")} onPress={onPrevious} size={32}>
+        {/*
+          `tone` follows this header's own: the arrows are `shellText` on the
+          band, and `IconButton`'s ground-family hover fill behind that ink is
+          1.10:1 — a control that vanishes under a pointer. The default is the
+          band, so forgetting it here is the failing case, not the safe one.
+        */}
+        <IconButton
+          label={t("shell.periodPrevious")}
+          onPress={onPrevious}
+          size={32}
+          tone={onSurface ? "ground" : "shell"}
+        >
           <Text style={[styles.arrow, onSurface ? styles.labelOnSurface : null]}>‹</Text>
         </IconButton>
         <Text style={[styles.label, onSurface ? styles.labelOnSurface : null]}>{label}</Text>
-        <IconButton label={t("shell.periodNext")} onPress={onNext} size={32}>
+        <IconButton
+          label={t("shell.periodNext")}
+          onPress={onNext}
+          size={32}
+          tone={onSurface ? "ground" : "shell"}
+        >
           <Text style={[styles.arrow, onSurface ? styles.labelOnSurface : null]}>›</Text>
         </IconButton>
       </View>
@@ -71,7 +87,11 @@ export function PeriodHeader({
           accessibilityRole="button"
           onPress={onToday}
           {...handlers}
-          style={[styles.today, focused ? styles.todayFocused : null]}
+          style={[
+            styles.today,
+            focused ? styles.todayFocused : null,
+            focused && onSurface ? styles.todayFocusedOnSurface : null,
+          ]}
         >
           <Text style={[styles.todayLabel, onSurface ? styles.todayLabelOnSurface : null]}>
             {t("shell.today")}
@@ -96,10 +116,18 @@ const useStyles = makeStyles((theme) => ({
   labelOnSurface: { color: theme.text },
   todayLabelOnSurface: { color: theme.textMuted },
   today: { minHeight: touchTarget.min, justifyContent: "center", paddingHorizontal: space.x2 },
+  /**
+   * **The ring on the band is near-white, not green.** `focusRing` is
+   * `accentIcon`, which is 2.04:1 on `shell` in light — under 1.4.11's 3:1 for
+   * a boundary, and invisible on the one ground the contrast census does not
+   * walk. `shellFocusRing` is `shellText`: 7.77:1 light, 7.94:1 dark.
+   */
   todayFocused: {
     outlineWidth: focus.width,
-    outlineColor: theme.focusRing,
+    outlineColor: theme.shellFocusRing,
     outlineOffset: focus.offset,
   },
+  /** `tone="surface"` puts the same control on a card, where green is the ring. */
+  todayFocusedOnSurface: { outlineColor: theme.focusRing },
   todayLabel: { color: theme.shellTextMuted, ...text.ui("bodySm", 600) },
 }));

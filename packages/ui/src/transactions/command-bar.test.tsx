@@ -7,6 +7,8 @@ import { currencyCode, toMoney } from "@waltning/core/money";
 import { createRef } from "react";
 import type { TextInput } from "react-native";
 import { expect, it, vi } from "vitest";
+import { ThemeProvider } from "../theme/provider";
+import { light } from "../theme/roles.ts";
 import { CommandBar, type CommandBarHandle, type CommandBarProps } from "./command-bar";
 
 const TODAY = "2026-09-03";
@@ -460,4 +462,26 @@ it("L-b — a date the chip cannot format renders as the bare string rather than
   };
   render(<CommandBar {...props({ value: "48.90 cash coffee", parse: unformattable })} />);
   expect(screen.getByText("not-a-date")).toBeDefined();
+});
+
+/**
+ * **The walked chip's ring is the band's, asserted where it renders.**
+ *
+ * This bar has one mount site — `DeskBand`'s `commandBar` slot — so
+ * `outlineOffset` puts the ring on `theme.shell`, where the page's green one
+ * measured 2.45:1 and then 2.04:1 once `accent-icon` was darkened for the page
+ * fills. It is also the *only* signal of where the keyboard is, since
+ * `aria-activedescendant` never moves DOM focus.
+ */
+it("walks with the band's ring, not the page's green one", () => {
+  const view = render(
+    <ThemeProvider theme={light}>
+      <CommandBar {...props({ value: "48.90 cash coffee yesterday", parse: RESOLVED })} />
+    </ThemeProvider>,
+  );
+  fireEvent.keyDown(view.getByRole("combobox"), { key: "ArrowDown" });
+  const walked = view.getAllByRole("option")[0];
+  if (walked === undefined) throw new Error("CommandBar draws no chip");
+  expect(getComputedStyle(walked).outlineColor).toBe("rgb(242, 240, 231)");
+  view.unmount();
 });

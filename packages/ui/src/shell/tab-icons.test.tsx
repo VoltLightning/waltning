@@ -19,13 +19,38 @@ const ICONS = [
   ["Settings", SettingsTabIcon],
 ] as const;
 
+/**
+ * The painted colours of an SVG glyph, which is where they live now — these
+ * were five shapes built from `View`s and the assertion read `backgroundColor`
+ * off them. Phosphor paints `fill` on `<path>`, so reading a background would
+ * find nothing and pass an empty set.
+ */
+function fillsOf(container: HTMLElement): Set<string> {
+  return new Set(
+    Array.from(container.querySelectorAll("svg *"))
+      .map((el) => el.getAttribute("fill"))
+      .filter((fill): fill is string => fill !== null && fill !== "none"),
+  );
+}
+
 describe("tab icons", () => {
-  it.each(ICONS)("%s never draws a circle — no borderRadius: 999 anywhere", (_name, Icon) => {
+  /**
+   * §2.4 reserves the circle for the radio, the switch and the floating add
+   * button, and a round tab glyph reads as one of those. Asserted on the SVG's
+   * own elements: a `borderRadius` check would now pass on every icon whatever
+   * shape it was, because none of them draws a bordered box any more.
+   */
+  it.each(ICONS)("%s draws no circle", (_name, Icon) => {
     const { container } = render(<Icon />);
-    for (const el of Array.from(container.querySelectorAll<HTMLElement>("*"))) {
-      const radius = getComputedStyle(el).borderRadius;
-      expect(radius).not.toBe("999px");
-    }
+    expect(container.querySelector("circle")).toBeNull();
+    expect(container.querySelector("ellipse")).toBeNull();
+  });
+
+  it.each(ICONS)("%s fits the box TabBar reserves", (_name, Icon) => {
+    const { container } = render(<Icon />);
+    const svg = container.querySelector("svg");
+    expect(svg?.getAttribute("width")).toBe("20");
+    expect(svg?.getAttribute("height")).toBe("20");
   });
 
   it.each(ICONS)("%s follows the label — accentText active, textMuted inactive", (_name, Icon) => {
@@ -40,22 +65,13 @@ describe("tab icons", () => {
       </ThemeProvider>,
     );
 
-    // Background colour only — `borderColor` computes to a non-transparent
-    // default even on elements with `borderWidth: 0`, which would report a
-    // "shared colour" that was never actually painted.
-    const inactiveColors = new Set(
-      Array.from(inactive.container.querySelectorAll<HTMLElement>("*"))
-        .map((el) => getComputedStyle(el).backgroundColor)
-        .filter((c) => c && c !== "rgba(0, 0, 0, 0)"),
-    );
-    const activeColors = new Set(
-      Array.from(active.container.querySelectorAll<HTMLElement>("*"))
-        .map((el) => getComputedStyle(el).backgroundColor)
-        .filter((c) => c && c !== "rgba(0, 0, 0, 0)"),
-    );
+    const inactiveColors = fillsOf(inactive.container);
+    const activeColors = fillsOf(active.container);
 
     expect(inactiveColors.size).toBeGreaterThan(0);
     expect(activeColors.size).toBeGreaterThan(0);
+    expect(activeColors).toContain(light.accentText);
+    expect(inactiveColors).toContain(light.textMuted);
     // The two states never share a colour — the whole point of the flag.
     for (const colour of activeColors) {
       expect(inactiveColors.has(colour)).toBe(false);

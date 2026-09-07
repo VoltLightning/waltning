@@ -22,10 +22,14 @@ const tabsShell = readFileSync(resolve(app, "../src/tabs-shell.tsx"), "utf8");
 describe("phone-alone preview presentation", () => {
   it("keeps the accepted Today slice visible in source", () => {
     expect(today).toContain('label: t("routes.createAccount")');
-    // C2 replaced the combined-currency `CurrencyTotals` hero with
-    // `money.netWorth`'s mine/ours split, per currency — `DualTotal` stacked
-    // the way `CurrencyTotals` stacked, never a summed total.
-    expect(today).toContain("snapshot.netWorth.map");
+    // The total is the lead currency's `mine`, in a strip, with the register
+    // one tap away. It was `snapshot.netWorth.map` into a stack of `DualTotal`
+    // heroes — the mine/ours split C2 introduced, still right and no longer
+    // the shape a phone band should spend two fifths of the screen on. What must not come back is
+    // a *summed* total (below); how many figures the strip shows is a layout
+    // decision this test has no business pinning.
+    expect(today).toContain("<NetWorthStrip");
+    expect(today).toContain("leadNetWorth.mine");
     expect(today).toContain('title={t("shell.recent")}');
     // The `+` is not wired here — `(tabs)/_layout.tsx` mounts one
     // `FloatingAdd` above the whole tab slot, so it survives a tab switch

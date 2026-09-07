@@ -159,7 +159,7 @@ describe("every backfill names a step that exists", () => {
     ).toBeUndefined();
     expect(
       REPLICA_BACKFILLS["0010_schema"]?.objects,
-      "0010_schema creates all six triggers no migration step can hold",
+      "0010_schema creates every trigger no migration step can hold",
     ).toBeDefined();
   });
 });
@@ -296,7 +296,7 @@ describe("every objects hook creates something the chain would not otherwise hav
    * would have caught it, but only because it happens to write a bad row —
    * nothing said the *object* had to survive.
    *
-   * **All six, because there is one home for them.** H1a's four spent one
+   * **All of them, because there is one home for them.** H1a's four spent one
    * commit at the tail of `0010_schema.sql`, a generated file, where the next
    * `pnpm ledger:generate` or the next rebuild of `transactions` would have
    * removed them just as quietly. Every hand-written replica trigger is
@@ -304,9 +304,11 @@ describe("every objects hook creates something the chain would not otherwise hav
    * `transactions` now — `0010_schema`, which is no longer the chain's head —
    * so this is the list of every trigger the replica has.
    *
-   * Run the real chain to the end, and ask for the six names. After the
-   * whole chain, never after the hook's own step, which is precisely the
-   * distinction the defect lived in.
+   * Run the real chain to the end, and ask for every name. After the whole
+   * chain, never after the hook's own step, which is precisely the
+   * distinction the defect lived in. The list is `migrate.test.ts`'s exact
+   * census restated as a survival check — that one is `toEqual`, so a trigger
+   * added without being counted is red there.
    */
   it("every hand-written trigger exists after the whole chain, not merely after its own step", () => {
     const names = objectsAfterChain("triggers-head", REPLICA_BACKFILLS);
@@ -317,6 +319,9 @@ describe("every objects hook creates something the chain would not otherwise hav
       "transactions_category_not_archived_update",
       "transaction_lines_category_not_archived_insert",
       "transaction_lines_category_not_archived_update",
+      "transactions_lines_sum_matches_update",
+      "transactions_amount_positive_insert",
+      "transactions_amount_positive_update",
     ]) {
       expect(names.has(trigger), `${trigger} survived the chain`).toBe(true);
     }
@@ -333,8 +338,8 @@ describe("every objects hook creates something the chain would not otherwise hav
    * database has run them, so a trigger written into one can never be
    * re-created from the chain after a later rebuild of its table drops it;
    * and a generated file loses it on the next `pnpm ledger:generate` besides.
-   * The test above says the six triggers survive; this one says there is no
-   * seventh living somewhere that cannot move.
+   * The test above says every trigger survives; this one says there is not
+   * one more living somewhere that cannot move.
    */
   it("no migration step creates a trigger — every one of them lives in a hook", () => {
     // Both chains: the checksum argument is the same for the outbox.

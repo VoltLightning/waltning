@@ -20,7 +20,7 @@
  * both `<Amount>`s and `shellTextMuted` on the labels, not the `text`/
  * `textMuted` a component sitting on `ground` would reach for. Nothing had
  * ever rendered this component under axe until its own story did, before it
- * had a caller — the light-ground inks measured 1.48:1 and 1.58:1 against the
+ * had a caller — the light-ground inks measure 1.48:1 and 1.45:1 against the
  * shell's green. `DeskBand` is its first real caller, at `size="band"`, ahead
  * of the display-currency hero this component is written for (E9); until
  * then it renders whatever single-currency figure its caller has.

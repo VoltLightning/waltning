@@ -3,31 +3,30 @@ import type { PhoneRecentTransaction } from "@waltning/client/ledger/create-phon
 import { deviceRuntime } from "@waltning/client/ledger/device-runtime";
 import { useLedgerController } from "@waltning/client/ledger/use-ledger-controller";
 import { usePhoneLedger } from "@waltning/client/ledger/use-phone-ledger";
+import { useSpendByCategory } from "@waltning/client/ledger/use-spend-by-category";
 import { useUnsettledBanner } from "@waltning/client/ledger/use-unsettled-banner";
+import { useWhereItWent } from "@waltning/client/ledger/use-where-it-went";
 import { accountingDate, shiftMonth, type YearMonth, yearMonth } from "@waltning/core/date";
 import * as money from "@waltning/core/money";
-import { monthLabel } from "@waltning/ui/i18n/locales";
+import { SpendRows } from "@waltning/ui/dashboard/spend-rows";
+import { monthLabel, weekdayLabel } from "@waltning/ui/i18n/locales";
 import { useLocale, useT } from "@waltning/ui/i18n/provider";
 import { Button } from "@waltning/ui/primitives/button";
 import { Card } from "@waltning/ui/shell/card";
-import { DualTotal } from "@waltning/ui/shell/dual-total";
-import { PeriodHeader } from "@waltning/ui/shell/period-header";
-import { StatTile } from "@waltning/ui/shell/stat-tile";
+import { MonthSummary } from "@waltning/ui/shell/month-summary";
+import { NetWorthStrip } from "@waltning/ui/shell/net-worth-strip";
 import { TodayFrame } from "@waltning/ui/shell/today-frame";
 import { UnsettledBanner } from "@waltning/ui/shell/unsettled-banner";
 import { EmptyState } from "@waltning/ui/states/empty-state";
 import { ErrorState } from "@waltning/ui/states/error-state";
 import { Toast } from "@waltning/ui/states/toast";
-import { text } from "@waltning/ui/theme/fonts";
-import { makeStyles } from "@waltning/ui/theme/styles";
-import { space } from "@waltning/ui/tokens";
 import {
   TransactionList,
   type TransactionListItem,
 } from "@waltning/ui/transactions/transaction-list";
 import { router, useLocalSearchParams } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
-import { Text, useColorScheme, View } from "react-native";
+import { useColorScheme } from "react-native";
 import { openUnsettled } from "./open-unsettled.ts";
 import { appearance, PREVIEW_RESET_ENABLED } from "./platform";
 import { PreviewAppearanceControls } from "./preview-appearance-controls";
@@ -90,20 +89,21 @@ function toRow(transaction: PhoneRecentTransaction): TransactionListItem {
  * remounting with this screen — `onAdd`, `addDisabled` and the device's
  * `floatPosition` preference all moved with it.
  *
- * **S04's hero and period row (C2).** `snapshot.netWorth` is `money.netWorth`
- * (A1) per currency — `DualTotal` for the lead, stacked for the rest, exactly
- * `CurrencyTotals`' own stacking shape reused for a figure that needs no FX.
- * `FxStatusChip`/`CurrencyChip` are not rendered: there is no rate and no
- * display currency on the phone (arc-phone excludes FX entirely), and
- * `Shell`'s slots for them stay empty rather than filled with a chip that
- * would have nothing true to say. The period (which month is shown) is this
- * component's own state, never the store's — only *spent* and *net* move when
- * it steps; net worth is a balance as of now.
+ * **The figures, and which of them the period moves.** `snapshot.netWorth` is
+ * `money.netWorth` (A1) per currency; the lead currency's `mine` goes in
+ * `NetWorthStrip` and the rest are a line saying the figure is partial, with
+ * S16 a tap away for all of them. `FxStatusChip`/`CurrencyChip` are not
+ * rendered: there is no rate and no display currency on the phone (arc-phone
+ * excludes FX entirely), and a chip with nothing true to say is worse than an
+ * empty slot.
+ *
+ * The period (which month is shown) is this component's own state, never the
+ * store's. Everything in `MonthSummary` moves when it steps, and so does
+ * *where it went*; the strip does not, because a balance is as of now.
  */
 export default function Today() {
   const t = useT();
   const locale = useLocale();
-  const styles = useStyles();
   const ledger = useLedgerController();
   // A label is a word, so the action cannot be a module constant any more —
   // `useT` is a hook. Memoised on `t` so the empty state is not handed a new
@@ -180,7 +180,10 @@ export default function Today() {
 
   // The device's own calendar (§7.0a), the same call `quick-add-screen.tsx`
   // makes — `deviceRuntime` reads `Intl`/`Date` only, not a platform API.
-  const currentMonth = yearMonth(deviceRuntime().capture().date.slice(0, 7));
+  const today = deviceRuntime().capture().date;
+  const currentMonth = yearMonth(today.slice(0, 7));
+  /** The band's second line — the weekday and the day, under the word *Today*. */
+  const todayLabel = weekdayLabel(today, locale);
   const [month, setMonth] = useState<YearMonth>(currentMonth);
   const handlePreviousMonth = useCallback(() => setMonth((current) => shiftMonth(current, -1)), []);
   const handleNextMonth = useCallback(() => setMonth((current) => shiftMonth(current, 1)), []);
@@ -220,50 +223,84 @@ export default function Today() {
     openUnsettled(openTarget);
   }, [openTarget]);
 
-  const hero = (
-    <View style={styles.heroStack}>
-      {snapshot.netWorth.map((entry, index) => (
-        <DualTotal
-          key={entry.currency}
-          mine={entry.mine}
-          ours={entry.hasShared ? entry.ours : null}
-          currency={entry.currency}
-          decimals={entry.decimals}
-          lead={index === 0}
-        />
-      ))}
-      {snapshot.netWorth.length > 1 ? (
-        <Text style={styles.heldSeparately}>{t("shell.heldSeparately")}</Text>
-      ) : null}
-    </View>
-  );
+  const handleOpenAccounts = useCallback(() => router.push("/accounts"), []);
 
-  const periodRow = leadNetWorth ? (
-    <View style={styles.periodRow}>
-      <PeriodHeader
-        label={monthLabel(month, locale)}
-        onPrevious={handlePreviousMonth}
-        onNext={handleNextMonth}
-        onToday={handleToday}
-        isCurrent={month === currentMonth}
-      />
-      <View style={styles.statRow}>
-        <StatTile
-          label={t("shell.spent")}
-          value={leadPeriodSpend?.spend ?? money.ZERO}
-          currency={leadNetWorth.currency}
-          decimals={leadNetWorth.decimals}
-          kind="spend"
-        />
-        <StatTile
-          label={t("shell.net")}
-          value={leadPeriodSpend?.net ?? money.ZERO}
-          currency={leadNetWorth.currency}
-          decimals={leadNetWorth.decimals}
-        />
-      </View>
-    </View>
+  /**
+   * The total, in a line. It led this screen as a 54pt hero in a band that
+   * spent about 350pt of an 844pt phone on it — and a figure that moves slowly
+   * is not what the app is opened to find out. The register it summarises is
+   * one tap away, where every currency and the shared totals live.
+   */
+  const netWorthStrip = leadNetWorth ? (
+    <NetWorthStrip
+      mine={leadNetWorth.mine}
+      ours={leadNetWorth.hasShared ? leadNetWorth.ours : null}
+      currency={leadNetWorth.currency}
+      decimals={leadNetWorth.decimals}
+      otherCurrencies={snapshot.netWorth.length - 1}
+      onPress={handleOpenAccounts}
+    />
   ) : null;
+
+  /** The hero, and §5's three figures in the shape `net = inflow − spend`. */
+  const monthCard = leadNetWorth ? (
+    <MonthSummary
+      label={monthLabel(month, locale)}
+      onPrevious={handlePreviousMonth}
+      onNext={handleNextMonth}
+      onToday={handleToday}
+      isCurrent={month === currentMonth}
+      spend={leadPeriodSpend?.spend ?? money.ZERO}
+      inflow={leadPeriodSpend?.inflow ?? money.ZERO}
+      net={leadPeriodSpend?.net ?? money.ZERO}
+      currency={leadNetWorth.currency}
+      decimals={leadNetWorth.decimals}
+    />
+  ) : null;
+
+  // One object per language rather than per render, so a re-render for an
+  // unrelated reason does not re-rank the rows.
+  const whereItWentLabels = useMemo(
+    () => ({
+      uncategorized: t("dashboard.uncategorized"),
+      other: t("dashboard.other"),
+      removed: t("dashboard.removedCategory"),
+    }),
+    [t],
+  );
+  /**
+   * §6, ranked and named by `useWhereItWent`.
+   *
+   * **`"mine"`, because this breaks down the figure directly above it.**
+   * `MonthSummary`'s *went out* comes from `periodSpend`, which keeps
+   * `ownership === "own"` rows only (§5). `money.inScope`'s `"all"` keeps
+   * shared ones too, so the bars summed to more than the total they claim to
+   * explain — five times more on a ledger holding one shared expense. `"mine"`
+   * is exactly `periodSpend`'s filter, and it excludes nothing else:
+   * `ownership` and `isBusiness` are different axes and only `"business"`
+   * reads the second, so the business half stays in both figures.
+   */
+  const spendByCategory = useSpendByCategory(ledger, period, "mine", snapshot.revision);
+  const whereItWentRows = useWhereItWent(
+    spendByCategory,
+    // The archived-inclusive tree. `categoryTree` drops archived rows for the
+    // picker that reads it, and archiving a category does not rewrite the
+    // transactions filed under it — so resolving names from that tree
+    // relabelled last month's spending as the honest blank.
+    snapshot.fullCategoryTree,
+    leadNetWorth?.currency,
+    whereItWentLabels,
+  );
+  const whereItWent =
+    whereItWentRows.length === 0 || leadNetWorth === undefined ? null : (
+      <Card title={t("shell.whereItWent")}>
+        <SpendRows
+          rows={whereItWentRows}
+          currency={leadNetWorth.currency}
+          decimals={leadNetWorth.decimals}
+        />
+      </Card>
+    );
 
   // S04 §3 draws exactly one banner row, and `Banner`'s own doc is explicit —
   // "page-level, one tone, one action." A second (or third) unsettled
@@ -332,6 +369,7 @@ export default function Today() {
           />
         </Card>
       )}
+      {whereItWent}
     </>
   ) : (
     <EmptyState
@@ -346,6 +384,16 @@ export default function Today() {
       {typeof message === "string" && !toastDismissed ? (
         <Toast message={message} onDismiss={handleDismissToast} token={toastToken} />
       ) : null}
+      {/*
+        Above the error branch, not inside the populated one. S04 §6: a failed
+        refresh leaves `snapshot`'s other fields untouched, so the figures it
+        did not touch stay on screen and only the part that failed is replaced.
+        They were in the band when the band held a hero, which got this for
+        free; on the ground it has to be said. With no accounts both are
+        `null`, so the first run is unaffected.
+      */}
+      {netWorthStrip}
+      {monthCard}
       {ledgerBody}
     </>
   );
@@ -360,16 +408,8 @@ export default function Today() {
           onReset={handleReset}
         />
       }
-      total={hero}
-      periodRow={periodRow}
+      date={todayLabel}
       body={body}
     />
   );
 }
-
-const useStyles = makeStyles((theme) => ({
-  heroStack: { gap: space.md },
-  heldSeparately: { color: theme.shellTextMuted, ...text.ui("caption") },
-  periodRow: { gap: space.x3 },
-  statRow: { flexDirection: "row", gap: space.x5 },
-}));

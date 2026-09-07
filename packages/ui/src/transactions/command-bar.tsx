@@ -686,9 +686,22 @@ const useStyles = makeStyles((theme) => ({
     backgroundColor: theme.subtleFill,
   },
   chipMachine: { borderColor: theme.accentFillBorder },
+  /**
+   * **The band's ring, because this bar has only one home.** `DeskBand`'s
+   * `commandBar` slot is the sole mount site (`tabs-shell.tsx`'s
+   * `DeskCommandBar`), and `outlineOffset` puts both the gap and the ring
+   * itself on `theme.shell` — where the page's green ring measured 2.45:1 and,
+   * 2.04:1 after `accent-icon` was darkened for the page fills. This indicator
+   * is the *only* signal of where the keyboard is: `aria-activedescendant`
+   * never moves DOM focus, so 2.4.11 rides on it as well as 1.4.11.
+   *
+   * It was missed by the pass that added `shellFocusRing` for the same reason
+   * `CurrencyChip` was: the pass walked `shell/` and `primitives/`, and this
+   * file lives under `transactions/`. What decides the set is the mount site.
+   */
   chipHighlighted: {
     outlineWidth: focus.width,
-    outlineColor: theme.focusRing,
+    outlineColor: theme.shellFocusRing,
     outlineOffset: focus.offset,
   },
   chipText: { color: theme.text, ...text.ui("bodySm", 600) },

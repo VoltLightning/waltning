@@ -820,6 +820,13 @@ export const en = {
     other: "Other",
     /** A line or transaction carrying no category — the null-`categoryId` row §6's split-lines fold can produce. */
     uncategorized: "Uncategorized",
+    /**
+     * A §6 bucket whose category the tree no longer holds at all. Distinct
+     * from `uncategorized`, which is money captured *without* one: a
+     * category that existed and is gone is not the same fact, and giving
+     * both the same name put three identically-labelled rows on one chart.
+     */
+    removedCategory: "Removed category",
     noBalances: "No accounts yet",
     noRecent: "Nothing recorded yet",
     noDebt: "Nobody owes, and you owe nobody",
@@ -855,6 +862,15 @@ export const en = {
     /** §6.7 — lower case, deliberately: a label beneath a figure, not a heading. */
     mine: "mine",
     ours: "ours",
+    openAccounts: "Open your accounts",
+    alsoInOtherCurrencies_one: "Also held in {{count}} other currency",
+    alsoInOtherCurrencies_few: "Also held in {{count}} other currencies",
+    alsoInOtherCurrencies_many: "Also held in {{count}} other currencies",
+    alsoInOtherCurrencies_other: "Also held in {{count}} other currencies",
+    keptSoFar: "Kept so far",
+    cameIn: "Came in",
+    wentOut: "Went out",
+    whereItWent: "Where it went",
     noAccounts: "No accounts yet",
     noAccountsBody: "Create one account to start your ledger.",
     /**

@@ -1375,6 +1375,33 @@ export type PhoneLedgerController = {
     id: Id<"transactions">,
     version: number,
     lines: readonly TransactionLineDraft[],
+    /**
+     * The transaction's own amount, when the re-split changes it. §10.3's
+     * invariant runs both ways and each operation on the device is its own
+     * transaction, so without carrying the amount here a split's total could
+     * not change at all: amount-first is refused by `update_transaction`'s
+     * check, lines-first by this one. Postgres can send the two statements
+     * separately because both sum triggers are `DEFERRABLE INITIALLY
+     * DEFERRED`; this parameter is the device's version of that deferral.
+     *
+     * **Asked for, never derived.** A version of this derived it — sum the
+     * lines, compare against the row, send it when they differ — which
+     * silently converted the sum-mismatch *refusal* into a rewrite of the
+     * transaction's amount, for every caller including the web ledger. It
+     * also summed the caller's raw strings before validating them, so a blank
+     * line threw `DecimalError` out of a controller whose whole contract is to
+     * return `fieldErrors`.
+     *
+     * **No screen passes it yet, and that is a gap with a name.** `LinesCard`
+     * disables `Save` unless the draft sums to the total it was handed, so
+     * S06 can express a re-allocation and not a restatement. Until it grows an
+     * explicit "the total was N" affordance, this parameter is reachable from
+     * the controller's own tests and from the web ledger, and the deadlock it
+     * breaks stays unbroken on the phone.
+     *
+     * Omit it for the ordinary re-split of an unchanged total.
+     */
+    amountOriginal?: string,
   ) => { id: Id<"transactions"> } | { fieldErrors: readonly FieldError[] };
   updateAccount: (
     draft: UpdateAccountDraft,
@@ -3445,7 +3472,7 @@ export function createPhoneLedger(
         throw error;
       }
     },
-    setTransactionLines: (id, version, lines) => {
+    setTransactionLines: (id, version, lines, amountOriginal) => {
       emitClientDiagnostic(diagnostics, {
         scope: "client_action",
         action: "set_transaction_lines",
@@ -3461,6 +3488,10 @@ export function createPhoneLedger(
             amount: line.amount,
             ...(line.categoryId ? { categoryId: line.categoryId } : {}),
           })),
+          // Spread, not `amountOriginal: amountOriginal` — the field is
+          // optional and a literal `undefined` is a value the strict schema
+          // would have to admit.
+          ...(amountOriginal === undefined ? {} : { amountOriginal }),
         });
         if (!parsed.success) {
           return finish(

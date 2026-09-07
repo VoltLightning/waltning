@@ -18,6 +18,7 @@ import {
   type PhoneCurrency,
   type PhoneNetWorth,
   type PhoneRecentTransaction,
+  type PhoneSpendByCategory,
 } from "@waltning/client/ledger/create-phone-ledger";
 import { deviceRuntime } from "@waltning/client/ledger/device-runtime";
 import { LedgerProvider } from "@waltning/client/ledger/ledger-provider";
@@ -28,6 +29,7 @@ import {
   type BalanceRow,
   type CurrencyCode,
   currencyCode,
+  type LedgerScope,
   type Money,
   netWorth,
   type PeriodSpendRow,
@@ -167,6 +169,19 @@ function fakeCategory(
   };
 }
 
+/** The one category these two S04 tests name. */
+const GROCERIES = "00000000-0000-4000-8000-00000000c001";
+
+/** A §6 bucket, as `readSpendByCategory` returns them — `null` is the blank. */
+function spendBucket(categoryId: string | null, amount: string): PhoneSpendByCategory {
+  return {
+    currency: currencyCode("PLN"),
+    decimals: 2,
+    categoryId,
+    amount: toMoney(amount),
+  } as PhoneSpendByCategory;
+}
+
 /**
  * **Named, not positional.** Six positional parameters had already made
  * a `fakeController([], [], tree, usage)` call a row of placeholders whose
@@ -178,6 +193,14 @@ function fakeCategory(
 type FakeControllerOptions = {
   accounts?: readonly FakeAccount[];
   periodSpend?: readonly PeriodSpendRow[];
+  /**
+   * §6's buckets, as `readSpendByCategory` would return them for the scope it
+   * is asked for. A function rather than rows, so a test can assert **which
+   * scope the screen asked for** — the defect this fixture exists to pin was
+   * S04 asking for `"all"` while the figure above the chart came from a read
+   * that keeps own accounts only.
+   */
+  spendByCategory?: (scope: LedgerScope) => readonly PhoneSpendByCategory[];
   categories?: readonly FakeCategory[];
   categoryUsage?: ReadonlyMap<Id<"categories">, number>;
   /** H2 — a caller testing the opening-balance banner hands its own rows rather than `unsettledOf`'s generic ones. */
@@ -204,6 +227,7 @@ function fakeController(options: FakeControllerOptions = {}) {
     periodSpend: periodSpendRows = [],
     categories: initialCategories = [],
     categoryUsage = new Map<Id<"categories">, number>(),
+    spendByCategory = () => [],
     unsettled: unsettledOverride,
     recent: recentRows = [],
     transactionCount = 0,
@@ -248,6 +272,7 @@ function fakeController(options: FakeControllerOptions = {}) {
     listCategoryUsage: () => categoryUsage,
     listNetWorth: () => netWorthOf(accounts),
     readPeriodSpend: () => periodSpendRows,
+    readSpendByCategory: (_period, scope) => spendByCategory(scope),
     listUnsettledClearing: () => unsettledOverride ?? unsettledOf(accounts),
     // No screen under test here drives S10 yet (`ledger-screen.test.tsx`
     // does) — an empty page and a no-op are enough to satisfy the port. The
@@ -516,24 +541,102 @@ describe("Today", () => {
   /**
    * §12: `spent` is §5's positive `spend` magnitude, not a signed delta — a
    * 120.50 expense renders as `120.50`, never `-120.50`.
+   *
+   * **The three figures are §5's whole identity, `net = inflow − spend`.**
+   * `inflow` used to be computed inside `periodSpend` and thrown away, so the
+   * screen showed *spent* and *net* and left the reader to work out what came
+   * in. Stating all three is what makes the month card readable as one
+   * sentence rather than two numbers and a subtraction.
    */
-  it("shows the period row's spent and net tiles from periodSpend, spend as a positive magnitude", () => {
+  it("shows the month card's three figures from periodSpend, spend as a positive magnitude", () => {
     const rows: readonly PeriodSpendRow[] = [
       {
         currency: currencyCode("PLN"),
         decimals: 2,
         spend: toMoney("120.50"),
+        inflow: toMoney("160.50"),
         net: toMoney("40.00"),
       },
     ];
     withLedger(<Today />, fakeController({ accounts: [PLN_ACCOUNT], periodSpend: rows }));
 
-    expect(screen.getByText("spent")).toBeDefined();
-    expect(screen.getByText("net")).toBeDefined();
+    expect(screen.getByText("Kept so far")).toBeDefined();
+    expect(screen.getByText("Came in")).toBeDefined();
+    expect(screen.getByText("Went out")).toBeDefined();
     const rendered = document.body.textContent ?? "";
     expect(rendered).toContain("120.50");
     expect(rendered).not.toContain("-120.50");
+    expect(rendered).toContain("160.50");
     expect(rendered).toContain("40.00");
+  });
+
+  /**
+   * **The chart breaks down the figure directly above it, so it reads the same
+   * rows.** `readSpendByCategory("all")` keeps shared-account rows;
+   * `periodSpend` — which produces *went out* — keeps `ownership === "own"`
+   * only, so the bars summed higher than the total they claim to explain. The
+   * fixture answers per scope, so this asserts *which scope was asked for*
+   * rather than trusting the number that came back.
+   */
+  it("asks for the same scope the month card's figures came from", () => {
+    const byScope = new Map<LedgerScope, readonly PhoneSpendByCategory[]>([
+      ["mine", [spendBucket(GROCERIES, "120.50")]],
+      ["all", [spendBucket(GROCERIES, "120.50"), spendBucket(null, "400.00")]],
+    ]);
+    withLedger(
+      <Today />,
+      fakeController({
+        accounts: [PLN_ACCOUNT],
+        categories: [fakeCategory({ id: GROCERIES, name: "Groceries", kind: "expense" })],
+        periodSpend: [
+          {
+            currency: currencyCode("PLN"),
+            decimals: 2,
+            spend: toMoney("120.50"),
+            inflow: toMoney("160.50"),
+            net: toMoney("40.00"),
+          },
+        ],
+        spendByCategory: (scope) => byScope.get(scope) ?? [],
+      }),
+    );
+
+    expect(screen.getByText("Where it went")).toBeDefined();
+    expect(screen.getByText("Groceries")).toBeDefined();
+    // The shared row `"all"` would have added is absent, so the bars sum to
+    // the same 120.50 the tile above them shows.
+    expect(screen.queryByText("Uncategorized")).toBeNull();
+  });
+
+  /**
+   * Archiving a category does not rewrite the transactions filed under it, and
+   * the picker's tree drops archived rows — so resolving names from that tree
+   * relabelled last month's spending as the honest blank. The screen reads the
+   * archived-inclusive tree instead.
+   */
+  it("still names a category that has since been archived", () => {
+    withLedger(
+      <Today />,
+      fakeController({
+        accounts: [PLN_ACCOUNT],
+        categories: [
+          fakeCategory({ id: GROCERIES, name: "Groceries", kind: "expense", archived: true }),
+        ],
+        periodSpend: [
+          {
+            currency: currencyCode("PLN"),
+            decimals: 2,
+            spend: toMoney("120.50"),
+            inflow: toMoney("0"),
+            net: toMoney("-120.50"),
+          },
+        ],
+        spendByCategory: () => [spendBucket(GROCERIES, "120.50")],
+      }),
+    );
+
+    expect(screen.getByText("Groceries")).toBeDefined();
+    expect(screen.queryByText("Uncategorized")).toBeNull();
   });
 
   it("shows the unsettled banner and opens the named transaction", () => {
@@ -712,7 +815,7 @@ describe("Today", () => {
    * its last known figure (`mine` still renders) while the ground panel shows
    * `ErrorState(recoverable)`.
    */
-  it("shows a recoverable error and keeps the hero when a refresh fails", () => {
+  it("shows a recoverable error and keeps the figures when a refresh fails", () => {
     let calls = 0;
     const port = basePort({
       listAccounts: () => {
@@ -750,7 +853,15 @@ describe("Today", () => {
     withLedger(<Today />, controller);
 
     expect(screen.getByText("Couldn't refresh")).toBeDefined();
-    expect(screen.getByText("mine")).toBeDefined();
+    // S04 §6: a failed balance query replaces the ground's body and nothing
+    // else, so the figures it did not touch stay. Both of them — the strip and
+    // the month card render above the error branch for exactly this reason,
+    // which the band used to give for free when it held the hero.
+    // The **figures**, not their labels. Asserting `getByText("mine")` passed
+    // with the strip rendering zero, because "mine" is a kicker.
+    expect(screen.getByText("Kept so far")).toBeDefined();
+    const rendered = document.body.textContent ?? "";
+    expect(rendered).toContain("50.00");
   });
 
   /**

@@ -173,3 +173,84 @@ describe("plural categories", () => {
     expect(instance.services.pluralResolver.getSuffixes("en").sort()).toEqual(["_one", "_other"]);
   });
 });
+
+/**
+ * **A key that declines, declines completely — in both catalogues.**
+ *
+ * Polish resolves `one`, `few`, `many` and `other`, and i18next falls back to
+ * the *bare* key when the form it wants is missing — which holds the singular.
+ * So a key written as `x` + `x_other` renders "w 2 innej walucie" for every
+ * count from 2 up, and English only looks right because `one` happens to be
+ * what the fallback holds. `filterExcludes` and the rate keys were already
+ * written out in full; this makes that the rule rather than the habit.
+ *
+ * **What it does not check: a counted key with no forms at all.** There are
+ * dozens, and most are deliberate — many are this catalogue's own `…One`/
+ * `…Many` pairs, where the *caller* picks the form, and the rest interpolate a
+ * count into a sentence that does not decline around it (`showingOfTotal`,
+ * `archivedCount`). No number here: counting them needs a parser that agrees
+ * with itself about multi-line values, and a figure in a comment that nothing
+ * recomputes is the thing this repository keeps finding wrong. Telling those apart from a genuine
+ * omission needs a judgement per key rather than a rule, so this checks the
+ * half a rule can decide. `dashboard.flowRange` is the one to watch: it reads
+ * "{{count}} miesięcy", correct for the `COMPLETE_FLOW_MONTHS` of 5 it is
+ * called with and wrong the day that constant becomes 2.
+ */
+describe("counted strings decline", () => {
+  const FORMS = ["one", "few", "many", "other"] as const;
+
+  /**
+   * Roots that already decline — a key with at least one `_one`/`_few`/
+   * `_many`/`_other` sibling. Not every `{{count}}` is a plural: `resultsOne`
+   * interpolates a number into a fixed sentence and has no forms to write out.
+   * What this catches is the half-declined key, which is the shape that fails
+   * silently: i18next falls back to the bare key, and the bare key holds the
+   * singular.
+   */
+  function countedRoots(catalogue: object, prefix = ""): Set<string> {
+    const roots = new Set<string>();
+    for (const [key, value] of Object.entries(catalogue)) {
+      if (typeof value === "object" && value !== null) {
+        for (const root of countedRoots(value, `${prefix}${key}.`)) roots.add(root);
+        continue;
+      }
+      if (typeof value !== "string") continue;
+      const suffix = FORMS.find((form) => key.endsWith(`_${form}`));
+      if (suffix === undefined) continue;
+      roots.add(`${prefix}${key.slice(0, -suffix.length - 1)}`);
+    }
+    return roots;
+  }
+
+  function has(catalogue: object, path: string): boolean {
+    return (
+      path
+        .split(".")
+        .reduce<unknown>(
+          (node, part) =>
+            typeof node === "object" && node !== null
+              ? (node as Record<string, unknown>)[part]
+              : undefined,
+          catalogue,
+        ) !== undefined
+    );
+  }
+
+  it.each([
+    ["en", en],
+    ["pl", pl],
+  ])("%s writes out every form of every counted key", (_name, catalogue) => {
+    const missing: string[] = [];
+    for (const root of countedRoots(catalogue)) {
+      for (const form of FORMS) {
+        if (!has(catalogue, `${root}_${form}`)) missing.push(`${root}_${form}`);
+      }
+    }
+    expect(missing, "a missing form falls back to the bare key, which is the singular").toEqual([]);
+  });
+
+  /** Both catalogues count the same things — a key counted in one and not the other is a bug in one of them. */
+  it("counts the same keys in both languages", () => {
+    expect([...countedRoots(pl)].sort()).toEqual([...countedRoots(en)].sort());
+  });
+});

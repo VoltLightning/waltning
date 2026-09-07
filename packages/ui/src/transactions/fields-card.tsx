@@ -324,7 +324,7 @@ function FieldDisclosureRow({
           {...handlers}
           // No hover fill: the label is `textMuted` and a real hover leaves
           // the cursor resting for the screenshot — `theme.hoverFill` under
-          // `textMuted` measures 4.47:1, short of AA's 4.5:1. Focus ring and
+          // `textMuted` measured 4.47:1 when this was written, short of AA's 4.5:1 (it clears it now, at 4.89). Focus ring and
           // press-scale carry the feedback instead; `BalanceRow`, the
           // anatomy this row copies, has no hover treatment either.
           style={[styles.row, focused ? styles.focused : null]}

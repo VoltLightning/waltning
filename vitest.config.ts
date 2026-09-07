@@ -33,6 +33,13 @@ export default defineConfig({
           new URL("packages/ui/.vitest/gesture-handler.ts", import.meta.url),
         ),
       },
+      // The SVG renderer under the icon set (§2.8) ships a `.web.js` half
+      // beside every native file; pointed at the package root, Vite takes the
+      // native one and dies on React Native's Flow-typed codegen.
+      {
+        find: /^react-native-svg$/,
+        replacement: "react-native-svg/lib/module/ReactNativeSVG.web.js",
+      },
       { find: /^react-native$/, replacement: "react-native-web" },
     ],
     // Platform extensions, web first — the same order Metro uses for the web
@@ -63,6 +70,12 @@ export default defineConfig({
           /react-native-worklets/,
           /react-native-reanimated/,
           /react-native-gesture-handler/,
+          // The SVG renderer under the icon set (§2.8). It ships `.web.js`
+          // halves beside its native files and imports without extensions, so
+          // it needs Vite's resolver and the `extensions` order above; loaded
+          // by Node instead, the native half arrives and dies on a Flow
+          // `typeof`.
+          /react-native-svg/,
         ],
       },
     },

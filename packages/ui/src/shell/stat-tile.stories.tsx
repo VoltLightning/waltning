@@ -9,6 +9,7 @@ import * as money from "@waltning/core/money";
 import { View } from "react-native";
 import { makeStyles } from "../theme/styles.ts";
 import { space } from "../tokens.ts";
+import { Card } from "./card";
 import { DualTotal } from "./dual-total";
 import { Shell } from "./shell";
 import { StatTile } from "./stat-tile";
@@ -63,4 +64,43 @@ const useStyles = makeStyles(() => ({
 /** Both tiles, the way S04 pairs them under `PeriodHeader`. */
 export const Pair: Story = {
   render: () => <Row />,
+};
+
+/**
+ * **On a card, where `MonthSummary` puts it.** The band's ink is near-white by
+ * design and was invisible here — nothing failed, the automated contrast pass
+ * did not flag it, and it took a screenshot to see. So the surface tone is a
+ * story: `income` and `spend` mean what they say, and this is where that is
+ * checked.
+ */
+/** Its own ground — the meta decorator puts every other story on the band. */
+const onCard: Story["decorators"] = [
+  (Story) => (
+    <Card>
+      <Story />
+    </Card>
+  ),
+];
+
+export const OnASurface: Story = {
+  decorators: onCard,
+  args: {
+    label: "Went out",
+    value: money.toMoney("4320.18"),
+    currency: "PLN",
+    kind: "spend",
+    tone: "surface",
+  },
+};
+
+/** Its pair, so the two colours are judged against each other and the fill. */
+export const OnASurfaceIncome: Story = {
+  decorators: onCard,
+  args: {
+    label: "Came in",
+    value: money.toMoney("7850.00"),
+    currency: "PLN",
+    kind: "income",
+    tone: "surface",
+  },
 };

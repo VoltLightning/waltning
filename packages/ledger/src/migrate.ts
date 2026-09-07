@@ -370,9 +370,11 @@ export type Backfill = {
  *
  * **One home, and it is here: every hand-written replica trigger lives in the
  * `objects` hook of the last step that rebuilds `transactions`, and it moves
- * when that step does.** All six of them — H1a's four
- * `*_category_not_archived_*` and WA017's two
- * `transactions_category_kind_matches_type_*` — are created by
+ * when that step does.** All nine of them — H1a's four
+ * `*_category_not_archived_*`, WA017's two
+ * `transactions_category_kind_matches_type_*`, C1's
+ * `transactions_lines_sum_matches_update` and H1's two
+ * `transactions_amount_positive_*` — are created by
  * `REPLICA_BACKFILLS["0010_schema"].objects` below, and nothing else in this
  * package writes a trigger.
  *
@@ -408,7 +410,7 @@ export type Backfill = {
  * `REPLICA_STEPS` — generated file or hand-written one — so the rule cannot
  * be broken back the way it was.
  *
- * `migrate.test.ts` censuses all six off `sqlite_master` **after the whole
+ * `migrate.test.ts` censuses all seven off `sqlite_master` **after the whole
  * chain has run** — not after the hook's own step, which is the one question
  * whose answer a later rebuild can change — and `backfills.test.ts` asks the
  * same by name and structurally.
@@ -434,6 +436,41 @@ export type Backfill = {
  * a delivered step be edited instead. `backfills.test.ts` runs the hook twice and
  * expects no throw.
  */
+/**
+ * `transactions_amount_positive` on the replica — `amount_original > 0` unless
+ * the row is an `adjustment` (`0012_fx_rates_derived_and_amount_guards.sql`).
+ *
+ * **A negative amount is not an error the device notices.** `money.signed`
+ * negates an expense, so `-10.00` on one reads back as **+10.00**: a spend that
+ * raises the balance, in every figure derived from it, with nothing thrown and
+ * nothing logged. Postgres refuses the row outright, so the only place such a
+ * row can exist is here — which is exactly the asymmetry a mirror is for.
+ *
+ * Zero rides along, on the CHECK's own `> 0`: `money.margin` throws
+ * "amountPivot is zero" for every FX figure on a row holding it.
+ *
+ * `BEFORE INSERT` as well as `BEFORE UPDATE OF amount_original`, because a
+ * sync-down or a `create_transaction` reaches this table by insert and neither
+ * passes through `set_transaction_lines`' service check. A comparison in
+ * `REAL`, not the scaled integers `transactions_lines_sum_matches_update`
+ * needs: a sign is exact in a double at every magnitude `zMoney` admits, and
+ * this asks nothing else of the value.
+ */
+const AMOUNT_POSITIVE_TRIGGERS: readonly string[] = [
+  `CREATE TRIGGER IF NOT EXISTS \`transactions_amount_positive_insert\`
+BEFORE INSERT ON \`transactions\`
+WHEN NEW.\`type\` <> 'adjustment' AND CAST(NEW.\`amount_original\` AS REAL) <= 0
+BEGIN
+  SELECT RAISE(ABORT, 'amounts are positive and non-zero; type carries direction (§7.2) — only an adjustment signs (transactions_amount_positive)');
+END`,
+  `CREATE TRIGGER IF NOT EXISTS \`transactions_amount_positive_update\`
+BEFORE UPDATE OF \`amount_original\`, \`type\` ON \`transactions\`
+WHEN NEW.\`type\` <> 'adjustment' AND CAST(NEW.\`amount_original\` AS REAL) <= 0
+BEGIN
+  SELECT RAISE(ABORT, 'amounts are positive and non-zero; type carries direction (§7.2) — only an adjustment signs (transactions_amount_positive)');
+END`,
+];
+
 const CATEGORY_KIND_TRIGGERS: readonly string[] = [
   `CREATE TRIGGER IF NOT EXISTS \`transactions_category_kind_matches_type_insert\`
 BEFORE INSERT ON \`transactions\`
@@ -478,6 +515,87 @@ END`,
  * `objects` hook re-runs whenever its step does, so it must be idempotent on
  * its own terms rather than on the journal's.
  */
+/**
+ * §10.3 on the replica: a split's lines sum to their parent, checked from
+ * **both** directions — the replica's half of `packages/db`'s
+ * `transaction_lines_sum_matches` / `transactions_lines_sum_matches`.
+ *
+ * *"The parent transaction holds the total and every balance reads it, so a
+ * mis-summed split is a balance that disagrees with itself."* The lines' own
+ * direction was checked in `set_transaction_lines` and nowhere else, so
+ * patching `amount_original` on an already-split transaction moved the parent
+ * off its lines: every figure read *through* the lines (§6's spend by
+ * category) then disagreed with every figure read from the parent (§5's
+ * `periodSpend`), and S04 draws those two one above the other.
+ *
+ * **One trigger, on the parent — not the mirror pair Postgres has.** The
+ * lines' own direction cannot be a trigger here: Postgres defers its
+ * constraint to the end of the statement, SQLite has no deferred triggers, and
+ * `set_transaction_lines` writes a split one row at a time — so an `AFTER
+ * INSERT` on `transaction_lines` fires on the first of two lines and aborts on
+ * a sum that was always going to be partial. That direction keeps its service
+ * check, which is sound because `set_transaction_lines` is its only writer;
+ * this direction had neither, and `amount_original` is patchable from
+ * `update_transaction`, which anything may call.
+ *
+ * **Zero lines is legal** — an unsplit transaction — so the `WHEN` is gated on
+ * the split existing.
+ *
+ * **Compared as scaled integers, never as `REAL`.** A first version cast both
+ * sides to `REAL`, which is a double, and money in a double is wrong in both
+ * directions: `0.01 + 1.62` sums to `1.6300000000000001` and *refused a
+ * correct write* — which is the worse half, because a `SqliteError` is not a
+ * `LocalRefusal`, so the outbox keeps a real entry the server will accept and
+ * the two diverge. Removing the decimal point yields the exact value in units
+ * of 1e-8, and `SUM` over those is integer arithmetic.
+ *
+ * **It abstains rather than guess.** That premise — every amount at exactly
+ * eight decimals — is true of every row `money.toMoney` writes and is *not*
+ * enforced by the column, which is plain `text` with no transform and no
+ * CHECK. So the `WHEN` requires it, of the parent and of every line, and a row
+ * at any other scale simply does not fire the trigger. A backstop that refuses
+ * a mathematically correct write is worse than one that stays quiet: the
+ * service check in `set-transaction-lines.executor.ts` is exact at every scale
+ * and is what actually guards the write; this is the layer for when that code
+ * is wrong.
+ *
+ * The same reasoning bounds the top end. Signed 64-bit integers are exact to
+ * ±92,233,720,368 units of currency and `zMoney` admits ten times that, so the
+ * `WHEN` abstains above it too rather than comparing two overflowed sums.
+ *
+ * **It never fires on the one path that legitimately restates a total, and
+ * that is by design.** `set_transaction_lines` carrying an `amount_original`
+ * deletes the old lines first, so the `UPDATE` lands with none under it and
+ * the `WHEN`'s first clause is already false; the new lines are inserted
+ * after, and this trigger watches `transactions`, not `transaction_lines`.
+ * The sum for that path is checked in `set-transaction-lines.executor.ts`,
+ * against the amount arriving in the *same* operation — which is the whole of
+ * how a split's total can change on a device that cannot defer a constraint.
+ * What this trigger is for is the other direction: an `amount_original` moved
+ * on its own, by `update_transaction` or by code that bypasses both, while
+ * lines still sit under it.
+ */
+const LINE_SUM_TRIGGERS: readonly string[] = [
+  `CREATE TRIGGER IF NOT EXISTS \`transactions_lines_sum_matches_update\`
+AFTER UPDATE OF \`amount_original\` ON \`transactions\`
+WHEN EXISTS (SELECT 1 FROM \`transaction_lines\` WHERE \`transaction_id\` = NEW.\`id\`)
+  AND length(NEW.\`amount_original\`) - instr(NEW.\`amount_original\`, '.') = 8
+  AND abs(CAST(NEW.\`amount_original\` AS REAL)) < 92233720368
+  AND NOT EXISTS (
+    SELECT 1 FROM \`transaction_lines\`
+    WHERE \`transaction_id\` = NEW.\`id\`
+      AND (length(\`amount\`) - instr(\`amount\`, '.') <> 8
+        OR abs(CAST(\`amount\` AS REAL)) >= 92233720368)
+  )
+BEGIN
+	SELECT RAISE(ABORT, 'transaction lines must sum to the transaction amount (§10.3)')
+	WHERE (
+		SELECT SUM(CAST(REPLACE(\`amount\`, '.', '') AS INTEGER)) FROM \`transaction_lines\`
+		WHERE \`transaction_id\` = NEW.\`id\`
+	) <> CAST(REPLACE(NEW.\`amount_original\`, '.', '') AS INTEGER);
+END`,
+];
+
 const CATEGORY_NOT_ARCHIVED_TRIGGERS: readonly string[] = [
   `CREATE TRIGGER IF NOT EXISTS \`transactions_category_not_archived_insert\`
 BEFORE INSERT ON \`transactions\`
@@ -586,21 +704,33 @@ export const REPLICA_BACKFILLS: Readonly<Record<string, Backfill>> = {
   },
   "0010_schema": {
     /**
-     * **The replica's six hand-written triggers, all of them, in one place.**
+     * **The replica's nine hand-written triggers, all of them, in one place.**
      * H1a's four `*_category_not_archived_*` (an archived category is never
-     * newly assigned — `packages/db`'s `assert_category_not_archived`) and
+     * newly assigned — `packages/db`'s `assert_category_not_archived`),
      * WA017's two `transactions_category_kind_matches_type_*` (a row's type
      * matches its category's kind — `packages/db/drizzle/
      * 0011_transaction_scale_and_category_kind.sql`'s
-     * `assert_category_kind_matches_type`). Both are backstops in `CLAUDE.md`'s
-     * sense — "holds when code is wrong" — under executors that already refuse
-     * with a real message: `assertCategoryNotArchived` for the first,
-     * `categorize-batch.executor.ts`'s own `WHERE` for the second.
+     * `assert_category_kind_matches_type`) and C1's
+     * `transactions_lines_sum_matches_update` (a split's lines still sum to
+     * its parent — `packages/db`'s deferred `assert_transaction_lines_sum`,
+     * which SQLite cannot defer, hence one trigger rather than two) and H1's
+     * two `transactions_amount_positive_*` (an amount is positive unless the
+     * row is an adjustment — `0012_fx_rates_derived_and_amount_guards.sql`'s
+     * CHECK of that name, which the replica had no mirror of, so a negative
+     * `amount_original` lived here and read back through `money.signed` with
+     * its sign flipped). All are
+     * backstops in `CLAUDE.md`'s sense — "holds when code is wrong" — under
+     * executors that already refuse with a real message:
+     * `assertCategoryNotArchived` for the first,
+     * `categorize-batch.executor.ts`'s own `WHERE` for the second,
+     * `set-transaction-lines.executor.ts`'s sum check for the third and its
+     * `assertRestatedAmountPositive` for the fourth.
      *
      * **On `0010_schema` because that is the last step that rebuilds
      * `transactions` — not because it is the head.** It is not the head:
-     * `0011_dashboard_layout_seed` and `0012_schema` run after it and neither
-     * touches this table. What matters is the rebuild. `0010_schema` rebuilds
+     * `0011_dashboard_layout_seed`, `0012_schema` and `0013_schema` all run
+     * after it, and none of them rebuilds this table — `0013_schema` touches
+     * it, but only to add two indexes, which leaves its triggers where they are. What matters is the rebuild. `0010_schema` rebuilds
      * `transactions` copy-rename-drop to add `brand_key`/`brand_source`
      * (§14.4b), and SQLite drops a table's triggers with the table — so a
      * hook one step earlier created two triggers the very next step deleted,
@@ -614,6 +744,8 @@ export const REPLICA_BACKFILLS: Readonly<Record<string, Backfill>> = {
     objects: (tx) => {
       for (const statement of CATEGORY_NOT_ARCHIVED_TRIGGERS) tx.run(sql.raw(statement));
       for (const statement of CATEGORY_KIND_TRIGGERS) tx.run(sql.raw(statement));
+      for (const statement of LINE_SUM_TRIGGERS) tx.run(sql.raw(statement));
+      for (const statement of AMOUNT_POSITIVE_TRIGGERS) tx.run(sql.raw(statement));
     },
   },
 };

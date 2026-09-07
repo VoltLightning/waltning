@@ -32,6 +32,7 @@ import {
   setTransactionLinesInput,
 } from "@waltning/core/registry/inputs";
 import { and, eq, isNull } from "drizzle-orm";
+import { assertAmountPositive, assertLineMagnitude } from "../amount-sign.ts";
 import { defineLocalExecutor, LocalRefusal } from "../executor.ts";
 import { assertMoneyScale } from "../scale.ts";
 import { ledgerSchema as schema } from "../schema-map.ts";
@@ -67,20 +68,81 @@ export const setTransactionLinesExecutor = defineLocalExecutor<
   // queued as an intent nothing will ever apply. Business refusals that a
   // future server might still resolve differently — a stale version, a
   // lines sum that does not match — stay inside `apply`, where they always
-  // were; only the scale refusal moves.
+  // were; only the scale refusals move. The restated total is one of them:
+  // it arrives on the same operation and is judged against the same currency,
+  // so leaving it in `apply` alone would queue an intent no server can ever
+  // resolve — the one thing this hook exists to prevent.
   validate: (input, tx) => {
     const current = tx
-      .select({ currency: transactions.currency, deletedAt: transactions.deletedAt })
+      .select({
+        currency: transactions.currency,
+        deletedAt: transactions.deletedAt,
+        type: transactions.type,
+      })
       .from(transactions)
       .where(eq(transactions.id, input.transactionId))
       .get();
-    if (!current || current.deletedAt !== null) return;
+    /**
+     * **A row this device does not hold is a refusal, not a skip.**
+     *
+     * The early return was `if (!current || ...) return`, which put back the
+     * entry this hook exists to keep out: an input naming an id the replica
+     * has never seen queued a real operation Postgres refuses forever, and
+     * `recover.ts` re-reads it at every launch while any sibling entry is
+     * `deferred`. The *deleted* branch is safe — `apply` refuses that with a
+     * message of its own — but the missing one fell through to the outbox.
+     *
+     * So only the scale check needs the row (it reads the currency's declared
+     * scale); the sign and the empty-set guard are judged without it, and
+     * `adjustment` — the one exemption — is a type an unknown row cannot have,
+     * since this operation mints nothing.
+     */
+    if (current !== undefined && current.deletedAt !== null) return;
+    const type = current?.type ?? "unknown";
+    if (input.amountOriginal !== undefined) {
+      if (current !== undefined) {
+        assertMoneyScale(
+          tx,
+          input.amountOriginal,
+          current.currency,
+          "set_transaction_lines: amount_original",
+        );
+      }
+      assertAmountPositive("set_transaction_lines: amount_original", input.amountOriginal, type);
+    }
+    /**
+     * **An empty set carries no total.** `replaceLines`' sum check is gated on
+     * `lines.length > 0`, and the lines are deleted before the parent is
+     * updated — so `{ lines: [], amountOriginal: "9999.00" }` cleared a split
+     * and restated the amount to anything at all, with the sum check skipped
+     * and the replica's own trigger already abstaining (its `WHEN` requires
+     * lines to exist). This operation names a breakdown; the operation that
+     * moves an amount on its own is `update_transaction`.
+     */
+    if (input.lines.length === 0 && input.amountOriginal !== undefined) {
+      throw new LocalRefusal(
+        "set_transaction_lines: an empty set removes the breakdown and cannot restate the amount — patch it with update_transaction",
+      );
+    }
+
     for (const line of input.lines) {
-      assertMoneyScale(
-        tx,
-        line.amount,
-        current.currency,
+      if (current !== undefined) {
+        assertMoneyScale(
+          tx,
+          line.amount,
+          current.currency,
+          `set_transaction_lines: transaction_lines[${line.id}].amount`,
+        );
+      }
+      /**
+       * A line is a magnitude, and a `0.00` one is a row receipts print —
+       * see `assertLineMagnitude` for why the parent's rule and this one are
+       * not the same rule.
+       */
+      assertLineMagnitude(
         `set_transaction_lines: transaction_lines[${line.id}].amount`,
+        line.amount,
+        type,
       );
     }
   },
@@ -108,10 +170,36 @@ function replaceLines(input: SetTransactionLinesInput, tx: ReplicaTx): LocalTran
     );
   }
 
+  /**
+   * **The amount this set is judged against — the patched one where the caller
+   * sent it.** Postgres can take the two statements separately because both
+   * sum triggers are `DEFERRABLE INITIALLY DEFERRED`: the parent and its lines
+   * may disagree inside a transaction and are judged at commit. Each operation
+   * here is its own transaction, so without this a split's total could not be
+   * changed in either order — 18 split 10 + 8 could not become 20 split
+   * 10 + 10, because amount-first is refused by the parent's check and
+   * lines-first by this one. Carrying both in one operation is the device's
+   * deferral.
+   */
+  const nextAmount = input.amountOriginal ?? current.amountOriginal;
+  if (input.amountOriginal !== undefined) {
+    assertMoneyScale(
+      tx,
+      input.amountOriginal,
+      current.currency,
+      "set_transaction_lines: amount_original",
+    );
+    assertAmountPositive(
+      "set_transaction_lines: amount_original",
+      input.amountOriginal,
+      current.type,
+    );
+  }
+
   const total = money.sum(input.lines.map((line) => line.amount));
-  if (input.lines.length > 0 && !money.eq(total, current.amountOriginal)) {
+  if (input.lines.length > 0 && !money.eq(total, nextAmount)) {
     throw new LocalRefusal(
-      `set_transaction_lines: lines sum to ${total}, the transaction is ${current.amountOriginal}`,
+      `set_transaction_lines: lines sum to ${total}, the transaction is ${nextAmount}`,
     );
   }
 
@@ -139,7 +227,18 @@ function replaceLines(input: SetTransactionLinesInput, tx: ReplicaTx): LocalTran
     );
   }
 
+  // The parent first, and only when it moves: the lines are about to be
+  // replaced, so the sum trigger on `transactions` sees the *old* set here —
+  // which is why an amount change has to arrive with an empty line table under
+  // it. Deleting first is what gives it one.
   tx.delete(transactionLines).where(eq(transactionLines.transactionId, input.transactionId)).run();
+
+  if (input.amountOriginal !== undefined) {
+    tx.update(transactions)
+      .set({ amountOriginal: money.toMoney(input.amountOriginal) })
+      .where(eq(transactions.id, input.transactionId))
+      .run();
+  }
 
   if (input.lines.length > 0) {
     tx.insert(transactionLines)

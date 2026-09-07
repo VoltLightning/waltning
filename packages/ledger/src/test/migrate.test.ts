@@ -1752,10 +1752,63 @@ describe("a constraint declared in the schema is present on the device", () => {
     ).toEqual([
       "transaction_lines_category_not_archived_insert",
       "transaction_lines_category_not_archived_update",
+      "transactions_amount_positive_insert",
+      "transactions_amount_positive_update",
       "transactions_category_kind_matches_type_insert",
       "transactions_category_kind_matches_type_update",
       "transactions_category_not_archived_insert",
       "transactions_category_not_archived_update",
+      "transactions_lines_sum_matches_update",
+    ]);
+  });
+
+  /**
+   * **The indexes a migrated device actually has.** The replica half of this
+   * file already pins tables and columns, and the outbox pins its own index
+   * list; the replica's were the gap — which matters because SQLite drops a
+   * table's indexes with the table, so a step that rebuilds `transactions`
+   * copy-rename-drop and forgets to re-declare one leaves the device scanning,
+   * with every test still green.
+   *
+   * **This pins the chain, not the schema.** A `packages/schema` declaration
+   * that was never regenerated is caught one step earlier, by
+   * `pnpm ledger:generate` writing a step and the diff being committed — a
+   * test cannot see an index that exists only in a source file the chain was
+   * not rebuilt from. What it does see is one that shipped and stopped
+   * shipping.
+   */
+  it("ships the whole index set the migration chain builds", () => {
+    const ledger = openAt("indexes");
+    migrateReplica(ledger.replica, { fs: realFs }).copy?.release();
+    ledger.close();
+
+    expect(
+      inspect(join(dir, "indexes-replica.db"), (db) => objects(db, "index")),
+      "regenerate the chain (`pnpm ledger:generate`) — a declared index that does not ship is worse than none",
+    ).toEqual([
+      // The four `uniqueIndex(...)` declarations — three of them partial, which
+      // a bare `unique()` could not express — land in `sqlite_master` as
+      // ordinary indexes, so they are listed together with the plain ones.
+      //
+      // **What this cannot see:** the autoindexes SQLite creates to back a
+      // primary key it does not store as the rowid. Those are named
+      // `sqlite_autoindex_*` and `objects()` filters that prefix, so fifteen go
+      // uncounted — thirteen single-column `text primary key`s (every id
+      // column, since a TEXT key is not a rowid alias), the composite key on
+      // `counterparty_distinct_pairs`, and the journal's own `tag`. Not one
+      // comes from a `UNIQUE` column: every uniqueness rule this schema states
+      // is a named `uniqueIndex(...)`, which is why they are all in the list
+      // below. They are the engine's own and move with the table; the ones
+      // listed here are the chain's.
+      "counterparties_name_uq",
+      "counterparty_merges_loser_open_uq",
+      "dashboard_layouts_one_active",
+      "fx_rates_pk",
+      "transaction_lines_category_idx",
+      "transaction_lines_transaction_idx",
+      "transactions_category_idx",
+      "transactions_counterparty_idx",
+      "transactions_date_idx",
     ]);
   });
 });

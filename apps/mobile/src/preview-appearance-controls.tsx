@@ -1,7 +1,9 @@
 import type { AppearancePreference } from "@waltning/client/appearance/create-appearance";
 import { useT } from "@waltning/ui/i18n/provider";
 import { Button } from "@waltning/ui/primitives/button";
+import { IconButton } from "@waltning/ui/primitives/icon-button";
 import { SegmentControl, type SegmentControlProps } from "@waltning/ui/primitives/segment-control";
+import { AppearanceIcon } from "@waltning/ui/shell/appearance-icon";
 import { BottomSheet } from "@waltning/ui/shell/bottom-sheet";
 import { Banner } from "@waltning/ui/states/banner";
 import { text } from "@waltning/ui/theme/fonts";
@@ -59,7 +61,14 @@ export function PreviewAppearanceControls({
 
   return (
     <>
-      <Button label={t("preview.appearance")} onPress={showAppearance} variant="primary" />
+      {/*
+        An icon, not a `Button variant="primary"`. The pill it replaced was the
+        width of the word *Appearance* and the loudest thing on the band — a
+        setting outranking the figures the screen exists to show.
+      */}
+      <IconButton label={t("preview.appearance")} onPress={showAppearance} tone="shell">
+        <AppearanceIcon />
+      </IconButton>
       <BottomSheet
         visible={sheet !== "closed"}
         title={sheet === "reset" ? t("preview.resetTitle") : t("preview.appearance")}

@@ -1,6 +1,8 @@
 /** @vitest-environment jsdom */
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { ThemeProvider } from "../theme/provider";
+import { light } from "../theme/roles.ts";
 import { Toast, UndoToast } from "./toast";
 
 const TOKEN = 1;
@@ -180,3 +182,44 @@ describe("UndoToast", () => {
     expect(screen.getByTestId("toast-mark")).toBeDefined();
   });
 });
+
+/**
+ * **The seventh control on the band, and the one the round that named six
+ * forgot to test.**
+ *
+ * A toast paints `theme.shell` and its action is the only thing on it a
+ * keyboard can reach. The green ring measures 2.04:1 there. Asserted against
+ * the *shell*, not against a token name: `shellFocusRing` and `shellText` hold
+ * the same string in both themes, so a name comparison could not tell a
+ * correct ring from one that merely looks right — while a contrast assertion
+ * catches the only thing a reader experiences, and would keep catching it if
+ * either token moved.
+ */
+it("draws its action's ring readably against the band it paints", () => {
+  const view = render(
+    <ThemeProvider theme={light}>
+      <UndoToast message="Row deleted" onUndo={vi.fn()} onDismiss={vi.fn()} token={TOKEN} />
+    </ThemeProvider>,
+  );
+  const action = view.getByRole("button", { name: "Undo" });
+  fireEvent.focusIn(action);
+  const ring = getComputedStyle(action).outlineColor;
+  expect(ring, "the action draws a ring at all").not.toBe("rgba(0, 0, 0, 0)");
+  expect(contrastAgainstShell(ring), ring).toBeGreaterThanOrEqual(3);
+  view.unmount();
+});
+
+/** WCAG's own formula, on an `rgb(r, g, b)` string against `light.shell`. */
+function contrastAgainstShell(rgb: string): number {
+  const parts = /^rgb\((\d+),\s*(\d+),\s*(\d+)\)$/.exec(rgb);
+  if (parts === null) throw new Error(`not an rgb colour: ${rgb}`);
+  const channel = (value: number) => {
+    const v = value / 255;
+    return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+  };
+  const luminance = (r: number, g: number, b: number) =>
+    0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b);
+  const ring = luminance(Number(parts[1]), Number(parts[2]), Number(parts[3]));
+  const shell = luminance(0x3c, 0x4f, 0x38);
+  return (Math.max(ring, shell) + 0.05) / (Math.min(ring, shell) + 0.05);
+}

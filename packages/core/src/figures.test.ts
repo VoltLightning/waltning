@@ -144,7 +144,13 @@ describe("periodSpend — §5 (base figure, C2)", () => {
       },
     ];
     expect(money.periodSpend(rows, period)).toEqual([
-      { currency: PLN, decimals: 2, spend: "100.00000000", net: "-70.00000000" },
+      {
+        currency: PLN,
+        decimals: 2,
+        spend: "100.00000000",
+        inflow: "30.00000000",
+        net: "-70.00000000",
+      },
     ]);
   });
 
@@ -190,8 +196,20 @@ describe("periodSpend — §5 (base figure, C2)", () => {
       },
     ];
     expect(money.periodSpend(rows, period)).toEqual([
-      { currency: PLN, decimals: 2, spend: "100.00000000", net: "-100.00000000" },
-      { currency: USD, decimals: 2, spend: "40.00000000", net: "-40.00000000" },
+      {
+        currency: PLN,
+        decimals: 2,
+        spend: "100.00000000",
+        inflow: "0.00000000",
+        net: "-100.00000000",
+      },
+      {
+        currency: USD,
+        decimals: 2,
+        spend: "40.00000000",
+        inflow: "0.00000000",
+        net: "-40.00000000",
+      },
     ]);
   });
 

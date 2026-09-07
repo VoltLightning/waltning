@@ -879,11 +879,25 @@ const transactionLine = z.object({
  * line-by-line patch would need a merge rule nobody can state. The sum of
  * line amounts equalling the transaction is enforced in the executor, where
  * the transaction's amount is known.
+ *
+ * **`amountOriginal` moves the parent in the same operation**, because
+ * otherwise a split's total cannot be changed at all. Postgres allows the two
+ * statements to be sent separately: both sum triggers are `DEFERRABLE INITIALLY
+ * DEFERRED`, so a transaction may pass through a state where the parent and
+ * its lines disagree and be judged only at commit. The device has no analogue
+ * — each operation is its own transaction — so 18 split 10 + 8 could not
+ * become 20 split 10 + 10 in either order: amount-first is refused by the
+ * parent's own check, lines-first by the lines'. One operation carrying both
+ * is the device's deferral.
+ *
+ * Optional, so the ordinary re-split of an unchanged total says nothing about
+ * the amount and cannot accidentally move it.
  */
 export const setTransactionLinesInput = z.object({
   transactionId: zId<"transactions">(),
   version: z.number().int().positive(),
   lines: z.array(transactionLine).max(200),
+  amountOriginal: zMoney.optional(),
 });
 export type SetTransactionLinesInput = z.output<typeof setTransactionLinesInput>;
 

@@ -34,12 +34,25 @@ function components(dir = srcDir, out: { name: string; text: string }[] = []) {
 
 const all = components();
 
-/** Anything a person can press or type into, wherever it lives. */
-const INTERACTIVE = /Pressable|TextInput/;
+/**
+ * Anything a person can press or type into, wherever it lives.
+ *
+ * **Matched against source with comments stripped.** The docblocks here quote
+ * `Pressable` and `TextInput` constantly — explaining what a component is
+ * *not*, or what the component it stands beside does — and a file that only
+ * mentions one was being asked for a touch target and a focus ring it has no
+ * element to put them on. The same reason `tests/architecture.test.ts` strips
+ * comments before every one of its scans.
+ */
+const INTERACTIVE = /\b(?:Pressable|TextInput)\b/;
+
+function code(text: string): string {
+  return text.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+}
 
 describe("the 44px floor, fixed at the source (§10)", () => {
   it("every interactive atom carries it", () => {
-    const interactive = all.filter((c) => INTERACTIVE.test(c.text));
+    const interactive = all.filter((c) => INTERACTIVE.test(code(c.text)));
     const missing = interactive
       .filter((c) => !/touchTarget\.min|minHeight: 44/.test(c.text))
       .map((c) => c.name);
@@ -55,7 +68,7 @@ describe("the focus ring, on every interactive element (§2.6)", () => {
   it("is never omitted", () => {
     // "Never removed, never replaced by a colour change alone." A colour-only
     // focus state is invisible to exactly the people it exists for.
-    const interactive = all.filter((c) => INTERACTIVE.test(c.text));
+    const interactive = all.filter((c) => INTERACTIVE.test(code(c.text)));
     const missing = interactive.filter((c) => !/focus\./.test(c.text)).map((c) => c.name);
 
     expect(missing, "interactive components with no focus ring").toEqual([]);

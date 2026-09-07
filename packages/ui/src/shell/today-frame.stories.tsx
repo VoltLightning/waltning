@@ -28,13 +28,14 @@ import { text } from "../theme/fonts.ts";
 import { makeStyles } from "../theme/styles.ts";
 import { space } from "../tokens.ts";
 import { Card } from "./card";
-import { CurrencyTotals } from "./currency-totals";
+import { MonthSummary } from "./month-summary";
+import { NetWorthStrip } from "./net-worth-strip";
 import { TodayFrame } from "./today-frame";
 
 const meta = {
   title: "Shell/TodayFrame",
   component: TodayFrame,
-  args: { appearanceAction: null },
+  args: { appearanceAction: null, date: "Saturday, 5 September" },
   parameters: { layout: "fullscreen" },
 } satisfies Meta<typeof TodayFrame>;
 
@@ -43,8 +44,13 @@ type Story = StoryObj<typeof meta>;
 
 export const Populated: Story = {
   args: {
-    total: renderTotal("48210.00"),
-    body: <Body>Three rows would sit here.</Body>,
+    body: (
+      <>
+        {renderTotal("48210.00")}
+        {renderMonth()}
+        <Body>Three rows would sit here.</Body>
+      </>
+    ),
   },
 };
 
@@ -63,8 +69,13 @@ export const Populated: Story = {
 export const NotchedPhone: Story = {
   decorators: [withInsets({ top: 59, right: 0, bottom: 34, left: 0 })],
   args: {
-    total: renderTotal("48210.00"),
-    body: <Body>Three rows would sit here.</Body>,
+    body: (
+      <>
+        {renderTotal("48210.00")}
+        {renderMonth()}
+        <Body>Three rows would sit here.</Body>
+      </>
+    ),
   },
 };
 
@@ -79,15 +90,19 @@ export const NotchedPhone: Story = {
  */
 export const TwoCurrencies: Story = {
   args: {
-    total: (
-      <CurrencyTotals
-        subtotals={[
-          { currency: "PLN", decimals: 2, balance: money.toMoney("12480.20") },
-          { currency: "BYN", decimals: 2, balance: money.toMoney("8400.00") },
-        ]}
-      />
+    body: (
+      <>
+        <NetWorthStrip
+          mine={money.toMoney("12480.20")}
+          ours={money.toMoney("18940.60")}
+          currency="PLN"
+          otherCurrencies={1}
+          onPress={noop}
+        />
+        {renderMonth()}
+        <Body>Three rows would sit here.</Body>
+      </>
     ),
-    body: <Body>Three rows would sit here.</Body>,
   },
 };
 
@@ -101,10 +116,7 @@ export const TwoCurrencies: Story = {
  * an invented figure in an invented currency.
  */
 export const FirstRun: Story = {
-  args: {
-    total: <CurrencyTotals subtotals={[]} />,
-    body: <Body>Nothing captured yet.</Body>,
-  },
+  args: { body: <Body>Nothing captured yet.</Body> },
 };
 
 /**
@@ -122,10 +134,27 @@ function withInsets(insets: SafeAreaInsets) {
   };
 }
 
-/** One currency. `<CurrencyTotals>` prints the lead figure and nothing else. */
+function noop() {}
+
+/** One currency, no shared account — the strip at its plainest. */
 function renderTotal(value: string) {
+  return <NetWorthStrip mine={money.toMoney(value)} ours={null} currency="PLN" onPress={noop} />;
+}
+
+/** The hero, now that the band has none. §5's three figures for one month. */
+function renderMonth() {
   return (
-    <CurrencyTotals subtotals={[{ currency: "PLN", decimals: 2, balance: money.toMoney(value) }]} />
+    <MonthSummary
+      label="September 2026"
+      onPrevious={noop}
+      onNext={noop}
+      onToday={noop}
+      isCurrent
+      spend={money.toMoney("4320.18")}
+      inflow={money.toMoney("7850.00")}
+      net={money.toMoney("3529.82")}
+      currency="PLN"
+    />
   );
 }
 

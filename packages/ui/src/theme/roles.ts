@@ -95,6 +95,22 @@ export type Theme = {
    * element, never removed and never replaced by a colour change alone.
    */
   focusRing: string;
+  /**
+   * The same ring, for a control on the shell. Green on green is 2.04:1 in
+   * light — under 1.4.11's 3:1 for a boundary — and the band is the one ground
+   * `focusRing` was never checked against, because it is not one of the six
+   * fills the census walks. Seven controls draw it, and the set is decided by
+   * what a component is drawn on rather than by which folder holds it —
+   * `CurrencyChip` lives under `fx/` and was missed by the first pass for
+   * exactly that reason. `IconButton tone="shell"`, `DeskBand`'s nav,
+   * `PeriodHeader`'s *Today*, `SegmentControl` on the inset track,
+   * `CurrencyChip`, `Toast`'s action and `CommandBar`'s walked chip — the last
+   * of which the "six" pass also missed, for the third time by folder. Each
+   * asserts its own outline in a
+   * render test: this role clearing 3:1 is a fact about two hex strings and
+   * says nothing about what any control paints.
+   */
+  shellFocusRing: string;
   /** A subtle green fill and its edge: a selected segment, a toggled chip. */
   accentFill: string;
   accentFillBorder: string;
@@ -122,6 +138,20 @@ export type Theme = {
    * chart palette this app has, not an oversight the way `#b3261e` was.
    */
   chartRamp: readonly string[];
+  /**
+   * One bar's fill, where the bars are separate and each sits on `subtleFill`.
+   *
+   * **Not a step of `chartRamp`, because a ramp cannot do this job.** The ramp
+   * tells *adjacent* segments of one stacked bar apart, so its steps are
+   * measured against each other. A row per category measures every step
+   * against the same track instead. Two of the five clear WCAG 1.4.11's 3:1 in
+   * light and four in dark — from the *other* end, because the ramp is one set
+   * of values for both themes, so the *largest* category's bar came out at
+   * 2.19:1 in dark and the smallest at 8.68:1.
+   * Magnitude is already the bar's length; colour was adding a second, worse
+   * encoding of it. One value, 3.90:1 light and 3.24:1 dark.
+   */
+  chartBar: string;
   chartOtherFill: string;
 
   /** P4's *asserted or aged*: a manual override, an estimated rate, a stale figure. */
@@ -226,6 +256,7 @@ export const light: Theme = {
   accentText: color.accentText,
   accentIcon: color.accentIcon,
   focusRing: color.accentIcon,
+  shellFocusRing: color.shellText,
   accentFill: color.accentFill,
   accentFillBorder: color.accentFillBorder,
 
@@ -233,6 +264,7 @@ export const light: Theme = {
   spend: color.spend,
 
   chartRamp: [color.green700, color.green600, color.green500, color.green400, color.green300],
+  chartBar: color.green600,
   chartOtherFill: color.green200,
 
   assertedFill: color.amber,
@@ -282,6 +314,7 @@ export const dark: Theme = {
   accentText: darkColor.accentText,
   accentIcon: darkColor.accentIcon,
   focusRing: darkColor.accentIcon,
+  shellFocusRing: darkColor.shellText,
   accentFill: darkColor.accentFill,
   accentFillBorder: darkColor.accentFillBorder,
 
@@ -291,6 +324,7 @@ export const dark: Theme = {
   // Same five values as `light` — see the role's own doc for why this ramp is
   // fixed across both themes rather than repainted like every other role.
   chartRamp: [color.green700, color.green600, color.green500, color.green400, color.green300],
+  chartBar: color.green600,
   chartOtherFill: color.green200,
 
   assertedFill: darkColor.amber,

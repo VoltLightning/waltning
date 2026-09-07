@@ -29,6 +29,29 @@ function relativeLuminance(hex: string): number {
   return 0.2126 * channel(1) + 0.7152 * channel(3) + 0.0722 * channel(5);
 }
 
+/**
+ * An `rgba(r,g,b,a)` overlay flattened onto an opaque hex beneath it.
+ *
+ * **The census could not see the shell's own fills at all.** `relativeLuminance`
+ * slices hex digits, so handed `rgba(255,255,255,0.10)` it returns `NaN` and
+ * every comparison silently passes. That is precisely the pairing this suite
+ * most needed after `IconButton` gained a shell tone — a glyph on an overlay
+ * over the band — so the one thing the census was extended to protect was the
+ * one thing it structurally could not measure.
+ */
+function over(overlay: string, base: string): string {
+  const match = /^rgba\((\d+),\s*(\d+),\s*(\d+),\s*([\d.]+)\)$/.exec(overlay);
+  if (match === null) return overlay;
+  const [, r, g, b, a] = match;
+  const alpha = Number(a);
+  const channel = (top: string, at: number) => {
+    const under = Number.parseInt(base.slice(at, at + 2), 16);
+    return Math.round(Number(top) * alpha + under * (1 - alpha));
+  };
+  const hex = (value: number) => value.toString(16).padStart(2, "0");
+  return `#${hex(channel(r ?? "0", 1))}${hex(channel(g ?? "0", 3))}${hex(channel(b ?? "0", 5))}`;
+}
+
 function contrastRatio(foreground: string, background: string): number {
   const a = relativeLuminance(foreground);
   const b = relativeLuminance(background);
@@ -152,9 +175,16 @@ describe("the token spec and the tokens agree", () => {
     // read — so a name the folder mangled (`green-100`) or a row shape it could
     // not match still counted, and nine chart colours plus six dark roles went
     // uncompared behind a green guard.
+    // **38 and 31, and the asymmetry is the point.** The light table lists
+    // *tokens* and is read against `tokens.ts`; the dark one lists *roles* and
+    // is read against `roles.ts`. A role that aliases a token — `focus-ring`
+    // on `accent-icon`'s row, `shell-focus-ring` on `shell-text`'s — has no
+    // key in `color`, so the light half skips it and only the dark half of
+    // that pair is enforced. Splitting the alias into its own light row would
+    // not help: it would name a value `tokens.ts` does not hold either.
     expect(compared, "a drop here means rows stopped being compared").toEqual({
       light: 38,
-      dark: 30,
+      dark: 31,
     });
   });
 
@@ -190,7 +220,25 @@ describe("a component follows the active theme", () => {
   it.each([
     ["light text on ground", light.text, light.ground],
     ["light text on surface", light.text, light.surface],
+    // **Muted text is not only ever on the page**, and it is the ink most
+    // often put on a fill: `NetWorthStrip` rests on `subtleFill`, every card's
+    // kicker sits on `surface`, and the rows below name every other fill it
+    // reaches. Which is why it is censused against all six rather than against
+    // the ground alone.
+    //
+    // **Including the two it used to fail.** A first version of this census
+    // added `surface`, `subtleFill` and `accentFill` — the three that passed —
+    // and left out `hoverFill` (4.47) and `pressedFill` (4.15), explaining the
+    // first away in a comment. Extending a census around its failing rows is
+    // the shape of not having one. `muted` moved a step darker instead, which
+    // is what "check a token against every fill it lands on" costs when the
+    // answer is no.
     ["light muted text on ground", light.textMuted, light.ground],
+    ["light muted text on surface", light.textMuted, light.surface],
+    ["light muted text on subtle fill", light.textMuted, light.subtleFill],
+    ["light muted text on hover fill", light.textMuted, light.hoverFill],
+    ["light muted text on pressed fill", light.textMuted, light.pressedFill],
+    ["light muted text on accent fill", light.textMuted, light.accentFill],
     ["light text on accent", light.textOnAccent, light.accent],
     ["light accent text on ground", light.accentText, light.ground],
     ["light asserted text on fill", light.assertedText, light.assertedFill],
@@ -224,6 +272,11 @@ describe("a component follows the active theme", () => {
     ["dark text on ground", dark.text, dark.ground],
     ["dark text on surface", dark.text, dark.surface],
     ["dark muted text on ground", dark.textMuted, dark.ground],
+    ["dark muted text on surface", dark.textMuted, dark.surface],
+    ["dark muted text on subtle fill", dark.textMuted, dark.subtleFill],
+    ["dark muted text on hover fill", dark.textMuted, dark.hoverFill],
+    ["dark muted text on pressed fill", dark.textMuted, dark.pressedFill],
+    ["dark muted text on accent fill", dark.textMuted, dark.accentFill],
     ["dark text on accent", dark.textOnAccent, dark.accent],
     ["dark accent text on ground", dark.accentText, dark.ground],
     ["dark asserted text on fill", dark.assertedText, dark.assertedFill],
@@ -279,6 +332,130 @@ describe("a component follows the active theme", () => {
     ]),
   )("keeps %s at the 3:1 boundary floor", (_label, edge, fill) => {
     expect(contrastRatio(edge, fill)).toBeGreaterThanOrEqual(3);
+  });
+
+  /**
+   * **The focus ring is an edge too, and the band is a ground the list above
+   * does not walk.**
+   *
+   * §2.6 puts a ring on every interactive element, which makes it the one
+   * boundary that appears on *every* fill in the system — including
+   * `theme.shell`, which is not one of the five above because nothing else is
+   * drawn on it. `focusRing` is `accentIcon`, and green on green measured
+   * **2.04:1** in light (2.45 before `accent-icon` was darkened for the page
+   * fills, which made this worse while fixing that): the ring on every control
+   * the band holds — seven of them, listed in `roles.ts` — was under the
+   * floor, on what a keyboard reaches first. `shellFocusRing` is the band's own
+   * ring, and this is the row that makes the pair a rule rather than a
+   * preference: point either at the other's ground and it fails. Which control
+   * paints which is asserted in each one's own render test; a ratio between two
+   * hex strings cannot see a component stop using the token.
+   */
+  it.each([
+    ["light", light],
+    ["dark", dark],
+  ])("keeps the %s focus ring at the 3:1 boundary floor on every page fill", (_label, theme) => {
+    // The same five the edge census walks, not the two a control rests on:
+    // a ring is drawn *while* the control is hovered or pressed, and
+    // `SegmentControl`'s own track is `subtleFill` — where the ring the census
+    // arrived at measures 3.66. The value it replaced was at 3.05 there, and
+    // at 2.89 and 2.69 on the two fills a control wears while it is being
+    // used, which is what this row found the moment it walked them.
+    for (const fill of ["ground", "surface", "subtleFill", "hoverFill", "pressedFill"] as const) {
+      expect(contrastRatio(theme.focusRing, theme[fill]), fill).toBeGreaterThanOrEqual(3);
+    }
+  });
+
+  it.each([
+    ["light", light],
+    ["dark", dark],
+  ])("keeps the %s focus ring visible on the shell", (_name, theme) => {
+    expect(contrastRatio(theme.shellFocusRing, theme.shell)).toBeGreaterThanOrEqual(3);
+  });
+
+  /**
+   * **A bar is a graphical object, and 1.4.11 asks 3:1 of it.**
+   *
+   * `SpendRows` draws one bar per category on `subtleFill`. It ranked into
+   * `chartRamp` first — a ramp built to be read in light, where its darkest
+   * step is the strongest. Reused verbatim in dark, the ordering inverts
+   * against the track: **in dark**, the *largest* category's bar sat at 2.19:1
+   * and the smallest at 8.68:1, so magnitude read as invisibility. Nothing
+   * caught it — the visual suite's axe pass checks text contrast, not a
+   * `View`'s fill against the `View` behind it.
+   */
+  /**
+   * **The band's own interactive fills, which are overlays rather than
+   * colours.** `IconButton tone="shell"` paints `shellNavActiveFill` under a
+   * pointer and `shellInsetTrackFill` under a finger — both `rgba` over the one
+   * flat green — and the glyph on top is `shellText`. The ground-family fills
+   * put that ink at 1.10:1, which is the defect the tone exists to prevent; a
+   * census that cannot flatten an overlay would not have caught the tone being
+   * removed again.
+   */
+  it.each([
+    ["light", light],
+    ["dark", dark],
+  ])("keeps the %s shell glyph readable on both of the band's fills", (_name, theme) => {
+    for (const overlay of [theme.shellNavActiveFill, theme.shellInsetTrackFill]) {
+      expect(contrastRatio(theme.shellText, over(overlay, theme.shell))).toBeGreaterThanOrEqual(
+        4.5,
+      );
+    }
+  });
+
+  /**
+   * **And that each fill is an overlay, which readability alone does not say.**
+   *
+   * The readability row catches a *pale* fill under near-white ink — 1.10:1,
+   * the original defect. It cannot catch a **dark** one: `shellText` on the
+   * dark theme's `hover` is 12.73:1, so the glyph stays perfectly legible
+   * while the control silently stops belonging to the band.
+   *
+   * **Asserted as the property, not as a distance.** A first version required
+   * the composite to land within 1.6:1 of the shell — a number picked from the
+   * one substitution that had been tried, and `darkColor.pressed` (1.48)
+   * passed it. Worse, an opaque hex never reaches `over()` at all, so the
+   * alpha machinery this census exists for sat idle while the row went green.
+   * What the tone actually depends on is that these are *translucent*: an
+   * overlay tints whatever the band is, so it tracks the shell by
+   * construction and cannot be a colour from another ramp. That is one
+   * property, and no threshold to calibrate.
+   */
+  it.each([
+    ["light", light],
+    ["dark", dark],
+  ])("keeps the %s band's fills a lit or shaded shell, nothing else", (_name, theme) => {
+    for (const overlay of [theme.shellNavActiveFill, theme.shellInsetTrackFill]) {
+      expect(overlay, "an opaque fill on the band is a colour from another ramp").toMatch(
+        /^rgba\(\d+,\s*\d+,\s*\d+,\s*0?\.\d+\)$/,
+      );
+      const composed = over(overlay, theme.shell);
+      const ratio = contrastRatio(composed, theme.shell);
+      // **Both bounds, and the reason there are two.** Alpha alone bought
+      // nothing: `rgba(220,0,0,0.06)` is a translucent *red* and passed, and
+      // `rgba(60,79,56,0.99)` — the shell at 99% — passed while making the
+      // active nav item and the inset track invisible. A fill nobody can see
+      // is not a fill; a fill from another ramp is not the band's.
+      expect(ratio, "a fill this close to the shell cannot be seen").toBeGreaterThan(1.03);
+      expect(ratio, "a fill this far from the shell is a colour of its own").toBeLessThan(1.6);
+      // And it is the shell, lit or shaded: an overlay of white or black moves
+      // every channel the same way. A hue of its own moves them apart.
+      const shift = ([1, 3, 5] as const).map(
+        (at) =>
+          Number.parseInt(composed.slice(at, at + 2), 16) -
+          Number.parseInt(theme.shell.slice(at, at + 2), 16),
+      );
+      const spread = Math.max(...shift) - Math.min(...shift);
+      expect(spread, `${overlay} tints the shell rather than lighting it`).toBeLessThanOrEqual(4);
+    }
+  });
+
+  it.each([
+    ["light", light],
+    ["dark", dark],
+  ])("keeps the %s chart bar readable on the track behind it", (_name, theme) => {
+    expect(contrastRatio(theme.chartBar, theme.subtleFill)).toBeGreaterThanOrEqual(3);
   });
 
   it.each([
