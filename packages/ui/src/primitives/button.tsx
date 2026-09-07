@@ -131,7 +131,20 @@ export function Button({
  */
 const useStyles = makeStyles((theme) => ({
   variantPrimary: { backgroundColor: theme.accent },
-  variantSecondary: { borderWidth: 1, borderColor: theme.border },
+  // **These two have no fill, so the edge is the whole control.** `theme.border`
+  // is a divider colour — 1.19:1 on the ground a button sits on, 1.02 under a
+  // pointer — and an outlined button drawn in it is a control WCAG 1.4.11 says
+  // cannot be located.
+  //
+  // `borderInteractive`, the resting edge every other control in the system
+  // uses — `Chip`, the account tile, the category cell, the currency tile, the
+  // composer's kind option. `borderStrong` was tried here on the argument that
+  // an action should outrank a receptacle, and it does not survive: the ramp is
+  // documented as "a selected control, a focus-adjacent edge", a resting button
+  // is neither, and a `TextField` strengthens to `borderStrong` on hover *and*
+  // focus, so the separation lasted exactly one state. A button that starts at
+  // the top of the ramp also has nowhere left to go.
+  variantSecondary: { borderWidth: 1, borderColor: theme.borderInteractive },
   variantGhost: {},
   variantDanger: { borderWidth: 1, borderColor: theme.dangerBorder },
 

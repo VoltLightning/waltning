@@ -56,6 +56,7 @@ import Animated from "react-native-reanimated";
 import { useT } from "../i18n/provider";
 import { Button } from "../primitives/button";
 import { useInteraction } from "../primitives/interaction.ts";
+import { horizontalScrollProps, nestedScrollProps } from "../primitives/nested-scroll.ts";
 import { usePressScale } from "../primitives/press-scale.ts";
 import { Tag } from "../primitives/tag";
 import { TextField } from "../primitives/text-field";
@@ -354,7 +355,12 @@ export function CategorySheet({
         hideLabel
       />
       {searching ? null : (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipRow}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          testID="category-chip-row"
+          {...horizontalScrollProps(styles.chipRow)}
+        >
           {groups.map((group) => (
             <GroupChip
               key={group.id}
@@ -367,14 +373,14 @@ export function CategorySheet({
         </ScrollView>
       )}
       {/*
-        `nestedScrollEnabled` on the inner list — the bounded one
-        (`gridScroll`'s own `maxHeight`) — never on the sheet body. Inert
-        today: `BottomSheet`'s body is a plain `View` in a `Modal`, so there
-        is no outer scrollable to lose the gesture to. It is the Android
-        contract for the day that body scrolls, stated on the list it would
-        be about.
+        The declaration goes on the inner list — the bounded one
+        (`gridScroll`'s own `maxHeight`) — never on the sheet body, which has
+        to keep moving. Load-bearing today: `BottomSheet`'s body is a
+        `ScrollView`, so this is a nested-scrolling child of a real scroller on
+        Android, and on the web the containment is what stops the sheet sliding
+        when the grid reaches its end.
       */}
-      <ScrollView style={styles.gridScroll} nestedScrollEnabled>
+      <ScrollView testID="category-grid-scroll" {...nestedScrollProps(styles.gridScroll)}>
         {visibleLeaves.length === 0 ? (
           emptyTree ? (
             createAction === undefined ? (
@@ -706,7 +712,12 @@ function CreateRow({
           ) : (
             <>
               <Text style={styles.label}>{t("categories.chooseGroup")}</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipRow}>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                testID="category-chip-row"
+                {...horizontalScrollProps(styles.chipRow)}
+              >
                 {groups.map((group) => (
                   <GroupChip
                     key={group.id}
@@ -768,7 +779,7 @@ const useStyles = makeStyles((theme) => ({
     justifyContent: "space-between",
     gap: space.sm,
     borderWidth: 1,
-    borderColor: theme.border,
+    borderColor: theme.borderInteractive,
     borderRadius: radius.sm,
     paddingHorizontal: space.x2,
     paddingVertical: space.lg,

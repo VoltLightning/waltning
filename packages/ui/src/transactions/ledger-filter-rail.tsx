@@ -54,6 +54,7 @@ import { Pressable, ScrollView, Text } from "react-native";
 import { useT } from "../i18n/provider";
 import { DateField } from "../primitives/date-field";
 import { useInteraction } from "../primitives/interaction.ts";
+import { nestedScrollProps } from "../primitives/nested-scroll.ts";
 import { SearchField } from "../primitives/search-field";
 import { type Segment, SegmentControl } from "../primitives/segment-control";
 import { MultiSelect, Select, type SelectOption } from "../primitives/select";
@@ -152,7 +153,7 @@ export function LedgerFilterRail<Scope extends string = string>({
 
   return (
     <ScrollView
-      style={styles.rail}
+      {...nestedScrollProps(styles.rail)}
       // The gap lives on the content, not the `ScrollView` itself — a
       // `ScrollView`'s own style is its viewport, and spacing set there
       // would not travel with the scrolled content.

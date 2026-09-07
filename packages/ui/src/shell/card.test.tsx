@@ -69,12 +69,14 @@ it("takes no floating clearance when it is not the screen's bottom edge", () => 
 
 /**
  * The carve-out, stated as a test so it cannot be quietly reversed: in
- * `scroll="own"` the clearance would land on the *panel*, shortening the
- * screen's own list and leaving a band of empty ground under it — with the
- * last row still under the button at the end of the scroll. The screen that
- * owns the list owns its bottom padding.
+ * `scroll="own"` neither the gutter nor the bottom clearance may land on the
+ * *panel*. A `View` with padding around a `FlatList` clips the list at that
+ * padding — the scroll bar rides 22 pt inside the page, a focused field's ring
+ * is sliced off left and right, and the bottom padding shortens the list
+ * instead of clearing the fold. The screen that owns the list applies both
+ * through `useGroundInset()`, on the content that actually scrolls.
  */
-it('scroll="own" clears the device but not the floating button', () => {
+it('scroll="own" leaves the gutter and the bottom to the screen\'s own scroller', () => {
   const { container } = render(
     <FloatingClearanceProvider value={floating.clearance}>
       <SafeAreaProvider insets={NOTCHED}>
@@ -84,26 +86,61 @@ it('scroll="own" clears the device but not the floating button', () => {
       </SafeAreaProvider>
     </FloatingClearanceProvider>,
   );
-  const panel = container.firstElementChild as HTMLElement;
-  // space.x5 (22) + NOTCHED.bottom (34), and nothing for the button.
-  expect(getComputedStyle(panel).paddingBottom).toBe("56px");
+  const style = getComputedStyle(container.firstElementChild as HTMLElement);
+  expect(style.paddingBottom).toBe("0px");
+  expect(style.paddingLeft).toBe("0px");
+  expect(style.paddingRight).toBe("0px");
+  // The one value a wrapper can carry without clipping anything inside it.
+  expect(style.paddingTop).toBe("22px");
 });
 
 it('scroll="own" renders no ScrollView', () => {
-  const { container } = render(
+  render(
     <GroundPanel scroll="own">
       <Text>hello</Text>
     </GroundPanel>,
   );
   expect(screen.queryByTestId("ground-panel-scroll")).toBeNull();
-  // The plain `View` this component was before scrolling existed — the
-  // clearance lands directly on it, since there is no scroll content to
-  // carry it instead.
-  const panel = container.firstElementChild as HTMLElement;
-  const style = getComputedStyle(panel);
-  expect(style.paddingBottom).toBe("22px");
-  expect(style.paddingLeft).toBe("22px");
-  expect(style.paddingRight).toBe("22px");
+});
+
+/**
+ * A page scroller shows no bar: the whole screen moving is its own feedback,
+ * and the indicator only ever drew over the gutter. It survives where a pane
+ * scrolls independently of the page — the desk rail, a sheet body — which is
+ * why this is asserted on the panel rather than banned everywhere.
+ */
+it("the page scroller shows no scroll indicator", () => {
+  render(
+    <GroundPanel>
+      <Text>hello</Text>
+    </GroundPanel>,
+  );
+  // `scrollbarWidth: none` is what `react-native-web`'s `ScrollViewBase` emits
+  // when either indicator prop is false, and it is the whole assertion: a
+  // class-name check reads as a second one but cannot fail, because RNW emits
+  // hashed atomic classes and never the word.
+  const scroller = screen.getByTestId("ground-panel-scroll");
+  expect(getComputedStyle(scroller).scrollbarWidth).toBe("none");
+});
+
+/**
+ * **And it contains nothing**, which is the other half of being the page.
+ * `contain` keeps a scroller's *own* bounce and pull-to-refresh — suppressing
+ * those is `none` — and stops the scroll from chaining outward, which on a
+ * nested scroller is what holds the browser's navigation gesture. A page
+ * scroller has nothing outward to chain into, so declaring containment there
+ * states something untrue about where it sits and buys nothing. Asserted so
+ * that "declared as the page" cannot quietly become "declared and contained".
+ */
+it("the page scroller contains neither axis", () => {
+  render(
+    <GroundPanel>
+      <Text>hello</Text>
+    </GroundPanel>,
+  );
+  const style = getComputedStyle(screen.getByTestId("ground-panel-scroll"));
+  expect(style.getPropertyValue("overscroll-behavior-x")).not.toBe("contain");
+  expect(style.getPropertyValue("overscroll-behavior-y")).not.toBe("contain");
 });
 
 it("clearBottom (the default) adds the device's own bottom inset to the clearance", () => {

@@ -16,6 +16,7 @@
 import type { Meta, StoryObj } from "@storybook/react-native-web-vite";
 import { ScrollView, Text } from "react-native";
 import { Button } from "../primitives/button";
+import { nestedScrollProps } from "../primitives/nested-scroll.ts";
 import { TextField } from "../primitives/text-field";
 import { text } from "../theme/fonts.ts";
 import { makeStyles } from "../theme/styles.ts";
@@ -64,16 +65,18 @@ function TallBody() {
  * sheet's body rather than instead of it — `AccountPicker`,
  * `CategorySheet` and `CounterpartyPicker` are all built this way.
  *
- * **`nestedScrollEnabled` is drawn here because it is the caller's to set.**
- * The prop makes the view it is on a nested-scrolling *child*, so an inner
- * list carries it and the sheet body does not. The three callers above do not
- * yet, which is the Android half of "pickers keep working" and is being fixed
- * where those files live; this story is the shape they are moving to.
+ * **Containment is the caller's to set, and it is a pair.** A bounded list
+ * inside this body spreads `nestedScrollProps`, which carries both halves:
+ * `nestedScrollEnabled` makes the view a nested-scrolling child on Android,
+ * and `overscroll-behavior: contain` is what does the same on the web, where
+ * the prop alone does nothing. This story drew the prop by itself for a while
+ * — the exact spelling that let a picker scroll the page behind it in a
+ * browser — which is why the architecture census reads stories too.
  */
 function OwnListBody() {
   const styles = useStyles();
   return (
-    <ScrollView style={styles.ownList} nestedScrollEnabled>
+    <ScrollView {...nestedScrollProps(styles.ownList)}>
       {ACCOUNTS.map((account) => (
         <Text key={account} style={styles.row}>
           {account}

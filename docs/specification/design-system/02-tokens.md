@@ -23,25 +23,25 @@ whatever the chrome around them does.
 | `subtle` | `#f1ebe0` | Table headers, inset boxes, neutral tag fills, the segment track |
 | `hover` | `#ece5d7` | The fill under a pointer |
 | `pressed` | `#e6ddcb` | The transient fill under a finger |
-| `border` | `#eae3d5` | Card edges, dividers, the outline of an unfilled control |
-| `border-interactive` | `#c6bdaa` | The resting edge of a control — an input, a chip |
-| `border-strong` | `#8d8672` | An edge that must read alone: a selected control. **3:1 on `surface`**, the WCAG floor for a UI boundary (3.63) |
+| `border` | `#eae3d5` | Card edges and dividers — a boundary between two areas, which WCAG sets no floor for. **Never a control's edge**: at 1.19:1 on `ground` it cannot carry 1.4.11, so an unfilled chip takes `border-interactive` like every other control |
+| `border-interactive` | `#88795c` | The resting edge of a control — an input, a chip. A control here is identified by its edge alone (its fill is `surface` on `ground`, 1.08:1), so this carries WCAG 1.4.11's **3:1 boundary floor** by itself — against **every fill a control is drawn on**: `ground`, `surface`, `subtle`, `hover`, `pressed`. 3.15 at the tightest |
+| `border-strong` | `#746e5f` | An edge that must read alone: a selected control, a focus-adjacent edge. One step above `border-interactive` on the same ramp, held to the same five fills (3.75 at the tightest of the two themes) |
 | `ink` | `#33302a` | Body text **and heading ink** — a heading is not a signal. Warm near-black, never `#000` |
 | `muted` | `#6e6759` | Secondary text, labels, captions; a transfer's figure. 5.2:1 on `ground` |
-| `accent` | `#55704f` | Primary action fill. Sage. **Job 1** |
+| `accent` | `#5c7357` | Primary action fill. Sage. **Job 1** |
 | `accent-text` | `#4c6247` | Links, a secondary action's label |
 | `accent-icon` | `#6f8f66` | Decorative accent marks; the **focus ring**. **Job 2** |
 | `accent-fill` | `#eef0e6` | A subtle sage fill: a selected segment, a toggled chip. `accent-text` reads on it at 5.8:1 |
 | `accent-fill-border` | `#b9c6ae` | The edge of `accent-fill` |
-| `income` | `#3f7a34` | Credits, positive deltas. Deliberately livelier than `accent`: an event, not a control. **Job 3** |
-| `spend` | `#a8543c` | Debits, negative balances, rising spend. A warm, restrained red — unmistakable, not alarming |
+| `income` | `#396c2e` | Credits, positive deltas. Deliberately livelier than `accent`: an event, not a control. **Job 3** |
+| `spend` | `#974b35` | Debits, negative balances, rising spend. A warm, restrained red — unmistakable, not alarming |
 | `green-100` … `green-900` | as below | The data ramp. **Job 4** |
 | `amber` | `#f4ecdf` | Fill — *not finished, or not fully observed* (P4). Never error, never success, never chrome |
 | `amber-ink` | `#77591c` | Text on amber |
 | `amber-border` | `#d9bd75` | Edge of an amber tag or chip |
 | `danger` | `#a33d26` | A destructive action, a refused write. **Never chrome** |
 | `danger-bg` | `#f8e8e2` | Fill behind a danger tag |
-| `danger-border` | `#dfa68f` | Edge of a danger control |
+| `danger-border` | `#c05e37` | Edge of a danger control — an outlined button, an errored input. A control with no fill is identified by its edge, so this carries the same **3:1** floor as `border-interactive`, in the danger hue (3.17 at the tightest of the two themes) |
 | `shell` | `#3c4f38` | The header shell. **One flat colour.** A deep sage at L\* 31 — see below |
 | `shell-text` | `#f2f0e7` | Text on the shell |
 | `shell-text-muted` | `#b8c4ae` | The currency marker, the mine/ours line |
@@ -99,13 +99,13 @@ with dark text.
 | `hoverFill` | `#302a23` |
 | `pressedFill` | `#363027` |
 | `border` | `#38332a` |
-| `borderInteractive` | `#5a5344` |
-| `borderStrong` | `#78715e` |
+| `borderInteractive` | `#877c65` |
+| `borderStrong` | `#918974` |
 | `hairline` | `rgba(240,236,227,.12)` |
 | `text` | `#f0ece3` |
 | `textMuted` / `tagNeutralText` | `#a59d8d` |
 | `textOnAccent` | `#ffffff` |
-| `accent` | `#55704f` |
+| `accent` | `#5c7357` |
 | `accentIcon` / `focusRing` | `#8fae84` |
 | `accentText` | `#a4c297` |
 | `accentFill` | `#2c3226` |
@@ -117,7 +117,7 @@ with dark text.
 | `assertedBorder` | `#8f7a3a` |
 | `dangerFill` | `#3d241c` |
 | `dangerText` | `#f0a28c` |
-| `dangerBorder` | `#a45f48` |
+| `dangerBorder` | `#b36a51` |
 | `shell` | `#3d4f39` |
 | `shellText` | `#f0f4ec` |
 | `shellTextMuted` | `#b3c2a9` |
@@ -276,8 +276,8 @@ blur read as a consumer app; a tool is squarer.
 |---|---|---|
 | `radius-pill` | `999px` | The round metaphors only: a radio's ring and dot, a switch's track and thumb, and the floating add button — the only full circle on the screen |
 | `radius-xs` | `3px` | Inline code |
-| `radius-sm` | `8px` | Controls: buttons, inputs — and every compact value-carrier: chip, tag, classification pill, segment thumb, multi-select token |
-| `radius-md` | `12px` | Cards, inset boxes; the segment track |
+| `radius-sm` | `10px` | Controls: buttons, inputs — and every compact value-carrier: chip, tag, classification pill, segment thumb, multi-select token |
+| `radius-md` | `14px` | Cards, inset boxes; the segment track |
 | `radius-lg` | `16px` | Sheets; the ground panel lifting over the shell |
 | `radius-icon` | `13 / 18 / 28px` | App icon at 56 / 120 / 512 |
 
@@ -382,9 +382,9 @@ and the sheet rise are all currently unbranched (§10).
 [Phosphor Icons](https://phosphoricons.com) — `fill` for brand and emphasis,
 `duotone` for navigation. Icon-only buttons always carry an accessible label.
 
-### 2.9 The two moving parts of the screen
+### 2.9 The moving parts of the screen
 
-Two behaviours are specified here because they are tokens of the *shell*
+Three behaviours are specified here because they are tokens of the *shell*
 rather than of any one screen, and because each has a rule a screen must not
 reinvent.
 
@@ -437,6 +437,20 @@ tapped — which opens the header without scrolling the list. The transition is
 while the compact figure rises in. Reduced motion gets an instant swap. The
 floating button is above the header in both states and never reflows when it
 folds. At desk width the threshold is larger; the behaviour is the same.
+
+**A page scroller draws no scroll bar; a pane does.** The whole screen moving
+is its own feedback, and the indicator only ever drew over the 22px gutter, so
+`GroundPanel`'s scroller and the two lists that stand in for it — the phone
+ledger and the rate table — set `showsVerticalScrollIndicator={false}` through
+`pageScrollProps`. **This holds on the web too**, where the platform would
+otherwise draw one: three targets ship the same screens, and a bar that appears
+on one of them is a fourth treatment of a thing this section exists to settle.
+
+The bar survives wherever a pane scrolls *independently of the page it sits
+on* — the desk filter rail, a bounded sheet body, a picker's list — because
+there the travel is the only thing saying the pane holds more. That is the same
+line `primitives/nested-scroll.ts` draws for overscroll containment, and for
+the same reason: a page and a pane are different objects.
 
 ### 2.10 The desk breakpoint
 

@@ -51,6 +51,7 @@ import { Amount } from "../fx/amount";
 import { useT } from "../i18n/provider";
 import { Button } from "../primitives/button";
 import { useInteraction } from "../primitives/interaction.ts";
+import { nestedScrollProps } from "../primitives/nested-scroll.ts";
 import { usePressScale } from "../primitives/press-scale.ts";
 import { SearchField } from "../primitives/search-field";
 import { Tag } from "../primitives/tag";
@@ -205,14 +206,16 @@ export function AccountPicker({
         />
       ) : null}
       {/*
-        `nestedScrollEnabled` belongs on *this* list — the bounded one
+        The declaration belongs on *this* list — the bounded one
         (`styles.scroll`'s own `maxHeight`) — never on the sheet body around
-        it. It is inert today, because `BottomSheet`'s body is a plain
-        `View` inside a `Modal` and there is no outer scrollable to lose the
-        gesture to; it is the Android contract for the day that body does
-        scroll, stated where it will still be right.
+        it, which is what has to keep moving. And it is load-bearing, not a
+        contract for later: `BottomSheet`'s body is a `ScrollView`
+        (`bottom-sheet.test.tsx` asserts its `overflow-y`), so on Android this
+        list is a nested-scrolling child of a real scroller, and on the web the
+        containment is what stops the sheet sliding when this list reaches its
+        end.
       */}
-      <ScrollView style={styles.scroll} nestedScrollEnabled>
+      <ScrollView testID="account-picker-scroll" {...nestedScrollProps(styles.scroll)}>
         {recent === undefined ? null : (
           <View style={styles.section}>
             <Text style={styles.sectionLabel}>{t("accounts.recent")}</Text>
@@ -366,7 +369,7 @@ const useStyles = makeStyles((theme) => ({
     minHeight: touchTarget.min,
     gap: space.xs,
     borderWidth: 1,
-    borderColor: theme.border,
+    borderColor: theme.borderInteractive,
     borderRadius: radius.sm,
     // `theme.surface` — the fill the money inks (`spend`/`income`) are tuned
     // against (`02-tokens.md` §2.1). `subtleFill` cost the negative-balance

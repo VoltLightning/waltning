@@ -77,6 +77,7 @@ import { focus, radius, space, touchTarget } from "../tokens.ts";
 import { type Anchor, panelPlacement, unanchoredPlacement, useAnchor } from "./anchor.ts";
 import { useDisclosureMotion } from "./disclosure-motion.ts";
 import { useInteraction } from "./interaction.ts";
+import { nestedScrollProps } from "./nested-scroll.ts";
 import { useWindowInsets } from "./safe-area";
 
 /** Six and a half rows — the half row is the signal that there is more. */
@@ -421,7 +422,7 @@ function PanelOverlay({
               the view it is set on a nested-scrolling child, which is what
               lets this list take the gesture instead of an outer scroller
               on Android. */}
-          <ScrollView style={styles.panelScroll} nestedScrollEnabled>
+          <ScrollView testID="select-panel-scroll" {...nestedScrollProps(styles.panelScroll)}>
             {children}
           </ScrollView>
         </Animated.View>

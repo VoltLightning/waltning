@@ -255,7 +255,7 @@ const useStyles = makeStyles((theme) => ({
     alignItems: "center",
     gap: space.md,
     borderWidth: 1,
-    borderColor: theme.border,
+    borderColor: theme.borderInteractive,
     borderRadius: radius.sm,
     paddingHorizontal: space.x2,
     minHeight: 44,

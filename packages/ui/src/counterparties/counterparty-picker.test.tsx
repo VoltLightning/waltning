@@ -1,6 +1,8 @@
 /** @vitest-environment jsdom */
+
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
+import { expectContainsOverscroll } from "../primitives/nested-scroll.test-support.ts";
 import { CounterpartyPicker } from "./counterparty-picker";
 
 const COUNTERPARTIES = [
@@ -24,6 +26,20 @@ describe("CounterpartyPicker", () => {
     expect(screen.getByText("Marek")).toBeDefined();
     expect(screen.getByText("Acme Sp. z o.o.")).toBeDefined();
     expect(screen.queryByText("Recent")).toBeNull();
+  });
+
+  /** The list contains its own overscroll, so scrolling it does not move the screen behind it. */
+  it("contains its own overscroll", () => {
+    render(
+      <CounterpartyPicker
+        visible
+        counterparties={COUNTERPARTIES}
+        onPick={vi.fn()}
+        onCreateNew={vi.fn()}
+        onDismiss={vi.fn()}
+      />,
+    );
+    expectContainsOverscroll("counterparty-picker-scroll");
   });
 
   it("shows a 'Recent' section for the given ids", () => {

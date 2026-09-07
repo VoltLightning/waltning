@@ -72,6 +72,7 @@ import { useCallback, useMemo } from "react";
 import { FlatList, Pressable, Text, View } from "react-native";
 import { useLocale, useT } from "../i18n/provider";
 import { useInteraction } from "../primitives/interaction.ts";
+import { pageScrollProps } from "../primitives/nested-scroll.ts";
 import { Tag } from "../primitives/tag";
 import { text } from "../theme/fonts.ts";
 import { makeStyles } from "../theme/styles.ts";
@@ -136,11 +137,20 @@ export type RateTableProps = {
   header?: React.ReactNode;
   /** The hosting screen's own content, below the table, inside the one scroller. */
   footer?: React.ReactNode;
+  /**
+   * The page's gutter and bottom clearance, for this list's own
+   * `contentContainerStyle` — passed in rather than read from a hook, because
+   * `fx/` is foundation and the value lives in the shell. Padding a `View`
+   * around this list instead would clip it: the bar would ride inside the
+   * page, and a focused field in `header` would lose its ring left and right.
+   * The screen gets the value from `useGroundInset()` and hands it down.
+   */
+  contentInset: { paddingLeft: number; paddingRight: number; paddingBottom: number };
 };
 
 const EMPTY_ROWS: RenderRow[] = [];
 
-export function RateTable({ pair, header, footer }: RateTableProps) {
+export function RateTable({ pair, header, footer, contentInset }: RateTableProps) {
   const t = useT();
   const styles = useStyles();
 
@@ -205,7 +215,13 @@ export function RateTable({ pair, header, footer }: RateTableProps) {
       // header and footer riding inside this list rather than beside it is the
       // whole shape, and `getByText` at document scope cannot tell them apart.
       testID="rate-table"
-      style={styles.list}
+      // This list *is* the screen's page (`header` and `footer` ride inside
+      // it), so it takes the page's props and its gutter goes on the
+      // *content*: a padded `View` around it would clip the bar 22 pt inside
+      // the page and slice the ring off the range fields in `header`
+      // (`shell/ground-inset.ts`).
+      {...pageScrollProps(styles.list)}
+      contentContainerStyle={contentInset}
       // The screen's own fields live in `header`, so this list is what a tap
       // has to reach past an open keyboard — the same two props `GroundPanel`
       // sets on the page scroller it is standing in for here.

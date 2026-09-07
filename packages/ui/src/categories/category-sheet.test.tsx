@@ -2,6 +2,7 @@
 
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { expect, it, vi } from "vitest";
+import { expectContainsOverscroll } from "../primitives/nested-scroll.test-support.ts";
 import { CategorySheet, type CategoryTreeNode } from "./category-sheet";
 
 const FOOD: CategoryTreeNode = {
@@ -73,6 +74,26 @@ it("shows every leaf across groups when browsing, and none of the other kind", (
   expect(screen.getByRole("radio", { name: "Eating out" })).toBeDefined();
   expect(screen.getByRole("radio", { name: "Fuel" })).toBeDefined();
   expect(screen.queryByText("Salary")).toBeNull();
+});
+
+/** The grid contains its own overscroll, so scrolling it does not move the sheet behind it. */
+it("contains its own overscroll", () => {
+  render(<CategorySheet visible kind="expense" tree={TREE} onPick={vi.fn()} onDismiss={vi.fn()} />);
+  expectContainsOverscroll("category-grid-scroll");
+});
+
+/**
+ * The chip row is horizontal and sits inside the sheet's own vertical body, so
+ * it contains **x only**: `react-native-web` expands `overscrollBehavior` to
+ * both axes, and containing `y` here would swallow a vertical drag that begins
+ * on the row and leave the sheet under it motionless.
+ */
+it("a chip row contains its own axis and lets a vertical drag through", () => {
+  render(<CategorySheet visible kind="expense" tree={TREE} onPick={vi.fn()} onDismiss={vi.fn()} />);
+  expectContainsOverscroll(
+    screen.getAllByTestId("category-chip-row")[0] as HTMLElement,
+    "horizontal",
+  );
 });
 
 /** S06 §9: search covers every leaf, ignoring whichever group is filtered. */
@@ -168,6 +189,31 @@ it("offers Create scoped to the chosen group on a search miss inside it", () => 
   fireEvent.click(screen.getByRole("button", { name: "Save" }));
   expect(onCreate).toHaveBeenCalledWith({ name: "Snacks", kind: "expense", parentId: "food" });
   expect(onPick).toHaveBeenCalledWith("new-id");
+});
+
+/**
+ * The create row's own group chooser — the *second* chip row in this file, and
+ * the one the first version of these tests left uncovered. It could be turned
+ * back into a page scroller, or lose containment outright, with the whole
+ * suite green.
+ */
+it("the create row's group chooser contains its own axis", () => {
+  render(
+    <CategorySheet
+      visible
+      kind="expense"
+      tree={TREE}
+      onCreate={vi.fn(() => ({ id: "new-id" }))}
+      onPick={vi.fn()}
+      onDismiss={vi.fn()}
+    />,
+  );
+  // "New" without a group chip selected: with one chosen the chooser is
+  // locked away, and this row is exactly the state that hides it.
+  fireEvent.click(screen.getByRole("button", { name: "New" }));
+
+  const rows = screen.getAllByTestId("category-chip-row");
+  expectContainsOverscroll(rows[rows.length - 1] as HTMLElement, "horizontal");
 });
 
 /** `+ New`, group already narrowed — the row locks to it rather than re-asking (S06 §6). */

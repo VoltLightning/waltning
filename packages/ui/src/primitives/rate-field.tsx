@@ -259,7 +259,7 @@ const useStyles = makeStyles((theme) => ({
     ...text.display("displayThree"),
     fontVariant: [...tabularNums],
     borderWidth: 1,
-    borderColor: theme.border,
+    borderColor: theme.borderInteractive,
     borderRadius: radius.sm,
     paddingHorizontal: space.x2,
     minHeight: 44,

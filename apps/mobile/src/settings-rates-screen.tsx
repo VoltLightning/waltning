@@ -81,6 +81,7 @@ import { useBreakpoint } from "@waltning/ui/primitives/use-breakpoint";
 import { BottomSheet } from "@waltning/ui/shell/bottom-sheet";
 import { Card, GroundPanel } from "@waltning/ui/shell/card";
 import { ConfirmDialog } from "@waltning/ui/shell/confirm-dialog";
+import { useGroundInset } from "@waltning/ui/shell/ground-inset";
 import { Toast } from "@waltning/ui/states/toast";
 import { text } from "@waltning/ui/theme/fonts";
 import { makeStyles } from "@waltning/ui/theme/styles";
@@ -170,6 +171,13 @@ export default function SettingsRatesScreen({
 }: SettingsRatesScreenProps = {}) {
   const t = useT();
   const styles = useStyles();
+  /**
+   * `RateTable` is this screen's one scroller, so the gutter and the bottom
+   * clearance ride on its content (`shell/ground-inset.ts`) — a padded `View`
+   * around it would clip the list at the gutter and slice the ring off the
+   * range fields riding in its header.
+   */
+  const inset = useGroundInset();
   const breakpoint = useBreakpoint();
   const ledger = useLedgerController();
   const snapshot = usePhoneLedger(ledger);
@@ -523,7 +531,7 @@ export default function SettingsRatesScreen({
 
   return (
     <GroundPanel scroll="own">
-      <RateTable pair={tablePair} header={header} footer={footer} />
+      <RateTable pair={tablePair} header={header} footer={footer} contentInset={inset.content} />
 
       {/*
         The sheet's own header is the editor's heading — "Set PLN per USD,

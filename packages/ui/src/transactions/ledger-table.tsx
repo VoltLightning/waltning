@@ -147,6 +147,7 @@ import {
 } from "react-native";
 import { Amount } from "../fx/amount";
 import { useT } from "../i18n/provider";
+import { nestedScrollProps } from "../primitives/nested-scroll.ts";
 import { text } from "../theme/fonts.ts";
 import { makeStyles } from "../theme/styles.ts";
 import { focus, hairline, radius, space, tabularNums, touchTarget } from "../tokens.ts";
@@ -502,10 +503,17 @@ export function LedgerTable({
         keyExtractor={keyExtractor}
         renderItem={renderItem}
         initialNumToRender={Math.min(rows.length, 50)}
-        style={styles.list}
         tabIndex={0}
         testID="ledger-table-scroller"
         {...keyboardProps}
+        // After `keyboardProps`, deliberately: JSX props are last-write-wins,
+        // so a spread following this one would replace the style — and with it
+        // the containment — while leaving `nestedScrollEnabled` in place, which
+        // is the shipped defect exactly. `tests/architecture.test.ts` refuses a
+        // `style` prop or any spread after the declaration; ordinary
+        // attributes, like the `contentContainerStyle` its siblings set, are
+        // free to follow.
+        {...nestedScrollProps(styles.list)}
       />
     </View>
   );

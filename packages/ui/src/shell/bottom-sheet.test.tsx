@@ -1,6 +1,8 @@
 /** @vitest-environment jsdom */
+
 import { act, render, screen } from "@testing-library/react";
 import { beforeEach, expect, it, vi } from "vitest";
+import { expectContainsOverscroll } from "../primitives/nested-scroll.test-support.ts";
 import type { SafeAreaInsets } from "../primitives/safe-area";
 import { SafeAreaProvider, WindowInsetsProvider } from "../primitives/safe-area";
 
@@ -111,6 +113,16 @@ it("bounds its height against the window and scrolls its body", () => {
   // §5.1's 170px top offset, measured against this window rather than guessed.
   expect(screen.getByTestId("bottom-sheet").style.maxHeight).toBe(`${793 - 170}px`);
   expect(getComputedStyle(screen.getByTestId("bottom-sheet-body")).overflowY).toBe("auto");
+});
+
+/** The sheet body contains its own overscroll, so reaching its end does not scroll the page behind it. */
+it("contains its own overscroll", () => {
+  render(
+    <BottomSheet visible title="Filter" onDismiss={vi.fn()}>
+      <span>rows</span>
+    </BottomSheet>,
+  );
+  expectContainsOverscroll("bottom-sheet-body");
 });
 
 /** A status bar taller than the design's offset pushes the cap down, not up. */

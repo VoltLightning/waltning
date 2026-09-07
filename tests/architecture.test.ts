@@ -17,6 +17,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
+import ts from "typescript";
 import { describe, expect, it } from "vitest";
 
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
@@ -425,6 +426,32 @@ describe("GroundPanel is the page scroller", () => {
     expect(
       offenders,
       'a screen that owns a virtualized list — directly or through a component it renders — must pass scroll="own", and nothing else may',
+    ).toEqual([]);
+  });
+
+  /**
+   * **The other half of `scroll="own"`, which used to be structural.**
+   *
+   * The panel once applied the screen's side gutter itself. It cannot any more
+   * — a padded `View` clips the list inside it — so the gutter moved from
+   * something a screen could not fail to get to something it has to ask for.
+   * Without this rule a new list-owning screen ships full-bleed against the
+   * device edge with every test green, which is a worse failure than the one
+   * the move fixed.
+   */
+  it('a screen that passes scroll="own" applies the gutter it no longer gets', () => {
+    const offenders = screenFiles()
+      .filter((file) => {
+        const text = readFileSync(file, "utf8")
+          .replace(/\/\*[\s\S]*?\*\//g, "")
+          .replace(/^\s*\/\/.*$/gm, "");
+        return /scroll="own"/.test(text) && !/\buseGroundInset\(/.test(text);
+      })
+      .map((file) => rel(file));
+
+    expect(
+      offenders,
+      'scroll="own" hands the gutter and the bottom clearance to the screen — call useGroundInset() and apply them',
     ).toEqual([]);
   });
 });
@@ -2581,6 +2608,433 @@ describe("a refusal is never reported as a success", () => {
     expect(
       offenders,
       'a bare phase: "success" literal outside finish() reintroduces L1 — every controller returns its outcome through finish() instead',
+    ).toEqual([]);
+  });
+});
+
+/**
+ * **Every scroller declares which kind it is.**
+ *
+ * A scroller is the outermost one on its screen — the page, whose movement is
+ * its own feedback — or a bounded one inside something else, whose end must be
+ * its end. Nothing about a `<ScrollView>` says which, so each one spreads the
+ * helper that matches (`primitives/nested-scroll.ts`), and this rule is what
+ * makes "each one" true.
+ *
+ * **What this rule is and is not.** It is a census: every scroller has made a
+ * declaration. It is *not* the guarantee — `primitives/nested-scroll.test.tsx`
+ * asserts the rendered `overscroll-behavior` of each helper's output, in the
+ * DOM, which is the only place the behaviour is real. Two earlier versions of
+ * this check tried to be the guarantee by reading source, and both could be
+ * spelled around while the page still chained.
+ *
+ * **Parsed with TypeScript, not with a regular expression.** The hand-rolled
+ * slicer this replaces was defeated by three ordinary spellings — a `>` inside
+ * a string attribute (`testID="a>b"`) ended the tag early, an unbalanced `}`
+ * in one truncated the attribute list, and a generic `<FlatList<Row>>` made
+ * the rule unsatisfiable. A trailing `// comment` inside an opening tag also
+ * survived the line-start comment strip and could satisfy the check by naming
+ * a helper it did not call. The compiler's own parser has no such edges, and
+ * it is already a dependency of this repository.
+ */
+/**
+ * **`border` is a divider. A control's edge is `border-interactive`.**
+ *
+ * `02-tokens` §2.1 gives `border` to "card edges and dividers" — a boundary
+ * between two *areas*, which WCAG sets no floor for, and at 1.19:1 on the
+ * ground it could not meet one. A control is different: `Button
+ * variant="secondary"`, `AmountField`, `RateField` and the picker cells all
+ * have no fill of their own, so the edge is the whole of what identifies them,
+ * and WCAG 1.4.11 asks 3:1 of it. Seven of them were drawn in the divider
+ * colour, including the amount field the whole capture flow turns on.
+ *
+ * **An allowlist, and each entry says why.** Whether an edge belongs to a
+ * control or to an area is not decidable from the source — a `Pressable` with
+ * a border might be the control or the card it sits in — so the rule flags
+ * every all-sides `borderColor: theme.border` in a file that renders one, and
+ * the four that are genuinely areas are named here. A fifth would have to be
+ * argued into this list in the open, which is the point.
+ */
+describe("a control's edge is not the divider colour", () => {
+  /**
+   * Every style object that draws a full box in `theme.border` — the divider
+   * colour — keyed by the style it belongs to. Genuine area edges are named in
+   * `AREA_EDGES` below with their reason; anything else is a control drawn in a
+   * value that cannot carry WCAG 1.4.11's 3:1.
+   *
+   * **No gate on what the file renders.** An earlier version only looked at
+   * files naming `Pressable`, `TextInput` or `TouchableOpacity`, which excluded
+   * eight of the thirty files that draw a border — including
+   * `threshold-slider.tsx`, an `accessibilityRole="adjustable"` control built
+   * from a gesture detector — and left two of the four allowlist entries
+   * permanently unreachable. The allowlist is the decision surface; a gate in
+   * front of it only decides which decisions get made.
+   */
+  const AREA_EDGES = new Map([
+    [
+      "packages/ui/src/primitives/select.tsx#panel",
+      "the dropdown's own surface, not the control that opens it",
+    ],
+    [
+      "packages/ui/src/primitives/toggle.tsx#thumb",
+      "identified by its fill against the track it rides on",
+    ],
+    [
+      "packages/ui/src/transactions/categorize-selection-confirm.tsx#root",
+      "a card: it carries a surface fill and holds the controls",
+    ],
+    [
+      "packages/ui/src/counterparties/settle-sheet.tsx#result",
+      "a result box — read, never pressed",
+    ],
+    // The four that reach the divider through `theme.elevation.<role>` — the
+    // house idiom for a card's own 1px edge, and the alias that defeated the
+    // first version of this rule. Each is a surface holding content, never a
+    // control: `Card` and `WidgetCard` are the boxes `05-composites` defines,
+    // and the sheet and dialog are the two modal grounds.
+    ["packages/ui/src/shell/card.tsx#card", "the `Card` surface itself"],
+    ["packages/ui/src/dashboard/widget-card.tsx#card", "the dashboard's own card surface"],
+    ["packages/ui/src/shell/bottom-sheet.tsx#sheet", "the sheet's ground, not a control on it"],
+    [
+      "packages/ui/src/shell/confirm-dialog.tsx#card",
+      "the dialog's ground; its buttons are elsewhere",
+    ],
+  ]);
+
+  const SIDE_WIDTHS = [
+    "borderTopWidth",
+    "borderRightWidth",
+    "borderBottomWidth",
+    "borderLeftWidth",
+  ];
+
+  /**
+   * Is this `borderColor` value the divider, under any of its names?
+   *
+   * **`theme.elevation.<role>.borderColor` is the divider.** `roles.ts` builds
+   * `card`, `sheet` and `dialog` with `bordered(color.border)`, so those paths
+   * resolve to `#eae3d5` — and that is the house idiom for a 1px edge, used by
+   * four files. (`float` and `floatLifted` come from `floating(...)` and are
+   * the shell and the accent; the pattern below matches them too, and nothing
+   * draws a border with either, so the over-match has never fired. Narrowing it
+   * would mean naming the three, which is a list that goes stale.)
+   * A control spelling its edge that way is the same defect wearing an alias,
+   * and it defeated the first version of this rule because the `theme.` in
+   * front of it looked like a property access on something else.
+   *
+   * A local bound to `theme.border` in the same file counts too: the
+   * indirection is one line and hides the token from a textual check.
+   */
+  function isDivider(colour: string, locals: ReadonlySet<string>): boolean {
+    if (/theme\.elevation\.\w+\.borderColor\b/.test(colour)) return true;
+    const names = ["theme.border", ...locals];
+    // On a word boundary, or `theme.border` matches `theme.borderInteractive`
+    // — the fix reported as the defect. Anywhere in the value, so a conditional
+    // branch counts: one taken branch at 1.19:1 is a control nobody can locate
+    // half the time.
+    return names.some((name) =>
+      new RegExp(`(^|[^\\w.])${name.replace(/\./g, "\\.")}(?![\\w])`).test(colour),
+    );
+  }
+
+  /** Locals bound to `theme.border` in this file, for the indirection above. */
+  function dividerLocals(text: string): Set<string> {
+    const locals = new Set<string>();
+    for (const [, local] of text.matchAll(
+      /\b(?:const|let)\s+([A-Za-z_$][\w$]*)\s*=\s*theme\.border\b(?!\w)/g,
+    )) {
+      if (local !== undefined) locals.add(local);
+    }
+    return locals;
+  }
+
+  function drawsDividerBox(
+    literal: ts.ObjectLiteralExpression,
+    names: ReadonlySet<string>,
+  ): boolean {
+    const properties = new Map<string, string>();
+    for (const property of literal.properties) {
+      if (!ts.isPropertyAssignment(property)) continue;
+      const key = ts.isIdentifier(property.name) ? property.name.text : property.name.getText();
+      properties.set(key, property.initializer.getText());
+    }
+    const allSides =
+      properties.has("borderWidth") || SIDE_WIDTHS.every((side) => properties.has(side));
+    if (!allSides) return false;
+    const colour = properties.get("borderColor");
+    if (colour === undefined) return false;
+    return isDivider(colour, names);
+  }
+
+  function offences(): string[] {
+    const found: string[] = [];
+    const files = ["packages/ui/src", "apps/mobile/src", "apps/mobile/app"]
+      .flatMap((root) => sourceFiles(join(repoRoot, root)))
+      .filter((file) => !/\.(test|stories)\.tsx?$/.test(file));
+
+    for (const file of files) {
+      const text = readFileSync(file, "utf8");
+      if (!/theme\.border\b|elevation\.\w+\.borderColor/.test(text)) continue;
+      const names = dividerLocals(text);
+      const source = ts.createSourceFile(
+        file,
+        text,
+        ts.ScriptTarget.Latest,
+        true,
+        ts.ScriptKind.TSX,
+      );
+      let inlineAt = 0;
+      const walk = (node: ts.Node): void => {
+        // Every object literal, not only a property's initializer: an inline
+        // `style={{…}}` and a hoisted `const edge = {…}` were both invisible.
+        if (ts.isObjectLiteralExpression(node) && drawsDividerBox(node, names)) {
+          const parent = node.parent;
+          const key =
+            parent !== undefined && ts.isPropertyAssignment(parent)
+              ? ts.isIdentifier(parent.name)
+                ? parent.name.text
+                : parent.name.getText()
+              : `inline@${inlineAt++}`;
+          found.push(`${relative(repoRoot, file)}#${key}`);
+        }
+        ts.forEachChild(node, walk);
+      };
+      walk(source);
+    }
+    return found;
+  }
+
+  it("uses theme.border only where the edge belongs to an area", () => {
+    const offenders = offences().filter((id) => !AREA_EDGES.has(id));
+    expect(
+      offenders,
+      "a control with no fill is identified by its edge — use theme.borderInteractive, or name the area edge in AREA_EDGES with its reason",
+    ).toEqual([]);
+  });
+
+  /**
+   * An allowlist that outlives the style it exempts silently re-permits the
+   * next thing to take that name. Checked against what the rule actually finds,
+   * rather than by grepping for the key — a docblock quoting `result: {` used
+   * to satisfy that, and this repository's docblocks quote style keys
+   * constantly.
+   */
+  it("names a style the rule actually finds, for every allowed area edge", () => {
+    const found = new Set(offences());
+    const stale = [...AREA_EDGES.keys()].filter((id) => !found.has(id));
+    expect(stale, "remove the exemption, or point it at the style that replaced it").toEqual([]);
+  });
+});
+
+describe("every scroller declares which kind it is", () => {
+  const SCROLLERS = new Set(["ScrollView", "FlatList", "SectionList", "VirtualizedList"]);
+  const SPREAD_HELPERS = new Set(["nestedScrollProps", "horizontalScrollProps", "pageScrollProps"]);
+  const STYLE_HELPERS = new Set(["containOverscroll", "containOverscrollX"]);
+  const HELPER_FILE = join(repoRoot, "packages/ui/src/primitives/nested-scroll.ts");
+
+  /**
+   * Every root that can render one. `apps/mobile/app/` was missed by the first
+   * version — the routes, which are as able to draw a list as `src/` is — and
+   * so were the stories, one of which was still carrying the defective
+   * spelling this branch exists to remove. A rule whose scope is narrower than
+   * the behaviour it governs is a rule about one directory.
+   */
+  const ROOTS = ["packages/ui/src", "packages/client/src", "apps/mobile/src", "apps/mobile/app"];
+
+  type Found = {
+    file: string;
+    name: string;
+    /** Which scroller within the file, so three in one file are not interchangeable. */
+    index: number;
+    /** The helper it declared with, or `"none"`. */
+    via: string;
+    overwritten: boolean;
+  };
+
+  /** The element's tag name, following `Animated.ScrollView` to its last part. */
+  function tagName(node: ts.JsxOpeningLikeElement): string {
+    const text = node.tagName.getText();
+    return text.slice(text.lastIndexOf(".") + 1);
+  }
+
+  /**
+   * **This element's own declaration, not one anywhere beneath it.**
+   *
+   * The first AST version asked whether any identifier in the attribute
+   * subtree named a helper, which accepted three things that declare nothing:
+   * a bare reference (`accessibilityLabel={String(nestedScrollProps)}`), a call
+   * whose result is thrown away, and — worst — a *nested* element's spread, so
+   * `<ScrollView style={s} ListEmptyComponent={<Inner {...nestedScrollProps(s)} />}>`
+   * certified the outer, bare scroller. So the shape is pinned: the helper is
+   * the direct callee of a call that is exactly a spread attribute's
+   * expression, or a style constant named inside this node's own `style`.
+   */
+  /** The helper this element declared with, for the census line. */
+  function declaredVia(node: ts.JsxOpeningLikeElement): string {
+    const at = declaringAttribute(node);
+    if (at === -1) return "none";
+    const attribute = node.attributes.properties[at];
+    if (attribute !== undefined && ts.isJsxSpreadAttribute(attribute)) {
+      const call = attribute.expression;
+      if (ts.isCallExpression(call) && ts.isIdentifier(call.expression))
+        return call.expression.text;
+    }
+    // The style constant by its own name, so containing the *wrong* axis shows
+    // up here. A literal string was returned before, which could not tell
+    // `containOverscroll` from `containOverscrollX` — the shape of the original
+    // bug, invisible in the census that exists to name shapes.
+    if (attribute !== undefined && ts.isJsxAttribute(attribute)) {
+      const initializer = attribute.initializer;
+      if (initializer !== undefined && ts.isJsxExpression(initializer)) {
+        const expression = initializer.expression;
+        if (expression !== undefined && ts.isIdentifier(expression)) return expression.text;
+        if (expression !== undefined && ts.isArrayLiteralExpression(expression)) {
+          const named = expression.elements.find(
+            (element) => ts.isIdentifier(element) && STYLE_HELPERS.has(element.text),
+          );
+          if (named !== undefined && ts.isIdentifier(named)) return named.text;
+        }
+      }
+    }
+    return "unknown";
+  }
+
+  function declaringAttribute(node: ts.JsxOpeningLikeElement): number {
+    return node.attributes.properties.findIndex((attribute) => {
+      if (ts.isJsxSpreadAttribute(attribute)) {
+        const call = attribute.expression;
+        return (
+          ts.isCallExpression(call) &&
+          ts.isIdentifier(call.expression) &&
+          SPREAD_HELPERS.has(call.expression.text)
+        );
+      }
+      if (!ts.isJsxAttribute(attribute)) return false;
+      if (!ts.isIdentifier(attribute.name) || attribute.name.text !== "style") return false;
+      const initializer = attribute.initializer;
+      if (initializer === undefined || !ts.isJsxExpression(initializer)) return false;
+      const expression = initializer.expression;
+      if (expression === undefined) return false;
+      // The identifier itself, or a *direct* element of the style array — not
+      // anything named `containOverscrollY` anywhere in the expression.
+      // Walking the subtree certified `style={holder.containOverscrollY}` (the
+      // name half of a property access) and, worse,
+      // `style={isDesk ? styles.desk : containOverscrollY}`, an ordinary
+      // spelling whose taken branch has no containment at all.
+      const isHelper = (n: ts.Node): boolean => ts.isIdentifier(n) && STYLE_HELPERS.has(n.text);
+      if (isHelper(expression)) return true;
+      return ts.isArrayLiteralExpression(expression) && expression.elements.some(isHelper);
+    });
+  }
+
+  /**
+   * Anything after the declaration that could replace the style it set — a
+   * `style` prop, or a spread of any kind.
+   *
+   * **Ordering, because a spread cannot be read.** `{...{ style: x }}` is an
+   * object literal this could inspect; `{...keyboardProps}` is a variable, and
+   * resolving it would mean type-checking the repository from a test. JSX props
+   * are last-write-wins, so a declaration that nothing follows cannot be
+   * overwritten, whatever the follower holds. `containOverscroll` is guarded
+   * the same way: it is a style attribute, and a later one replaces it.
+   */
+  function overwritesAfter(node: ts.JsxOpeningLikeElement, declaredAt: number): boolean {
+    if (declaredAt === -1) return false;
+    return node.attributes.properties.slice(declaredAt + 1).some((attribute) => {
+      if (ts.isJsxSpreadAttribute(attribute)) return true;
+      return (
+        ts.isJsxAttribute(attribute) &&
+        ts.isIdentifier(attribute.name) &&
+        attribute.name.text === "style"
+      );
+    });
+  }
+
+  function scrollers(): Found[] {
+    const found: Found[] = [];
+    const files = ROOTS.flatMap((root) => sourceFiles(join(repoRoot, root))).filter(
+      (file) => file !== HELPER_FILE && !/\.test\.tsx?$/.test(file),
+    );
+
+    for (const file of files) {
+      const source = ts.createSourceFile(
+        file,
+        readFileSync(file, "utf8"),
+        ts.ScriptTarget.Latest,
+        true,
+        ts.ScriptKind.TSX,
+      );
+      const walk = (node: ts.Node): void => {
+        if (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) {
+          const name = tagName(node);
+          if (SCROLLERS.has(name)) {
+            const declaredAt = declaringAttribute(node);
+            const rel = relative(repoRoot, file);
+            found.push({
+              file: rel,
+              name,
+              index: found.filter((other) => other.file === rel).length,
+              via: declaredVia(node),
+              overwritten: overwritesAfter(node, declaredAt),
+            });
+          }
+        }
+        ts.forEachChild(node, walk);
+      };
+      walk(source);
+    }
+    return found;
+  }
+
+  /**
+   * **The census, pinned as a set rather than a count.**
+   *
+   * A number fails with "expected 13 to be 12", which teaches the next person
+   * to edit the literal without reading what changed — and it stays green when
+   * the parser silently stops finding one scroller while someone adds another.
+   * A set names the file that appeared or vanished.
+   */
+  it("finds every scroller in the repository", () => {
+    const census = scrollers()
+      .map(({ file, name, index, via }) => `${file}#${index} <${name}> ${via}`)
+      .sort();
+
+    expect(census).toEqual([
+      "apps/mobile/src/ledger-screen.tsx#0 <FlatList> pageScrollProps",
+      "packages/ui/src/accounts/account-picker.tsx#0 <ScrollView> nestedScrollProps",
+      "packages/ui/src/categories/category-sheet.tsx#0 <ScrollView> horizontalScrollProps",
+      "packages/ui/src/categories/category-sheet.tsx#1 <ScrollView> nestedScrollProps",
+      "packages/ui/src/categories/category-sheet.tsx#2 <ScrollView> horizontalScrollProps",
+      "packages/ui/src/counterparties/counterparty-picker.tsx#0 <ScrollView> nestedScrollProps",
+      "packages/ui/src/fx/rate-table.tsx#0 <FlatList> pageScrollProps",
+      "packages/ui/src/primitives/select.tsx#0 <ScrollView> nestedScrollProps",
+      "packages/ui/src/shell/bottom-sheet.stories.tsx#0 <ScrollView> nestedScrollProps",
+      "packages/ui/src/shell/bottom-sheet.tsx#0 <ScrollView> containOverscroll",
+      "packages/ui/src/shell/card.tsx#0 <ScrollView> pageScrollProps",
+      "packages/ui/src/transactions/ledger-filter-rail.tsx#0 <ScrollView> nestedScrollProps",
+      "packages/ui/src/transactions/ledger-table.tsx#0 <FlatList> nestedScrollProps",
+    ]);
+  });
+
+  it("spreads one of the nested-scroll helpers", () => {
+    const offenders = scrollers()
+      .filter(({ via }) => via === "none")
+      .map(({ file, name, index }) => `${file}#${index} <${name}>`);
+
+    expect(
+      offenders,
+      "a bare scroller is undeclared: bounded ones take nestedScrollProps(style) (or horizontalScrollProps), a screen's own takes pageScrollProps(style)",
+    ).toEqual([]);
+  });
+
+  it("lets nothing that sets style follow its declaration", () => {
+    const offenders = scrollers()
+      .filter(({ overwritten }) => overwritten)
+      .map(({ file, name, index }) => `${file}#${index} <${name}>`);
+
+    expect(
+      offenders,
+      "move the declaration after every other style-bearing attribute — a later style prop or spread replaces it",
     ).toEqual([]);
   });
 });

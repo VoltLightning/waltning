@@ -10,6 +10,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { Checkbox } from "./checkbox";
+import { expectContainsOverscroll } from "./nested-scroll.test-support.ts";
 import { RadioGroup } from "./radio";
 import { MultiSelect, Select } from "./select";
 import { TextField } from "./text-field";
@@ -139,6 +140,26 @@ describe("Select", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Currency" }));
     expect(screen.getAllByRole("radio")).toHaveLength(2);
+  });
+
+  /**
+   * The audit's own report, in a test: scrolling inside an open picker moved
+   * the screen behind it. `nestedScrollEnabled` was set and does nothing on
+   * the web, so the panel chained; the containment has to be asserted where it
+   * is real, on the rendered element, not by reading the source for a prop.
+   */
+  it("contains its own overscroll, so the page behind it does not move", () => {
+    render(
+      <Select
+        label="Currency"
+        placeholder="Choose"
+        options={CURRENCIES}
+        value={null}
+        onChange={vi.fn()}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Currency" }));
+    expectContainsOverscroll("select-panel-scroll");
   });
 
   /**

@@ -257,7 +257,7 @@ const useStyles = makeStyles((theme) => ({
     minHeight: touchTarget.min,
     paddingHorizontal: space.x3,
     borderWidth: 1,
-    borderColor: theme.border,
+    borderColor: theme.borderInteractive,
     borderRadius: radius.sm,
     backgroundColor: theme.surface,
   },

@@ -3,6 +3,7 @@
 import { createEvent, fireEvent, render, screen } from "@testing-library/react";
 import * as money from "@waltning/core/money";
 import { describe, expect, it, vi } from "vitest";
+import { expectContainsOverscroll } from "../primitives/nested-scroll.test-support.ts";
 import { LedgerTable, type LedgerTableRow, type LedgerTableSelection } from "./ledger-table";
 
 function row(overrides: Partial<LedgerTableRow> & { id: string }): LedgerTableRow {
@@ -66,6 +67,20 @@ describe("LedgerTable", () => {
     expect(screen.getByText("Groceries")).toBeDefined();
     expect(screen.getAllByText("Cash").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Mine").length).toBeGreaterThan(0);
+  });
+
+  /** The table contains its own overscroll, so reaching its end does not scroll the page. */
+  it("contains its own overscroll", () => {
+    render(
+      <LedgerTable
+        rows={ROWS}
+        sort={null}
+        onSortColumn={noop}
+        selection={selectionOf()}
+        onOpenRow={noop}
+      />,
+    );
+    expectContainsOverscroll("ledger-table-scroller");
   });
 
   /**

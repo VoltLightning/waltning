@@ -49,19 +49,36 @@ export const color = {
   pressed: "#e6ddcb",
   /** Card edges, dividers, the outline of an unfilled control. */
   border: "#eae3d5",
-  /** The border of an interactive control at rest — an input, a chip. */
-  borderInteractive: "#c6bdaa",
+  /**
+   * The border of an interactive control at rest — an input, a chip.
+   *
+   * **A control this app draws is identified by its edge alone**, because its
+   * fill is `surface` on `ground` at 1.08:1 — invisible. So this value carries
+   * WCAG 1.4.11's 3:1 boundary floor by itself, and it has to carry it against
+   * **every fill a control is drawn on**, not just the page: a filled chip
+   * sits on `subtle`, and any control under a finger sits on `hover` or
+   * `pressed`. Checked against all five, the tan this replaced ran from 1.86
+   * on `surface` down to 1.38 on `pressed`, and a first correction to
+   * `#9d8d6d` still left a filled chip's edge at 2.74 and a hovered one at
+   * 2.59 — floor met on the page, missed in the states. 3.15 at the tightest
+   * pairing here, chosen with headroom rather than landing on 3.00 so the next
+   * nudge to a fill does not cross the floor silently.
+   */
+  borderInteractive: "#88795c",
   /**
    * A border that must read on its own: a selected control, a focus-adjacent
-   * edge. Held to 3:1 against `surface`, the WCAG floor for a UI boundary —
-   * this one sits at 3.63.
+   * edge. One clear step above `borderInteractive` on the same ramp and held
+   * to the same five fills — 3.75 at the tightest of the two themes, against
+   * that step's 3.15.
+   * It used to be stated as 3.63 "against `surface`", which was true and was
+   * the wrong pairing: on the pressed fill the same value was 2.69.
    */
-  borderStrong: "#8d8672",
+  borderStrong: "#746e5f",
   ink: "#33302a",
   muted: "#6e6759",
 
   /** A primary action's fill. Job 1. */
-  accent: "#55704f",
+  accent: "#5c7357",
   /** Links, a secondary action's label. */
   accentText: "#4c6247",
   /** Decorative accent marks, and the focus ring. Job 2. */
@@ -79,14 +96,18 @@ export const color = {
    *
    * `income` is a *livelier* green than the sage `accent`, so a credit reads
    * as an event and a button reads as a control — related, never confused.
-   * Held at 4.5:1 on `ground` as well as `surface` in `theme.test.tsx`, which
-   * is what pushed it a step darker than the mockups' figure. `spend` is a
+   * Held at 4.5:1 against every fill a
+   * figure lands on, which is what pushed it darker than the mockups' figure.
+   * `ground` and `surface` were never the binding pair — 5.80 and 6.25 here —
+   * and the tightest is `pressedFill` at 4.64, with `hoverFill` at 4.99 behind
+   * it. Those two were the fills nothing checked while the comfortable pair
+   * was checked twice. `spend` is a
    * warm, restrained red: unmistakable, not alarming. A transfer is neither;
    * money moved between your own accounts is `muted`, because nothing was
    * gained or lost. Job 3 is `income`.
    */
-  income: "#3f7a34",
-  spend: "#a8543c",
+  income: "#396c2e",
+  spend: "#974b35",
 
   /**
    * The green ramp is the **entire** chart palette: magnitude reads as depth,
@@ -116,7 +137,7 @@ export const color = {
   /** Danger — a destructive action, a refused write. **Never chrome.** */
   danger: "#a33d26",
   dangerBg: "#f8e8e2",
-  dangerBorder: "#dfa68f",
+  dangerBorder: "#c05e37",
 
   /**
    * The shell: one flat colour, no gradient. A gradient was the one thing on
@@ -177,11 +198,11 @@ export const darkColor = {
   hover: "#302a23",
   pressed: "#363027",
   border: "#38332a",
-  borderInteractive: "#5a5344",
-  borderStrong: "#78715e",
+  borderInteractive: "#877c65",
+  borderStrong: "#918974",
   ink: "#f0ece3",
   muted: "#a59d8d",
-  accent: "#55704f",
+  accent: "#5c7357",
   accentText: "#a4c297",
   accentIcon: "#8fae84",
   accentFill: "#2c3226",
@@ -194,7 +215,7 @@ export const darkColor = {
   amberBorder: "#8f7a3a",
   danger: "#f0a28c",
   dangerBg: "#3d241c",
-  dangerBorder: "#a45f48",
+  dangerBorder: "#b36a51",
   /**
    * On a warm-charcoal ground a surface reads by rising, so the dark shell
    * sits well above `ground` (1.97:1) and `surface` (1.79:1) — the 1.5 floor
@@ -367,10 +388,10 @@ export const space = {
 export const radius = {
   pill: 999,
   xs: 3,
-  /** Controls: buttons, inputs. */
-  sm: 8,
-  /** Cards, inset boxes. */
-  md: 12,
+  /** Controls: buttons, inputs, chips, the segment thumb. */
+  sm: 10,
+  /** Cards, inset boxes; the segment track. */
+  md: 14,
   /** Sheets, and the ground panel lifting over the shell. */
   lg: 16,
 } as const;
@@ -479,7 +500,7 @@ export const motionFrequency = {
   rare: "sheet",
 } as const satisfies Record<string, keyof typeof motion>;
 
-/* ── 2.9 The two moving parts of the screen ─────────────────────────────── */
+/* ── 2.9 The moving parts of the screen ────────────────────────────────── */
 
 /**
  * **The add button floats.** §2.9 fixes its geometry: a 56px circle — the only
