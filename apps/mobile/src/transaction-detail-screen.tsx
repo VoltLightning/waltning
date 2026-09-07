@@ -209,9 +209,24 @@ export default function TransactionDetail() {
     [detail, ledger, refetch, t, transactionId],
   );
 
+  /**
+   * **A re-split may restate the total, and has to be able to.** §10.3's
+   * invariant runs both ways and each operation on the device is its own
+   * transaction, so 18 split 10 + 8 could not become 20 split 10 + 10 in
+   * either order — the amount refused by the lines it no longer matches, the
+   * lines refused by the amount. Postgres sends the two statements separately
+   * because both sum triggers are `DEFERRABLE INITIALLY DEFERRED`; carrying
+   * the sum here is the device's deferral.
+   *
+   * Sent only when it differs, so an ordinary re-allocation of an unchanged
+   * total says nothing about the amount and cannot move it by accident.
+   */
   const handleSaveLines = useCallback(
     (lines: readonly LinesCardDraftLine[]) => {
       if (!transactionId || !detail) return;
+      // A re-split that changes the total carries the new one, which the
+      // controller derives from the row it already reads — the screen composes
+      // and does not compute (`create-phone-ledger.ts`'s own doc).
       const result = ledger.setTransactionLines(transactionId, detail.version, lines);
       if ("id" in result) {
         setLinesErrors(undefined);

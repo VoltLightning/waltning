@@ -44,3 +44,14 @@ it("hovers on the shell with the shell's own overlay, not the ground's fill", ()
 it("hovers on the ground with the ground's fill", () => {
   expect(fillWhileHovered("ground")).toBe("rgb(236, 229, 215)");
 });
+
+/**
+ * **The pressed half is asserted in `theme/theme.test.tsx`, not here.**
+ * `Pressable`'s pressed state comes from its own press responder, which jsdom
+ * does not drive — `fireEvent.pointerDown` leaves the style function's
+ * `pressed` false, so a test written here would assert the resting fill and
+ * pass whatever the pressed one was. The census flattens both of the band's
+ * overlays onto `shell` and checks `shellText` on each, which is the guarantee
+ * this component's `tone` exists to keep.
+ */
+it.skip("presses on the shell — see theme.test.tsx's overlay census", () => {});

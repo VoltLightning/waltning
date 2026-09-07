@@ -35,7 +35,7 @@
  *
  * **The action is not `<Button variant="ghost">`.** Ghost's ink is
  * `theme.textMuted`, tuned for the light `ground`/`surface` steps every other
- * ghost button sits on — on the toast's `theme.shell` fill it measured 1.58:1
+ * ghost button sits on — on the toast's `theme.shell` fill it measures 1.45:1
  * against 4.5. A toast is the one component that is *always* on the shell
  * colour, so its action gets the shell's own ink rather than a shared
  * primitive built for a different surface.

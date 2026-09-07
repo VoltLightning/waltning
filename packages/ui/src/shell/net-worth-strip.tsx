@@ -132,12 +132,12 @@ const useStyles = makeStyles((theme) => ({
     backgroundColor: theme.subtleFill,
   },
   /**
-   * `accentFill`, not `hoverFill`. `textMuted` measures **4.47:1** on
-   * `hoverFill` — a hair under the 4.5 floor, the same number `button.tsx`
-   * documents — and this strip puts two muted lines on it. `button.tsx` fixes
-   * that by changing the ink; here there are two inks and one fill, so the
-   * fill moves instead: `accentFill` is a visible change from `subtleFill` and
-   * holds `textMuted` at 4.87 light and 4.91 dark.
+   * `accentFill`, not `hoverFill`. This strip puts two muted lines on its
+   * fill, and `textMuted` was **4.47:1** on `hoverFill` when it was chosen —
+   * under the 4.5 floor. `muted` has since moved a step darker and clears
+   * every fill it lands on (4.89 on `hoverFill` now), so the choice is no
+   * longer forced; it stays because `accentFill` is the more legible of the
+   * two anyway, at 5.32 light and 4.91 dark.
    */
   hovered: { backgroundColor: theme.accentFill },
   focused: {

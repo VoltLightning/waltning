@@ -151,7 +151,11 @@ function SegmentOption<Value extends string>({
         {segment.label}
       </Text>
       {segment.count === undefined ? null : (
-        <Text style={[styles.count, active ? styles.countActive : null]}>{segment.count}</Text>
+        <Text
+          style={[shell ? styles.countShell : styles.count, active ? styles.countActive : null]}
+        >
+          {segment.count}
+        </Text>
       )}
     </Pressable>
   );
@@ -197,6 +201,14 @@ const useStyles = makeStyles((theme) => ({
   // dark-on-light contrast either way.
   labelActive: { color: theme.text, ...text.ui("bodySm", 600) },
   count: { color: theme.textMuted, ...text.ui("caption") },
+  /**
+   * The band's own muted ink. `textMuted` is a ground colour — on the shell's
+   * recessed track it measures 1.78:1, which is the label's own hazard one
+   * line up, left open because no `tone="shell"` caller passes a count yet.
+   * The docblock advertises live counts per segment; a feature that is only
+   * unbroken because nobody uses it is broken.
+   */
+  countShell: { color: theme.shellTextMuted, ...text.ui("caption") },
   countActive: { color: theme.accentText },
   disabled: { opacity: 0.45 },
 }));

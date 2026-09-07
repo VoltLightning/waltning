@@ -29,6 +29,29 @@ function relativeLuminance(hex: string): number {
   return 0.2126 * channel(1) + 0.7152 * channel(3) + 0.0722 * channel(5);
 }
 
+/**
+ * An `rgba(r,g,b,a)` overlay flattened onto an opaque hex beneath it.
+ *
+ * **The census could not see the shell's own fills at all.** `relativeLuminance`
+ * slices hex digits, so handed `rgba(255,255,255,0.10)` it returns `NaN` and
+ * every comparison silently passes. That is precisely the pairing this suite
+ * most needed after `IconButton` gained a shell tone — a glyph on an overlay
+ * over the band — so the one thing the census was extended to protect was the
+ * one thing it structurally could not measure.
+ */
+function over(overlay: string, base: string): string {
+  const match = /^rgba\((\d+),\s*(\d+),\s*(\d+),\s*([\d.]+)\)$/.exec(overlay);
+  if (match === null) return overlay;
+  const [, r, g, b, a] = match;
+  const alpha = Number(a);
+  const channel = (top: string, at: number) => {
+    const under = Number.parseInt(base.slice(at, at + 2), 16);
+    return Math.round(Number(top) * alpha + under * (1 - alpha));
+  };
+  const hex = (value: number) => value.toString(16).padStart(2, "0");
+  return `#${hex(channel(r ?? "0", 1))}${hex(channel(g ?? "0", 3))}${hex(channel(b ?? "0", 5))}`;
+}
+
 function contrastRatio(foreground: string, background: string): number {
   const a = relativeLuminance(foreground);
   const b = relativeLuminance(background);
@@ -191,8 +214,10 @@ describe("a component follows the active theme", () => {
     ["light text on ground", light.text, light.ground],
     ["light text on surface", light.text, light.surface],
     // **Muted text is not only ever on the page**, and it is the ink most
-    // often put on a fill: eighteen files pair it with one, `NetWorthStrip`
-    // rests on `subtleFill`, every card's kicker sits on `surface`.
+    // often put on a fill: `NetWorthStrip` rests on `subtleFill`, every card's
+    // kicker sits on `surface`, and the rows below name every other fill it
+    // reaches. Which is why it is censused against all six rather than against
+    // the ground alone.
     //
     // **Including the two it used to fail.** A first version of this census
     // added `surface`, `subtleFill` and `accentFill` — the three that passed —
@@ -306,13 +331,33 @@ describe("a component follows the active theme", () => {
    * **A bar is a graphical object, and 1.4.11 asks 3:1 of it.**
    *
    * `SpendRows` draws one bar per category on `subtleFill`. It ranked into
-   * `chartRamp` first, and two of that ramp's five steps clear the floor
-   * against a single track in light while four do in dark — from the *other*
-   * end, because `chartRamp` is the light
-   * ramp verbatim, so the *largest* category's bar sat at 2.19:1 while the
-   * smallest was at 8.68:1. Nothing caught it: the visual suite's axe pass
-   * checks text contrast, not a `View`'s fill against the `View` behind it.
+   * `chartRamp` first — a ramp built to be read in light, where its darkest
+   * step is the strongest. Reused verbatim in dark, the ordering inverts
+   * against the track: **in dark**, the *largest* category's bar sat at 2.19:1
+   * and the smallest at 8.68:1, so magnitude read as invisibility. Nothing
+   * caught it — the visual suite's axe pass checks text contrast, not a
+   * `View`'s fill against the `View` behind it.
    */
+  /**
+   * **The band's own interactive fills, which are overlays rather than
+   * colours.** `IconButton tone="shell"` paints `shellNavActiveFill` under a
+   * pointer and `shellInsetTrackFill` under a finger — both `rgba` over the one
+   * flat green — and the glyph on top is `shellText`. The ground-family fills
+   * put that ink at 1.10:1, which is the defect the tone exists to prevent; a
+   * census that cannot flatten an overlay would not have caught the tone being
+   * removed again.
+   */
+  it.each([
+    ["light", light],
+    ["dark", dark],
+  ])("keeps the %s shell glyph readable on both of the band's fills", (_name, theme) => {
+    for (const overlay of [theme.shellNavActiveFill, theme.shellInsetTrackFill]) {
+      expect(contrastRatio(theme.shellText, over(overlay, theme.shell))).toBeGreaterThanOrEqual(
+        4.5,
+      );
+    }
+  });
+
   it.each([
     ["light", light],
     ["dark", dark],

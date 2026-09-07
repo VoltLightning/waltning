@@ -67,7 +67,10 @@ export const setTransactionLinesExecutor = defineLocalExecutor<
   // queued as an intent nothing will ever apply. Business refusals that a
   // future server might still resolve differently — a stale version, a
   // lines sum that does not match — stay inside `apply`, where they always
-  // were; only the scale refusal moves.
+  // were; only the scale refusals move. The restated total is one of them:
+  // it arrives on the same operation and is judged against the same currency,
+  // so leaving it in `apply` alone would queue an intent no server can ever
+  // resolve — the one thing this hook exists to prevent.
   validate: (input, tx) => {
     const current = tx
       .select({ currency: transactions.currency, deletedAt: transactions.deletedAt })
@@ -75,6 +78,14 @@ export const setTransactionLinesExecutor = defineLocalExecutor<
       .where(eq(transactions.id, input.transactionId))
       .get();
     if (!current || current.deletedAt !== null) return;
+    if (input.amountOriginal !== undefined) {
+      assertMoneyScale(
+        tx,
+        input.amountOriginal,
+        current.currency,
+        "set_transaction_lines: amount_original",
+      );
+    }
     for (const line of input.lines) {
       assertMoneyScale(
         tx,

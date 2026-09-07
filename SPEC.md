@@ -1833,6 +1833,15 @@ amount is the fact; lines are an allocation of it. So:
   own category where they do not.
 - A breakdown that does not sum to the total carries an explicit `unallocated`
   line rather than silently disagreeing (S07 §9).
+- **A re-split may restate the total, in the same operation.** Subordinate is
+  about which figure the ledger reads, not about which write may move it:
+  `set_transaction_lines` takes an optional `amount_original`, applied with the
+  new lines under one transaction and judged by the same sum rule. Without it a
+  split's total cannot change at all — Postgres accepts the two statements
+  separately because both sum triggers are `DEFERRABLE INITIALLY DEFERRED`, and
+  the phone has no deferral: each operation is its own transaction, so the
+  amount is refused by the lines it no longer matches and the lines by the
+  amount. Carrying both is the device's version of that deferral.
 
 This is what makes a receipt and a hand-entered split the same shape, and it is
 why `is_business` splitting (§13.1 point 4) is deliberately *not* this: a

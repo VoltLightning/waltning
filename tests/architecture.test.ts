@@ -2613,31 +2613,6 @@ describe("a refusal is never reported as a success", () => {
 });
 
 /**
- * **Every scroller declares which kind it is.**
- *
- * A scroller is the outermost one on its screen — the page, whose movement is
- * its own feedback — or a bounded one inside something else, whose end must be
- * its end. Nothing about a `<ScrollView>` says which, so each one spreads the
- * helper that matches (`primitives/nested-scroll.ts`), and this rule is what
- * makes "each one" true.
- *
- * **What this rule is and is not.** It is a census: every scroller has made a
- * declaration. It is *not* the guarantee — `primitives/nested-scroll.test.tsx`
- * asserts the rendered `overscroll-behavior` of each helper's output, in the
- * DOM, which is the only place the behaviour is real. Two earlier versions of
- * this check tried to be the guarantee by reading source, and both could be
- * spelled around while the page still chained.
- *
- * **Parsed with TypeScript, not with a regular expression.** The hand-rolled
- * slicer this replaces was defeated by three ordinary spellings — a `>` inside
- * a string attribute (`testID="a>b"`) ended the tag early, an unbalanced `}`
- * in one truncated the attribute list, and a generic `<FlatList<Row>>` made
- * the rule unsatisfiable. A trailing `// comment` inside an opening tag also
- * survived the line-start comment strip and could satisfy the check by naming
- * a helper it did not call. The compiler's own parser has no such edges, and
- * it is already a dependency of this repository.
- */
-/**
  * **`border` is a divider. A control's edge is `border-interactive`.**
  *
  * `02-tokens` §2.1 gives `border` to "card edges and dividers" — a boundary
@@ -2737,14 +2712,32 @@ describe("a control's edge is not the divider colour", () => {
     );
   }
 
-  /** Locals bound to `theme.border` in this file, for the indirection above. */
-  function dividerLocals(text: string): Set<string> {
+  /**
+   * Locals bound to `theme.border` in this file, for the indirection above.
+   *
+   * **From the tree, not the text.** A regex over the source counted a
+   * commented-out `const edge = theme.border` as a binding — and this
+   * repository's docblocks quote code constantly — so a live `borderColor:
+   * edge` naming a *different* local was reported at a line where nothing was
+   * wrong, while the reader went looking for a binding that had been deleted.
+   * The walk sees declarations only.
+   */
+  function dividerLocals(source: ts.SourceFile): Set<string> {
     const locals = new Set<string>();
-    for (const [, local] of text.matchAll(
-      /\b(?:const|let)\s+([A-Za-z_$][\w$]*)\s*=\s*theme\.border\b(?!\w)/g,
-    )) {
-      if (local !== undefined) locals.add(local);
-    }
+    const walk = (node: ts.Node): void => {
+      if (
+        ts.isVariableDeclaration(node) &&
+        ts.isIdentifier(node.name) &&
+        node.initializer !== undefined &&
+        ts.isPropertyAccessExpression(node.initializer) &&
+        node.initializer.name.text === "border" &&
+        node.initializer.expression.getText() === "theme"
+      ) {
+        locals.add(node.name.text);
+      }
+      ts.forEachChild(node, walk);
+    };
+    walk(source);
     return locals;
   }
 
@@ -2774,8 +2767,11 @@ describe("a control's edge is not the divider colour", () => {
 
     for (const file of files) {
       const text = readFileSync(file, "utf8");
+      // A cheap skip, and safe against comments in the direction that matters:
+      // every real use contains this text, so a file it skips has none. A file
+      // that mentions the token only in prose costs one parse and finds
+      // nothing — `dividerLocals` reads the tree.
       if (!/theme\.border\b|elevation\.\w+\.borderColor/.test(text)) continue;
-      const names = dividerLocals(text);
       const source = ts.createSourceFile(
         file,
         text,
@@ -2783,6 +2779,7 @@ describe("a control's edge is not the divider colour", () => {
         true,
         ts.ScriptKind.TSX,
       );
+      const names = dividerLocals(source);
       let inlineAt = 0;
       const walk = (node: ts.Node): void => {
         // Every object literal, not only a property's initializer: an inline
@@ -2826,6 +2823,31 @@ describe("a control's edge is not the divider colour", () => {
   });
 });
 
+/**
+ * **Every scroller declares which kind it is.**
+ *
+ * A scroller is the outermost one on its screen — the page, whose movement is
+ * its own feedback — or a bounded one inside something else, whose end must be
+ * its end. Nothing about a `<ScrollView>` says which, so each one spreads the
+ * helper that matches (`primitives/nested-scroll.ts`), and this rule is what
+ * makes "each one" true.
+ *
+ * **What this rule is and is not.** It is a census: every scroller has made a
+ * declaration. It is *not* the guarantee — `primitives/nested-scroll.test.tsx`
+ * asserts the rendered `overscroll-behavior` of each helper's output, in the
+ * DOM, which is the only place the behaviour is real. Two earlier versions of
+ * this check tried to be the guarantee by reading source, and both could be
+ * spelled around while the page still chained.
+ *
+ * **Parsed with TypeScript, not with a regular expression.** The hand-rolled
+ * slicer this replaces was defeated by three ordinary spellings — a `>` inside
+ * a string attribute (`testID="a>b"`) ended the tag early, an unbalanced `}`
+ * in one truncated the attribute list, and a generic `<FlatList<Row>>` made
+ * the rule unsatisfiable. A trailing `// comment` inside an opening tag also
+ * survived the line-start comment strip and could satisfy the check by naming
+ * a helper it did not call. The compiler's own parser has no such edges, and
+ * it is already a dependency of this repository.
+ */
 describe("every scroller declares which kind it is", () => {
   const SCROLLERS = new Set(["ScrollView", "FlatList", "SectionList", "VirtualizedList"]);
   const SPREAD_HELPERS = new Set(["nestedScrollProps", "horizontalScrollProps", "pageScrollProps"]);

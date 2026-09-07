@@ -370,9 +370,10 @@ export type Backfill = {
  *
  * **One home, and it is here: every hand-written replica trigger lives in the
  * `objects` hook of the last step that rebuilds `transactions`, and it moves
- * when that step does.** All six of them — H1a's four
- * `*_category_not_archived_*` and WA017's two
- * `transactions_category_kind_matches_type_*` — are created by
+ * when that step does.** All seven of them — H1a's four
+ * `*_category_not_archived_*`, WA017's two
+ * `transactions_category_kind_matches_type_*` and C1's
+ * `transactions_lines_sum_matches_update` — are created by
  * `REPLICA_BACKFILLS["0010_schema"].objects` below, and nothing else in this
  * package writes a trigger.
  *
@@ -506,26 +507,50 @@ END`,
  *
  * **Compared as scaled integers, never as `REAL`.** A first version cast both
  * sides to `REAL`, which is a double, and money in a double is wrong in both
- * directions: `0.01 + 1.62` sums to `1.6300000000000001` and would have
- * *refused a correct write*, while two amounts differing below the double's
- * precision would have been *accepted as equal*. Every amount here is written
- * by `money.toMoney` at exactly 8 decimal places (`SPEC.md` §7.0), so removing
- * the point yields the exact value in units of 1e-8 and `SUM` over those is
- * integer arithmetic. `money.toMoney` is what keeps that premise true: it is
- * the only writer of these columns and it emits `toFixed(8)`. (Not
- * `assertMoneyScale`, which rejects *more* decimals than a currency allows and
- * would pass a two-decimal string happily — the SQLite column is plain `text`
- * with no transform of its own.)
+ * directions: `0.01 + 1.62` sums to `1.6300000000000001` and *refused a
+ * correct write* — which is the worse half, because a `SqliteError` is not a
+ * `LocalRefusal`, so the outbox keeps a real entry the server will accept and
+ * the two diverge. Removing the decimal point yields the exact value in units
+ * of 1e-8, and `SUM` over those is integer arithmetic.
  *
- * The bound is SQLite's signed 64-bit integer: this is exact to ±92,233,720,368
- * units of currency and would silently overflow past it. `numeric(20,8)` allows
- * more; nothing in a personal ledger comes near, and a trigger that is exact to
- * ninety-two billion is a better guarantee than one that is approximate at ten.
+ * **It abstains rather than guess.** That premise — every amount at exactly
+ * eight decimals — is true of every row `money.toMoney` writes and is *not*
+ * enforced by the column, which is plain `text` with no transform and no
+ * CHECK. So the `WHEN` requires it, of the parent and of every line, and a row
+ * at any other scale simply does not fire the trigger. A backstop that refuses
+ * a mathematically correct write is worse than one that stays quiet: the
+ * service check in `set-transaction-lines.executor.ts` is exact at every scale
+ * and is what actually guards the write; this is the layer for when that code
+ * is wrong.
+ *
+ * The same reasoning bounds the top end. Signed 64-bit integers are exact to
+ * ±92,233,720,368 units of currency and `zMoney` admits ten times that, so the
+ * `WHEN` abstains above it too rather than comparing two overflowed sums.
+ *
+ * **It never fires on the one path that legitimately restates a total, and
+ * that is by design.** `set_transaction_lines` carrying an `amount_original`
+ * deletes the old lines first, so the `UPDATE` lands with none under it and
+ * the `WHEN`'s first clause is already false; the new lines are inserted
+ * after, and this trigger watches `transactions`, not `transaction_lines`.
+ * The sum for that path is checked in `set-transaction-lines.executor.ts`,
+ * against the amount arriving in the *same* operation — which is the whole of
+ * how a split's total can change on a device that cannot defer a constraint.
+ * What this trigger is for is the other direction: an `amount_original` moved
+ * on its own, by `update_transaction` or by code that bypasses both, while
+ * lines still sit under it.
  */
 const LINE_SUM_TRIGGERS: readonly string[] = [
   `CREATE TRIGGER IF NOT EXISTS \`transactions_lines_sum_matches_update\`
 AFTER UPDATE OF \`amount_original\` ON \`transactions\`
 WHEN EXISTS (SELECT 1 FROM \`transaction_lines\` WHERE \`transaction_id\` = NEW.\`id\`)
+  AND length(NEW.\`amount_original\`) - instr(NEW.\`amount_original\`, '.') = 8
+  AND abs(CAST(NEW.\`amount_original\` AS REAL)) < 92233720368
+  AND NOT EXISTS (
+    SELECT 1 FROM \`transaction_lines\`
+    WHERE \`transaction_id\` = NEW.\`id\`
+      AND (length(\`amount\`) - instr(\`amount\`, '.') <> 8
+        OR abs(CAST(\`amount\` AS REAL)) >= 92233720368)
+  )
 BEGIN
 	SELECT RAISE(ABORT, 'transaction lines must sum to the transaction amount (§10.3)')
 	WHERE (
@@ -643,16 +668,21 @@ export const REPLICA_BACKFILLS: Readonly<Record<string, Backfill>> = {
   },
   "0010_schema": {
     /**
-     * **The replica's six hand-written triggers, all of them, in one place.**
+     * **The replica's seven hand-written triggers, all of them, in one place.**
      * H1a's four `*_category_not_archived_*` (an archived category is never
-     * newly assigned — `packages/db`'s `assert_category_not_archived`) and
+     * newly assigned — `packages/db`'s `assert_category_not_archived`),
      * WA017's two `transactions_category_kind_matches_type_*` (a row's type
      * matches its category's kind — `packages/db/drizzle/
      * 0011_transaction_scale_and_category_kind.sql`'s
-     * `assert_category_kind_matches_type`). Both are backstops in `CLAUDE.md`'s
-     * sense — "holds when code is wrong" — under executors that already refuse
-     * with a real message: `assertCategoryNotArchived` for the first,
-     * `categorize-batch.executor.ts`'s own `WHERE` for the second.
+     * `assert_category_kind_matches_type`) and C1's
+     * `transactions_lines_sum_matches_update` (a split's lines still sum to
+     * its parent — `packages/db`'s deferred `assert_transaction_lines_sum`,
+     * which SQLite cannot defer, hence one trigger rather than two). All are
+     * backstops in `CLAUDE.md`'s sense — "holds when code is wrong" — under
+     * executors that already refuse with a real message:
+     * `assertCategoryNotArchived` for the first,
+     * `categorize-batch.executor.ts`'s own `WHERE` for the second, and
+     * `set-transaction-lines.executor.ts`'s sum check for the third.
      *
      * **On `0010_schema` because that is the last step that rebuilds
      * `transactions` — not because it is the head.** It is not the head:

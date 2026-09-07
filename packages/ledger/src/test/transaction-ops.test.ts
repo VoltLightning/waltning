@@ -833,9 +833,17 @@ describe("set_transaction_lines", () => {
   });
 
   /**
-   * The other direction: a difference a double cannot resolve. Written
+   * **The other direction: a difference a double cannot resolve.** Written
    * straight to the replica, because the executor's decimal check would refuse
    * it first and the point is what the trigger does when the code is wrong.
+   *
+   * **A billion, not eighteen.** The first version of this test used
+   * `18.00000000` against `18.00000001` and called it "below floating-point
+   * precision" — a double resolves that trivially (ulp at 18 is about
+   * 3.6e-15), so the test was green against the very code it claims to
+   * regress. The crossover is at 1e9: `1000000000.00000001` and
+   * `1000000000.00000000` are the same double, and the `REAL` comparison
+   * accepted them as equal.
    */
   it("refuses a difference below floating-point precision", () => {
     const v = () => readTxn()?.version ?? 0;
@@ -846,11 +854,12 @@ describe("set_transaction_lines", () => {
       input: {
         transactionId: TXN,
         version: v(),
+        amountOriginal: "1000000000",
         lines: [
           {
             id: id<"transactionLines">("00000000-0000-4000-8000-0000000000e1"),
             description: "Whole",
-            amount: "18",
+            amount: "1000000000",
           },
         ],
       },
@@ -859,7 +868,7 @@ describe("set_transaction_lines", () => {
     expect(() =>
       stores.ledger.replica.db
         .update(transactions)
-        .set({ amountOriginal: money.toMoney("18.00000001") })
+        .set({ amountOriginal: money.toMoney("1000000000.00000001") })
         .where(eq(transactions.id, TXN))
         .run(),
     ).toThrow(/lines must sum/);
@@ -1038,6 +1047,32 @@ describe("set_transaction_lines", () => {
 
     expect(entries()).toHaveLength(before);
     expect(readLines()).toHaveLength(0);
+  });
+
+  /**
+   * **And the restated total, on the one input where no line covers it.** A
+   * 3dp total that *matches* its lines needs a 3dp line to sum to it, so the
+   * loop above catches those; an **empty** set skips both the loop and the sum
+   * check, and left `amount_original` guarded in `apply` alone — clearing a
+   * split while restating the total queued an entry `apply` then refused.
+   * That is the same orphan H2 names, through the one door it left open.
+   */
+  it("refuses a restated total past the currency's scale on an empty set (H2)", () => {
+    const v = () => readTxn()?.version ?? 0;
+    const entries = () => stores.ledger.outbox.db.select().from(outbox).all();
+    const before = entries().length;
+
+    expect(() =>
+      writeLocally(stores.ledger, {
+        executor: setTransactionLinesExecutor,
+        registry: ledgerRegistry,
+        capture,
+        input: { transactionId: TXN, version: v(), amountOriginal: "18.005", lines: [] },
+      }),
+    ).toThrow(/holds more decimal places/);
+
+    expect(entries()).toHaveLength(before);
+    expect(readTxn()?.amountOriginal).toBe("18.00000000");
   });
 });
 

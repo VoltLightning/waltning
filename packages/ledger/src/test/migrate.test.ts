@@ -1788,11 +1788,16 @@ describe("a constraint declared in the schema is present on the device", () => {
       // a bare `unique()` could not express — land in `sqlite_master` as
       // ordinary indexes, so they are listed together with the plain ones.
       //
-      // **What this cannot see:** the autoindexes SQLite creates for a `UNIQUE`
-      // column or a composite primary key. Those are named `sqlite_autoindex_*`
-      // and `objects()` filters that prefix, so fifteen of them go uncounted —
-      // including `counterparty_distinct_pairs`. They are the engine's own and
-      // move with the table; the ones listed here are the chain's.
+      // **What this cannot see:** the autoindexes SQLite creates to back a
+      // primary key it does not store as the rowid. Those are named
+      // `sqlite_autoindex_*` and `objects()` filters that prefix, so fifteen go
+      // uncounted — thirteen single-column `text primary key`s (every id
+      // column, since a TEXT key is not a rowid alias), the composite key on
+      // `counterparty_distinct_pairs`, and the journal's own `tag`. Not one
+      // comes from a `UNIQUE` column: every uniqueness rule this schema states
+      // is a named `uniqueIndex(...)`, which is why they are all in the list
+      // below. They are the engine's own and move with the table; the ones
+      // listed here are the chain's.
       "counterparties_name_uq",
       "counterparty_merges_loser_open_uq",
       "dashboard_layouts_one_active",

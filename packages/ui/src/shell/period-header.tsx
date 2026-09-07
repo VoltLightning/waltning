@@ -58,11 +58,27 @@ export function PeriodHeader({
   return (
     <View style={styles.root}>
       <View style={styles.stepper}>
-        <IconButton label={t("shell.periodPrevious")} onPress={onPrevious} size={32}>
+        {/*
+          `tone` follows this header's own: the arrows are `shellText` on the
+          band, and `IconButton`'s ground-family hover fill behind that ink is
+          1.10:1 — a control that vanishes under a pointer. The default is the
+          band, so forgetting it here is the failing case, not the safe one.
+        */}
+        <IconButton
+          label={t("shell.periodPrevious")}
+          onPress={onPrevious}
+          size={32}
+          tone={onSurface ? "ground" : "shell"}
+        >
           <Text style={[styles.arrow, onSurface ? styles.labelOnSurface : null]}>‹</Text>
         </IconButton>
         <Text style={[styles.label, onSurface ? styles.labelOnSurface : null]}>{label}</Text>
-        <IconButton label={t("shell.periodNext")} onPress={onNext} size={32}>
+        <IconButton
+          label={t("shell.periodNext")}
+          onPress={onNext}
+          size={32}
+          tone={onSurface ? "ground" : "shell"}
+        >
           <Text style={[styles.arrow, onSurface ? styles.labelOnSurface : null]}>›</Text>
         </IconButton>
       </View>

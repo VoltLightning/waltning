@@ -155,7 +155,7 @@ const useStyles = makeStyles((theme) => ({
   inkSecondary: { color: theme.accentText },
   inkGhost: { color: theme.textMuted },
   /**
-   * `textMuted` on `hoverFill` measures 4.47:1 — under the 4.5:1 floor by a
+   * `textMuted` on `hoverFill` measured 4.47:1 when this was written — under the 4.5:1 floor by a
    * hair, and invisible until a real story left a ghost button hovered under
    * axe (`QuickAddForm`'s `More`). `inkSecondary` and `inkDanger` sit on the
    * same fill well clear of the line, so only ghost needs its own hover ink;

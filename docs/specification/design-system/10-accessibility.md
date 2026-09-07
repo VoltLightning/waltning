@@ -2,7 +2,7 @@
 
 | Requirement | State | Action |
 |---|---|---|
-| Contrast 4.5:1 body / 3:1 large | ⚠️ verify | Measure `muted #5f7168` on white, amber ink on amber (tightest pair), and ramp 300–400 tiles |
+| Contrast 4.5:1 body / 3:1 large | ✅ | `theme.test.tsx` measures every text pair and every control edge against **all six fills** each lands on, both themes, and fails under 4.5:1 (3:1 for a boundary). `muted` is `#686154`, tightest at 4.54 on `pressed`. What it cannot reach: an alpha overlay on the shell (`relativeLuminance` is hex-only) and non-text marks the axe pass does not cover |
 | Target ≥ 44px (WCAG 2.5.8) | ❌ fails | Chips measure ~34px. Tab-bar glyphs unverified |
 | Focus visible | ✅ | 2px `green-500`, 2px offset |
 | Colour not sole encoding | ✅ specified | Pills and overrides carry text; composition charts cap at 5 segments with direct labels (§7.2); the line chart pairs hue with marker shape and end labels (§7.1). Verify on implementation |

@@ -3,16 +3,16 @@
  *
  * **Vendored rather than depended on, and the reason is a number.** §2.8 names
  * Phosphor, and `phosphor-react-native` is the obvious way to get it — but its
- * entry re-exports all 1,512 icons from 63 MB of source, Metro does not
- * tree-shake across that, and adding it took the iOS bundle from **6.3 MB to
- * 13 MB**. Its per-icon subpath (`phosphor-react-native/src/icons/House`)
+ * entry re-exports all 1,512 icons (about 24 MB of published source across
+ * `src` and `lib`), Metro does not tree-shake across that, and adding it took
+ * the iOS bundle from **6.3 MB to 13 MB** — the measurement that decided this. Its per-icon subpath (`phosphor-react-native/src/icons/House`)
  * publishes raw `.tsx`, which does not survive this repository's
  * `exactOptionalPropertyTypes` and does not run under the test resolver.
  *
  * So the renderer stays a dependency (`react-native-svg`, Expo 57's pinned
  * 15.15.4, bundled in Expo Go — no EAS cutover) and the *shapes* live here.
- * Same geometry, from Phosphor 2.x's own `duotone` definitions, at about six
- * kilobytes. Phosphor Icons is MIT-licensed, © 2023 Phosphor Icons —
+ * Same geometry, from Phosphor 2.x's own `duotone` definitions, in a little
+ * over five kilobytes of this file. Phosphor Icons is MIT-licensed, © 2023 Phosphor Icons —
  * https://phosphoricons.com.
  *
  * **Adding a glyph is a copy, not an install.** Take the `duotone` entry from

@@ -1719,11 +1719,21 @@ describe("phone ledger controller — transaction detail writes (C5)", () => {
         (acc, line) => money.add(acc, line.amount),
         money.toMoney("0"),
       );
-      if (input.lines.length > 0 && !money.eq(sum, money.abs(row.amount))) {
-        throw new Error(`set_transaction_lines: lines sum to ${sum}, the transaction is 48.90`);
+      // The real executor judges the lines against the *patched* amount when
+      // one travels with them — the device's stand-in for Postgres's deferred
+      // constraint. A fake that judged against the stored amount would refuse
+      // the one flow this fixture exists to exercise.
+      const against = input.amountOriginal ?? money.abs(row.amount);
+      if (input.lines.length > 0 && !money.eq(sum, against)) {
+        throw new Error(
+          `set_transaction_lines: lines sum to ${sum}, the transaction is ${against}`,
+        );
       }
       row = {
         ...row,
+        ...(input.amountOriginal === undefined
+          ? {}
+          : { amount: money.toMoney(`-${input.amountOriginal}`) }),
         lines: input.lines.map((line) => ({
           id: line.id,
           description: line.description,
@@ -1866,8 +1876,19 @@ describe("phone ledger controller — transaction detail writes (C5)", () => {
     expect(controller.getTransaction(TXN)?.lines).toMatchObject([{ description: "Groceries" }]);
   });
 
-  /** The plan's other named case: a lines sum mismatch reaches fieldErrors too. */
-  it("a lines sum mismatch reaches fieldErrors, plain text, no messageKey", () => {
+  /**
+   * **A sum that differs restates the total — it is not a refusal here.**
+   *
+   * The plan named this as the second `fieldErrors` case, from when the
+   * controller could only send lines. S06 has no amount editor: `LinesCard`
+   * renders the total read-only, so editing the lines is the *only* way a user
+   * can say the transaction was 10.00 and not 48.90 — and refusing it would
+   * leave a wrong amount uncorrectable on the device. The executor's own
+   * refusal is still the guarantee for a mismatched *pair*, covered in
+   * `@waltning/ledger`'s `transaction-ops.test.ts`; the controller cannot
+   * produce one, because it derives the amount from the same lines.
+   */
+  it("restates the total when the new lines sum to something else", () => {
     const { controller } = detailHarness();
     const result = controller.setTransactionLines(TXN, 1, [
       {
@@ -1876,12 +1897,57 @@ describe("phone ledger controller — transaction detail writes (C5)", () => {
         amount: "10.00",
       },
     ]);
-    expect("fieldErrors" in result && result.fieldErrors).toEqual([
+    expect(idOf(result)).toBe(TXN);
+    const after = controller.getTransaction(TXN);
+    expect(money.abs(after?.amount ?? money.toMoney("0"))).toBe("10.00000000");
+    expect(after?.lines).toMatchObject([{ description: "Groceries" }]);
+  });
+
+  /**
+   * **The re-split that changes the total, through the controller.**
+   *
+   * The ledger-level test for this passed by calling the executor directly,
+   * which is the one path a screen does not have: the controller built the
+   * input literally with no `amountOriginal` in it, so the field was
+   * unreachable from the app and the deadlock it exists to break was exactly
+   * as present as before. A capability tested only below the layer that
+   * exposes it is not tested.
+   *
+   * The controller derives it from the lines and the row it already reads —
+   * S06 has no amount editor, so the lines are the whole of what the user can
+   * state.
+   */
+  it("setTransactionLines carries a new total, so a split can be re-split to one", () => {
+    const { controller, setTransactionLines } = detailHarness();
+    const result = controller.setTransactionLines(TXN, 1, [
       {
-        path: "",
-        message: "set_transaction_lines: lines sum to 10.00000000, the transaction is 48.90",
+        id: "11111111-1111-4111-8111-111111111111",
+        description: "Groceries",
+        amount: "30.00",
+      },
+      {
+        id: "22222222-2222-4222-8222-222222222222",
+        description: "Flowers",
+        amount: "30.00",
       },
     ]);
+    expect(idOf(result)).toBe(TXN);
+    expect(setTransactionLines.mock.calls[0]?.[0]).toMatchObject({
+      amountOriginal: "60.00000000",
+    });
+  });
+
+  /** Omitted, it is absent from the input — an ordinary re-split cannot move the total by accident. */
+  it("sends no amount when the re-split does not restate the total", () => {
+    const { controller, setTransactionLines } = detailHarness();
+    controller.setTransactionLines(TXN, 1, [
+      {
+        id: "11111111-1111-4111-8111-111111111111",
+        description: "Groceries",
+        amount: "48.90",
+      },
+    ]);
+    expect(setTransactionLines.mock.calls[0]?.[0]).not.toHaveProperty("amountOriginal");
   });
 
   /**
