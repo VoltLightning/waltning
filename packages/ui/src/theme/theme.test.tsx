@@ -100,12 +100,21 @@ describe("the token spec and the tokens agree", () => {
    */
   function rowsFrom(markdown: string): Map<string, string> {
     const rows = new Map<string, string>();
-    for (const [, name, value] of markdown.matchAll(
-      /^\|\s*`([a-zA-Z][\w-]*)`\s*\|\s*`(#[0-9a-f]{6}|\d+(?:px)?)`\s*\|/gm,
+    // One or two backticked names — the dark table writes three rows as
+    // `` `subtleFill` / `tagNeutralFill` ``, and a pattern that stopped at the
+    // first name skipped seven role values in silence.
+    for (const [, first, second, value] of markdown.matchAll(
+      /^\|\s*`([a-zA-Z][\w-]*)`(?:\s*\/\s*`([a-zA-Z][\w-]*)`)?\s*\|\s*`(#[0-9a-f]{6}|\d+(?:px)?)`\s*\|/gm,
     )) {
-      if (name === undefined || value === undefined) continue;
-      const camel = name.replace(/-([a-z])/g, (_, c: string) => c.toUpperCase());
-      if (!rows.has(camel)) rows.set(camel, value);
+      if (value === undefined) continue;
+      for (const name of [first, second]) {
+        if (name === undefined) continue;
+        // `\w`, not `[a-z]`: `green-100` has to fold to `green100`, and the
+        // nine-step chart ramp — "the **entire** chart palette" — was the
+        // largest thing this test was silently not comparing.
+        const camel = name.replace(/-(\w)/g, (_, c: string) => c.toUpperCase());
+        if (!rows.has(camel)) rows.set(camel, value);
+      }
     }
     return rows;
   }
@@ -122,6 +131,7 @@ describe("the token spec and the tokens agree", () => {
     const darkRows = rowsFrom(SPEC.slice(darkAt));
 
     const disagreements: string[] = [];
+    const compared = { light: 0, dark: 0 };
     for (const [rows, palette, label] of [
       [lightRows, color, "light"],
       [darkRows, dark, "dark"],
@@ -129,12 +139,23 @@ describe("the token spec and the tokens agree", () => {
       for (const [name, stated] of rows) {
         const actual = (palette as Record<string, unknown>)[name];
         if (typeof actual !== "string" || !actual.startsWith("#")) continue;
+        compared[label] += 1;
         if (actual !== stated)
           disagreements.push(`${label} ${name}: spec ${stated}, code ${actual}`);
       }
     }
 
     expect(disagreements, "change the spec in the same PR — CLAUDE.md's rule").toEqual([]);
+
+    // **The count of keys actually compared, not of rows parsed.** The first
+    // version guarded with `rowsFrom(SPEC).size`, which counts what the regex
+    // read — so a name the folder mangled (`green-100`) or a row shape it could
+    // not match still counted, and nine chart colours plus seven dark roles went
+    // uncompared behind a green guard.
+    expect(compared, "a drop here means rows stopped being compared").toEqual({
+      light: 38,
+      dark: 30,
+    });
   });
 
   it("states the same radius scale", () => {
@@ -149,9 +170,15 @@ describe("the token spec and the tokens agree", () => {
     expect(disagreements).toEqual([]);
   });
 
-  it("reads a table at all", () => {
-    // A regex that matched nothing would make both rules above vacuous.
-    expect(rowsFrom(SPEC).size).toBeGreaterThan(30);
+  it("compares the whole chart ramp", () => {
+    // Named on its own because §2.1 calls the ramp "the **entire** chart
+    // palette" and it was the largest silent gap: nine keys, none compared.
+    const rows = rowsFrom(SPEC);
+    for (const step of [100, 200, 300, 400, 500, 600, 700, 800, 900]) {
+      expect(rows.get(`green${step}`), `green-${step} is stated in the spec`).toBe(
+        (color as Record<string, string>)[`green${step}`],
+      );
+    }
   });
 });
 
@@ -252,26 +279,6 @@ describe("a component follows the active theme", () => {
     ]),
   )("keeps %s at the 3:1 boundary floor", (_label, edge, fill) => {
     expect(contrastRatio(edge, fill)).toBeGreaterThanOrEqual(3);
-  });
-
-  /**
-   * **`border` is a divider, and the test says which is which.**
-   *
-   * `02-tokens` calls `border` "card edges and dividers" — a boundary between
-   * two *areas*, which WCAG sets no floor for, and at 1.02:1 against the fills
-   * it sits on it could not meet one. That is fine until it lands on a control:
-   * `Button variant="secondary"` and `variant="danger"` have no fill, so their
-   * edge is the whole of what identifies them, and drawing it in a divider
-   * colour made two buttons that cannot be located. Stated here as the gap
-   * between the two roles, so the day someone reaches for `border` on a
-   * control the number is already written down.
-   */
-  it.each([
-    ["light", light],
-    ["dark", dark],
-  ])("keeps the %s divider well below every control edge", (_name, theme) => {
-    expect(contrastRatio(theme.border, theme.surface)).toBeLessThan(2);
-    expect(contrastRatio(theme.borderInteractive, theme.surface)).toBeGreaterThanOrEqual(3);
   });
 
   it.each([

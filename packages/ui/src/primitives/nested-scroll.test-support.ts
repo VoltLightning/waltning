@@ -18,10 +18,10 @@ import { screen } from "@testing-library/react";
 import { expect } from "vitest";
 
 /**
- * `contain` on the axis this scroller scrolls, and **not** on the other one: a
- * `ScrollView` gets `overflow: hidden` on its cross axis, so containing there
- * swallows a drag it cannot use and an ancestor can — a horizontal chip row
- * inside a sheet must still let a vertical drag move the sheet.
+ * A vertical scroller contains both axes — its own travel, and the browser's
+ * horizontal back-gesture on the axis it cannot use. A horizontal chip row
+ * contains `x` alone, because above *it* is the sheet or page that scrolls
+ * vertically, and that drag has to reach it.
  */
 export function expectContainsOverscroll(
   target: string | HTMLElement,
@@ -31,8 +31,11 @@ export function expectContainsOverscroll(
   // draws two of the same kind (`CategorySheet`'s chip rows) and the test has
   // to say which.
   const style = getComputedStyle(typeof target === "string" ? screen.getByTestId(target) : target);
-  const scrolled = axis === "vertical" ? "y" : "x";
-  const cross = axis === "vertical" ? "x" : "y";
-  expect(style.getPropertyValue(`overscroll-behavior-${scrolled}`)).toBe("contain");
-  expect(style.getPropertyValue(`overscroll-behavior-${cross}`)).not.toBe("contain");
+  expect(style.getPropertyValue("overscroll-behavior-x")).toBe("contain");
+  if (axis === "vertical") {
+    expect(style.getPropertyValue("overscroll-behavior-y")).toBe("contain");
+  } else {
+    // A chip row leaves `y` free so the sheet or page under it still moves.
+    expect(style.getPropertyValue("overscroll-behavior-y")).not.toBe("contain");
+  }
 }

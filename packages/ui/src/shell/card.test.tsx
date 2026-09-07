@@ -125,9 +125,10 @@ it("the page scroller shows no scroll indicator", () => {
 
 /**
  * **And it contains nothing**, which is the other half of being the page.
- * Containment is for a scroller with something behind it; this one *is* what
- * is behind everything else, and containing here would stop the browser's own
- * pull-to-refresh and rubber-band without anything asking it to. Asserted so
+ * Containment stops *chaining* and leaves an element's own bounce and
+ * pull-to-refresh alone — suppressing those is `overscroll-behavior: none`,
+ * not `contain`. A page scroller has nothing above it to chain into, so the
+ * declaration would state something untrue about where it sits. Asserted so
  * that "declared as the page" cannot quietly become "declared and contained".
  */
 it("the page scroller contains neither axis", () => {

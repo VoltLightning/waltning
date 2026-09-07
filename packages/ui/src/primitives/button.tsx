@@ -136,13 +136,15 @@ const useStyles = makeStyles((theme) => ({
   // pointer — and an outlined button drawn in it is a control WCAG 1.4.11 says
   // cannot be located.
   //
-  // `borderStrong` rather than `borderInteractive`, which is the input's
-  // resting edge: an action and a receptacle should not read as the same
-  // object, and on `borderInteractive` a *hovered* `TextField` (which
-  // strengthens to `borderStrong`) read heavier than a button at rest. The
-  // ramp's own words are "an edge that must read alone", which is a button
-  // before it is a field.
-  variantSecondary: { borderWidth: 1, borderColor: theme.borderStrong },
+  // `borderInteractive`, the resting edge every other control in the system
+  // uses — `Chip`, the account tile, the category cell, the currency tile, the
+  // composer's kind option. `borderStrong` was tried here on the argument that
+  // an action should outrank a receptacle, and it does not survive: the ramp is
+  // documented as "a selected control, a focus-adjacent edge", a resting button
+  // is neither, and a `TextField` strengthens to `borderStrong` on hover *and*
+  // focus, so the separation lasted exactly one state. A button that starts at
+  // the top of the ramp also has nowhere left to go.
+  variantSecondary: { borderWidth: 1, borderColor: theme.borderInteractive },
   variantGhost: {},
   variantDanger: { borderWidth: 1, borderColor: theme.dangerBorder },
 

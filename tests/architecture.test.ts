@@ -2656,72 +2656,168 @@ describe("a refusal is never reported as a success", () => {
  * argued into this list in the open, which is the point.
  */
 describe("a control's edge is not the divider colour", () => {
+  /**
+   * Every style object that draws a full box in `theme.border` — the divider
+   * colour — keyed by the style it belongs to. Genuine area edges are named in
+   * `AREA_EDGES` below with their reason; anything else is a control drawn in a
+   * value that cannot carry WCAG 1.4.11's 3:1.
+   *
+   * **No gate on what the file renders.** An earlier version only looked at
+   * files naming `Pressable`, `TextInput` or `TouchableOpacity`, which excluded
+   * eight of the thirty files that draw a border — including
+   * `threshold-slider.tsx`, an `accessibilityRole="adjustable"` control built
+   * from a gesture detector — and left two of the four allowlist entries
+   * permanently unreachable. The allowlist is the decision surface; a gate in
+   * front of it only decides which decisions get made.
+   */
   const AREA_EDGES = new Map([
     [
       "packages/ui/src/primitives/select.tsx#panel",
-      "the dropdown's own surface — a floating card, not the control that opens it",
+      "the dropdown's own surface, not the control that opens it",
     ],
     [
       "packages/ui/src/primitives/toggle.tsx#thumb",
-      "identified by its fill against the track it rides on, never by this edge",
+      "identified by its fill against the track it rides on",
     ],
     [
       "packages/ui/src/transactions/categorize-selection-confirm.tsx#root",
-      "a card: it carries `backgroundColor: theme.surface` and holds the controls",
+      "a card: it carries a surface fill and holds the controls",
     ],
     [
       "packages/ui/src/counterparties/settle-sheet.tsx#result",
       "a result box — read, never pressed",
     ],
+    // The four that reach the divider through `theme.elevation.<role>` — the
+    // house idiom for a card's own 1px edge, and the alias that defeated the
+    // first version of this rule. Each is a surface holding content, never a
+    // control: `Card` and `WidgetCard` are the boxes `05-composites` defines,
+    // and the sheet and dialog are the two modal grounds.
+    ["packages/ui/src/shell/card.tsx#card", "the `Card` surface itself"],
+    ["packages/ui/src/dashboard/widget-card.tsx#card", "the dashboard's own card surface"],
+    ["packages/ui/src/shell/bottom-sheet.tsx#sheet", "the sheet's ground, not a control on it"],
+    [
+      "packages/ui/src/shell/confirm-dialog.tsx#card",
+      "the dialog's ground; its buttons are elsewhere",
+    ],
   ]);
 
-  it("uses theme.border only where the edge belongs to an area", () => {
-    const offenders: string[] = [];
+  const SIDE_WIDTHS = [
+    "borderTopWidth",
+    "borderRightWidth",
+    "borderBottomWidth",
+    "borderLeftWidth",
+  ];
+
+  /**
+   * Is this `borderColor` value the divider, under any of its names?
+   *
+   * **`theme.elevation.<role>.borderColor` is the divider.** `roles.ts` builds
+   * every elevation with `bordered(color.border)`, so that path resolves to
+   * `#eae3d5` — and it is the house idiom for a 1px edge, used by four files.
+   * A control spelling its edge that way is the same defect wearing an alias,
+   * and it defeated the first version of this rule because the `theme.` in
+   * front of it looked like a property access on something else.
+   *
+   * A local bound to `theme.border` in the same file counts too: the
+   * indirection is one line and hides the token from a textual check.
+   */
+  function isDivider(colour: string, locals: ReadonlySet<string>): boolean {
+    if (/theme\.elevation\.\w+\.borderColor\b/.test(colour)) return true;
+    const names = ["theme.border", ...locals];
+    // On a word boundary, or `theme.border` matches `theme.borderInteractive`
+    // — the fix reported as the defect. Anywhere in the value, so a conditional
+    // branch counts: one taken branch at 1.19:1 is a control nobody can locate
+    // half the time.
+    return names.some((name) =>
+      new RegExp(`(^|[^\\w.])${name.replace(/\./g, "\\.")}(?![\\w])`).test(colour),
+    );
+  }
+
+  /** Locals bound to `theme.border` in this file, for the indirection above. */
+  function dividerLocals(text: string): Set<string> {
+    const locals = new Set<string>();
+    for (const [, local] of text.matchAll(
+      /\b(?:const|let)\s+([A-Za-z_$][\w$]*)\s*=\s*theme\.border\b(?!\w)/g,
+    )) {
+      if (local !== undefined) locals.add(local);
+    }
+    return locals;
+  }
+
+  function drawsDividerBox(
+    literal: ts.ObjectLiteralExpression,
+    names: ReadonlySet<string>,
+  ): boolean {
+    const properties = new Map<string, string>();
+    for (const property of literal.properties) {
+      if (!ts.isPropertyAssignment(property)) continue;
+      const key = ts.isIdentifier(property.name) ? property.name.text : property.name.getText();
+      properties.set(key, property.initializer.getText());
+    }
+    const allSides =
+      properties.has("borderWidth") || SIDE_WIDTHS.every((side) => properties.has(side));
+    if (!allSides) return false;
+    const colour = properties.get("borderColor");
+    if (colour === undefined) return false;
+    return isDivider(colour, names);
+  }
+
+  function offences(): string[] {
+    const found: string[] = [];
     const files = ["packages/ui/src", "apps/mobile/src", "apps/mobile/app"]
       .flatMap((root) => sourceFiles(join(repoRoot, root)))
       .filter((file) => !/\.(test|stories)\.tsx?$/.test(file));
 
     for (const file of files) {
       const text = readFileSync(file, "utf8");
-      if (!/\b(Pressable|TextInput|TouchableOpacity)\b/.test(text)) continue;
+      if (!/theme\.border\b|elevation\.\w+\.borderColor/.test(text)) continue;
+      const names = dividerLocals(text);
       const source = ts.createSourceFile(
         file,
         text,
         ts.ScriptTarget.Latest,
         true,
-        ts.ScriptKind.TS,
+        ts.ScriptKind.TSX,
       );
+      let inlineAt = 0;
       const walk = (node: ts.Node): void => {
-        if (ts.isPropertyAssignment(node) && ts.isObjectLiteralExpression(node.initializer)) {
-          const key = ts.isIdentifier(node.name) ? node.name.text : node.name.getText();
-          const body = node.initializer.getText();
-          const dividerEdge = /borderColor:\s*theme\.border\b/.test(body);
-          const allSides = /\bborderWidth:/.test(body);
-          if (dividerEdge && allSides) {
-            const id = `${relative(repoRoot, file)}#${key}`;
-            if (!AREA_EDGES.has(id)) offenders.push(id);
-          }
+        // Every object literal, not only a property's initializer: an inline
+        // `style={{…}}` and a hoisted `const edge = {…}` were both invisible.
+        if (ts.isObjectLiteralExpression(node) && drawsDividerBox(node, names)) {
+          const parent = node.parent;
+          const key =
+            parent !== undefined && ts.isPropertyAssignment(parent)
+              ? ts.isIdentifier(parent.name)
+                ? parent.name.text
+                : parent.name.getText()
+              : `inline@${inlineAt++}`;
+          found.push(`${relative(repoRoot, file)}#${key}`);
         }
         ts.forEachChild(node, walk);
       };
       walk(source);
     }
+    return found;
+  }
 
+  it("uses theme.border only where the edge belongs to an area", () => {
+    const offenders = offences().filter((id) => !AREA_EDGES.has(id));
     expect(
       offenders,
       "a control with no fill is identified by its edge — use theme.borderInteractive, or name the area edge in AREA_EDGES with its reason",
     ).toEqual([]);
   });
 
-  it("names an existing style for every allowed area edge", () => {
-    // An allowlist that outlives the style it exempts is an allowlist that
-    // silently re-permits the next thing to take that name.
-    const stale = [...AREA_EDGES.keys()].filter((id) => {
-      const [file, key] = id.split("#");
-      const path = join(repoRoot, file ?? "");
-      if (!existsSync(path)) return true;
-      return !new RegExp(`\\b${key}:\\s*\\{`).test(readFileSync(path, "utf8"));
-    });
+  /**
+   * An allowlist that outlives the style it exempts silently re-permits the
+   * next thing to take that name. Checked against what the rule actually finds,
+   * rather than by grepping for the key — a docblock quoting `result: {` used
+   * to satisfy that, and this repository's docblocks quote style keys
+   * constantly.
+   */
+  it("names a style the rule actually finds, for every allowed area edge", () => {
+    const found = new Set(offences());
+    const stale = [...AREA_EDGES.keys()].filter((id) => !found.has(id));
     expect(stale, "remove the exemption, or point it at the style that replaced it").toEqual([]);
   });
 });
@@ -2729,7 +2825,7 @@ describe("a control's edge is not the divider colour", () => {
 describe("every scroller declares which kind it is", () => {
   const SCROLLERS = new Set(["ScrollView", "FlatList", "SectionList", "VirtualizedList"]);
   const SPREAD_HELPERS = new Set(["nestedScrollProps", "horizontalScrollProps", "pageScrollProps"]);
-  const STYLE_HELPERS = new Set(["containOverscrollY", "containOverscrollX"]);
+  const STYLE_HELPERS = new Set(["containOverscroll", "containOverscrollX"]);
   const HELPER_FILE = join(repoRoot, "packages/ui/src/primitives/nested-scroll.ts");
 
   /**
@@ -2779,7 +2875,24 @@ describe("every scroller declares which kind it is", () => {
       if (ts.isCallExpression(call) && ts.isIdentifier(call.expression))
         return call.expression.text;
     }
-    return "containOverscroll";
+    // The style constant by its own name, so containing the *wrong* axis shows
+    // up here. A literal string was returned before, which could not tell
+    // `containOverscroll` from `containOverscrollX` — the shape of the original
+    // bug, invisible in the census that exists to name shapes.
+    if (attribute !== undefined && ts.isJsxAttribute(attribute)) {
+      const initializer = attribute.initializer;
+      if (initializer !== undefined && ts.isJsxExpression(initializer)) {
+        const expression = initializer.expression;
+        if (expression !== undefined && ts.isIdentifier(expression)) return expression.text;
+        if (expression !== undefined && ts.isArrayLiteralExpression(expression)) {
+          const named = expression.elements.find(
+            (element) => ts.isIdentifier(element) && STYLE_HELPERS.has(element.text),
+          );
+          if (named !== undefined && ts.isIdentifier(named)) return named.text;
+        }
+      }
+    }
+    return "unknown";
   }
 
   function declaringAttribute(node: ts.JsxOpeningLikeElement): number {
@@ -2818,7 +2931,7 @@ describe("every scroller declares which kind it is", () => {
    * object literal this could inspect; `{...keyboardProps}` is a variable, and
    * resolving it would mean type-checking the repository from a test. JSX props
    * are last-write-wins, so a declaration that nothing follows cannot be
-   * overwritten, whatever the follower holds. `containOverscrollY` is guarded
+   * overwritten, whatever the follower holds. `containOverscroll` is guarded
    * the same way: it is a style attribute, and a later one replaces it.
    */
   function overwritesAfter(node: ts.JsxOpeningLikeElement, declaredAt: number): boolean {

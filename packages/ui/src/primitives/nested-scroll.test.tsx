@@ -15,7 +15,7 @@ import { render, screen } from "@testing-library/react";
 import { ScrollView } from "react-native";
 import { describe, expect, it } from "vitest";
 import {
-  containOverscrollY,
+  containOverscroll,
   horizontalScrollProps,
   nestedScrollProps,
   pageScrollProps,
@@ -38,17 +38,14 @@ function overscroll(testID: string) {
 
 describe("a bounded scroller contains the axis it scrolls", () => {
   /**
-   * `y` contained, `x` deliberately not. `react-native-web` gives a vertical
-   * `ScrollView` `overflow-x: hidden`, which makes it a scroll container on an
-   * axis it cannot use — so containing `x` would swallow a horizontal drag that
-   * belongs to whatever ancestor can scroll. The mirror of the rule the
-   * horizontal helper follows, which is why neither takes the shorthand.
+   * Both axes. The cross axis is `overflow-x: hidden` — a scroll container with
+   * nothing of its own to scroll — so what is contained there is taken from
+   * what is above, and on the web that is the browser's horizontal
+   * back-gesture. A sideways swipe on a picker should not navigate away.
    */
-  it("contains y and leaves x alone", () => {
+  it("contains both axes — its own travel, and the browser's back-gesture", () => {
     render(<ScrollView testID="bounded" {...nestedScrollProps({ flex: 1 })} />);
-    const { x, y } = overscroll("bounded");
-    expect(y).toBe("contain");
-    expect(x).not.toBe("contain");
+    expect(overscroll("bounded")).toEqual({ x: "contain", y: "contain" });
   });
 
   it("keeps the style it was given", () => {
@@ -60,10 +57,8 @@ describe("a bounded scroller contains the axis it scrolls", () => {
   });
 
   it("is what BottomSheet's body spreads directly", () => {
-    render(<ScrollView testID="sheet-body" style={containOverscrollY} />);
-    const { x, y } = overscroll("sheet-body");
-    expect(y).toBe("contain");
-    expect(x).not.toBe("contain");
+    render(<ScrollView testID="sheet-body" style={containOverscroll} />);
+    expect(overscroll("sheet-body")).toEqual({ x: "contain", y: "contain" });
   });
 });
 

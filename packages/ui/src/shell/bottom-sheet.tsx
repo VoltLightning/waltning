@@ -76,7 +76,7 @@ import {
 } from "react-native";
 import { useT } from "../i18n/provider";
 import { Button } from "../primitives/button";
-import { containOverscrollY } from "../primitives/nested-scroll.ts";
+import { containOverscroll } from "../primitives/nested-scroll.ts";
 import { useWindowInsets } from "../primitives/safe-area";
 import { text } from "../theme/fonts.ts";
 import { makeStyles } from "../theme/styles.ts";
@@ -166,7 +166,7 @@ export function BottomSheet({ visible, title, onDismiss, footer, children }: Bot
             </View>
             <ScrollView
               testID="bottom-sheet-body"
-              style={[styles.body, containOverscrollY]}
+              style={[styles.body, containOverscroll]}
               contentContainerStyle={styles.bodyContent}
               keyboardShouldPersistTaps="handled"
             >
