@@ -1752,6 +1752,8 @@ describe("a constraint declared in the schema is present on the device", () => {
     ).toEqual([
       "transaction_lines_category_not_archived_insert",
       "transaction_lines_category_not_archived_update",
+      "transactions_amount_positive_insert",
+      "transactions_amount_positive_update",
       "transactions_category_kind_matches_type_insert",
       "transactions_category_kind_matches_type_update",
       "transactions_category_not_archived_insert",

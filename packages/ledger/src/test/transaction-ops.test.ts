@@ -1050,6 +1050,91 @@ describe("set_transaction_lines", () => {
   });
 
   /**
+   * **H1 — a restated total is positive, and the trigger says so when the
+   * service check is bypassed.**
+   *
+   * `set_transaction_lines` was the one operation that could write
+   * `amount_original` with no positivity rule anywhere:
+   * `setTransactionLinesInput` is a bare `zMoney` (it never sees the row's
+   * `type`, so it cannot know whether a sign is legal), and the replica had no
+   * mirror of `transactions_amount_positive`. A `-10.00` expense is not an
+   * error anyone sees — `money.signed` negates an expense, so it reads back as
+   * **+10.00**, a spend that raises the balance — and the outbox entry
+   * carrying it is one Postgres refuses outright.
+   */
+  it("refuses a negative restated total before queuing an entry (H1)", () => {
+    const v = () => readTxn()?.version ?? 0;
+    const entries = () => stores.ledger.outbox.db.select().from(outbox).all();
+    const before = entries().length;
+
+    expect(() =>
+      writeLocally(stores.ledger, {
+        executor: setTransactionLinesExecutor,
+        registry: ledgerRegistry,
+        capture,
+        input: {
+          transactionId: TXN,
+          version: v(),
+          amountOriginal: "-10.00",
+          lines: [
+            {
+              id: id<"transactionLines">("00000000-0000-4000-8000-0000000000d1"),
+              description: "Espresso",
+              amount: "-10.00",
+            },
+          ],
+        },
+      }),
+    ).toThrow(/amounts are positive and non-zero/);
+
+    expect(entries()).toHaveLength(before);
+    expect(readTxn()?.amountOriginal).toBe("18.00000000");
+  });
+
+  /** Zero with it: `money.margin` throws "amountPivot is zero" on every FX figure of such a row. */
+  it("refuses a restated total of zero (H2)", () => {
+    const v = () => readTxn()?.version ?? 0;
+    expect(() =>
+      writeLocally(stores.ledger, {
+        executor: setTransactionLinesExecutor,
+        registry: ledgerRegistry,
+        capture,
+        input: { transactionId: TXN, version: v(), amountOriginal: "0", lines: [] },
+      }),
+    ).toThrow(/amounts are positive and non-zero/);
+  });
+
+  /**
+   * The trigger underneath it, reached the way `CLAUDE.md` asks — break the
+   * guarantee once, past the code that refuses politely, and prove the
+   * database still holds.
+   */
+  it("the replica refuses a negative amount even when nothing above it does (H1)", () => {
+    expect(() =>
+      stores.ledger.replica.db
+        .update(transactions)
+        .set({ amountOriginal: money.toMoney("-10") })
+        .where(eq(transactions.id, TXN))
+        .run(),
+    ).toThrow(/amounts are positive and non-zero/);
+  });
+
+  /** And an `adjustment` is the exemption the Postgres CHECK carries, not an oversight. */
+  it("the replica allows a negative amount on an adjustment", () => {
+    stores.ledger.replica.db
+      .update(transactions)
+      .set({ type: "adjustment" })
+      .where(eq(transactions.id, TXN))
+      .run();
+    stores.ledger.replica.db
+      .update(transactions)
+      .set({ amountOriginal: money.toMoney("-10") })
+      .where(eq(transactions.id, TXN))
+      .run();
+    expect(readTxn()?.amountOriginal).toBe("-10.00000000");
+  });
+
+  /**
    * **And the restated total, on the one input where no line covers it.** A
    * 3dp total that *matches* its lines needs a 3dp line to sum to it, so the
    * loop above catches those; an **empty** set skips both the loop and the sum

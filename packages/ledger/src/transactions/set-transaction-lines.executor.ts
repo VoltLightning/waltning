@@ -73,7 +73,11 @@ export const setTransactionLinesExecutor = defineLocalExecutor<
   // resolve — the one thing this hook exists to prevent.
   validate: (input, tx) => {
     const current = tx
-      .select({ currency: transactions.currency, deletedAt: transactions.deletedAt })
+      .select({
+        currency: transactions.currency,
+        deletedAt: transactions.deletedAt,
+        type: transactions.type,
+      })
       .from(transactions)
       .where(eq(transactions.id, input.transactionId))
       .get();
@@ -85,6 +89,7 @@ export const setTransactionLinesExecutor = defineLocalExecutor<
         current.currency,
         "set_transaction_lines: amount_original",
       );
+      assertRestatedAmountPositive(input.amountOriginal, current.type);
     }
     for (const line of input.lines) {
       assertMoneyScale(
@@ -98,6 +103,32 @@ export const setTransactionLinesExecutor = defineLocalExecutor<
 
   apply: (input, tx) => replaceLines(input, tx),
 });
+
+/**
+ * **A restated total is positive, unless the row is an adjustment.**
+ *
+ * `transactions_amount_positive` (`0012_fx_rates_derived_and_amount_guards.sql`)
+ * is `amount_original > 0 OR type = 'adjustment'`, and `createTransactionInput`
+ * carries the same rule with the same exemption — but `setTransactionLinesInput`
+ * cannot: it never sees the row's `type`, so the schema has no way to know
+ * whether a sign is legal. The executor does.
+ *
+ * What it prevents is not a caught error. `money.signed` negates an expense, so
+ * an `amount_original` of `-10.00` on one reads back as **+10.00** — a spend
+ * that raises the account balance, in a figure nothing flags. And the outbox
+ * entry carrying it is one Postgres refuses outright, which is the orphaned
+ * intent `validate` exists to keep out of the queue.
+ *
+ * Zero is refused with it, on the same authority: `money.margin` throws
+ * "amountPivot is zero" for every FX figure on that row.
+ */
+function assertRestatedAmountPositive(amount: string, type: string): void {
+  if (type === "adjustment") return;
+  if (money.dec(amount).gt(0)) return;
+  throw new LocalRefusal(
+    `set_transaction_lines: amount_original is ${amount} — amounts are positive and non-zero; \`type\` carries direction (§7.2), and only an adjustment signs (transactions_amount_positive)`,
+  );
+}
 
 function replaceLines(input: SetTransactionLinesInput, tx: ReplicaTx): LocalTransactionRow {
   const current = tx
@@ -138,6 +169,7 @@ function replaceLines(input: SetTransactionLinesInput, tx: ReplicaTx): LocalTran
       current.currency,
       "set_transaction_lines: amount_original",
     );
+    assertRestatedAmountPositive(input.amountOriginal, current.type);
   }
 
   const total = money.sum(input.lines.map((line) => line.amount));

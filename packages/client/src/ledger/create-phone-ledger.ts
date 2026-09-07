@@ -1374,20 +1374,34 @@ export type PhoneLedgerController = {
   setTransactionLines: (
     id: Id<"transactions">,
     version: number,
-    /**
-     * The new set. **A total the lines no longer sum to is carried for the
-     * caller, not asked of it** — the controller reads the parent row here
-     * anyway, so it compares the sum against that row and sends
-     * `amount_original` when the two differ. §10.3's invariant runs both ways
-     * and each operation on the device is its own transaction, so without
-     * carrying the amount a split's total could not change at all:
-     * amount-first is refused by `update_transaction`'s check, lines-first by
-     * this one. Postgres can send the two statements separately because both
-     * sum triggers are `DEFERRABLE INITIALLY DEFERRED`; deriving it here is
-     * the device's version of that deferral, and it keeps the arithmetic out
-     * of the screen that calls this.
-     */
     lines: readonly TransactionLineDraft[],
+    /**
+     * The transaction's own amount, when the re-split changes it. §10.3's
+     * invariant runs both ways and each operation on the device is its own
+     * transaction, so without carrying the amount here a split's total could
+     * not change at all: amount-first is refused by `update_transaction`'s
+     * check, lines-first by this one. Postgres can send the two statements
+     * separately because both sum triggers are `DEFERRABLE INITIALLY
+     * DEFERRED`; this parameter is the device's version of that deferral.
+     *
+     * **Asked for, never derived.** A version of this derived it — sum the
+     * lines, compare against the row, send it when they differ — which
+     * silently converted the sum-mismatch *refusal* into a rewrite of the
+     * transaction's amount, for every caller including the web ledger. It
+     * also summed the caller's raw strings before validating them, so a blank
+     * line threw `DecimalError` out of a controller whose whole contract is to
+     * return `fieldErrors`.
+     *
+     * **No screen passes it yet, and that is a gap with a name.** `LinesCard`
+     * disables `Save` unless the draft sums to the total it was handed, so
+     * S06 can express a re-allocation and not a restatement. Until it grows an
+     * explicit "the total was N" affordance, this parameter is reachable from
+     * the controller's own tests and from the web ledger, and the deadlock it
+     * breaks stays unbroken on the phone.
+     *
+     * Omit it for the ordinary re-split of an unchanged total.
+     */
+    amountOriginal?: string,
   ) => { id: Id<"transactions"> } | { fieldErrors: readonly FieldError[] };
   updateAccount: (
     draft: UpdateAccountDraft,
@@ -3458,29 +3472,13 @@ export function createPhoneLedger(
         throw error;
       }
     },
-    setTransactionLines: (id, version, lines) => {
+    setTransactionLines: (id, version, lines, amountOriginal) => {
       emitClientDiagnostic(diagnostics, {
         scope: "client_action",
         action: "set_transaction_lines",
         phase: "start",
       });
       try {
-        /**
-         * **The restated total, derived rather than asked for.** `detail.amount`
-         * is the *signed* leg and a line's amount is the stored magnitude
-         * (§12's `spent`), so the comparison is against its absolute value —
-         * comparing the two directly would restate the total on every single
-         * expense. An empty set carries nothing: an unsplit transaction has no
-         * sum to keep, and `set_transaction_lines` is not the operation that
-         * changes an amount on its own.
-         */
-        const existing = port.getTransaction(id);
-        const total =
-          lines.length === 0 ? undefined : money.sum(lines.map((l) => money.toMoney(l.amount)));
-        const amountOriginal =
-          total !== undefined && existing !== null && !money.eq(total, money.abs(existing.amount))
-            ? total
-            : undefined;
         const parsed = setTransactionLinesInput.safeParse({
           transactionId: id,
           version,
@@ -3512,7 +3510,7 @@ export function createPhoneLedger(
          * offending line before the write rather than discovered as a
          * silently truncated figure the day the breakdown is read back.
          */
-        const parent = existing;
+        const parent = port.getTransaction(id);
         if (parent !== null) {
           const overScale = parsed.data.lines
             .map((line, index) => ({ line, index }))

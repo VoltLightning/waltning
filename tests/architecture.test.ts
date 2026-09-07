@@ -2724,16 +2724,32 @@ describe("a control's edge is not the divider colour", () => {
    */
   function dividerLocals(source: ts.SourceFile): Set<string> {
     const locals = new Set<string>();
+
+    /**
+     * `theme.border` through the wrappers that do not change the value.
+     * Narrowing the rule to a *bare* property access lost `const edge =
+     * theme.border as string`, which the regex it replaced did match — a
+     * tree-walk is only stricter than a regex where you let it be.
+     */
+    const unwrap = (node: ts.Expression): ts.Expression =>
+      ts.isAsExpression(node) ||
+      ts.isSatisfiesExpression(node) ||
+      ts.isParenthesizedExpression(node) ||
+      ts.isNonNullExpression(node)
+        ? unwrap(node.expression)
+        : node;
+
     const walk = (node: ts.Node): void => {
-      if (
-        ts.isVariableDeclaration(node) &&
-        ts.isIdentifier(node.name) &&
-        node.initializer !== undefined &&
-        ts.isPropertyAccessExpression(node.initializer) &&
-        node.initializer.name.text === "border" &&
-        node.initializer.expression.getText() === "theme"
-      ) {
-        locals.add(node.name.text);
+      if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name)) {
+        const initializer = node.initializer === undefined ? undefined : unwrap(node.initializer);
+        if (
+          initializer !== undefined &&
+          ts.isPropertyAccessExpression(initializer) &&
+          initializer.name.text === "border" &&
+          initializer.expression.getText() === "theme"
+        ) {
+          locals.add(node.name.text);
+        }
       }
       ts.forEachChild(node, walk);
     };

@@ -370,10 +370,11 @@ export type Backfill = {
  *
  * **One home, and it is here: every hand-written replica trigger lives in the
  * `objects` hook of the last step that rebuilds `transactions`, and it moves
- * when that step does.** All seven of them — H1a's four
+ * when that step does.** All nine of them — H1a's four
  * `*_category_not_archived_*`, WA017's two
- * `transactions_category_kind_matches_type_*` and C1's
- * `transactions_lines_sum_matches_update` — are created by
+ * `transactions_category_kind_matches_type_*`, C1's
+ * `transactions_lines_sum_matches_update` and H1's two
+ * `transactions_amount_positive_*` — are created by
  * `REPLICA_BACKFILLS["0010_schema"].objects` below, and nothing else in this
  * package writes a trigger.
  *
@@ -435,6 +436,41 @@ export type Backfill = {
  * a delivered step be edited instead. `backfills.test.ts` runs the hook twice and
  * expects no throw.
  */
+/**
+ * `transactions_amount_positive` on the replica — `amount_original > 0` unless
+ * the row is an `adjustment` (`0012_fx_rates_derived_and_amount_guards.sql`).
+ *
+ * **A negative amount is not an error the device notices.** `money.signed`
+ * negates an expense, so `-10.00` on one reads back as **+10.00**: a spend that
+ * raises the balance, in every figure derived from it, with nothing thrown and
+ * nothing logged. Postgres refuses the row outright, so the only place such a
+ * row can exist is here — which is exactly the asymmetry a mirror is for.
+ *
+ * Zero rides along, on the CHECK's own `> 0`: `money.margin` throws
+ * "amountPivot is zero" for every FX figure on a row holding it.
+ *
+ * `BEFORE INSERT` as well as `BEFORE UPDATE OF amount_original`, because a
+ * sync-down or a `create_transaction` reaches this table by insert and neither
+ * passes through `set_transaction_lines`' service check. A comparison in
+ * `REAL`, not the scaled integers `transactions_lines_sum_matches_update`
+ * needs: a sign is exact in a double at every magnitude `zMoney` admits, and
+ * this asks nothing else of the value.
+ */
+const AMOUNT_POSITIVE_TRIGGERS: readonly string[] = [
+  `CREATE TRIGGER IF NOT EXISTS \`transactions_amount_positive_insert\`
+BEFORE INSERT ON \`transactions\`
+WHEN NEW.\`type\` <> 'adjustment' AND CAST(NEW.\`amount_original\` AS REAL) <= 0
+BEGIN
+  SELECT RAISE(ABORT, 'amounts are positive and non-zero; type carries direction (§7.2) — only an adjustment signs (transactions_amount_positive)');
+END`,
+  `CREATE TRIGGER IF NOT EXISTS \`transactions_amount_positive_update\`
+BEFORE UPDATE OF \`amount_original\`, \`type\` ON \`transactions\`
+WHEN NEW.\`type\` <> 'adjustment' AND CAST(NEW.\`amount_original\` AS REAL) <= 0
+BEGIN
+  SELECT RAISE(ABORT, 'amounts are positive and non-zero; type carries direction (§7.2) — only an adjustment signs (transactions_amount_positive)');
+END`,
+];
+
 const CATEGORY_KIND_TRIGGERS: readonly string[] = [
   `CREATE TRIGGER IF NOT EXISTS \`transactions_category_kind_matches_type_insert\`
 BEFORE INSERT ON \`transactions\`
@@ -668,7 +704,7 @@ export const REPLICA_BACKFILLS: Readonly<Record<string, Backfill>> = {
   },
   "0010_schema": {
     /**
-     * **The replica's seven hand-written triggers, all of them, in one place.**
+     * **The replica's nine hand-written triggers, all of them, in one place.**
      * H1a's four `*_category_not_archived_*` (an archived category is never
      * newly assigned — `packages/db`'s `assert_category_not_archived`),
      * WA017's two `transactions_category_kind_matches_type_*` (a row's type
@@ -677,12 +713,18 @@ export const REPLICA_BACKFILLS: Readonly<Record<string, Backfill>> = {
      * `assert_category_kind_matches_type`) and C1's
      * `transactions_lines_sum_matches_update` (a split's lines still sum to
      * its parent — `packages/db`'s deferred `assert_transaction_lines_sum`,
-     * which SQLite cannot defer, hence one trigger rather than two). All are
+     * which SQLite cannot defer, hence one trigger rather than two) and H1's
+     * two `transactions_amount_positive_*` (an amount is positive unless the
+     * row is an adjustment — `0012_fx_rates_derived_and_amount_guards.sql`'s
+     * CHECK of that name, which the replica had no mirror of, so a negative
+     * `amount_original` lived here and read back through `money.signed` with
+     * its sign flipped). All are
      * backstops in `CLAUDE.md`'s sense — "holds when code is wrong" — under
      * executors that already refuse with a real message:
      * `assertCategoryNotArchived` for the first,
-     * `categorize-batch.executor.ts`'s own `WHERE` for the second, and
-     * `set-transaction-lines.executor.ts`'s sum check for the third.
+     * `categorize-batch.executor.ts`'s own `WHERE` for the second,
+     * `set-transaction-lines.executor.ts`'s sum check for the third and its
+     * `assertRestatedAmountPositive` for the fourth.
      *
      * **On `0010_schema` because that is the last step that rebuilds
      * `transactions` — not because it is the head.** It is not the head:
@@ -702,6 +744,7 @@ export const REPLICA_BACKFILLS: Readonly<Record<string, Backfill>> = {
       for (const statement of CATEGORY_NOT_ARCHIVED_TRIGGERS) tx.run(sql.raw(statement));
       for (const statement of CATEGORY_KIND_TRIGGERS) tx.run(sql.raw(statement));
       for (const statement of LINE_SUM_TRIGGERS) tx.run(sql.raw(statement));
+      for (const statement of AMOUNT_POSITIVE_TRIGGERS) tx.run(sql.raw(statement));
     },
   },
 };

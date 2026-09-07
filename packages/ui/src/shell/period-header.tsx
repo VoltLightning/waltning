@@ -87,7 +87,11 @@ export function PeriodHeader({
           accessibilityRole="button"
           onPress={onToday}
           {...handlers}
-          style={[styles.today, focused ? styles.todayFocused : null]}
+          style={[
+            styles.today,
+            focused ? styles.todayFocused : null,
+            focused && onSurface ? styles.todayFocusedOnSurface : null,
+          ]}
         >
           <Text style={[styles.todayLabel, onSurface ? styles.todayLabelOnSurface : null]}>
             {t("shell.today")}
@@ -112,10 +116,18 @@ const useStyles = makeStyles((theme) => ({
   labelOnSurface: { color: theme.text },
   todayLabelOnSurface: { color: theme.textMuted },
   today: { minHeight: touchTarget.min, justifyContent: "center", paddingHorizontal: space.x2 },
+  /**
+   * **The ring on the band is near-white, not green.** `focusRing` is
+   * `accentIcon`, which is 2.45:1 on `shell` in light — under 1.4.11's 3:1 for
+   * a boundary, and invisible on the one ground the contrast census does not
+   * walk. `shellFocusRing` is `shellText`: 7.77:1 light, 7.94:1 dark.
+   */
   todayFocused: {
     outlineWidth: focus.width,
-    outlineColor: theme.focusRing,
+    outlineColor: theme.shellFocusRing,
     outlineOffset: focus.offset,
   },
+  /** `tone="surface"` puts the same control on a card, where green is the ring. */
+  todayFocusedOnSurface: { outlineColor: theme.focusRing },
   todayLabel: { color: theme.shellTextMuted, ...text.ui("bodySm", 600) },
 }));

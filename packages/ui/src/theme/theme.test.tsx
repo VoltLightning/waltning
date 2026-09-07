@@ -177,7 +177,7 @@ describe("the token spec and the tokens agree", () => {
     // uncompared behind a green guard.
     expect(compared, "a drop here means rows stopped being compared").toEqual({
       light: 38,
-      dark: 30,
+      dark: 31,
     });
   });
 
@@ -328,6 +328,34 @@ describe("a component follows the active theme", () => {
   });
 
   /**
+   * **The focus ring is an edge too, and the band is a ground the list above
+   * does not walk.**
+   *
+   * §2.6 puts a ring on every interactive element, which makes it the one
+   * boundary that appears on *every* fill in the system — including
+   * `theme.shell`, which is not one of the five above because nothing else is
+   * drawn on it. `focusRing` is `accentIcon`, and green on green measured
+   * **2.45:1** in light: the ring on `IconButton tone="shell"`, `DeskBand`'s
+   * nav, `PeriodHeader`'s *Today* and the band's `SegmentControl` was under
+   * the floor, on the four controls a keyboard reaches first. `shellFocusRing`
+   * is the band's own ring, and this is the row that makes the pair a rule
+   * rather than a preference: point either at the other's ground and it fails.
+   */
+  it.each([
+    ["light ring on the page fills", light.focusRing, ["ground", "surface"] as const, light],
+    ["dark ring on the page fills", dark.focusRing, ["ground", "surface"] as const, dark],
+  ])("keeps the %s at the 3:1 boundary floor", (_label, ring, fills, theme) => {
+    for (const fill of fills) expect(contrastRatio(ring, theme[fill])).toBeGreaterThanOrEqual(3);
+  });
+
+  it.each([
+    ["light", light],
+    ["dark", dark],
+  ])("keeps the %s focus ring visible on the shell", (_name, theme) => {
+    expect(contrastRatio(theme.shellFocusRing, theme.shell)).toBeGreaterThanOrEqual(3);
+  });
+
+  /**
    * **A bar is a graphical object, and 1.4.11 asks 3:1 of it.**
    *
    * `SpendRows` draws one bar per category on `subtleFill`. It ranked into
@@ -355,6 +383,25 @@ describe("a component follows the active theme", () => {
       expect(contrastRatio(theme.shellText, over(overlay, theme.shell))).toBeGreaterThanOrEqual(
         4.5,
       );
+    }
+  });
+
+  /**
+   * **And that each fill is the band's, which readability alone does not say.**
+   *
+   * The row above catches a *pale* fill under near-white ink — 1.10:1, the
+   * original defect. It cannot catch a **dark** one: `shellText` on the dark
+   * theme's `hover` is 12.73:1, so the glyph stays perfectly legible while the
+   * control silently stops belonging to the band. Half the defect, invisible
+   * to the half of the census written for it. So the fills are also required
+   * to stay *near* the shell, which no ground fill of either theme is.
+   */
+  it.each([
+    ["light", light],
+    ["dark", dark],
+  ])("keeps the %s band's own fills on the band", (_name, theme) => {
+    for (const overlay of [theme.shellNavActiveFill, theme.shellInsetTrackFill]) {
+      expect(contrastRatio(over(overlay, theme.shell), theme.shell)).toBeLessThan(1.6);
     }
   });
 

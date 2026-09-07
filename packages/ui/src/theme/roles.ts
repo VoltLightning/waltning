@@ -95,6 +95,15 @@ export type Theme = {
    * element, never removed and never replaced by a colour change alone.
    */
   focusRing: string;
+  /**
+   * The same ring, for a control on the shell. Green on green is 2.45:1 in
+   * light — under 1.4.11's 3:1 for a boundary — and the band is the one ground
+   * `focusRing` was never checked against, because it is not one of the six
+   * fills the census walks. Every focusable control on the band uses this:
+   * `IconButton tone="shell"`, `DeskBand`'s nav, `PeriodHeader`'s *Today*,
+   * `SegmentControl` on the inset track.
+   */
+  shellFocusRing: string;
   /** A subtle green fill and its edge: a selected segment, a toggled chip. */
   accentFill: string;
   accentFillBorder: string;
@@ -240,6 +249,7 @@ export const light: Theme = {
   accentText: color.accentText,
   accentIcon: color.accentIcon,
   focusRing: color.accentIcon,
+  shellFocusRing: color.shellText,
   accentFill: color.accentFill,
   accentFillBorder: color.accentFillBorder,
 
@@ -297,6 +307,7 @@ export const dark: Theme = {
   accentText: darkColor.accentText,
   accentIcon: darkColor.accentIcon,
   focusRing: darkColor.accentIcon,
+  shellFocusRing: darkColor.shellText,
   accentFill: darkColor.accentFill,
   accentFillBorder: darkColor.accentFillBorder,
 

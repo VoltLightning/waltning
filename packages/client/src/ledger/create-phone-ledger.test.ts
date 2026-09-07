@@ -1877,18 +1877,17 @@ describe("phone ledger controller — transaction detail writes (C5)", () => {
   });
 
   /**
-   * **A sum that differs restates the total — it is not a refusal here.**
+   * **A lines sum mismatch is a refusal, not a silent restatement.**
    *
-   * The plan named this as the second `fieldErrors` case, from when the
-   * controller could only send lines. S06 has no amount editor: `LinesCard`
-   * renders the total read-only, so editing the lines is the *only* way a user
-   * can say the transaction was 10.00 and not 48.90 — and refusing it would
-   * leave a wrong amount uncorrectable on the device. The executor's own
-   * refusal is still the guarantee for a mismatched *pair*, covered in
-   * `@waltning/ledger`'s `transaction-ops.test.ts`; the controller cannot
-   * produce one, because it derives the amount from the same lines.
+   * A version of this controller derived the total instead of taking it —
+   * sum the lines, compare against the row, send `amountOriginal` when they
+   * differ — which turned this refusal into a rewrite of the transaction's
+   * amount for every caller. A mistyped line no longer said "these do not add
+   * up"; it said "the transaction was 10.00 after all", and the ledger it
+   * rewrote is the record. The amount moves only when a caller asks for it,
+   * below.
    */
-  it("restates the total when the new lines sum to something else", () => {
+  it("a lines sum mismatch reaches fieldErrors, plain text, no messageKey", () => {
     const { controller } = detailHarness();
     const result = controller.setTransactionLines(TXN, 1, [
       {
@@ -1897,10 +1896,38 @@ describe("phone ledger controller — transaction detail writes (C5)", () => {
         amount: "10.00",
       },
     ]);
-    expect(idOf(result)).toBe(TXN);
-    const after = controller.getTransaction(TXN);
-    expect(money.abs(after?.amount ?? money.toMoney("0"))).toBe("10.00000000");
-    expect(after?.lines).toMatchObject([{ description: "Groceries" }]);
+    expect("fieldErrors" in result && result.fieldErrors).toEqual([
+      {
+        path: "",
+        message: "set_transaction_lines: lines sum to 10.00000000, the transaction is 48.90000000",
+      },
+    ]);
+  });
+
+  /**
+   * **A blank line is a field error, not a `DecimalError`.**
+   *
+   * `LinesCard`'s `+ Add` appends a row with an empty amount, so an untouched
+   * one reaches this controller as `""` — and the derivation above summed the
+   * caller's raw strings *before* `safeParse` saw them. `money.toMoney("")`
+   * calls `Decimal`'s constructor, which throws, and this controller rethrows:
+   * a screen with no `try` around its save handler crashed on a tap. It is the
+   * same trap `createTransaction` documents 500 lines above — validate first,
+   * then compute — re-broken below where it is written down.
+   */
+  it("refuses an empty amount as a field error rather than throwing", () => {
+    const { controller } = detailHarness();
+    const result = controller.setTransactionLines(TXN, 1, [
+      {
+        id: "11111111-1111-4111-8111-111111111111",
+        description: "Groceries",
+        amount: "48.90",
+      },
+      { id: "22222222-2222-4222-8222-222222222222", description: "", amount: "" },
+    ]);
+    expect("fieldErrors" in result && result.fieldErrors.map((e) => e.path)).toContain(
+      "lines.1.amount",
+    );
   });
 
   /**
@@ -1913,24 +1940,31 @@ describe("phone ledger controller — transaction detail writes (C5)", () => {
    * as present as before. A capability tested only below the layer that
    * exposes it is not tested.
    *
-   * The controller derives it from the lines and the row it already reads —
-   * S06 has no amount editor, so the lines are the whole of what the user can
-   * state.
+   * S06 still does not pass it: `LinesCard` disables `Save` on an unbalanced
+   * draft, so the phone can re-allocate a total and not restate one. That is a
+   * missing affordance, named in the controller's own docblock — not a reason
+   * to derive the amount from the lines, which would rewrite the ledger on a
+   * typo.
    */
   it("setTransactionLines carries a new total, so a split can be re-split to one", () => {
     const { controller, setTransactionLines } = detailHarness();
-    const result = controller.setTransactionLines(TXN, 1, [
-      {
-        id: "11111111-1111-4111-8111-111111111111",
-        description: "Groceries",
-        amount: "30.00",
-      },
-      {
-        id: "22222222-2222-4222-8222-222222222222",
-        description: "Flowers",
-        amount: "30.00",
-      },
-    ]);
+    const result = controller.setTransactionLines(
+      TXN,
+      1,
+      [
+        {
+          id: "11111111-1111-4111-8111-111111111111",
+          description: "Groceries",
+          amount: "30.00",
+        },
+        {
+          id: "22222222-2222-4222-8222-222222222222",
+          description: "Flowers",
+          amount: "30.00",
+        },
+      ],
+      "60.00",
+    );
     expect(idOf(result)).toBe(TXN);
     expect(setTransactionLines.mock.calls[0]?.[0]).toMatchObject({
       amountOriginal: "60.00000000",

@@ -67,6 +67,7 @@ export function IconButton({
       hovered && !disabled ? (tone === "shell" ? styles.hoveredShell : styles.hovered) : null,
       pressed ? (tone === "shell" ? styles.pressedShell : styles.pressed) : null,
       focused ? styles.focused : null,
+      focused && tone === "shell" ? styles.focusedShell : null,
       disabled ? styles.disabled : null,
     ],
     [disabled, focused, hovered, size, styles, tone],
@@ -101,5 +102,12 @@ const useStyles = makeStyles((theme) => ({
     outlineColor: theme.focusRing,
     outlineOffset: focus.offset,
   },
+  /**
+   * **The ring on the band is near-white, not green.** `focusRing` is
+   * `accentIcon`, which is 2.45:1 on `shell` in light — under 1.4.11's 3:1 for
+   * a boundary, and invisible on the one ground the contrast census does not
+   * walk. `shellFocusRing` is `shellText`: 7.77:1 light, 7.94:1 dark.
+   */
+  focusedShell: { outlineColor: theme.shellFocusRing },
   disabled: { opacity: 0.45 },
 }));

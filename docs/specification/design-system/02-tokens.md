@@ -43,7 +43,7 @@ whatever the chrome around them does.
 | `danger-bg` | `#f8e8e2` | Fill behind a danger tag |
 | `danger-border` | `#c05e37` | Edge of a danger control — an outlined button, an errored input. A control with no fill is identified by its edge, so this carries the same **3:1** floor as `border-interactive`, in the danger hue (3.17 at the tightest of the two themes) |
 | `shell` | `#3c4f38` | The header shell. **One flat colour.** A deep sage at L\* 31 — see below |
-| `shell-text` | `#f2f0e7` | Text on the shell |
+| `shell-text` / `shell-focus-ring` | `#f2f0e7` | Text on the shell; the focus ring there — see §2.6 |
 | `shell-text-muted` | `#b8c4ae` | The currency marker, the mine/ours line |
 | `shadow-ink` | `#262117` | The ink the one shadow is cast in. Never a fill, never a text colour |
 | `bolt` | `#f5c63d` | App icon accent only — not a UI colour |
@@ -121,6 +121,7 @@ with dark text.
 | `shell` | `#3d4f39` |
 | `shellText` | `#f0f4ec` |
 | `shellTextMuted` | `#b3c2a9` |
+| `shellFocusRing` | `#f0f4ec` |
 
 **The shell must read as a band, and it is the only pair where the fills do
 that alone.** Everywhere else an edge is drawn: `elevation.card` puts a
@@ -339,8 +340,16 @@ the web bundle composes all three.
 
 ### 2.6 Focus
 
-`2px solid accent-icon`, `2px` offset, on **every** interactive element. Never
+`2px solid focus-ring`, `2px` offset, on **every** interactive element. Never
 removed, never replaced by a colour change alone.
+
+**On the shell the ring is `shell-focus-ring`, and it is not green.**
+`focus-ring` is `accent-icon`, which is 2.45:1 on `shell` in light — under the
+3:1 WCAG 1.4.11 asks of a boundary, and the band is not one of the fills §2.1's
+ramp is measured against, so nothing said so. `shell-focus-ring` is
+`shell-text`: 7.77:1 light, 7.94:1 dark. It is what `IconButton tone="shell"`,
+`DeskBand`'s nav, `PeriodHeader`'s *Today* and the band's `SegmentControl`
+draw.
 
 ### 2.7 Motion
 

@@ -144,6 +144,7 @@ function SegmentOption<Value extends string>({
         hovered && !active && !shell && !disabled ? styles.hovered : null,
         active ? (shell ? styles.activeShell : styles.active) : null,
         focused ? styles.focused : null,
+        focused && tone === "shell" ? styles.focusedShell : null,
         disabled ? styles.disabled : null,
       ]}
     >
@@ -194,6 +195,13 @@ const useStyles = makeStyles((theme) => ({
     outlineColor: theme.focusRing,
     outlineOffset: focus.offset,
   },
+  /**
+   * **The ring on the band is near-white, not green.** `focusRing` is
+   * `accentIcon`, which is 2.45:1 on `shell` in light — under 1.4.11's 3:1 for
+   * a boundary, and invisible on the one ground the contrast census does not
+   * walk. `shellFocusRing` is `shellText`: 7.77:1 light, 7.94:1 dark.
+   */
+  focusedShell: { outlineColor: theme.shellFocusRing },
   label: { color: theme.textMuted, ...text.ui("bodySm") },
   labelShell: { color: theme.shellTextMuted, ...text.ui("bodySm") },
   // Ink, both tones: the active fill is light in the `surface` tone (`ground`
@@ -203,10 +211,11 @@ const useStyles = makeStyles((theme) => ({
   count: { color: theme.textMuted, ...text.ui("caption") },
   /**
    * The band's own muted ink. `textMuted` is a ground colour — on the shell's
-   * recessed track it measures 1.78:1, which is the label's own hazard one
-   * line up, left open because no `tone="shell"` caller passes a count yet.
-   * The docblock advertises live counts per segment; a feature that is only
-   * unbroken because nobody uses it is broken.
+   * recessed track it measures **1.78:1 in light** (4.04:1 in dark, which is
+   * why a theme-blind figure here would have read as safe), the label's own
+   * hazard one line up, left open because no `tone="shell"` caller passes a
+   * count yet. The docblock advertises live counts per segment; a feature that
+   * is only unbroken because nobody uses it is broken.
    */
   countShell: { color: theme.shellTextMuted, ...text.ui("caption") },
   countActive: { color: theme.accentText },
