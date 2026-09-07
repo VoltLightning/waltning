@@ -72,6 +72,8 @@ import {
   CategorizeSelectionConfirm,
   type CategorizeSelectionConfirmState,
 } from "@waltning/ui/transactions/categorize-selection-confirm";
+import { DayHeader } from "@waltning/ui/transactions/day-header";
+import { EntryRow } from "@waltning/ui/transactions/entry-row";
 import { LedgerFilterRail } from "@waltning/ui/transactions/ledger-filter-rail";
 import { LedgerSelectionBar } from "@waltning/ui/transactions/ledger-selection-bar";
 import {
@@ -83,8 +85,6 @@ import {
 import { PeriodField } from "@waltning/ui/transactions/period-field";
 import { RunningTotal, RunningTotalSkeleton } from "@waltning/ui/transactions/running-total";
 import { SwipeableRow } from "@waltning/ui/transactions/swipeable-row";
-import { TransactionRow } from "@waltning/ui/transactions/transaction-row";
-import { TransferRow } from "@waltning/ui/transactions/transfer-row";
 import { type Href, router, useLocalSearchParams } from "expo-router";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { FlatList, Pressable, Text, type TextInput, View } from "react-native";
@@ -1023,15 +1023,6 @@ function flattenSections(
   return entries;
 }
 
-function DayHeader({ label }: { label: string }) {
-  const styles = useStyles();
-  return (
-    <View style={styles.dayHeader}>
-      <Text style={styles.dayHeaderText}>{label}</Text>
-    </View>
-  );
-}
-
 /* ── One list row — a transaction or a transfer, tap and swipe both wired ─── */
 
 type LedgerRowItemProps = {
@@ -1042,57 +1033,18 @@ type LedgerRowItemProps = {
 };
 
 function LedgerRowItem({ row, onPress, onShortSwipe, onLongSwipe }: LedgerRowItemProps) {
-  const styles = useStyles();
-  const handlePress = useCallback(() => onPress(row.id), [onPress, row.id]);
   const handleShortSwipe = useCallback(() => onShortSwipe(row.id), [onShortSwipe, row.id]);
   const handleLongSwipe = useCallback(() => onLongSwipe(row.id), [onLongSwipe, row.id]);
+  const entry = <EntryRow row={row} onPress={onPress} withAccount />;
 
-  const body =
-    row.type === "transfer" && row.toAccountName && row.toAmount && row.toCurrency ? (
-      <TransferRow
-        date={row.date}
-        fromAccountName={row.accountName}
-        toAccountName={row.toAccountName}
-        amount={row.amount}
-        currency={row.currency}
-        decimals={row.decimals}
-        toAmount={row.toAmount}
-        toCurrency={row.toCurrency}
-        toDecimals={row.toDecimals ?? row.decimals}
-      />
-    ) : (
-      <TransactionRow
-        date={row.date}
-        payee={row.payee}
-        category={row.categoryName}
-        account={row.accountName}
-        amount={row.amount}
-        currency={row.currency}
-        decimals={row.decimals}
-        type={row.type}
-        isBusiness={row.isBusiness}
-        brandKey={row.brandKey}
-      />
-    );
-
-  const pressable = (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={row.payee || row.accountName}
-      onPress={handlePress}
-      style={styles.rowSeparator}
-    >
-      {body}
-    </Pressable>
-  );
-
-  // Categorising a transfer or an adjustment has no meaning (`transactions_category_shape`) —
-  // those rows stay tap-only rather than carrying a swipe gesture with nothing to do.
-  if (row.type !== "income" && row.type !== "expense") return pressable;
+  // Categorising a transfer or an adjustment has no meaning
+  // (`transactions_category_shape`) — those rows stay tap-only rather than
+  // carrying a swipe gesture with nothing to do.
+  if (row.type !== "income" && row.type !== "expense") return entry;
 
   return (
     <SwipeableRow onShortSwipe={handleShortSwipe} onLongSwipe={handleLongSwipe}>
-      {pressable}
+      {entry}
     </SwipeableRow>
   );
 }
@@ -1113,8 +1065,6 @@ const useStyles = makeStyles((theme) => ({
   clearAllText: { color: theme.textMuted, ...text.ui("bodySm", 600) },
   skeletonList: { gap: space.md },
   list: { flex: 1 },
-  dayHeader: { paddingTop: space.x3, paddingBottom: space.xs },
-  dayHeaderText: { color: theme.textMuted, ...text.ui("kicker") },
   rowSeparator: { borderTopWidth: hairline.width, borderTopColor: theme.hairline },
   // S10 §3 web — "the filter bar as a persistent left rail" beside the table.
   deskLayout: { flex: 1, flexDirection: "row", gap: space.x5 },

@@ -34,10 +34,7 @@ import {
   resolveCounterpartyFigures,
   settleResidualDirection,
 } from "@waltning/client/counterparties/counterparty-figures";
-import type {
-  PhoneCapturableAccount,
-  PhoneSearchTransaction,
-} from "@waltning/client/ledger/create-phone-ledger";
+import type { PhoneCapturableAccount } from "@waltning/client/ledger/create-phone-ledger";
 import { crossRateProvenance } from "@waltning/client/ledger/cross-rate-provenance";
 import { deviceRuntime } from "@waltning/client/ledger/device-runtime";
 import { useCounterpartyHistory } from "@waltning/client/ledger/use-counterparty-history";
@@ -64,9 +61,8 @@ import { text } from "@waltning/ui/theme/fonts";
 import { makeStyles } from "@waltning/ui/theme/styles";
 import { space } from "@waltning/ui/tokens";
 import { applyKey } from "@waltning/ui/transactions/amount-keys";
+import { EntryRow } from "@waltning/ui/transactions/entry-row";
 import { Keypad, type KeypadKey } from "@waltning/ui/transactions/keypad";
-import { TransactionRow } from "@waltning/ui/transactions/transaction-row";
-import { TransferRow } from "@waltning/ui/transactions/transfer-row";
 import { router, useLocalSearchParams } from "expo-router";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { Text, View } from "react-native";
@@ -82,51 +78,6 @@ const SETTLE_KNOWN_PATHS = [
   "discharges.amount",
   "note",
 ];
-
-type HistoryRowProps = {
-  row: PhoneSearchTransaction;
-  onPress: (id: string) => void;
-};
-
-function HistoryRow({ row, onPress }: HistoryRowProps) {
-  const t = useT();
-  const handlePress = useCallback(() => onPress(row.id), [onPress, row.id]);
-  const roleTag =
-    row.counterpartyRole && row.counterpartyRole !== "debt"
-      ? t(`counterparties.role.${row.counterpartyRole}`)
-      : undefined;
-
-  if (row.type === "transfer" && row.toAccountName && row.toAmount && row.toCurrency) {
-    return (
-      <TransferRow
-        date={row.date}
-        fromAccountName={row.accountName}
-        toAccountName={row.toAccountName}
-        amount={row.amount}
-        currency={row.currency}
-        decimals={row.decimals}
-        toAmount={row.toAmount}
-        toCurrency={row.toCurrency}
-        toDecimals={row.toDecimals ?? row.decimals}
-      />
-    );
-  }
-  return (
-    <TransactionRow
-      date={row.date}
-      payee={row.payee}
-      category={row.categoryName}
-      amount={row.amount}
-      currency={row.currency}
-      decimals={row.decimals}
-      type={row.type}
-      isBusiness={row.isBusiness}
-      brandKey={row.brandKey}
-      {...(roleTag === undefined ? {} : { roleTag })}
-      onPress={handlePress}
-    />
-  );
-}
 
 /** The replica's account onto `AccountPicker`'s own choice shape — grouped, kind-ordered, S16 §3, `transfer-screen.tsx`'s own `toPickerChoice` matched rather than shared. */
 function toPickerChoice(account: PhoneCapturableAccount): AccountPickerAccount {
@@ -646,7 +597,7 @@ export default function CounterpartyDetail() {
         // all.
         <View style={styles.historyRows}>
           {historyRows.map((row) => (
-            <HistoryRow key={row.id} row={row} onPress={handleOpenRow} />
+            <EntryRow key={row.id} row={row} onPress={handleOpenRow} />
           ))}
         </View>
       )}

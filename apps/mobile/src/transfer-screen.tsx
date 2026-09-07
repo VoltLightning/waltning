@@ -20,11 +20,12 @@ import { deviceRuntime } from "@waltning/client/ledger/device-runtime";
 import { parseTransferRoute } from "@waltning/client/ledger/preview-routes";
 import { useLedgerController } from "@waltning/client/ledger/use-ledger-controller";
 import { usePhoneLedger } from "@waltning/client/ledger/use-phone-ledger";
-import { type FieldError, mapFieldErrors } from "@waltning/client/transport/field-errors";
+import { mapFieldErrors } from "@waltning/client/transport/field-errors";
 import { accountingDate, isAccountingDate } from "@waltning/core/date";
 import * as money from "@waltning/core/money";
 import { AccountPicker, type AccountPickerAccount } from "@waltning/ui/accounts/account-picker";
 import { parseAmount } from "@waltning/ui/fx/amount-field";
+import { resolveFieldErrorMessage } from "@waltning/ui/i18n/field-error-messages";
 import { useT } from "@waltning/ui/i18n/provider";
 import { GroundPanel } from "@waltning/ui/shell/card";
 import { makeStyles } from "@waltning/ui/theme/styles";
@@ -43,34 +44,6 @@ import { View } from "react-native";
 
 /** `create_transaction`'s own field paths for a transfer row — everything else lands at form level. */
 const KNOWN_PATHS = ["amountOriginal", "accountId", "toAccountId", "toAmount", "fee", "date"];
-
-/**
- * L — a refusal's own text, resolving the `messageKey`s `createTransaction`
- * can set for a transfer row through `useT()` — it cannot call the hook
- * itself (`packages/client` is not a component). The same two keys
- * `quick-add-screen.tsx`'s own `resolveFieldErrorMessage` resolves for
- * `amountOriginal`; here they can also land on `toAmount` or `fee`
- * (`0011_transaction_scale_and_category_kind.sql`'s extended
- * `assert_amount_scale`), and `accountId` (the *from* leg's own rate guard).
- * Everything else was already `error.message` — the raw English a schema or
- * an executor wrote — never routed through a translation at all.
- */
-function resolveFieldErrorMessage(t: ReturnType<typeof useT>, error: FieldError): string {
-  if (error.messageKey === "transactions.needsRate") {
-    return t("transactions.needsRate", { currency: error.params?.["currency"] ?? "" });
-  }
-  if (error.messageKey === "transactions.tooManyDecimals") {
-    return t("transactions.tooManyDecimals", {
-      currency: error.params?.["currency"] ?? "",
-      decimals: error.params?.["decimals"] ?? "",
-    });
-  }
-  /** H1 — the fee field's own refusal when `parseAmount` cannot read it. */
-  if (error.messageKey === "transactions.invalidAmount") {
-    return t("transactions.invalidAmount");
-  }
-  return error.message;
-}
 
 function handleCancel() {
   router.back();

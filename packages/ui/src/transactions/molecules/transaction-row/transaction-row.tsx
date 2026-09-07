@@ -152,9 +152,24 @@ export function TransactionRow({
 
   return (
     <Animated.View style={press.style}>
+      {/*
+        **No `accessibilityLabel`.** One on a `Pressable` *replaces* the name
+        composed from its content, so every list built on this row — the
+        ledger, a counterparty's history, the recent widget, the transaction
+        list — announced a payee and never the amount, the category, the date
+        or the business marker. The figure is the reason the row exists.
+
+        `net-worth-strip` documents the same defect and the same fix, found
+        the same way: nothing failed, because a test reading `textContent`
+        still sees content a reader can never reach. Only the *accessible
+        name* shows it, which is what `entry-row.test.tsx` asserts.
+
+        A row with no payee still announces: the date, the category and the
+        figure are all in the content, which is why the old fallback to `date`
+        was never carrying anything the content did not already say.
+      */}
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={payee || date}
         onPress={handlePress}
         onPressIn={press.onPressIn}
         onPressOut={press.onPressOut}

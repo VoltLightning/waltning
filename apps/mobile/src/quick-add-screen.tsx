@@ -17,6 +17,7 @@ import * as money from "@waltning/core/money";
 import { AccountPicker, type AccountPickerAccount } from "@waltning/ui/accounts/account-picker";
 import { CategorySheet } from "@waltning/ui/categories/category-sheet";
 import { parseAmount } from "@waltning/ui/fx/amount-field";
+import { KNOWN_PATHS, resolveFieldErrorMessage } from "@waltning/ui/i18n/field-error-messages";
 import { useT } from "@waltning/ui/i18n/provider";
 import { useSafeArea } from "@waltning/ui/primitives/safe-area";
 import { useBreakpoint } from "@waltning/ui/primitives/use-breakpoint";
@@ -27,10 +28,6 @@ import { space } from "@waltning/ui/tokens";
 import { applyKey } from "@waltning/ui/transactions/amount-keys";
 import { ComposerHeader } from "@waltning/ui/transactions/composer-header";
 import { Dock, type DockModeOption } from "@waltning/ui/transactions/dock";
-import {
-  KNOWN_PATHS,
-  resolveFieldErrorMessage,
-} from "@waltning/ui/transactions/field-error-messages";
 import { Keypad, type KeypadKey } from "@waltning/ui/transactions/keypad";
 import {
   QuickAddComposer,

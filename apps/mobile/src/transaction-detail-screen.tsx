@@ -49,6 +49,7 @@ import {
   CategorySheet,
   type CategorySheetCreateDraft,
 } from "@waltning/ui/categories/category-sheet";
+import { resolveFieldErrorMessage } from "@waltning/ui/i18n/field-error-messages";
 import { useT } from "@waltning/ui/i18n/provider";
 import { Button } from "@waltning/ui/primitives/button";
 import { Card, GroundPanel } from "@waltning/ui/shell/card";
@@ -62,14 +63,6 @@ import { LinesCard, type LinesCardDraftLine } from "@waltning/ui/transactions/li
 import { TransactionHero } from "@waltning/ui/transactions/transaction-hero";
 import { router, useLocalSearchParams } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
-
-/** Resolves the one `messageKey` a refusal here ever carries. */
-function resolveFieldErrorMessage(t: ReturnType<typeof useT>, error: FieldError): string {
-  if (error.messageKey === "transactions.changedElsewhere") {
-    return t("transactions.changedElsewhere");
-  }
-  return error.message;
-}
 
 /**
  * Every refusal this screen sees is form-level — `refusalFromThrow` in

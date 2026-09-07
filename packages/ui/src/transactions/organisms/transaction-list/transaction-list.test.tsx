@@ -40,7 +40,7 @@ describe("TransactionList", () => {
     const onPress = vi.fn();
     render(<TransactionList transactions={ROWS} onPress={onPress} />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Employer" }));
+    fireEvent.click(screen.getByRole("button", { name: /Employer/ }));
 
     expect(onPress).toHaveBeenCalledTimes(1);
     expect(onPress).toHaveBeenCalledWith("22222222-2222-4222-8222-222222222222");
