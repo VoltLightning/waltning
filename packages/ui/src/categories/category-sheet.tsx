@@ -56,7 +56,7 @@ import Animated from "react-native-reanimated";
 import { useT } from "../i18n/provider";
 import { Button } from "../primitives/button";
 import { useInteraction } from "../primitives/interaction.ts";
-import { nestedScrollProps } from "../primitives/nested-scroll.ts";
+import { horizontalScrollProps, nestedScrollProps } from "../primitives/nested-scroll.ts";
 import { usePressScale } from "../primitives/press-scale.ts";
 import { Tag } from "../primitives/tag";
 import { TextField } from "../primitives/text-field";
@@ -358,7 +358,7 @@ export function CategorySheet({
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
-          {...nestedScrollProps(styles.chipRow)}
+          {...horizontalScrollProps(styles.chipRow)}
         >
           {groups.map((group) => (
             <GroupChip
@@ -714,7 +714,7 @@ function CreateRow({
               <ScrollView
                 horizontal
                 showsHorizontalScrollIndicator={false}
-                {...nestedScrollProps(styles.chipRow)}
+                {...horizontalScrollProps(styles.chipRow)}
               >
                 {groups.map((group) => (
                   <GroupChip

@@ -503,10 +503,14 @@ export function LedgerTable({
         keyExtractor={keyExtractor}
         renderItem={renderItem}
         initialNumToRender={Math.min(rows.length, 50)}
-        {...nestedScrollProps(styles.list)}
         tabIndex={0}
         testID="ledger-table-scroller"
         {...keyboardProps}
+        // Last, deliberately: JSX props are last-write-wins, so a spread after
+        // this one would replace the style — and with it the containment —
+        // while leaving `nestedScrollEnabled` in place, which is the shipped
+        // defect exactly. `tests/architecture.test.ts` refuses any other order.
+        {...nestedScrollProps(styles.list)}
       />
     </View>
   );

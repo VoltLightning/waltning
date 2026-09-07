@@ -77,18 +77,22 @@ describe("a component follows the active theme", () => {
     ["light spend on ground", light.spend, light.ground],
     ["light spend on surface", light.spend, light.surface],
     // **A figure is not only ever on the page.** `transaction-row.tsx` renders
-    // `<Amount>` and turns its background to `hoverFill` under a pointer and
-    // `pressedFill` under a finger; `account-picker.tsx` does the same with a
-    // balance. Those are the tightest pairings money is drawn at, and they
-    // were the ones nothing checked — `income` sat at 4.31 hovered and 4.00
-    // pressed while clearing `ground` and `surface` comfortably. `subtleFill`
-    // is listed for the inset boxes and table headers.
+    // `<Amount>` and turns its background to `hoverFill` under a pointer;
+    // `account-picker.tsx` and `category-sheet.tsx` do the same with a balance
+    // and a cell; `ledger-table.tsx` puts a selected row on `accentFill`. Hover
+    // is the tightest of those and was the one nothing checked — `income` sat
+    // at 4.31 there while clearing `ground` and `surface` comfortably.
+    // `pressedFill` holds no figure today (`icon-button.tsx` is its only user)
+    // and is listed anyway: a row is pressable, and which fill a figure ends up
+    // on should not be the thing that decides whether it is legible.
     ["light income on subtle fill", light.income, light.subtleFill],
     ["light spend on subtle fill", light.spend, light.subtleFill],
     ["light income on hover fill", light.income, light.hoverFill],
     ["light spend on hover fill", light.spend, light.hoverFill],
     ["light income on pressed fill", light.income, light.pressedFill],
     ["light spend on pressed fill", light.spend, light.pressedFill],
+    ["light income on accent fill", light.income, light.accentFill],
+    ["light spend on accent fill", light.spend, light.accentFill],
     ["light accent text on accent fill", light.accentText, light.accentFill],
     ["dark text on ground", dark.text, dark.ground],
     ["dark text on surface", dark.text, dark.surface],
@@ -110,6 +114,8 @@ describe("a component follows the active theme", () => {
     ["dark spend on hover fill", dark.spend, dark.hoverFill],
     ["dark income on pressed fill", dark.income, dark.pressedFill],
     ["dark spend on pressed fill", dark.spend, dark.pressedFill],
+    ["dark income on accent fill", dark.income, dark.accentFill],
+    ["dark spend on accent fill", dark.spend, dark.accentFill],
     ["dark accent text on accent fill", dark.accentText, dark.accentFill],
   ])("keeps %s at 4.5:1", (_label, foreground, background) => {
     expect(foreground).not.toBe(background);
@@ -151,11 +157,12 @@ describe("a component follows the active theme", () => {
     ["dark", dark],
   ])("keeps the %s selected edge above the resting one", (_name, theme) => {
     // On every fill, not one: a ramp that inverts on the pressed fill is not a
-    // ramp. The margin is stated so a future nudge to either step has to keep
-    // the gap rather than merely keep the order.
+    // ramp. And by a stated margin rather than by `toBeGreaterThan`, which is
+    // satisfied by a gap of 0.001 — that is "keeps the order", which is what a
+    // ramp is *not*. The two steps sit 0.5–0.7 apart today.
     for (const fill of ["ground", "surface", "subtleFill", "hoverFill", "pressedFill"] as const) {
-      expect(contrastRatio(theme.borderStrong, theme[fill])).toBeGreaterThan(
-        contrastRatio(theme.borderInteractive, theme[fill]),
+      expect(contrastRatio(theme.borderStrong, theme[fill])).toBeGreaterThanOrEqual(
+        contrastRatio(theme.borderInteractive, theme[fill]) + 0.4,
       );
     }
   });

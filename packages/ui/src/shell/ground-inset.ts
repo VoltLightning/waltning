@@ -58,8 +58,16 @@ export type GroundInset = {
    * A separate name for identical numbers, because the whole defect class here
    * is a value applied to the wrong kind of thing. `content` says "this goes on
    * a `contentContainerStyle`"; a reviewer seeing it on a plain `View` should
-   * be able to call that wrong without checking whether it happens to be
-   * harmless. It is harmless exactly when the `View` holds no scroller.
+   * be able to call that wrong without first working out whether it happens to
+   * be harmless.
+   *
+   * **On a `View` that holds scrollers, this shortens their viewport rather
+   * than their content — which is the point at desk width.** The two panes of
+   * the ledger are side by side and each owns its travel; ending both 22 pt
+   * above the window is the page's padding doing its job. What it must never
+   * be is a `View` wrapped around a *single* scroller that fills the screen:
+   * there the padding is the clip, and the bar and the focus ring pay for it.
+   * That case takes `content`, on the scroller itself.
    */
   block: { paddingLeft: number; paddingRight: number; paddingBottom: number };
 };

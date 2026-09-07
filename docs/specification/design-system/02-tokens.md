@@ -23,7 +23,7 @@ whatever the chrome around them does.
 | `subtle` | `#f1ebe0` | Table headers, inset boxes, neutral tag fills, the segment track |
 | `hover` | `#ece5d7` | The fill under a pointer |
 | `pressed` | `#e6ddcb` | The transient fill under a finger |
-| `border` | `#eae3d5` | Card edges, dividers, the outline of an unfilled control |
+| `border` | `#eae3d5` | Card edges and dividers — a boundary between two areas, which WCAG sets no floor for. **Never a control's edge**: at 1.19:1 on `ground` it cannot carry 1.4.11, so an unfilled chip takes `border-interactive` like every other control |
 | `border-interactive` | `#88795c` | The resting edge of a control — an input, a chip. A control here is identified by its edge alone (its fill is `surface` on `ground`, 1.08:1), so this carries WCAG 1.4.11's **3:1 boundary floor** by itself — against **every fill a control is drawn on**: `ground`, `surface`, `subtle`, `hover`, `pressed`. 3.15 at the tightest |
 | `border-strong` | `#746e5f` | An edge that must read alone: a selected control, a focus-adjacent edge. One step above `border-interactive` on the same ramp, held to the same five fills (3.76) |
 | `ink` | `#33302a` | Body text **and heading ink** — a heading is not a signal. Warm near-black, never `#000` |

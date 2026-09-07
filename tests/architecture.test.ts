@@ -17,6 +17,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
+import ts from "typescript";
 import { describe, expect, it } from "vitest";
 
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
@@ -2614,88 +2615,151 @@ describe("a refusal is never reported as a success", () => {
 /**
  * **Every scroller declares which kind it is.**
  *
- * A scroller is either the outermost one on its screen — the page, whose
- * movement is its own feedback — or a bounded one inside something else, whose
- * end must be its end. Nothing about a `<ScrollView>` says which, so each one
- * spreads the helper that matches (`primitives/nested-scroll.ts`), and this
- * rule is what makes "each one" true.
+ * A scroller is the outermost one on its screen — the page, whose movement is
+ * its own feedback — or a bounded one inside something else, whose end must be
+ * its end. Nothing about a `<ScrollView>` says which, so each one spreads the
+ * helper that matches (`primitives/nested-scroll.ts`), and this rule is what
+ * makes "each one" true.
  *
- * **Two ways this was wrong before the rule existed.** Containment needs
- * `nestedScrollEnabled` *and* `overscroll-behavior: contain`; the first is a
- * no-op on the web, and three pickers shipped with only that half, so the
- * screen behind them scrolled in a browser. And a fourth picker
- * (`counterparty-picker`) had neither, which a rule keyed on the *presence* of
- * `nestedScrollEnabled` could never see: it caught half-fixed and ignored
- * un-fixed. So the check is inverted — every scroller must opt in, rather than
- * every wrong scroller being spotted.
+ * **What this rule is and is not.** It is a census: every scroller has made a
+ * declaration. It is *not* the guarantee — `primitives/nested-scroll.test.tsx`
+ * asserts the rendered `overscroll-behavior` of each helper's output, in the
+ * DOM, which is the only place the behaviour is real. Two earlier versions of
+ * this check tried to be the guarantee by reading source, and both could be
+ * spelled around while the page still chained.
  *
- * **Checked per element, not per file.** The first version asked whether the
- * file mentioned the helper anywhere, which one already-correct call site made
- * true for every other scroller beside it.
+ * **Parsed with TypeScript, not with a regular expression.** The hand-rolled
+ * slicer this replaces was defeated by three ordinary spellings — a `>` inside
+ * a string attribute (`testID="a>b"`) ended the tag early, an unbalanced `}`
+ * in one truncated the attribute list, and a generic `<FlatList<Row>>` made
+ * the rule unsatisfiable. A trailing `// comment` inside an opening tag also
+ * survived the line-start comment strip and could satisfy the check by naming
+ * a helper it did not call. The compiler's own parser has no such edges, and
+ * it is already a dependency of this repository.
  */
 describe("every scroller declares which kind it is", () => {
-  const SCROLLERS = /<(ScrollView|FlatList|SectionList)\b/g;
-  const DECLARED = /\bnestedScrollProps\(|\bpageScrollProps\(|\bcontainOverscroll\b/;
-  const HELPER = join(repoRoot, "packages/ui/src/primitives/nested-scroll.ts");
+  const SCROLLERS = new Set(["ScrollView", "FlatList", "SectionList", "VirtualizedList"]);
+  const HELPERS = new Set([
+    "nestedScrollProps",
+    "horizontalScrollProps",
+    "pageScrollProps",
+    "containOverscroll",
+    "containOverscrollX",
+  ]);
+  const HELPER_FILE = join(repoRoot, "packages/ui/src/primitives/nested-scroll.ts");
+
+  const SPREAD_HELPERS = new Set(["nestedScrollProps", "horizontalScrollProps", "pageScrollProps"]);
+
+  type Found = {
+    file: string;
+    name: string;
+    declared: boolean;
+    /** Something after the helper spread could replace the style it returned. */
+    overwritten: boolean;
+  };
+
+  /** The element's tag name, following `Animated.ScrollView` to its last part. */
+  function tagName(node: ts.JsxOpeningLikeElement): string {
+    const text = node.tagName.getText();
+    return text.slice(text.lastIndexOf(".") + 1);
+  }
 
   /**
-   * The opening tag with every brace-nested value blanked out, so only its own
-   * attribute *names* remain. Without this, a `ListEmptyComponent={<Text
-   * style={…}>}` reads as a `style` prop on the list itself.
+   * Does any identifier in this element's attributes name a helper? Read from
+   * the AST, so a helper named in a comment or a string cannot answer for one
+   * that was never called.
    */
-  function ownAttrs(tag: string): string {
-    let depth = 0;
-    let out = "";
-    for (const c of tag) {
-      if (c === "{") depth++;
-      if (depth === 0) out += c;
-      if (c === "}") depth--;
-    }
-    return out;
+  function namesAny(node: ts.Node, names: ReadonlySet<string>): boolean {
+    let found = false;
+    const walk = (n: ts.Node): void => {
+      if (ts.isIdentifier(n) && names.has(n.text)) found = true;
+      else ts.forEachChild(n, walk);
+    };
+    if (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) {
+      for (const attribute of node.attributes.properties) walk(attribute);
+    } else walk(node);
+    return found;
   }
 
-  /** The opening tag's attributes: to the first `>` outside braces or strings. */
-  function openingTag(text: string, from: number): string {
-    let depth = 0;
-    for (let i = from; i < text.length; i++) {
-      const c = text[i];
-      if (c === "{") depth++;
-      else if (c === "}") depth--;
-      else if (c === ">" && depth === 0) return text.slice(from, i);
-    }
-    return text.slice(from);
+  /**
+   * Anything after the helper spread that could set `style` — a `style` prop,
+   * or another spread of any kind.
+   *
+   * **Stated as ordering rather than as "has a style prop", because a spread
+   * cannot be read.** `{...{ style: x }}` is an object literal this could
+   * inspect, but `{...keyboardProps}` is a variable, and resolving it would
+   * mean type-checking the repository from a test. Ordering needs no
+   * resolution: JSX props are last-write-wins, so a helper spread that comes
+   * last cannot be overwritten by anything, whatever it holds. That also
+   * makes the safe spelling the obvious one — put the helper at the end.
+   */
+  function overwritesAfterHelper(node: ts.JsxOpeningLikeElement): boolean {
+    const properties = node.attributes.properties;
+    const helperAt = properties.findIndex(
+      (attribute) => ts.isJsxSpreadAttribute(attribute) && namesAny(attribute, SPREAD_HELPERS),
+    );
+    if (helperAt === -1) return false;
+    return properties.slice(helperAt + 1).some((attribute) => {
+      if (ts.isJsxSpreadAttribute(attribute)) return true;
+      return (
+        ts.isJsxAttribute(attribute) &&
+        ts.isIdentifier(attribute.name) &&
+        attribute.name.text === "style"
+      );
+    });
   }
 
-  function elements(): { file: string; tag: string }[] {
-    return sourceFiles(join(repoRoot, "packages/ui/src"))
+  function scrollers(): Found[] {
+    const found: Found[] = [];
+    const files = sourceFiles(join(repoRoot, "packages/ui/src"))
       .concat(sourceFiles(join(repoRoot, "apps/mobile/src")))
-      .filter((file) => file !== HELPER && !/\.(test|stories)\.tsx?$/.test(file))
-      .flatMap((file) => {
-        // Comments stripped, as `importsOf` does: the prose here quotes these
-        // tag names constantly, and `nested-scroll.ts` documents both spellings.
-        const text = readFileSync(file, "utf8")
-          .replace(/\/\*[\s\S]*?\*\//g, "")
-          .replace(/^\s*\/\/.*$/gm, "");
-        return [...text.matchAll(SCROLLERS)].map((m) => ({
-          file: relative(repoRoot, file),
-          tag: openingTag(text, m.index),
-        }));
-      });
+      .filter((file) => file !== HELPER_FILE && !/\.(test|stories)\.tsx?$/.test(file));
+
+    for (const file of files) {
+      const source = ts.createSourceFile(
+        file,
+        readFileSync(file, "utf8"),
+        ts.ScriptTarget.Latest,
+        true,
+        ts.ScriptKind.TSX,
+      );
+      const walk = (node: ts.Node): void => {
+        if (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) {
+          const name = tagName(node);
+          if (SCROLLERS.has(name)) {
+            found.push({
+              file: relative(repoRoot, file),
+              name,
+              declared: namesAny(node, HELPERS),
+              overwritten: overwritesAfterHelper(node),
+            });
+          }
+        }
+        ts.forEachChild(node, walk);
+      };
+      walk(source);
+    }
+    return found;
   }
 
-  it("finds the scrollers it means to check", () => {
-    // A regex that matched nothing would make every rule below vacuous.
-    expect(elements().length).toBeGreaterThanOrEqual(10);
+  /**
+   * Pinned, not a floor: a lower bound stays green when a scroller is deleted
+   * *or* when the parser silently stops finding one, which is the failure that
+   * would make every rule below vacuous. A census that changes is a decision
+   * to make here, in the open.
+   */
+  it("finds every scroller in the repository", () => {
+    expect(scrollers().length).toBe(12);
   });
 
-  it("spreads nestedScrollProps, pageScrollProps or containOverscroll", () => {
-    const offenders = elements()
-      .filter(({ tag }) => !DECLARED.test(tag))
-      .map(({ file, tag }) => `${file} → ${tag.split("\n")[0]?.trim()}`);
+  it("spreads one of the nested-scroll helpers", () => {
+    const offenders = scrollers()
+      .filter(({ declared }) => !declared)
+      .map(({ file, name }) => `${file} → <${name}>`);
 
     expect(
       offenders,
-      "a bare scroller is undeclared: bounded ones take nestedScrollProps(style), a screen's own takes pageScrollProps(style)",
+      "a bare scroller is undeclared: bounded ones take nestedScrollProps(style) (or horizontalScrollProps), a screen's own takes pageScrollProps(style)",
     ).toEqual([]);
   });
 
@@ -2706,21 +2770,21 @@ describe("every scroller declares which kind it is", () => {
    * defect. The helpers take the style for that reason; this refuses the
    * spelling that would take it back.
    */
-  it("never puts a style prop on an element that spread one of them", () => {
-    const offenders = elements()
-      .filter(({ tag }) => /\bnestedScrollProps\(|\bpageScrollProps\(/.test(tag))
-      .filter(({ tag }) => /(^|\s)style=/.test(ownAttrs(tag)))
-      .map(({ file }) => file);
+  it("puts the helper spread last, where nothing can overwrite its style", () => {
+    const offenders = scrollers()
+      .filter(({ overwritten }) => overwritten)
+      .map(({ file, name }) => `${file} → <${name}>`);
 
     expect(
       offenders,
-      "pass the style to the helper — a later style prop replaces the one it returned",
+      "move the helper spread last — a style prop or a later spread replaces the style it returned",
     ).toEqual([]);
   });
 
-  it("keeps both halves of containment in the helper", () => {
-    const text = readFileSync(HELPER, "utf8");
+  it("keeps every half of containment in the helper", () => {
+    const text = readFileSync(HELPER_FILE, "utf8");
     expect(text).toMatch(/nestedScrollEnabled: true/);
     expect(text).toMatch(/overscrollBehavior: "contain"/);
+    expect(text).toMatch(/overscrollBehaviorX: "contain"/);
   });
 });

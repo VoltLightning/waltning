@@ -57,18 +57,19 @@ export const color = {
    * WCAG 1.4.11's 3:1 boundary floor by itself, and it has to carry it against
    * **every fill a control is drawn on**, not just the page: a filled chip
    * sits on `subtle`, and any control under a finger sits on `hover` or
-   * `pressed`. Checked against all five, the tan this replaced was 1.73 at
-   * best and 2.41 at worst, and a first correction to `#9d8d6d` still left a
-   * filled chip's edge at 2.74 and a hovered one at 2.59 — floor met on the
-   * page, missed in the states. 3.15 at the tightest pairing — chosen with
-   * headroom rather than landing on 3.00, so the next nudge to a fill does not
-   * cross the floor silently.
+   * `pressed`. Checked against all five, the tan this replaced ran from 1.87
+   * on `surface` down to 1.38 on `pressed`, and a first correction to
+   * `#9d8d6d` still left a filled chip's edge at 2.74 and a hovered one at
+   * 2.59 — floor met on the page, missed in the states. 3.15 at the tightest
+   * pairing here, chosen with headroom rather than landing on 3.00 so the next
+   * nudge to a fill does not cross the floor silently.
    */
   borderInteractive: "#88795c",
   /**
    * A border that must read on its own: a selected control, a focus-adjacent
    * edge. One clear step above `borderInteractive` on the same ramp and held
-   * to the same five fills — 3.76 at the tightest, against that step's 3.15.
+   * to the same five fills — 3.75 at the tightest of the two themes, against
+   * that step's 3.15.
    * It used to be stated as 3.63 "against `surface`", which was true and was
    * the wrong pairing: on the pressed fill the same value was 2.69.
    */
@@ -95,8 +96,10 @@ export const color = {
    *
    * `income` is a *livelier* green than the sage `accent`, so a credit reads
    * as an event and a button reads as a control — related, never confused.
-   * Held at 4.5:1 on `ground` as well as `surface` in `theme.test.tsx`, which
-   * is what pushed it a step darker than the mockups' figure. `spend` is a
+   * Held at 4.5:1 against every fill a
+   * figure lands on, which is what pushed it darker than the mockups' figure:
+   * `ground` and `surface` were never the binding pair (5.80 and 6.25), and
+   * `hoverFill` — a `transaction-row` under a pointer — was. `spend` is a
    * warm, restrained red: unmistakable, not alarming. A transfer is neither;
    * money moved between your own accounts is `muted`, because nothing was
    * gained or lost. Job 3 is `income`.
