@@ -9,11 +9,11 @@ import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { ThemeProvider } from "../theme/provider";
 import { light } from "../theme/roles.ts";
-import { Button } from "./button";
-import { Chip } from "./chip";
-import { IconButton } from "./icon-button";
-import { SegmentControl } from "./segment-control";
-import { Tag } from "./tag";
+import { Button } from "./atoms/button/button";
+import { Chip } from "./atoms/chip/chip";
+import { IconButton } from "./atoms/icon-button/icon-button";
+import { SegmentControl } from "./atoms/segment-control/segment-control";
+import { Tag } from "./atoms/tag";
 
 function noop() {}
 

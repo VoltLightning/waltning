@@ -9,12 +9,12 @@
 
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { Checkbox } from "./checkbox";
+import { Checkbox } from "./atoms/checkbox/checkbox";
+import { RadioGroup } from "./atoms/radio/radio";
+import { MultiSelect, Select } from "./atoms/select/select";
+import { TextField } from "./atoms/text-field/text-field";
+import { Toggle } from "./atoms/toggle/toggle";
 import { expectContainsOverscroll } from "./nested-scroll.test-support.ts";
-import { RadioGroup } from "./radio";
-import { MultiSelect, Select } from "./select";
-import { TextField } from "./text-field";
-import { Toggle } from "./toggle";
 
 const KINDS = [
   { value: "checking", label: "Checking" },

@@ -12,7 +12,10 @@
  */
 
 import { toMoney } from "@waltning/core/money";
-import type { PhoneLedgerPort, PhoneSearchPage } from "./create-phone-ledger.ts";
+import type {
+  PhoneLedgerPort,
+  PhoneSearchPage,
+} from "./create-phone-ledger/create-phone-ledger.ts";
 
 const EMPTY_SEARCH_PAGE: PhoneSearchPage = {
   rows: [],

@@ -14,7 +14,7 @@
  * the locale's decimal mark. `decimalMark` only ever touches a *display*.
  */
 
-import type { KeypadKey } from "./keypad";
+import type { KeypadKey } from "./organisms/keypad/keypad";
 
 /**
  * `raw` after one keypress, capped at `decimals` fraction digits.

@@ -16,7 +16,7 @@ import { todayIn } from "@waltning/core/date";
 import { type Id, type IdTable, id } from "@waltning/core/id";
 import { randomId } from "@waltning/core/random";
 import type { ClientDiagnostics } from "../diagnostics.ts";
-import type { PhoneLedgerRuntime } from "./create-phone-ledger.ts";
+import type { PhoneLedgerRuntime } from "./create-phone-ledger/create-phone-ledger.ts";
 
 export function deviceRuntime(diagnostics?: ClientDiagnostics): PhoneLedgerRuntime {
   return {

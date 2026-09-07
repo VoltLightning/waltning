@@ -12,7 +12,7 @@ import { useState } from "react";
 import { View } from "react-native";
 import { makeStyles } from "../theme/styles.ts";
 import { space } from "../tokens.ts";
-import { MultiSelect } from "./select";
+import { MultiSelect } from "./atoms/select/select";
 
 function noop() {}
 

@@ -2,7 +2,7 @@ import { useSyncExternalStore } from "react";
 import type {
   DevicePreferenceController,
   DevicePreferenceSnapshot,
-} from "./create-device-preference.ts";
+} from "./create-device-preference/create-device-preference.ts";
 
 /** The controller's snapshot, as React state. */
 export function useDevicePreference<Value>(

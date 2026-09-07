@@ -22,7 +22,6 @@
 
 import type {
   CategorizeBatchDraft,
-  PhoneCurrencyTotal,
   PhoneSearchTransaction,
 } from "@waltning/client/ledger/create-phone-ledger";
 import { deviceRuntime } from "@waltning/client/ledger/device-runtime";
@@ -49,10 +48,8 @@ import {
   type YearMonth,
   yearMonth,
 } from "@waltning/core/date";
-import * as money from "@waltning/core/money";
 import { CategorySheet } from "@waltning/ui/categories/category-sheet";
-import { Amount } from "@waltning/ui/fx/amount";
-import { decimalMark, monthLabel } from "@waltning/ui/i18n/locales";
+import { monthLabel } from "@waltning/ui/i18n/locales";
 import { useLocale, useT } from "@waltning/ui/i18n/provider";
 import { Chip } from "@waltning/ui/primitives/chip";
 import { pageScrollProps } from "@waltning/ui/primitives/nested-scroll";
@@ -70,6 +67,7 @@ import { Skeleton } from "@waltning/ui/states/skeleton";
 import { text } from "@waltning/ui/theme/fonts";
 import { makeStyles } from "@waltning/ui/theme/styles";
 import { hairline, radius, space, touchTarget } from "@waltning/ui/tokens";
+import { ActiveFilterChip } from "@waltning/ui/transactions/active-filter-chip";
 import {
   CategorizeSelectionConfirm,
   type CategorizeSelectionConfirmState,
@@ -83,6 +81,7 @@ import {
   sortLedgerTableRows,
 } from "@waltning/ui/transactions/ledger-table";
 import { PeriodField } from "@waltning/ui/transactions/period-field";
+import { RunningTotal, RunningTotalSkeleton } from "@waltning/ui/transactions/running-total";
 import { SwipeableRow } from "@waltning/ui/transactions/swipeable-row";
 import { TransactionRow } from "@waltning/ui/transactions/transaction-row";
 import { TransferRow } from "@waltning/ui/transactions/transfer-row";
@@ -651,7 +650,7 @@ export default function Ledger() {
                 {search.loaded ? (
                   <RunningTotal total={search.total} shown={search.rows.length} />
                 ) : (
-                  <TotalSkeleton />
+                  <RunningTotalSkeleton />
                 )}
               </Card>
             )}
@@ -775,7 +774,9 @@ export default function Ledger() {
         </View>
 
         {search.loaded && search.total.count === 0 ? null : (
-          <Card>{search.loaded ? <RunningTotal total={search.total} /> : <TotalSkeleton />}</Card>
+          <Card>
+            {search.loaded ? <RunningTotal total={search.total} /> : <RunningTotalSkeleton />}
+          </Card>
         )}
       </View>
 
@@ -999,123 +1000,6 @@ function activeFilterChips(
   return chips;
 }
 
-type ActiveFilterChipProps = { label: string; excludes?: number | undefined; onRemove: () => void };
-
-/**
- * The whole chip is the remove target — `select.tsx`'s `Token` makes the same
- * choice for the same reason: an ×-only target would be a 10px button
- * wearing a 44px costume. Editing a filter's *value* happens through
- * `+ Filter`; tapping an already-active chip only ever removes it.
- */
-function ActiveFilterChip({ label, excludes, onRemove }: ActiveFilterChipProps) {
-  const t = useT();
-  const styles = useStyles();
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={t("common.remove", { value: label })}
-      onPress={onRemove}
-      style={styles.activeChip}
-    >
-      <Text style={styles.activeChipText}>{label}</Text>
-      {/*
-        §4's exclusion count, on the chip rather than beside it — the phone's
-        chip row is its filter bar, and `05-composites.md` §5.6 asks the same
-        of it as §4 asks of the desk rail. Nothing at zero: a chip that hides
-        nothing has nothing to report.
-      */}
-      {excludes !== undefined && excludes > 0 ? (
-        <Text style={styles.activeChipExcludes}>
-          {/* The plural is the resolver's — `ExcludesNote`'s own doc (L4). */}
-          {t("transactions.filterExcludes", { count: excludes })}
-        </Text>
-      ) : null}
-      <View style={styles.activeChipCross}>
-        <View style={[styles.activeChipCrossBar, styles.activeChipCrossBarA]} />
-        <View style={[styles.activeChipCrossBar, styles.activeChipCrossBarB]} />
-      </View>
-    </Pressable>
-  );
-}
-
-/* ── The running total — S10 §3, §9 ──────────────────────────────────────── */
-
-type RunningTotalProps = {
-  total: { count: number; currencies: readonly PhoneCurrencyTotal[] };
-  /**
-   * How many rows are actually loaded. Equal to `total.count` once the desk
-   * drain has run to the end, and less than it when the drain hit its cap —
-   * in which case the header says both numbers rather than the one that is
-   * no longer true of what is on screen (C1, round 1). Absent on the phone,
-   * whose list pages and whose count has always meant "matching", not
-   * "loaded".
-   */
-  shown?: number;
-};
-
-function RunningTotal({ total, shown }: RunningTotalProps) {
-  const t = useT();
-  const styles = useStyles();
-  if (total.count === 0) return null;
-  const countLabel =
-    shown !== undefined && shown < total.count
-      ? t("transactions.showingOfTotal", { shown, count: total.count })
-      : total.count === 1
-        ? t("transactions.totalCountOne", { count: total.count })
-        : t("transactions.totalCountMany", { count: total.count });
-
-  return (
-    <View style={styles.total}>
-      <Text style={styles.totalCount}>{countLabel}</Text>
-      {total.currencies.map((currency) => (
-        <CurrencyTotalLine key={currency.currency} currency={currency} />
-      ))}
-    </View>
-  );
-}
-
-function CurrencyTotalLine({ currency }: { currency: PhoneCurrencyTotal }) {
-  const t = useT();
-  const locale = useLocale();
-  const styles = useStyles();
-  return (
-    <View style={styles.totalLine}>
-      <Amount
-        value={currency.sum}
-        currency={currency.currency}
-        decimals={currency.decimals}
-        size="large"
-      />
-      {currency.capitalCount > 0 ? (
-        <Text style={styles.totalExcluding}>
-          {currency.capitalCount === 1
-            ? t("transactions.totalExcludingCapitalOne", {
-                amount: money.forDisplay(
-                  currency.sumExcludingCapital,
-                  currency.decimals,
-                  decimalMark(locale),
-                ),
-                count: currency.capitalCount,
-              })
-            : t("transactions.totalExcludingCapitalMany", {
-                amount: money.forDisplay(
-                  currency.sumExcludingCapital,
-                  currency.decimals,
-                  decimalMark(locale),
-                ),
-                count: currency.capitalCount,
-              })}
-        </Text>
-      ) : null}
-    </View>
-  );
-}
-
-function TotalSkeleton() {
-  const t = useT();
-  return <Skeleton shape="row" label={t("transactions.loadingTransactions")} />;
-}
-
 /* ── Day sections, flattened for `FlatList` ──────────────────────────────── */
 
 type ListEntry =
@@ -1227,32 +1111,6 @@ const useStyles = makeStyles((theme) => ({
     paddingHorizontal: space.md,
   },
   clearAllText: { color: theme.textMuted, ...text.ui("bodySm", 600) },
-  activeChip: {
-    minHeight: touchTarget.min,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: space.md,
-    borderWidth: 1,
-    borderColor: theme.accentFillBorder,
-    backgroundColor: theme.accentFill,
-    borderRadius: 8,
-    paddingHorizontal: space.x3,
-  },
-  activeChipText: { color: theme.accentText, ...text.ui("bodySm", 600) },
-  activeChipExcludes: { color: theme.accentText, ...text.ui("caption") },
-  activeChipCross: { width: 10, height: 10, alignItems: "center", justifyContent: "center" },
-  activeChipCrossBar: {
-    position: "absolute",
-    width: 11,
-    height: 1.5,
-    backgroundColor: theme.accentText,
-  },
-  activeChipCrossBarA: { transform: [{ rotate: "45deg" }] },
-  activeChipCrossBarB: { transform: [{ rotate: "-45deg" }] },
-  total: { gap: space.xs },
-  totalCount: { color: theme.textMuted, ...text.ui("bodySm", 600) },
-  totalLine: { gap: space.xs },
-  totalExcluding: { color: theme.textMuted, ...text.ui("caption") },
   skeletonList: { gap: space.md },
   list: { flex: 1 },
   dayHeader: { paddingTop: space.x3, paddingBottom: space.xs },

@@ -5,7 +5,7 @@
  * 33 lines each. What was actually different between them is now the whole file.
  */
 
-import { type Query, useQuery } from "../query/use-query.ts";
+import { type Query, useQuery } from "../query/use-query/use-query.ts";
 import type { ApiClient } from "../transport/client.ts";
 
 /** Indexed access rather than a `never` fallback — see `use-accounts.ts`. */

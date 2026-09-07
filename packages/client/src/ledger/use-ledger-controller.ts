@@ -6,7 +6,7 @@
  */
 
 import { useContext } from "react";
-import type { PhoneLedgerController } from "./create-phone-ledger.ts";
+import type { PhoneLedgerController } from "./create-phone-ledger/create-phone-ledger.ts";
 import { LedgerContext } from "./ledger-provider.tsx";
 
 export function useLedgerController(): PhoneLedgerController {

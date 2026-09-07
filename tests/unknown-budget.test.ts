@@ -162,7 +162,7 @@ const BUDGET: Record<string, { max: number; why: string }> = {
     max: 2,
     why: "JSON off the disk — the stored button position, which is exactly as trustworthy as JSON off a wire and is checked field by field before it becomes a position",
   },
-  "packages/client/src/transactions/last-capture.ts": {
+  "packages/client/src/transactions/last-capture/last-capture.ts": {
     max: 2,
     why: "JSON off the disk — the stored last-captured account, the same shape float-geometry.ts's own budget is for, checked field by field before it becomes a LastCapture",
   },
@@ -194,7 +194,7 @@ const BUDGET: Record<string, { max: number; why: string }> = {
     max: 2,
     why: "`error.cause` is unknown by construction; the code beside it is now tRPC's own union",
   },
-  "packages/client/src/query/use-query.ts": {
+  "packages/client/src/query/use-query/use-query.ts": {
     max: 2,
     why: "a dependency array is heterogeneous by definition, and a promise rejection is a catch binding",
   },
@@ -242,11 +242,11 @@ const BUDGET: Record<string, { max: number; why: string }> = {
     max: 2,
     why: "the same catch binding as smoke.ts's own reasonOf, restated as a Playwright test — one in reasonOf itself, one holding whatever create_counterparty's mutate() threw before it is narrowed by an instanceof guard, not a cast",
   },
-  "packages/client/src/transport/field-errors.ts": {
+  "packages/client/src/transport/field-errors/field-errors.ts": {
     max: 1,
     why: "fieldErrorsFromZod takes whatever a controller or a transport caught, exactly like a catch binding, and narrows it with an instanceof guard rather than a cast",
   },
-  "packages/client/src/ledger/create-phone-ledger.ts": {
+  "packages/client/src/ledger/create-phone-ledger/create-phone-ledger.ts": {
     max: 20,
     why: "accountWriteRefusal, reconcileAccountRefusal, createTransactionRefusal, createCounterpartyRefusal, counterpartyWriteRefusal, mergeCounterpartiesRefusal, unmergeCounterpartiesRefusal, settleDebtRefusal and changePivotRefusal each take whatever the named executor threw — a catch binding one call removed from the catch clause itself — and narrow it with an instanceof guard rather than a cast. L1's finish() adds three more: DistributiveOmit's own `T extends unknown` is the standard TypeScript idiom that makes a conditional type distribute over a union — not a value going untyped, a type-level trigger with no other spelling — and fieldErrorsOf(outcome: unknown) takes whichever of ~75 different controller return shapes was just produced (a deliberately heterogeneous collection, the one other case CLAUDE.md names), narrowed with an `in` check before the one cast that reads the narrowed shape back out. L4 adds five more: `columnOf`/`paramsOf` each take whatever a local `LocalRefusal` or a server envelope threw — the same catch-binding shape as the refusal mappers above, structural rather than an `instanceof` because this file deliberately never imports `@waltning/ledger`'s own class — narrowed with `typeof`/`in` checks before the casts that read the narrowed shape back out. `DESK4` adds one more: `PhoneDashboardWidget.config` is `Record<string, unknown>`, restating `dashboard-widgets.pg.ts`'s own `WidgetConfig` — a per-kind bag whose shape is open by design (`SPEC.md` §14.5's own widget catalogue gives each `kind` a different config), the same value-position case `gate.ts` is budgeted for.",
   },
@@ -320,7 +320,7 @@ const BUDGET: Record<string, { max: number; why: string }> = {
     max: 1,
     why: "raceWithChildError's rejection handler — Promise.prototype.then's own lib types the rejection reason as any, so this is written out as unknown by hand rather than left to that default, same reasoning as a catch binding even though the language does not force it here",
   },
-  "packages/ui/src/transactions/ledger-table.tsx": {
+  "packages/ui/src/transactions/organisms/ledger-table/ledger-table.tsx": {
     max: 1,
     why: "the desk table's checkbox column reads shiftKey off Pressable's own onPress event to tell a shift-click range from an ordinary one — react-native-web genuinely puts it there on web (PressResponder.js's own comment: the event's nativeEvent is a MouseEvent), but GestureResponderEvent's type does not declare it, the same seam ledger-screen.tsx's own Href cast already crosses",
   },

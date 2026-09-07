@@ -49,6 +49,7 @@ import * as money from "@waltning/core/money";
 import { AccountPicker, type AccountPickerAccount } from "@waltning/ui/accounts/account-picker";
 import { BalanceLedger } from "@waltning/ui/counterparties/balance-ledger";
 import { CounterpartyCard } from "@waltning/ui/counterparties/counterparty-card";
+import { MergeRow } from "@waltning/ui/counterparties/merge-row";
 import { SettleSheet, type SettleSheetField } from "@waltning/ui/counterparties/settle-sheet";
 import { parseAmount } from "@waltning/ui/fx/amount-field";
 import { decimalMark } from "@waltning/ui/i18n/locales";
@@ -124,28 +125,6 @@ function HistoryRow({ row, onPress }: HistoryRowProps) {
       {...(roleTag === undefined ? {} : { roleTag })}
       onPress={handlePress}
     />
-  );
-}
-
-type MergeRowProps = {
-  mergeId: string;
-  loserName: string;
-  movedCount: number;
-  onUnmerge: (mergeId: string) => void;
-};
-
-/** One live merge into this counterparty — its own row, its own bound handler. */
-function MergeRow({ mergeId, loserName, movedCount, onUnmerge }: MergeRowProps) {
-  const t = useT();
-  const styles = useStyles();
-  const handleUnmerge = useCallback(() => onUnmerge(mergeId), [mergeId, onUnmerge]);
-  return (
-    <View style={styles.mergeRow}>
-      <Text style={styles.mergeText}>
-        {t("counterparties.mergedInto", { name: loserName, count: movedCount })}
-      </Text>
-      <Button label={t("counterparties.unmerge")} onPress={handleUnmerge} variant="ghost" />
-    </View>
   );
 }
 
@@ -737,12 +716,4 @@ const useStyles = makeStyles((theme) => ({
   historyTitle: { color: theme.textMuted, ...text.ui("kicker") },
   // No `gap` — rows abut, the same as the plain `ScrollView` this replaced.
   historyRows: {},
-  mergeRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: space.md,
-    paddingTop: space.md,
-  },
-  mergeText: { flexShrink: 1, color: theme.textMuted, ...text.ui("caption") },
 }));

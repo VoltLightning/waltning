@@ -9,7 +9,7 @@ import { render, screen } from "@testing-library/react";
 import { expect, it } from "vitest";
 import { SafeAreaProvider } from "../primitives/safe-area";
 import { floating, focus } from "../tokens.ts";
-import { FloatingClearanceProvider } from "./floating-clearance";
+import { FloatingClearanceProvider } from "./atoms/floating-clearance";
 import { useGroundInset } from "./ground-inset.ts";
 
 const NOTCHED = { top: 59, right: 0, bottom: 34, left: 0 };

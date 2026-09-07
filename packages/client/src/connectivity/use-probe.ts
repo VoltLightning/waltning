@@ -17,7 +17,7 @@
  */
 
 import { CaptiveResponseError } from "@waltning/core/rule-zero-fetch";
-import { useQuery } from "../query/use-query.ts";
+import { useQuery } from "../query/use-query/use-query.ts";
 import type { ApiClient } from "../transport/client.ts";
 
 export type Probe =

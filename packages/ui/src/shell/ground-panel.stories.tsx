@@ -28,7 +28,7 @@ import type { Meta, StoryObj } from "@storybook/react-native-web-vite";
 import { Text, View } from "react-native";
 import { makeStyles } from "../theme/styles.ts";
 import { hairline, space } from "../tokens.ts";
-import { GroundPanel } from "./card";
+import { GroundPanel } from "./molecules/card/card";
 
 const ROWS = Array.from({ length: 40 }, (_, index) => index);
 const LAST_ROW_TEST_ID = "tall-content-last-row";
