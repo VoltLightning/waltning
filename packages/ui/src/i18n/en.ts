@@ -327,6 +327,19 @@ export const en = {
     filterAccount: "Account",
     filterCategory: "Category",
     filterScope: "Scope",
+    /**
+     * §4's period, as the ranges a person actually filters by. The two date
+     * fields this replaces asked for a range one endpoint at a time, each with
+     * three *capture* shortcuts under it — "from Saturday to Saturday" is not
+     * a range anyone sets, and six buttons for a job four names do is why the
+     * sheet ran under the keyboard.
+     */
+    periodThisMonth: "This month",
+    periodLastMonth: "Last month",
+    periodLast30: "Last 30 days",
+    periodAnyTime: "Any time",
+    /** The way back to two explicit dates, for a range none of the four names. */
+    periodCustom: "Exact dates",
     filterFrom: "From",
     filterTo: "To",
     /* ── S10 §4's remaining filter dimensions — the desk rail (DESK3 round 1, M) ── */

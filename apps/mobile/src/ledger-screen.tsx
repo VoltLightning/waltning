@@ -55,7 +55,6 @@ import { Amount } from "@waltning/ui/fx/amount";
 import { decimalMark, monthLabel } from "@waltning/ui/i18n/locales";
 import { useLocale, useT } from "@waltning/ui/i18n/provider";
 import { Chip } from "@waltning/ui/primitives/chip";
-import { DateField } from "@waltning/ui/primitives/date-field";
 import { pageScrollProps } from "@waltning/ui/primitives/nested-scroll";
 import { SearchField } from "@waltning/ui/primitives/search-field";
 import { type Segment, SegmentControl } from "@waltning/ui/primitives/segment-control";
@@ -83,6 +82,7 @@ import {
   type LedgerTableRow,
   sortLedgerTableRows,
 } from "@waltning/ui/transactions/ledger-table";
+import { PeriodField } from "@waltning/ui/transactions/period-field";
 import { SwipeableRow } from "@waltning/ui/transactions/swipeable-row";
 import { TransactionRow } from "@waltning/ui/transactions/transaction-row";
 import { TransferRow } from "@waltning/ui/transactions/transfer-row";
@@ -855,18 +855,7 @@ export default function Ledger() {
           value={filter.scope}
           onChange={filters.setScope}
         />
-        <DateField
-          label={t("transactions.filterFrom")}
-          value={filter.from}
-          onChange={filters.setFrom}
-          today={today}
-        />
-        <DateField
-          label={t("transactions.filterTo")}
-          value={filter.to}
-          onChange={filters.setTo}
-          today={today}
-        />
+        <PeriodField from={filter.from} to={filter.to} today={today} onChange={filters.setRange} />
       </BottomSheet>
 
       <CategorySheet
