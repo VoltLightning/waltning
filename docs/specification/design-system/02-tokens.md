@@ -350,9 +350,9 @@ ramp is measured against, so nothing said so. `shell-focus-ring` is
 `shell-text`: 7.77:1 light, 7.94:1 dark. Seven controls draw it —
 `IconButton tone="shell"`, `DeskBand`'s nav, `PeriodHeader`'s *Today*, the
 band's `SegmentControl`, `CurrencyChip`, `Toast`'s action and `CommandBar`'s
-walked chip. **The set is decided by the mount site, not by the folder**: three
-of those live outside `shell/` and each was missed by a pass that went looking
-by directory.
+walked chip. **The set is decided by the mount site, not by the folder**: five
+of the seven live outside `shell/`, and three of those were missed by passes
+that went looking by directory.
 
 ### 2.7 Motion
 

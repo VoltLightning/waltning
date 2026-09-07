@@ -1120,30 +1120,42 @@ describe("set_transaction_lines", () => {
   });
 
   /**
-   * **A row this device does not hold queues nothing either.**
+   * **A row this device does not hold is queued, not dropped.**
    *
-   * Both guards opened with `if (!current || ...) return`, which put the
-   * stuck entry straight back: an id the replica has never seen skipped the
-   * check entirely and queued a real `update_transaction` carrying `-10.00`,
-   * which Postgres refuses for as long as the device lives. `adjustment` is
-   * the only exemption and neither operation can set a `type`, so an unknown
-   * row cannot be one — the amount is judged without it.
+   * A version of this hook refused instead, on the argument that neither
+   * operation can set a `type` so an unknown row cannot be the `adjustment`
+   * the sign rule exempts. That is a non-sequitur — it says the write cannot
+   * *make* the row an adjustment, not that the row is not one — and it cost a
+   * capture: an adjustment taken offline in a currency with no known rate
+   * defers, so the replica holds no row, and editing it to the negative value
+   * that is legal for its type hit a `validate` refusal. `validate`'s
+   * refusals are `dependency: false`, so `recover.ts` blocks rather than
+   * defers them, `outstanding` skips a blocked entry forever and the drain
+   * reads only `pending`. The edit vanished with nothing shown to anyone.
+   *
+   * Nothing diverges by queuing it: the replica wrote no row, so there is no
+   * replica/outbox disagreement, and the server adjudicates a write against a
+   * row only it holds. That is what the outbox is for.
    */
-  it("refuses a negative amount for a row it does not hold (C1)", () => {
+  it("queues a write against a row it does not hold rather than dropping it (C1)", () => {
     const entries = () => stores.ledger.outbox.db.select().from(outbox).all();
     const before = entries().length;
     const ghost = id<"transactions">("00000000-0000-4000-8000-0000000000ff");
 
+    // `apply` refuses — the row is not here — but as a *dependency* refusal,
+    // the class `recover.ts` retries instead of blocking.
     expect(() =>
       writeLocally(stores.ledger, {
         executor: updateTransactionExecutor,
         registry: ledgerRegistry,
         capture,
-        input: { id: ghost, version: 1, patch: { amountOriginal: "-10.00" } },
+        input: { id: ghost, version: 1, patch: { amountOriginal: "-25.00" } },
       }),
-    ).toThrow(/amounts are positive and non-zero/);
+    ).toThrow(/no transaction/);
 
-    expect(entries(), "no entry the server can never accept").toHaveLength(before);
+    expect(entries(), "the intent survives to be adjudicated by the server").toHaveLength(
+      before + 1,
+    );
   });
 
   /**

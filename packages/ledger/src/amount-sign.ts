@@ -50,9 +50,16 @@ export function assertAmountPositive(subject: string, amount: string, type: stri
  * is a category reading back with its sign flipped in §6's figures: the same
  * argument as above, one column over.
  *
- * **Zero is not.** The reason the parent's zero is refused is that
- * `amount_original` is the FX pivot and `money.margin` throws on a zero one. A
- * line is never a pivot, and a receipt routinely carries a `0.00` row — a
+ * **Zero is not.** The parent's zero is refused because `amount_original` is
+ * the FX pivot and `money.margin` throws on a zero one — with the caveat that
+ * `adjustment` is exempt from that rule here *and* in `createTransactionInput`,
+ * so a zero adjustment is creatable on both engines and will throw in every FX
+ * figure. That is a real gap and it is not this function's: the exemption is
+ * `transactions_amount_positive`'s own shape (`> 0 OR type = 'adjustment'`),
+ * and narrowing it belongs in a migration, not in a device-side helper that
+ * would then refuse rows the server accepts.
+ *
+ * A line is never a pivot, and a receipt routinely carries a `0.00` row — a
  * loyalty item, a free refill, a rounding line. Refusing it rejected the whole
  * breakdown for a line the shop printed, and neither engine has a CHECK here
  * to appeal to: `transaction_lines` carries none. Being stricter than the

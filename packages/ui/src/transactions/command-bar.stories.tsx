@@ -9,9 +9,32 @@ import type { Meta, StoryObj } from "@storybook/react-native-web-vite";
 import type { CaptureParse } from "@waltning/core/capture/grammar";
 import { accountingDate } from "@waltning/core/date";
 import { currencyCode, toMoney } from "@waltning/core/money";
+import { View } from "react-native";
+import { makeStyles } from "../theme/styles.ts";
+import { space } from "../tokens.ts";
 import { CommandBar, type CommandBarProps } from "./command-bar";
 
 function noop() {}
+
+/**
+ * **On the band, because that is the only ground this bar has.**
+ *
+ * `DeskBand`'s `commandBar` slot is its sole mount site, and the bar paints no
+ * fill of its own — so its hint, reason and payee render straight onto
+ * `theme.shell`. These stories used to render it on the page ground, which is
+ * a background it never has: the axe pass then measured every ink against the
+ * wrong pairing and passed, while on the real band those inks sat at 1.45:1.
+ * A story that lies about where a component lives is a contrast check that
+ * cannot fail.
+ */
+function OnTheBand({ children }: { children: React.ReactNode }) {
+  const styles = useStyles();
+  return <View style={styles.band}>{children}</View>;
+}
+
+const useStyles = makeStyles((theme) => ({
+  band: { backgroundColor: theme.shell, padding: space.x5 },
+}));
 
 const ACCOUNTS: CommandBarProps["accounts"] = [
   { id: "acc-cash", name: "Cash", currency: currencyCode("PLN"), decimals: 2 },
@@ -33,6 +56,13 @@ const meta = {
     onSubmit: noop,
     onDiscard: noop,
   },
+  decorators: [
+    (Story) => (
+      <OnTheBand>
+        <Story />
+      </OnTheBand>
+    ),
+  ],
 } satisfies Meta<typeof CommandBar>;
 
 export default meta;

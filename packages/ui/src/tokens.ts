@@ -161,6 +161,8 @@ export const color = {
   shell: "#3c4f38",
   shellText: "#f2f0e7",
   shellTextMuted: "#b8c4ae",
+  /** A refusal on the band. `danger-text` is a page ink and reads 1.37:1 there. */
+  shellDangerText: "#f2b5a2",
   /**
    * The active state for a control that lives *on* the shell — `DeskBand`'s
    * nav today. A translucent white rather than a step off the shell's own
@@ -235,6 +237,8 @@ export const darkColor = {
   shellText: "#f0f4ec",
   /** Tuned to this shell — 4.7:1 on it, over the 4.5 floor. */
   shellTextMuted: "#b3c2a9",
+  /** A refusal on the band — the band is one colour, so this is too. */
+  shellDangerText: "#f2b5a2",
 } as const;
 
 /* ── 2.2 Typography ──────────────────────────────────────────────────────── */

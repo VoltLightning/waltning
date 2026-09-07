@@ -217,3 +217,41 @@ export function shiftMonth(month: YearMonth, n: number): YearMonth {
   const mm = String(shifted.getUTCMonth() + 1).padStart(2, "0");
   return yearMonth(`${yyyy}-${mm}`);
 }
+
+/**
+ * One calendar month as a filter range, inclusive on both ends.
+ *
+ * The month's last day is "the day before the first of the next month" rather
+ * than a table of lengths — `shiftMonth`/`addDays` carry the year rollover and
+ * February in a leap year. `periodMonthOf` is this function read backwards,
+ * which is why they sit together: a range this built must be a range that one
+ * recognises.
+ *
+ * **In `core` because two surfaces read it.** It lived in the phone's ledger
+ * screen while only the desk rail's period stepper used it; the filter sheet's
+ * period presets are the second caller, and a `packages/ui` component cannot
+ * import from an app.
+ */
+export function monthRange(month: YearMonth): { from: AccountingDate; to: AccountingDate } {
+  return {
+    from: accountingDate(`${month}-01`),
+    to: addDays(accountingDate(`${shiftMonth(month, 1)}-01`), -1),
+  };
+}
+
+/**
+ * The calendar month a range names, or `null` when it names none.
+ *
+ * **The label *is* the filter.** A period stepper that keeps its own month
+ * beside the range drifts: "Clear all filters" left one build's label naming a
+ * month it no longer filtered, over a table covering every transaction ever.
+ * Deriving the month from the range means the label can only ever say what the
+ * query is doing — a whole calendar month names its month, and anything else
+ * has to print its own two ends.
+ */
+export function periodMonthOf(from: string, to: string): YearMonth | null {
+  if (!isAccountingDate(from) || !isAccountingDate(to)) return null;
+  const month = yearMonth(from.slice(0, 7));
+  const bounds = monthRange(month);
+  return from === bounds.from && to === bounds.to ? month : null;
+}

@@ -169,6 +169,7 @@ export function BottomSheet({ visible, title, onDismiss, footer, children }: Bot
               style={[styles.body, containOverscroll]}
               contentContainerStyle={styles.bodyContent}
               keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
             >
               {children}
             </ScrollView>
@@ -208,7 +209,6 @@ const useStyles = makeStyles((theme) => ({
     backgroundColor: theme.surface,
     borderTopLeftRadius: radius.lg,
     borderTopRightRadius: radius.lg,
-    paddingHorizontal: space.x5,
     paddingTop: space.x5,
     gap: space.x4,
     shadowColor: theme.elevation.raised.shadowColor,
@@ -218,11 +218,27 @@ const useStyles = makeStyles((theme) => ({
     borderWidth: theme.elevation.raised.borderWidth,
     borderColor: theme.elevation.raised.borderColor,
   },
-  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  header: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: space.x5,
+  },
   title: { color: theme.text, ...text.ui("displayThree") },
-  /** The one part that gives way — header and footer keep their own height. */
+  /**
+   * The one part that gives way — header and footer keep their own height.
+   *
+   * **The gutter is on the content, not on the sheet.** It used to be
+   * `paddingHorizontal` on `sheet`, which put this scroller *inside* the
+   * padding: the scroll indicator rode in a channel indented from the sheet's
+   * own edge, and a focused field's ring — drawn 4px outside its box — was
+   * clipped left and right by the padding it was sitting in. Same defect the
+   * screens had, same fix as `shell/ground-inset.ts`: the scroller spans the
+   * sheet, the inset rides on what it carries. The indicator is hidden
+   * besides; the sheet's own height already says there is more.
+   */
   body: { flexShrink: 1 },
-  /** The gap the sheet used to apply to every child directly. */
-  bodyContent: { gap: space.x4 },
-  footer: { gap: space.md },
+  /** The gap the sheet used to apply to every child directly, and the gutter. */
+  bodyContent: { gap: space.x4, paddingHorizontal: space.x5 },
+  footer: { gap: space.md, paddingHorizontal: space.x5 },
 }));

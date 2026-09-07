@@ -658,7 +658,27 @@ function PreviewChip({
 }
 
 const useStyles = makeStyles((theme) => ({
-  root: { gap: space.xs },
+  /**
+   * **The bar carries its own surface.** It had none: `root` set a gap and
+   * nothing else, so every leaf that is not inside a chip rendered straight
+   * onto `theme.shell` — the hint and reason at 1.45:1, field errors at 1.37,
+   * and the preview's own **amount** at 1.42, in a money colour that is fixed
+   * and cannot be re-tinted for one ground.
+   *
+   * Recolouring ink by ink was the wrong repair: it needed a shell variant of
+   * every page ink, money included. A control that sits on the band and has no
+   * fill is the defect. With a surface under it the page inks are correct
+   * again, the figure keeps the colour it has everywhere else, and the bar
+   * reads as an object on the band instead of text floating on it.
+   */
+  root: {
+    gap: space.xs,
+    backgroundColor: theme.surface,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: theme.border,
+    paddingVertical: space.md,
+  },
   input: {
     minHeight: touchTarget.min,
     borderRadius: radius.sm,

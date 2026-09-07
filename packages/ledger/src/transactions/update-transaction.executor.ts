@@ -77,27 +77,36 @@ export const updateTransactionExecutor = defineLocalExecutor<
       .where(eq(transactions.id, input.id))
       .get();
     /**
-     * **A row this device does not hold is a refusal, not a skip.**
+     * **A row this device does not hold is skipped, not refused — and the two
+     * rounds either side of this line are both wrong on their own.**
      *
-     * The early return was `if (!current || current.deletedAt !== null)
-     * return`, which put back the entry this hook exists to keep out: a
-     * `-10.00` patch naming an id the replica has never seen queued a real
-     * `update_transaction` that Postgres refuses forever, and `recover.ts`
-     * re-reads it at every launch while any sibling entry is `deferred`. The
-     * deleted branch is safe — `apply` refuses that with a message — but the
-     * missing one fell through to the outbox.
+     * Refusing here was the fix for a ghost id queueing an entry. It caused
+     * data loss. An `adjustment` may legitimately carry a negative
+     * `amount_original` (`transactions_amount_positive` is `> 0 OR type =
+     * 'adjustment'`), and the exemption is a property of a row this hook may
+     * not have: an adjustment captured offline in a currency with no known
+     * rate defers, so the outbox holds the create and the replica holds no row
+     * at all. Editing that adjustment to `-25.00` — the legal value — hit a
+     * refusal that `validate` classes `dependency: false`, so `recover.ts`
+     * marked the entry `refused`, `outstanding` skips it forever and the drain
+     * only reads `pending`. The edit vanished, with no error a person sees.
      *
-     * `adjustment` is the only exemption, and neither of the two operations
-     * that reach this check can set a `type`: `update_transaction`'s patch has
-     * no such field and `set_transaction_lines` mints nothing. So an unknown
-     * row cannot be an adjustment, and a non-positive amount for one is
-     * refused on the spot.
+     * "Neither operation can set a `type`" was the argument for refusing, and
+     * it is a non-sequitur: it says this write cannot *make* the row an
+     * adjustment, not that the row is not one already.
+     *
+     * So the rule is judged where the row is. The queued entry that motivated
+     * the refusal is not the stuck kind — the replica wrote nothing, so
+     * nothing diverges, and the server adjudicates a write against a row only
+     * it holds. That is what the outbox is for. `apply` still refuses, with
+     * `dependency: true` on the "no such row" path, which is the class
+     * `recover.ts` defers rather than drops.
      */
-    if (current !== undefined && current.deletedAt !== null) return;
+    if (current === undefined || current.deletedAt !== null) return;
     assertAmountPositive(
       "update_transaction: amount_original",
       input.patch.amountOriginal,
-      current?.type ?? "unknown",
+      current.type,
     );
   },
 
