@@ -57,7 +57,7 @@ export const color = {
    * WCAG 1.4.11's 3:1 boundary floor by itself, and it has to carry it against
    * **every fill a control is drawn on**, not just the page: a filled chip
    * sits on `subtle`, and any control under a finger sits on `hover` or
-   * `pressed`. Checked against all five, the tan this replaced ran from 1.87
+   * `pressed`. Checked against all five, the tan this replaced ran from 1.86
    * on `surface` down to 1.38 on `pressed`, and a first correction to
    * `#9d8d6d` still left a filled chip's edge at 2.74 and a hovered one at
    * 2.59 — floor met on the page, missed in the states. 3.15 at the tightest
@@ -500,7 +500,7 @@ export const motionFrequency = {
   rare: "sheet",
 } as const satisfies Record<string, keyof typeof motion>;
 
-/* ── 2.9 The two moving parts of the screen ─────────────────────────────── */
+/* ── 2.9 The moving parts of the screen ────────────────────────────────── */
 
 /**
  * **The add button floats.** §2.9 fixes its geometry: a 56px circle — the only

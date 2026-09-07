@@ -2712,8 +2712,12 @@ describe("a control's edge is not the divider colour", () => {
    * Is this `borderColor` value the divider, under any of its names?
    *
    * **`theme.elevation.<role>.borderColor` is the divider.** `roles.ts` builds
-   * every elevation with `bordered(color.border)`, so that path resolves to
-   * `#eae3d5` — and it is the house idiom for a 1px edge, used by four files.
+   * `card`, `sheet` and `dialog` with `bordered(color.border)`, so those paths
+   * resolve to `#eae3d5` — and that is the house idiom for a 1px edge, used by
+   * four files. (`float` and `floatLifted` come from `floating(...)` and are
+   * the shell and the accent; the pattern below matches them too, and nothing
+   * draws a border with either, so the over-match has never fired. Narrowing it
+   * would mean naming the three, which is a list that goes stale.)
    * A control spelling its edge that way is the same defect wearing an alias,
    * and it defeated the first version of this rule because the `theme.` in
    * front of it looked like a property access on something else.

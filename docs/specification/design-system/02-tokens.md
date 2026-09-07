@@ -382,7 +382,7 @@ and the sheet rise are all currently unbranched (§10).
 [Phosphor Icons](https://phosphoricons.com) — `fill` for brand and emphasis,
 `duotone` for navigation. Icon-only buttons always carry an accessible label.
 
-### 2.9 The two moving parts of the screen
+### 2.9 The moving parts of the screen
 
 Three behaviours are specified here because they are tokens of the *shell*
 rather than of any one screen, and because each has a rule a screen must not

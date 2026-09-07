@@ -206,12 +206,14 @@ export function AccountPicker({
         />
       ) : null}
       {/*
-        `nestedScrollEnabled` belongs on *this* list — the bounded one
+        The declaration belongs on *this* list — the bounded one
         (`styles.scroll`'s own `maxHeight`) — never on the sheet body around
-        it. It is inert today, because `BottomSheet`'s body is a plain
-        `View` inside a `Modal` and there is no outer scrollable to lose the
-        gesture to; it is the Android contract for the day that body does
-        scroll, stated where it will still be right.
+        it, which is what has to keep moving. And it is load-bearing, not a
+        contract for later: `BottomSheet`'s body is a `ScrollView`
+        (`bottom-sheet.test.tsx` asserts its `overflow-y`), so on Android this
+        list is a nested-scrolling child of a real scroller, and on the web the
+        containment is what stops the sheet sliding when this list reaches its
+        end.
       */}
       <ScrollView testID="account-picker-scroll" {...nestedScrollProps(styles.scroll)}>
         {recent === undefined ? null : (

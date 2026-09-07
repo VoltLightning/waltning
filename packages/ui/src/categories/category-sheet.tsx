@@ -373,12 +373,12 @@ export function CategorySheet({
         </ScrollView>
       )}
       {/*
-        `nestedScrollEnabled` on the inner list — the bounded one
-        (`gridScroll`'s own `maxHeight`) — never on the sheet body. Inert
-        today: `BottomSheet`'s body is a plain `View` in a `Modal`, so there
-        is no outer scrollable to lose the gesture to. It is the Android
-        contract for the day that body scrolls, stated on the list it would
-        be about.
+        The declaration goes on the inner list — the bounded one
+        (`gridScroll`'s own `maxHeight`) — never on the sheet body, which has
+        to keep moving. Load-bearing today: `BottomSheet`'s body is a
+        `ScrollView`, so this is a nested-scrolling child of a real scroller on
+        Android, and on the web the containment is what stops the sheet sliding
+        when the grid reaches its end.
       */}
       <ScrollView testID="category-grid-scroll" {...nestedScrollProps(styles.gridScroll)}>
         {visibleLeaves.length === 0 ? (

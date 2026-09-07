@@ -102,7 +102,7 @@ describe("the token spec and the tokens agree", () => {
     const rows = new Map<string, string>();
     // One or two backticked names — the dark table writes three rows as
     // `` `subtleFill` / `tagNeutralFill` ``, and a pattern that stopped at the
-    // first name skipped seven role values in silence.
+    // first name skipped six role values in silence.
     for (const [, first, second, value] of markdown.matchAll(
       /^\|\s*`([a-zA-Z][\w-]*)`(?:\s*\/\s*`([a-zA-Z][\w-]*)`)?\s*\|\s*`(#[0-9a-f]{6}|\d+(?:px)?)`\s*\|/gm,
     )) {
@@ -150,7 +150,7 @@ describe("the token spec and the tokens agree", () => {
     // **The count of keys actually compared, not of rows parsed.** The first
     // version guarded with `rowsFrom(SPEC).size`, which counts what the regex
     // read — so a name the folder mangled (`green-100`) or a row shape it could
-    // not match still counted, and nine chart colours plus seven dark roles went
+    // not match still counted, and nine chart colours plus six dark roles went
     // uncompared behind a green guard.
     expect(compared, "a drop here means rows stopped being compared").toEqual({
       light: 38,
@@ -304,8 +304,8 @@ describe("a component follows the active theme", () => {
    * **The shell has to read as a band, and nothing drew a line under it.**
    *
    * Every check above is a text-on-fill ratio, and the dark shell passed all of
-   * them: `#0a1f16` holds `shellText` at 15.6:1. What it did not hold was any
-   * relationship to the page — 1.10:1 against `ground` and 1.01:1 against
+   * them: `#0a1f16` holds `shellText` at 15.5:1. What it did not hold was any
+   * relationship to the page — 1.01:1 against `ground` and 1.09:1 against
    * `surface`, so the header was legible text floating on an area boundary
    * nobody could see. The screen read as one flat black rectangle, and the
    * suite was green throughout.

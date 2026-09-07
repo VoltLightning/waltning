@@ -125,10 +125,11 @@ it("the page scroller shows no scroll indicator", () => {
 
 /**
  * **And it contains nothing**, which is the other half of being the page.
- * Containment stops *chaining* and leaves an element's own bounce and
- * pull-to-refresh alone — suppressing those is `overscroll-behavior: none`,
- * not `contain`. A page scroller has nothing above it to chain into, so the
- * declaration would state something untrue about where it sits. Asserted so
+ * `contain` keeps a scroller's *own* bounce and pull-to-refresh — suppressing
+ * those is `none` — and stops the scroll from chaining outward, which on a
+ * nested scroller is what holds the browser's navigation gesture. A page
+ * scroller has nothing outward to chain into, so declaring containment there
+ * states something untrue about where it sits and buys nothing. Asserted so
  * that "declared as the page" cannot quietly become "declared and contained".
  */
 it("the page scroller contains neither axis", () => {
