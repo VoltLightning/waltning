@@ -408,7 +408,7 @@ export type Backfill = {
  * `REPLICA_STEPS` — generated file or hand-written one — so the rule cannot
  * be broken back the way it was.
  *
- * `migrate.test.ts` censuses all six off `sqlite_master` **after the whole
+ * `migrate.test.ts` censuses all seven off `sqlite_master` **after the whole
  * chain has run** — not after the hook's own step, which is the one question
  * whose answer a later rebuild can change — and `backfills.test.ts` asks the
  * same by name and structurally.
@@ -502,10 +502,25 @@ END`,
  * `update_transaction`, which anything may call.
  *
  * **Zero lines is legal** — an unsplit transaction — so the `WHEN` is gated on
- * the split existing. The comparison is `CAST(... AS REAL)` rather than string
- * equality: `numeric(20,8)` strings compare correctly as text only when both
- * are at the same scale, which is true of every row this codebase writes and
- * is not something a trigger should assume of a row it did not write.
+ * the split existing.
+ *
+ * **Compared as scaled integers, never as `REAL`.** A first version cast both
+ * sides to `REAL`, which is a double, and money in a double is wrong in both
+ * directions: `0.01 + 1.62` sums to `1.6300000000000001` and would have
+ * *refused a correct write*, while two amounts differing below the double's
+ * precision would have been *accepted as equal*. Every amount here is written
+ * by `money.toMoney` at exactly 8 decimal places (`SPEC.md` §7.0), so removing
+ * the point yields the exact value in units of 1e-8 and `SUM` over those is
+ * integer arithmetic. `money.toMoney` is what keeps that premise true: it is
+ * the only writer of these columns and it emits `toFixed(8)`. (Not
+ * `assertMoneyScale`, which rejects *more* decimals than a currency allows and
+ * would pass a two-decimal string happily — the SQLite column is plain `text`
+ * with no transform of its own.)
+ *
+ * The bound is SQLite's signed 64-bit integer: this is exact to ±92,233,720,368
+ * units of currency and would silently overflow past it. `numeric(20,8)` allows
+ * more; nothing in a personal ledger comes near, and a trigger that is exact to
+ * ninety-two billion is a better guarantee than one that is approximate at ten.
  */
 const LINE_SUM_TRIGGERS: readonly string[] = [
   `CREATE TRIGGER IF NOT EXISTS \`transactions_lines_sum_matches_update\`
@@ -514,9 +529,9 @@ WHEN EXISTS (SELECT 1 FROM \`transaction_lines\` WHERE \`transaction_id\` = NEW.
 BEGIN
 	SELECT RAISE(ABORT, 'transaction lines must sum to the transaction amount (§10.3)')
 	WHERE (
-		SELECT CAST(SUM(\`amount\`) AS REAL) FROM \`transaction_lines\`
+		SELECT SUM(CAST(REPLACE(\`amount\`, '.', '') AS INTEGER)) FROM \`transaction_lines\`
 		WHERE \`transaction_id\` = NEW.\`id\`
-	) <> CAST(NEW.\`amount_original\` AS REAL);
+	) <> CAST(REPLACE(NEW.\`amount_original\`, '.', '') AS INTEGER);
 END`,
 ];
 

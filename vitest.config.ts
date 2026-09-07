@@ -70,13 +70,12 @@ export default defineConfig({
           /react-native-worklets/,
           /react-native-reanimated/,
           /react-native-gesture-handler/,
-          // The icon set (§2.8) and the renderer under it. Both ship `.web.js`
-          // halves beside their native ones and import without extensions, so
-          // they need Vite's resolver and the `extensions` order above; loaded
+          // The SVG renderer under the icon set (§2.8). It ships `.web.js`
+          // halves beside its native files and imports without extensions, so
+          // it needs Vite's resolver and the `extensions` order above; loaded
           // by Node instead, the native half arrives and dies on a Flow
           // `typeof`.
           /react-native-svg/,
-          /phosphor-react-native/,
         ],
       },
     },

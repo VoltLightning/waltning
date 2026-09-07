@@ -114,6 +114,20 @@ describe("useWhereItWent", () => {
     expect(document.body.textContent ?? "").not.toContain("gone");
   });
 
+  /**
+   * **Two lost ids are one row.** Splitting them puts two identically-named
+   * rows on one chart with two amounts — the defect the fold exists to
+   * prevent, and it survived one direction longer than the others. What the
+   * reader can act on is "some of this month has no category I can show you";
+   * saying that twice says less.
+   */
+  it("folds every lost category into a single row", () => {
+    const rows = rowsFor([bucket("gone-a", "10.00"), bucket("gone-b", "5.00")], []);
+    expect(rows).toEqual([
+      { key: "removed", label: "Removed category", amount: money.toMoney("15.00") },
+    ]);
+  });
+
   /** No lead currency — a ledger with no accounts — is no rows, not a throw. */
   it("is empty when there is no currency to pick", () => {
     const { result } = renderHook(() =>

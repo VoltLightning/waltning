@@ -12,10 +12,12 @@
  * exactly and one fold decides what *mine*, *shared* and *business* mean.
  *
  * **The line query is driven by the ids the first query already found**
- * (`inArray`), not by a second join back through `transactions`. The replica
- * indexes neither `transactions.date` nor `transaction_lines.transaction_id`,
- * so the join shape re-scanned `transactions` to re-derive a set this function
- * is already holding.
+ * (`inArray`), not by a second join back through `transactions`: the join
+ * shape re-scans `transactions` to re-derive a set this function is already
+ * holding. That was written when the replica indexed neither
+ * `transactions.date` nor `transaction_lines.transaction_id`; step `0013`
+ * added both when S04 moved two period reads onto the launch screen, and the
+ * shape is still right — an index makes the re-scan cheaper, not necessary.
  *
  * **And it is chunked**, through the same `chunkIds` the counterparty merge
  * uses. `inArray` binds one SQLite variable per id and the default ceiling is

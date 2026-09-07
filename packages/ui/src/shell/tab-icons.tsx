@@ -3,12 +3,17 @@
  * wired today, and `CalendarTabIcon` waiting for S11 to build the screen it
  * belongs to.
  *
- * **Phosphor, duotone, at last (§2.8).** These were five shapes built from
- * plain `View`s, because no icon library was installed — and it showed: Today
- * was a filled square, which is a placeholder rather than a home, and Debt was
- * an arrow that could have meant anything. `react-native-svg` ships in Expo
- * Go, so the install needed no EAS cutover, and the drawn set is gone in one
- * move rather than being extended a sixth time.
+ * **Phosphor duotone, at last (§2.8).** These were five shapes built from
+ * plain `View`s, because no icon set was installed — and it showed: Today was
+ * a filled square, which is a placeholder rather than a home, and Debt was an
+ * arrow that could have meant anything. The shapes are Phosphor's own, drawn
+ * through `react-native-svg` (Expo Go bundles it, so no EAS cutover) from the
+ * six paths in `phosphor.tsx` — which is where the reason for vendoring them
+ * rather than installing 1,512 is written down.
+ *
+ * `duotone` because §2.8 gives it to navigation, and the tab bar is the
+ * navigation: the tone layer is the same ink at reduced opacity, so an
+ * inactive glyph is one colour lighter rather than a different shape.
  *
  * **One box for all five, and the icon is drawn inside it.** `Today` used to
  * *be* its 14px square rather than sit in a 20px box, so its label rose 3px
@@ -21,16 +26,16 @@
  * word beside it rather than staying `textMuted` regardless of selection.
  */
 
-import {
-  ArrowsLeftRight,
-  CalendarBlank,
-  House,
-  ListBullets,
-  SlidersHorizontal,
-} from "phosphor-react-native";
 import { View } from "react-native";
 import { useTheme } from "../theme/provider";
 import { makeStyles } from "../theme/styles.ts";
+import {
+  ArrowsLeftRightIcon,
+  CalendarBlankIcon,
+  HouseIcon,
+  ListBulletsIcon,
+  SlidersHorizontalIcon,
+} from "./phosphor";
 
 /**
  * The box every glyph is drawn in, and the box `TabBar` reserves for it.
@@ -41,23 +46,12 @@ export const TAB_ICON_SIZE = 20;
 
 export type TabIconProps = { active?: boolean };
 
-/**
- * `duotone` — §2.8 gives it to navigation, and the tab bar is the navigation.
- * The second tone is the same ink at Phosphor's own reduced opacity, so an
- * inactive glyph is one colour lighter rather than a different shape.
- */
-const WEIGHT = "duotone" as const;
-
 export function TodayTabIcon({ active = false }: TabIconProps) {
   const styles = useStyles();
   const theme = useTheme();
   return (
     <View style={styles.box}>
-      <House
-        size={TAB_ICON_SIZE}
-        color={active ? theme.accentText : theme.textMuted}
-        weight={WEIGHT}
-      />
+      <HouseIcon size={TAB_ICON_SIZE} color={active ? theme.accentText : theme.textMuted} />
     </View>
   );
 }
@@ -67,11 +61,7 @@ export function LedgerTabIcon({ active = false }: TabIconProps) {
   const theme = useTheme();
   return (
     <View style={styles.box}>
-      <ListBullets
-        size={TAB_ICON_SIZE}
-        color={active ? theme.accentText : theme.textMuted}
-        weight={WEIGHT}
-      />
+      <ListBulletsIcon size={TAB_ICON_SIZE} color={active ? theme.accentText : theme.textMuted} />
     </View>
   );
 }
@@ -81,11 +71,7 @@ export function CalendarTabIcon({ active = false }: TabIconProps) {
   const theme = useTheme();
   return (
     <View style={styles.box}>
-      <CalendarBlank
-        size={TAB_ICON_SIZE}
-        color={active ? theme.accentText : theme.textMuted}
-        weight={WEIGHT}
-      />
+      <CalendarBlankIcon size={TAB_ICON_SIZE} color={active ? theme.accentText : theme.textMuted} />
     </View>
   );
 }
@@ -100,10 +86,9 @@ export function DebtTabIcon({ active = false }: TabIconProps) {
   const theme = useTheme();
   return (
     <View style={styles.box}>
-      <ArrowsLeftRight
+      <ArrowsLeftRightIcon
         size={TAB_ICON_SIZE}
         color={active ? theme.accentText : theme.textMuted}
-        weight={WEIGHT}
       />
     </View>
   );
@@ -114,10 +99,9 @@ export function SettingsTabIcon({ active = false }: TabIconProps) {
   const theme = useTheme();
   return (
     <View style={styles.box}>
-      <SlidersHorizontal
+      <SlidersHorizontalIcon
         size={TAB_ICON_SIZE}
         color={active ? theme.accentText : theme.textMuted}
-        weight={WEIGHT}
       />
     </View>
   );

@@ -19,8 +19,8 @@
  * *appearance* here.
  */
 
-import { CircleHalf } from "phosphor-react-native";
 import { useTheme } from "../theme/provider";
+import { CircleHalfIcon } from "./phosphor";
 
 /** Matches `TAB_ICON_SIZE` — the shell's glyphs are one size. */
 const SIZE = 20;
@@ -28,5 +28,5 @@ const SIZE = 20;
 export function AppearanceIcon() {
   // The band's own ink: this sits on `theme.shell`, never on the ground.
   const theme = useTheme();
-  return <CircleHalf size={SIZE} color={theme.shellText} weight="duotone" />;
+  return <CircleHalfIcon size={SIZE} color={theme.shellText} />;
 }

@@ -780,6 +780,175 @@ describe("set_transaction_lines", () => {
     expect(readTxn()?.amountOriginal, "the refused write changed nothing").toBe("18.00000000");
   });
 
+  /**
+   * **Money in a double is wrong in both directions**, which is why the
+   * trigger compares scaled integers. `0.01 + 1.62` sums to
+   * `1.6300000000000001` as a `REAL`, so a first version of this trigger
+   * refused a correct write; and two amounts differing below the double's
+   * precision compared equal, so it accepted a wrong one. Both cases here,
+   * against the trigger alone — the executor's own check is decimal and was
+   * never in doubt.
+   */
+  it("accepts a split whose lines only sum exactly in decimal, never in floating point", () => {
+    const v = () => readTxn()?.version ?? 0;
+    // The parent first — a transaction with no lines yet has no sum to keep.
+    writeLocally(stores.ledger, {
+      executor: updateTransactionExecutor,
+      registry: ledgerRegistry,
+      capture,
+      input: { id: TXN, version: v(), patch: { amountOriginal: "1.63" } },
+    });
+    writeLocally(stores.ledger, {
+      executor: setTransactionLinesExecutor,
+      registry: ledgerRegistry,
+      capture,
+      input: {
+        transactionId: TXN,
+        version: v(),
+        lines: [
+          {
+            id: id<"transactionLines">("00000000-0000-4000-8000-0000000000d1"),
+            description: "Bag",
+            amount: "0.01",
+          },
+          {
+            id: id<"transactionLines">("00000000-0000-4000-8000-0000000000d2"),
+            description: "Bread",
+            amount: "1.62",
+          },
+        ],
+      },
+    });
+
+    // The re-send a form makes when it submits every field it read. 0.01 + 1.62
+    // is 1.63 exactly in decimal and 1.6300000000000001 as a `REAL`, so the
+    // first version of this trigger refused it.
+    writeLocally(stores.ledger, {
+      executor: updateTransactionExecutor,
+      registry: ledgerRegistry,
+      capture,
+      input: { id: TXN, version: v(), patch: { amountOriginal: "1.63" } },
+    });
+    expect(readTxn()?.amountOriginal).toBe("1.63000000");
+  });
+
+  /**
+   * The other direction: a difference a double cannot resolve. Written
+   * straight to the replica, because the executor's decimal check would refuse
+   * it first and the point is what the trigger does when the code is wrong.
+   */
+  it("refuses a difference below floating-point precision", () => {
+    const v = () => readTxn()?.version ?? 0;
+    writeLocally(stores.ledger, {
+      executor: setTransactionLinesExecutor,
+      registry: ledgerRegistry,
+      capture,
+      input: {
+        transactionId: TXN,
+        version: v(),
+        lines: [
+          {
+            id: id<"transactionLines">("00000000-0000-4000-8000-0000000000e1"),
+            description: "Whole",
+            amount: "18",
+          },
+        ],
+      },
+    });
+
+    expect(() =>
+      stores.ledger.replica.db
+        .update(transactions)
+        .set({ amountOriginal: money.toMoney("18.00000001") })
+        .where(eq(transactions.id, TXN))
+        .run(),
+    ).toThrow(/lines must sum/);
+  });
+
+  /**
+   * **A split's total can still change — in one operation, which is the
+   * device's version of Postgres's deferral.** Postgres lets the two
+   * statements arrive separately because both sum triggers are `DEFERRABLE
+   * INITIALLY DEFERRED`; here each operation is its own transaction, so
+   * amount-first is refused by the parent's check and lines-first by the
+   * lines'. Guarding one direction without this would have made a split's
+   * total unchangeable by any route a screen offers.
+   */
+  it("re-splits to a new total when the amount travels with the lines", () => {
+    const v = () => readTxn()?.version ?? 0;
+    writeLocally(stores.ledger, {
+      executor: setTransactionLinesExecutor,
+      registry: ledgerRegistry,
+      capture,
+      input: {
+        transactionId: TXN,
+        version: v(),
+        lines: [
+          {
+            id: id<"transactionLines">("00000000-0000-4000-8000-0000000000f1"),
+            description: "Espresso",
+            amount: "10",
+          },
+          {
+            id: id<"transactionLines">("00000000-0000-4000-8000-0000000000f2"),
+            description: "Croissant",
+            amount: "8",
+          },
+        ],
+      },
+    });
+
+    writeLocally(stores.ledger, {
+      executor: setTransactionLinesExecutor,
+      registry: ledgerRegistry,
+      capture,
+      input: {
+        transactionId: TXN,
+        version: v(),
+        amountOriginal: "20",
+        lines: [
+          {
+            id: id<"transactionLines">("00000000-0000-4000-8000-0000000000f3"),
+            description: "Espresso",
+            amount: "10",
+          },
+          {
+            id: id<"transactionLines">("00000000-0000-4000-8000-0000000000f4"),
+            description: "Cake",
+            amount: "10",
+          },
+        ],
+      },
+    });
+
+    expect(readTxn()?.amountOriginal).toBe("20.00000000");
+    expect(readLines()).toHaveLength(2);
+  });
+
+  /** And the new total still has to be the sum — carrying it is not a bypass. */
+  it("refuses an amount that travels with lines it does not match", () => {
+    const v = () => readTxn()?.version ?? 0;
+    expect(() =>
+      writeLocally(stores.ledger, {
+        executor: setTransactionLinesExecutor,
+        registry: ledgerRegistry,
+        capture,
+        input: {
+          transactionId: TXN,
+          version: v(),
+          amountOriginal: "20",
+          lines: [
+            {
+              id: id<"transactionLines">("00000000-0000-4000-8000-0000000000f5"),
+              description: "Espresso",
+              amount: "10",
+            },
+          ],
+        },
+      }),
+    ).toThrow(/lines sum to 10.*the transaction is 20/s);
+  });
+
   /** The same patch with the lines removed is ordinary — an unsplit transaction has no sum to keep. */
   it("update_transaction allows an amount change when there are no lines", () => {
     const v = () => readTxn()?.version ?? 0;

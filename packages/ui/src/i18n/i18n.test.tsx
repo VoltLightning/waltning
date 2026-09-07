@@ -184,15 +184,17 @@ describe("plural categories", () => {
  * what the fallback holds. `filterExcludes` and the rate keys were already
  * written out in full; this makes that the rule rather than the habit.
  *
- * **What it does not check: a counted key with no forms at all.** Twenty-six
- * of those exist, and most are deliberate — fourteen are this catalogue's own
- * `…One`/`…Many` pairs, where the *caller* picks the form, and the rest
- * interpolate a count into a sentence that does not decline around it
- * (`showingOfTotal`, `archivedCount`). Telling those apart from a genuine
+ * **What it does not check: a counted key with no forms at all.** There are
+ * dozens, and most are deliberate — many are this catalogue's own `…One`/
+ * `…Many` pairs, where the *caller* picks the form, and the rest interpolate a
+ * count into a sentence that does not decline around it (`showingOfTotal`,
+ * `archivedCount`). No number here: counting them needs a parser that agrees
+ * with itself about multi-line values, and a figure in a comment that nothing
+ * recomputes is the thing this repository keeps finding wrong. Telling those apart from a genuine
  * omission needs a judgement per key rather than a rule, so this checks the
  * half a rule can decide. `dashboard.flowRange` is the one to watch: it reads
- * "{{count}} miesięcy", correct for its constant 6 and wrong the day that
- * constant becomes 2.
+ * "{{count}} miesięcy", correct for the `COMPLETE_FLOW_MONTHS` of 5 it is
+ * called with and wrong the day that constant becomes 2.
  */
 describe("counted strings decline", () => {
   const FORMS = ["one", "few", "many", "other"] as const;

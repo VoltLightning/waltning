@@ -97,10 +97,16 @@ export function useWhereItWent(
     const named = rows
       .filter((row) => row.currency === currency)
       .map((row) => ({
+        // Two lost ids are one row, for the same reason the seed's blank folds
+        // into the null bucket: what the reader can act on is "some of this
+        // month has no category I can show you", and splitting that across
+        // two identically-named rows says less, twice.
         key:
           row.categoryId === null || row.categoryId === seededBlank
             ? "uncategorized"
-            : row.categoryId,
+            : names.has(row.categoryId)
+              ? row.categoryId
+              : "removed",
         // Three states, three labels. The caller passes the archived-inclusive
         // tree, so `unknown` is reached only by a category that is genuinely
         // gone rather than merely hidden.

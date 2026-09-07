@@ -114,8 +114,9 @@ function patchTransaction(input: UpdateTransactionInput, tx: ReplicaTx): LocalTr
    * (`transactions_lines_sum_matches`, `AFTER UPDATE OF amount_original`), so
    * the write was one the server would reject when the outbox drained — the
    * device holding a row that cannot sync, which is what `architecture/14`
-   * §14.6 exists to prevent. `0014_database_objects` carries the same trigger
-   * on the replica, so this holds when the code is wrong.
+   * §14.6 exists to prevent. `REPLICA_BACKFILLS["0010_schema"].objects` carries
+   * the same trigger on the replica (`migrate.ts`'s `LINE_SUM_TRIGGERS`), so
+   * this holds when the code is wrong.
    */
   if ("amountOriginal" in input.patch) {
     const lines = tx

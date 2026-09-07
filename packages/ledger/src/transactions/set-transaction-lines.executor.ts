@@ -108,10 +108,31 @@ function replaceLines(input: SetTransactionLinesInput, tx: ReplicaTx): LocalTran
     );
   }
 
+  /**
+   * **The amount this set is judged against — the patched one where the caller
+   * sent it.** Postgres can take the two statements separately because both
+   * sum triggers are `DEFERRABLE INITIALLY DEFERRED`: the parent and its lines
+   * may disagree inside a transaction and are judged at commit. Each operation
+   * here is its own transaction, so without this a split's total could not be
+   * changed in either order — 18 split 10 + 8 could not become 20 split
+   * 10 + 10, because amount-first is refused by the parent's check and
+   * lines-first by this one. Carrying both in one operation is the device's
+   * deferral.
+   */
+  const nextAmount = input.amountOriginal ?? current.amountOriginal;
+  if (input.amountOriginal !== undefined) {
+    assertMoneyScale(
+      tx,
+      input.amountOriginal,
+      current.currency,
+      "set_transaction_lines: amount_original",
+    );
+  }
+
   const total = money.sum(input.lines.map((line) => line.amount));
-  if (input.lines.length > 0 && !money.eq(total, current.amountOriginal)) {
+  if (input.lines.length > 0 && !money.eq(total, nextAmount)) {
     throw new LocalRefusal(
-      `set_transaction_lines: lines sum to ${total}, the transaction is ${current.amountOriginal}`,
+      `set_transaction_lines: lines sum to ${total}, the transaction is ${nextAmount}`,
     );
   }
 
@@ -139,7 +160,18 @@ function replaceLines(input: SetTransactionLinesInput, tx: ReplicaTx): LocalTran
     );
   }
 
+  // The parent first, and only when it moves: the lines are about to be
+  // replaced, so the sum trigger on `transactions` sees the *old* set here —
+  // which is why an amount change has to arrive with an empty line table under
+  // it. Deleting first is what gives it one.
   tx.delete(transactionLines).where(eq(transactionLines.transactionId, input.transactionId)).run();
+
+  if (input.amountOriginal !== undefined) {
+    tx.update(transactions)
+      .set({ amountOriginal: money.toMoney(input.amountOriginal) })
+      .where(eq(transactions.id, input.transactionId))
+      .run();
+  }
 
   if (input.lines.length > 0) {
     tx.insert(transactionLines)

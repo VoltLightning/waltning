@@ -27,6 +27,20 @@ export type IconButtonProps = {
   onPress: () => void;
   size?: IconButtonSize;
   disabled?: boolean;
+  /**
+   * The ground it sits on: `"ground"` (default) — a card or the page;
+   * `"shell"` — the sage band.
+   *
+   * **The fills are not interchangeable, and the failure is total.** `hoverFill`
+   * and `pressedFill` are ground-family creams; painted behind a `shellText`
+   * glyph on the band they leave it at **1.10:1** in light, which is a control
+   * that vanishes the moment a pointer touches it. `button.tsx` guards the same
+   * hazard by excluding `hoverFill` from its `primary` variant. On the shell
+   * the lit/recessed pair is an alpha overlay — `shellNavActiveFill` and
+   * `shellInsetTrackFill` — which darkens or lifts the one flat green without
+   * introducing a second colour to keep in sync.
+   */
+  tone?: "ground" | "shell";
   children: React.ReactNode;
 };
 
@@ -35,6 +49,7 @@ export function IconButton({
   onPress,
   size = 40,
   disabled = false,
+  tone = "ground",
   children,
 }: IconButtonProps) {
   const { hovered, focused, handlers } = useInteraction();
@@ -49,12 +64,12 @@ export function IconButton({
       styles.base,
       { width: size, height: size },
       // Hover under press: the pressed fill is one step darker and must win.
-      hovered && !disabled ? styles.hovered : null,
-      pressed ? styles.pressed : null,
+      hovered && !disabled ? (tone === "shell" ? styles.hoveredShell : styles.hovered) : null,
+      pressed ? (tone === "shell" ? styles.pressedShell : styles.pressed) : null,
       focused ? styles.focused : null,
       disabled ? styles.disabled : null,
     ],
-    [disabled, focused, hovered, size, styles],
+    [disabled, focused, hovered, size, styles, tone],
   );
 
   return (
@@ -78,6 +93,9 @@ const useStyles = makeStyles((theme) => ({
   content: { alignItems: "center", justifyContent: "center" },
   hovered: { backgroundColor: theme.hoverFill },
   pressed: { backgroundColor: theme.pressedFill },
+  /** Alpha over the one flat green — see `tone`. Lit under a pointer, recessed under a finger. */
+  hoveredShell: { backgroundColor: theme.shellNavActiveFill },
+  pressedShell: { backgroundColor: theme.shellInsetTrackFill },
   focused: {
     outlineWidth: focus.width,
     outlineColor: theme.focusRing,

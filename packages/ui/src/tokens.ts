@@ -75,7 +75,7 @@ export const color = {
    */
   borderStrong: "#746e5f",
   ink: "#33302a",
-  muted: "#6e6759",
+  muted: "#686154",
 
   /** A primary action's fill. Job 1. */
   accent: "#5c7357",

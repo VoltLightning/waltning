@@ -191,13 +191,21 @@ describe("a component follows the active theme", () => {
     ["light text on ground", light.text, light.ground],
     ["light text on surface", light.text, light.surface],
     // **Muted text is not only ever on the page**, and it is the ink most
-    // often put on a fill: `NetWorthStrip` rests on `subtleFill` and hovers,
-    // every card's kicker sits on `surface`. `hoverFill` is the tight one —
-    // 4.47:1, which is why that strip hovers to `accentFill` instead, and why
-    // `button.tsx` gives its ghost variant a different ink there.
+    // often put on a fill: eighteen files pair it with one, `NetWorthStrip`
+    // rests on `subtleFill`, every card's kicker sits on `surface`.
+    //
+    // **Including the two it used to fail.** A first version of this census
+    // added `surface`, `subtleFill` and `accentFill` — the three that passed —
+    // and left out `hoverFill` (4.47) and `pressedFill` (4.15), explaining the
+    // first away in a comment. Extending a census around its failing rows is
+    // the shape of not having one. `muted` moved a step darker instead, which
+    // is what "check a token against every fill it lands on" costs when the
+    // answer is no.
     ["light muted text on ground", light.textMuted, light.ground],
     ["light muted text on surface", light.textMuted, light.surface],
     ["light muted text on subtle fill", light.textMuted, light.subtleFill],
+    ["light muted text on hover fill", light.textMuted, light.hoverFill],
+    ["light muted text on pressed fill", light.textMuted, light.pressedFill],
     ["light muted text on accent fill", light.textMuted, light.accentFill],
     ["light text on accent", light.textOnAccent, light.accent],
     ["light accent text on ground", light.accentText, light.ground],
@@ -234,6 +242,8 @@ describe("a component follows the active theme", () => {
     ["dark muted text on ground", dark.textMuted, dark.ground],
     ["dark muted text on surface", dark.textMuted, dark.surface],
     ["dark muted text on subtle fill", dark.textMuted, dark.subtleFill],
+    ["dark muted text on hover fill", dark.textMuted, dark.hoverFill],
+    ["dark muted text on pressed fill", dark.textMuted, dark.pressedFill],
     ["dark muted text on accent fill", dark.textMuted, dark.accentFill],
     ["dark text on accent", dark.textOnAccent, dark.accent],
     ["dark accent text on ground", dark.accentText, dark.ground],
@@ -296,8 +306,9 @@ describe("a component follows the active theme", () => {
    * **A bar is a graphical object, and 1.4.11 asks 3:1 of it.**
    *
    * `SpendRows` draws one bar per category on `subtleFill`. It ranked into
-   * `chartRamp` first, and only two of that ramp's five steps clear the floor
-   * against a single track — worse in dark, where `chartRamp` is the light
+   * `chartRamp` first, and two of that ramp's five steps clear the floor
+   * against a single track in light while four do in dark — from the *other*
+   * end, because `chartRamp` is the light
    * ramp verbatim, so the *largest* category's bar sat at 2.19:1 while the
    * smallest was at 8.68:1. Nothing caught it: the visual suite's axe pass
    * checks text contrast, not a `View`'s fill against the `View` behind it.

@@ -1784,9 +1784,15 @@ describe("a constraint declared in the schema is present on the device", () => {
       inspect(join(dir, "indexes-replica.db"), (db) => objects(db, "index")),
       "regenerate the chain (`pnpm ledger:generate`) — a declared index that does not ship is worse than none",
     ).toEqual([
-      // The four unique indexes are constraints wearing an index's clothes —
-      // drizzle emits a `unique()` as one, and `sqlite_master` cannot tell
-      // them apart from the plain ones. Listed together for that reason.
+      // The four `uniqueIndex(...)` declarations — three of them partial, which
+      // a bare `unique()` could not express — land in `sqlite_master` as
+      // ordinary indexes, so they are listed together with the plain ones.
+      //
+      // **What this cannot see:** the autoindexes SQLite creates for a `UNIQUE`
+      // column or a composite primary key. Those are named `sqlite_autoindex_*`
+      // and `objects()` filters that prefix, so fifteen of them go uncounted —
+      // including `counterparty_distinct_pairs`. They are the engine's own and
+      // move with the table; the ones listed here are the chain's.
       "counterparties_name_uq",
       "counterparty_merges_loser_open_uq",
       "dashboard_layouts_one_active",

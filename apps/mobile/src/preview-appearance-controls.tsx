@@ -66,7 +66,7 @@ export function PreviewAppearanceControls({
         width of the word *Appearance* and the loudest thing on the band — a
         setting outranking the figures the screen exists to show.
       */}
-      <IconButton label={t("preview.appearance")} onPress={showAppearance}>
+      <IconButton label={t("preview.appearance")} onPress={showAppearance} tone="shell">
         <AppearanceIcon />
       </IconButton>
       <BottomSheet

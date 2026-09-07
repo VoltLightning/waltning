@@ -27,7 +27,7 @@ whatever the chrome around them does.
 | `border-interactive` | `#88795c` | The resting edge of a control — an input, a chip. A control here is identified by its edge alone (its fill is `surface` on `ground`, 1.08:1), so this carries WCAG 1.4.11's **3:1 boundary floor** by itself — against **every fill a control is drawn on**: `ground`, `surface`, `subtle`, `hover`, `pressed`. 3.15 at the tightest |
 | `border-strong` | `#746e5f` | An edge that must read alone: a selected control, a focus-adjacent edge. One step above `border-interactive` on the same ramp, held to the same five fills (3.75 at the tightest of the two themes) |
 | `ink` | `#33302a` | Body text **and heading ink** — a heading is not a signal. Warm near-black, never `#000` |
-| `muted` | `#6e6759` | Secondary text, labels, captions; a transfer's figure. 5.2:1 on `ground` |
+| `muted` | `#686154` | Secondary text, labels, captions; a transfer's figure. Held to 4.5:1 against **every** fill it lands on — `ground`, `surface`, `subtle`, `hover`, `pressed`, `accent-fill` — because eighteen files pair it with one of those; 4.54 at the tightest (`pressed`) |
 | `accent` | `#5c7357` | Primary action fill. Sage. **Job 1** |
 | `accent-text` | `#4c6247` | Links, a secondary action's label |
 | `accent-icon` | `#6f8f66` | Decorative accent marks; the **focus ring**. **Job 2** |
