@@ -5,7 +5,7 @@ import { yearMonth } from "@waltning/core/date";
 import * as money from "@waltning/core/money";
 import { createInstance } from "i18next";
 import { describe, expect, it } from "vitest";
-import { Amount } from "../fx/amount";
+import { Amount } from "../fx/atoms/amount/amount";
 import { en, type Messages } from "./en.ts";
 import { decimalMark, LOCALES, monthLabel, resolveLocale } from "./locales.ts";
 import { pl } from "./pl.ts";

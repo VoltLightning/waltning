@@ -73,7 +73,7 @@ function isSkipSignal(exitCode: number): boolean {
 
 describe("needs-visual.sh — the trigger set is computed from staged paths (M-3)", () => {
   it.each([
-    ["packages/ui/src/fx/amount.tsx", "a component"],
+    ["packages/ui/src/fx/atoms/amount/amount.tsx", "a component"],
     [
       "packages/ui/package.json",
       "ui's own package.json — a react-native-web bump can move a pixel",
@@ -106,7 +106,7 @@ describe("needs-visual.sh — the trigger set is computed from staged paths (M-3
     expect(
       needsVisualExitCode([
         "README.md",
-        "packages/ui/src/shell/dual-total.tsx",
+        "packages/ui/src/shell/molecules/dual-total/dual-total.tsx",
         "apps/api/src/index.ts",
       ]),
     ).toBe(0);

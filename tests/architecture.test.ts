@@ -1540,7 +1540,10 @@ describe("a card groups rows or holds a figure — never a whole screen", () => 
 
     // 2 — the card grows a title. The tab shell draws the screen's name, so
     // a title here is that name twice, and the exemption is spent.
-    const menu = join(repoRoot, "packages/ui/src/settings/settings-menu.tsx");
+    const menu = join(
+      repoRoot,
+      "packages/ui/src/settings/organisms/settings-menu/settings-menu.tsx",
+    );
     const menuText = sourceOf(menu);
     expect(menuText, "the menu component exists").not.toBe("");
     const titled = rootCard(menuText.replace("<Card>", "<Card title={title}>"), "SettingsMenu");
@@ -1675,7 +1678,9 @@ describe("a card groups rows or holds a figure — never a whole screen", () => 
     // The one this test exists to keep honest: the repo's own early-return card.
     expect(
       rootCard(
-        sourceOf(join(repoRoot, "packages/ui/src/accounts/shared-group.tsx")),
+        sourceOf(
+          join(repoRoot, "packages/ui/src/accounts/molecules/shared-group/shared-group.tsx"),
+        ),
         "SharedGroup",
       ),
     ).toBeDefined();
@@ -1982,7 +1987,7 @@ describe("motion is Reanimated and gestures are gesture-handler", () => {
   it("setInterval appears in packages/ui/src only in thinking-indicator.tsx", () => {
     const offenders: string[] = [];
     for (const file of sourceFiles(join(repoRoot, "packages/ui/src"))) {
-      if (file.endsWith(join("states", "thinking-indicator.tsx"))) continue;
+      if (file.endsWith(join("thinking-indicator", "thinking-indicator.tsx"))) continue;
       if (/\bsetInterval\s*\(/.test(readFileSync(file, "utf8"))) {
         offenders.push(rel(file));
       }
@@ -2575,7 +2580,10 @@ describe("every component builds its styles the same way", () => {
  */
 describe("a refusal is never reported as a success", () => {
   it("create-phone-ledger.ts derives phase through finish(), never by a bare literal", () => {
-    const file = join(repoRoot, "packages/client/src/ledger/create-phone-ledger.ts");
+    const file = join(
+      repoRoot,
+      "packages/client/src/ledger/create-phone-ledger/create-phone-ledger.ts",
+    );
     const lines = readFileSync(file, "utf8").split("\n");
 
     const finishStart = lines.findIndex((line) => line.includes("function finish<T>("));
@@ -2660,6 +2668,87 @@ describe("a refusal is never reported as a success", () => {
  * other `color:` is a person reading grey-on-grey at 2:1, and the exception
  * has quietly become a licence.
  */
+/**
+ * **Inside a module, a folder is a tier or it is a component's own folder.**
+ *
+ * `CLAUDE.md` bans a tier as a *top-level* folder — `atoms/` at the root of a
+ * package files by size instead of by concept, which is how the FX concept
+ * ended up spread across five files in three tiers while one file held
+ * `TransactionRow` and `BalanceRow` because they share a shape and nothing
+ * else. Inside a module the same names are the right ones: a scale within one
+ * concept.
+ *
+ * So the rule is positional. A module's children are `atoms/`, `molecules/`,
+ * `organisms/` and loose support files; a tier's children are components,
+ * each in its own folder when it has a test or a story to sit beside it.
+ * Anything else — a `components/`, a `hooks/`, a second concept smuggled in as
+ * a subfolder — is refused here rather than argued about in review.
+ */
+describe("a module's folders are tiers", () => {
+  const TIERS = new Set(["atoms", "molecules", "organisms"]);
+  /** The foundation packages whose top level is modules rather than tiers. */
+  const ROOTS = ["packages/ui/src"];
+
+  function offences(): string[] {
+    const bad: string[] = [];
+    for (const root of ROOTS) {
+      const base = join(repoRoot, root);
+      for (const mod of readdirSync(base, { withFileTypes: true })) {
+        if (!mod.isDirectory()) continue;
+        const modDir = join(base, mod.name);
+        for (const child of readdirSync(modDir, { withFileTypes: true })) {
+          if (!child.isDirectory()) continue;
+          if (!TIERS.has(child.name)) {
+            bad.push(`${root}/${mod.name}/${child.name} — not a tier`);
+            continue;
+          }
+          // A tier holds components: a file, or a folder named for one.
+          for (const leaf of readdirSync(join(modDir, child.name), { withFileTypes: true })) {
+            if (!leaf.isDirectory()) continue;
+            const own = readdirSync(join(modDir, child.name, leaf.name));
+            if (!own.some((f) => f === `${leaf.name}.tsx` || f === `${leaf.name}.ts`)) {
+              bad.push(
+                `${root}/${mod.name}/${child.name}/${leaf.name} — folder without its component`,
+              );
+            }
+          }
+        }
+      }
+    }
+    return bad;
+  }
+
+  /**
+   * **`transport/build.ts` keeps its flat shape, and the reason is `.gitignore`.**
+   *
+   * A2 folders a unit next to its test, which for this one would mean
+   * `transport/build/` — a directory `.gitignore` matches by name, so the two
+   * files inside it become invisible to git. The pre-commit hook caught it as
+   * a force-add rather than the rule below, which is the right order: a name
+   * that collides with an ignore is a repository fact, not an architecture
+   * one. The exception costs a flat pair of files and buys not renaming a
+   * module for the build system's benefit.
+   */
+  it("allows only tier names inside a module", () => {
+    expect(
+      offences(),
+      "a folder inside a module is atoms/, molecules/ or organisms/ — or a component's own folder inside one",
+    ).toEqual([]);
+  });
+
+  /** The tiers are populated: a rule nothing satisfies is a rule nobody is following. */
+  it("actually files components into tiers", () => {
+    const tiers = readdirSync(join(repoRoot, "packages/ui/src"), { withFileTypes: true })
+      .filter((d) => d.isDirectory())
+      .flatMap((mod) =>
+        readdirSync(join(repoRoot, "packages/ui/src", mod.name), { withFileTypes: true })
+          .filter((d) => d.isDirectory() && TIERS.has(d.name))
+          .map((d) => `${mod.name}/${d.name}`),
+      );
+    expect(tiers.length, "modules carry tiers").toBeGreaterThan(20);
+  });
+});
+
 describe("faint ink stays decoration", () => {
   /** Style names that are marks rather than text. Each earns its place by what it draws. */
   const MARKS = /(chevron|caret|arrow|icon|glyph|rule|divider|dot|separator|unit|tick|handle)/i;
@@ -2718,27 +2807,54 @@ describe("a component on the band uses the band's inks", () => {
    * — a slot is invisible to a grep for the fill).
    */
   const ON_THE_BAND = [
-    "packages/ui/src/shell/desk-band.tsx",
-    "packages/ui/src/shell/tab-bar.tsx",
-    "packages/ui/src/shell/shell.tsx",
-    "packages/ui/src/states/toast.tsx",
-    "packages/ui/src/transactions/command-bar.tsx",
-    "packages/ui/src/fx/currency-chip.tsx",
+    "packages/ui/src/shell/organisms/desk-band/desk-band.tsx",
+    "packages/ui/src/shell/organisms/tab-bar/tab-bar.tsx",
+    "packages/ui/src/shell/organisms/shell/shell.tsx",
+    "packages/ui/src/states/molecules/toast/toast.tsx",
+    "packages/ui/src/transactions/organisms/command-bar/command-bar.tsx",
+    "packages/ui/src/fx/atoms/currency-chip/currency-chip.tsx",
   ];
 
   /** A style that sits on a fill of its own, with the fill that puts it there. */
   const ON_THEIR_OWN_FILL = new Map([
     // `CommandBar` carries its own `surface` fill (see its `root`), so every
     // ink inside it is on a page ground and the page's inks are correct.
-    ["packages/ui/src/transactions/command-bar.tsx#chipTextMuted", "on the bar's own surface"],
-    ["packages/ui/src/transactions/command-bar.tsx#chipText", "on the bar's own surface"],
-    ["packages/ui/src/transactions/command-bar.tsx#input", "on the bar's own surface"],
-    ["packages/ui/src/transactions/command-bar.tsx#hint", "on the bar's own surface"],
-    ["packages/ui/src/transactions/command-bar.tsx#payee", "on the bar's own surface"],
-    ["packages/ui/src/transactions/command-bar.tsx#reason", "on the bar's own surface"],
-    ["packages/ui/src/transactions/command-bar.tsx#trailCaption", "on the bar's own surface"],
-    ["packages/ui/src/transactions/command-bar.tsx#fieldError", "on the bar's own surface"],
-    ["packages/ui/src/shell/tab-bar.tsx#label", "the tab bar is a `surface`, not the band"],
+    [
+      "packages/ui/src/transactions/organisms/command-bar/command-bar.tsx#chipTextMuted",
+      "on the bar's own surface",
+    ],
+    [
+      "packages/ui/src/transactions/organisms/command-bar/command-bar.tsx#chipText",
+      "on the bar's own surface",
+    ],
+    [
+      "packages/ui/src/transactions/organisms/command-bar/command-bar.tsx#input",
+      "on the bar's own surface",
+    ],
+    [
+      "packages/ui/src/transactions/organisms/command-bar/command-bar.tsx#hint",
+      "on the bar's own surface",
+    ],
+    [
+      "packages/ui/src/transactions/organisms/command-bar/command-bar.tsx#payee",
+      "on the bar's own surface",
+    ],
+    [
+      "packages/ui/src/transactions/organisms/command-bar/command-bar.tsx#reason",
+      "on the bar's own surface",
+    ],
+    [
+      "packages/ui/src/transactions/organisms/command-bar/command-bar.tsx#trailCaption",
+      "on the bar's own surface",
+    ],
+    [
+      "packages/ui/src/transactions/organisms/command-bar/command-bar.tsx#fieldError",
+      "on the bar's own surface",
+    ],
+    [
+      "packages/ui/src/shell/organisms/tab-bar/tab-bar.tsx#label",
+      "the tab bar is a `surface`, not the band",
+    ],
   ]);
 
   function offences(): string[] {
@@ -2805,23 +2921,23 @@ describe("a control's edge is not the divider colour", () => {
    */
   const AREA_EDGES = new Map([
     [
-      "packages/ui/src/primitives/select.tsx#panel",
+      "packages/ui/src/primitives/atoms/select/select.tsx#panel",
       "the dropdown's own surface, not the control that opens it",
     ],
     [
-      "packages/ui/src/primitives/toggle.tsx#thumb",
+      "packages/ui/src/primitives/atoms/toggle/toggle.tsx#thumb",
       "identified by its fill against the track it rides on",
     ],
     [
-      "packages/ui/src/transactions/categorize-selection-confirm.tsx#root",
+      "packages/ui/src/transactions/organisms/categorize-selection-confirm/categorize-selection-confirm.tsx#root",
       "a card: it carries a surface fill and holds the controls",
     ],
     [
-      "packages/ui/src/counterparties/settle-sheet.tsx#result",
+      "packages/ui/src/counterparties/organisms/settle-sheet/settle-sheet.tsx#result",
       "a result box — read, never pressed",
     ],
     [
-      "packages/ui/src/transactions/command-bar.tsx#root",
+      "packages/ui/src/transactions/organisms/command-bar/command-bar.tsx#root",
       "the bar's own surface on the band, not a control on it",
     ],
     // The four that reach the divider through `theme.elevation.<role>` — the
@@ -2829,11 +2945,17 @@ describe("a control's edge is not the divider colour", () => {
     // first version of this rule. Each is a surface holding content, never a
     // control: `Card` and `WidgetCard` are the boxes `05-composites` defines,
     // and the sheet and dialog are the two modal grounds.
-    ["packages/ui/src/shell/card.tsx#card", "the `Card` surface itself"],
-    ["packages/ui/src/dashboard/widget-card.tsx#card", "the dashboard's own card surface"],
-    ["packages/ui/src/shell/bottom-sheet.tsx#sheet", "the sheet's ground, not a control on it"],
+    ["packages/ui/src/shell/molecules/card/card.tsx#card", "the `Card` surface itself"],
     [
-      "packages/ui/src/shell/confirm-dialog.tsx#card",
+      "packages/ui/src/dashboard/molecules/widget-card/widget-card.tsx#card",
+      "the dashboard's own card surface",
+    ],
+    [
+      "packages/ui/src/shell/organisms/bottom-sheet/bottom-sheet.tsx#sheet",
+      "the sheet's ground, not a control on it",
+    ],
+    [
+      "packages/ui/src/shell/organisms/confirm-dialog/confirm-dialog.tsx#card",
       "the dialog's ground; its buttons are elsewhere",
     ],
   ]);
@@ -3248,18 +3370,18 @@ describe("every scroller declares which kind it is", () => {
 
     expect(census).toEqual([
       "apps/mobile/src/ledger-screen.tsx#0 <FlatList> pageScrollProps",
-      "packages/ui/src/accounts/account-picker.tsx#0 <ScrollView> nestedScrollProps",
-      "packages/ui/src/categories/category-sheet.tsx#0 <ScrollView> horizontalScrollProps",
-      "packages/ui/src/categories/category-sheet.tsx#1 <ScrollView> nestedScrollProps",
-      "packages/ui/src/categories/category-sheet.tsx#2 <ScrollView> horizontalScrollProps",
-      "packages/ui/src/counterparties/counterparty-picker.tsx#0 <ScrollView> nestedScrollProps",
-      "packages/ui/src/fx/rate-table.tsx#0 <FlatList> pageScrollProps",
-      "packages/ui/src/primitives/select.tsx#0 <ScrollView> nestedScrollProps",
-      "packages/ui/src/shell/bottom-sheet.stories.tsx#0 <ScrollView> nestedScrollProps",
-      "packages/ui/src/shell/bottom-sheet.tsx#0 <ScrollView> containOverscroll",
-      "packages/ui/src/shell/card.tsx#0 <ScrollView> pageScrollProps",
-      "packages/ui/src/transactions/ledger-filter-rail.tsx#0 <ScrollView> nestedScrollProps",
-      "packages/ui/src/transactions/ledger-table.tsx#0 <FlatList> nestedScrollProps",
+      "packages/ui/src/accounts/organisms/account-picker/account-picker.tsx#0 <ScrollView> nestedScrollProps",
+      "packages/ui/src/categories/organisms/category-sheet/category-sheet.tsx#0 <ScrollView> horizontalScrollProps",
+      "packages/ui/src/categories/organisms/category-sheet/category-sheet.tsx#1 <ScrollView> nestedScrollProps",
+      "packages/ui/src/categories/organisms/category-sheet/category-sheet.tsx#2 <ScrollView> horizontalScrollProps",
+      "packages/ui/src/counterparties/organisms/counterparty-picker/counterparty-picker.tsx#0 <ScrollView> nestedScrollProps",
+      "packages/ui/src/fx/organisms/rate-table/rate-table.tsx#0 <FlatList> pageScrollProps",
+      "packages/ui/src/primitives/atoms/select/select.tsx#0 <ScrollView> nestedScrollProps",
+      "packages/ui/src/shell/molecules/card/card.tsx#0 <ScrollView> pageScrollProps",
+      "packages/ui/src/shell/organisms/bottom-sheet/bottom-sheet.stories.tsx#0 <ScrollView> nestedScrollProps",
+      "packages/ui/src/shell/organisms/bottom-sheet/bottom-sheet.tsx#0 <ScrollView> containOverscroll",
+      "packages/ui/src/transactions/organisms/ledger-filter-rail/ledger-filter-rail.tsx#0 <ScrollView> nestedScrollProps",
+      "packages/ui/src/transactions/organisms/ledger-table/ledger-table.tsx#0 <FlatList> nestedScrollProps",
     ]);
   });
 

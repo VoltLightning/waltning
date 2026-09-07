@@ -18,7 +18,7 @@
  */
 
 import { createContext, type ReactNode } from "react";
-import type { PhoneLedgerController } from "./create-phone-ledger.ts";
+import type { PhoneLedgerController } from "./create-phone-ledger/create-phone-ledger.ts";
 
 export const LedgerContext = createContext<PhoneLedgerController | null>(null);
 

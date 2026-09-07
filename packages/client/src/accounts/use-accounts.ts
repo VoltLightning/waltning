@@ -5,7 +5,7 @@
  * else was the state machine, and it lives in `use-query.ts` now.
  */
 
-import { type Query, useQuery } from "../query/use-query.ts";
+import { type Query, useQuery } from "../query/use-query/use-query.ts";
 import type { ApiClient } from "../transport/client.ts";
 
 /**

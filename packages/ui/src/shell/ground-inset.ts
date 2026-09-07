@@ -36,7 +36,7 @@
 
 import { useSafeArea } from "../primitives/safe-area";
 import { space } from "../tokens.ts";
-import { useFloatingClearance } from "./floating-clearance";
+import { useFloatingClearance } from "./atoms/floating-clearance";
 
 export type GroundInset = {
   /**

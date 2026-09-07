@@ -11,7 +11,7 @@
  * only an unmount.
  */
 
-import { type Query, useQuery } from "../query/use-query.ts";
+import { type Query, useQuery } from "../query/use-query/use-query.ts";
 import type { ApiClient } from "../transport/client.ts";
 
 type Page = Awaited<ReturnType<ApiClient["op"]["search_transactions"]["query"]>>;
