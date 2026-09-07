@@ -30,7 +30,7 @@ whatever the chrome around them does.
 | `muted` | `#686154` | Secondary text, labels, captions; a transfer's figure. Held to 4.5:1 against **every** fill it lands on — `ground`, `surface`, `subtle`, `hover`, `pressed`, `accent-fill` — because eighteen files pair it with one of those; 4.54 at the tightest (`pressed`) |
 | `accent` | `#5c7357` | Primary action fill. Sage. **Job 1** |
 | `accent-text` | `#4c6247` | Links, a secondary action's label |
-| `accent-icon` | `#6f8f66` | Decorative accent marks; the **focus ring**. **Job 2** |
+| `accent-icon` | `#64815c` | Decorative accent marks; the **focus ring**. **Job 2**. Dark enough for 3:1 on `hover` and `pressed` too — the ring is drawn while a control is being used |
 | `accent-fill` | `#eef0e6` | A subtle sage fill: a selected segment, a toggled chip. `accent-text` reads on it at 5.8:1 |
 | `accent-fill-border` | `#b9c6ae` | The edge of `accent-fill` |
 | `income` | `#396c2e` | Credits, positive deltas. Deliberately livelier than `accent`: an event, not a control. **Job 3** |

@@ -17,6 +17,7 @@ import {
   updateTransactionInput,
 } from "@waltning/core/registry/inputs";
 import { and, eq, isNull, sql } from "drizzle-orm";
+import { assertAmountPositive } from "../amount-sign.ts";
 import { defineLocalExecutor, LocalRefusal } from "../executor.ts";
 import { ledgerSchema as schema } from "../schema-map.ts";
 import type { LocalTx } from "../write.ts";
@@ -45,6 +46,43 @@ export const updateTransactionExecutor = defineLocalExecutor<
    * existence, it only edits one that already does.
    */
   mints: () => [],
+
+  /**
+   * **The sign, before the outbox commits.**
+   *
+   * `set_transaction_lines` is not the only operation that can move
+   * `amount_original` — this one patches it directly, and carried no
+   * positivity rule at all: `transactionPatch`'s `superRefine` guards
+   * `toAmount` and `fee` and not the amount itself, because the patch never
+   * sees the row's `type` and so cannot know whether a sign is legal. The
+   * executor does. See `assertAmountPositive` for what a negative amount does
+   * to every figure that reads it.
+   *
+   * Here rather than in `patchTransaction` alone, and it is the difference
+   * between two failures: the replica's `transactions_amount_positive_*`
+   * trigger raises a bare `SqliteError`, which is not a `LocalRefusal`, so the
+   * replica rolls back and the **outbox entry stays** — a real
+   * `update_transaction` that Postgres will reject for as long as the device
+   * lives (`architecture/14` §14.6). This hook runs before that entry is
+   * written, and refuses with a message naming the value.
+   *
+   * The lines-sum check stays in `apply` where it has always been: a server
+   * could resolve that one differently, and this one it cannot.
+   */
+  validate: (input, tx) => {
+    if (input.patch.amountOriginal === undefined) return;
+    const current = tx
+      .select({ type: transactions.type, deletedAt: transactions.deletedAt })
+      .from(transactions)
+      .where(eq(transactions.id, input.id))
+      .get();
+    if (!current || current.deletedAt !== null) return;
+    assertAmountPositive(
+      "update_transaction: amount_original",
+      input.patch.amountOriginal,
+      current.type,
+    );
+  },
 
   apply: (input, tx) => patchTransaction(input, tx),
 });
@@ -118,6 +156,14 @@ function patchTransaction(input: UpdateTransactionInput, tx: ReplicaTx): LocalTr
    * the same trigger on the replica (`migrate.ts`'s `LINE_SUM_TRIGGERS`), so
    * this holds when the code is wrong.
    */
+  if (input.patch.amountOriginal !== undefined) {
+    assertAmountPositive(
+      "update_transaction: amount_original",
+      input.patch.amountOriginal,
+      current.type,
+    );
+  }
+
   if ("amountOriginal" in input.patch) {
     const lines = tx
       .select({ amount: transactionLines.amount })

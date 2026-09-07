@@ -81,8 +81,17 @@ export const color = {
   accent: "#5c7357",
   /** Links, a secondary action's label. */
   accentText: "#4c6247",
-  /** Decorative accent marks, and the focus ring. Job 2. */
-  accentIcon: "#6f8f66",
+  /**
+   * Decorative accent marks, and the focus ring. Job 2.
+   *
+   * **`#64815c`, a step darker than the `#6f8f66` it was.** §2.6 draws the ring
+   * on *every* interactive element, which puts it on every fill in the system
+   * — including the two a control wears while it is being used. The old value
+   * cleared 1.4.11's 3:1 on the page (3.36 / 3.62) and missed it on
+   * `hover` (2.89) and `pressed` (2.69): the ring faded exactly as a pointer
+   * arrived. Now 4.03 / 4.34 / 3.66 / 3.46 / 3.22 across the five.
+   */
+  accentIcon: "#64815c",
   /**
    * A subtle sage fill and its edge — a selected segment, a toggled chip, an
    * inset that belongs to the accent. The accent text reads on the fill at

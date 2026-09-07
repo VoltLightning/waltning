@@ -320,9 +320,10 @@ const useStyles = makeStyles((theme) => ({
   message: { ...text.ui("body"), color: theme.shellText, flexShrink: 1 },
   count: { ...text.ui("body", 600), color: theme.shellTextMuted },
   action: { paddingVertical: space.xs, paddingHorizontal: space.sm, borderRadius: radius.sm },
+  /** The band's ring, by its role rather than by the colour that happens to match. */
   actionFocused: {
     outlineWidth: focus.width,
-    outlineColor: theme.shellText,
+    outlineColor: theme.shellFocusRing,
     outlineOffset: focus.offset,
   },
   actionLabel: { ...text.ui("body", 600), color: theme.shellText },

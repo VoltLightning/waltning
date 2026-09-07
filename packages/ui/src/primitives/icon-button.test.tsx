@@ -44,3 +44,29 @@ it("hovers on the shell with the shell's own overlay, not the ground's fill", ()
 it("hovers on the ground with the ground's fill", () => {
   expect(fillWhileHovered("ground")).toBe("rgb(236, 229, 215)");
 });
+
+/**
+ * **The ring on the band, asserted where it renders.** `theme.test.tsx` proves
+ * `shellFocusRing` clears 3:1 on `shell` — a property of two hex strings, which
+ * cannot notice this control going back to the green one. The whole ring fix
+ * was deletable with the suite green, the same shape as the `tone` prop that
+ * shipped unasserted a round earlier.
+ */
+it("focuses with the ring of the ground it is on", () => {
+  for (const [tone, expected] of [
+    ["shell", "rgb(242, 240, 231)"],
+    ["ground", "rgb(100, 129, 92)"],
+  ] as const) {
+    const view = render(
+      <ThemeProvider theme={light}>
+        <IconButton label="Appearance" onPress={vi.fn()} tone={tone}>
+          <span>glyph</span>
+        </IconButton>
+      </ThemeProvider>,
+    );
+    const button = view.getByRole("button");
+    fireEvent.focusIn(button);
+    expect(getComputedStyle(button).outlineColor, tone).toBe(expected);
+    view.unmount();
+  }
+});

@@ -1091,6 +1091,88 @@ describe("set_transaction_lines", () => {
     expect(readTxn()?.amountOriginal).toBe("18.00000000");
   });
 
+  /**
+   * **`update_transaction` is the other half, and it had no rule at all.**
+   *
+   * The trigger this suite adds refuses the row — but as a bare `SqliteError`,
+   * which is not a `LocalRefusal`: the replica rolls back and the **outbox
+   * entry stays**, a real `update_transaction` Postgres will reject for as
+   * long as the device lives. Guarding one operation and not the other turned
+   * silently-wrong data into a stuck queue, which is worse. The `validate`
+   * hook refuses before the entry is written.
+   */
+  it("refuses a negative patched amount before queuing an entry (C1)", () => {
+    const v = () => readTxn()?.version ?? 0;
+    const entries = () => stores.ledger.outbox.db.select().from(outbox).all();
+    const before = entries().length;
+
+    expect(() =>
+      writeLocally(stores.ledger, {
+        executor: updateTransactionExecutor,
+        registry: ledgerRegistry,
+        capture,
+        input: { id: TXN, version: v(), patch: { amountOriginal: "-10.00" } },
+      }),
+    ).toThrow(/amounts are positive and non-zero/);
+
+    expect(entries(), "no entry the server can never accept").toHaveLength(before);
+    expect(readTxn()?.amountOriginal).toBe("18.00000000");
+  });
+
+  /**
+   * **A line signs no more than its parent.** §12 stores a line as a
+   * magnitude, so `-10.00` in a set that sums correctly is a category reading
+   * back with its sign flipped in §6's figures — and `transaction_lines`
+   * carries no CHECK on either engine, so the executor is the only layer.
+   */
+  it("refuses a negative line amount even in a set that sums (M2)", () => {
+    const v = () => readTxn()?.version ?? 0;
+    expect(() =>
+      writeLocally(stores.ledger, {
+        executor: setTransactionLinesExecutor,
+        registry: ledgerRegistry,
+        capture,
+        input: {
+          transactionId: TXN,
+          version: v(),
+          lines: [
+            {
+              id: id<"transactionLines">("00000000-0000-4000-8000-0000000000e5"),
+              description: "Refund",
+              amount: "-10.00",
+            },
+            {
+              id: id<"transactionLines">("00000000-0000-4000-8000-0000000000e6"),
+              description: "Groceries",
+              amount: "28.00",
+            },
+          ],
+        },
+      }),
+    ).toThrow(/amounts are positive and non-zero/);
+    expect(readLines()).toHaveLength(0);
+  });
+
+  /**
+   * **An empty set restated the amount to anything at all.** The sum check is
+   * gated on `lines.length > 0` and the lines are deleted before the parent is
+   * updated, so the replica's trigger abstains too: `{ lines: [],
+   * amountOriginal: "9999.00" }` cleared a split and moved the total with
+   * nothing checking either side.
+   */
+  it("refuses a restated amount on an empty set (M1)", () => {
+    const v = () => readTxn()?.version ?? 0;
+    expect(() =>
+      writeLocally(stores.ledger, {
+        executor: setTransactionLinesExecutor,
+        registry: ledgerRegistry,
+        capture,
+        input: { transactionId: TXN, version: v(), amountOriginal: "9999.00", lines: [] },
+      }),
+    ).toThrow(/cannot restate the amount/);
+    expect(readTxn()?.amountOriginal).toBe("18.00000000");
+  });
+
   /** Zero with it: `money.margin` throws "amountPivot is zero" on every FX figure of such a row. */
   it("refuses a restated total of zero (H2)", () => {
     const v = () => readTxn()?.version ?? 0;

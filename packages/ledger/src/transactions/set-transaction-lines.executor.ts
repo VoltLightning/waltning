@@ -32,6 +32,7 @@ import {
   setTransactionLinesInput,
 } from "@waltning/core/registry/inputs";
 import { and, eq, isNull } from "drizzle-orm";
+import { assertAmountPositive } from "../amount-sign.ts";
 import { defineLocalExecutor, LocalRefusal } from "../executor.ts";
 import { assertMoneyScale } from "../scale.ts";
 import { ledgerSchema as schema } from "../schema-map.ts";
@@ -89,8 +90,27 @@ export const setTransactionLinesExecutor = defineLocalExecutor<
         current.currency,
         "set_transaction_lines: amount_original",
       );
-      assertRestatedAmountPositive(input.amountOriginal, current.type);
+      assertAmountPositive(
+        "set_transaction_lines: amount_original",
+        input.amountOriginal,
+        current.type,
+      );
     }
+    /**
+     * **An empty set carries no total.** `replaceLines`' sum check is gated on
+     * `lines.length > 0`, and the lines are deleted before the parent is
+     * updated — so `{ lines: [], amountOriginal: "9999.00" }` cleared a split
+     * and restated the amount to anything at all, with the sum check skipped
+     * and the replica's own trigger already abstaining (its `WHEN` requires
+     * lines to exist). This operation names a breakdown; the operation that
+     * moves an amount on its own is `update_transaction`.
+     */
+    if (input.lines.length === 0 && input.amountOriginal !== undefined) {
+      throw new LocalRefusal(
+        "set_transaction_lines: an empty set removes the breakdown and cannot restate the amount — patch it with update_transaction",
+      );
+    }
+
     for (const line of input.lines) {
       assertMoneyScale(
         tx,
@@ -98,37 +118,26 @@ export const setTransactionLinesExecutor = defineLocalExecutor<
         current.currency,
         `set_transaction_lines: transaction_lines[${line.id}].amount`,
       );
+      /**
+       * **A line signs no more than its parent does.** The same argument as
+       * `assertAmountPositive`, one column over: §12 stores a line as a
+       * magnitude, and `-10.00` in a set summing to the right total is a
+       * category that reads back with its sign flipped in §6's spend figures.
+       * Postgres has no CHECK here — `transaction_lines` carries none — so
+       * this is a service check with no constraint under it, and stricter than
+       * the server on purpose: a device that refuses what the server would
+       * accept queues nothing, which is the safe direction.
+       */
+      assertAmountPositive(
+        `set_transaction_lines: transaction_lines[${line.id}].amount`,
+        line.amount,
+        current.type,
+      );
     }
   },
 
   apply: (input, tx) => replaceLines(input, tx),
 });
-
-/**
- * **A restated total is positive, unless the row is an adjustment.**
- *
- * `transactions_amount_positive` (`0012_fx_rates_derived_and_amount_guards.sql`)
- * is `amount_original > 0 OR type = 'adjustment'`, and `createTransactionInput`
- * carries the same rule with the same exemption — but `setTransactionLinesInput`
- * cannot: it never sees the row's `type`, so the schema has no way to know
- * whether a sign is legal. The executor does.
- *
- * What it prevents is not a caught error. `money.signed` negates an expense, so
- * an `amount_original` of `-10.00` on one reads back as **+10.00** — a spend
- * that raises the account balance, in a figure nothing flags. And the outbox
- * entry carrying it is one Postgres refuses outright, which is the orphaned
- * intent `validate` exists to keep out of the queue.
- *
- * Zero is refused with it, on the same authority: `money.margin` throws
- * "amountPivot is zero" for every FX figure on that row.
- */
-function assertRestatedAmountPositive(amount: string, type: string): void {
-  if (type === "adjustment") return;
-  if (money.dec(amount).gt(0)) return;
-  throw new LocalRefusal(
-    `set_transaction_lines: amount_original is ${amount} — amounts are positive and non-zero; \`type\` carries direction (§7.2), and only an adjustment signs (transactions_amount_positive)`,
-  );
-}
 
 function replaceLines(input: SetTransactionLinesInput, tx: ReplicaTx): LocalTransactionRow {
   const current = tx
@@ -169,7 +178,11 @@ function replaceLines(input: SetTransactionLinesInput, tx: ReplicaTx): LocalTran
       current.currency,
       "set_transaction_lines: amount_original",
     );
-    assertRestatedAmountPositive(input.amountOriginal, current.type);
+    assertAmountPositive(
+      "set_transaction_lines: amount_original",
+      input.amountOriginal,
+      current.type,
+    );
   }
 
   const total = money.sum(input.lines.map((line) => line.amount));

@@ -2726,30 +2726,33 @@ describe("a control's edge is not the divider colour", () => {
     const locals = new Set<string>();
 
     /**
-     * `theme.border` through the wrappers that do not change the value.
-     * Narrowing the rule to a *bare* property access lost `const edge =
-     * theme.border as string`, which the regex it replaced did match — a
-     * tree-walk is only stricter than a regex where you let it be.
+     * **Any declaration whose initializer *mentions* `theme.border`.**
+     *
+     * The rule's two rewrites each lost a shape. The regex it started as
+     * (`= theme.border\b`) counted a commented-out declaration, so a live
+     * `borderColor: edge` naming a different local was reported at a line
+     * where nothing was wrong. Matching a *bare* `PropertyAccessExpression`
+     * instead fixed that and lost `theme.border as string`; unwrapping `as`,
+     * `satisfies`, parens and `!` fixed that and still lost
+     * `theme.border ?? theme.borderStrong` — a binary operand, a ternary
+     * branch, and every other position an expression can hold.
+     *
+     * Enumerating positions is the losing move. What is wanted is: does this
+     * declaration's own source name the divider colour? — asked of the
+     * initializer's text, which the parser has already stripped of comments,
+     * so the census keeps what the tree bought and drops the shape guessing.
+     * It over-collects a local bound to something merely *derived* from
+     * `theme.border`, which is the safe direction: the worst case is a style
+     * named in `AREA_EDGES` with its reason.
      */
-    const unwrap = (node: ts.Expression): ts.Expression =>
-      ts.isAsExpression(node) ||
-      ts.isSatisfiesExpression(node) ||
-      ts.isParenthesizedExpression(node) ||
-      ts.isNonNullExpression(node)
-        ? unwrap(node.expression)
-        : node;
-
     const walk = (node: ts.Node): void => {
-      if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name)) {
-        const initializer = node.initializer === undefined ? undefined : unwrap(node.initializer);
-        if (
-          initializer !== undefined &&
-          ts.isPropertyAccessExpression(initializer) &&
-          initializer.name.text === "border" &&
-          initializer.expression.getText() === "theme"
-        ) {
-          locals.add(node.name.text);
-        }
+      if (
+        ts.isVariableDeclaration(node) &&
+        ts.isIdentifier(node.name) &&
+        node.initializer !== undefined &&
+        /(^|[^\w.])theme\.border(?![\w])/.test(node.initializer.getText())
+      ) {
+        locals.add(node.name.text);
       }
       ts.forEachChild(node, walk);
     };

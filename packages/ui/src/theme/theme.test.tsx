@@ -175,6 +175,13 @@ describe("the token spec and the tokens agree", () => {
     // read — so a name the folder mangled (`green-100`) or a row shape it could
     // not match still counted, and nine chart colours plus six dark roles went
     // uncompared behind a green guard.
+    // **38 and 31, and the asymmetry is the point.** The light table lists
+    // *tokens* and is read against `tokens.ts`; the dark one lists *roles* and
+    // is read against `roles.ts`. A role that aliases a token — `focus-ring`
+    // on `accent-icon`'s row, `shell-focus-ring` on `shell-text`'s — has no
+    // key in `color`, so the light half skips it and only the dark half of
+    // that pair is enforced. Splitting the alias into its own light row would
+    // not help: it would name a value `tokens.ts` does not hold either.
     expect(compared, "a drop here means rows stopped being compared").toEqual({
       light: 38,
       dark: 31,
@@ -342,10 +349,17 @@ describe("a component follows the active theme", () => {
    * rather than a preference: point either at the other's ground and it fails.
    */
   it.each([
-    ["light ring on the page fills", light.focusRing, ["ground", "surface"] as const, light],
-    ["dark ring on the page fills", dark.focusRing, ["ground", "surface"] as const, dark],
-  ])("keeps the %s at the 3:1 boundary floor", (_label, ring, fills, theme) => {
-    for (const fill of fills) expect(contrastRatio(ring, theme[fill])).toBeGreaterThanOrEqual(3);
+    ["light", light],
+    ["dark", dark],
+  ])("keeps the %s focus ring at the 3:1 boundary floor on every page fill", (_label, theme) => {
+    // The same five the edge census walks, not the two a control rests on:
+    // a ring is drawn *while* the control is hovered or pressed, and
+    // `SegmentControl`'s own track is `subtleFill` — where the light ring
+    // measures 3.05, five hundredths above the floor and, until this row,
+    // unmeasured.
+    for (const fill of ["ground", "surface", "subtleFill", "hoverFill", "pressedFill"] as const) {
+      expect(contrastRatio(theme.focusRing, theme[fill]), fill).toBeGreaterThanOrEqual(3);
+    }
   });
 
   it.each([
@@ -387,20 +401,33 @@ describe("a component follows the active theme", () => {
   });
 
   /**
-   * **And that each fill is the band's, which readability alone does not say.**
+   * **And that each fill is an overlay, which readability alone does not say.**
    *
-   * The row above catches a *pale* fill under near-white ink — 1.10:1, the
-   * original defect. It cannot catch a **dark** one: `shellText` on the dark
-   * theme's `hover` is 12.73:1, so the glyph stays perfectly legible while the
-   * control silently stops belonging to the band. Half the defect, invisible
-   * to the half of the census written for it. So the fills are also required
-   * to stay *near* the shell, which no ground fill of either theme is.
+   * The readability row catches a *pale* fill under near-white ink — 1.10:1,
+   * the original defect. It cannot catch a **dark** one: `shellText` on the
+   * dark theme's `hover` is 12.73:1, so the glyph stays perfectly legible
+   * while the control silently stops belonging to the band.
+   *
+   * **Asserted as the property, not as a distance.** A first version required
+   * the composite to land within 1.6:1 of the shell — a number picked from the
+   * one substitution that had been tried, and `darkColor.pressed` (1.48)
+   * passed it. Worse, an opaque hex never reaches `over()` at all, so the
+   * alpha machinery this census exists for sat idle while the row went green.
+   * What the tone actually depends on is that these are *translucent*: an
+   * overlay tints whatever the band is, so it tracks the shell by
+   * construction and cannot be a colour from another ramp. That is one
+   * property, and no threshold to calibrate.
    */
   it.each([
     ["light", light],
     ["dark", dark],
-  ])("keeps the %s band's own fills on the band", (_name, theme) => {
+  ])("keeps the %s band's fills translucent, so they are the band's", (_name, theme) => {
     for (const overlay of [theme.shellNavActiveFill, theme.shellInsetTrackFill]) {
+      expect(overlay, "an opaque fill on the band is a colour from another ramp").toMatch(
+        /^rgba\(\d+,\s*\d+,\s*\d+,\s*0?\.\d+\)$/,
+      );
+      // And the composite still reads: an overlay at alpha 0.95 is opaque in
+      // all but name, so the property above is necessary and not sufficient.
       expect(contrastRatio(over(overlay, theme.shell), theme.shell)).toBeLessThan(1.6);
     }
   });

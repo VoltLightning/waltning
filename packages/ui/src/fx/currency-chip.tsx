@@ -120,9 +120,17 @@ const useStyles = makeStyles((theme) => ({
   // resolve — the accent bar is the second, shape-based signal every other
   // amber/asserted marker in this system already carries.
   codeActive: { color: theme.shellText, borderBottomColor: theme.accent },
+  /**
+   * **The band's ring, because this chip lives on the band.** Every other
+   * colour here is already a shell token — `DeskCurrency` mounts it into
+   * `DeskBand`'s `currencySlot` — and the green ring was 2.45:1 against that
+   * ground. It was missed by the pass that added `shellFocusRing` precisely
+   * because it lives under `fx/` rather than `shell/`: the set is decided by
+   * what a component is drawn on, never by which folder holds it.
+   */
   focused: {
     outlineWidth: focus.width,
-    outlineColor: theme.focusRing,
+    outlineColor: theme.shellFocusRing,
     outlineOffset: focus.offset,
   },
 }));

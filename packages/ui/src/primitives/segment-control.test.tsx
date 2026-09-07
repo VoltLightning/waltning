@@ -4,7 +4,7 @@
  * The band's variant of a control whose default belongs to the page.
  */
 
-import { render } from "@testing-library/react";
+import { fireEvent, render } from "@testing-library/react";
 import { expect, it, vi } from "vitest";
 import { ThemeProvider } from "../theme/provider";
 import { light } from "../theme/roles.ts";
@@ -41,4 +41,29 @@ it("draws a count on the band in the band's muted ink", () => {
 /** The default is unchanged — every other caller sits on a card. */
 it("draws a count on a card in the page's muted ink", () => {
   expect(countColour("surface")).toBe("rgb(104, 97, 84)");
+});
+
+/**
+ * **The ring on the band, asserted where it renders.** `theme.test.tsx` proves
+ * `shellFocusRing` clears 3:1 on `shell` — a property of two hex strings, which
+ * cannot notice this control going back to the green one. The whole ring fix
+ * was deletable with the suite green, the same shape as the `tone` prop that
+ * shipped unasserted a round earlier.
+ */
+it("focuses a segment with the ring of the ground it is on", () => {
+  for (const [tone, expected] of [
+    ["shell", "rgb(242, 240, 231)"],
+    ["surface", "rgb(100, 129, 92)"],
+  ] as const) {
+    const view = render(
+      <ThemeProvider theme={light}>
+        <SegmentControl segments={SEGMENTS} value="ours" onChange={vi.fn()} tone={tone} />
+      </ThemeProvider>,
+    );
+    const [first] = view.getAllByRole("tab");
+    if (first === undefined) throw new Error("SegmentControl draws no segment");
+    fireEvent.focusIn(first);
+    expect(getComputedStyle(first).outlineColor, tone).toBe(expected);
+    view.unmount();
+  }
 });
