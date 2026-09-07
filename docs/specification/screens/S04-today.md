@@ -34,12 +34,12 @@ tab bar → S10, S11, S12, S03.
 │  Saturday, 5 September                          │
 └─────────────────────────────────────────────────┘
 ┌ ground panel · radius-xl, lifts over the shell ─┐
-│  ┌ mine   48 620,84 zł                       › ┐│  ← NetWorthStrip → S12
+│  ┌ mine   48 620,84 zł                       › ┐│  ← NetWorthStrip → S16
 │  └───────────────────────────────────────────  ┘│
 │  ┌ September 2026 ─────────────────── ‹  ›  ────┐│  ← MonthSummary, the hero
 │  │ Kept so far                     +3 529,82 zł ││
 │  │ ┌ Came in ─────────┐ ┌ Went out ───────────┐ ││
-│  │ │ +7 850,00        │ │ −4 320,18           │ ││
+│  │ │ +7 850,00        │ │ 4 320,18            │ ││
 │  │ └──────────────────┘ └─────────────────────┘ ││
 │  └──────────────────────────────────────────────┘│
 │  ⚠ 340,00 zł unallocated · dinner, 6 Aug        │  ← only when non-zero
@@ -65,12 +65,12 @@ tab bar → S10, S11, S12, S03.
 ```
 
 **The month is the hero, and net worth is a line.** The band used to carry
-`DualTotal` at 54px plus the period and its two stat tiles — about 500pt of an
-844pt screen — and everything the day had actually changed began below the
+`DualTotal` at 54px plus the period and its two stat tiles — about 350pt of an
+844pt screen, two fifths of it — and everything the day had actually changed began below the
 fold. A total you own moves slowly and is checked occasionally; what changed
 *this period* is what the app is opened for. So `MonthSummary` leads the ground
 with §5's three figures in the shape `net = inflow − spend`, and `NetWorthStrip`
-carries the total above it in one line, with S12 one tap away for the currencies
+carries the total above it in one line, with S16 one tap away for the currencies
 and the shared figures it cannot fit.
 
 **`inflow` is stated, not implied.** `spent` and `net` alone leave the reader
@@ -78,7 +78,8 @@ subtracting to find out what came in — §5 computes all three and the card sho
 all three.
 
 **Where it went is §6, at leaf granularity, capped at five plus a named
-remainder.** The lead currency's categories only: arc-phone converts nothing
+remainder — six buckets give six named rows, because folding one category into
+*Other* costs a name and saves no room.** The lead currency's categories only: arc-phone converts nothing
 (§6 is class **S**), so a bar summing two currencies would be an invented
 figure. An uncategorised bucket keeps its own name rather than folding into
 *Other* — it is the one bucket a person can act on.
@@ -96,15 +97,11 @@ plus presets and an arbitrary range. Both components already exist: the arrows
 are the calendar's `PeriodHeader` (§6.3), the sheet is Reports' `PeriodPicker`
 (§7). Nothing is invented here.
 
-**Only the lower row is period-scoped.** Net worth is a balance *as of now* and
-does not move when you step back to July; spend and net do. The arrows sit on
-the row they govern, below `DualTotal` rather than above it, so the boundary is
-positional rather than something you have to be told.
-
-**Capture sits in the thumb zone, balances do not.** The say-a-transaction row
-and Scan are the two things done in motion, one-handed, several times a day, so
-they are placed where the thumb already is (Fitts). Reading happens with the
-phone held still.
+**Only the card is period-scoped.** Net worth is a balance *as of now* and does
+not move when you step back to July; everything inside `MonthSummary` does, and
+so does *where it went* below it. The arrows sit inside the card they govern,
+under the strip rather than above it, so the boundary is positional rather than
+something you have to be told.
 
 Recent shows five rows, non-scrolling. It is a *confirmation surface*, not a
 browsing one — S10 is a tap away for browsing.
@@ -136,11 +133,12 @@ is awaiting admission. On a phone-alone ledger, successful local
 materialisation is the final save: the row appears as ordinary ledger data with
 no sync-status marker.
 
-Under the disposable preview profile, S04 renders the mine/ours hero per
-currency, the period row (*spent*, *net*, stepped by month), the
-unsettled-clearing banner when one exists, five Recent rows, the Create
-account first-run action, the floating `+`, and the appearance action. That
-profile omits the tab bar, voice, scan, sync state, and FX presentation.
+Under the disposable preview profile, S04 renders the net-worth strip, the
+month card (*kept so far*, *came in*, *went out*, stepped by month), the
+unsettled-clearing banner when one exists, five Recent rows, *where it went*,
+the Create account first-run action, the floating `+`, and the appearance
+action. That profile omits the tab bar, voice, scan, sync state, and FX
+presentation.
 
 ### Web — ≥1024px
 
@@ -155,9 +153,9 @@ happened*.
 | Component | Notes |
 |---|---|
 | `Shell` | The sage band: the heading, the day, and the appearance action. **No `hero`** — see §3 |
-| `NetWorthStrip` | *Mine* on the ground in one line, *ours* and any second currency muted beneath it. Pressable → S12. Renders above the error branch, so a failed refresh keeps it (§6) |
+| `NetWorthStrip` | *Mine* on the ground in one line, *ours* and any second currency muted beneath it. Pressable → S16. Renders above the error branch, so a failed refresh keeps it (§6) |
 | `MonthSummary` | The hero. `PeriodHeader` + *kept so far* + the `StatTile` pair. Draws three zeroes for a period the ledger did not exist in — that is the true answer, not an empty state |
-| `SpendRows` | *Where it went* — §6 at leaf granularity, five rows plus a named remainder, bars proportional to the largest row |
+| `SpendRows` | *Where it went* — §6 at leaf granularity, five rows plus a named remainder (six buckets give six named rows), bars proportional to the largest row, one colour |
 | `PeriodHeader` | `‹ label ›` + *Today*. Steps by the current granularity (§6.3) |
 | `PeriodPicker` | Opened by tapping the label or stat row — granularity, presets, arbitrary range (§7) |
 | `StatTile` | *Came in* and *went out*, inside `MonthSummary`. **Period-scoped**; the strip above it is not |
@@ -191,8 +189,8 @@ keeps it fast and what makes it safe to render from cache offline.
 |---|---|
 | Loading | Not modelled — the replica read is synchronous SQLite, with no in-between moment to show a skeleton for (`09-state-matrix.md`) |
 | Populated | As drawn |
-| Empty | `EmptyState(first-run)` when no accounts exist. Reachable if J1 was abandoned; offers *Add an account*. *Import from Money Manager* is S29's path — the setup wizard, which S16 enters by that name — and arrives with it; until then this state offers create alone rather than an action with nowhere to go. Accounts with no transactions is the second empty: the hero and period row stay, and *No transactions yet* replaces the Recent card rather than emptying it. That wording is chosen by the unfiltered count — a ledger that holds rows Recent did not return gets this screen's ordinary empty, `transactions.emptyRecentTitle` (*Nothing recent*) and `emptyRecentBody`, with *Show all*. Its own pair rather than S10's: S10's body names an excluding filter, and Recent has a window, not a filter |
-| Error | Balance query failed → `ErrorState(recoverable)` in the ground panel; **the hero keeps its last known figure with its age** rather than blanking |
+| Empty | `EmptyState(first-run)` when no accounts exist. Reachable if J1 was abandoned; offers *Add an account*. *Import from Money Manager* is S29's path — the setup wizard, which S16 enters by that name — and arrives with it; until then this state offers create alone rather than an action with nowhere to go. Accounts with no transactions is the second empty: the strip and the month card stay — three zeroes is the true answer for that period — and *No transactions yet* replaces the Recent card rather than emptying it. *Where it went* draws nothing at all, because there is no row to name. That wording is chosen by the unfiltered count — a ledger that holds rows Recent did not return gets this screen's ordinary empty, `transactions.emptyRecentTitle` (*Nothing recent*) and `emptyRecentBody`, with *Show all*. Its own pair rather than S10's: S10's body names an excluding filter, and Recent has a window, not a filter |
+| Error | Balance query failed → `ErrorState(recoverable)` in the ground panel; **the strip and the month card keep their last known figures** rather than blanking. They render above the error branch for that reason, which a test pins |
 | Offline | Cached, with `Banner(neutral)` — *showing data as of 14:06*. Capture stays fully available; that is the point of the outbox |
 | Gated | n/a — single user |
 
@@ -248,6 +246,6 @@ ignore.
    is what working rule 1 is for.
 
    The one thing it required deciding: **net worth does not respond to it.** A
-   balance is as-of-now; spend and net are period figures. Putting the arrows on
-   the row they govern, beneath `DualTotal`, makes that positional instead of
-   something the interface has to explain.
+   balance is as-of-now; the month's figures are period figures. Putting the
+   arrows inside the card they govern, under the net-worth strip, makes that
+   positional instead of something the interface has to explain.

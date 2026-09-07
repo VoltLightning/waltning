@@ -30,15 +30,16 @@ import { recurringTransactions } from "./recurring-transactions.sqlite.ts";
  * on, and it would be shown a row missing figures it is expected to check.
  *
  * Most indexes, all eight foreign-key behaviours and every other check stay
- * in `packages/db`. **`category_id` and `counterparty_id` are the exceptions
- * (M2, R2 M4)** — S19's merge preview reads `category_id` straight off the
+ * in `packages/db`. **`category_id`, `counterparty_id` and `date` are the
+ * exceptions (M2, R2 M4)** — S19's merge preview reads `category_id` straight off the
  * replica, on every render the merge sheet is open for, and
  * `readCounterpartyBalances`/`balancesForCounterparty`
  * (`packages/ledger/src/counterparties/read-counterparty-balances.ts`) scan
  * `transactions` by `counterparty_id` on every settlement, every archive
  * gate, and every §7 read — the same predicate Postgres already indexes
  * (`transactions_counterparty_idx`) — and the replica had nothing at all
- * backing either one.
+ * backing either one. `date` joined them when S04 moved two period reads onto
+ * the launch screen; see the index's own note below.
  *
  * **One check does not stay server-only (L), the same exception
  * `counterparty_distinct_pairs` makes for its own ordering check** — the
@@ -132,6 +133,15 @@ export const transactionsColumns = () => ({
 export const transactions = k.table("transactions", transactionsColumns(), (t) => [
   index("transactions_category_idx").on(t.categoryId),
   index("transactions_counterparty_idx").on(t.counterpartyId),
+  /**
+   * Every period read scans this range — §5's `periodSpend`, §6's spend by
+   * category, §12's buckets — and S04 now runs two of them on the launch
+   * screen, again on every refresh and every month step. Without it that is a
+   * full table scan per interaction: invisible on a laptop with a hundred
+   * rows, and the thing `CLAUDE.md` names when it says pi-scale defects hide
+   * behind small fixtures.
+   */
+  index("transactions_date_idx").on(t.date),
   check(
     "transactions_debt_amount_requires_currency",
     sql`${t.debtAmount} IS NULL OR ${t.debtCurrency} IS NOT NULL`,

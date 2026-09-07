@@ -721,7 +721,7 @@ describe("Today", () => {
    * its last known figure (`mine` still renders) while the ground panel shows
    * `ErrorState(recoverable)`.
    */
-  it("shows a recoverable error and keeps the hero when a refresh fails", () => {
+  it("shows a recoverable error and keeps the figures when a refresh fails", () => {
     let calls = 0;
     const port = basePort({
       listAccounts: () => {
@@ -759,7 +759,13 @@ describe("Today", () => {
     withLedger(<Today />, controller);
 
     expect(screen.getByText("Couldn't refresh")).toBeDefined();
+    // S04 §6: a failed balance query replaces the ground's body and nothing
+    // else, so the figures it did not touch stay. Both of them — the strip and
+    // the month card render above the error branch for exactly this reason,
+    // which the band used to give for free when it held the hero.
     expect(screen.getByText("mine")).toBeDefined();
+    expect(screen.getByText("Kept so far")).toBeDefined();
+    expect(screen.getByText("Came in")).toBeDefined();
   });
 
   /**

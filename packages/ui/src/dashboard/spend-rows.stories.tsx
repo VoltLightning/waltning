@@ -46,8 +46,12 @@ export const OneDominant: Story = {
 };
 
 /**
- * The tail folded, and the blank kept apart from it. *Uncategorized* is money
- * a person can act on; *Other* is the rows that ran off the end.
+ * The fold at its largest: five named rows and the remainder. Six is the most
+ * `useWhereItWent` ever hands over — a seventh row was a state this story
+ * invented and the model cannot produce.
+ *
+ * The blank stays out of the fold. *Uncategorized* is money a person can act
+ * on; *Other* is the rows that ran off the end.
  */
 export const FoldedTail: Story = {
   args: {
@@ -55,10 +59,9 @@ export const FoldedTail: Story = {
       { key: "groceries", label: "Groceries", amount: money.toMoney("1240.50") },
       { key: "home", label: "Home", amount: money.toMoney("980.00") },
       { key: "transport", label: "Transport", amount: money.toMoney("610.40") },
-      { key: "fun", label: "Fun", amount: money.toMoney("489.28") },
+      { key: "uncategorized", label: "Uncategorized", amount: money.toMoney("489.28") },
       { key: "health", label: "Health", amount: money.toMoney("212.00") },
-      { key: "uncategorized", label: "Uncategorized", amount: money.toMoney("140.00") },
-      { key: "other", label: "Other", amount: money.toMoney("96.20") },
+      { key: "other", label: "Other", amount: money.toMoney("236.20") },
     ],
   },
 };

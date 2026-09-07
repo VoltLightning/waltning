@@ -122,6 +122,19 @@ export type Theme = {
    * chart palette this app has, not an oversight the way `#b3261e` was.
    */
   chartRamp: readonly string[];
+  /**
+   * One bar's fill, where the bars are separate and each sits on `subtleFill`.
+   *
+   * **Not a step of `chartRamp`, because a ramp cannot do this job.** The ramp
+   * tells *adjacent* segments of one stacked bar apart, so its steps are
+   * measured against each other. A row per category measures every step
+   * against the same track instead, and only two of the five clear WCAG
+   * 1.4.11's 3:1 there — in dark the ramp is the light one verbatim, so the
+   * *largest* category's bar came out at 2.19:1 and the smallest at 8.68:1.
+   * Magnitude is already the bar's length; colour was adding a second, worse
+   * encoding of it. One value, 3.90:1 light and 3.24:1 dark.
+   */
+  chartBar: string;
   chartOtherFill: string;
 
   /** P4's *asserted or aged*: a manual override, an estimated rate, a stale figure. */
@@ -233,6 +246,7 @@ export const light: Theme = {
   spend: color.spend,
 
   chartRamp: [color.green700, color.green600, color.green500, color.green400, color.green300],
+  chartBar: color.green600,
   chartOtherFill: color.green200,
 
   assertedFill: color.amber,
@@ -291,6 +305,7 @@ export const dark: Theme = {
   // Same five values as `light` — see the role's own doc for why this ramp is
   // fixed across both themes rather than repainted like every other role.
   chartRamp: [color.green700, color.green600, color.green500, color.green400, color.green300],
+  chartBar: color.green600,
   chartOtherFill: color.green200,
 
   assertedFill: darkColor.amber,

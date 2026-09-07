@@ -19,7 +19,7 @@ it("owns the Today layout — heading, date, appearance action and body", () => 
 
 /**
  * **The band holds no figure.** Net worth was the hero here and the band it
- * needed spent about 500pt of a 844pt screen on a total that moves slowly,
+ * needed spent about 350pt of an 844pt screen on a total that moves slowly,
  * with the month's own figures below the fold. Asserted rather than left to
  * the screenshot, because a `hero` slot that is merely unused is one prop away
  * from being used again.

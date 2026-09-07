@@ -36,5 +36,13 @@ export const transactionLines = k.table(
   transactionLinesColumns({ transactionId: () => transactions.id }),
   // `category_id` (M2) — S19's merge preview scans this on every render the
   // merge sheet is open for; see `transactions.sqlite.ts`'s own note.
-  (t) => [index("transaction_lines_category_idx").on(t.categoryId)],
+  (t) => [
+    index("transaction_lines_category_idx").on(t.categoryId),
+    /**
+     * §6 probes lines by their transaction, chunked — the join every
+     * split-aware read makes. The category index above answers the other
+     * direction and cannot serve this one.
+     */
+    index("transaction_lines_transaction_idx").on(t.transactionId),
+  ],
 );

@@ -281,6 +281,23 @@ describe("a component follows the active theme", () => {
     expect(contrastRatio(edge, fill)).toBeGreaterThanOrEqual(3);
   });
 
+  /**
+   * **A bar is a graphical object, and 1.4.11 asks 3:1 of it.**
+   *
+   * `SpendRows` draws one bar per category on `subtleFill`. It ranked into
+   * `chartRamp` first, and only two of that ramp's five steps clear the floor
+   * against a single track — worse in dark, where `chartRamp` is the light
+   * ramp verbatim, so the *largest* category's bar sat at 2.19:1 while the
+   * smallest was at 8.68:1. Nothing caught it: the visual suite's axe pass
+   * checks text contrast, not a `View`'s fill against the `View` behind it.
+   */
+  it.each([
+    ["light", light],
+    ["dark", dark],
+  ])("keeps the %s chart bar readable on the track behind it", (_name, theme) => {
+    expect(contrastRatio(theme.chartBar, theme.subtleFill)).toBeGreaterThanOrEqual(3);
+  });
+
   it.each([
     ["light", light],
     ["dark", dark],

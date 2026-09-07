@@ -10,7 +10,7 @@ import { describe, expect, it } from "vitest";
 import type { PhoneCategoryNode, PhoneSpendByCategory } from "./create-phone-ledger.ts";
 import { useWhereItWent } from "./use-where-it-went.ts";
 
-const LABELS = { uncategorized: "Uncategorized", other: "Other" };
+const LABELS = { uncategorized: "Uncategorized", other: "Other", removed: "Removed category" };
 
 function node(id: string, name: string): PhoneCategoryNode {
   return {
@@ -97,10 +97,18 @@ describe("useWhereItWent", () => {
     expect(rows[0]?.key).toBe("uncategorized");
   });
 
-  /** A category the tree does not hold reads as the blank, never as a raw id. */
-  it("does not print an id for a category the tree has lost", () => {
-    const rows = rowsFor([bucket("gone", "10.00")], []);
-    expect(rows[0]?.label).toBe("Uncategorized");
+  /**
+   * **A lost category is not the blank.** The caller passes the
+   * archived-inclusive tree, so this is a category that is genuinely gone —
+   * and saying its money had no category would be false. It also has to be
+   * distinguishable from the real category the seed ships called
+   * "Uncategorized", which would otherwise put two identical labels on one
+   * chart with two different amounts.
+   */
+  it("names a lost category apart from the blank, and never prints its id", () => {
+    const rows = rowsFor([bucket("gone", "10.00"), bucket(null, "5.00")], []);
+    expect(rows.map((row) => row.label)).toEqual(["Removed category", "Uncategorized"]);
+    expect(document.body.textContent ?? "").not.toContain("gone");
   });
 
   /** No lead currency — a ledger with no accounts — is no rows, not a throw. */

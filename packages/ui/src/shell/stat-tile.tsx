@@ -1,9 +1,9 @@
 /**
- * `<StatTile>` — `design-system/05` §5.1: figure + label, on the shell.
+ * `<StatTile>` — `design-system/05` §5.1: figure + label.
  *
  * **No `delta` prop yet.** §5.1 describes one ("delta takes `negative` ink
  * when spend rose"), but it needs a prior period's figure to compare against,
- * and C2 — this component's first and only caller — has no prior-period read
+ * and `MonthSummary` — this component's only caller — has no prior-period read
  * to hand it (`periodSpend` answers one period at a time). Adding the prop
  * now would be a parameter nothing can fill; a caller that computes a
  * comparison extends this rather than the other way round.
@@ -42,6 +42,13 @@ export type StatTileProps = {
   kind?: AmountKind;
   /** The ground it sits on: `"shell"` (default) — the band; `"surface"` — a card. */
   tone?: "shell" | "surface";
+  /**
+   * Force a leading `+` on a positive figure. Off by default — §12's `spend`
+   * is a positive *magnitude*, so a sign there would be one the figure does
+   * not carry. *Came in* sets it; *went out* does not, which looks asymmetric
+   * and is the arithmetic being honest.
+   */
+  signed?: boolean;
 };
 
 export function StatTile({
@@ -51,6 +58,7 @@ export function StatTile({
   decimals = 2,
   kind = "auto",
   tone = "shell",
+  signed = false,
 }: StatTileProps) {
   const styles = useStyles();
 
@@ -64,6 +72,7 @@ export function StatTile({
         size="body"
         emphasis={tone === "shell" ? "shell" : "default"}
         kind={kind}
+        signed={signed}
       />
     </View>
   );

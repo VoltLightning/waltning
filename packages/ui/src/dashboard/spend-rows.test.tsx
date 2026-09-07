@@ -75,15 +75,17 @@ describe("SpendRows", () => {
   });
 
   /**
-   * The ramp has five steps and the fold gives at most seven rows, so the last
-   * two share the palest one rather than reading `undefined` and falling back
-   * to the accent — which would put a *brand* colour in a chart.
+   * **Every bar is the same colour.** The first version ranked into
+   * `chartRamp`, whose steps are measured against each other because they are
+   * segments of one stacked bar; separate bars are each measured against the
+   * same track, where three of those five steps fall under 3:1 — and in dark
+   * the largest category's bar came out at 2.19:1. Length is the encoding.
    */
-  it("clamps to the ramp's last step rather than running past it", () => {
-    const rows = Array.from({ length: 7 }, (_, i) => ({
+  it("draws every bar in one colour", () => {
+    const rows = Array.from({ length: 6 }, (_, i) => ({
       key: `k${i}`,
       label: `Row ${i}`,
-      amount: money.toMoney("10.00"),
+      amount: money.toMoney(`${60 - i * 10}.00`),
     }));
     render(<SpendRows currency="PLN" rows={rows} />);
     const colourOf = (label: string) => {
@@ -91,7 +93,8 @@ describe("SpendRows", () => {
       const fill = track?.firstElementChild;
       return fill instanceof HTMLElement ? fill.style.backgroundColor : "";
     };
-    expect(colourOf("Row 6")).toBe(colourOf("Row 4"));
-    expect(colourOf("Row 0")).not.toBe(colourOf("Row 4"));
+    const colours = new Set(rows.map((row) => colourOf(row.label)));
+    expect(colours.size).toBe(1);
+    expect([...colours][0]).not.toBe("");
   });
 });

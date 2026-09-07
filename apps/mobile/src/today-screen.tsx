@@ -89,15 +89,17 @@ function toRow(transaction: PhoneRecentTransaction): TransactionListItem {
  * remounting with this screen — `onAdd`, `addDisabled` and the device's
  * `floatPosition` preference all moved with it.
  *
- * **S04's hero and period row (C2).** `snapshot.netWorth` is `money.netWorth`
- * (A1) per currency — `DualTotal` for the lead, stacked for the rest, exactly
- * `CurrencyTotals`' own stacking shape reused for a figure that needs no FX.
- * `FxStatusChip`/`CurrencyChip` are not rendered: there is no rate and no
- * display currency on the phone (arc-phone excludes FX entirely), and
- * `Shell`'s slots for them stay empty rather than filled with a chip that
- * would have nothing true to say. The period (which month is shown) is this
- * component's own state, never the store's — only *spent* and *net* move when
- * it steps; net worth is a balance as of now.
+ * **The figures, and which of them the period moves.** `snapshot.netWorth` is
+ * `money.netWorth` (A1) per currency; the lead currency's `mine` goes in
+ * `NetWorthStrip` and the rest are a line saying the figure is partial, with
+ * S16 a tap away for all of them. `FxStatusChip`/`CurrencyChip` are not
+ * rendered: there is no rate and no display currency on the phone (arc-phone
+ * excludes FX entirely), and a chip with nothing true to say is worse than an
+ * empty slot.
+ *
+ * The period (which month is shown) is this component's own state, never the
+ * store's. Everything in `MonthSummary` moves when it steps, and so does
+ * *where it went*; the strip does not, because a balance is as of now.
  */
 export default function Today() {
   const t = useT();
@@ -225,7 +227,7 @@ export default function Today() {
 
   /**
    * The total, in a line. It led this screen as a 54pt hero in a band that
-   * spent about 500pt of a 844pt phone on it — and a figure that moves slowly
+   * spent about 350pt of an 844pt phone on it — and a figure that moves slowly
    * is not what the app is opened to find out. The register it summarises is
    * one tap away, where every currency and the shared totals live.
    */
@@ -256,22 +258,36 @@ export default function Today() {
     />
   ) : null;
 
-  /**
-   * §6, ranked and named by `useWhereItWent`. `"all"` rather than a scope
-   * control: S04 has none, and the figures above it — the total, the month —
-   * are unscoped too, so a breakdown that quietly excluded the business half
-   * would not add up to the *went out* directly above it.
-   */
-  // Memoised so `useWhereItWent`'s own memo is not invalidated by a fresh
-  // object every render — the labels change with the language, nothing else.
+  // One object per language rather than per render, so a re-render for an
+  // unrelated reason does not re-rank the rows.
   const whereItWentLabels = useMemo(
-    () => ({ uncategorized: t("dashboard.uncategorized"), other: t("dashboard.other") }),
+    () => ({
+      uncategorized: t("dashboard.uncategorized"),
+      other: t("dashboard.other"),
+      removed: t("dashboard.removedCategory"),
+    }),
     [t],
   );
-  const spendByCategory = useSpendByCategory(ledger, period, "all", snapshot.revision);
+  /**
+   * §6, ranked and named by `useWhereItWent`.
+   *
+   * **`"mine"`, because this breaks down the figure directly above it.**
+   * `MonthSummary`'s *went out* comes from `periodSpend`, which keeps
+   * `ownership === "own"` rows only (§5). `money.inScope`'s `"all"` keeps
+   * shared ones too, so the bars summed to more than the total they claim to
+   * explain — five times more on a ledger holding one shared expense. `"mine"`
+   * is exactly `periodSpend`'s filter, and it excludes nothing else:
+   * `ownership` and `isBusiness` are different axes and only `"business"`
+   * reads the second, so the business half stays in both figures.
+   */
+  const spendByCategory = useSpendByCategory(ledger, period, "mine", snapshot.revision);
   const whereItWentRows = useWhereItWent(
     spendByCategory,
-    snapshot.categoryTree,
+    // The archived-inclusive tree. `categoryTree` drops archived rows for the
+    // picker that reads it, and archiving a category does not rewrite the
+    // transactions filed under it — so resolving names from that tree
+    // relabelled last month's spending as the honest blank.
+    snapshot.fullCategoryTree,
     leadNetWorth?.currency,
     whereItWentLabels,
   );

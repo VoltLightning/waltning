@@ -3,9 +3,11 @@
  * accounts that hold it.
  *
  * **Net worth stopped being the hero because it is not the daily question.**
- * S04's band spent about 500pt of a 844pt screen on four figures — the total,
+ * S04's band spent about 350pt of an 844pt screen on four figures — the total,
  * the period, spend and net — and then handed over a ground with almost
- * nothing on it. But a total you own changes slowly and is checked
+ * nothing on it. (348 on a notched phone with a shared account: 81 of inset
+ * and padding, 28 of heading, 93 of `DualTotal`, 84 of period row and tiles,
+ * two 20pt gaps and 22 of padding. Two fifths of the screen.) But a total you own changes slowly and is checked
  * occasionally; what changed *this month* is what the screen is opened for. So
  * the month became the hero (`MonthSummary`) and this is the total: a strip,
  * still first, still on top, and a tap from the register that explains it.
@@ -58,7 +60,15 @@ export function NetWorthStrip({
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={t("shell.openAccounts")}
+      /*
+        **No `accessibilityLabel`.** One on a `Pressable` *replaces* the
+        accessible name computed from its content, so a screen reader announced
+        "Open your accounts, button" and never read the figure — the headline
+        number of the screen, which the plain `DualTotal` this replaced was
+        perfectly able to read out. The content is the name; where it goes is
+        a hint.
+      */
+      accessibilityHint={t("shell.openAccounts")}
       onPress={onPress}
       style={[styles.root, hovered ? styles.hovered : null, focused ? styles.focused : null]}
       {...handlers}
@@ -113,7 +123,15 @@ const useStyles = makeStyles((theme) => ({
     borderRadius: radius.sm,
     backgroundColor: theme.subtleFill,
   },
-  hovered: { backgroundColor: theme.hoverFill },
+  /**
+   * `accentFill`, not `hoverFill`. `textMuted` measures **4.47:1** on
+   * `hoverFill` — a hair under the 4.5 floor, the same number `button.tsx`
+   * documents — and this strip puts two muted lines on it. `button.tsx` fixes
+   * that by changing the ink; here there are two inks and one fill, so the
+   * fill moves instead: `accentFill` is a visible change from `subtleFill` and
+   * holds `textMuted` at 4.87 light and 4.91 dark.
+   */
+  hovered: { backgroundColor: theme.accentFill },
   focused: {
     outlineWidth: focus.width,
     outlineStyle: "solid",

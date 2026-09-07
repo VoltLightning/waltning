@@ -8,12 +8,17 @@
  * the bar and the figure on one baseline, so the eye reads down a column
  * instead of across a legend. Same data, same ramp, different question.
  *
- * **The ramp, not a hue per category.** `02-tokens` §2.1 gives the green ramp
- * as "the **entire** chart palette: magnitude reads as depth", so rank picks
- * the step and there is no second hue to learn. The mockups this screen was
- * drawn from tinted each category separately; the tokens win, because a colour
- * that means *groceries* on one screen and nothing on the next is a colour
- * that means nothing.
+ * **One colour for every bar, and the length is the magnitude.** The mockups
+ * this was drawn from tinted each category separately; `02-tokens` §2.1 gives
+ * the green ramp as the entire chart palette, so the first version ranked into
+ * that. Both are wrong here for the same reason: `chartRamp`'s steps are
+ * measured against *each other*, because they are adjacent segments of one
+ * stacked bar. Separate bars are each measured against the same track, and
+ * only two of the five steps clear WCAG 1.4.11's 3:1 there — in dark, where
+ * the ramp is the light one verbatim, the biggest category came out at 2.19:1
+ * and the smallest at 8.68:1, so magnitude read as *invisible*. `chartBar` is
+ * one value that clears the floor in both themes; the bar's length was always
+ * the encoding.
  *
  * **Bars are proportional to the largest row, not to the total.** A share of
  * the total is what the stacked bar already says; here the useful comparison
@@ -53,7 +58,6 @@ const BAR_HEIGHT = 9;
 export function SpendRows({ rows, currency, decimals = 2 }: SpendRowsProps) {
   const styles = useStyles();
   const theme = useTheme();
-  const ramp = theme.chartRamp;
 
   // `money.cmp`, the way `SpendByCategoryWidget` folds its own total: a bar's
   // width is arithmetic on an amount, and `SPEC.md` §7.0's rule holds for it
@@ -67,12 +71,9 @@ export function SpendRows({ rows, currency, decimals = 2 }: SpendRowsProps) {
   // splits a component's styling across two places, which is how a hardcoded
   // colour returns unnoticed. `dock.tsx`'s `[styles.root, clearance]` is the
   // precedent, and `tests/architecture.test.ts` enforces it.
-  const drawn = rows.map((row, index) => ({
+  const drawn = rows.map((row) => ({
     ...row,
-    fill: {
-      width: `${share(row.amount, widest)}%` as const,
-      backgroundColor: ramp[Math.min(index, ramp.length - 1)] ?? theme.accent,
-    },
+    fill: { width: `${share(row.amount, widest)}%` as const, backgroundColor: theme.chartBar },
   }));
 
   return (

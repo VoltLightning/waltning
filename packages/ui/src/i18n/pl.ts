@@ -407,6 +407,13 @@ export const pl: Messages = {
     incomeVsExpense: "Przychody i wydatki",
     other: "Inne",
     uncategorized: "Bez kategorii",
+    /**
+     * A §6 bucket whose category the tree no longer holds at all. Distinct
+     * from `uncategorized`, which is money captured *without* one: a
+     * category that existed and is gone is not the same fact, and giving
+     * both the same name put three identically-labelled rows on one chart.
+     */
+    removedCategory: "Usunięta kategoria",
     otherCurrencies: "Inne waluty",
     monthToDate: "{{month}} · do dziś",
     asOf: "Na dzień {{date}}",
@@ -427,7 +434,12 @@ export const pl: Messages = {
     mine: "moje",
     ours: "nasze",
     openAccounts: "Otwórz konta",
-    alsoInOtherCurrencies: "Także w {{count}} innej walucie",
+    // 1 → walucie, 2–4 → walutach, 5+ (and 0) → walutach. All four forms,
+    // because Polish resolves `few`/`many` and a bare key holds the singular —
+    // so two currencies read "w 2 innej walucie" until this was written out.
+    alsoInOtherCurrencies_one: "Także w {{count}} innej walucie",
+    alsoInOtherCurrencies_few: "Także w {{count}} innych walutach",
+    alsoInOtherCurrencies_many: "Także w {{count}} innych walutach",
     alsoInOtherCurrencies_other: "Także w {{count}} innych walutach",
     keptSoFar: "Zostało do tej pory",
     cameIn: "Wpłynęło",

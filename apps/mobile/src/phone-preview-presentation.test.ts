@@ -25,7 +25,7 @@ describe("phone-alone preview presentation", () => {
     // The total is the lead currency's `mine`, in a strip, with the register
     // one tap away. It was `snapshot.netWorth.map` into a stack of `DualTotal`
     // heroes — the mine/ours split C2 introduced, still right and no longer
-    // the shape a phone band should spend 500pt on. What must not come back is
+    // the shape a phone band should spend two fifths of the screen on. What must not come back is
     // a *summed* total (below); how many figures the strip shows is a layout
     // decision this test has no business pinning.
     expect(today).toContain("<NetWorthStrip");

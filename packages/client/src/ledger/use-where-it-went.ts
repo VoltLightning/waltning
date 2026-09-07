@@ -20,6 +20,10 @@
  * reads to the end, and a truncated one that says nothing about what it cut is
  * a total that does not add up.
  *
+ * **Six buckets give six rows, not five and a remainder of one.** Folding a
+ * single category into *Other* replaces a name with a word that means less and
+ * saves no space at all; the cap exists to stop a list, not to hide a row.
+ *
  * **An uncategorised bucket keeps its own name, and is not *Other*.**
  * `categoryId: null` is money that was captured without a category; *Other* is
  * the tail of ones that have them. Folding the first into the second would
@@ -42,6 +46,14 @@ export type WhereItWentLabels = {
   uncategorized: string;
   /** The folded tail. */
   other: string;
+  /**
+   * A bucket whose category the tree no longer holds. **Not the blank.**
+   * Falling back to `uncategorized` put up to three identically-named rows on
+   * one chart — the null-category row, a real category the seed ships called
+   * "Uncategorized", and every archived one — and claimed of the last that its
+   * money had no category, when it has one that is merely hidden.
+   */
+  removed: string;
 };
 
 /** Five named rows, then everything else in one. §7.2's own shape. */
@@ -64,17 +76,19 @@ export function useWhereItWent(
       .filter((row) => row.currency === currency)
       .map((row) => ({
         key: row.categoryId ?? "uncategorized",
-        // A category the tree does not hold is one the reader cannot be told
-        // about — the blank's own wording is the truthful answer, and it is
-        // the same answer the capture screen gives for the same state.
+        // Three states, three labels. The caller passes the archived-inclusive
+        // tree, so `unknown` is reached only by a category that is genuinely
+        // gone rather than merely hidden.
         label:
           row.categoryId === null
             ? labels.uncategorized
-            : (names.get(row.categoryId) ?? labels.uncategorized),
+            : (names.get(row.categoryId) ?? labels.removed),
         amount: row.amount,
       }))
       .sort((a, b) => money.cmp(b.amount, a.amount));
 
+    // `<= TOP + 1`, deliberately: at exactly six the tail is one row, and
+    // folding one named category into *Other* costs a name and saves nothing.
     if (named.length <= TOP + 1) return named;
     const head = named.slice(0, TOP);
     const tail = named.slice(TOP);
@@ -82,5 +96,5 @@ export function useWhereItWent(
       ...head,
       { key: "other", label: labels.other, amount: money.sum(tail.map((row) => row.amount)) },
     ];
-  }, [rows, categoryTree, currency, labels.uncategorized, labels.other]);
+  }, [rows, categoryTree, currency, labels.uncategorized, labels.other, labels.removed]);
 }

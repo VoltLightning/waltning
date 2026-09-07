@@ -520,6 +520,13 @@ export const REPLICA_STEPS: readonly {
       `CREATE UNIQUE INDEX \`dashboard_layouts_one_active\` ON \`dashboard_layouts\` (\`is_active\`) WHERE "dashboard_layouts"."is_active" = 1`,
     ],
   },
+  {
+    tag: "0013_schema",
+    statements: [
+      `CREATE INDEX \`transaction_lines_transaction_idx\` ON \`transaction_lines\` (\`transaction_id\`)`,
+      `CREATE INDEX \`transactions_date_idx\` ON \`transactions\` (\`date\`)`,
+    ],
+  },
 ];
 
 /** One step per file in `drizzle/outbox`, filename order — the queue, its index, and the counter `claimSeq` allocates from. */

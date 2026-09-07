@@ -35,7 +35,7 @@ export function TodayFrame({ appearanceAction, date, body }: TodayFrameProps) {
     <View style={styles.root}>
       {/*
         No `hero`. The band was carrying net worth and the period's figures —
-        about 500pt of a 844pt screen — and everything the day actually
+        about 350pt of an 844pt screen — and everything the day actually
         changed started below the fold. Now it is a title, a date and the
         appearance control, and the ground begins where the content does.
       */}

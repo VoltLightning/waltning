@@ -33,7 +33,7 @@ export type ShellProps = {
   /**
    * The band's figure — optional, because S04 no longer has one. Net worth was
    * the phone's hero until the band it needed was measured against what it
-   * answered: about 500pt of a 844pt screen for a total that moves slowly,
+   * answered: about 350pt of an 844pt screen for a total that moves slowly,
    * with the month's own figures below the fold. The month is the hero now
    * (`MonthSummary`) and it lives on the ground, so this band is a title, a
    * date and one action. `DeskBand` still passes a figure and still gets one.

@@ -90,6 +90,11 @@ export function MonthSummary({
             decimals={decimals}
             kind="income"
             tone="surface"
+            // `signed` on the inflow and not on the outflow, which looks
+            // asymmetric and is not: §12 defines `spend` as a positive
+            // *magnitude*, so a `−` there would be a sign the figure does not
+            // carry. The `+` says this one is money arriving.
+            signed
           />
         </View>
         <View style={styles.tile}>
