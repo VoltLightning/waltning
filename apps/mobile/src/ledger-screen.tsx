@@ -72,6 +72,7 @@ import {
   CategorizeSelectionConfirm,
   type CategorizeSelectionConfirmState,
 } from "@waltning/ui/transactions/categorize-selection-confirm";
+import { DayHeader } from "@waltning/ui/transactions/day-header";
 import { LedgerFilterRail } from "@waltning/ui/transactions/ledger-filter-rail";
 import { LedgerSelectionBar } from "@waltning/ui/transactions/ledger-selection-bar";
 import {
@@ -1023,15 +1024,6 @@ function flattenSections(
   return entries;
 }
 
-function DayHeader({ label }: { label: string }) {
-  const styles = useStyles();
-  return (
-    <View style={styles.dayHeader}>
-      <Text style={styles.dayHeaderText}>{label}</Text>
-    </View>
-  );
-}
-
 /* ── One list row — a transaction or a transfer, tap and swipe both wired ─── */
 
 type LedgerRowItemProps = {
@@ -1113,8 +1105,6 @@ const useStyles = makeStyles((theme) => ({
   clearAllText: { color: theme.textMuted, ...text.ui("bodySm", 600) },
   skeletonList: { gap: space.md },
   list: { flex: 1 },
-  dayHeader: { paddingTop: space.x3, paddingBottom: space.xs },
-  dayHeaderText: { color: theme.textMuted, ...text.ui("kicker") },
   rowSeparator: { borderTopWidth: hairline.width, borderTopColor: theme.hairline },
   // S10 §3 web — "the filter bar as a persistent left rail" beside the table.
   deskLayout: { flex: 1, flexDirection: "row", gap: space.x5 },
