@@ -344,12 +344,15 @@ the web bundle composes all three.
 removed, never replaced by a colour change alone.
 
 **On the shell the ring is `shell-focus-ring`, and it is not green.**
-`focus-ring` is `accent-icon`, which is 2.45:1 on `shell` in light — under the
+`focus-ring` is `accent-icon`, which is 2.04:1 on `shell` in light — under the
 3:1 WCAG 1.4.11 asks of a boundary, and the band is not one of the fills §2.1's
 ramp is measured against, so nothing said so. `shell-focus-ring` is
-`shell-text`: 7.77:1 light, 7.94:1 dark. It is what `IconButton tone="shell"`,
-`DeskBand`'s nav, `PeriodHeader`'s *Today* and the band's `SegmentControl`
-draw.
+`shell-text`: 7.77:1 light, 7.94:1 dark. Seven controls draw it —
+`IconButton tone="shell"`, `DeskBand`'s nav, `PeriodHeader`'s *Today*, the
+band's `SegmentControl`, `CurrencyChip`, `Toast`'s action and `CommandBar`'s
+walked chip. **The set is decided by the mount site, not by the folder**: three
+of those live outside `shell/` and each was missed by a pass that went looking
+by directory.
 
 ### 2.7 Motion
 

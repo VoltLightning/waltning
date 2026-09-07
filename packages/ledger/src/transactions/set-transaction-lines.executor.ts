@@ -32,7 +32,7 @@ import {
   setTransactionLinesInput,
 } from "@waltning/core/registry/inputs";
 import { and, eq, isNull } from "drizzle-orm";
-import { assertAmountPositive } from "../amount-sign.ts";
+import { assertAmountPositive, assertLineMagnitude } from "../amount-sign.ts";
 import { defineLocalExecutor, LocalRefusal } from "../executor.ts";
 import { assertMoneyScale } from "../scale.ts";
 import { ledgerSchema as schema } from "../schema-map.ts";
@@ -82,19 +82,33 @@ export const setTransactionLinesExecutor = defineLocalExecutor<
       .from(transactions)
       .where(eq(transactions.id, input.transactionId))
       .get();
-    if (!current || current.deletedAt !== null) return;
+    /**
+     * **A row this device does not hold is a refusal, not a skip.**
+     *
+     * The early return was `if (!current || ...) return`, which put back the
+     * entry this hook exists to keep out: an input naming an id the replica
+     * has never seen queued a real operation Postgres refuses forever, and
+     * `recover.ts` re-reads it at every launch while any sibling entry is
+     * `deferred`. The *deleted* branch is safe — `apply` refuses that with a
+     * message of its own — but the missing one fell through to the outbox.
+     *
+     * So only the scale check needs the row (it reads the currency's declared
+     * scale); the sign and the empty-set guard are judged without it, and
+     * `adjustment` — the one exemption — is a type an unknown row cannot have,
+     * since this operation mints nothing.
+     */
+    if (current !== undefined && current.deletedAt !== null) return;
+    const type = current?.type ?? "unknown";
     if (input.amountOriginal !== undefined) {
-      assertMoneyScale(
-        tx,
-        input.amountOriginal,
-        current.currency,
-        "set_transaction_lines: amount_original",
-      );
-      assertAmountPositive(
-        "set_transaction_lines: amount_original",
-        input.amountOriginal,
-        current.type,
-      );
+      if (current !== undefined) {
+        assertMoneyScale(
+          tx,
+          input.amountOriginal,
+          current.currency,
+          "set_transaction_lines: amount_original",
+        );
+      }
+      assertAmountPositive("set_transaction_lines: amount_original", input.amountOriginal, type);
     }
     /**
      * **An empty set carries no total.** `replaceLines`' sum check is gated on
@@ -112,26 +126,23 @@ export const setTransactionLinesExecutor = defineLocalExecutor<
     }
 
     for (const line of input.lines) {
-      assertMoneyScale(
-        tx,
-        line.amount,
-        current.currency,
-        `set_transaction_lines: transaction_lines[${line.id}].amount`,
-      );
+      if (current !== undefined) {
+        assertMoneyScale(
+          tx,
+          line.amount,
+          current.currency,
+          `set_transaction_lines: transaction_lines[${line.id}].amount`,
+        );
+      }
       /**
-       * **A line signs no more than its parent does.** The same argument as
-       * `assertAmountPositive`, one column over: §12 stores a line as a
-       * magnitude, and `-10.00` in a set summing to the right total is a
-       * category that reads back with its sign flipped in §6's spend figures.
-       * Postgres has no CHECK here — `transaction_lines` carries none — so
-       * this is a service check with no constraint under it, and stricter than
-       * the server on purpose: a device that refuses what the server would
-       * accept queues nothing, which is the safe direction.
+       * A line is a magnitude, and a `0.00` one is a row receipts print —
+       * see `assertLineMagnitude` for why the parent's rule and this one are
+       * not the same rule.
        */
-      assertAmountPositive(
+      assertLineMagnitude(
         `set_transaction_lines: transaction_lines[${line.id}].amount`,
         line.amount,
-        current.type,
+        type,
       );
     }
   },

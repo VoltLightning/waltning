@@ -730,7 +730,7 @@ export const REPLICA_BACKFILLS: Readonly<Record<string, Backfill>> = {
      * `transactions` — not because it is the head.** It is not the head:
      * `0011_dashboard_layout_seed`, `0012_schema` and `0013_schema` all run
      * after it, and none of them rebuilds this table — `0013_schema` touches
-     * it, but only to add an index, which leaves its triggers where they are. What matters is the rebuild. `0010_schema` rebuilds
+     * it, but only to add two indexes, which leaves its triggers where they are. What matters is the rebuild. `0010_schema` rebuilds
      * `transactions` copy-rename-drop to add `brand_key`/`brand_source`
      * (§14.4b), and SQLite drops a table's triggers with the table — so a
      * hook one step earlier created two triggers the very next step deleted,

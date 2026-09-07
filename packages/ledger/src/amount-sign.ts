@@ -42,3 +42,26 @@ export function assertAmountPositive(subject: string, amount: string, type: stri
     `${subject} is ${amount} — amounts are positive and non-zero; \`type\` carries direction (§7.2), and only an adjustment signs (transactions_amount_positive)`,
   );
 }
+
+/**
+ * **A line signs no more than its parent — but zero is a line a receipt has.**
+ *
+ * §12 stores a line as a magnitude, so `-10.00` in a set that sums correctly
+ * is a category reading back with its sign flipped in §6's figures: the same
+ * argument as above, one column over.
+ *
+ * **Zero is not.** The reason the parent's zero is refused is that
+ * `amount_original` is the FX pivot and `money.margin` throws on a zero one. A
+ * line is never a pivot, and a receipt routinely carries a `0.00` row — a
+ * loyalty item, a free refill, a rounding line. Refusing it rejected the whole
+ * breakdown for a line the shop printed, and neither engine has a CHECK here
+ * to appeal to: `transaction_lines` carries none. Being stricter than the
+ * server is the safe direction only where the strictness is right.
+ */
+export function assertLineMagnitude(subject: string, amount: string, type: string): void {
+  if (type === "adjustment") return;
+  if (money.dec(amount).gte(0)) return;
+  throw new LocalRefusal(
+    `${subject} is ${amount} — a line is a magnitude (§12); \`type\` carries direction (§7.2), and only an adjustment signs`,
+  );
+}

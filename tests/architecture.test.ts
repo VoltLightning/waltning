@@ -2754,6 +2754,23 @@ describe("a control's edge is not the divider colour", () => {
       ) {
         locals.add(node.name.text);
       }
+      /**
+       * **`const { border } = theme` — the one shape reading the initializer's
+       * text can never catch**, because the token never appears in it. The
+       * name is on the *left*, and `isIdentifier(node.name)` skipped the whole
+       * declaration before the text test ran. A file using only this form also
+       * fails the cheap `theme.border` skip, so it was invisible twice.
+       */
+      if (
+        ts.isBindingElement(node) &&
+        ts.isIdentifier(node.name) &&
+        (node.propertyName ?? node.name).getText() === "border" &&
+        node.parent.parent !== undefined &&
+        ts.isVariableDeclaration(node.parent.parent) &&
+        node.parent.parent.initializer?.getText() === "theme"
+      ) {
+        locals.add(node.name.text);
+      }
       ts.forEachChild(node, walk);
     };
     walk(source);
@@ -2770,11 +2787,28 @@ describe("a control's edge is not the divider colour", () => {
       const key = ts.isIdentifier(property.name) ? property.name.text : property.name.getText();
       properties.set(key, property.initializer.getText());
     }
-    const allSides =
-      properties.has("borderWidth") || SIDE_WIDTHS.every((side) => properties.has(side));
-    if (!allSides) return false;
     const colour = properties.get("borderColor");
     if (colour === undefined) return false;
+
+    /**
+     * **A width the same object does not state is a width stated elsewhere.**
+     *
+     * Requiring `borderWidth` (or all four sides) *here* was the shape-guessing
+     * this rule already dropped from `dividerLocals`, one function over — and
+     * it missed the dominant React Native split: `Chip` puts `borderWidth: 1`
+     * on its base style and `borderColor` on the `empty`/`filled` variant that
+     * composes with it, so a control edge at 1.19:1 on the ground left the
+     * suite green. So an object that states a colour and *no* width is flagged
+     * too: it cannot be read alone, and the thing it composes with is out of
+     * view.
+     *
+     * A **single side** with an explicit width is the one shape still let
+     * through, because that is what a divider *is* — a rule between two rows,
+     * which is the use `02-tokens` §2.1 gives this colour. Nothing is guessed:
+     * a partial box (two or three sides) counts as a box and is flagged.
+     */
+    const statedSides = SIDE_WIDTHS.filter((side) => properties.has(side));
+    if (!properties.has("borderWidth") && statedSides.length === 1) return false;
     return isDivider(colour, names);
   }
 

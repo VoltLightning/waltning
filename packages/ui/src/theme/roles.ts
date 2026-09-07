@@ -96,15 +96,17 @@ export type Theme = {
    */
   focusRing: string;
   /**
-   * The same ring, for a control on the shell. Green on green is 2.45:1 in
+   * The same ring, for a control on the shell. Green on green is 2.04:1 in
    * light — under 1.4.11's 3:1 for a boundary — and the band is the one ground
    * `focusRing` was never checked against, because it is not one of the six
-   * fills the census walks. Six controls draw it, and the set is decided by
+   * fills the census walks. Seven controls draw it, and the set is decided by
    * what a component is drawn on rather than by which folder holds it —
    * `CurrencyChip` lives under `fx/` and was missed by the first pass for
    * exactly that reason. `IconButton tone="shell"`, `DeskBand`'s nav,
    * `PeriodHeader`'s *Today*, `SegmentControl` on the inset track,
-   * `CurrencyChip`, and `Toast`'s action. Each asserts its own outline in a
+   * `CurrencyChip`, `Toast`'s action and `CommandBar`'s walked chip — the last
+   * of which the "six" pass also missed, for the third time by folder. Each
+   * asserts its own outline in a
    * render test: this role clearing 3:1 is a fact about two hex strings and
    * says nothing about what any control paints.
    */

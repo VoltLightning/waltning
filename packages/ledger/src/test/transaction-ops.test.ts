@@ -1120,6 +1120,33 @@ describe("set_transaction_lines", () => {
   });
 
   /**
+   * **A row this device does not hold queues nothing either.**
+   *
+   * Both guards opened with `if (!current || ...) return`, which put the
+   * stuck entry straight back: an id the replica has never seen skipped the
+   * check entirely and queued a real `update_transaction` carrying `-10.00`,
+   * which Postgres refuses for as long as the device lives. `adjustment` is
+   * the only exemption and neither operation can set a `type`, so an unknown
+   * row cannot be one — the amount is judged without it.
+   */
+  it("refuses a negative amount for a row it does not hold (C1)", () => {
+    const entries = () => stores.ledger.outbox.db.select().from(outbox).all();
+    const before = entries().length;
+    const ghost = id<"transactions">("00000000-0000-4000-8000-0000000000ff");
+
+    expect(() =>
+      writeLocally(stores.ledger, {
+        executor: updateTransactionExecutor,
+        registry: ledgerRegistry,
+        capture,
+        input: { id: ghost, version: 1, patch: { amountOriginal: "-10.00" } },
+      }),
+    ).toThrow(/amounts are positive and non-zero/);
+
+    expect(entries(), "no entry the server can never accept").toHaveLength(before);
+  });
+
+  /**
    * **A line signs no more than its parent.** §12 stores a line as a
    * magnitude, so `-10.00` in a set that sums correctly is a category reading
    * back with its sign flipped in §6's figures — and `transaction_lines`
@@ -1149,8 +1176,42 @@ describe("set_transaction_lines", () => {
           ],
         },
       }),
-    ).toThrow(/amounts are positive and non-zero/);
+    ).toThrow(/a line is a magnitude/);
     expect(readLines()).toHaveLength(0);
+  });
+
+  /**
+   * **And zero is not the same rule.** The parent's zero is refused because
+   * `amount_original` is the FX pivot and `money.margin` throws on a zero one.
+   * A line is never a pivot, and a receipt prints `0.00` rows — a loyalty
+   * item, a free refill. A first version applied the parent's predicate to
+   * both columns and rejected the whole breakdown for a line the shop itself
+   * printed, with no CHECK on either engine to appeal to.
+   */
+  it("accepts a zero line — a receipt prints those", () => {
+    const v = () => readTxn()?.version ?? 0;
+    writeLocally(stores.ledger, {
+      executor: setTransactionLinesExecutor,
+      registry: ledgerRegistry,
+      capture,
+      input: {
+        transactionId: TXN,
+        version: v(),
+        lines: [
+          {
+            id: id<"transactionLines">("00000000-0000-4000-8000-0000000000e7"),
+            description: "Loyalty item",
+            amount: "0.00",
+          },
+          {
+            id: id<"transactionLines">("00000000-0000-4000-8000-0000000000e8"),
+            description: "Groceries",
+            amount: "18.00",
+          },
+        ],
+      },
+    });
+    expect(readLines()).toHaveLength(2);
   });
 
   /**

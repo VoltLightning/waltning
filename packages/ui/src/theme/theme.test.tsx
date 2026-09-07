@@ -342,11 +342,14 @@ describe("a component follows the active theme", () => {
    * boundary that appears on *every* fill in the system — including
    * `theme.shell`, which is not one of the five above because nothing else is
    * drawn on it. `focusRing` is `accentIcon`, and green on green measured
-   * **2.45:1** in light: the ring on `IconButton tone="shell"`, `DeskBand`'s
-   * nav, `PeriodHeader`'s *Today* and the band's `SegmentControl` was under
-   * the floor, on the four controls a keyboard reaches first. `shellFocusRing`
-   * is the band's own ring, and this is the row that makes the pair a rule
-   * rather than a preference: point either at the other's ground and it fails.
+   * **2.04:1** in light (2.45 before `accent-icon` was darkened for the page
+   * fills, which made this worse while fixing that): the ring on every control
+   * the band holds — seven of them, listed in `roles.ts` — was under the
+   * floor, on what a keyboard reaches first. `shellFocusRing` is the band's own
+   * ring, and this is the row that makes the pair a rule rather than a
+   * preference: point either at the other's ground and it fails. Which control
+   * paints which is asserted in each one's own render test; a ratio between two
+   * hex strings cannot see a component stop using the token.
    */
   it.each([
     ["light", light],
@@ -354,9 +357,10 @@ describe("a component follows the active theme", () => {
   ])("keeps the %s focus ring at the 3:1 boundary floor on every page fill", (_label, theme) => {
     // The same five the edge census walks, not the two a control rests on:
     // a ring is drawn *while* the control is hovered or pressed, and
-    // `SegmentControl`'s own track is `subtleFill` — where the light ring
-    // measures 3.05, five hundredths above the floor and, until this row,
-    // unmeasured.
+    // `SegmentControl`'s own track is `subtleFill` — where the ring the census
+    // arrived at measures 3.66. The value it replaced was at 3.05 there, and
+    // at 2.89 and 2.69 on the two fills a control wears while it is being
+    // used, which is what this row found the moment it walked them.
     for (const fill of ["ground", "surface", "subtleFill", "hoverFill", "pressedFill"] as const) {
       expect(contrastRatio(theme.focusRing, theme[fill]), fill).toBeGreaterThanOrEqual(3);
     }
@@ -421,14 +425,29 @@ describe("a component follows the active theme", () => {
   it.each([
     ["light", light],
     ["dark", dark],
-  ])("keeps the %s band's fills translucent, so they are the band's", (_name, theme) => {
+  ])("keeps the %s band's fills a lit or shaded shell, nothing else", (_name, theme) => {
     for (const overlay of [theme.shellNavActiveFill, theme.shellInsetTrackFill]) {
       expect(overlay, "an opaque fill on the band is a colour from another ramp").toMatch(
         /^rgba\(\d+,\s*\d+,\s*\d+,\s*0?\.\d+\)$/,
       );
-      // And the composite still reads: an overlay at alpha 0.95 is opaque in
-      // all but name, so the property above is necessary and not sufficient.
-      expect(contrastRatio(over(overlay, theme.shell), theme.shell)).toBeLessThan(1.6);
+      const composed = over(overlay, theme.shell);
+      const ratio = contrastRatio(composed, theme.shell);
+      // **Both bounds, and the reason there are two.** Alpha alone bought
+      // nothing: `rgba(220,0,0,0.06)` is a translucent *red* and passed, and
+      // `rgba(60,79,56,0.99)` — the shell at 99% — passed while making the
+      // active nav item and the inset track invisible. A fill nobody can see
+      // is not a fill; a fill from another ramp is not the band's.
+      expect(ratio, "a fill this close to the shell cannot be seen").toBeGreaterThan(1.03);
+      expect(ratio, "a fill this far from the shell is a colour of its own").toBeLessThan(1.6);
+      // And it is the shell, lit or shaded: an overlay of white or black moves
+      // every channel the same way. A hue of its own moves them apart.
+      const shift = ([1, 3, 5] as const).map(
+        (at) =>
+          Number.parseInt(composed.slice(at, at + 2), 16) -
+          Number.parseInt(theme.shell.slice(at, at + 2), 16),
+      );
+      const spread = Math.max(...shift) - Math.min(...shift);
+      expect(spread, `${overlay} tints the shell rather than lighting it`).toBeLessThanOrEqual(4);
     }
   });
 

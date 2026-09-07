@@ -123,7 +123,7 @@ const useStyles = makeStyles((theme) => ({
   /**
    * **The band's ring, because this chip lives on the band.** Every other
    * colour here is already a shell token — `DeskCurrency` mounts it into
-   * `DeskBand`'s `currencySlot` — and the green ring was 2.45:1 against that
+   * `DeskBand`'s `currencySlot` — and the green ring is 2.04:1 against that
    * ground. It was missed by the pass that added `shellFocusRing` precisely
    * because it lives under `fx/` rather than `shell/`: the set is decided by
    * what a component is drawn on, never by which folder holds it.

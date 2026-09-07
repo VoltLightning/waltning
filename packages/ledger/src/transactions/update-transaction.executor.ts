@@ -76,11 +76,28 @@ export const updateTransactionExecutor = defineLocalExecutor<
       .from(transactions)
       .where(eq(transactions.id, input.id))
       .get();
-    if (!current || current.deletedAt !== null) return;
+    /**
+     * **A row this device does not hold is a refusal, not a skip.**
+     *
+     * The early return was `if (!current || current.deletedAt !== null)
+     * return`, which put back the entry this hook exists to keep out: a
+     * `-10.00` patch naming an id the replica has never seen queued a real
+     * `update_transaction` that Postgres refuses forever, and `recover.ts`
+     * re-reads it at every launch while any sibling entry is `deferred`. The
+     * deleted branch is safe — `apply` refuses that with a message — but the
+     * missing one fell through to the outbox.
+     *
+     * `adjustment` is the only exemption, and neither of the two operations
+     * that reach this check can set a `type`: `update_transaction`'s patch has
+     * no such field and `set_transaction_lines` mints nothing. So an unknown
+     * row cannot be an adjustment, and a non-positive amount for one is
+     * refused on the spot.
+     */
+    if (current !== undefined && current.deletedAt !== null) return;
     assertAmountPositive(
       "update_transaction: amount_original",
       input.patch.amountOriginal,
-      current.type,
+      current?.type ?? "unknown",
     );
   },
 
