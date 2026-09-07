@@ -99,7 +99,7 @@ export function CounterpartyPicker({
         onClear={handleClear}
         {...(searching ? { resultCount: visibleList.length } : {})}
       />
-      <ScrollView {...nestedScrollProps(styles.scroll)}>
+      <ScrollView testID="counterparty-picker-scroll" {...nestedScrollProps(styles.scroll)}>
         {recent.length === 0 ? null : (
           <View style={styles.section}>
             <Text style={styles.sectionLabel}>{t("counterparties.pickerRecent")}</Text>

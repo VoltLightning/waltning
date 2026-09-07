@@ -2639,24 +2639,20 @@ describe("a refusal is never reported as a success", () => {
  */
 describe("every scroller declares which kind it is", () => {
   const SCROLLERS = new Set(["ScrollView", "FlatList", "SectionList", "VirtualizedList"]);
-  const HELPERS = new Set([
-    "nestedScrollProps",
-    "horizontalScrollProps",
-    "pageScrollProps",
-    "containOverscroll",
-    "containOverscrollX",
-  ]);
+  const SPREAD_HELPERS = new Set(["nestedScrollProps", "horizontalScrollProps", "pageScrollProps"]);
+  const STYLE_HELPERS = new Set(["containOverscroll", "containOverscrollX"]);
   const HELPER_FILE = join(repoRoot, "packages/ui/src/primitives/nested-scroll.ts");
 
-  const SPREAD_HELPERS = new Set(["nestedScrollProps", "horizontalScrollProps", "pageScrollProps"]);
+  /**
+   * Every root that can render one. `apps/mobile/app/` was missed by the first
+   * version — the routes, which are as able to draw a list as `src/` is — and
+   * so were the stories, one of which was still carrying the defective
+   * spelling this branch exists to remove. A rule whose scope is narrower than
+   * the behaviour it governs is a rule about one directory.
+   */
+  const ROOTS = ["packages/ui/src", "packages/client/src", "apps/mobile/src", "apps/mobile/app"];
 
-  type Found = {
-    file: string;
-    name: string;
-    declared: boolean;
-    /** Something after the helper spread could replace the style it returned. */
-    overwritten: boolean;
-  };
+  type Found = { file: string; name: string; declared: boolean; overwritten: boolean };
 
   /** The element's tag name, following `Animated.ScrollView` to its last part. */
   function tagName(node: ts.JsxOpeningLikeElement): string {
@@ -2665,41 +2661,55 @@ describe("every scroller declares which kind it is", () => {
   }
 
   /**
-   * Does any identifier in this element's attributes name a helper? Read from
-   * the AST, so a helper named in a comment or a string cannot answer for one
-   * that was never called.
+   * **This element's own declaration, not one anywhere beneath it.**
+   *
+   * The first AST version asked whether any identifier in the attribute
+   * subtree named a helper, which accepted three things that declare nothing:
+   * a bare reference (`accessibilityLabel={String(nestedScrollProps)}`), a call
+   * whose result is thrown away, and — worst — a *nested* element's spread, so
+   * `<ScrollView style={s} ListEmptyComponent={<Inner {...nestedScrollProps(s)} />}>`
+   * certified the outer, bare scroller. So the shape is pinned: the helper is
+   * the direct callee of a call that is exactly a spread attribute's
+   * expression, or a style constant named inside this node's own `style`.
    */
-  function namesAny(node: ts.Node, names: ReadonlySet<string>): boolean {
-    let found = false;
-    const walk = (n: ts.Node): void => {
-      if (ts.isIdentifier(n) && names.has(n.text)) found = true;
-      else ts.forEachChild(n, walk);
-    };
-    if (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) {
-      for (const attribute of node.attributes.properties) walk(attribute);
-    } else walk(node);
-    return found;
+  function declaringAttribute(node: ts.JsxOpeningLikeElement): number {
+    return node.attributes.properties.findIndex((attribute) => {
+      if (ts.isJsxSpreadAttribute(attribute)) {
+        const call = attribute.expression;
+        return (
+          ts.isCallExpression(call) &&
+          ts.isIdentifier(call.expression) &&
+          SPREAD_HELPERS.has(call.expression.text)
+        );
+      }
+      if (!ts.isJsxAttribute(attribute)) return false;
+      if (!ts.isIdentifier(attribute.name) || attribute.name.text !== "style") return false;
+      const initializer = attribute.initializer;
+      if (initializer === undefined || !ts.isJsxExpression(initializer)) return false;
+      let named = false;
+      const walk = (n: ts.Node): void => {
+        if (ts.isIdentifier(n) && STYLE_HELPERS.has(n.text)) named = true;
+        else ts.forEachChild(n, walk);
+      };
+      if (initializer.expression !== undefined) walk(initializer.expression);
+      return named;
+    });
   }
 
   /**
-   * Anything after the helper spread that could set `style` — a `style` prop,
-   * or another spread of any kind.
+   * Anything after the declaration that could replace the style it set — a
+   * `style` prop, or a spread of any kind.
    *
-   * **Stated as ordering rather than as "has a style prop", because a spread
-   * cannot be read.** `{...{ style: x }}` is an object literal this could
-   * inspect, but `{...keyboardProps}` is a variable, and resolving it would
-   * mean type-checking the repository from a test. Ordering needs no
-   * resolution: JSX props are last-write-wins, so a helper spread that comes
-   * last cannot be overwritten by anything, whatever it holds. That also
-   * makes the safe spelling the obvious one — put the helper at the end.
+   * **Ordering, because a spread cannot be read.** `{...{ style: x }}` is an
+   * object literal this could inspect; `{...keyboardProps}` is a variable, and
+   * resolving it would mean type-checking the repository from a test. JSX props
+   * are last-write-wins, so a declaration that nothing follows cannot be
+   * overwritten, whatever the follower holds. `containOverscroll` is guarded
+   * the same way: it is a style attribute, and a later one replaces it.
    */
-  function overwritesAfterHelper(node: ts.JsxOpeningLikeElement): boolean {
-    const properties = node.attributes.properties;
-    const helperAt = properties.findIndex(
-      (attribute) => ts.isJsxSpreadAttribute(attribute) && namesAny(attribute, SPREAD_HELPERS),
-    );
-    if (helperAt === -1) return false;
-    return properties.slice(helperAt + 1).some((attribute) => {
+  function overwritesAfter(node: ts.JsxOpeningLikeElement, declaredAt: number): boolean {
+    if (declaredAt === -1) return false;
+    return node.attributes.properties.slice(declaredAt + 1).some((attribute) => {
       if (ts.isJsxSpreadAttribute(attribute)) return true;
       return (
         ts.isJsxAttribute(attribute) &&
@@ -2711,9 +2721,9 @@ describe("every scroller declares which kind it is", () => {
 
   function scrollers(): Found[] {
     const found: Found[] = [];
-    const files = sourceFiles(join(repoRoot, "packages/ui/src"))
-      .concat(sourceFiles(join(repoRoot, "apps/mobile/src")))
-      .filter((file) => file !== HELPER_FILE && !/\.(test|stories)\.tsx?$/.test(file));
+    const files = ROOTS.flatMap((root) => sourceFiles(join(repoRoot, root))).filter(
+      (file) => file !== HELPER_FILE && !/\.test\.tsx?$/.test(file),
+    );
 
     for (const file of files) {
       const source = ts.createSourceFile(
@@ -2727,11 +2737,12 @@ describe("every scroller declares which kind it is", () => {
         if (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) {
           const name = tagName(node);
           if (SCROLLERS.has(name)) {
+            const declaredAt = declaringAttribute(node);
             found.push({
               file: relative(repoRoot, file),
               name,
-              declared: namesAny(node, HELPERS),
-              overwritten: overwritesAfterHelper(node),
+              declared: declaredAt !== -1,
+              overwritten: overwritesAfter(node, declaredAt),
             });
           }
         }
@@ -2743,13 +2754,33 @@ describe("every scroller declares which kind it is", () => {
   }
 
   /**
-   * Pinned, not a floor: a lower bound stays green when a scroller is deleted
-   * *or* when the parser silently stops finding one, which is the failure that
-   * would make every rule below vacuous. A census that changes is a decision
-   * to make here, in the open.
+   * **The census, pinned as a set rather than a count.**
+   *
+   * A number fails with "expected 13 to be 12", which teaches the next person
+   * to edit the literal without reading what changed — and it stays green when
+   * the parser silently stops finding one scroller while someone adds another.
+   * A set names the file that appeared or vanished.
    */
   it("finds every scroller in the repository", () => {
-    expect(scrollers().length).toBe(12);
+    const census = scrollers()
+      .map(({ file, name }) => `${file} → <${name}>`)
+      .sort();
+
+    expect(census).toEqual([
+      "apps/mobile/src/ledger-screen.tsx → <FlatList>",
+      "packages/ui/src/accounts/account-picker.tsx → <ScrollView>",
+      "packages/ui/src/categories/category-sheet.tsx → <ScrollView>",
+      "packages/ui/src/categories/category-sheet.tsx → <ScrollView>",
+      "packages/ui/src/categories/category-sheet.tsx → <ScrollView>",
+      "packages/ui/src/counterparties/counterparty-picker.tsx → <ScrollView>",
+      "packages/ui/src/fx/rate-table.tsx → <FlatList>",
+      "packages/ui/src/primitives/select.tsx → <ScrollView>",
+      "packages/ui/src/shell/bottom-sheet.stories.tsx → <ScrollView>",
+      "packages/ui/src/shell/bottom-sheet.tsx → <ScrollView>",
+      "packages/ui/src/shell/card.tsx → <ScrollView>",
+      "packages/ui/src/transactions/ledger-filter-rail.tsx → <ScrollView>",
+      "packages/ui/src/transactions/ledger-table.tsx → <FlatList>",
+    ]);
   });
 
   it("spreads one of the nested-scroll helpers", () => {
@@ -2763,21 +2794,14 @@ describe("every scroller declares which kind it is", () => {
     ).toEqual([]);
   });
 
-  /**
-   * JSX props are last-write-wins, so `{...nestedScrollProps(a)} style={b}`
-   * replaces the whole style the helper returned — dropping the containment
-   * while `nestedScrollEnabled` survives, which is precisely the shipped
-   * defect. The helpers take the style for that reason; this refuses the
-   * spelling that would take it back.
-   */
-  it("puts the helper spread last, where nothing can overwrite its style", () => {
+  it("lets nothing that sets style follow its declaration", () => {
     const offenders = scrollers()
       .filter(({ overwritten }) => overwritten)
       .map(({ file, name }) => `${file} → <${name}>`);
 
     expect(
       offenders,
-      "move the helper spread last — a style prop or a later spread replaces the style it returned",
+      "move the declaration after every other style-bearing attribute — a later style prop or spread replaces it",
     ).toEqual([]);
   });
 

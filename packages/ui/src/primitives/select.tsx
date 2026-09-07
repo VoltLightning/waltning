@@ -422,7 +422,9 @@ function PanelOverlay({
               the view it is set on a nested-scrolling child, which is what
               lets this list take the gesture instead of an outer scroller
               on Android. */}
-          <ScrollView {...nestedScrollProps(styles.panelScroll)}>{children}</ScrollView>
+          <ScrollView testID="select-panel-scroll" {...nestedScrollProps(styles.panelScroll)}>
+            {children}
+          </ScrollView>
         </Animated.View>
       </View>
     </Modal>

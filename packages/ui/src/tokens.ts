@@ -97,9 +97,11 @@ export const color = {
    * `income` is a *livelier* green than the sage `accent`, so a credit reads
    * as an event and a button reads as a control — related, never confused.
    * Held at 4.5:1 against every fill a
-   * figure lands on, which is what pushed it darker than the mockups' figure:
-   * `ground` and `surface` were never the binding pair (5.80 and 6.25), and
-   * `hoverFill` — a `transaction-row` under a pointer — was. `spend` is a
+   * figure lands on, which is what pushed it darker than the mockups' figure.
+   * `ground` and `surface` were never the binding pair — 5.80 and 6.25 here —
+   * and the tightest is `pressedFill` at 4.64, with `hoverFill` at 4.99 behind
+   * it. Those two were the fills nothing checked while the comfortable pair
+   * was checked twice. `spend` is a
    * warm, restrained red: unmistakable, not alarming. A transfer is neither;
    * money moved between your own accounts is `muted`, because nothing was
    * gained or lost. Job 3 is `income`.
@@ -135,7 +137,7 @@ export const color = {
   /** Danger — a destructive action, a refused write. **Never chrome.** */
   danger: "#a33d26",
   dangerBg: "#f8e8e2",
-  dangerBorder: "#dfa68f",
+  dangerBorder: "#c05e37",
 
   /**
    * The shell: one flat colour, no gradient. A gradient was the one thing on
@@ -213,7 +215,7 @@ export const darkColor = {
   amberBorder: "#8f7a3a",
   danger: "#f0a28c",
   dangerBg: "#3d241c",
-  dangerBorder: "#a45f48",
+  dangerBorder: "#b36a51",
   /**
    * On a warm-charcoal ground a surface reads by rising, so the dark shell
    * sits well above `ground` (1.97:1) and `surface` (1.79:1) — the 1.5 floor

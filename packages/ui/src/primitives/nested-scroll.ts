@@ -21,20 +21,26 @@
  * `overflow-y: hidden` — which still makes it a scroll container, so
  * `overscroll-behavior-y: contain` on a chip row stops a vertical drag that
  * starts on the row from scrolling the sheet it sits in. A horizontal scroller
- * therefore contains **x only**, and takes no `nestedScrollEnabled`: Android
- * routes it to `ReactHorizontalScrollViewManager`, which does not implement
- * that prop, and a prop that does nothing is a claim that it does something.
+ * therefore contains **x only**. Its Android half is unchanged:
+ * `ReactHorizontalScrollViewManager` implements `nestedScrollEnabled` like its
+ * vertical sibling, so the prop stays. Only the CSS is axis-specific, because
+ * only the CSS applies to both axes at once.
  *
  * Each helper takes the scroller's style and returns it, so containment and
  * layout arrive as one value. That is a convenience, not a guarantee: JSX
  * props are last-write-wins, so anything spread *after* a helper replaces the
  * style it returned while leaving `nestedScrollEnabled` in place — the shipped
- * defect exactly. What holds is an ordering rule — the helper spread comes
- * last, refused otherwise by `tests/architecture.test.ts`, which parses the
- * JSX with the compiler rather than a regular expression — and
- * `nested-scroll.test.tsx`, which asserts the *rendered* `overscroll-behavior`
- * each helper produces. The behaviour is real only in the DOM, so that is
- * where it is measured.
+ * defect exactly. What holds is an ordering rule — nothing that can set
+ * `style` may follow the declaration, refused otherwise by
+ * `tests/architecture.test.ts`, which parses the JSX with the compiler rather
+ * than a regular expression.
+ *
+ * **And the containment itself is asserted on rendered components**, in each
+ * picker's, sheet's and rail's own test, through
+ * `expectContainsOverscroll` — because a rule that reads source is a census of
+ * declarations, never a guarantee about behaviour. `nested-scroll.test.tsx`
+ * checks what these helpers hand to `react-native-web`; the call-site tests
+ * check that the element a person actually scrolls got it.
  *
  * ```tsx
  * <ScrollView {...nestedScrollProps(styles.panelScroll)}>        // bounded
@@ -80,13 +86,15 @@ export function nestedScrollProps(style: StyleProp<ViewStyle>): {
 }
 
 /**
- * A bounded horizontal scroller — a chip row. Contains its own axis and no
- * more; see the axis note above for why it carries no `nestedScrollEnabled`.
+ * A bounded horizontal scroller — a chip row. Same Android half as its
+ * vertical sibling; the CSS contains its own axis and no more, so a vertical
+ * drag that starts on the row still reaches the sheet under it.
  */
 export function horizontalScrollProps(style: StyleProp<ViewStyle>): {
+  nestedScrollEnabled: true;
   style: StyleProp<ViewStyle>;
 } {
-  return { style: [style, containOverscrollX] };
+  return { nestedScrollEnabled: true, style: [style, containOverscrollX] };
 }
 
 /**

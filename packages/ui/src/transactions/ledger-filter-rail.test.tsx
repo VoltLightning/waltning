@@ -2,6 +2,7 @@
 
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
+import { expectContainsOverscroll } from "../primitives/nested-scroll.test-support.ts";
 import { LedgerFilterRail, type LedgerFilterRailProps } from "./ledger-filter-rail";
 
 const SCOPES = [
@@ -75,6 +76,12 @@ describe("LedgerFilterRail", () => {
     // keeps `ScrollView` out of `apps/mobile/src` is why this component
     // exists at all.
     expect(screen.getByTestId("ledger-desk-rail")).toBeDefined();
+  });
+
+  /** The rail contains its own overscroll, so reaching its end does not scroll the table beside it. */
+  it("contains its own overscroll", () => {
+    render(<LedgerFilterRail {...railProps()} />);
+    expectContainsOverscroll("ledger-desk-rail");
   });
 
   /** S10 §4 — "each filter reports the count it excludes." */

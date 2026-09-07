@@ -358,6 +358,7 @@ export function CategorySheet({
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
+          testID="category-chip-row"
           {...horizontalScrollProps(styles.chipRow)}
         >
           {groups.map((group) => (
@@ -379,7 +380,7 @@ export function CategorySheet({
         contract for the day that body scrolls, stated on the list it would
         be about.
       */}
-      <ScrollView {...nestedScrollProps(styles.gridScroll)}>
+      <ScrollView testID="category-grid-scroll" {...nestedScrollProps(styles.gridScroll)}>
         {visibleLeaves.length === 0 ? (
           emptyTree ? (
             createAction === undefined ? (
@@ -714,6 +715,7 @@ function CreateRow({
               <ScrollView
                 horizontal
                 showsHorizontalScrollIndicator={false}
+                testID="category-chip-row"
                 {...horizontalScrollProps(styles.chipRow)}
               >
                 {groups.map((group) => (

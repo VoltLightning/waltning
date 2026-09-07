@@ -213,7 +213,7 @@ export function AccountPicker({
         gesture to; it is the Android contract for the day that body does
         scroll, stated where it will still be right.
       */}
-      <ScrollView {...nestedScrollProps(styles.scroll)}>
+      <ScrollView testID="account-picker-scroll" {...nestedScrollProps(styles.scroll)}>
         {recent === undefined ? null : (
           <View style={styles.section}>
             <Text style={styles.sectionLabel}>{t("accounts.recent")}</Text>

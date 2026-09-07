@@ -25,7 +25,7 @@ whatever the chrome around them does.
 | `pressed` | `#e6ddcb` | The transient fill under a finger |
 | `border` | `#eae3d5` | Card edges and dividers — a boundary between two areas, which WCAG sets no floor for. **Never a control's edge**: at 1.19:1 on `ground` it cannot carry 1.4.11, so an unfilled chip takes `border-interactive` like every other control |
 | `border-interactive` | `#88795c` | The resting edge of a control — an input, a chip. A control here is identified by its edge alone (its fill is `surface` on `ground`, 1.08:1), so this carries WCAG 1.4.11's **3:1 boundary floor** by itself — against **every fill a control is drawn on**: `ground`, `surface`, `subtle`, `hover`, `pressed`. 3.15 at the tightest |
-| `border-strong` | `#746e5f` | An edge that must read alone: a selected control, a focus-adjacent edge. One step above `border-interactive` on the same ramp, held to the same five fills (3.76) |
+| `border-strong` | `#746e5f` | An edge that must read alone: a selected control, a focus-adjacent edge. One step above `border-interactive` on the same ramp, held to the same five fills (3.75 at the tightest of the two themes) |
 | `ink` | `#33302a` | Body text **and heading ink** — a heading is not a signal. Warm near-black, never `#000` |
 | `muted` | `#6e6759` | Secondary text, labels, captions; a transfer's figure. 5.2:1 on `ground` |
 | `accent` | `#5c7357` | Primary action fill. Sage. **Job 1** |
@@ -41,7 +41,7 @@ whatever the chrome around them does.
 | `amber-border` | `#d9bd75` | Edge of an amber tag or chip |
 | `danger` | `#a33d26` | A destructive action, a refused write. **Never chrome** |
 | `danger-bg` | `#f8e8e2` | Fill behind a danger tag |
-| `danger-border` | `#dfa68f` | Edge of a danger control |
+| `danger-border` | `#c05e37` | Edge of a danger control — an outlined button, an errored input. A control with no fill is identified by its edge, so this carries the same **3:1** floor as `border-interactive`, in the danger hue (3.18) |
 | `shell` | `#3c4f38` | The header shell. **One flat colour.** A deep sage at L\* 31 — see below |
 | `shell-text` | `#f2f0e7` | Text on the shell |
 | `shell-text-muted` | `#b8c4ae` | The currency marker, the mine/ours line |
@@ -117,7 +117,7 @@ with dark text.
 | `assertedBorder` | `#8f7a3a` |
 | `dangerFill` | `#3d241c` |
 | `dangerText` | `#f0a28c` |
-| `dangerBorder` | `#a45f48` |
+| `dangerBorder` | `#b36a51` |
 | `shell` | `#3d4f39` |
 | `shellText` | `#f0f4ec` |
 | `shellTextMuted` | `#b3c2a9` |

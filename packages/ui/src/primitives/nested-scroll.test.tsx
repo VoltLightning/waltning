@@ -21,7 +21,13 @@ import {
   pageScrollProps,
 } from "./nested-scroll.ts";
 
-/** The two axes as the browser resolves them, whichever shorthand produced them. */
+/**
+ * The two axes as they reach the DOM. `react-native-web` emits the longhands
+ * itself, so this reads back what it wrote rather than resolving a shorthand —
+ * what is measured is that the declaration survives the style pipeline onto
+ * the element, not that a browser engine honours it. That last step is the
+ * browser's own, and no test here can stand in for it.
+ */
 function overscroll(testID: string) {
   const style = getComputedStyle(screen.getByTestId(testID));
   return {
@@ -65,8 +71,13 @@ describe("a horizontal scroller contains its own axis and no more", () => {
     expect(y).not.toBe("contain");
   });
 
-  it("claims no Android nested scrolling, which a horizontal list does not implement", () => {
-    expect(horizontalScrollProps({})).not.toHaveProperty("nestedScrollEnabled");
+  it("keeps the Android half, which a horizontal list does implement", () => {
+    // `ReactHorizontalScrollViewManager` declares `@ReactProp("nestedScrollEnabled")`
+    // exactly as the vertical manager does. An earlier version of this helper
+    // dropped the prop on the stated grounds that it did nothing there, which
+    // was simply false about this repository's own React Native.
+    expect(horizontalScrollProps({}).nestedScrollEnabled).toBe(true);
+    expect(nestedScrollProps({}).nestedScrollEnabled).toBe(true);
   });
 });
 

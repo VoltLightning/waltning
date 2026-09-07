@@ -79,12 +79,13 @@ describe("a component follows the active theme", () => {
     // **A figure is not only ever on the page.** `transaction-row.tsx` renders
     // `<Amount>` and turns its background to `hoverFill` under a pointer;
     // `account-picker.tsx` and `category-sheet.tsx` do the same with a balance
-    // and a cell; `ledger-table.tsx` puts a selected row on `accentFill`. Hover
-    // is the tightest of those and was the one nothing checked — `income` sat
-    // at 4.31 there while clearing `ground` and `surface` comfortably.
-    // `pressedFill` holds no figure today (`icon-button.tsx` is its only user)
-    // and is listed anyway: a row is pressable, and which fill a figure ends up
-    // on should not be the thing that decides whether it is legible.
+    // and a cell; `ledger-table.tsx` puts a selected row on `accentFill`. None of
+    // those were checked, while `ground` and `surface` were checked twice: on
+    // `main` the money pair cleared those two at 4.8 and 5.2 and sat at 4.14 on
+    // hover and 3.85 on pressed. `pressedFill` holds no figure today
+    // (`icon-button.tsx` is its only user) and is the tightest of the four
+    // anyway, so it is listed: which fill a figure lands on should not be the
+    // thing that decides whether it can be read.
     ["light income on subtle fill", light.income, light.subtleFill],
     ["light spend on subtle fill", light.spend, light.subtleFill],
     ["light income on hover fill", light.income, light.hoverFill],
@@ -145,11 +146,33 @@ describe("a component follows the active theme", () => {
     (["ground", "surface", "subtleFill", "hoverFill", "pressedFill"] as const).flatMap((fill) => [
       [`light control edge on ${fill}`, light.borderInteractive, light[fill]] as const,
       [`light strong edge on ${fill}`, light.borderStrong, light[fill]] as const,
+      [`light danger edge on ${fill}`, light.dangerBorder, light[fill]] as const,
       [`dark control edge on ${fill}`, dark.borderInteractive, dark[fill]] as const,
       [`dark strong edge on ${fill}`, dark.borderStrong, dark[fill]] as const,
+      [`dark danger edge on ${fill}`, dark.dangerBorder, dark[fill]] as const,
     ]),
   )("keeps %s at the 3:1 boundary floor", (_label, edge, fill) => {
     expect(contrastRatio(edge, fill)).toBeGreaterThanOrEqual(3);
+  });
+
+  /**
+   * **`border` is a divider, and the test says which is which.**
+   *
+   * `02-tokens` calls `border` "card edges and dividers" — a boundary between
+   * two *areas*, which WCAG sets no floor for, and at 1.02:1 against the fills
+   * it sits on it could not meet one. That is fine until it lands on a control:
+   * `Button variant="secondary"` and `variant="danger"` have no fill, so their
+   * edge is the whole of what identifies them, and drawing it in a divider
+   * colour made two buttons that cannot be located. Stated here as the gap
+   * between the two roles, so the day someone reaches for `border` on a
+   * control the number is already written down.
+   */
+  it.each([
+    ["light", light],
+    ["dark", dark],
+  ])("keeps the %s divider well below every control edge", (_name, theme) => {
+    expect(contrastRatio(theme.border, theme.surface)).toBeLessThan(2);
+    expect(contrastRatio(theme.borderInteractive, theme.surface)).toBeGreaterThanOrEqual(3);
   });
 
   it.each([
@@ -159,7 +182,11 @@ describe("a component follows the active theme", () => {
     // On every fill, not one: a ramp that inverts on the pressed fill is not a
     // ramp. And by a stated margin rather than by `toBeGreaterThan`, which is
     // satisfied by a gap of 0.001 — that is "keeps the order", which is what a
-    // ramp is *not*. The two steps sit 0.5–0.7 apart today.
+    // ramp is *not*. The ten pairings sit between 0.58 and 0.82 apart today.
+    //
+    // A difference of two contrast ratios is not a perceptual quantity, so 0.4
+    // is a floor under drift rather than a claim about how the two steps look.
+    // The claim that matters is the 3:1 above, which each step meets alone.
     for (const fill of ["ground", "surface", "subtleFill", "hoverFill", "pressedFill"] as const) {
       expect(contrastRatio(theme.borderStrong, theme[fill])).toBeGreaterThanOrEqual(
         contrastRatio(theme.borderInteractive, theme[fill]) + 0.4,

@@ -131,7 +131,12 @@ export function Button({
  */
 const useStyles = makeStyles((theme) => ({
   variantPrimary: { backgroundColor: theme.accent },
-  variantSecondary: { borderWidth: 1, borderColor: theme.border },
+  // **These two have no fill, so the edge is the whole control.** `theme.border`
+  // is a divider colour — 1.02:1 against the fills a button sits on — and an
+  // outlined button drawn in it is a control WCAG 1.4.11 says cannot be
+  // located. `borderInteractive` is the token that carries that floor
+  // (`tokens.ts`), and `dangerBorder` carries it in the danger hue.
+  variantSecondary: { borderWidth: 1, borderColor: theme.borderInteractive },
   variantGhost: {},
   variantDanger: { borderWidth: 1, borderColor: theme.dangerBorder },
 
