@@ -128,7 +128,12 @@ describe("TransactionRow", () => {
         onPress={onPress}
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: "Grocer" }));
+    // A substring, because the row's accessible name is now its whole
+    // content — the payee *and* the figure. It used to be exactly the payee,
+    // which is the defect this row carried: an `accessibilityLabel` replaces
+    // the composed name, so a reader heard "Grocer, button" and never the
+    // amount. This assertion pinned it in place.
+    fireEvent.click(screen.getByRole("button", { name: /Grocer/ }));
     expect(onPress).toHaveBeenCalledTimes(1);
   });
 });

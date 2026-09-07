@@ -8,6 +8,12 @@
  * screen to show a mixed list would have made it again — and the two would
  * have drifted on which fields count as "this is a transfer".
  *
+ * **The press belongs to the row, and the row has no `accessibilityLabel`.**
+ * One on a wrapping `Pressable` *replaces* the name a reader composes from the
+ * content, which is how the ledger came to announce a payee and never the
+ * amount, the category or the date — the same defect `net-worth-strip`
+ * documents, on the list this app is mostly made of. The content is the name.
+ *
  * **The shape is declared here rather than imported.** `packages/ui` never
  * depends on `@waltning/client`, so the row arrives structurally, the way
  * `unsettled-banner` takes its own. What this component needs is a handful of
@@ -49,9 +55,15 @@ export type LedgerEntry = {
 export type EntryRowProps = {
   row: LedgerEntry;
   onPress: (id: string) => void;
+  /**
+   * Name the account the entry sits in. The ledger does, because it lists
+   * across all of them; a counterparty's own history does not, because the
+   * question there is who, not where.
+   */
+  withAccount?: boolean;
 };
 
-export function EntryRow({ row, onPress }: EntryRowProps) {
+export function EntryRow({ row, onPress, withAccount }: EntryRowProps) {
   const t = useT();
   const handlePress = useCallback(() => onPress(row.id), [onPress, row.id]);
   /**
@@ -86,6 +98,7 @@ export function EntryRow({ row, onPress }: EntryRowProps) {
       amount={row.amount}
       currency={row.currency}
       decimals={row.decimals}
+      {...(withAccount === true ? { account: row.accountName } : {})}
       type={row.type}
       isBusiness={row.isBusiness}
       brandKey={row.brandKey}
