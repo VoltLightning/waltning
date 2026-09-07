@@ -28,6 +28,10 @@
  *   <FlatList … contentContainerStyle={inset.content} />
  * </GroundPanel>
  * ```
+ *
+ * Three members, because the numbers are not the hard part — knowing what a
+ * value may be attached to is. `gutter` is sides only, `content` goes on a
+ * scroller's content, `block` on a non-scrolling child that ends the panel.
  */
 
 import { useSafeArea } from "../primitives/safe-area";
@@ -35,17 +39,46 @@ import { space } from "../tokens.ts";
 import { useFloatingClearance } from "./floating-clearance";
 
 export type GroundInset = {
-  /** Left and right only — for a sibling of the scroller that shares its gutter. */
+  /**
+   * Left and right only — for a sibling of the scroller that shares its
+   * gutter and is not the panel's last element (a search field, a chip row).
+   */
   gutter: { paddingLeft: number; paddingRight: number };
   /**
-   * The scroller's own `contentContainerStyle`: the same gutter, plus the
-   * bottom clearance — design padding, the home indicator, and whatever room
-   * the shell says a floating button needs over this page.
+   * The scroller's own `contentContainerStyle`: the gutter, plus the bottom
+   * clearance — design padding, the home indicator, and whatever room the
+   * shell says a floating button needs over this page.
    */
   content: { paddingLeft: number; paddingRight: number; paddingBottom: number };
+  /**
+   * The same values as `content`, for a child that is the panel's bottom edge
+   * but is **not** a scroller: an empty state where the list would be, a
+   * loading skeleton, or a row of independently scrolling panes at desk width.
+   *
+   * A separate name for identical numbers, because the whole defect class here
+   * is a value applied to the wrong kind of thing. `content` says "this goes on
+   * a `contentContainerStyle`"; a reviewer seeing it on a plain `View` should
+   * be able to call that wrong without checking whether it happens to be
+   * harmless. It is harmless exactly when the `View` holds no scroller.
+   */
+  block: { paddingLeft: number; paddingRight: number; paddingBottom: number };
 };
 
-export function useGroundInset(): GroundInset {
+export type GroundInsetOptions = {
+  /**
+   * `true` (default) — this panel is the screen's own bottom edge, so the
+   * bottom clearance is the design padding, the home indicator and the
+   * floating button's room. `false` — something else sits below it and clears
+   * the inset itself (a `Dock`), so only the design padding is added.
+   *
+   * The mirror of `GroundPanel`'s own prop, which `scroll="own"` cannot honour
+   * for the screen: the panel no longer carries a bottom at all, so a screen
+   * that would have passed `clearBottom={false}` passes it here instead.
+   */
+  clearBottom?: boolean;
+};
+
+export function useGroundInset({ clearBottom = true }: GroundInsetOptions = {}): GroundInset {
   const insets = useSafeArea();
   const floatClearance = useFloatingClearance();
 
@@ -53,9 +86,8 @@ export function useGroundInset(): GroundInset {
     paddingLeft: space.x5 + insets.left,
     paddingRight: space.x5 + insets.right,
   };
+  const bottom = clearBottom ? insets.bottom + floatClearance : 0;
+  const withBottom = { ...gutter, paddingBottom: space.x5 + bottom };
 
-  return {
-    gutter,
-    content: { ...gutter, paddingBottom: space.x5 + insets.bottom + floatClearance },
-  };
+  return { gutter, content: withBottom, block: withBottom };
 }

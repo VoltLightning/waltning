@@ -355,7 +355,11 @@ export function CategorySheet({
         hideLabel
       />
       {searching ? null : (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipRow}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          {...nestedScrollProps(styles.chipRow)}
+        >
           {groups.map((group) => (
             <GroupChip
               key={group.id}
@@ -707,7 +711,11 @@ function CreateRow({
           ) : (
             <>
               <Text style={styles.label}>{t("categories.chooseGroup")}</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipRow}>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                {...nestedScrollProps(styles.chipRow)}
+              >
                 {groups.map((group) => (
                   <GroupChip
                     key={group.id}

@@ -72,6 +72,7 @@ import { useCallback, useMemo } from "react";
 import { FlatList, Pressable, Text, View } from "react-native";
 import { useLocale, useT } from "../i18n/provider";
 import { useInteraction } from "../primitives/interaction.ts";
+import { pageScrollProps } from "../primitives/nested-scroll.ts";
 import { Tag } from "../primitives/tag";
 import { text } from "../theme/fonts.ts";
 import { makeStyles } from "../theme/styles.ts";
@@ -214,13 +215,13 @@ export function RateTable({ pair, header, footer, contentInset }: RateTableProps
       // header and footer riding inside this list rather than beside it is the
       // whole shape, and `getByText` at document scope cannot tell them apart.
       testID="rate-table"
-      style={styles.list}
-      // The page's gutter and its bottom clearance ride on the *content*, not
-      // on a `View` around this list: a wrapper would clip the bar 22 pt
-      // inside the page and slice the ring off any field in `header`
+      // This list *is* the screen's page (`header` and `footer` ride inside
+      // it), so it takes the page's props and its gutter goes on the
+      // *content*: a padded `View` around it would clip the bar 22 pt inside
+      // the page and slice the ring off the range fields in `header`
       // (`shell/ground-inset.ts`).
+      {...pageScrollProps(styles.list)}
       contentContainerStyle={contentInset}
-      showsVerticalScrollIndicator={false}
       // The screen's own fields live in `header`, so this list is what a tap
       // has to reach past an open keyboard — the same two props `GroundPanel`
       // sets on the page scroller it is standing in for here.

@@ -427,6 +427,32 @@ describe("GroundPanel is the page scroller", () => {
       'a screen that owns a virtualized list — directly or through a component it renders — must pass scroll="own", and nothing else may',
     ).toEqual([]);
   });
+
+  /**
+   * **The other half of `scroll="own"`, which used to be structural.**
+   *
+   * The panel once applied the screen's side gutter itself. It cannot any more
+   * — a padded `View` clips the list inside it — so the gutter moved from
+   * something a screen could not fail to get to something it has to ask for.
+   * Without this rule a new list-owning screen ships full-bleed against the
+   * device edge with every test green, which is a worse failure than the one
+   * the move fixed.
+   */
+  it('a screen that passes scroll="own" applies the gutter it no longer gets', () => {
+    const offenders = screenFiles()
+      .filter((file) => {
+        const text = readFileSync(file, "utf8")
+          .replace(/\/\*[\s\S]*?\*\//g, "")
+          .replace(/^\s*\/\/.*$/gm, "");
+        return /scroll="own"/.test(text) && !/\buseGroundInset\(/.test(text);
+      })
+      .map((file) => rel(file));
+
+    expect(
+      offenders,
+      'scroll="own" hands the gutter and the bottom clearance to the screen — call useGroundInset() and apply them',
+    ).toEqual([]);
+  });
 });
 
 describe("a card groups rows or holds a figure — never a whole screen", () => {
@@ -2586,44 +2612,113 @@ describe("a refusal is never reported as a success", () => {
 });
 
 /**
- * **A scroller inside a scroller stops at its own end.**
+ * **Every scroller declares which kind it is.**
  *
- * `nestedScrollEnabled` reads like the whole answer and is half of one: it
- * makes the view a nested-scrolling child on Android, iOS does this anyway,
- * and on the web it does nothing at all. The web half is
- * `overscroll-behavior: contain`. The shipped app set the first alone on three
- * pickers, so scrolling inside a picker in a browser moved the screen behind
- * it — the defect this rule exists to keep fixed.
+ * A scroller is either the outermost one on its screen — the page, whose
+ * movement is its own feedback — or a bounded one inside something else, whose
+ * end must be its end. Nothing about a `<ScrollView>` says which, so each one
+ * spreads the helper that matches (`primitives/nested-scroll.ts`), and this
+ * rule is what makes "each one" true.
  *
- * `nestedScrollProps()` applies both and takes the scroller's style, so the
- * containment cannot be dropped by a `style` prop arriving after it. Setting
- * the bare prop is therefore always a mistake outside that helper.
+ * **Two ways this was wrong before the rule existed.** Containment needs
+ * `nestedScrollEnabled` *and* `overscroll-behavior: contain`; the first is a
+ * no-op on the web, and three pickers shipped with only that half, so the
+ * screen behind them scrolled in a browser. And a fourth picker
+ * (`counterparty-picker`) had neither, which a rule keyed on the *presence* of
+ * `nestedScrollEnabled` could never see: it caught half-fixed and ignored
+ * un-fixed. So the check is inverted — every scroller must opt in, rather than
+ * every wrong scroller being spotted.
+ *
+ * **Checked per element, not per file.** The first version asked whether the
+ * file mentioned the helper anywhere, which one already-correct call site made
+ * true for every other scroller beside it.
  */
-describe("a nested scroller contains its own overscroll", () => {
+describe("every scroller declares which kind it is", () => {
+  const SCROLLERS = /<(ScrollView|FlatList|SectionList)\b/g;
+  const DECLARED = /\bnestedScrollProps\(|\bpageScrollProps\(|\bcontainOverscroll\b/;
   const HELPER = join(repoRoot, "packages/ui/src/primitives/nested-scroll.ts");
 
-  it("sets nestedScrollEnabled only through nestedScrollProps", () => {
-    const offenders = sourceFiles(join(repoRoot, "packages/ui/src"))
+  /**
+   * The opening tag with every brace-nested value blanked out, so only its own
+   * attribute *names* remain. Without this, a `ListEmptyComponent={<Text
+   * style={…}>}` reads as a `style` prop on the list itself.
+   */
+  function ownAttrs(tag: string): string {
+    let depth = 0;
+    let out = "";
+    for (const c of tag) {
+      if (c === "{") depth++;
+      if (depth === 0) out += c;
+      if (c === "}") depth--;
+    }
+    return out;
+  }
+
+  /** The opening tag's attributes: to the first `>` outside braces or strings. */
+  function openingTag(text: string, from: number): string {
+    let depth = 0;
+    for (let i = from; i < text.length; i++) {
+      const c = text[i];
+      if (c === "{") depth++;
+      else if (c === "}") depth--;
+      else if (c === ">" && depth === 0) return text.slice(from, i);
+    }
+    return text.slice(from);
+  }
+
+  function elements(): { file: string; tag: string }[] {
+    return sourceFiles(join(repoRoot, "packages/ui/src"))
       .concat(sourceFiles(join(repoRoot, "apps/mobile/src")))
       .filter((file) => file !== HELPER && !/\.(test|stories)\.tsx?$/.test(file))
-      .filter((file) => {
-        // Comments stripped, for the same reason `importsOf` strips them: the
-        // prose in this repository quotes the prop constantly, and
-        // `bottom-sheet.tsx` explains at length that it does *not* set one.
+      .flatMap((file) => {
+        // Comments stripped, as `importsOf` does: the prose here quotes these
+        // tag names constantly, and `nested-scroll.ts` documents both spellings.
         const text = readFileSync(file, "utf8")
           .replace(/\/\*[\s\S]*?\*\//g, "")
           .replace(/^\s*\/\/.*$/gm, "");
-        return /\bnestedScrollEnabled\b/.test(text) && !/\bnestedScrollProps\b/.test(text);
-      })
-      .map((file) => relative(repoRoot, file));
+        return [...text.matchAll(SCROLLERS)].map((m) => ({
+          file: relative(repoRoot, file),
+          tag: openingTag(text, m.index),
+        }));
+      });
+  }
+
+  it("finds the scrollers it means to check", () => {
+    // A regex that matched nothing would make every rule below vacuous.
+    expect(elements().length).toBeGreaterThanOrEqual(10);
+  });
+
+  it("spreads nestedScrollProps, pageScrollProps or containOverscroll", () => {
+    const offenders = elements()
+      .filter(({ tag }) => !DECLARED.test(tag))
+      .map(({ file, tag }) => `${file} → ${tag.split("\n")[0]?.trim()}`);
 
     expect(
       offenders,
-      "spread nestedScrollProps(style) instead — the bare prop is a no-op on the web",
+      "a bare scroller is undeclared: bounded ones take nestedScrollProps(style), a screen's own takes pageScrollProps(style)",
     ).toEqual([]);
   });
 
-  it("keeps both halves in the helper", () => {
+  /**
+   * JSX props are last-write-wins, so `{...nestedScrollProps(a)} style={b}`
+   * replaces the whole style the helper returned — dropping the containment
+   * while `nestedScrollEnabled` survives, which is precisely the shipped
+   * defect. The helpers take the style for that reason; this refuses the
+   * spelling that would take it back.
+   */
+  it("never puts a style prop on an element that spread one of them", () => {
+    const offenders = elements()
+      .filter(({ tag }) => /\bnestedScrollProps\(|\bpageScrollProps\(/.test(tag))
+      .filter(({ tag }) => /(^|\s)style=/.test(ownAttrs(tag)))
+      .map(({ file }) => file);
+
+    expect(
+      offenders,
+      "pass the style to the helper — a later style prop replaces the one it returned",
+    ).toEqual([]);
+  });
+
+  it("keeps both halves of containment in the helper", () => {
     const text = readFileSync(HELPER, "utf8");
     expect(text).toMatch(/nestedScrollEnabled: true/);
     expect(text).toMatch(/overscrollBehavior: "contain"/);

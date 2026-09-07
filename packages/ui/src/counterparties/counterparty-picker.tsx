@@ -19,6 +19,7 @@ import { useT } from "../i18n/provider";
 import { Button } from "../primitives/button";
 import { useInteraction } from "../primitives/interaction.ts";
 import { monogramFor } from "../primitives/monogram.ts";
+import { nestedScrollProps } from "../primitives/nested-scroll.ts";
 import { usePressScale } from "../primitives/press-scale.ts";
 import { SearchField } from "../primitives/search-field";
 import { BottomSheet } from "../shell/bottom-sheet";
@@ -98,7 +99,7 @@ export function CounterpartyPicker({
         onClear={handleClear}
         {...(searching ? { resultCount: visibleList.length } : {})}
       />
-      <ScrollView style={styles.scroll}>
+      <ScrollView {...nestedScrollProps(styles.scroll)}>
         {recent.length === 0 ? null : (
           <View style={styles.section}>
             <Text style={styles.sectionLabel}>{t("counterparties.pickerRecent")}</Text>

@@ -24,8 +24,8 @@ whatever the chrome around them does.
 | `hover` | `#ece5d7` | The fill under a pointer |
 | `pressed` | `#e6ddcb` | The transient fill under a finger |
 | `border` | `#eae3d5` | Card edges, dividers, the outline of an unfilled control |
-| `border-interactive` | `#9d8d6d` | The resting edge of a control — an input, a chip. A control here is identified by its edge alone (its fill is `surface` on `ground`, 1.05:1), so this carries WCAG 1.4.11's **3:1 boundary floor** by itself (3.02) |
-| `border-strong` | `#8d8672` | An edge that must read alone: a selected control, a focus-adjacent edge. One step above `border-interactive` on the same ramp (3.63) |
+| `border-interactive` | `#88795c` | The resting edge of a control — an input, a chip. A control here is identified by its edge alone (its fill is `surface` on `ground`, 1.08:1), so this carries WCAG 1.4.11's **3:1 boundary floor** by itself — against **every fill a control is drawn on**: `ground`, `surface`, `subtle`, `hover`, `pressed`. 3.15 at the tightest |
+| `border-strong` | `#746e5f` | An edge that must read alone: a selected control, a focus-adjacent edge. One step above `border-interactive` on the same ramp, held to the same five fills (3.76) |
 | `ink` | `#33302a` | Body text **and heading ink** — a heading is not a signal. Warm near-black, never `#000` |
 | `muted` | `#6e6759` | Secondary text, labels, captions; a transfer's figure. 5.2:1 on `ground` |
 | `accent` | `#5c7357` | Primary action fill. Sage. **Job 1** |
@@ -33,8 +33,8 @@ whatever the chrome around them does.
 | `accent-icon` | `#6f8f66` | Decorative accent marks; the **focus ring**. **Job 2** |
 | `accent-fill` | `#eef0e6` | A subtle sage fill: a selected segment, a toggled chip. `accent-text` reads on it at 5.8:1 |
 | `accent-fill-border` | `#b9c6ae` | The edge of `accent-fill` |
-| `income` | `#3e7733` | Credits, positive deltas. Deliberately livelier than `accent`: an event, not a control. **Job 3** |
-| `spend` | `#a6533b` | Debits, negative balances, rising spend. A warm, restrained red — unmistakable, not alarming |
+| `income` | `#396c2e` | Credits, positive deltas. Deliberately livelier than `accent`: an event, not a control. **Job 3** |
+| `spend` | `#974b35` | Debits, negative balances, rising spend. A warm, restrained red — unmistakable, not alarming |
 | `green-100` … `green-900` | as below | The data ramp. **Job 4** |
 | `amber` | `#f4ecdf` | Fill — *not finished, or not fully observed* (P4). Never error, never success, never chrome |
 | `amber-ink` | `#77591c` | Text on amber |
@@ -99,8 +99,8 @@ with dark text.
 | `hoverFill` | `#302a23` |
 | `pressedFill` | `#363027` |
 | `border` | `#38332a` |
-| `borderInteractive` | `#746b57` |
-| `borderStrong` | `#78715e` |
+| `borderInteractive` | `#877c65` |
+| `borderStrong` | `#918974` |
 | `hairline` | `rgba(240,236,227,.12)` |
 | `text` | `#f0ece3` |
 | `textMuted` / `tagNeutralText` | `#a59d8d` |

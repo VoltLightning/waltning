@@ -56,6 +56,7 @@ import { decimalMark, monthLabel } from "@waltning/ui/i18n/locales";
 import { useLocale, useT } from "@waltning/ui/i18n/provider";
 import { Chip } from "@waltning/ui/primitives/chip";
 import { DateField } from "@waltning/ui/primitives/date-field";
+import { pageScrollProps } from "@waltning/ui/primitives/nested-scroll";
 import { SearchField } from "@waltning/ui/primitives/search-field";
 import { type Segment, SegmentControl } from "@waltning/ui/primitives/segment-control";
 import { MultiSelect, type SelectOption } from "@waltning/ui/primitives/select";
@@ -277,10 +278,11 @@ export default function Ledger() {
   /**
    * This screen owns its list, so `GroundPanel scroll="own"` holds neither the
    * gutter nor the bottom clearance (`shell/ground-inset.ts`): padding a `View`
-   * around a `FlatList` clips the list at the gutter — the bar rides inside the
-   * page, the search field's focus ring is sliced off left and right, and the
-   * last transaction stops short of the fold with the add button still over it.
-   * Both values go on the content that scrolls.
+   * around a `FlatList` clips the list at the gutter, so the bar rides 22 pt
+   * inside the page and the last transaction stops short of the fold with the
+   * add button still over it. The ring half of that defect belongs to
+   * `rate-table.tsx`, whose fields ride inside the list; this screen's search
+   * field is a sibling of the list, not a child of it.
    */
   const inset = useGroundInset();
   const breakpoint = useBreakpoint();
@@ -651,7 +653,7 @@ export default function Ledger() {
 
     return (
       <GroundPanel scroll="own">
-        <View style={[styles.deskLayout, inset.content]}>
+        <View style={[styles.deskLayout, inset.block]}>
           {/*
             `scroll="own"`, not the panel's default page scroll: both
             children of this row own their own scroll and their own height —
@@ -812,13 +814,13 @@ export default function Ledger() {
       </View>
 
       {!search.loaded ? (
-        <View style={[styles.skeletonList, inset.gutter]}>
+        <View style={[styles.skeletonList, inset.block]}>
           {SKELETON_ROW_KEYS.map((key) => (
             <Skeleton key={key} shape="row" label={t("transactions.loadingTransactions")} />
           ))}
         </View>
       ) : search.error !== undefined ? (
-        <View style={inset.gutter}>
+        <View style={inset.block}>
           <ErrorState
             variant="recoverable"
             what={t("transactions.loadFailedTitle")}
@@ -827,7 +829,7 @@ export default function Ledger() {
           />
         </View>
       ) : showEmpty ? (
-        <View style={inset.gutter}>
+        <View style={inset.block}>
           {filtered && !emptyIsFirstRun ? (
             <EmptyState
               variant="filtered"
@@ -852,12 +854,12 @@ export default function Ledger() {
           renderItem={renderItem}
           onEndReached={handleEndReached}
           onEndReachedThreshold={0.5}
-          style={styles.list}
-          // The gutter and the clearance both ride on the content, so the bar
-          // sits at the page's edge and the last row clears the button at the
-          // end of the travel rather than at the fold (`shell/ground-inset.ts`).
+          // This list is the screen's page: the gutter and the clearance ride
+          // on its content, so the bar sits at the page's edge and the last row
+          // clears the button at the end of the travel rather than at the fold
+          // (`shell/ground-inset.ts`).
+          {...pageScrollProps(styles.list)}
           contentContainerStyle={inset.content}
-          showsVerticalScrollIndicator={false}
         />
       )}
 

@@ -115,8 +115,11 @@ it("the page scroller shows no scroll indicator", () => {
       <Text>hello</Text>
     </GroundPanel>,
   );
+  // `scrollbarWidth: none` is what `react-native-web`'s `ScrollViewBase` emits
+  // when either indicator prop is false, and it is the whole assertion: a
+  // class-name check reads as a second one but cannot fail, because RNW emits
+  // hashed atomic classes and never the word.
   const scroller = screen.getByTestId("ground-panel-scroll");
-  expect(scroller.className).not.toContain("scroll-indicator");
   expect(getComputedStyle(scroller).scrollbarWidth).toBe("none");
 });
 

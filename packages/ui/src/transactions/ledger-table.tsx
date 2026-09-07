@@ -147,6 +147,7 @@ import {
 } from "react-native";
 import { Amount } from "../fx/amount";
 import { useT } from "../i18n/provider";
+import { nestedScrollProps } from "../primitives/nested-scroll.ts";
 import { text } from "../theme/fonts.ts";
 import { makeStyles } from "../theme/styles.ts";
 import { focus, hairline, radius, space, tabularNums, touchTarget } from "../tokens.ts";
@@ -502,7 +503,7 @@ export function LedgerTable({
         keyExtractor={keyExtractor}
         renderItem={renderItem}
         initialNumToRender={Math.min(rows.length, 50)}
-        style={styles.list}
+        {...nestedScrollProps(styles.list)}
         tabIndex={0}
         testID="ledger-table-scroller"
         {...keyboardProps}

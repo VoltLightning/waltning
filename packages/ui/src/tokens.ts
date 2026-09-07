@@ -53,19 +53,26 @@ export const color = {
    * The border of an interactive control at rest — an input, a chip.
    *
    * **A control this app draws is identified by its edge alone**, because its
-   * fill is `surface` on `ground` at 1.05:1 — invisible. So this value carries
-   * WCAG 1.4.11's 3:1 boundary floor by itself and sits at 3.02 on both, where
-   * the tan it replaced was 1.73 and left every field to be inferred rather
-   * than seen. `borderStrong` stays above it at 3.63, so rest and
-   * hover/selected are still two steps of one ramp.
+   * fill is `surface` on `ground` at 1.08:1 — invisible. So this value carries
+   * WCAG 1.4.11's 3:1 boundary floor by itself, and it has to carry it against
+   * **every fill a control is drawn on**, not just the page: a filled chip
+   * sits on `subtle`, and any control under a finger sits on `hover` or
+   * `pressed`. Checked against all five, the tan this replaced was 1.73 at
+   * best and 2.41 at worst, and a first correction to `#9d8d6d` still left a
+   * filled chip's edge at 2.74 and a hovered one at 2.59 — floor met on the
+   * page, missed in the states. 3.15 at the tightest pairing — chosen with
+   * headroom rather than landing on 3.00, so the next nudge to a fill does not
+   * cross the floor silently.
    */
-  borderInteractive: "#9d8d6d",
+  borderInteractive: "#88795c",
   /**
    * A border that must read on its own: a selected control, a focus-adjacent
-   * edge. Held to 3:1 against `surface`, the WCAG floor for a UI boundary —
-   * this one sits at 3.63.
+   * edge. One clear step above `borderInteractive` on the same ramp and held
+   * to the same five fills — 3.76 at the tightest, against that step's 3.15.
+   * It used to be stated as 3.63 "against `surface`", which was true and was
+   * the wrong pairing: on the pressed fill the same value was 2.69.
    */
-  borderStrong: "#8d8672",
+  borderStrong: "#746e5f",
   ink: "#33302a",
   muted: "#6e6759",
 
@@ -94,8 +101,8 @@ export const color = {
    * money moved between your own accounts is `muted`, because nothing was
    * gained or lost. Job 3 is `income`.
    */
-  income: "#3e7733",
-  spend: "#a6533b",
+  income: "#396c2e",
+  spend: "#974b35",
 
   /**
    * The green ramp is the **entire** chart palette: magnitude reads as depth,
@@ -186,8 +193,8 @@ export const darkColor = {
   hover: "#302a23",
   pressed: "#363027",
   border: "#38332a",
-  borderInteractive: "#746b57",
-  borderStrong: "#78715e",
+  borderInteractive: "#877c65",
+  borderStrong: "#918974",
   ink: "#f0ece3",
   muted: "#a59d8d",
   accent: "#5c7357",

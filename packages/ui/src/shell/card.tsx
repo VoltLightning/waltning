@@ -102,6 +102,7 @@
  */
 
 import { ScrollView, Text, View } from "react-native";
+import { pageScrollProps } from "../primitives/nested-scroll.ts";
 import { useSafeArea } from "../primitives/safe-area";
 import { Tag } from "../primitives/tag";
 import { text } from "../theme/fonts.ts";
@@ -163,6 +164,11 @@ export type GroundPanelProps = {
    * tab shell). `false` — for a panel that is not that edge (`Dock` sits
    * below it and clears the inset itself): the design padding (`space.x5`) is
    * all it adds.
+   *
+   * **Read in `scroll="page"` only.** In `scroll="own"` this panel carries no
+   * bottom at all, so there is nothing here for the flag to change; the screen
+   * passes the same choice to `useGroundInset({ clearBottom: false })`, which
+   * is where its own scroller's bottom is decided.
    */
   clearBottom?: boolean;
 };
@@ -195,16 +201,10 @@ export function GroundPanel({ children, scroll = "page", clearBottom = true }: G
     <View style={styles.panel}>
       <ScrollView
         testID="ground-panel-scroll"
-        style={styles.scroll}
+        {...pageScrollProps(styles.scroll)}
         contentContainerStyle={[styles.scrollContent, clearance]}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
-        // A whole page moving is its own feedback, and a bar over the gutter
-        // is one more thing on a screen that already has enough. The indicator
-        // stays only where a pane scrolls independently of the page it sits on
-        // — the desk filter rail, a bounded sheet body — because there the
-        // travel is the only clue the pane has more in it.
-        showsVerticalScrollIndicator={false}
         // iOS-only; harmless elsewhere (`react-native`'s own contract for a
         // prop a platform does not implement).
         automaticallyAdjustKeyboardInsets
@@ -245,11 +245,11 @@ const useStyles = makeStyles((theme) => ({
   },
   heading: { flexDirection: "row", alignItems: "center", gap: space.x3, flexShrink: 1 },
   title: { color: theme.text, ...text.ui("displayThree") },
-  // Background and radius only — the padding and the inter-child gap that
-  // used to live here now live on whichever style actually carries the
-  // panel's content: `panelPadding` for `scroll="own"`, `scrollContent` for
-  // the page-scrolling default. A short screen still looks identical either
-  // way, because the values are the same ones, just relocated.
+  // Background and radius only. The padding lives on whichever style can
+  // carry it without clipping something: `scrollContent` in the page-scrolling
+  // default, and in `scroll="own"` only `panelTop` — the sides and the bottom
+  // go to the screen's own scroller through `useGroundInset()`, so the two
+  // modes are deliberately *not* the same values relocated.
   panel: {
     backgroundColor: theme.ground,
     borderTopLeftRadius: radius.lg,
@@ -265,8 +265,9 @@ const useStyles = makeStyles((theme) => ({
   scroll: { flex: 1 },
   /**
    * `flexGrow: 1` — a screen shorter than the device still fills it, while a
-   * screen taller than the device scrolls instead of clipping. Same padding
-   * and gap `panelPadding` carries for `"own"`.
+   * screen taller than the device scrolls instead of clipping. The gap is the
+   * one `panelTop` also carries; the padding is this mode's alone, since in
+   * `"own"` it belongs to the screen's own scroller.
    */
   scrollContent: { padding: space.x5, gap: space.x4, flexGrow: 1 },
 }));

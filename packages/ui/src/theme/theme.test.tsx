@@ -76,13 +76,19 @@ describe("a component follows the active theme", () => {
     ["light income on surface", light.income, light.surface],
     ["light spend on ground", light.spend, light.ground],
     ["light spend on surface", light.spend, light.surface],
-    // A figure lands on the subtle fill too — an inset box, a filled chip, a
-    // table header — and that is the tightest of the three page fills. Both
-    // money colours cleared `ground` and `surface` while sitting at 4.38 and
-    // 4.43 here, so the pair that was actually checked was never the pair that
-    // decided legibility.
+    // **A figure is not only ever on the page.** `transaction-row.tsx` renders
+    // `<Amount>` and turns its background to `hoverFill` under a pointer and
+    // `pressedFill` under a finger; `account-picker.tsx` does the same with a
+    // balance. Those are the tightest pairings money is drawn at, and they
+    // were the ones nothing checked — `income` sat at 4.31 hovered and 4.00
+    // pressed while clearing `ground` and `surface` comfortably. `subtleFill`
+    // is listed for the inset boxes and table headers.
     ["light income on subtle fill", light.income, light.subtleFill],
     ["light spend on subtle fill", light.spend, light.subtleFill],
+    ["light income on hover fill", light.income, light.hoverFill],
+    ["light spend on hover fill", light.spend, light.hoverFill],
+    ["light income on pressed fill", light.income, light.pressedFill],
+    ["light spend on pressed fill", light.spend, light.pressedFill],
     ["light accent text on accent fill", light.accentText, light.accentFill],
     ["dark text on ground", dark.text, dark.ground],
     ["dark text on surface", dark.text, dark.surface],
@@ -100,6 +106,10 @@ describe("a component follows the active theme", () => {
     ["dark spend on surface", dark.spend, dark.surface],
     ["dark income on subtle fill", dark.income, dark.subtleFill],
     ["dark spend on subtle fill", dark.spend, dark.subtleFill],
+    ["dark income on hover fill", dark.income, dark.hoverFill],
+    ["dark spend on hover fill", dark.spend, dark.hoverFill],
+    ["dark income on pressed fill", dark.income, dark.pressedFill],
+    ["dark spend on pressed fill", dark.spend, dark.pressedFill],
     ["dark accent text on accent fill", dark.accentText, dark.accentFill],
   ])("keeps %s at 4.5:1", (_label, foreground, background) => {
     expect(foreground).not.toBe(background);
@@ -109,26 +119,30 @@ describe("a component follows the active theme", () => {
   /**
    * **A control here is identified by its edge, so the edge carries the
    * floor.** WCAG 1.4.11 asks 3:1 of the visual information needed to identify
-   * a component — and an input's fill is `surface` on `ground` at 1.05:1,
+   * a component — and an input's fill is `surface` on `ground` at 1.08:1,
    * which identifies nothing. That leaves the border as the only carrier, and
    * it was `#c6bdaa` at 1.73:1: a field you infer from the label above it
-   * rather than see. Checked against both page fills a control sits on,
-   * because a chip on the ground and an input on a card are the same control.
+   * rather than see.
    *
-   * `borderStrong` is checked at the same floor and stays the higher step, so
-   * "at rest" and "selected" remain two rungs of one ramp rather than one
-   * legible edge and one decorative one.
+   * **Against every fill a control is drawn on, not just the page.** A filled
+   * `Chip` pairs `borderInteractive` with `subtleFill` (`chip.tsx`), and any
+   * control under a pointer or a finger pairs it with `hoverFill` or
+   * `pressedFill`. Checking the two page fills alone passed a correction that
+   * still left a filled chip's edge at 2.74 and a hovered one at 2.59 — the
+   * floor met exactly where it was easy and missed in three states.
+   *
+   * `borderStrong` is checked the same way and stays the higher step, so "at
+   * rest" and "selected" remain two rungs of one ramp rather than one legible
+   * edge and one decorative one.
    */
-  it.each([
-    ["light control edge on ground", light.borderInteractive, light.ground],
-    ["light control edge on surface", light.borderInteractive, light.surface],
-    ["light strong edge on ground", light.borderStrong, light.ground],
-    ["light strong edge on surface", light.borderStrong, light.surface],
-    ["dark control edge on ground", dark.borderInteractive, dark.ground],
-    ["dark control edge on surface", dark.borderInteractive, dark.surface],
-    ["dark strong edge on ground", dark.borderStrong, dark.ground],
-    ["dark strong edge on surface", dark.borderStrong, dark.surface],
-  ])("keeps %s at the 3:1 boundary floor", (_label, edge, fill) => {
+  it.each(
+    (["ground", "surface", "subtleFill", "hoverFill", "pressedFill"] as const).flatMap((fill) => [
+      [`light control edge on ${fill}`, light.borderInteractive, light[fill]] as const,
+      [`light strong edge on ${fill}`, light.borderStrong, light[fill]] as const,
+      [`dark control edge on ${fill}`, dark.borderInteractive, dark[fill]] as const,
+      [`dark strong edge on ${fill}`, dark.borderStrong, dark[fill]] as const,
+    ]),
+  )("keeps %s at the 3:1 boundary floor", (_label, edge, fill) => {
     expect(contrastRatio(edge, fill)).toBeGreaterThanOrEqual(3);
   });
 
@@ -136,9 +150,14 @@ describe("a component follows the active theme", () => {
     ["light", light],
     ["dark", dark],
   ])("keeps the %s selected edge above the resting one", (_name, theme) => {
-    expect(contrastRatio(theme.borderStrong, theme.surface)).toBeGreaterThan(
-      contrastRatio(theme.borderInteractive, theme.surface),
-    );
+    // On every fill, not one: a ramp that inverts on the pressed fill is not a
+    // ramp. The margin is stated so a future nudge to either step has to keep
+    // the gap rather than merely keep the order.
+    for (const fill of ["ground", "surface", "subtleFill", "hoverFill", "pressedFill"] as const) {
+      expect(contrastRatio(theme.borderStrong, theme[fill])).toBeGreaterThan(
+        contrastRatio(theme.borderInteractive, theme[fill]),
+      );
+    }
   });
 
   /**

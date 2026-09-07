@@ -16,6 +16,7 @@
     "./i18n/provider": "./src/i18n/provider.tsx",
     "./primitives/*": "./src/primitives/*.tsx",
     "./primitives/use-breakpoint": "./src/primitives/use-breakpoint.ts",
+    "./primitives/nested-scroll": "./src/primitives/nested-scroll.ts",
     "./review/*": "./src/review/*.tsx",
     "./settings/*": "./src/settings/*.tsx",
     "./shell/*": "./src/shell/*.tsx",
