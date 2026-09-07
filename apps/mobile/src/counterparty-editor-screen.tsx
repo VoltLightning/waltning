@@ -34,13 +34,13 @@ import { nearMatches } from "@waltning/client/counterparties/near-matches";
 import { deviceRuntime } from "@waltning/client/ledger/device-runtime";
 import { useLedgerController } from "@waltning/client/ledger/use-ledger-controller";
 import { usePhoneLedger } from "@waltning/client/ledger/use-phone-ledger";
-import type { FieldError } from "@waltning/client/transport/field-errors";
 import { mapFieldErrors } from "@waltning/client/transport/field-errors";
 import {
   CounterpartyForm,
   type CounterpartyFormCandidate,
   type CounterpartyFormValues,
 } from "@waltning/ui/counterparties/counterparty-form";
+import { resolveFieldErrorMessage } from "@waltning/ui/i18n/field-error-messages";
 import { useT } from "@waltning/ui/i18n/provider";
 import { GroundPanel } from "@waltning/ui/shell/card";
 import { ErrorState } from "@waltning/ui/states/error-state";
@@ -65,13 +65,6 @@ import { View } from "react-native";
  * own wording, and the executor's own message.
  */
 const KNOWN_PATHS = ["name"];
-
-function resolveFieldErrorMessage(t: ReturnType<typeof useT>, error: FieldError): string {
-  if (error.messageKey === "counterparties.nameCollision") return t("counterparties.nameCollision");
-  if (error.messageKey === "counterparties.staleVersion") return t("counterparties.staleVersion");
-  if (error.messageKey === "counterparties.openBalance") return t("counterparties.openBalance");
-  return error.message;
-}
 
 export default function CounterpartyEditor() {
   const t = useT();

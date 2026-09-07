@@ -20,6 +20,7 @@ import {
   type AccountPatch,
 } from "@waltning/ui/accounts/account-editor";
 import { type ReconcileDraft, ReconcileSheet } from "@waltning/ui/accounts/reconcile-sheet";
+import { resolveFieldErrorMessage } from "@waltning/ui/i18n/field-error-messages";
 import { useT } from "@waltning/ui/i18n/provider";
 import { GroundPanel } from "@waltning/ui/shell/card";
 import { router, useLocalSearchParams } from "expo-router";
@@ -40,25 +41,6 @@ const KNOWN_PATHS = [
   "memo",
   "groupId",
 ];
-
-/**
- * A refusal's own text, resolving a known `messageKey` through `useT()` —
- * `packages/client` is not a component and cannot call it itself. Same shape
- * `account-creation-screen.tsx` uses for `create_account`'s own refusals.
- */
-function resolveFieldErrorMessage(t: ReturnType<typeof useT>, error: FieldError): string {
-  if (error.messageKey === "accounts.staleVersion") return t("accounts.staleVersion");
-  if (error.messageKey === "accounts.sharedNotBusiness") return t("accounts.sharedNotBusiness");
-  if (error.messageKey === "accounts.nothingToReconcile") return t("accounts.nothingToReconcile");
-  /** M1 — `openingBalance`/`observedBalance`'s own scale mirror (`create-phone-ledger.ts`). */
-  if (error.messageKey === "transactions.tooManyDecimals") {
-    return t("transactions.tooManyDecimals", {
-      currency: error.params?.["currency"] ?? "",
-      decimals: error.params?.["decimals"] ?? "",
-    });
-  }
-  return error.message;
-}
 
 export default function AccountEditorScreen() {
   const t = useT();

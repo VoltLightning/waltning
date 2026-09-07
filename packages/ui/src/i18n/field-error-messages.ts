@@ -14,7 +14,7 @@
  * real `FieldError` (carrying `path` too) still passes it without a cast.
  */
 
-import type { useT } from "../i18n/provider";
+import type { useT } from "./provider";
 
 export type FieldErrorMessage = {
   message: string;
@@ -69,6 +69,27 @@ export function resolveFieldErrorMessage(
   // (`create-phone-ledger.ts`) and this is where the key becomes a sentence.
   if (error.messageKey === "transactions.badDate") {
     return t("transactions.badDate");
+  }
+  /**
+   * **Any other key the catalogue holds, resolved rather than passed through.**
+   *
+   * Six screens grew their own copy of this function — accounts, the account
+   * editor, transfers, the counterparty editor, transaction detail, currencies
+   * — each listing two or three keys of its own and ending in the same
+   * `return error.message`. They were not variations on a policy; they were
+   * six people reaching the same place by hand, and a seventh screen would
+   * have written a seventh.
+   *
+   * The branches above stay because each *shapes* its parameters — a
+   * currency, a decimal count, an income/expense word chosen before
+   * interpolation. Everything else needs only the key and whatever params came
+   * with it, which is one line. `defaultValue` is what keeps a key the
+   * catalogue does not hold from rendering as its own dotted name: the
+   * controller's English falls through instead, which is what every one of
+   * those six copies did.
+   */
+  if (error.messageKey !== undefined) {
+    return t(error.messageKey, { ...error.params, defaultValue: error.message });
   }
   return error.message;
 }

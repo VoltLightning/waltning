@@ -8,8 +8,8 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { defaultI18n } from "../i18n/provider";
 import { resolveFieldErrorMessage } from "./field-error-messages.ts";
+import { defaultI18n } from "./provider";
 
 const en = defaultI18n.getFixedT("en");
 const pl = defaultI18n.getFixedT("pl");

@@ -40,6 +40,7 @@ import { mapFieldErrors } from "@waltning/client/transport/field-errors";
 import { type CaptureContext, parseCapture } from "@waltning/core/capture/grammar";
 import { currencyCode } from "@waltning/core/money";
 import { CurrencyChip } from "@waltning/ui/fx/currency-chip";
+import { KNOWN_PATHS, resolveFieldErrorMessage } from "@waltning/ui/i18n/field-error-messages";
 import { useT } from "@waltning/ui/i18n/provider";
 import { SafeAreaProvider, useSafeArea } from "@waltning/ui/primitives/safe-area";
 import { SegmentControl } from "@waltning/ui/primitives/segment-control";
@@ -55,10 +56,6 @@ import { text } from "@waltning/ui/theme/fonts";
 import { makeStyles } from "@waltning/ui/theme/styles";
 import { floating } from "@waltning/ui/tokens";
 import { CommandBar, type CommandBarHandle } from "@waltning/ui/transactions/command-bar";
-import {
-  KNOWN_PATHS,
-  resolveFieldErrorMessage,
-} from "@waltning/ui/transactions/field-error-messages";
 import { router } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { type LayoutChangeEvent, Text, View } from "react-native";

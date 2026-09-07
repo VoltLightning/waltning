@@ -36,12 +36,12 @@ import type { CurrencyPatch } from "@waltning/client/ledger/create-phone-ledger"
 import { deviceRuntime } from "@waltning/client/ledger/device-runtime";
 import { useLedgerController } from "@waltning/client/ledger/use-ledger-controller";
 import { usePhoneLedger } from "@waltning/client/ledger/use-phone-ledger";
-import type { FieldError } from "@waltning/client/transport/field-errors";
 import {
   CurrencyRow,
   type CurrencyRowCoverage,
   type CurrencyRowData,
 } from "@waltning/ui/fx/currency-row";
+import { resolveFieldErrorMessage } from "@waltning/ui/i18n/field-error-messages";
 import { useT } from "@waltning/ui/i18n/provider";
 import { Button } from "@waltning/ui/primitives/button";
 import { Select, type SelectOption } from "@waltning/ui/primitives/select";
@@ -56,17 +56,6 @@ import { space } from "@waltning/ui/tokens";
 import { router } from "expo-router";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { Text, View } from "react-native";
-
-/**
- * `change_pivot`'s two refusals (C1), resolved through `useT()` —
- * `packages/client` cannot call it itself. Same shape `account-editor-
- * screen.tsx` uses for `update_account`'s own refusals.
- */
-function resolvePivotErrorMessage(t: ReturnType<typeof useT>, error: FieldError): string {
-  if (error.messageKey === "fx.pivotAlreadyPivot") return t("fx.pivotAlreadyPivot");
-  if (error.messageKey === "fx.pivotChangeRefused") return t("fx.pivotChangeRefused");
-  return error.message;
-}
 
 type Draft = { code: string; name: string; symbol: string };
 
@@ -278,7 +267,7 @@ export default function SettingsCurrenciesScreen() {
     if ("fieldErrors" in result) {
       const [fieldError] = result.fieldErrors;
       toastTokenRef.current += 1;
-      setToast(fieldError ? resolvePivotErrorMessage(t, fieldError) : t("fx.pivotChangeRefused"));
+      setToast(fieldError ? resolveFieldErrorMessage(t, fieldError) : t("fx.pivotChangeRefused"));
       return;
     }
     // M2 — §7.0's *"dropped rather than left mis-quoted"*, said out loud. The
