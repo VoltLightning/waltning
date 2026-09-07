@@ -926,7 +926,7 @@ describe("a card groups rows or holds a figure — never a whole screen", () => 
    * is, because the rule then stops seeing every screen made of it — which
    * is the failure C1 was.
    */
-  const UI_CARD_COMPONENTS = ["SettingsMenu", "SharedGroup"];
+  const UI_CARD_COMPONENTS = ["MonthSummary", "SettingsMenu", "SharedGroup"];
 
   /** The text inside the bracket that opens at `at`, brackets counted. */
   function balanced(src: string, at: number): string | undefined {

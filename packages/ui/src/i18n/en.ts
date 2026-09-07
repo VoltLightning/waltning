@@ -855,6 +855,13 @@ export const en = {
     /** §6.7 — lower case, deliberately: a label beneath a figure, not a heading. */
     mine: "mine",
     ours: "ours",
+    openAccounts: "Open your accounts",
+    alsoInOtherCurrencies: "Also held in {{count}} other currency",
+    alsoInOtherCurrencies_other: "Also held in {{count}} other currencies",
+    keptSoFar: "Kept so far",
+    cameIn: "Came in",
+    wentOut: "Went out",
+    whereItWent: "Where it went",
     noAccounts: "No accounts yet",
     noAccountsBody: "Create one account to start your ledger.",
     /**

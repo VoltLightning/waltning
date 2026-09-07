@@ -29,22 +29,21 @@ tab bar → S10, S11, S12, S03.
 ### Mobile — 390pt
 
 ```
-┌ shell · green-900 → green-800 gradient ─────────┐
-│  FxStatusChip     CurrencyChip       Appearance │
-│                                                 │
-│  MINE            12 480,20 zł      display-hero │
-│  ours            18 940,60 zł      display-3    │
-│                                                 │
-│  ‹      August 2026      ›              Today   │  ← PeriodHeader
-│  spent  −3 210,40   ·   net  +840,20            │  ← tap → PeriodPicker
+┌ shell · sage band ──────────────────────────────┐
+│  Today                              Appearance  │
+│  Saturday, 5 September                          │
 └─────────────────────────────────────────────────┘
 ┌ ground panel · radius-xl, lifts over the shell ─┐
+│  ┌ mine   48 620,84 zł                       › ┐│  ← NetWorthStrip → S12
+│  └───────────────────────────────────────────  ┘│
+│  ┌ September 2026 ─────────────────── ‹  ›  ────┐│  ← MonthSummary, the hero
+│  │ Kept so far                     +3 529,82 zł ││
+│  │ ┌ Came in ─────────┐ ┌ Went out ───────────┐ ││
+│  │ │ +7 850,00        │ │ −4 320,18           │ ││
+│  │ └──────────────────┘ └─────────────────────┘ ││
+│  └──────────────────────────────────────────────┘│
 │  ⚠ 340,00 zł unallocated · dinner, 6 Aug        │  ← only when non-zero
 │                                       [Allocate]│
-│                                                 │
-│  ┌ say a transaction ──────────────┐ ┌ Scan ┐   │  ← thumb zone starts here
-│  │ ◉  "forty-eight ninety, coffee" │ │  ▣   │   │
-│  └─────────────────────────────────┘ └──────┘   │
 │                                                 │
 │  ┌ Recent ───────────────────────────────────┐  │
 │  │ Today     Coffee · Eating out   −48,90 zł │  │
@@ -53,16 +52,42 @@ tab bar → S10, S11, S12, S03.
 │  │                                 251,04 zł │  │
 │  │                                Show all → │  │
 │  └───────────────────────────────────────────┘  │
+│  ┌ Where it went ────────────────────────────┐  │  ← SpendRows, §6
+│  │ Groceries  ███████████████     1 240,50   │  │
+│  │ Home       ██████████             980,00  │  │
+│  │ Transport  ██████                 610,40  │  │
+│  └───────────────────────────────────────────┘  │
 └─────────────────────────────────────────────────┘
 │                                          (＋)   │  ← floats, §2.9
-┌ tab bar · 5 ────────────────────────────────────┐
-│  Today   Ledger   Calendar   Debt   Settings    │
+┌ tab bar · 4 ────────────────────────────────────┐
+│  Today   Ledger   Debt   Settings               │
 └─────────────────────────────────────────────────┘
 ```
 
-**The hero earns its height because it answers the question in one glance.**
-`DualTotal` puts *mine* dominant and *ours* secondary beneath — never a toggle,
-because showing one at a time invites reading the wrong number (`SPEC.md` §6.7).
+**The month is the hero, and net worth is a line.** The band used to carry
+`DualTotal` at 54px plus the period and its two stat tiles — about 500pt of an
+844pt screen — and everything the day had actually changed began below the
+fold. A total you own moves slowly and is checked occasionally; what changed
+*this period* is what the app is opened for. So `MonthSummary` leads the ground
+with §5's three figures in the shape `net = inflow − spend`, and `NetWorthStrip`
+carries the total above it in one line, with S12 one tap away for the currencies
+and the shared figures it cannot fit.
+
+**`inflow` is stated, not implied.** `spent` and `net` alone leave the reader
+subtracting to find out what came in — §5 computes all three and the card shows
+all three.
+
+**Where it went is §6, at leaf granularity, capped at five plus a named
+remainder.** The lead currency's categories only: arc-phone converts nothing
+(§6 is class **S**), so a bar summing two currencies would be an invented
+figure. An uncategorised bucket keeps its own name rather than folding into
+*Other* — it is the one bucket a person can act on.
+
+**The strip still refuses a toggle.** `NetWorthStrip` shows *mine* with *ours*
+on a muted second line — never one at a time, because showing one at a time
+invites reading the wrong number (`SPEC.md` §6.7). Where the ledger holds more
+than one currency the strip says so, for the same reason: a partial total that
+does not admit it is the same defect in a different shape.
 
 **The period is steppable and selectable.** Arrows move one period at a time in
 the current granularity, *Today* returns to the present, and tapping the label
@@ -129,17 +154,19 @@ happened*.
 
 | Component | Notes |
 |---|---|
-| `Shell(hero)` | Gradient band; holds `FxStatusChip`, `CurrencyChip`, `DualTotal` |
-| `DualTotal` | *Mine* at `display-hero` 54px, *ours* at `display-3`. Degrades to one figure when no shared account exists |
+| `Shell` | The sage band: the heading, the day, and the appearance action. **No `hero`** — see §3 |
+| `NetWorthStrip` | *Mine* on the ground in one line, *ours* and any second currency muted beneath it. Pressable → S12. Renders above the error branch, so a failed refresh keeps it (§6) |
+| `MonthSummary` | The hero. `PeriodHeader` + *kept so far* + the `StatTile` pair. Draws three zeroes for a period the ledger did not exist in — that is the true answer, not an empty state |
+| `SpendRows` | *Where it went* — §6 at leaf granularity, five rows plus a named remainder, bars proportional to the largest row |
 | `PeriodHeader` | `‹ label ›` + *Today*. Steps by the current granularity (§6.3) |
 | `PeriodPicker` | Opened by tapping the label or stat row — granularity, presets, arbitrary range (§7) |
-| `StatTile` | Period spend and net. **Period-scoped**; `DualTotal` above it is not |
+| `StatTile` | *Came in* and *went out*, inside `MonthSummary`. **Period-scoped**; the strip above it is not |
 | `Banner(warn)` | Unsettled clearing — rendered **only when non-zero**, with one action |
 | `Card` | Wraps Recent — a grouped list of rows, `title="Recent"` + `action="Show all"`. **Only when Recent has rows**; an empty ledger renders `EmptyState(first-run)` on the ground instead |
 | `TransactionRow` | Recent; `TransferRow` for transfers; `BIZ` tag where business |
 | `BrandIcon` | `TransactionRow`'s own leading mark for a recognised merchant — ORLEN, YouTube, or another the bundled catalogue carries (§14.4b). Offline, never blank: an unmatched payee falls back to its monogram |
 | `FxAmount` | Any foreign row — `local · rate · display`, the rate for that row's own date (P1) |
-| `TabBar` | 5 tabs, all ≥44px. `+` is not one of them |
+| `TabBar` | 4 tabs, all ≥44px. `+` is not one of them |
 | `FloatingAdd` | The `+`, above everything, wherever it was last put (`02-tokens` §2.9) |
 | `EmptyState(first-run)` | Two of them. No accounts — offers create; the import path is S29's, and arrives with it (no route exists yet, and this screen invents none). Accounts but no transactions — *No transactions yet*, S10's own wording, in place of the Recent card. *No transactions yet* is chosen by an unfiltered count, never by an empty Recent window: a ledger holding rows Recent did not return gets `transactions.emptyRecentTitle`/`emptyRecentBody` and *Show all* instead |
 | `AppearanceButton` | Header action; opens the appearance sheet |

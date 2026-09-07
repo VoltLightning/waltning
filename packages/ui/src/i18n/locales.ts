@@ -91,6 +91,29 @@ export function dayLabel(date: AccountingDate, locale: Locale): string {
   }).format(new Date(Date.UTC(year, mo - 1, day)));
 }
 
+/**
+ * "Saturday, 5 September" — the weekday and the day, for a band whose heading
+ * is already the word *Today*.
+ *
+ * **No year, deliberately.** The heading says the date is today's, so the year
+ * is the one piece a reader never needs here and the one that pushes the line
+ * onto a second row on a narrow phone. `dayLabel` keeps the year, because a
+ * transaction's date is not assumed to be near.
+ *
+ * Same `timeZone: "UTC"` and the same rebuild through `Date.UTC` as
+ * `dayLabel`, for the same reason: a bare accounting date re-interpreted in a
+ * negative offset renders as the day before.
+ */
+export function weekdayLabel(date: AccountingDate, locale: Locale): string {
+  const [year, mo, day] = date.split("-").map(Number) as [number, number, number];
+  return new Intl.DateTimeFormat(locale, {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    timeZone: "UTC",
+  }).format(new Date(Date.UTC(year, mo - 1, day)));
+}
+
 /** Whether a string is a language this app ships. */
 export function isLocale(value: string): value is Locale {
   return (LOCALES as readonly string[]).includes(value);

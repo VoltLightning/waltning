@@ -17,8 +17,9 @@
  *
  * `leading`/`trailing` are rendered exactly as given — a heading, a brand
  * mark, an appearance control — because a screen's header content is never
- * this component's to style; `hero` and `children` (an optional row below
- * it, `PeriodHeader`'s eventual slot) are the same.
+ * this component's to style; `hero` and `children` are the same. All three
+ * are optional: a band with a title and one action is a legal band, and it is
+ * what S04 draws now.
  */
 
 import { View } from "react-native";
@@ -29,7 +30,15 @@ import { space } from "../tokens.ts";
 export type ShellProps = {
   leading?: React.ReactNode;
   trailing?: React.ReactNode;
-  hero: React.ReactNode;
+  /**
+   * The band's figure — optional, because S04 no longer has one. Net worth was
+   * the phone's hero until the band it needed was measured against what it
+   * answered: about 500pt of a 844pt screen for a total that moves slowly,
+   * with the month's own figures below the fold. The month is the hero now
+   * (`MonthSummary`) and it lives on the ground, so this band is a title, a
+   * date and one action. `DeskBand` still passes a figure and still gets one.
+   */
+  hero?: React.ReactNode;
   children?: React.ReactNode;
 };
 
@@ -52,7 +61,7 @@ export function Shell({ leading, trailing, hero, children }: ShellProps) {
         {leading}
         {trailing}
       </View>
-      <View>{hero}</View>
+      {hero === undefined ? null : <View>{hero}</View>}
       {children}
     </View>
   );

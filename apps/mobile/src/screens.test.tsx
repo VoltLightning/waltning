@@ -516,23 +516,32 @@ describe("Today", () => {
   /**
    * §12: `spent` is §5's positive `spend` magnitude, not a signed delta — a
    * 120.50 expense renders as `120.50`, never `-120.50`.
+   *
+   * **The three figures are §5's whole identity, `net = inflow − spend`.**
+   * `inflow` used to be computed inside `periodSpend` and thrown away, so the
+   * screen showed *spent* and *net* and left the reader to work out what came
+   * in. Stating all three is what makes the month card readable as one
+   * sentence rather than two numbers and a subtraction.
    */
-  it("shows the period row's spent and net tiles from periodSpend, spend as a positive magnitude", () => {
+  it("shows the month card's three figures from periodSpend, spend as a positive magnitude", () => {
     const rows: readonly PeriodSpendRow[] = [
       {
         currency: currencyCode("PLN"),
         decimals: 2,
         spend: toMoney("120.50"),
+        inflow: toMoney("160.50"),
         net: toMoney("40.00"),
       },
     ];
     withLedger(<Today />, fakeController({ accounts: [PLN_ACCOUNT], periodSpend: rows }));
 
-    expect(screen.getByText("spent")).toBeDefined();
-    expect(screen.getByText("net")).toBeDefined();
+    expect(screen.getByText("Kept so far")).toBeDefined();
+    expect(screen.getByText("Came in")).toBeDefined();
+    expect(screen.getByText("Went out")).toBeDefined();
     const rendered = document.body.textContent ?? "";
     expect(rendered).toContain("120.50");
     expect(rendered).not.toContain("-120.50");
+    expect(rendered).toContain("160.50");
     expect(rendered).toContain("40.00");
   });
 

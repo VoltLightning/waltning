@@ -601,7 +601,20 @@ export type PeriodTransactionRow = {
   amountOriginal: Money;
 };
 
-export type PeriodSpendRow = { currency: CurrencyCode; decimals: number; spend: Money; net: Money };
+export type PeriodSpendRow = {
+  currency: CurrencyCode;
+  decimals: number;
+  spend: Money;
+  /**
+   * §5's `inflow` — the sum over income, stated rather than left to be
+   * recovered as `net + spend` by whatever renders it. It was computed here
+   * and discarded, so the one screen that shows *came in* beside *went out*
+   * had to do money arithmetic to get it back, which is the thing `money.ts`
+   * exists to keep out of screens.
+   */
+  inflow: Money;
+  net: Money;
+};
 
 /**
  * §5's base figure — class **R** (`computations.md` §0): `spend` is the
@@ -658,6 +671,7 @@ export const periodSpend = (
       currency,
       decimals,
       spend: toMoney(spend),
+      inflow: toMoney(inflow),
       net: toMoney(inflow.minus(spend)),
     }));
 };
