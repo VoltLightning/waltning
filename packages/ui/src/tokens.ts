@@ -49,8 +49,17 @@ export const color = {
   pressed: "#e6ddcb",
   /** Card edges, dividers, the outline of an unfilled control. */
   border: "#eae3d5",
-  /** The border of an interactive control at rest — an input, a chip. */
-  borderInteractive: "#c6bdaa",
+  /**
+   * The border of an interactive control at rest — an input, a chip.
+   *
+   * **A control this app draws is identified by its edge alone**, because its
+   * fill is `surface` on `ground` at 1.05:1 — invisible. So this value carries
+   * WCAG 1.4.11's 3:1 boundary floor by itself and sits at 3.02 on both, where
+   * the tan it replaced was 1.73 and left every field to be inferred rather
+   * than seen. `borderStrong` stays above it at 3.63, so rest and
+   * hover/selected are still two steps of one ramp.
+   */
+  borderInteractive: "#9d8d6d",
   /**
    * A border that must read on its own: a selected control, a focus-adjacent
    * edge. Held to 3:1 against `surface`, the WCAG floor for a UI boundary —
@@ -61,7 +70,7 @@ export const color = {
   muted: "#6e6759",
 
   /** A primary action's fill. Job 1. */
-  accent: "#55704f",
+  accent: "#5c7357",
   /** Links, a secondary action's label. */
   accentText: "#4c6247",
   /** Decorative accent marks, and the focus ring. Job 2. */
@@ -85,8 +94,8 @@ export const color = {
    * money moved between your own accounts is `muted`, because nothing was
    * gained or lost. Job 3 is `income`.
    */
-  income: "#3f7a34",
-  spend: "#a8543c",
+  income: "#3e7733",
+  spend: "#a6533b",
 
   /**
    * The green ramp is the **entire** chart palette: magnitude reads as depth,
@@ -177,11 +186,11 @@ export const darkColor = {
   hover: "#302a23",
   pressed: "#363027",
   border: "#38332a",
-  borderInteractive: "#5a5344",
+  borderInteractive: "#746b57",
   borderStrong: "#78715e",
   ink: "#f0ece3",
   muted: "#a59d8d",
-  accent: "#55704f",
+  accent: "#5c7357",
   accentText: "#a4c297",
   accentIcon: "#8fae84",
   accentFill: "#2c3226",
@@ -367,10 +376,10 @@ export const space = {
 export const radius = {
   pill: 999,
   xs: 3,
-  /** Controls: buttons, inputs. */
-  sm: 8,
-  /** Cards, inset boxes. */
-  md: 12,
+  /** Controls: buttons, inputs, chips, the segment thumb. */
+  sm: 10,
+  /** Cards, inset boxes; the segment track. */
+  md: 14,
   /** Sheets, and the ground panel lifting over the shell. */
   lg: 16,
 } as const;

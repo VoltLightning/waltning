@@ -65,7 +65,6 @@
  */
 
 import { useCallback, useState } from "react";
-import type { ViewStyle } from "react-native";
 import {
   KeyboardAvoidingView,
   Modal,
@@ -77,22 +76,13 @@ import {
 } from "react-native";
 import { useT } from "../i18n/provider";
 import { Button } from "../primitives/button";
+import { containOverscroll } from "../primitives/nested-scroll.ts";
 import { useWindowInsets } from "../primitives/safe-area";
 import { text } from "../theme/fonts.ts";
 import { makeStyles } from "../theme/styles.ts";
 import { focus, radius, space, touchTarget } from "../tokens.ts";
 import { dismissKeyboard, KEYBOARD_AVOIDANCE, useKeyboardHeight } from "./keyboard.ts";
 import { sheetBounds } from "./sheet-geometry.ts";
-
-/**
- * `overscroll-behavior` is a web property `react-native-web` forwards to CSS
- * and native has no equivalent for, so `ViewStyle` does not declare it. Named
- * here as an intersection rather than cast: the shape stays checked, and the
- * one extra property is visible instead of hidden behind an assertion.
- */
-const containOverscroll: ViewStyle & { overscrollBehavior?: "contain" } = {
-  overscrollBehavior: "contain",
-};
 
 export type BottomSheetProps = {
   visible: boolean;

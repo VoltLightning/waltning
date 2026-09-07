@@ -76,6 +76,13 @@ describe("a component follows the active theme", () => {
     ["light income on surface", light.income, light.surface],
     ["light spend on ground", light.spend, light.ground],
     ["light spend on surface", light.spend, light.surface],
+    // A figure lands on the subtle fill too — an inset box, a filled chip, a
+    // table header — and that is the tightest of the three page fills. Both
+    // money colours cleared `ground` and `surface` while sitting at 4.38 and
+    // 4.43 here, so the pair that was actually checked was never the pair that
+    // decided legibility.
+    ["light income on subtle fill", light.income, light.subtleFill],
+    ["light spend on subtle fill", light.spend, light.subtleFill],
     ["light accent text on accent fill", light.accentText, light.accentFill],
     ["dark text on ground", dark.text, dark.ground],
     ["dark text on surface", dark.text, dark.surface],
@@ -91,10 +98,47 @@ describe("a component follows the active theme", () => {
     ["dark income on surface", dark.income, dark.surface],
     ["dark spend on ground", dark.spend, dark.ground],
     ["dark spend on surface", dark.spend, dark.surface],
+    ["dark income on subtle fill", dark.income, dark.subtleFill],
+    ["dark spend on subtle fill", dark.spend, dark.subtleFill],
     ["dark accent text on accent fill", dark.accentText, dark.accentFill],
   ])("keeps %s at 4.5:1", (_label, foreground, background) => {
     expect(foreground).not.toBe(background);
     expect(contrastRatio(foreground, background)).toBeGreaterThanOrEqual(4.5);
+  });
+
+  /**
+   * **A control here is identified by its edge, so the edge carries the
+   * floor.** WCAG 1.4.11 asks 3:1 of the visual information needed to identify
+   * a component — and an input's fill is `surface` on `ground` at 1.05:1,
+   * which identifies nothing. That leaves the border as the only carrier, and
+   * it was `#c6bdaa` at 1.73:1: a field you infer from the label above it
+   * rather than see. Checked against both page fills a control sits on,
+   * because a chip on the ground and an input on a card are the same control.
+   *
+   * `borderStrong` is checked at the same floor and stays the higher step, so
+   * "at rest" and "selected" remain two rungs of one ramp rather than one
+   * legible edge and one decorative one.
+   */
+  it.each([
+    ["light control edge on ground", light.borderInteractive, light.ground],
+    ["light control edge on surface", light.borderInteractive, light.surface],
+    ["light strong edge on ground", light.borderStrong, light.ground],
+    ["light strong edge on surface", light.borderStrong, light.surface],
+    ["dark control edge on ground", dark.borderInteractive, dark.ground],
+    ["dark control edge on surface", dark.borderInteractive, dark.surface],
+    ["dark strong edge on ground", dark.borderStrong, dark.ground],
+    ["dark strong edge on surface", dark.borderStrong, dark.surface],
+  ])("keeps %s at the 3:1 boundary floor", (_label, edge, fill) => {
+    expect(contrastRatio(edge, fill)).toBeGreaterThanOrEqual(3);
+  });
+
+  it.each([
+    ["light", light],
+    ["dark", dark],
+  ])("keeps the %s selected edge above the resting one", (_name, theme) => {
+    expect(contrastRatio(theme.borderStrong, theme.surface)).toBeGreaterThan(
+      contrastRatio(theme.borderInteractive, theme.surface),
+    );
   });
 
   /**

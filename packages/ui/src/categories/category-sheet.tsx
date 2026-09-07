@@ -56,6 +56,7 @@ import Animated from "react-native-reanimated";
 import { useT } from "../i18n/provider";
 import { Button } from "../primitives/button";
 import { useInteraction } from "../primitives/interaction.ts";
+import { nestedScrollProps } from "../primitives/nested-scroll.ts";
 import { usePressScale } from "../primitives/press-scale.ts";
 import { Tag } from "../primitives/tag";
 import { TextField } from "../primitives/text-field";
@@ -374,7 +375,7 @@ export function CategorySheet({
         contract for the day that body scrolls, stated on the list it would
         be about.
       */}
-      <ScrollView style={styles.gridScroll} nestedScrollEnabled>
+      <ScrollView {...nestedScrollProps(styles.gridScroll)}>
         {visibleLeaves.length === 0 ? (
           emptyTree ? (
             createAction === undefined ? (

@@ -51,6 +51,7 @@ import { Amount } from "../fx/amount";
 import { useT } from "../i18n/provider";
 import { Button } from "../primitives/button";
 import { useInteraction } from "../primitives/interaction.ts";
+import { nestedScrollProps } from "../primitives/nested-scroll.ts";
 import { usePressScale } from "../primitives/press-scale.ts";
 import { SearchField } from "../primitives/search-field";
 import { Tag } from "../primitives/tag";
@@ -212,7 +213,7 @@ export function AccountPicker({
         gesture to; it is the Android contract for the day that body does
         scroll, stated where it will still be right.
       */}
-      <ScrollView style={styles.scroll} nestedScrollEnabled>
+      <ScrollView {...nestedScrollProps(styles.scroll)}>
         {recent === undefined ? null : (
           <View style={styles.section}>
             <Text style={styles.sectionLabel}>{t("accounts.recent")}</Text>

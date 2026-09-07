@@ -20,6 +20,7 @@
     "./settings/*": "./src/settings/*.tsx",
     "./shell/*": "./src/shell/*.tsx",
     "./shell/float-geometry": "./src/shell/float-geometry.ts",
+    "./shell/ground-inset": "./src/shell/ground-inset.ts",
     "./shell/floating-add.test-support": "./src/shell/floating-add.test-support.ts",
     "./states/*": "./src/states/*.tsx",
     "./theme/fonts": "./src/theme/fonts.ts",

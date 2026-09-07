@@ -11,6 +11,7 @@ import type { Meta, StoryObj } from "@storybook/react-native-web-vite";
 import { Text } from "react-native";
 import { text } from "../theme/fonts.ts";
 import { makeStyles } from "../theme/styles.ts";
+import { space } from "../tokens.ts";
 import { RateTable } from "./rate-table";
 
 function noop() {}
@@ -47,6 +48,9 @@ const meta = {
       ],
       onSelectRow: noop,
     },
+    // What the hosting screen reads from `useGroundInset()`: the page's own
+    // gutter, on the list's content rather than on a `View` around it.
+    contentInset: { paddingLeft: space.x5, paddingRight: space.x5, paddingBottom: space.x5 },
   },
 } satisfies Meta<typeof RateTable>;
 

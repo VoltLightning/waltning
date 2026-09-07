@@ -92,12 +92,13 @@
  * added to the panel's own padding rather than replacing it: breathing room
  * and a circle overhead are two different measurements.
  *
- * **`scroll="own"` takes none of it**, because the clearance has to land on
- * the *content that scrolls* and in that mode this component is not holding
- * it. Padding the panel would only shorten the screen's own list and leave a
- * band of empty ground with the last row still under the button at the end of
- * the scroll. A screen that owns its list reads the same hook and puts the
- * value in the list's own `contentContainerStyle`.
+ * **`scroll="own"` takes none of it — nor the side gutter**, because both have
+ * to land on the *content that scrolls* and in that mode this component is not
+ * holding it. Padding the panel would clip the screen's own list at the
+ * gutter: the scroll bar rides inside the page, a focused field's ring is cut
+ * off left and right, and the bottom padding shortens the list rather than
+ * clearing the fold. A screen that owns its list calls `useGroundInset()` and
+ * spreads the values onto the list's own `contentContainerStyle`.
  */
 
 import { ScrollView, Text, View } from "react-native";
@@ -171,26 +172,22 @@ export function GroundPanel({ children, scroll = "page", clearBottom = true }: G
   const insets = useSafeArea();
   const floatClearance = useFloatingClearance();
 
-  // Not in `useStyles`: that cache is keyed on the theme, and these are keyed
-  // on the device. The clearance lives on whichever style ends up carrying
-  // the panel's padding — the scroll content in `"page"` mode, the panel
-  // itself in `"own"` — so the last row clears the home indicator at the end
-  // of the scroll, not at the fold.
-  const deviceBottom = clearBottom ? insets.bottom : 0;
-  const sides = {
-    paddingLeft: space.x5 + insets.left,
-    paddingRight: space.x5 + insets.right,
-  };
-
   if (scroll === "own") {
-    // The device only: the button's clearance belongs to the list this
-    // screen owns, not to a band of ground under it.
-    const clearance = { ...sides, paddingBottom: space.x5 + deviceBottom };
-    return <View style={[styles.panel, styles.panelPadding, clearance]}>{children}</View>;
+    // **No gutter and no bottom clearance here.** Both belong to the scroller
+    // this screen owns — a `View` around it clips the bar inside the page and
+    // slices a focused field's ring (`shell/ground-inset.ts` has it in full).
+    // The panel keeps only what a wrapper can honestly carry: the top padding
+    // and the gap between its children.
+    return <View style={[styles.panel, styles.panelTop]}>{children}</View>;
   }
 
+  // Not in `useStyles`: that cache is keyed on the theme, and these are keyed
+  // on the device. The clearance goes on the scroll *content*, so the last row
+  // clears the home indicator at the end of the travel rather than at the fold.
+  const deviceBottom = clearBottom ? insets.bottom : 0;
   const clearance = {
-    ...sides,
+    paddingLeft: space.x5 + insets.left,
+    paddingRight: space.x5 + insets.right,
     paddingBottom: space.x5 + deviceBottom + (clearBottom ? floatClearance : 0),
   };
 
@@ -202,6 +199,12 @@ export function GroundPanel({ children, scroll = "page", clearBottom = true }: G
         contentContainerStyle={[styles.scrollContent, clearance]}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
+        // A whole page moving is its own feedback, and a bar over the gutter
+        // is one more thing on a screen that already has enough. The indicator
+        // stays only where a pane scrolls independently of the page it sits on
+        // — the desk filter rail, a bounded sheet body — because there the
+        // travel is the only clue the pane has more in it.
+        showsVerticalScrollIndicator={false}
         // iOS-only; harmless elsewhere (`react-native`'s own contract for a
         // prop a platform does not implement).
         automaticallyAdjustKeyboardInsets
@@ -253,8 +256,12 @@ const useStyles = makeStyles((theme) => ({
     borderTopRightRadius: radius.lg,
     flex: 1,
   },
-  /** `scroll="own"` — today's padding and gap, applied directly since there is no scroll content to carry them. */
-  panelPadding: { padding: space.x5, gap: space.x4 },
+  /**
+   * `scroll="own"` — the top padding and the inter-child gap, the two values a
+   * wrapper can apply without clipping the scroller inside it. The sides and
+   * the bottom travel down through `useGroundInset()` instead.
+   */
+  panelTop: { paddingTop: space.x5, gap: space.x4 },
   scroll: { flex: 1 },
   /**
    * `flexGrow: 1` — a screen shorter than the device still fills it, while a

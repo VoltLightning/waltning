@@ -6,6 +6,9 @@ import { expect, it, vi } from "vitest";
 import { I18nProvider } from "../i18n/provider";
 import { RateTable, type RateTablePair } from "./rate-table";
 
+/** The page gutter a screen hands down; the values are `useGroundInset()`'s. */
+const INSET = { paddingLeft: 22, paddingRight: 22, paddingBottom: 22 };
+
 const BASE = "USD";
 const QUOTE = "PLN";
 
@@ -24,6 +27,7 @@ function pair(overrides: Partial<RateTablePair> = {}): RateTablePair {
 it("renders a gap for a date with no held rate", () => {
   render(
     <RateTable
+      contentInset={INSET}
       pair={pair({
         to: "2026-08-03",
         rows: [
@@ -39,7 +43,10 @@ it("renders a gap for a date with no held rate", () => {
 
 it("marks a manual row amber, distinct from a synced one, with a translated label", () => {
   render(
-    <RateTable pair={pair({ rows: [{ date: "2026-08-01", rate: "3.9000", source: "manual" }] })} />,
+    <RateTable
+      contentInset={INSET}
+      pair={pair({ rows: [{ date: "2026-08-01", rate: "3.9000", source: "manual" }] })}
+    />,
   );
   expect(screen.getByText("Manual")).toBeDefined();
   expect(screen.queryByText("manual")).toBeNull();
@@ -48,6 +55,7 @@ it("marks a manual row amber, distinct from a synced one, with a translated labe
 it("holds up to 4dp on the rate", () => {
   render(
     <RateTable
+      contentInset={INSET}
       pair={pair({ rows: [{ date: "2026-08-01", rate: "3.75560000", source: "nbp" }] })}
     />,
   );
@@ -57,20 +65,24 @@ it("holds up to 4dp on the rate", () => {
 it("renders the rate through the locale-aware helper — a comma in Polish", () => {
   render(
     <I18nProvider locale="pl">
-      <RateTable pair={pair({ rows: [{ date: "2026-08-01", rate: "4.0231", source: "nbp" }] })} />
+      <RateTable
+        contentInset={INSET}
+        pair={pair({ rows: [{ date: "2026-08-01", rate: "4.0231", source: "nbp" }] })}
+      />
     </I18nProvider>,
   );
   expect(screen.getByText("4,0231")).toBeDefined();
 });
 
 it("states which way the rate reads, in a column header — quote per base", () => {
-  render(<RateTable pair={pair()} />);
+  render(<RateTable contentInset={INSET} pair={pair()} />);
   expect(screen.getByText("PLN per USD")).toBeDefined();
 });
 
 it("a carried-forward row states its age, never the raw enum", () => {
   render(
     <RateTable
+      contentInset={INSET}
       pair={pair({
         rows: [{ date: "2026-08-01", rate: "3.7601", source: "carried_forward", carriedDays: 3 }],
       })}
@@ -85,6 +97,7 @@ it("a carried-forward row states its age, never the raw enum", () => {
 it("an unrecognised source renders 'Unknown', never 'Manual'", () => {
   render(
     <RateTable
+      contentInset={INSET}
       pair={pair({ rows: [{ date: "2026-08-01", rate: "3.7601", source: "some_future_source" }] })}
     />,
   );
@@ -97,6 +110,7 @@ it("an unrecognised source renders 'Unknown', never 'Manual'", () => {
 it("a carried-forward row with an unlocatable origin states its age as unknown", () => {
   render(
     <RateTable
+      contentInset={INSET}
       pair={pair({
         rows: [
           { date: "2026-08-01", rate: "3.7601", source: "carried_forward", carriedDays: null },
@@ -112,6 +126,7 @@ it("a tap seeds a single-day edit", () => {
   const onSelectRow = vi.fn();
   render(
     <RateTable
+      contentInset={INSET}
       pair={pair({ rows: [{ date: "2026-08-01", rate: "3.7556", source: "nbp" }], onSelectRow })}
     />,
   );
@@ -120,7 +135,7 @@ it("a tap seeds a single-day edit", () => {
 });
 
 it("an inverted range renders no rows", () => {
-  render(<RateTable pair={pair({ from: "2026-08-05", to: "2026-08-01" })} />);
+  render(<RateTable contentInset={INSET} pair={pair({ from: "2026-08-05", to: "2026-08-01" })} />);
   expect(screen.getByText("The range must not end before it starts.")).toBeDefined();
 });
 
@@ -138,6 +153,7 @@ it("an inverted range renders no rows", () => {
 it("carries the screen's own header and footer inside the one list", () => {
   render(
     <RateTable
+      contentInset={INSET}
       pair={pair({ rows: [{ date: "2026-08-01", rate: "3.7556", source: "nbp" }] })}
       header={<Text>the screen's controls</Text>}
       footer={<Text>the coverage card</Text>}
@@ -158,6 +174,7 @@ it("carries the screen's own header and footer inside the one list", () => {
 it("with no pair, keeps the scroller and its header and footer, and states nothing about a range", () => {
   render(
     <RateTable
+      contentInset={INSET}
       pair={null}
       header={<Text>the screen's controls</Text>}
       footer={<Text>the coverage card</Text>}

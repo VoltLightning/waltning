@@ -69,12 +69,14 @@ it("takes no floating clearance when it is not the screen's bottom edge", () => 
 
 /**
  * The carve-out, stated as a test so it cannot be quietly reversed: in
- * `scroll="own"` the clearance would land on the *panel*, shortening the
- * screen's own list and leaving a band of empty ground under it — with the
- * last row still under the button at the end of the scroll. The screen that
- * owns the list owns its bottom padding.
+ * `scroll="own"` neither the gutter nor the bottom clearance may land on the
+ * *panel*. A `View` with padding around a `FlatList` clips the list at that
+ * padding — the scroll bar rides 22 pt inside the page, a focused field's ring
+ * is sliced off left and right, and the bottom padding shortens the list
+ * instead of clearing the fold. The screen that owns the list applies both
+ * through `useGroundInset()`, on the content that actually scrolls.
  */
-it('scroll="own" clears the device but not the floating button', () => {
+it('scroll="own" leaves the gutter and the bottom to the screen\'s own scroller', () => {
   const { container } = render(
     <FloatingClearanceProvider value={floating.clearance}>
       <SafeAreaProvider insets={NOTCHED}>
@@ -84,26 +86,38 @@ it('scroll="own" clears the device but not the floating button', () => {
       </SafeAreaProvider>
     </FloatingClearanceProvider>,
   );
-  const panel = container.firstElementChild as HTMLElement;
-  // space.x5 (22) + NOTCHED.bottom (34), and nothing for the button.
-  expect(getComputedStyle(panel).paddingBottom).toBe("56px");
+  const style = getComputedStyle(container.firstElementChild as HTMLElement);
+  expect(style.paddingBottom).toBe("0px");
+  expect(style.paddingLeft).toBe("0px");
+  expect(style.paddingRight).toBe("0px");
+  // The one value a wrapper can carry without clipping anything inside it.
+  expect(style.paddingTop).toBe("22px");
 });
 
 it('scroll="own" renders no ScrollView', () => {
-  const { container } = render(
+  render(
     <GroundPanel scroll="own">
       <Text>hello</Text>
     </GroundPanel>,
   );
   expect(screen.queryByTestId("ground-panel-scroll")).toBeNull();
-  // The plain `View` this component was before scrolling existed — the
-  // clearance lands directly on it, since there is no scroll content to
-  // carry it instead.
-  const panel = container.firstElementChild as HTMLElement;
-  const style = getComputedStyle(panel);
-  expect(style.paddingBottom).toBe("22px");
-  expect(style.paddingLeft).toBe("22px");
-  expect(style.paddingRight).toBe("22px");
+});
+
+/**
+ * A page scroller shows no bar: the whole screen moving is its own feedback,
+ * and the indicator only ever drew over the gutter. It survives where a pane
+ * scrolls independently of the page — the desk rail, a sheet body — which is
+ * why this is asserted on the panel rather than banned everywhere.
+ */
+it("the page scroller shows no scroll indicator", () => {
+  render(
+    <GroundPanel>
+      <Text>hello</Text>
+    </GroundPanel>,
+  );
+  const scroller = screen.getByTestId("ground-panel-scroll");
+  expect(scroller.className).not.toContain("scroll-indicator");
+  expect(getComputedStyle(scroller).scrollbarWidth).toBe("none");
 });
 
 it("clearBottom (the default) adds the device's own bottom inset to the clearance", () => {

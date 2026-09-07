@@ -2584,3 +2584,48 @@ describe("a refusal is never reported as a success", () => {
     ).toEqual([]);
   });
 });
+
+/**
+ * **A scroller inside a scroller stops at its own end.**
+ *
+ * `nestedScrollEnabled` reads like the whole answer and is half of one: it
+ * makes the view a nested-scrolling child on Android, iOS does this anyway,
+ * and on the web it does nothing at all. The web half is
+ * `overscroll-behavior: contain`. The shipped app set the first alone on three
+ * pickers, so scrolling inside a picker in a browser moved the screen behind
+ * it — the defect this rule exists to keep fixed.
+ *
+ * `nestedScrollProps()` applies both and takes the scroller's style, so the
+ * containment cannot be dropped by a `style` prop arriving after it. Setting
+ * the bare prop is therefore always a mistake outside that helper.
+ */
+describe("a nested scroller contains its own overscroll", () => {
+  const HELPER = join(repoRoot, "packages/ui/src/primitives/nested-scroll.ts");
+
+  it("sets nestedScrollEnabled only through nestedScrollProps", () => {
+    const offenders = sourceFiles(join(repoRoot, "packages/ui/src"))
+      .concat(sourceFiles(join(repoRoot, "apps/mobile/src")))
+      .filter((file) => file !== HELPER && !/\.(test|stories)\.tsx?$/.test(file))
+      .filter((file) => {
+        // Comments stripped, for the same reason `importsOf` strips them: the
+        // prose in this repository quotes the prop constantly, and
+        // `bottom-sheet.tsx` explains at length that it does *not* set one.
+        const text = readFileSync(file, "utf8")
+          .replace(/\/\*[\s\S]*?\*\//g, "")
+          .replace(/^\s*\/\/.*$/gm, "");
+        return /\bnestedScrollEnabled\b/.test(text) && !/\bnestedScrollProps\b/.test(text);
+      })
+      .map((file) => relative(repoRoot, file));
+
+    expect(
+      offenders,
+      "spread nestedScrollProps(style) instead — the bare prop is a no-op on the web",
+    ).toEqual([]);
+  });
+
+  it("keeps both halves in the helper", () => {
+    const text = readFileSync(HELPER, "utf8");
+    expect(text).toMatch(/nestedScrollEnabled: true/);
+    expect(text).toMatch(/overscrollBehavior: "contain"/);
+  });
+});

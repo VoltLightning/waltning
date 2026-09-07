@@ -62,7 +62,7 @@ import { MultiSelect, type SelectOption } from "@waltning/ui/primitives/select";
 import { useBreakpoint } from "@waltning/ui/primitives/use-breakpoint";
 import { BottomSheet } from "@waltning/ui/shell/bottom-sheet";
 import { Card, GroundPanel } from "@waltning/ui/shell/card";
-import { useFloatingClearance } from "@waltning/ui/shell/floating-clearance";
+import { useGroundInset } from "@waltning/ui/shell/ground-inset";
 import { Banner } from "@waltning/ui/states/banner";
 import { EmptyState } from "@waltning/ui/states/empty-state";
 import { ErrorState } from "@waltning/ui/states/error-state";
@@ -275,13 +275,14 @@ export default function Ledger() {
   const locale = useLocale();
   const styles = useStyles();
   /**
-   * This screen owns its list, so `GroundPanel scroll="own"` holds no
-   * clearance for it (`shell/floating-clearance.tsx`): padding the panel
-   * would only shorten the `FlatList` and leave a band of empty ground with
-   * the last transaction still under the add button at the end of the
-   * scroll. The clearance goes on the list's own content instead.
+   * This screen owns its list, so `GroundPanel scroll="own"` holds neither the
+   * gutter nor the bottom clearance (`shell/ground-inset.ts`): padding a `View`
+   * around a `FlatList` clips the list at the gutter — the bar rides inside the
+   * page, the search field's focus ring is sliced off left and right, and the
+   * last transaction stops short of the fold with the add button still over it.
+   * Both values go on the content that scrolls.
    */
-  const floatClearance = useFloatingClearance();
+  const inset = useGroundInset();
   const breakpoint = useBreakpoint();
   const isDesk = breakpoint === "desk";
   const ledger = useLedgerController();
@@ -650,7 +651,7 @@ export default function Ledger() {
 
     return (
       <GroundPanel scroll="own">
-        <View style={styles.deskLayout}>
+        <View style={[styles.deskLayout, inset.content]}>
           {/*
             `scroll="own"`, not the panel's default page scroll: both
             children of this row own their own scroll and their own height —
@@ -775,71 +776,75 @@ export default function Ledger() {
     );
   }
 
-  const listClearance = { paddingBottom: floatClearance };
-
   return (
     <GroundPanel scroll="own">
-      <SearchField
-        value={filter.text}
-        onChangeText={filters.setText}
-        placeholder={t("transactions.searchPlaceholder")}
-      />
-      <View style={styles.chipRow}>
-        {activeFilters.map((chip) => (
-          <ActiveFilterChip
-            key={chip.key}
-            label={chip.label}
-            excludes={chip.excludes}
-            onRemove={chip.onRemove}
-          />
-        ))}
-        <Chip placeholder={t("transactions.addFilter")} onPress={handleOpenSheet} />
-        {filtered ? (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={t("transactions.clearAllFilters")}
-            onPress={filters.clearAll}
-            style={styles.clearAll}
-          >
-            <Text style={styles.clearAllText}>{t("transactions.clearAllFilters")}</Text>
-          </Pressable>
-        ) : null}
+      <View style={[styles.head, inset.gutter]}>
+        <SearchField
+          value={filter.text}
+          onChangeText={filters.setText}
+          placeholder={t("transactions.searchPlaceholder")}
+        />
+        <View style={styles.chipRow}>
+          {activeFilters.map((chip) => (
+            <ActiveFilterChip
+              key={chip.key}
+              label={chip.label}
+              excludes={chip.excludes}
+              onRemove={chip.onRemove}
+            />
+          ))}
+          <Chip placeholder={t("transactions.addFilter")} onPress={handleOpenSheet} />
+          {filtered ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={t("transactions.clearAllFilters")}
+              onPress={filters.clearAll}
+              style={styles.clearAll}
+            >
+              <Text style={styles.clearAllText}>{t("transactions.clearAllFilters")}</Text>
+            </Pressable>
+          ) : null}
+        </View>
+
+        {search.loaded && search.total.count === 0 ? null : (
+          <Card>{search.loaded ? <RunningTotal total={search.total} /> : <TotalSkeleton />}</Card>
+        )}
       </View>
 
-      {search.loaded && search.total.count === 0 ? null : (
-        <Card>{search.loaded ? <RunningTotal total={search.total} /> : <TotalSkeleton />}</Card>
-      )}
-
       {!search.loaded ? (
-        <View style={styles.skeletonList}>
+        <View style={[styles.skeletonList, inset.gutter]}>
           {SKELETON_ROW_KEYS.map((key) => (
             <Skeleton key={key} shape="row" label={t("transactions.loadingTransactions")} />
           ))}
         </View>
       ) : search.error !== undefined ? (
-        <ErrorState
-          variant="recoverable"
-          what={t("transactions.loadFailedTitle")}
-          why={t("transactions.loadFailedWhy")}
-          action={{ label: t("common.retry"), onPress: search.retry }}
-        />
+        <View style={inset.gutter}>
+          <ErrorState
+            variant="recoverable"
+            what={t("transactions.loadFailedTitle")}
+            why={t("transactions.loadFailedWhy")}
+            action={{ label: t("common.retry"), onPress: search.retry }}
+          />
+        </View>
       ) : showEmpty ? (
-        filtered && !emptyIsFirstRun ? (
-          <EmptyState
-            variant="filtered"
-            title={t("transactions.emptyFilteredTitle")}
-            body={t("transactions.emptyFilteredBody")}
-            count={unfilteredCount}
-            primaryAction={{ label: t("transactions.clearFilters"), onPress: filters.clearAll }}
-          />
-        ) : (
-          <EmptyState
-            variant="first-run"
-            title={t("transactions.emptyFirstRunTitle")}
-            body={t("transactions.emptyFirstRunBody")}
-            primaryAction={{ label: t("shell.add"), onPress: handleAddTransaction }}
-          />
-        )
+        <View style={inset.gutter}>
+          {filtered && !emptyIsFirstRun ? (
+            <EmptyState
+              variant="filtered"
+              title={t("transactions.emptyFilteredTitle")}
+              body={t("transactions.emptyFilteredBody")}
+              count={unfilteredCount}
+              primaryAction={{ label: t("transactions.clearFilters"), onPress: filters.clearAll }}
+            />
+          ) : (
+            <EmptyState
+              variant="first-run"
+              title={t("transactions.emptyFirstRunTitle")}
+              body={t("transactions.emptyFirstRunBody")}
+              primaryAction={{ label: t("shell.add"), onPress: handleAddTransaction }}
+            />
+          )}
+        </View>
       ) : (
         <FlatList
           data={entries}
@@ -848,10 +853,11 @@ export default function Ledger() {
           onEndReached={handleEndReached}
           onEndReachedThreshold={0.5}
           style={styles.list}
-          // A per-shell value rather than a theme constant, so it is
-          // composed here beside the JSX — `TabBar`'s own `clearance` and
-          // `FloatingAdd`'s dock frame take the same shape.
-          contentContainerStyle={listClearance}
+          // The gutter and the clearance both ride on the content, so the bar
+          // sits at the page's edge and the last row clears the button at the
+          // end of the travel rather than at the fold (`shell/ground-inset.ts`).
+          contentContainerStyle={inset.content}
+          showsVerticalScrollIndicator={false}
         />
       )}
 
@@ -1251,6 +1257,12 @@ function LedgerRowItem({ row, onPress, onShortSwipe, onLongSwipe }: LedgerRowIte
 }
 
 const useStyles = makeStyles((theme) => ({
+  /**
+   * The band above the list: search, the filter chips and the running total.
+   * It carries the gutter the panel no longer applies, and the gap the panel
+   * used to give these three as siblings.
+   */
+  head: { gap: space.x4 },
   chipRow: { flexDirection: "row", flexWrap: "wrap", gap: space.md },
   clearAll: {
     minHeight: touchTarget.min,
