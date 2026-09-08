@@ -46,6 +46,10 @@ export type PagerProps = {
 function PagerView({ pages, activeKey, onActiveKeyChange }: PagerProps) {
   const styles = useStyles();
   const scroller = useRef<ScrollView>(null);
+  // Only the width is measured. The height is `100%` in the stylesheet, for
+  // the reason measuring it cannot work: a slot's height is what the
+  // measurement would be derived *from*, so the first pass sizes the slots to
+  // their content and every pass after that measures that mistake.
   const [width, setWidth] = useState(0);
   // Resolved once, and everything downstream reads the resolution rather than
   // the prop. A caller holding a stale key otherwise scrolls to page 0 while
@@ -86,7 +90,14 @@ function PagerView({ pages, activeKey, onActiveKeyChange }: PagerProps) {
       showsHorizontalScrollIndicator={false}
       onLayout={onLayout}
       onMomentumScrollEnd={onMomentumScrollEnd}
-      {...pageScrollProps(styles.track)}
+      // The slots have to be as tall as the track, not as tall as what is in
+      // them. `flexGrow` on the scroller's own `style` does not reach them —
+      // it sizes the viewport — so a page whose content ran past the fold got
+      // an unbounded height, and the vertical scroller inside it had nothing
+      // to scroll within: Summary's *Go to* grid was simply cut off, with no
+      // gesture that could reach it.
+      contentContainerStyle={styles.track}
+      {...pageScrollProps(styles.viewport)}
     >
       {pages.map((page) => (
         <PagerSlot
@@ -154,6 +165,29 @@ const PagerSlot = memo(PagerSlotView);
 export const Pager = memo(PagerView);
 
 const useStyles = makeStyles(() => ({
+  viewport: { flex: 1 },
+  // `flexGrow` so the track is as tall as the scroller even when its slots
+  // are not, which is what gives the percentage below something definite to
+  // resolve against.
   track: { flexGrow: 1 },
-  slot: { flexGrow: 1 },
+  /**
+   * **`height: "100%"`, and never `flexGrow`.**
+   *
+   * A slot that sizes to its content makes the pager as tall as its tallest
+   * page, and that height travels up through the route wrapper — which grows
+   * but does not shrink — until the screen is taller than the device. Nothing
+   * clips it and nothing scrolls, so the page below the fold is unreachable:
+   * Summary's *Go to* grid was exactly that. The percentage resolves against
+   * the track, which is bounded by the scroller, which is bounded by the
+   * device — so the slot is the viewport and never the content.
+   *
+   * `overflow: hidden` is the other half: a page taller than the slot then
+   * scrolls inside its own scroller rather than pushing the pager taller.
+   *
+   * `flexShrink: 0` because CSS shrinks flex children by default and React
+   * Native does not. Without it every page after the first is squeezed to
+   * share one screen's width — the second slot measured 32pt of the 503 it
+   * had been given — so a swipe landed on a page drawn in a column.
+   */
+  slot: { height: "100%", flexShrink: 0, overflow: "hidden" },
 }));

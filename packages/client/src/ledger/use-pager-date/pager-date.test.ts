@@ -96,30 +96,30 @@ describe("enterDay and goToPage", () => {
 });
 
 describe("periodLabel", () => {
-  it("hides the year while the period is in the current one", () => {
-    expect(periodLabel(on("2026-09-08"), TODAY)).toEqual({
+  it("gives the month and its year as parts, in the current year", () => {
+    expect(periodLabel(on("2026-09-08"))).toEqual({
       unit: "month",
       month: "2026-09",
-      showYear: false,
+      year: 2026,
     });
   });
 
-  it("shows the year once you have stepped out of it", () => {
-    expect(periodLabel(on("2024-03-04"), TODAY)).toEqual({
+  it("gives the same two parts once you have stepped out of the year", () => {
+    expect(periodLabel(on("2024-03-04"))).toEqual({
       unit: "month",
       month: "2024-03",
-      showYear: true,
+      year: 2024,
     });
   });
 
   it("says the year on Months, where the year is the period", () => {
-    expect(periodLabel(on("2026-09-08", "months"), TODAY)).toEqual({ unit: "year", year: 2026 });
+    expect(periodLabel(on("2026-09-08", "months"))).toEqual({ unit: "year", year: 2026 });
   });
 
   it("hands back parts, never a formatted string", () => {
     // `packages/client` may not import `packages/ui`, so it cannot know a
     // month's name in the reader's language — and must not guess at one.
-    const label = periodLabel(on("2026-09-08"), TODAY);
+    const label = periodLabel(on("2026-09-08"));
     expect(JSON.stringify(label)).not.toContain("September");
   });
 });

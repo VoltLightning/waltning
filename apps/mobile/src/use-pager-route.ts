@@ -81,7 +81,7 @@ export function usePagerRoute(today: AccountingDate): PagerRoute {
     [state, write],
   );
 
-  const label = useMemo(() => periodLabel(state, today), [state, today]);
+  const label = useMemo(() => periodLabel(state), [state]);
 
   return {
     state,

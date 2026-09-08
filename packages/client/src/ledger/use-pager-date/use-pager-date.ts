@@ -51,7 +51,7 @@ export function usePagerDate(
   );
   const showDay = useCallback((date: AccountingDate) => setState((s) => enterDay(s, date)), []);
 
-  const label = useMemo(() => periodLabel(state, today), [state, today]);
+  const label = useMemo(() => periodLabel(state), [state]);
 
   return {
     state,

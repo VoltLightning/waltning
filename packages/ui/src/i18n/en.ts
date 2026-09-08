@@ -876,12 +876,21 @@ export const en = {
     flowRange: "{{count}} months + this month to date",
   },
   shell: {
-    /** `PeriodBar`'s magnifier. */
+    /** Summary's gateway grid — a kicker over the cards. */
+    goTo: "Go to",
+    /** `PagerHeader`'s magnifier. */
     search: "Search",
+    /**
+     * `PagerHeader`'s title, which is the picker. Named for what it does
+     * rather than for the month it shows: "September" is already read out as
+     * the heading, and a button called *September* says nothing about what
+     * tapping it will do.
+     */
+    pickPeriod: "Choose a month",
     /** `PageTabs` — the four views of one date (S04 §3). */
     summary: "Summary",
     list: "List",
-    /** `PeriodBar`'s arrows name the unit they step; the label only says it to the eye. */
+    /** `PagerHeader`'s arrows name the unit they step; the label only says it to the eye. */
     previousMonth: "Previous month",
     nextMonth: "Next month",
     previousYear: "Previous year",

@@ -441,8 +441,11 @@ export const pl: Messages = {
     flowRange: "{{count}} miesięcy + bieżący do dziś",
   },
   shell: {
-    /** `PeriodBar`'s magnifier. */
+    /** Summary's gateway grid — a kicker over the cards. */
+    goTo: "Przejdź do",
+    /** `PagerHeader`'s magnifier. */
     search: "Szukaj",
+    pickPeriod: "Wybierz miesiąc",
     summary: "Podsumowanie",
     list: "Lista",
     previousMonth: "Poprzedni miesiąc",

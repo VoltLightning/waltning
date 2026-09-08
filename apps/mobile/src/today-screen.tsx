@@ -10,24 +10,35 @@ import { useWhereItWent } from "@waltning/client/ledger/use-where-it-went";
 import { accountingDate, shiftMonth, yearMonth } from "@waltning/core/date";
 import * as money from "@waltning/core/money";
 import { SpendRows } from "@waltning/ui/dashboard/spend-rows";
-import { decimalMark, monthLabel } from "@waltning/ui/i18n/locales";
+import { monthLabel } from "@waltning/ui/i18n/locales";
 import { useLocale, useT } from "@waltning/ui/i18n/provider";
 import { Button } from "@waltning/ui/primitives/button";
-import { Card } from "@waltning/ui/shell/card";
+import { Card, GroundPanel } from "@waltning/ui/shell/card";
+import { GatewayGrid } from "@waltning/ui/shell/molecules/gateway-grid/gateway-grid";
 import { MonthSummary } from "@waltning/ui/shell/month-summary";
 import { NetWorthStrip } from "@waltning/ui/shell/net-worth-strip";
 import { PagerFrame } from "@waltning/ui/shell/organisms/pager-frame/pager-frame";
+import {
+  ArrowsLeftRightIcon,
+  CircleHalfIcon,
+  ListBulletsIcon,
+  SlidersHorizontalIcon,
+} from "@waltning/ui/shell/phosphor";
 import { UnsettledBanner } from "@waltning/ui/shell/unsettled-banner";
 import { EmptyState } from "@waltning/ui/states/empty-state";
 import { ErrorState } from "@waltning/ui/states/error-state";
 import { Toast } from "@waltning/ui/states/toast";
+import { text } from "@waltning/ui/theme/fonts";
+import { useTheme } from "@waltning/ui/theme/provider";
+import { makeStyles } from "@waltning/ui/theme/styles";
 import {
   TransactionList,
   type TransactionListItem,
 } from "@waltning/ui/transactions/transaction-list";
 import { router, useLocalSearchParams } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
-import { useColorScheme } from "react-native";
+import { Text as RNText, useColorScheme, View } from "react-native";
+import { useAnimatedScrollHandler, useSharedValue } from "react-native-reanimated";
 import { HomeListPage } from "./home-list-page";
 import { openUnsettled } from "./open-unsettled.ts";
 import { appearance, PREVIEW_RESET_ENABLED } from "./platform";
@@ -44,6 +55,21 @@ function handlePreference(next: "system" | "light" | "dark") {
 
 function handleShowAll() {
   router.push("/ledger");
+}
+
+/**
+ * Summary's *Go to* — only what neither the tab bar nor the shared bar
+ * carries (S04 §3). Debt is here rather than in the bar because it is a figure
+ * you check, not a place you live, and here it can carry the figure.
+ */
+function handleGateway(key: string) {
+  // A literal per branch rather than a lookup table: expo-router types its
+  // routes, and a `Record<string, string>` throws that away — a typo would
+  // become a runtime 404 instead of a compile error.
+  if (key === "debt") router.push("/debt");
+  else if (key === "categories") router.push("/settings/categories");
+  else if (key === "currencies") router.push("/settings/currencies");
+  else if (key === "rates") router.push("/settings/rates");
 }
 
 /**
@@ -104,6 +130,20 @@ function toRow(transaction: PhoneRecentTransaction): TransactionListItem {
  * store's. Everything in `MonthSummary` moves when it steps, and so does
  * *where it went*; the strip does not, because a balance is as of now.
  */
+const GATEWAY_ICON = 16;
+
+/** The grid's kicker. `DayHeader`'s step, on the ground rather than in a card. */
+function SectionLabel({ children }: { children: string }) {
+  const styles = useSectionStyles();
+  return <RNText style={styles.label}>{children}</RNText>;
+}
+
+const useSectionStyles = makeStyles((theme) => ({
+  label: { color: theme.textMuted, ...text.ui("kicker") },
+  goToRow: { flexDirection: "row", alignItems: "center" },
+  spacer: { flex: 1 },
+}));
+
 export default function Today() {
   const t = useT();
   const locale = useLocale();
@@ -188,6 +228,8 @@ export default function Today() {
   // The period, the page and the day all live in the URL (`use-pager-route`),
   // so the agent can link to one — S03's *see them in the ledger* is
   // `/?view=list&date=2026-05-25` rather than a screen's own default.
+  const gatewayInk = useTheme().accentText;
+  const sectionStyles = useSectionStyles();
   const pager = usePagerRoute(today);
   // `DayRibbon` hands back the date it drew; this is where a bare string
   // becomes an `AccountingDate`, and the only place it needs to.
@@ -204,11 +246,37 @@ export default function Today() {
     },
     [pager.showPage],
   );
+  /**
+   * The title at rest is the picker, and Months is where it goes (S04 §3).
+   * The page is already the year as a grid of twelve, so the picker is a page
+   * this screen has rather than a sheet it would have to grow.
+   */
+  const handlePickPeriod = useCallback(() => pager.showPage("months"), [pager.showPage]);
+
+  /**
+   * One offset, shared with the header, written by whichever page is scrolling.
+   *
+   * A shared value rather than state: the header's shape is read on the UI
+   * thread every frame, and routing 60 scroll events a second through React
+   * would re-render this whole screen for a header that moved 1pt.
+   *
+   * Only the visible page can scroll, so there is no contention between the
+   * two — and switching pages carries the offset the new page is at as soon as
+   * it moves.
+   */
+  const scrollY = useSharedValue(0);
+  const handleScroll = useAnimatedScrollHandler({
+    onScroll: (event) => {
+      scrollY.value = event.contentOffset.y;
+    },
+  });
+
   const barLabels = useMemo(
     () => ({
       previous: t(pager.stepUnit === "year" ? "shell.previousYear" : "shell.previousMonth"),
       next: t(pager.stepUnit === "year" ? "shell.nextYear" : "shell.nextMonth"),
       search: t("shell.search"),
+      pickPeriod: t("shell.pickPeriod"),
     }),
     [pager.stepUnit, t],
   );
@@ -337,6 +405,39 @@ export default function Today() {
   // fields are untouched by a failed refresh, S04 §6) and replaces only the
   // ground panel's body — never the account list, which a query failure did
   // not touch.
+  // Every card carries a figure, which is what makes the grid a status board
+  // rather than a menu. A destination with nothing true to say yet passes
+  // `null` and draws no second line — an empty line looks broken.
+  const gateways = useMemo(
+    () => [
+      {
+        key: "debt",
+        label: t("routes.debt"),
+        detail: null,
+        icon: <ArrowsLeftRightIcon size={GATEWAY_ICON} color={gatewayInk} />,
+      },
+      {
+        key: "categories",
+        label: t("routes.categories"),
+        detail: null,
+        icon: <ListBulletsIcon size={GATEWAY_ICON} color={gatewayInk} />,
+      },
+      {
+        key: "currencies",
+        label: t("routes.currencies"),
+        detail: null,
+        icon: <CircleHalfIcon size={GATEWAY_ICON} color={gatewayInk} />,
+      },
+      {
+        key: "rates",
+        label: t("routes.rates"),
+        detail: null,
+        icon: <SlidersHorizontalIcon size={GATEWAY_ICON} color={gatewayInk} />,
+      },
+    ],
+    [gatewayInk, t],
+  );
+
   const ledgerBody = snapshot.error ? (
     <ErrorState
       variant="recoverable"
@@ -390,6 +491,27 @@ export default function Today() {
         </Card>
       )}
       {whereItWent}
+      {/*
+        The appearance control, which the band used to carry in its action
+        slot. `PagerFrame` has no such slot — the bar carries the period,
+        search and nothing else (S04 §3) — and S04 §4 puts this in S30 ·
+        Settings, which does not have it yet. It rides the *Go to* kicker
+        until then: an icon alone on the ground is an unexplained circle, and
+        beside the heading for low-frequency destinations it at least has
+        company and a reason.
+      */}
+      <View style={sectionStyles.goToRow}>
+        <SectionLabel>{t("shell.goTo")}</SectionLabel>
+        <View style={sectionStyles.spacer} />
+        <PreviewAppearanceControls
+          tone="ground"
+          preference={resolved.preference}
+          resetEnabled={PREVIEW_RESET_ENABLED}
+          onPreference={handlePreference}
+          onReset={handleReset}
+        />
+      </View>
+      <GatewayGrid gateways={gateways} onSelect={handleGateway} />
     </>
   ) : (
     <EmptyState
@@ -401,20 +523,6 @@ export default function Today() {
   );
   const body = (
     <>
-      {/*
-        The appearance control, which the band used to carry in its action
-        slot. `PagerFrame` has no such slot — the bar carries the period,
-        search and nothing else (S04 §3) — and S04 §4 says this belongs in
-        S30 · Settings. It sits at the top of Summary until Settings has it:
-        dropping it here would make appearance switching, and the preview
-        reset, reachable from nowhere.
-      */}
-      <PreviewAppearanceControls
-        preference={resolved.preference}
-        resetEnabled={PREVIEW_RESET_ENABLED}
-        onPreference={handlePreference}
-        onReset={handleReset}
-      />
       {typeof message === "string" && !toastDismissed ? (
         <Toast message={message} onDismiss={handleDismissToast} token={toastToken} />
       ) : null}
@@ -434,7 +542,14 @@ export default function Today() {
 
   const pages = useMemo(
     () => [
-      { key: "summary", label: t("shell.summary"), node: body },
+      {
+        // The gutter and the scroll belong to the page, not to the pager: the
+        // List page is a full-bleed virtualised list and would be ruined by
+        // the same wrapper Summary needs.
+        key: "summary",
+        label: t("shell.summary"),
+        node: <GroundPanel onScroll={handleScroll}>{body}</GroundPanel>,
+      },
       {
         key: "list",
         label: t("shell.list"),
@@ -447,11 +562,12 @@ export default function Today() {
             pivotDecimals={leadNetWorth.decimals}
             onPickDay={handlePickDay}
             onOpenTransaction={handleOpenTransaction}
+            onScroll={handleScroll}
           />
         ) : null,
       },
     ],
-    [body, handlePickDay, ledger, leadNetWorth, pager.state.date, t, today],
+    [body, handlePickDay, handleScroll, ledger, leadNetWorth, pager.state.date, t, today],
   );
 
   return (
@@ -459,15 +575,13 @@ export default function Today() {
       periodLabel={
         pager.label.unit === "year"
           ? String(pager.label.year)
-          : pager.label.showYear
-            ? monthLabel(month, locale)
-            : monthLabel(month, locale).replace(/\s+\d{4}$/, "")
+          : // The year is the caption underneath, so the title is the month
+            // alone whichever year it is in.
+            monthLabel(month, locale).replace(/\s+\d{4}$/, "")
       }
-      periodFigure={money.forDisplay(
-        leadPeriodSpend?.spend ?? money.ZERO,
-        leadNetWorth?.decimals ?? 2,
-        decimalMark(locale),
-      )}
+      periodDetail={pager.label.unit === "year" ? null : String(pager.label.year)}
+      onPickPeriod={handlePickPeriod}
+      scrollY={scrollY}
       onPrevious={pager.previous}
       onNext={pager.next}
       onSearch={handleShowAll}

@@ -10,6 +10,7 @@ import { Amount } from "@waltning/ui/fx/amount";
 import { dayLabel, weekdayInitial } from "@waltning/ui/i18n/locales";
 import { useLocale, useT } from "@waltning/ui/i18n/provider";
 import { pageScrollProps } from "@waltning/ui/primitives/nested-scroll";
+import type { ScrollHandler } from "@waltning/ui/shell/card";
 import { text } from "@waltning/ui/theme/fonts";
 import { makeStyles } from "@waltning/ui/theme/styles";
 import { DayHeader } from "@waltning/ui/transactions/day-header";
@@ -20,7 +21,8 @@ import {
 import { LedgerRowItem } from "@waltning/ui/transactions/molecules/ledger-row-item/ledger-row-item";
 import { QuietDay, QuietRun } from "@waltning/ui/transactions/molecules/quiet-days/quiet-days";
 import { useCallback, useMemo } from "react";
-import { FlatList, Text, View } from "react-native";
+import { Text, View } from "react-native";
+import Animated from "react-native-reanimated";
 
 /**
  * S04's List page — the whole ledger, continuous in both directions.
@@ -47,6 +49,12 @@ export type HomeListPageProps = {
   pivotDecimals: number;
   onPickDay: (date: string) => void;
   onOpenTransaction: (id: string) => void;
+  /**
+   * Forwarded to the list, for chrome that moves with the page. This screen
+   * owns its scroller (`GroundPanel` is not in the tree), so it is the only
+   * thing that can report the offset the header collapses from.
+   */
+  onScroll?: ScrollHandler | undefined;
 };
 
 type DayTotal = { pivot: Money; approximate: boolean } | { pivot: null };
@@ -65,6 +73,7 @@ export function HomeListPage({
   pivotDecimals,
   onPickDay,
   onOpenTransaction,
+  onScroll,
 }: HomeListPageProps) {
   const t = useT();
   const locale = useLocale();
@@ -165,12 +174,16 @@ export function HomeListPage({
   return (
     <View style={styles.root}>
       <DayRibbon days={days} current={anchor} onPickDay={onPickDay} />
-      <FlatList
+      <Animated.FlatList
         data={entries}
         renderItem={renderItem}
         keyExtractor={keyExtractor}
         onEndReached={handleEndReached}
         onEndReachedThreshold={END_REACHED_THRESHOLD}
+        onScroll={onScroll}
+        // 16ms: the header interpolates from this, and the default reports
+        // once per gesture — a header that jumps when the finger lifts.
+        scrollEventThrottle={16}
         // The page's own vertical scroller, inside the pager's horizontal one.
         {...pageScrollProps(styles.list)}
       />

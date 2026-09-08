@@ -37,9 +37,16 @@ Browsing the ledger and picking a date are this screen, one swipe away. See §3.
 **S04 is four views of one date, and a swipe moves between them.**
 
 ```
-┌ shell ──────────────────────────────────────────┐
-│  ‹  September  ›            −4 320,18     [🔍] │  ← PeriodBar, shared
+┌ at rest ────────────────────────────────────────┐
+│  September  ⌄                             [🔍]  │  ← PagerHeader, shared
+│  2026                                           │
 │   Summary    List    Calendar    Months         │  ← PageTabs, marker under one
+│  ─────────────────────────────────────────────  │
+└─────────────────────────────────────────────────┘
+
+┌ scrolled ───────────────────────────────────────┐
+│  September 2026 ⌄            [‹│›]        [🔍]  │  ← the same header, collapsed
+│   Summary    List    Calendar    Months         │
 │  ─────────────────────────────────────────────  │
 └─────────────────────────────────────────────────┘
 ```
@@ -59,14 +66,46 @@ exactly. Summary and Months read its month, and **picking a month sets the
 date to that month's newest day** — a reverse-chronological list is entered
 from its end, not its start.
 
-**The chrome is shared and does not move.** One row: the period with its
-arrows, the figure for whatever period the current page is in, and search.
+**The chrome is shared and never scrolls away, but it changes shape.** The
+header has two layouts and the scroll chooses between them, continuously —
+it is one control resizing, not two headers swapping.
 
-**The year appears only when it is not this one.** *September* while you are
-in 2026; *March 2024* once you have stepped out of it. Five things share
-326pt, and the year is the one of them that is usually already known — a bar
-that wrapped to two lines to repeat it would be spending a row on the least
-surprising word on the screen.
+- **At rest** the month is a large title and **the whole title is the picker**:
+  tapping it opens Months, which is where you go when the month you want is not
+  the next one. There are no arrows. At the top of a screen the answer to
+  "somewhere else" is usually not "one step", and a stepper flanking a title
+  makes the title look like a value being scrubbed.
+- **Scrolled** the title shrinks to a single row and **the stepper appears**
+  beside search, as one control with a divider rather than two loose chevrons.
+  The title is no longer a target worth aiming at, and stepping is what you
+  want while reading a month — so the control arrives exactly when the reason
+  for it does.
+
+The month never moves sideways and never changes colour; it changes size, and
+the stepper fades in beside it. The two layouts are stacked and cross-faded at
+the midpoint of the travel — one has finished leaving before the other starts
+arriving, because two layouts at half opacity are two ghosts. Exactly one of
+them is ever in the accessibility tree: opacity is continuous and reachability
+is not, and a reader walking both hears the month twice.
+
+**The collapse is spread over the height the header gives up**, not a round
+number, so the header rises at exactly the speed of the content beneath it and
+the two read as one sheet sliding under another.
+
+**The header navigates; the page reports.** It carries no figure. A draft put
+the current period's total in the row's trailing half and it did not survive
+being rendered: a bare number with no label to say which figure it was, no room
+for its currency, and close enough to the magnifier to read as its caption —
+while the card 100pt below said the same month as three labelled figures with
+the currency on each. The header was carrying a worse copy of what the screen
+already said better.
+
+**The year is a caption, and it is always drawn.** It used to be dropped inside
+the current year, because five things shared 326pt and the year was the one of
+them usually already known. It now sets under the month rather than beside it,
+so it costs a line nobody was using instead of a share of the row — and a rule
+that exists to save width has nothing left to save. Months is the exception:
+there the year is the period, and `2026` under `2026` is the year twice.
 
 **The agent is a tab, because `⌘K` is a desk gesture and the top-right corner
 is the hardest point on a 390pt phone to reach.** S03 has been reachable from
@@ -149,8 +188,8 @@ happened*.
 
 | Component | Notes |
 |---|---|
-| `Shell` | `PeriodBar` + `PageTabs`, shared by all four pages and never scrolled away |
-| `PeriodBar` | The period with its arrows, the current page's figure, search, and the agent. The arrows step **the unit the page is in**; the year is drawn only when it is not the current one |
+| `Shell` | `PagerHeader` + `PageTabs`, shared by all four pages and never scrolled away |
+| `PagerHeader` | The period and search, in two layouts the scroll moves between: a large title that is itself the picker, collapsing to a compact title with a stepper beside it. The arrows step **the unit the page is in**; the year is a caption under the title |
 | `PageTabs` | Summary · List · Calendar · Months, a marker on a hairline. What makes the swipe discoverable |
 | `Pager` | The four pages, swiped or tapped between, over one shared date |
 | `GatewayGrid` | Summary's *Go to* — six cards, each with a figure. Only destinations neither the tab bar **nor the shared bar** carries, which is why Accounts, Debt and the agent are absent from it |
@@ -182,7 +221,7 @@ the pager answers it with two of its own pages and a swipe, which is the same
 reach without a panel to open and close. Reports (§7) still wants a picker,
 because a report has no pager to borrow.
 
-**`PeriodHeader` retires into `PeriodBar`.** Its arrows and its *Today* are
+**`PeriodHeader` retires into `PagerHeader`.** Its arrows and its *Today* are
 here, stepping whatever unit the page is in.
 
 ## 5. Data

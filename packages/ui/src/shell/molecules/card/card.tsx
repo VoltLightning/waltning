@@ -101,7 +101,8 @@
  * spreads the values onto the list's own `contentContainerStyle`.
  */
 
-import { ScrollView, Text, View } from "react-native";
+import { Text, View } from "react-native";
+import Animated, { type useAnimatedScrollHandler } from "react-native-reanimated";
 import { Tag } from "../../../primitives/atoms/tag";
 import { pageScrollProps } from "../../../primitives/nested-scroll.ts";
 import { useSafeArea } from "../../../primitives/safe-area";
@@ -109,6 +110,16 @@ import { text } from "../../../theme/fonts.ts";
 import { makeStyles } from "../../../theme/styles.ts";
 import { hairline, radius, space } from "../../../tokens.ts";
 import { useFloatingClearance } from "../../atoms/floating-clearance";
+
+/**
+ * A Reanimated scroll handler, named once so the two components that forward
+ * one agree on it.
+ *
+ * Reanimated's, not React Native's: the header this feeds interpolates its
+ * shape on the UI thread, and a plain `onScroll` would put a JS round-trip
+ * between the finger and the header on every frame.
+ */
+export type ScrollHandler = ReturnType<typeof useAnimatedScrollHandler>;
 
 export type CardProps = {
   title?: string;
@@ -171,9 +182,23 @@ export type GroundPanelProps = {
    * is where its own scroller's bottom is decided.
    */
   clearBottom?: boolean;
+  /**
+   * Forwarded to the panel's scroller, for chrome that has to move with the
+   * page — S04's header collapses from it.
+   *
+   * **Read in `scroll="page"` only**: in `scroll="own"` this component is a
+   * `View` and there is no scroller here to listen to. The screen that owns
+   * the list is the one that can report it, and does.
+   */
+  onScroll?: ScrollHandler | undefined;
 };
 
-export function GroundPanel({ children, scroll = "page", clearBottom = true }: GroundPanelProps) {
+export function GroundPanel({
+  children,
+  scroll = "page",
+  clearBottom = true,
+  onScroll,
+}: GroundPanelProps) {
   const styles = useStyles();
   const insets = useSafeArea();
   const floatClearance = useFloatingClearance();
@@ -199,8 +224,12 @@ export function GroundPanel({ children, scroll = "page", clearBottom = true }: G
 
   return (
     <View style={styles.panel}>
-      <ScrollView
+      <Animated.ScrollView
         testID="ground-panel-scroll"
+        onScroll={onScroll}
+        // 16ms: the header derives its shape from this, and a default of 0
+        // reports once per gesture — a header that jumps when the finger lifts.
+        scrollEventThrottle={16}
         {...pageScrollProps(styles.scroll)}
         contentContainerStyle={[styles.scrollContent, clearance]}
         keyboardShouldPersistTaps="handled"
@@ -210,7 +239,7 @@ export function GroundPanel({ children, scroll = "page", clearBottom = true }: G
         automaticallyAdjustKeyboardInsets
       >
         {children}
-      </ScrollView>
+      </Animated.ScrollView>
     </View>
   );
 }

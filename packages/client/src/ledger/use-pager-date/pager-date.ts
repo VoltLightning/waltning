@@ -77,22 +77,21 @@ export function goToPage(state: PagerState, page: PagerPageKey): PagerState {
  * never import; handing back parts keeps the seam and makes the one rule worth
  * testing testable without a locale.
  *
- * **`showYear` is false while the period is in the current year** (S04 §3):
- * five things share 326pt, and the year is the one of them usually already
- * known. `September` in 2026, `March 2024` once you have stepped out of it.
+ * **The year is a part of its own, not a flag** (S04 §3). It used to be
+ * dropped inside the current year, because five things shared 326pt and the
+ * year was the one of them usually already known. The header now sets it as a
+ * caption under the month rather than beside it, so it costs a line nobody was
+ * using instead of a share of the row — and a rule that exists to save width
+ * has nothing to save.
  */
 export type PeriodLabel =
-  | { unit: "month"; month: YearMonth; showYear: boolean }
+  | { unit: "month"; month: YearMonth; year: number }
   | { unit: "year"; year: number };
 
-export function periodLabel(state: PagerState, today: AccountingDate): PeriodLabel {
+export function periodLabel(state: PagerState): PeriodLabel {
   const year = Number(state.date.slice(0, 4));
   if (stepUnitOf(state.page) === "year") return { unit: "year", year };
-  return {
-    unit: "month",
-    month: yearMonth(state.date.slice(0, 7)),
-    showYear: year !== Number(today.slice(0, 4)),
-  };
+  return { unit: "month", month: yearMonth(state.date.slice(0, 7)), year };
 }
 
 /**

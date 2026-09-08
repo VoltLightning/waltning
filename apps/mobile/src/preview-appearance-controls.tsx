@@ -17,6 +17,15 @@ function isAppearancePreference(value: string): value is AppearancePreference {
 }
 
 export type PreviewAppearanceControlsProps = {
+  /**
+   * Which ground it sits on.
+   *
+   * `shell` was the only caller while this lived in the band's action slot.
+   * S04's pager has no action slot, so it sits on the ground of the Summary
+   * page until S30 · Settings carries it — and a shell-toned control on the
+   * ground is an invisible circle.
+   */
+  tone?: "ground" | "shell";
   preference: AppearancePreference;
   resetEnabled: boolean;
   onPreference: (preference: AppearancePreference) => Promise<void>;
@@ -24,6 +33,7 @@ export type PreviewAppearanceControlsProps = {
 };
 
 export function PreviewAppearanceControls({
+  tone = "shell",
   preference,
   resetEnabled,
   onPreference,
@@ -66,7 +76,7 @@ export function PreviewAppearanceControls({
         width of the word *Appearance* and the loudest thing on the band — a
         setting outranking the figures the screen exists to show.
       */}
-      <IconButton label={t("preview.appearance")} onPress={showAppearance} tone="shell">
+      <IconButton label={t("preview.appearance")} onPress={showAppearance} tone={tone}>
         <AppearanceIcon />
       </IconButton>
       <BottomSheet

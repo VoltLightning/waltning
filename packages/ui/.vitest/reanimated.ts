@@ -36,3 +36,5 @@ export const Extrapolation = m.Extrapolation;
 // that arithmetic pulled into a plain `.ts` function and exercised directly,
 // where `vitest` runs it for real rather than through this mock.
 export const interpolate = m.interpolate;
+export const useAnimatedReaction = m.useAnimatedReaction;
+export const useAnimatedScrollHandler = m.useAnimatedScrollHandler;

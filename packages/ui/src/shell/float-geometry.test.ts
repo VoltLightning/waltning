@@ -42,11 +42,16 @@ describe("the floating add button's geometry (§2.9)", () => {
   });
 
   it("never rests on an edge — the inset holds on every side", () => {
+    // A release above the chrome lands *below* it: `headroom` keeps the button
+    // out of a tab root's own period bar and page tabs, which it would
+    // otherwise cover — and covering navigation is worse than being slightly
+    // further from a thumb.
+    const top = 59 + 16 + floating.headroom;
     const from = defaultFloat(phone, notched);
-    expect(releaseAt(from, -40, 10, phone, notched)).toEqual({ x: 16, y: 59 + 16, dock: null });
+    expect(releaseAt(from, -40, 10, phone, notched)).toEqual({ x: 16, y: top, dock: null });
     expect(releaseAt(from, 900, 10, phone, notched)).toEqual({
       x: 390 - 16 - floating.size,
-      y: 59 + 16,
+      y: top,
       dock: null,
     });
   });

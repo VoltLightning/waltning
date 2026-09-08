@@ -39,7 +39,9 @@ type Range = { minX: number; maxX: number; minY: number; maxY: number };
 function range(bounds: FloatBounds, insets: SafeAreaInsets): Range {
   "worklet";
   const minX = insets.left + floating.inset;
-  const minY = insets.top + floating.inset;
+  // `headroom`, not just the inset: a tab root carries its own chrome up
+  // there, and a button parked over it hides navigation (§2.9).
+  const minY = insets.top + floating.inset + floating.headroom;
   return {
     minX,
     minY,
