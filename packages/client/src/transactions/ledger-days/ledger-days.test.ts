@@ -1,7 +1,7 @@
 import { accountingDate } from "@waltning/core/date";
 import { currencyCode, pivotPerUnit, toMoney } from "@waltning/core/money";
 import { describe, expect, it } from "vitest";
-import { type LedgerDayRow, toLedgerItems } from "./ledger-days.ts";
+import { type LedgerDayRow, ribbonDays, toLedgerItems } from "./ledger-days.ts";
 
 const PLN = currencyCode("PLN");
 const EUR = currencyCode("EUR");
@@ -150,5 +150,48 @@ describe("toLedgerItems", () => {
 
   it("returns nothing for no rows", () => {
     expect(toLedgerItems([], PLN)).toEqual([]);
+  });
+});
+
+describe("ribbonDays", () => {
+  const day = (date: string, ...amounts: string[]) => amounts.map((a) => row(date, a));
+
+  it("makes heavy relative to what is on screen, not to an absolute figure", () => {
+    // A ledger whose largest day is 200 and one whose largest is 20 000 would
+    // otherwise draw every mark the same size — the mark exists to say this
+    // day was unusual for you.
+    const items = toLedgerItems(
+      [...day("2026-08-14", "-200"), ...day("2026-08-13", "-20"), ...day("2026-08-12", "-120")],
+      PLN,
+    );
+    expect(ribbonDays(items).map((d) => d.activity)).toEqual(["heavy", "some", "heavy"]);
+  });
+
+  it("calls a day that nets to zero with rows on it flat, never in or out", () => {
+    // Transfers between your own accounts: money moved and none of it left.
+    const items = toLedgerItems([...day("2026-08-14", "-100", "100")], PLN);
+    expect(ribbonDays(items)[0]).toMatchObject({ direction: "flat", activity: "some" });
+  });
+
+  it("reads a positive day as in", () => {
+    const items = toLedgerItems([...day("2026-08-14", "7850")], PLN);
+    expect(ribbonDays(items)[0]).toMatchObject({ direction: "in" });
+  });
+
+  it("says something happened on a day it cannot price, and no more", () => {
+    const items = toLedgerItems(
+      [row("2026-08-14", "-50", { toAmount: toMoney("50"), toCurrency: EUR, toFxRate: null })],
+      PLN,
+    );
+    expect(ribbonDays(items)[0]).toMatchObject({
+      activity: "some",
+      direction: "flat",
+      pivot: null,
+    });
+  });
+
+  it("counts the entries, so the label can say how many", () => {
+    const items = toLedgerItems([...day("2026-08-14", "-10", "-20", "-30")], PLN);
+    expect(ribbonDays(items)[0]?.entries).toBe(3);
   });
 });
