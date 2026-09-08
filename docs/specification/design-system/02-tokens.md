@@ -441,7 +441,7 @@ keeps a desk-width throw from carrying it through the wall.
 
 **Hold it over the tab bar and it falls in.** Dragged onto the bar and held
 there — long enough to be a decision rather than a slip — it snaps into the bar
-as a 44×44 item between Accounts and Debt, losing its shadow and its circle
+as a 44×44 item between Accounts and the agent, losing its shadow and its circle
 because a docked button is bar furniture, not a layer above one. The bar keeps
 its four tabs and gains a fifth target; nothing is displaced, because the tabs
 were never using that width.

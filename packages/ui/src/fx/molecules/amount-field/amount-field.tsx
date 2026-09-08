@@ -168,11 +168,20 @@ function HeroAmountField({
     );
   }
 
+  // `react-native-web` never reads the `accessibilityState` object:
+  // `createDOMProps` recognises only this flat legacy name, so
+  // `aria-selected` never reaches the DOM without it. `conformance.test.ts`
+  // refuses one without the other.
+  const ariaSelectedProps: { accessibilitySelected: boolean } = {
+    accessibilitySelected: active,
+  };
+
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
       accessibilityState={{ selected: active }}
+      {...ariaSelectedProps}
       onPress={onPress}
     >
       <View style={[styles.heroField, active ? styles.heroFieldActive : null]}>

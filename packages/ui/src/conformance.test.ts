@@ -64,6 +64,54 @@ describe("the 44px floor, fixed at the source (§10)", () => {
   });
 });
 
+/**
+ * **Native accessibility props that never reach the web DOM.**
+ *
+ * `react-native-web`'s `createDOMProps` reads a narrow set of names, and the
+ * RN-core object forms are not among them: `accessibilityState` is ignored in
+ * favour of the flat legacy `accessibilitySelected`/`accessibilityDisabled`,
+ * and `accessibilityElementsHidden`/`importantForAccessibility` are mapped to
+ * nothing at all. A component that sets only the native form is correct on a
+ * phone and silently inaccessible on the web build — the same codebase, half
+ * the users.
+ *
+ * This has now been found three times by hand: `TabBar` documented it,
+ * `PageTabs` repeated it, and `Pager` repeated the hidden-elements half. Three
+ * times is a rule.
+ *
+ * **Only the two pairs actually verified are checked.** `TabBar` proved the
+ * `selected` gap and `Pager`'s own test proved the hidden-elements one. RNW's
+ * handling of `checked` and `expanded` is not asserted here, because nobody
+ * has watched them fail — a check on a guess is a check that gets deleted the
+ * first time it fires wrongly.
+ */
+describe("accessibility that crosses to the web build", () => {
+  const NATIVE_ONLY: readonly { native: RegExp; web: RegExp; fix: string }[] = [
+    {
+      // `selected` as a state of its own — never `checked: selected`,
+      // which is `aria-checked` and a different question.
+      native: /accessibilityState=\{\{\s*selected\b/,
+      web: /accessibilitySelected|aria-selected/,
+      fix: "add `accessibilitySelected` — react-native-web ignores the state object",
+    },
+    {
+      native: /accessibilityElementsHidden/,
+      web: /"aria-hidden"|aria-hidden=/,
+      fix: "add `aria-hidden` — react-native-web maps neither native prop",
+    },
+  ];
+
+  it("never states a selection or a hidden subtree in the native form alone", () => {
+    const offenders = all.flatMap((c) =>
+      NATIVE_ONLY.filter((rule) => rule.native.test(c.text) && !rule.web.test(c.text)).map(
+        (rule) => `${c.name}: ${rule.fix}`,
+      ),
+    );
+
+    expect(offenders, "native-only accessibility props").toEqual([]);
+  });
+});
+
 describe("the focus ring, on every interactive element (§2.6)", () => {
   it("is never omitted", () => {
     // "Never removed, never replaced by a colour change alone." A colour-only

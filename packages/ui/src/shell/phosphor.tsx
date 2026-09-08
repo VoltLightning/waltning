@@ -128,3 +128,43 @@ export function CircleHalfIcon({ size, color }: PhosphorIconProps) {
     </Svg>
   );
 }
+
+/**
+ * Three regular-weight glyphs for `PeriodBar`, not duotone.
+ *
+ * §2.8 gives duotone to *navigation* — the tab bar is the navigation, and a
+ * chevron that steps a month is a control. A duotone caret at 18px is a
+ * smudge: the tone layer has nowhere to sit inside a stroke that thin.
+ */
+export function CaretLeftIcon({ size, color }: PhosphorIconProps) {
+  return (
+    <Svg width={size} height={size} viewBox={VIEW_BOX}>
+      <Path
+        d="M165.66 202.34a8 8 0 0 1-11.32 11.32l-80-80a8 8 0 0 1 0-11.32l80-80a8 8 0 0 1 11.32 11.32L91.31 128Z"
+        fill={color}
+      />
+    </Svg>
+  );
+}
+
+export function CaretRightIcon({ size, color }: PhosphorIconProps) {
+  return (
+    <Svg width={size} height={size} viewBox={VIEW_BOX}>
+      <Path
+        d="M181.66 133.66l-80 80a8 8 0 0 1-11.32-11.32L164.69 128 90.34 53.66a8 8 0 0 1 11.32-11.32l80 80a8 8 0 0 1 0 11.32"
+        fill={color}
+      />
+    </Svg>
+  );
+}
+
+export function MagnifyingGlassIcon({ size, color }: PhosphorIconProps) {
+  return (
+    <Svg width={size} height={size} viewBox={VIEW_BOX}>
+      <Path
+        d="M229.66 218.34l-50.06-50.06a88.21 88.21 0 1 0-11.32 11.32l50.06 50.06a8 8 0 0 0 11.32-11.32M40 112a72 72 0 1 1 72 72 72.08 72.08 0 0 1-72-72"
+        fill={color}
+      />
+    </Svg>
+  );
+}
