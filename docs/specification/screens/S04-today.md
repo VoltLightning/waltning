@@ -38,7 +38,7 @@ Browsing the ledger and picking a date are this screen, one swipe away. See §3.
 
 ```
 ┌ shell ──────────────────────────────────────────┐
-│  ‹  September  ›       −4 320,18    [🔍]  [✦] │  ← PeriodBar, shared
+│  ‹  September  ›            −4 320,18     [🔍] │  ← PeriodBar, shared
 │   Summary    List    Calendar    Months         │  ← PageTabs, marker under one
 │  ─────────────────────────────────────────────  │
 └─────────────────────────────────────────────────┘
@@ -60,8 +60,7 @@ date to that month's newest day** — a reverse-chronological list is entered
 from its end, not its start.
 
 **The chrome is shared and does not move.** One row: the period with its
-arrows, the figure for whatever period the current page is in, search, and the
-agent.
+arrows, the figure for whatever period the current page is in, and search.
 
 **The year appears only when it is not this one.** *September* while you are
 in 2026; *March 2024* once you have stepped out of it. Five things share
@@ -69,12 +68,14 @@ in 2026; *March 2024* once you have stepped out of it. Five things share
 that wrapped to two lines to repeat it would be spending a row on the least
 surprising word on the screen.
 
-**The agent has a button, because `⌘K` is a desk gesture.** S03 has been
-reachable from any screen since it was written, and on the phone it was
-reachable from nowhere. It sits in the shared bar rather than on Summary,
-because *ask the ledger* is not a place you go from one page — it is the thing
-you do while looking at any of them, and a question is usually about what is
-already on screen.
+**The agent is a tab, because `⌘K` is a desk gesture and the top-right corner
+is the hardest point on a 390pt phone to reach.** S03 has been reachable from
+any screen since it was written, and on the phone it was reachable from
+nowhere. A header button was drafted first and did not survive its own
+argument: it was justified as *contextual*, then routed to a full screen that
+drops the context. Tier 1 at a few-times-a-week is tab frequency, every other
+top-level destination is a tab, and the bottom bar is the half of the screen a
+thumb owns.
 **The arrows step the unit the page is in** — a month on Summary, List and
 Calendar; a year on Months — and the label always says which, so the control
 never has to be explained.
@@ -95,19 +96,24 @@ same action as swiping to it; neither is the primary.
 │  ┌ Where it went ──────────────────────────────┐│  ← SpendRows, §6
 │  └─────────────────────────────────────────────┘│
 │  GO TO                                          │
-│    Import              Recurring                │
-│    Subscriptions       Categories               │
-│    Tax timeline        Reports                  │
+│    Between us          Import                   │
+│    Recurring           Subscriptions            │
+│    Categories          Tax timeline             │
 ```
 
 **The landing page, and the one the app opens on.** §1's question is answered
 here; the other three are where you go once it has been.
 
-***Go to* carries only what nothing else does.** Accounts and Debt are tabs
-and the agent is in the bar, so a card for any of them would be a second door
-into the same room — and a second door is worse than none, because now there
-are two things to keep current. Each card carries a figure, so the grid reads
-as status rather than as a menu.
+***Go to* carries only what nothing else does.** Accounts and the agent are
+tabs, so a card for either would be a second door into the same room — and a
+second door is worse than none, because now there are two things to keep
+current.
+
+**Debt is here rather than in the tab bar, and gains by it.** *Between us* is a
+figure you check, not a place you live; as a tab it was a word and an icon, and
+as a card it carries `+1 480,00 zł · 3 people`. Every card carries a figure, so
+the grid reads as status rather than as a menu — which is the whole reason a
+low-frequency destination is better off in it.
 
 #### List
 
@@ -145,7 +151,6 @@ happened*.
 |---|---|
 | `Shell` | `PeriodBar` + `PageTabs`, shared by all four pages and never scrolled away |
 | `PeriodBar` | The period with its arrows, the current page's figure, search, and the agent. The arrows step **the unit the page is in**; the year is drawn only when it is not the current one |
-| `AgentButton` | In the bar, on every page → S03. The phone's answer to a desk's `⌘K` |
 | `PageTabs` | Summary · List · Calendar · Months, a marker on a hairline. What makes the swipe discoverable |
 | `Pager` | The four pages, swiped or tapped between, over one shared date |
 | `GatewayGrid` | Summary's *Go to* — six cards, each with a figure. Only destinations neither the tab bar **nor the shared bar** carries, which is why Accounts, Debt and the agent are absent from it |
@@ -166,7 +171,7 @@ happened*.
 | `Banner(warn)` | Unsettled clearing — rendered **only when non-zero**, with one action |
 | `TodayPill` | Floats over the list when the list is away from today. The only way back from a jump (§6) |
 | `FilterChip` | The carried filter, pinned under `PageTabs`: what it is, and an `✕` that clears it. One chip — this screen receives a filter, it does not compose them. Composing is `FilterBar`, and it is S10's, on the desk |
-| `TabBar` | 4 tabs, all ≥44px — Home · Accounts · Debt · Settings. **No Ledger tab**: this screen is the ledger, so one would lead where you already are. `+` is not a tab, though it may come to rest in the bar (`02-tokens` §2.9) |
+| `TabBar` | 4 tabs, all ≥44px — Home · Accounts · **Agent** · Settings. **No Ledger tab**: this screen is the ledger, so one would lead where you already are. **No Debt tab**: it is a figure you check, not a place you live, and it reads better in *Go to* where it can carry one. `+` is not a tab, though it may come to rest between Accounts and Agent (`02-tokens` §2.9) |
 | `FloatingAdd` | The `+`, above everything, wherever it was last put (`02-tokens` §2.9) |
 | `EmptyState(first-run)` | No accounts — offers create; the import path is S29's and arrives with it. No transactions — §6 |
 | `AppearanceButton` · `BottomSheet(appearance)` | Moved to S30 · Settings. The header has one action, and it is the picker |

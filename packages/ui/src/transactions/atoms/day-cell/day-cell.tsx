@@ -27,12 +27,21 @@ import { focus, radius, space, tabularNums, touchTarget } from "../../../tokens.
 /** How much moved that day, in three steps a reader can tell apart at a glance. */
 export type DayActivity = "none" | "some" | "heavy";
 
+/**
+ * Which way the day netted. `flat` is not "nothing" — it is a day where money
+ * moved and none of it left, which is what a day of transfers between your own
+ * accounts looks like, and the honest mark for it is neither colour.
+ */
+export type DayDirection = "out" | "in" | "flat";
+
 export type DayCellProps = {
   /** One letter, already localised — the ribbon resolves it once for the week. */
   weekday: string;
   /** The day of the month, as drawn. */
   day: number;
   activity: DayActivity;
+  /** Defaults to `flat`, which is what a day with no rows nets to anyway. */
+  direction?: DayDirection;
   /** The day the list is currently showing. At most one cell in a ribbon. */
   current?: boolean;
   /** The real today, which stays marked wherever the list has scrolled to. */
@@ -48,6 +57,7 @@ function DayCellView({
   weekday,
   day,
   activity,
+  direction = "flat",
   current = false,
   today = false,
   ahead = false,
@@ -76,15 +86,33 @@ function DayCellView({
     >
       <Text style={sub}>{weekday}</Text>
       <Text style={ink}>{day}</Text>
-      <View style={[styles.mark, markStyle(styles, activity, today)]} />
+      <View style={[styles.mark, ...markStyle(styles, activity, direction, today)]} />
     </Pressable>
   );
 }
 
-function markStyle(styles: ReturnType<typeof useStyles>, activity: DayActivity, today: boolean) {
-  if (activity === "none") return styles.markNone;
-  if (today) return activity === "heavy" ? styles.markHeavyOnFill : styles.markSomeOnFill;
-  return activity === "heavy" ? styles.markHeavy : styles.markSome;
+/**
+ * **Three channels, and none of them is hue alone.** Size is how much moved,
+ * colour is which way it went, and a ring against a fill says the direction
+ * again without colour. Red and green are the one pair a colourblind reader
+ * cannot separate, so the third channel is not decoration — it is what makes
+ * the second legal (WCAG 1.4.1).
+ *
+ * On today's accent fill every mark goes white: a coloured mark on a coloured
+ * ground is the one place the pair stops clearing its contrast.
+ */
+function markStyle(
+  styles: ReturnType<typeof useStyles>,
+  activity: DayActivity,
+  direction: DayDirection,
+  today: boolean,
+): object[] {
+  if (activity === "none") return [styles.markNone];
+  const size = activity === "heavy" ? styles.markHeavy : styles.markSome;
+  if (today) return [size, styles.markOnFill];
+  if (direction === "in") return [size, styles.markIn];
+  if (direction === "out") return [size, styles.markOut];
+  return [size, styles.markFlat];
 }
 
 export const DayCell = memo(DayCellView);
@@ -126,8 +154,13 @@ const useStyles = makeStyles((theme) => ({
   subOnFill: { ...text.ui("caption", 600), color: theme.textOnAccent },
   mark: { borderRadius: radius.pill },
   markNone: { width: 5, height: 5, backgroundColor: theme.insetFill },
-  markSome: { width: 6, height: 6, backgroundColor: theme.textMuted },
-  markHeavy: { width: 9, height: 9, backgroundColor: theme.text },
-  markSomeOnFill: { width: 6, height: 6, backgroundColor: theme.textOnAccent },
-  markHeavyOnFill: { width: 9, height: 9, backgroundColor: theme.textOnAccent },
+  markSome: { width: 8, height: 8 },
+  markHeavy: { width: 12, height: 12 },
+  // Filled for out, a ring for in — the money colours, unchanged. A saturated
+  // pair was drawn and rejected: the figures and the marks disagreeing about
+  // what green means is worse than a mark that is quiet at 8px.
+  markOut: { backgroundColor: theme.spend },
+  markIn: { borderWidth: 2, borderColor: theme.income },
+  markFlat: { backgroundColor: theme.textMuted },
+  markOnFill: { backgroundColor: theme.textOnAccent },
 }));

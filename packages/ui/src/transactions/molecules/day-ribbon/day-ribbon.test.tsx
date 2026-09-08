@@ -33,6 +33,7 @@ const HEAVY: RibbonDay = {
   day: 14,
   weekday: "T",
   activity: "heavy",
+  direction: "out",
   label: "Thursday 14 August, 296 out, 3 entries",
 };
 const SOME: RibbonDay = {
@@ -40,7 +41,8 @@ const SOME: RibbonDay = {
   day: 15,
   weekday: "F",
   activity: "some",
-  label: "Friday 15 August, 42 out, 1 entry",
+  direction: "in",
+  label: "Friday 15 August, 7 850 in, 1 entry",
 };
 const DAYS: readonly RibbonDay[] = [QUIET, HEAVY, SOME];
 
@@ -110,4 +112,20 @@ it("re-renders no cell at all when only the parent re-rendered", () => {
   view.rerender(tree);
 
   expect(renders.get(HEAVY.label) ?? 0).toBe(before);
+});
+
+it("keeps a flat day neutral — money moved and none of it left", () => {
+  // A day of transfers between your own accounts nets to zero. Colouring it
+  // either way would be a claim about direction the day does not make, and
+  // marking it "nothing" would hide that anything happened at all.
+  const flat: RibbonDay = {
+    date: "2026-08-16",
+    day: 16,
+    weekday: "S",
+    activity: "some",
+    direction: "flat",
+    label: "Saturday 16 August, moved between your accounts, 2 entries",
+  };
+  draw({ days: [flat], current: "2026-08-16" });
+  expect(screen.getByRole("button", { name: /moved between your accounts/ })).toBeTruthy();
 });

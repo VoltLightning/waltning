@@ -23,7 +23,7 @@ import { ScrollView } from "react-native";
 import { horizontalScrollProps } from "../../../primitives/nested-scroll.ts";
 import { makeStyles } from "../../../theme/styles.ts";
 import { space } from "../../../tokens.ts";
-import { type DayActivity, DayCell } from "../../atoms/day-cell/day-cell";
+import { type DayActivity, DayCell, type DayDirection } from "../../atoms/day-cell/day-cell";
 
 export type RibbonDay = {
   /** `YYYY-MM-DD`, and the identity of the cell. */
@@ -33,6 +33,8 @@ export type RibbonDay = {
   /** One localised letter. */
   weekday: string;
   activity: DayActivity;
+  /** Which way the day netted. Absent is `flat` — money moved and none of it left. */
+  direction?: DayDirection;
   today?: boolean;
   ahead?: boolean;
   /** The full date and what happened — what a screen reader hears instead of "14". */
@@ -72,6 +74,7 @@ function RibbonCell({
       weekday={day.weekday}
       day={day.day}
       activity={day.activity}
+      direction={day.direction ?? "flat"}
       current={current}
       today={day.today ?? false}
       ahead={day.ahead ?? false}
@@ -117,4 +120,4 @@ const useStyles = makeStyles(() => ({
   track: { flexDirection: "row", gap: space.xs, paddingHorizontal: space.x3 },
 }));
 
-export type { DayActivity };
+export type { DayActivity, DayDirection };

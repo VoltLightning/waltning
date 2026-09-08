@@ -53,6 +53,8 @@ calendar is worth having: a month grid you can read without opening anything.
 
 Year gains a twelve-column strip with the sparkline at usable height.
 
+**Its phone form is S04's Calendar page, and the mark is shared.** Size is how much moved, colour is which way the day netted in the money colours, and filled against ring repeats the direction without hue — the third channel is what keeps the second legal, since red and green are the one pair a colourblind reader cannot separate (S04 §3). A day that nets to zero with activity stays neutral.
+
 ## 4. Components
 
 | Component | Notes |

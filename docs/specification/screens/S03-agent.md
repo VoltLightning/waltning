@@ -25,7 +25,7 @@ way by construction; nothing here is a special case.
 | From | Via | Back to |
 |---|---|---|
 | Nav | Agent | — |
-| S04 | The agent button in `PeriodBar` — every page of the pager | S04, on the page you left |
+| Tab bar | Agent | The tab you came from |
 | Any screen | `⌘K` on a keyboard | Where you were |
 
 **Exits** — a result row → S09 · a workbook → S27 · a proposed category → S19.
