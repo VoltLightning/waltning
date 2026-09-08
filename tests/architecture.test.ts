@@ -2921,6 +2921,10 @@ describe("a control's edge is not the divider colour", () => {
    */
   const AREA_EDGES = new Map([
     [
+      "packages/ui/src/transactions/molecules/quiet-days/quiet-days.tsx#run",
+      "a card standing in for the days it collapsed — an area in the list, with its own pressable inside it",
+    ],
+    [
       "packages/ui/src/primitives/atoms/select/select.tsx#panel",
       "the dropdown's own surface, not the control that opens it",
     ],
