@@ -1,7 +1,7 @@
 # S18 · Settings · Exchange rates
 
 **Surface** both · **Journeys** J10, J11 · **Frequency** rare, and after every failure
-**Design** none
+**Design** [S18.html](design/S18.html)
 **Status** specified · tier 3
 
 ---

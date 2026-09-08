@@ -6,7 +6,14 @@
     "useIgnoreFile": true
   },
   "files": {
-    "includes": ["**", "!**/drizzle/meta", "!**/drizzle/*/meta", "!design", "!pnpm-lock.yaml"]
+    "includes": [
+      "**",
+      "!**/drizzle/meta",
+      "!**/drizzle/*/meta",
+      "!design",
+      "!docs/specification/screens/design",
+      "!pnpm-lock.yaml"
+    ]
   },
   "formatter": {
     "enabled": true,

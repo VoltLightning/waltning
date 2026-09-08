@@ -1,7 +1,7 @@
 # S15 · Counterparty editor
 
 **Surface** both · **Journeys** J7, J8, J15 · **Frequency** occasional
-**Design** none
+**Design** [S15.html](design/S15.html)
 **Status** specified · tier 2
 
 ---

@@ -1,7 +1,7 @@
 # S06 · Category sheet
 
 **Surface** both · **Journeys** J2, J3, J4, J5 · **Frequency** several times a day
-**Design** Claude Design project
+**Design** [S06.html](design/S06.html)
 **Status** specified · tier 1
 
 ---

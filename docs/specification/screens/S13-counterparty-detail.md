@@ -1,7 +1,7 @@
 # S13 · Counterparty detail
 
 **Surface** both · **Journeys** J7, J8 · **Frequency** weekly
-**Design** none
+**Design** [S13.html](design/S13.html)
 **Status** specified · tier 2
 
 ---

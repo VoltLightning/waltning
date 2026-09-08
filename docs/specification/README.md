@@ -120,6 +120,25 @@ state.
 
 ### Screens
 
+**Every screen doc names its design, and the design is a drawing.** Each
+`screens/Sxx-*.md` carries a `**Design**` line pointing at
+`screens/design/Sxx.html` — a self-contained page holding that screen at 390pt,
+openable in any browser, committed beside the prose it illustrates. A screen
+with more than one drawn state names each file.
+
+**The HTML is never the implementation.** It exists so the prose has something
+to point at, and so a layout claim can be checked by looking rather than by
+imagining. The screen ships as React Native against `packages/ui`, composed
+from the components §4 of its doc names — nobody copies markup out of these
+files, and a component that appears in a drawing but not in a `## 4. Components`
+table does not exist. Where the drawing and the doc disagree, the doc is the
+specification and the drawing is out of date.
+
+`tests/docs-consistency.test.ts` holds the two halves to each other: every
+`Design` link resolves, and every file under `design/` belongs to a screen that
+exists.
+
+
 **One document per concept, both surfaces inside it** (`_TEMPLATE-screen.md`
 §3). Purpose, components, data, states and rules are written once; only layout
 and interaction split into mobile and web subsections.

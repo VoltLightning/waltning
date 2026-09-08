@@ -1,7 +1,7 @@
 # S01 · Dashboard
 
 **Surface** wide (RN Web / DeX / iPad) · **Journeys** J6, J4, J8, J11 · **Frequency** daily
-**Design** Claude Design project
+**Design** none — the desk layout is not drawn yet
 **Status** specified · tier 1
 
 ---

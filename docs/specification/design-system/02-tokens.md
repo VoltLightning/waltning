@@ -437,14 +437,26 @@ the inset, at the height it was dropped — the height is the user's, the side
 is the nearer one, and it never rests on the edge itself. The settle is a
 spring with a visible bounce, and the bounce is bounded: its damping is solved
 from the distance so the overshoot is at most half the inset, which is what
-keeps a desk-width throw from carrying it through the wall. Push it off the
-bottom and it docks as a 44×22 tab with a chevron, at the column it was
-dropped, sitting on top of the safe area rather than inside it. Tap the tab
-and it returns to its last floating position, not the default. Position and
-docked state are a **device preference** — stored like the appearance
-setting, never a registry operation, never synced. It stays a button:
-focusable, labelled, and a keyboard user is never asked to drag; tap always
-adds, only a real drag moves it.
+keeps a desk-width throw from carrying it through the wall.
+
+**Hold it over the tab bar and it falls in.** Dragged onto the bar and held
+there — long enough to be a decision rather than a slip — it snaps into the bar
+as a 44×44 item between Accounts and Debt, losing its shadow and its circle
+because a docked button is bar furniture, not a layer above one. The bar keeps
+its four tabs and gains a fifth target; nothing is displaced, because the tabs
+were never using that width.
+
+**Docked, tap still adds. Long-press pops it back out**, to its last floating
+position rather than the default. That split is the whole reason docking is
+safe: the button's one job survives the move, so a mis-drag costs a long-press
+and never a trip through settings. The undock gesture lives on the button
+itself and never on the bar, so nobody finds it by reaching for a tab.
+
+Position and docked state are a **device preference** — stored like the
+appearance setting, never a registry operation, never synced. It stays a button
+throughout: focusable, labelled, and a keyboard user is never asked to drag; tap
+always adds, only a real drag moves it, and docked it is an ordinary member of
+the bar's focus order.
 
 **And the page under it leaves room for it.** Being over everything is what
 makes the button findable and what makes it cover things: a page whose bottom

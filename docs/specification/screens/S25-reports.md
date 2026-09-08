@@ -1,7 +1,7 @@
 # S25 · Reports
 
 **Surface** wide · **Journeys** J6, J11 · **Frequency** weekly to monthly
-**Design** none
+**Design** [S25.html](design/S25.html)
 **Status** specified · tier 2
 
 ---

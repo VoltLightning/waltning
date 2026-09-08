@@ -1,7 +1,7 @@
 # S27 · Export
 
 **Surface** web (backend) · **Journeys** J11, J6, J9 · **Frequency** monthly to annually
-**Design** none
+**Design** [S27.html](design/S27.html)
 **Status** specified · tier 2
 
 ---

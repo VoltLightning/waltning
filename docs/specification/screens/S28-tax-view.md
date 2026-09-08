@@ -1,7 +1,7 @@
 # S28 · Tax view
 
 **Surface** wide; close and export need the backend · **Journeys** J11 · **Frequency** monthly to annually
-**Design** none
+**Design** [S28.html](design/S28.html)
 **Status** specified · tier 2 · **build early** — revenue is live (`SPEC.md` §13.6)
 
 ---

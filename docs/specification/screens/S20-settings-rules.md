@@ -1,7 +1,7 @@
 # S20 · Settings · Rules
 
 **Surface** wide · **Journeys** J4 · **Frequency** monthly, alongside import
-**Design** none
+**Design** [S20.html](design/S20.html)
 **Status** specified · tier 3
 
 ---

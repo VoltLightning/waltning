@@ -1,7 +1,7 @@
 # S22 · Settings · Tax
 
 **Surface** both · **Journeys** J11, J1 · **Frequency** rare
-**Design** none
+**Design** [S22.html](design/S22.html)
 **Status** specified · tier 3
 
 ---

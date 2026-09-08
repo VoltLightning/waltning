@@ -1,7 +1,7 @@
 # S08 · Voice multi-intent
 
 **Surface** mobile · **Journeys** J2 · **Frequency** occasional
-**Design** Claude Design project
+**Design** [S08.html](design/S08.html)
 **Status** specified · tier 2
 
 ---

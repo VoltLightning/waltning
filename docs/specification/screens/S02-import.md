@@ -1,7 +1,7 @@
 # S02 · Import
 
 **Surface** web (backend) · **Journeys** J4 · **Frequency** monthly, per institution
-**Design** Claude Design project
+**Design** [S02.html](design/S02.html)
 **Status** specified · tier 1
 
 ---

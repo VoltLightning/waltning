@@ -1,7 +1,7 @@
 # S10 · Transactions list
 
 **Surface** desk · **Journeys** J5, J6, J7, J12 · **Frequency** several times a week
-**Design** none
+**Design** [S10.html](design/S10.html)
 **Status** specified · tier 1
 
 ---

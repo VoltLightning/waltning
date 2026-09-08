@@ -2,7 +2,7 @@
 
 **Surface** mobile (capture) · both (review) · **Journeys** J3, J2, J11
 **Frequency** a few times a week
-**Design** Claude Design project
+**Design** [S07.html](design/S07.html)
 **Status** specified · tier 1
 
 ---
@@ -24,6 +24,8 @@ forever as the evidence behind it.
 Three sub-screens: **a** capture · **b** queue · **c** review.
 
 ## 3. Layout
+
+**The commit pair is a pinned dock, never the end of a scroll.** *Keep as one* and *Split in three* sit on the ground in a bar above the safe area, with the fields and lines scrolling behind them. A receipt with six extracted fields and four lines is taller than the screen, so a decision placed after the content is a decision you have to go looking for — and this screen exists to be answered, not read. The dock is drawn whether or not the content overflows, so its position never moves between one receipt and the next.
 
 ### Mobile — 390pt
 

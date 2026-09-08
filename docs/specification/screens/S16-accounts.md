@@ -1,7 +1,7 @@
 # S16 · Accounts
 
 **Surface** both · **Journeys** J14, J1, J2 · **Frequency** rare
-**Design** none
+**Design** [S16.html](design/S16.html)
 **Status** specified · tier 2
 
 ---
@@ -75,6 +75,8 @@ account is an ordinary account that belongs to a different total (`SPEC.md`
 §6.7 — where *jointly-owned* is the system's own word for it, as it is in
 `flows/J14` §4), and **a negative balance here gets no warning treatment**,
 because a shared account being overdrawn is a real fact.
+
+**An account is not named after its group.** *Cash* holding an account called *Cash* spends a row saying what the card's title already said; the register names the account — *Wallet*, *Travel float*, *Everyday*, *Studio* — and the group names the kind. Where a migration produces the repetition, the row keeps the imported name and the rename is an ordinary edit; nothing is renamed on the user's behalf.
 
 Each group — kind or `SharedGroup` — is a card of grouped rows: the group name
 is the card's title, its per-currency subtotals the card's one header figure,

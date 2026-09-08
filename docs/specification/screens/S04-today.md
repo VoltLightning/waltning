@@ -1,7 +1,7 @@
 # S04 · Today
 
 **Surface** mobile · **Journeys** J2, J5, J6, J7, J8 · **Frequency** several times a day
-**Design** Claude Design project
+**Design** [S04.html](design/S04.html)
 **Status** specified · tier 1
 
 ---
@@ -24,8 +24,8 @@ shows today is the list that shows every day before it.
 | Push notification | Unsettled clearing, failed backup | The thing it names |
 
 **Exits** — `+` → S05 · Scan → S07a · say-a-transaction → S05 in voice mode ·
-a row → S09 · balances → S16 · unsettled banner → J8 allocation ·
-tab bar → S12, S03.
+a row → S09 · the net-worth strip → S16 · unsettled banner → J8 allocation ·
+tab bar → S16, S12, S30.
 
 **S04 has no *show all*, and the tab bar has no Ledger or Calendar tab.**
 Browsing the ledger and picking a date are this screen, at a different scroll
@@ -63,8 +63,8 @@ position and with the picker open. See §10.
 │  └───────────────────────────────────────────┘  │
 └─────────────────────────────────────────────────┘
 │                                          (＋)   │
-┌ tab bar · 3 ────────────────────────────────────┐
-│  Today        Debt          Settings            │
+┌ tab bar · 4 ────────────────────────────────────┐
+│  Home    Accounts    Debt    Settings     (＋)  │
 └─────────────────────────────────────────────────┘
 ```
 
@@ -229,7 +229,7 @@ happened*.
 | `Banner(warn)` | Unsettled clearing — rendered **only when non-zero**, with one action |
 | `TodayPill` | Floats over the list when the list is away from today. The only way back from a jump (§6) |
 | `FilterChip` | The carried filter, pinned under the ribbon: what it is, and an `✕` that clears it. One chip — this screen receives a filter, it does not compose them. Composing is `FilterBar`, and it is S10's, on the desk |
-| `TabBar` | 3 tabs, all ≥44px — Today · Debt · Settings. Ledger's tab went when this screen absorbed it; the freed slot stays empty rather than being filled for symmetry. S03 Agent is the only other phone screen with the frequency to earn it, and that is a decision, not a consequence. `+` is not a tab |
+| `TabBar` | 4 tabs, all ≥44px — Home · Accounts · Debt · Settings. **No Ledger tab**: this screen is the ledger, so one would lead where you already are. `+` is not a tab, though it may come to rest in the bar (`02-tokens` §2.9) |
 | `FloatingAdd` | The `+`, above everything, wherever it was last put (`02-tokens` §2.9) |
 | `EmptyState(first-run)` | No accounts — offers create; the import path is S29's and arrives with it. No transactions — §6 |
 | `AppearanceButton` · `BottomSheet(appearance)` | Moved to S30 · Settings. The header has one action, and it is the picker |

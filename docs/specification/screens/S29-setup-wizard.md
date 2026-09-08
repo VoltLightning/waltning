@@ -1,7 +1,7 @@
 # S29 · Setup wizard
 
 **Surface** both · **Journeys** J1, J15 · **Frequency** once
-**Design** none
+**Design** [S29.html](design/S29.html)
 **Status** specified · tier 2
 
 ---

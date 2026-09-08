@@ -1,7 +1,7 @@
 # S12 · Debt
 
 **Surface** both · **Journeys** J7, J8 · **Frequency** weekly
-**Design** none
+**Design** [S12.html](design/S12.html)
 **Status** specified · tier 2
 
 > Absorbs the former S26 (Debt overview · web). Portfolio scale and counterparty
@@ -25,6 +25,9 @@ Who owes you, and whom you owe, across every currency.
 transaction that needs allocating.
 
 ## 3. Layout
+
+**The hero card is S04's `MonthSummary`, with debt's three figures in it.** Label above the number, the number on its own line, a `FlowBar` whose track is *you lent* and whose fill is *you owe* — so the gap that remains is what comes back to you — then the labelled pair beneath. Every figure carries its currency
+(`design-system/04` §4.1). The two screens a person opens daily should not state a net of two figures in two different shapes; this is the same card, holding a different subtraction.
 
 ### Mobile — 390pt
 

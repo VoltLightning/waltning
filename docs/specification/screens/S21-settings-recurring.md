@@ -1,7 +1,7 @@
 # S21 · Settings · Recurring
 
 **Surface** both · **Journeys** J13 · **Frequency** monthly review
-**Design** none
+**Design** [S21.html](design/S21.html)
 **Status** specified · tier 3
 
 ---

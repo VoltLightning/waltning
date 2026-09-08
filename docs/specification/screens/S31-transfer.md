@@ -1,7 +1,7 @@
 # S31 · Transfer
 
 **Surface** both · **Journeys** J2, J10, J14 · **Frequency** weekly
-**Design** none
+**Design** [S31.html](design/S31.html)
 **Status** specified · tier 2
 
 > Added after the S05 type-selector decision. `SPEC.md` §14.1 lists Transfer as

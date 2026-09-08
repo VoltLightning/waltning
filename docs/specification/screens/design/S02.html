@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>S02 · Import — Waltning</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap');
+body{margin:0;background:#efe9dd;font-family:'IBM Plex Sans',system-ui,sans-serif;
+     display:flex;flex-direction:column;align-items:center;gap:12px;padding:28px 16px 40px}
+h1{font-size:15px;font-weight:600;color:#4a4438;margin:0;letter-spacing:-.1px}
+p.note{max-width:390px;margin:0;font-size:12px;line-height:1.5;color:#6f6759;text-align:center}
+p.note code{font-size:11.5px;background:#e4dccd;border-radius:4px;padding:1px 4px}
+.frame{width:390px;height:844px;overflow:hidden;border-radius:22px;
+       box-shadow:0 10px 34px -14px rgba(51,48,42,.42);flex-shrink:0}
+.n{font-variant-numeric:tabular-nums}
+.k{font-size:11px;font-weight:600;letter-spacing:.5px;color:#8a8478;text-transform:uppercase}
+a{color:#5c7357}
+</style></head><body>
+<h1>S02 · Import</h1>
+<p class="note">A drawing of the intent, not a source to copy. The screen ships as React Native
+against <code>packages/ui</code>; this file exists so <code>S02-import.md</code> has something to point at.</p>
+<div class="frame"><div style="width: 390px; height: 844px; background: #faf6ef; color: #33302a; display: flex; flex-direction: column; padding: 64px 20px 32px 20px; box-sizing: border-box; gap: 16px; overflow: hidden; font-family: 'IBM Plex Sans', system-ui, sans-serif;">
+  <div style="flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 0 4px;">
+    <div style="display: flex; flex-direction: column; gap: 2px; min-width: 0;">
+      <div style="font-size: 22px; font-weight: 600; letter-spacing: -0.3px;">Import</div>
+      <div style="font-size: 13px; color: #8a8478;">This one belongs on a bigger screen</div>
+    </div>
+    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="#8a8478" stroke-width="1.6" stroke-linecap="round"><path d="M11 4l-5 5 5 5"></path></svg>
+  </div>
+  <div style="flex-shrink: 0; background: #ffffff; border: 1px solid #eae3d5; border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 12px; overflow: hidden;">
+    <div style="display: flex; flex-direction: column; gap: 8px;">
+      <div style="font-size: 16px; font-weight: 600;">Forty rows, one at a time</div>
+      <div style="font-size: 13px; line-height: 1.55; color: #8a8478;">A statement is read, classified and checked row by row — dense, keyboard-driven work. Swiping through it on a phone would be slower and less accurate than waiting until you are at the machine.</div>
+    </div>
+    <div style="display: flex; gap: 10px;">
+      <div style="background: #f8f4ec; border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 2px;"><div style="flex: 1; display: flex; flex-direction: column; gap: 2px;"><div style="font-size: 11px; color: #8a8478;">Waiting for you</div><div class="n" style="font-size: 16px; font-weight: 600; color: #33302a;">1 statement</div></div></div>
+      <div style="background: #f8f4ec; border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 2px;"><div style="flex: 1; display: flex; flex-direction: column; gap: 2px;"><div style="font-size: 11px; color: #8a8478;">Rows</div><div class="n" style="font-size: 16px; font-weight: 600; color: #33302a;">344</div></div></div>
+    </div>
+  </div>
+  <div style="flex-shrink: 0; background: #ffffff; border: 1px solid #eae3d5; border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 12px; overflow: hidden;">
+    <div class="k">What is waiting</div>
+    <div style="display: flex; flex-direction: column; gap: 0;">
+      <div style="display: flex; align-items: center; gap: 11px; padding: 12px 16px; border-bottom: 1px solid #f1ebe0;"><div style="flex: 1; display: flex; flex-direction: column; gap: 1px; min-width: 0;"><div style="font-size: 14px; font-weight: 600;">bank-a-august.csv</div><div style="font-size: 12px; color: #8a8478;">uploaded from the machine · 2 days ago</div></div><span class="n" style="font-size: 13px; font-weight: 600; color: #8a8478;">344 rows</span></div>
+      <div style="display: flex; align-items: center; gap: 11px; padding: 12px 16px; "><div style="flex: 1; display: flex; flex-direction: column; gap: 1px; min-width: 0;"><div style="font-size: 14px; font-weight: 600;">Needs review</div><div style="font-size: 12px; color: #8a8478;">18 the model was unsure about</div></div><span class="n" style="font-size: 13px; font-weight: 600; color: #8a6d28;">18</span></div>
+    </div>
+  </div>
+  <div style="flex-shrink: 0; font-size: 12px; line-height: 1.45; color: #8a8478; padding: 0 4px;">Everything else about the ledger works here. This is the one screen that asks for width rather than a smaller version of itself.</div>
+  <div style="flex-shrink: 0; flex-grow: 1;"></div>
+  <div style="flex-shrink: 0; background: #5c7357; border-radius: 12px; padding: 15px; text-align: center; font-size: 15px; font-weight: 600; color: #ffffff;">Open on the machine</div>
+  <div style="flex-shrink: 0; text-align: center; font-size: 12px; color: #8a8478;">waltning.local · already signed in</div>
+</div></div>
+</body></html>

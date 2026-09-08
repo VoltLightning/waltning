@@ -1,7 +1,7 @@
 # S05 · Quick add
 
 **Surface** mobile · **Journeys** J2, J3, J7, J8 · **Frequency** several times a day
-**Design** Claude Design project · `design/gaps.dc.html` G3
+**Design** [S05-dark.html](design/S05-dark.html) · [S05.html](design/S05.html)
 **Status** specified · tier 1
 
 ---

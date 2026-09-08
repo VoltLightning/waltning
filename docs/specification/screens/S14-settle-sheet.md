@@ -1,7 +1,7 @@
 # S14 · Settle sheet
 
 **Surface** both · **Journeys** J7, J8 · **Frequency** weekly
-**Design** none
+**Design** [S14.html](design/S14.html)
 **Status** specified · tier 2
 
 ---

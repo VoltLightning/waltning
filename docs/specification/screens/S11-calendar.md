@@ -1,7 +1,7 @@
 # S11 · Calendar
 
 **Surface** desk · **Journeys** J5, J6, J13 · **Frequency** weekly
-**Design** none
+**Design** [S11.html](design/S11.html)
 **Status** specified · tier 1
 
 > Absorbs the former S23 (Calendar · web). It was the same component at a wider

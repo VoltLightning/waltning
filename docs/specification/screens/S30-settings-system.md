@@ -1,7 +1,7 @@
 # S30 · Settings · System
 
 **Surface** both · **Journeys** J10, J15 · **Frequency** rare, and after every alarm
-**Design** none
+**Design** [S30.html](design/S30.html)
 **Status** specified
 
 ---

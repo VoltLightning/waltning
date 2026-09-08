@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>S29 · Setting up — Waltning</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap');
+body{margin:0;background:#efe9dd;font-family:'IBM Plex Sans',system-ui,sans-serif;
+     display:flex;flex-direction:column;align-items:center;gap:12px;padding:28px 16px 40px}
+h1{font-size:15px;font-weight:600;color:#4a4438;margin:0;letter-spacing:-.1px}
+p.note{max-width:390px;margin:0;font-size:12px;line-height:1.5;color:#6f6759;text-align:center}
+p.note code{font-size:11.5px;background:#e4dccd;border-radius:4px;padding:1px 4px}
+.frame{width:390px;height:844px;overflow:hidden;border-radius:22px;
+       box-shadow:0 10px 34px -14px rgba(51,48,42,.42);flex-shrink:0}
+.n{font-variant-numeric:tabular-nums}
+.k{font-size:11px;font-weight:600;letter-spacing:.5px;color:#8a8478;text-transform:uppercase}
+a{color:#5c7357}
+</style></head><body>
+<h1>S29 · Setting up</h1>
+<p class="note">A drawing of the intent, not a source to copy. The screen ships as React Native
+against <code>packages/ui</code>; this file exists so <code>S29-setup-wizard.md</code> has something to point at.</p>
+<div class="frame"><div style="width: 390px; height: 844px; background: #faf6ef; color: #33302a; display: flex; flex-direction: column; padding: 64px 20px 32px 20px; box-sizing: border-box; gap: 16px; overflow: hidden; font-family: 'IBM Plex Sans', system-ui, sans-serif;">
+  <div style="flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 0 4px;">
+    <div style="display: flex; flex-direction: column; gap: 2px; min-width: 0;">
+      <div style="font-size: 22px; font-weight: 600; letter-spacing: -0.3px;">Let&rsquo;s set this up</div>
+      <div style="font-size: 13px; color: #8a8478;">Four steps, and the last one proves the rest</div>
+    </div>
+    
+  </div>
+  <div style="flex-shrink: 0; background: #ffffff; border: 1px solid #eae3d5; border-radius: 14px; padding: 0; display: flex; flex-direction: column; gap: 0; overflow: hidden;">
+<div style="display: flex; align-items: flex-start; gap: 12px; padding: 12px 16px; border-bottom: 1px solid #f1ebe0;"><span style="width: 24px; height: 24px; border-radius: 12px; background: #5c7357; display: flex; align-items: center; justify-content: center; flex-shrink: 0;"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 8.5l3 3 6-6"></path></svg></span><div style="flex: 1; display: flex; flex-direction: column; gap: 2px;"><span style="font-size: 14px; font-weight: 600; color: #33302a;">Your currency</span><span style="font-size: 12px; line-height: 1.4; color: #8a8478;">PLN — everything is measured in it underneath</span></div></div><div style="display: flex; align-items: flex-start; gap: 12px; padding: 12px 16px; border-bottom: 1px solid #f1ebe0;"><span style="width: 24px; height: 24px; border-radius: 12px; background: #5c7357; display: flex; align-items: center; justify-content: center; flex-shrink: 0;"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 8.5l3 3 6-6"></path></svg></span><div style="flex: 1; display: flex; flex-direction: column; gap: 2px;"><span style="font-size: 14px; font-weight: 600; color: #33302a;">Your accounts</span><span style="font-size: 12px; line-height: 1.4; color: #8a8478;">Bank A, Cash and Card B</span></div></div><div style="display: flex; align-items: flex-start; gap: 12px; padding: 12px 16px; border-bottom: 1px solid #f1ebe0;"><span style="width: 24px; height: 24px; border-radius: 12px; border: 2px solid #5c7357; display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 12px; font-weight: 700; color: #4c6247;">3</span><div style="flex: 1; display: flex; flex-direction: column; gap: 2px;"><span style="font-size: 14px; font-weight: 600; color: #33302a;">Bring in history</span><span style="font-size: 12px; line-height: 1.4; color: #8a8478;">A statement, or start from today</span></div></div><div style="display: flex; align-items: flex-start; gap: 12px; padding: 12px 16px; border-bottom: 1px solid #f1ebe0;"><span style="width: 24px; height: 24px; border-radius: 12px; border: 1.5px solid #b5aea0; display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 12px; font-weight: 600; color: #b5aea0;">4</span><div style="flex: 1; display: flex; flex-direction: column; gap: 2px;"><span style="font-size: 14px; font-weight: 600; color: #8a8478;">Check the balances</span><span style="font-size: 12px; line-height: 1.4; color: #8a8478;">Every account has to land on the figure you know</span></div></div>
+  </div>
+  <div style="flex-shrink: 0; background: #ffffff; border: 1px solid #eae3d5; border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 12px; overflow: hidden;">
+    <div style="display: flex; flex-direction: column; gap: 6px;">
+      <div style="font-size: 15px; font-weight: 600;">Do the balances agree?</div>
+      <div style="font-size: 13px; line-height: 1.5; color: #8a8478;">Nothing is built on imported history until each account matches the balance you can see in your bank. Two of three agree so far.</div>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 0;">
+      <div style="display: flex; align-items: center; gap: 11px; padding: 12px 16px; border-bottom: 1px solid #f1ebe0;"><div style="flex: 1; display: flex; flex-direction: column; gap: 1px; min-width: 0;"><div style="font-size: 14px; font-weight: 600;">Bank A · Current</div><div style="font-size: 12px; color: #8a8478;">imported 248 rows</div></div><span class="n" style="font-size: 13px; font-weight: 600; color: #46813a;">agrees</span></div>
+      <div style="display: flex; align-items: center; gap: 11px; padding: 12px 16px; border-bottom: 1px solid #f1ebe0;"><div style="flex: 1; display: flex; flex-direction: column; gap: 1px; min-width: 0;"><div style="font-size: 14px; font-weight: 600;">Cash</div><div style="font-size: 12px; color: #8a8478;">opening balance only</div></div><span class="n" style="font-size: 13px; font-weight: 600; color: #46813a;">agrees</span></div>
+      <div style="display: flex; align-items: center; gap: 11px; padding: 12px 16px; "><div style="flex: 1; display: flex; flex-direction: column; gap: 1px; min-width: 0;"><div style="font-size: 14px; font-weight: 600;">Card B</div><div style="font-size: 12px; color: #8a8478;">off by 240,00 — one row missing</div></div><span class="n" style="font-size: 13px; font-weight: 600; color: #8a6d28;">check</span></div>
+    </div>
+  </div>
+  <div style="flex-shrink: 0; flex-grow: 1;"></div>
+  <div style="flex-shrink: 0; background: #5c7357; border-radius: 12px; padding: 15px; text-align: center; font-size: 15px; font-weight: 600; color: #ffffff;">Find the missing row</div>
+  <div style="flex-shrink: 0; text-align: center; font-size: 12px; color: #8a8478;">You can skip this and start from today instead</div>
+</div></div>
+</body></html>
