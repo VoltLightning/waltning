@@ -92,6 +92,23 @@ export function dayLabel(date: AccountingDate, locale: Locale): string {
 }
 
 /**
+ * One letter — the weekday, for `DayRibbon`'s cells.
+ *
+ * **`narrow`, not the first character of `short`.** Slicing a short name is a
+ * Latin-alphabet assumption: it breaks on any script whose weekday does not
+ * begin with a standalone letter, and gives "Ni" for Polish *niedziela* where
+ * the platform's own narrow form is "N". The ambiguity that comes with it —
+ * two Tuesdays and two Thursdays reading "T" in English — is why every cell
+ * also carries its full date as an accessible name.
+ */
+export function weekdayInitial(date: AccountingDate, locale: Locale): string {
+  const [year, mo, day] = date.split("-").map(Number) as [number, number, number];
+  return new Intl.DateTimeFormat(locale, { weekday: "narrow", timeZone: "UTC" }).format(
+    new Date(Date.UTC(year, mo - 1, day)),
+  );
+}
+
+/**
  * "Saturday, 5 September" — the weekday and the day, for a band whose heading
  * is already the word *Today*.
  *

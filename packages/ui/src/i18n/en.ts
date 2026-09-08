@@ -198,6 +198,22 @@ export const en = {
     otherGroup: "Other",
   },
   transactions: {
+    /**
+     * `DayRibbon`'s accessible name — the full date and what happened on it.
+     *
+     * A cell reads "14" to the eye and must not to a screen reader: a run of
+     * bare numbers says nothing about which month, which year, or whether the
+     * day held anything (S04 §7).
+     */
+    ribbonDayOne: "{{date}}, {{count}} entry",
+    ribbonDayMany: "{{date}}, {{count}} entries",
+    /** The same cell on a day with nothing on it. */
+    ribbonDayEmpty: "{{date}}, nothing",
+    /** One quiet day in the list — the line beside its date. */
+    nothingThatDay: "nothing",
+    /** A collapsed run of quiet days. Two flat forms, as `resultsOne` explains. */
+    quietRunOne: "{{count}} day · nothing recorded",
+    quietRunMany: "{{count}} days · nothing recorded",
     amount: "Amount",
     account: "Account",
     /**
@@ -858,6 +874,8 @@ export const en = {
     flowRange: "{{count}} months + this month to date",
   },
   shell: {
+    /** `QuietRun`'s action — opens the days it collapsed. */
+    show: "Show",
     today: "Today",
     /**
      * The floating add button. A verb, because a `+` has no name a screen

@@ -114,6 +114,13 @@ export const pl: Messages = {
     otherGroup: "Inne",
   },
   transactions: {
+    /** `DayRibbon`'s accessible name — the full date and what happened on it. */
+    ribbonDayOne: "{{date}}, {{count}} wpis",
+    ribbonDayMany: "{{date}}, {{count}} wpisów",
+    ribbonDayEmpty: "{{date}}, nic",
+    nothingThatDay: "nic",
+    quietRunOne: "{{count}} dzień · nic nie zapisano",
+    quietRunMany: "{{count}} dni · nic nie zapisano",
     amount: "Kwota",
     account: "Konto",
     needsRate: "Waluta {{currency}} wymaga kursu wymiany, zanim zapiszesz w niej transakcję.",
@@ -433,6 +440,7 @@ export const pl: Messages = {
     flowRange: "{{count}} miesięcy + bieżący do dziś",
   },
   shell: {
+    show: "Pokaż",
     today: "Dziś",
     add: "Dodaj",
     showAdd: "Pokaż przycisk dodawania",
