@@ -164,6 +164,12 @@ import {
 import { deleteTransactionExecutor } from "./transactions/delete-transaction.executor.ts";
 import { type AuditLogResult, readAuditLog } from "./transactions/read-audit-log.ts";
 import { readIncomeVsExpense } from "./transactions/read-income-vs-expense.ts";
+import {
+  type LedgerDirection,
+  type LedgerFilter,
+  type LedgerPage,
+  readLedgerPage,
+} from "./transactions/read-ledger-page.ts";
 import { readPayeeHistory } from "./transactions/read-payee-history.ts";
 import { readPeriodSpend } from "./transactions/read-period-spend.ts";
 import { type LocalRecentTransaction, readRecent } from "./transactions/read-recent.ts";
@@ -275,6 +281,22 @@ export type LocalLedgerSession = {
     cursor?: TransactionSearchCursor,
     options?: TransactionSearchOptions,
   ) => TransactionSearchPage;
+  /**
+   * S04's List page — one page walking away from an anchor, in one direction.
+   *
+   * Beside `searchTransactions` rather than folded into it: that one answers
+   * *find the thing you remember* and carries a running total every page,
+   * because S10's filter bar promises one. This answers *where am I in the
+   * ledger* and has a position instead. `read-ledger-page.ts`'s own doc has
+   * the argument.
+   */
+  readLedgerPage: (options: {
+    anchor: AccountingDate;
+    direction: LedgerDirection;
+    cursor?: TransactionSearchCursor;
+    filter?: LedgerFilter;
+    limit?: number;
+  }) => LedgerPage;
   createAccount: (input: CreateAccountInput, capture: Capture) => LocalAccountRow;
   createTransaction: (input: CreateTransactionInput, capture: Capture) => LocalTransactionRow;
   createCategory: (input: CreateCategoryInput, capture: Capture) => LocalCategoryRow;
@@ -638,6 +660,7 @@ export function createLocalLedgerSession<TRun>(
     balanceAsOf: (accountId, asOf) => readBalanceAsOf(requireOpen().replica.db, accountId, asOf),
     searchTransactions: (filter, cursor, options) =>
       searchTransactions(requireOpen().replica.db, filter, cursor, options),
+    readLedgerPage: (options) => readLedgerPage(requireOpen().replica.db, options),
     getTransaction: (id) => readTransaction(requireOpen().replica.db, id),
     getAuditLog: (entity, entityId) => {
       requireOpen();

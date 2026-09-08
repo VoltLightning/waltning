@@ -17,7 +17,7 @@ import { deviceRuntime } from "@waltning/client/ledger/device-runtime";
 import { LedgerProvider } from "@waltning/client/ledger/ledger-provider";
 import { basePort } from "@waltning/client/ledger/test-port";
 import { id } from "@waltning/core/id";
-import { currencyCode } from "@waltning/core/money";
+import { currencyCode, pivotPerUnit } from "@waltning/core/money";
 import type { ReactElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -53,7 +53,10 @@ function expenseRow(overrides: Partial<PhoneSearchTransaction> = {}): PhoneSearc
     amount: "-48.90000000" as never,
     currency: PLN,
     decimals: 2,
+    fxRate: pivotPerUnit("1"),
+    fxRateEstimated: false,
     toAmount: null,
+    toFxRate: null,
     toCurrency: null,
     toDecimals: null,
     isBusiness: false,

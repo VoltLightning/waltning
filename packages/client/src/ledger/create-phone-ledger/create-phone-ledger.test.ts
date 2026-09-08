@@ -324,6 +324,7 @@ function harness(
     readActiveDashboardLayout: () => null,
     listUnsettledClearing: () => [],
     balanceAsOf,
+    readLedgerPage: () => ({ rows: [], nextCursor: undefined }),
     searchTransactions: () => ({
       rows: [],
       nextCursor: undefined,

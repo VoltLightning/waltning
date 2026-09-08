@@ -48,6 +48,9 @@ export function basePort(overrides: Partial<PhoneLedgerPort> = {}): PhoneLedgerP
     listUnsettledClearing: () => [],
     balanceAsOf: () => toMoney("0"),
     searchTransactions: () => EMPTY_SEARCH_PAGE,
+    // No rows and no cursor: a stub that returned a page would make every
+    // caller's first assertion about this file rather than about the caller.
+    readLedgerPage: () => ({ rows: [], nextCursor: undefined }),
     createAccount: () => undefined,
     createTransaction: () => undefined,
     createCategory: () => undefined,
