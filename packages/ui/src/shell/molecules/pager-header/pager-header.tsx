@@ -47,6 +47,7 @@ import Animated, {
   type SharedValue,
   useAnimatedReaction,
   useAnimatedStyle,
+  useSharedValue,
 } from "react-native-reanimated";
 import { useInteraction } from "../../../primitives/interaction.ts";
 import { text } from "../../../theme/fonts.ts";
@@ -146,10 +147,23 @@ function PagerHeaderView({
   // control at 4% opacity is invisible and still tappable, and a screen reader
   // walking both layouts hears the month twice.
   const [collapsed, setCollapsed] = useState(false);
+  // What JS has already been told, mirrored on the UI thread.
+  //
+  // **Not the reaction's own `previous`.** That is `null` on its first run, so
+  // `next !== previous` is trivially true and the first scroll of a session
+  // costs a render that changes nothing — measured at two per crossing instead
+  // of one. Guarding on `previous !== null` is worse and was tried: the first
+  // run is the first *observation*, not the mount, so on a page opened
+  // already-scrolled it swallows the real transition and the header never
+  // collapses at all. This mirror starts where the state does, so exactly one
+  // render happens per genuine crossing and none for anything else.
+  const sent = useSharedValue(false);
   useAnimatedReaction(
     () => isCollapsed(collapseProgress(scrollY.value)),
-    (next, previous) => {
-      if (next !== previous) runOnJS(setCollapsed)(next);
+    (next) => {
+      if (next === sent.value) return;
+      sent.value = next;
+      runOnJS(setCollapsed)(next);
     },
     [scrollY],
   );
