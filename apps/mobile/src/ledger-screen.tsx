@@ -73,7 +73,6 @@ import {
   type CategorizeSelectionConfirmState,
 } from "@waltning/ui/transactions/categorize-selection-confirm";
 import { DayHeader } from "@waltning/ui/transactions/day-header";
-import { EntryRow } from "@waltning/ui/transactions/entry-row";
 import { LedgerFilterRail } from "@waltning/ui/transactions/ledger-filter-rail";
 import { LedgerSelectionBar } from "@waltning/ui/transactions/ledger-selection-bar";
 import {
@@ -82,9 +81,9 @@ import {
   type LedgerTableRow,
   sortLedgerTableRows,
 } from "@waltning/ui/transactions/ledger-table";
+import { LedgerRowItem } from "@waltning/ui/transactions/molecules/ledger-row-item/ledger-row-item";
 import { PeriodField } from "@waltning/ui/transactions/period-field";
 import { RunningTotal, RunningTotalSkeleton } from "@waltning/ui/transactions/running-total";
-import { SwipeableRow } from "@waltning/ui/transactions/swipeable-row";
 import { type Href, router, useLocalSearchParams } from "expo-router";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { FlatList, Pressable, Text, type TextInput, View } from "react-native";
@@ -1021,32 +1020,6 @@ function flattenSections(
     }
   }
   return entries;
-}
-
-/* ── One list row — a transaction or a transfer, tap and swipe both wired ─── */
-
-type LedgerRowItemProps = {
-  row: PhoneSearchTransaction;
-  onPress: (id: string) => void;
-  onShortSwipe: (id: string) => void;
-  onLongSwipe: (id: string) => void;
-};
-
-function LedgerRowItem({ row, onPress, onShortSwipe, onLongSwipe }: LedgerRowItemProps) {
-  const handleShortSwipe = useCallback(() => onShortSwipe(row.id), [onShortSwipe, row.id]);
-  const handleLongSwipe = useCallback(() => onLongSwipe(row.id), [onLongSwipe, row.id]);
-  const entry = <EntryRow row={row} onPress={onPress} withAccount />;
-
-  // Categorising a transfer or an adjustment has no meaning
-  // (`transactions_category_shape`) — those rows stay tap-only rather than
-  // carrying a swipe gesture with nothing to do.
-  if (row.type !== "income" && row.type !== "expense") return entry;
-
-  return (
-    <SwipeableRow onShortSwipe={handleShortSwipe} onLongSwipe={handleLongSwipe}>
-      {entry}
-    </SwipeableRow>
-  );
 }
 
 const useStyles = makeStyles((theme) => ({
