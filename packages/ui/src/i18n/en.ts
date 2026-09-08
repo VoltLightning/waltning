@@ -876,6 +876,16 @@ export const en = {
     flowRange: "{{count}} months + this month to date",
   },
   shell: {
+    /** `PeriodBar`'s magnifier. */
+    search: "Search",
+    /** `PageTabs` — the four views of one date (S04 §3). */
+    summary: "Summary",
+    list: "List",
+    /** `PeriodBar`'s arrows name the unit they step; the label only says it to the eye. */
+    previousMonth: "Previous month",
+    nextMonth: "Next month",
+    previousYear: "Previous year",
+    nextYear: "Next year",
     /** `QuietRun`'s action — opens the days it collapsed. */
     show: "Show",
     today: "Today",

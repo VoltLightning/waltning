@@ -145,11 +145,13 @@ function renderTotal(value: string) {
 function renderMonth() {
   return (
     <MonthSummary
-      label="September 2026"
-      onPrevious={noop}
-      onNext={noop}
-      onToday={noop}
-      isCurrent
+      period={{
+        label: "September 2026",
+        onPrevious: noop,
+        onNext: noop,
+        onToday: noop,
+        isCurrent: true,
+      }}
       spend={money.toMoney("4320.18")}
       inflow={money.toMoney("7850.00")}
       net={money.toMoney("3529.82")}

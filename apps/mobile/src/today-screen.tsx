@@ -1,21 +1,22 @@
 import { useAppearance } from "@waltning/client/appearance/use-appearance";
 import type { PhoneRecentTransaction } from "@waltning/client/ledger/create-phone-ledger";
 import { deviceRuntime } from "@waltning/client/ledger/device-runtime";
+import { isPagerPageKey } from "@waltning/client/ledger/pager-date";
 import { useLedgerController } from "@waltning/client/ledger/use-ledger-controller";
 import { usePhoneLedger } from "@waltning/client/ledger/use-phone-ledger";
 import { useSpendByCategory } from "@waltning/client/ledger/use-spend-by-category";
 import { useUnsettledBanner } from "@waltning/client/ledger/use-unsettled-banner";
 import { useWhereItWent } from "@waltning/client/ledger/use-where-it-went";
-import { accountingDate, shiftMonth, type YearMonth, yearMonth } from "@waltning/core/date";
+import { accountingDate, shiftMonth, yearMonth } from "@waltning/core/date";
 import * as money from "@waltning/core/money";
 import { SpendRows } from "@waltning/ui/dashboard/spend-rows";
-import { monthLabel, weekdayLabel } from "@waltning/ui/i18n/locales";
+import { decimalMark, monthLabel } from "@waltning/ui/i18n/locales";
 import { useLocale, useT } from "@waltning/ui/i18n/provider";
 import { Button } from "@waltning/ui/primitives/button";
 import { Card } from "@waltning/ui/shell/card";
 import { MonthSummary } from "@waltning/ui/shell/month-summary";
 import { NetWorthStrip } from "@waltning/ui/shell/net-worth-strip";
-import { TodayFrame } from "@waltning/ui/shell/today-frame";
+import { PagerFrame } from "@waltning/ui/shell/organisms/pager-frame/pager-frame";
 import { UnsettledBanner } from "@waltning/ui/shell/unsettled-banner";
 import { EmptyState } from "@waltning/ui/states/empty-state";
 import { ErrorState } from "@waltning/ui/states/error-state";
@@ -27,9 +28,11 @@ import {
 import { router, useLocalSearchParams } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
 import { useColorScheme } from "react-native";
+import { HomeListPage } from "./home-list-page";
 import { openUnsettled } from "./open-unsettled.ts";
 import { appearance, PREVIEW_RESET_ENABLED } from "./platform";
 import { PreviewAppearanceControls } from "./preview-appearance-controls";
+import { usePagerRoute } from "./use-pager-route.ts";
 
 function handleCreateAccount() {
   router.push({ pathname: "/account/new", params: { returnTo: "today" } });
@@ -181,13 +184,35 @@ export default function Today() {
   // The device's own calendar (§7.0a), the same call `quick-add-screen.tsx`
   // makes — `deviceRuntime` reads `Intl`/`Date` only, not a platform API.
   const today = deviceRuntime().capture().date;
-  const currentMonth = yearMonth(today.slice(0, 7));
   /** The band's second line — the weekday and the day, under the word *Today*. */
-  const todayLabel = weekdayLabel(today, locale);
-  const [month, setMonth] = useState<YearMonth>(currentMonth);
-  const handlePreviousMonth = useCallback(() => setMonth((current) => shiftMonth(current, -1)), []);
-  const handleNextMonth = useCallback(() => setMonth((current) => shiftMonth(current, 1)), []);
-  const handleToday = useCallback(() => setMonth(currentMonth), [currentMonth]);
+  // The period, the page and the day all live in the URL (`use-pager-route`),
+  // so the agent can link to one — S03's *see them in the ledger* is
+  // `/?view=list&date=2026-05-25` rather than a screen's own default.
+  const pager = usePagerRoute(today);
+  // `DayRibbon` hands back the date it drew; this is where a bare string
+  // becomes an `AccountingDate`, and the only place it needs to.
+  const handlePickDay = useCallback(
+    (date: string) => pager.showDay(accountingDate(date)),
+    [pager.showDay],
+  );
+  // The frame speaks in page keys as strings; `showPage` takes the four this
+  // screen knows. `parsePagerState` is what makes a stray one safe, so this
+  // narrows rather than validates.
+  const handlePageChange = useCallback(
+    (key: string) => {
+      if (isPagerPageKey(key)) pager.showPage(key);
+    },
+    [pager.showPage],
+  );
+  const barLabels = useMemo(
+    () => ({
+      previous: t(pager.stepUnit === "year" ? "shell.previousYear" : "shell.previousMonth"),
+      next: t(pager.stepUnit === "year" ? "shell.nextYear" : "shell.nextMonth"),
+      search: t("shell.search"),
+    }),
+    [pager.stepUnit, t],
+  );
+  const month = yearMonth(pager.state.date.slice(0, 7));
 
   // Half-open — `money.Period`'s own shape — so the range needs no notion of
   // how many days the month has, only `shiftMonth`.
@@ -245,11 +270,6 @@ export default function Today() {
   /** The hero, and §5's three figures in the shape `net = inflow − spend`. */
   const monthCard = leadNetWorth ? (
     <MonthSummary
-      label={monthLabel(month, locale)}
-      onPrevious={handlePreviousMonth}
-      onNext={handleNextMonth}
-      onToday={handleToday}
-      isCurrent={month === currentMonth}
       spend={leadPeriodSpend?.spend ?? money.ZERO}
       inflow={leadPeriodSpend?.inflow ?? money.ZERO}
       net={leadPeriodSpend?.net ?? money.ZERO}
@@ -381,6 +401,20 @@ export default function Today() {
   );
   const body = (
     <>
+      {/*
+        The appearance control, which the band used to carry in its action
+        slot. `PagerFrame` has no such slot — the bar carries the period,
+        search and nothing else (S04 §3) — and S04 §4 says this belongs in
+        S30 · Settings. It sits at the top of Summary until Settings has it:
+        dropping it here would make appearance switching, and the preview
+        reset, reachable from nowhere.
+      */}
+      <PreviewAppearanceControls
+        preference={resolved.preference}
+        resetEnabled={PREVIEW_RESET_ENABLED}
+        onPreference={handlePreference}
+        onReset={handleReset}
+      />
       {typeof message === "string" && !toastDismissed ? (
         <Toast message={message} onDismiss={handleDismissToast} token={toastToken} />
       ) : null}
@@ -398,18 +432,49 @@ export default function Today() {
     </>
   );
 
+  const pages = useMemo(
+    () => [
+      { key: "summary", label: t("shell.summary"), node: body },
+      {
+        key: "list",
+        label: t("shell.list"),
+        node: leadNetWorth ? (
+          <HomeListPage
+            ledger={ledger}
+            anchor={pager.state.date}
+            today={today}
+            pivotCurrency={leadNetWorth.currency}
+            pivotDecimals={leadNetWorth.decimals}
+            onPickDay={handlePickDay}
+            onOpenTransaction={handleOpenTransaction}
+          />
+        ) : null,
+      },
+    ],
+    [body, handlePickDay, ledger, leadNetWorth, pager.state.date, t, today],
+  );
+
   return (
-    <TodayFrame
-      appearanceAction={
-        <PreviewAppearanceControls
-          preference={resolved.preference}
-          resetEnabled={PREVIEW_RESET_ENABLED}
-          onPreference={handlePreference}
-          onReset={handleReset}
-        />
+    <PagerFrame
+      periodLabel={
+        pager.label.unit === "year"
+          ? String(pager.label.year)
+          : pager.label.showYear
+            ? monthLabel(month, locale)
+            : monthLabel(month, locale).replace(/\s+\d{4}$/, "")
       }
-      date={todayLabel}
-      body={body}
+      periodFigure={money.forDisplay(
+        leadPeriodSpend?.spend ?? money.ZERO,
+        leadNetWorth?.decimals ?? 2,
+        decimalMark(locale),
+      )}
+      onPrevious={pager.previous}
+      onNext={pager.next}
+      onSearch={handleShowAll}
+      barLabels={barLabels}
+      pages={pages}
+      activeKey={pager.state.page}
+      onPageChange={handlePageChange}
     />
   );
 }

@@ -33,12 +33,28 @@ import { PeriodHeader } from "../period-header/period-header";
 import { StatTile } from "../stat-tile/stat-tile";
 
 export type MonthSummaryProps = {
-  /** The period's display label — "September 2026". Formatted by the caller. */
-  label: string;
-  onPrevious: () => void;
-  onNext: () => void;
-  onToday: () => void;
-  isCurrent: boolean;
+  /**
+   * The period's own header — label and arrows — or nothing.
+   *
+   * **Absent where something above already carries the period.** S04's pager
+   * puts it in `PeriodBar`, shared by all four pages, and a card drawing its
+   * own beneath that would be two controls over one date: the drift the pager
+   * exists to avoid, and visibly two rows of the same month. S01's widget grid
+   * has no such bar and passes them.
+   *
+   * All five together or none: a label with no arrows is a heading pretending
+   * to be a control, and arrows with no label do not say what they step.
+   */
+  period?:
+    | {
+        /** "September 2026", formatted by the caller. */
+        label: string;
+        onPrevious: () => void;
+        onNext: () => void;
+        onToday: () => void;
+        isCurrent: boolean;
+      }
+    | undefined;
   /** §5's figures for the lead currency: `net = inflow − spend`. */
   spend: money.Money;
   inflow: money.Money;
@@ -48,11 +64,7 @@ export type MonthSummaryProps = {
 };
 
 export function MonthSummary({
-  label,
-  onPrevious,
-  onNext,
-  onToday,
-  isCurrent,
+  period,
   spend,
   inflow,
   net,
@@ -64,14 +76,16 @@ export function MonthSummary({
 
   return (
     <Card>
-      <PeriodHeader
-        label={label}
-        onPrevious={onPrevious}
-        onNext={onNext}
-        onToday={onToday}
-        isCurrent={isCurrent}
-        tone="surface"
-      />
+      {period === undefined ? null : (
+        <PeriodHeader
+          label={period.label}
+          onPrevious={period.onPrevious}
+          onNext={period.onNext}
+          onToday={period.onToday}
+          isCurrent={period.isCurrent}
+          tone="surface"
+        />
+      )}
       <View style={styles.hero}>
         <Text style={styles.heroLabel}>{t("shell.keptSoFar")}</Text>
         {/*

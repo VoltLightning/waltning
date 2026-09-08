@@ -14,11 +14,13 @@ const meta = {
   title: "Shell/MonthSummary",
   component: MonthSummary,
   args: {
-    label: "September 2026",
-    onPrevious: noop,
-    onNext: noop,
-    onToday: noop,
-    isCurrent: true,
+    period: {
+      label: "September 2026",
+      onPrevious: noop,
+      onNext: noop,
+      onToday: noop,
+      isCurrent: true,
+    },
     currency: "PLN",
   },
 } satisfies Meta<typeof MonthSummary>;
@@ -50,8 +52,13 @@ export const Overspent: Story = {
  */
 export const PastMonth: Story = {
   args: {
-    label: "August 2026",
-    isCurrent: false,
+    period: {
+      label: "August 2026",
+      onPrevious: noop,
+      onNext: noop,
+      onToday: noop,
+      isCurrent: false,
+    },
     spend: money.toMoney("5120.00"),
     inflow: money.toMoney("7850.00"),
     net: money.toMoney("2730.00"),
