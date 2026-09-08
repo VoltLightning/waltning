@@ -102,6 +102,7 @@
     "./shell/molecules/period-bar/period-bar": "./src/shell/molecules/period-bar/period-bar.tsx",
     "./shell/month-summary": "./src/shell/molecules/month-summary/month-summary.tsx",
     "./shell/net-worth-strip": "./src/shell/molecules/net-worth-strip/net-worth-strip.tsx",
+    "./shell/organisms/pager/pager": "./src/shell/organisms/pager/pager.tsx",
     "./shell/period-header": "./src/shell/molecules/period-header/period-header.tsx",
     "./shell/phosphor": "./src/shell/phosphor.tsx",
     "./shell/screen-reader-destination": "./src/shell/atoms/screen-reader-destination.tsx",

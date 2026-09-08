@@ -127,10 +127,19 @@ function SegmentOption<Value extends string>({
     ? `${base}, ${segment.disabledReason ?? t("common.later")}`
     : base;
 
+  // `react-native-web` never reads the `accessibilityState` object:
+  // `createDOMProps` recognises only this flat legacy name, so
+  // `aria-selected` never reaches the DOM without it. `conformance.test.ts`
+  // refuses one without the other.
+  const ariaSelectedProps: { accessibilitySelected: boolean } = {
+    accessibilitySelected: active,
+  };
+
   return (
     <Pressable
       accessibilityRole="tab"
       accessibilityState={{ selected: active, disabled }}
+      {...ariaSelectedProps}
       accessibilityLabel={accessibleLabel}
       disabled={disabled}
       onPress={handlePress}

@@ -96,9 +96,14 @@ function useThinkingDots(reduced: boolean): string {
 function ThinkingDots({ reduced }: { reduced: boolean }) {
   const styles = useStyles();
   const dots = useThinkingDots(reduced);
+  // `accessibilityElementsHidden` is native only — react-native-web maps it to
+  // nothing, so this decorative subtree stays in the web build's accessibility
+  // tree unless `aria-hidden` says so too (`conformance.test.ts`).
+  const ariaHiddenProps: { "aria-hidden": true } = { "aria-hidden": true };
+
   return (
     // Decorative: the row's own "accessibilityLabel" already says "thinking".
-    <View accessibilityElementsHidden importantForAccessibility="no">
+    <View accessibilityElementsHidden importantForAccessibility="no" {...ariaHiddenProps}>
       {/* Invisible, laid out normally: claims the row's width at its widest step
       so the real text below can move inside that width without ever changing it. */}
       <Text style={[styles.dotText, styles.dotsSizer]}>{FULL_STEP}</Text>

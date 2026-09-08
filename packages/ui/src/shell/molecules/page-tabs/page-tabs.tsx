@@ -52,20 +52,25 @@ function TabItem({
   const key = tab.key;
   const press = useCallback(() => onSelect(key), [onSelect, key]);
 
-  // `react-native-web` never reads RN-core's `accessibilityState` object —
-  // `createDOMProps` recognises only the flat, legacy `accessibilitySelected`
-  // name, so `aria-selected` never reaches the DOM without it and a web
-  // screen reader is told nothing about which tab is current. `TabBar`
-  // documents the same gap; both forms go out, the object for native.
-  const ariaSelectedProps: { accessibilitySelected: boolean } = { accessibilitySelected: active };
+  // `react-native-web` never reads RN-core's `accessibilityState` object:
+  // `createDOMProps` recognises only this flat legacy name, so `aria-selected`
+  // never reaches the DOM without it and a web reader is told nothing about
+  // what is current. `conformance.test.ts` now refuses one without the other.
+  const ariaSelectedProps: { accessibilitySelected: boolean } = {
+    accessibilitySelected: active,
+  };
 
   return (
     <Pressable
       accessibilityRole="tab"
       accessibilityState={{ selected: active }}
+      {...ariaSelectedProps}
+      // `react-native-web` never reads the state object — `createDOMProps`
+      // recognises only this flat legacy name, so `aria-selected` never
+      // reaches the DOM without it (`conformance.test.ts` now refuses one
+      // without the other).
       onPress={press}
       {...handlers}
-      {...ariaSelectedProps}
       style={[styles.item, focused ? styles.focused : null]}
     >
       <Text style={active ? styles.labelActive : styles.label}>{tab.label}</Text>

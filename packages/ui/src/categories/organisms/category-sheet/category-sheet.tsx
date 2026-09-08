@@ -556,12 +556,21 @@ function GroupChip({ id, name, selected, onPress }: GroupChipProps) {
   const { hovered, focused, handlers } = useInteraction();
   const press = usePressScale();
   const handlePress = useCallback(() => onPress(id), [id, onPress]);
+  // `react-native-web` never reads the `accessibilityState` object:
+  // `createDOMProps` recognises only this flat legacy name, so
+  // `aria-selected` never reaches the DOM without it. `conformance.test.ts`
+  // refuses one without the other.
+  const ariaSelectedProps: { accessibilitySelected: boolean } = {
+    accessibilitySelected: selected,
+  };
+
   return (
     <Animated.View style={press.style}>
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={name}
         accessibilityState={{ selected }}
+        {...ariaSelectedProps}
         aria-pressed={selected}
         onPress={handlePress}
         onPressIn={press.onPressIn}

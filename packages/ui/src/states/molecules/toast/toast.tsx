@@ -166,11 +166,18 @@ function ToastAction({ label, onPress }: ToastActionProps) {
 /** Decorative — the message text is the one thing that says what happened (P5). */
 function StatusMark() {
   const styles = useStyles();
+  // `accessibilityElementsHidden` is native only — react-native-web maps it to
+  // nothing, so this decorative subtree stays in the web build's accessibility
+  // tree unless `aria-hidden` says so too (`conformance.test.ts`).
+  const ariaHiddenProps: { "aria-hidden": true } = { "aria-hidden": true };
+
   return (
     <View
       testID="toast-mark"
       style={styles.mark}
       accessibilityElementsHidden
+      {...ariaHiddenProps}
+      aria-hidden
       importantForAccessibility="no"
     >
       <View style={styles.markCheck} />
