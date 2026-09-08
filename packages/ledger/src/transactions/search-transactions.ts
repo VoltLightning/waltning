@@ -4,25 +4,17 @@ import { id as brandId, type Id } from "@waltning/core/id";
 import type { CurrencyCode, Money } from "@waltning/core/money";
 import * as money from "@waltning/core/money";
 import type { CounterpartyRole, TxnType } from "@waltning/schema/enums";
-import {
-  and,
-  count,
-  desc,
-  eq,
-  exists,
-  gte,
-  inArray,
-  isNull,
-  lt,
-  lte,
-  or,
-  type SQL,
-} from "drizzle-orm";
+import { and, count, desc, eq, exists, lt, or, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/sqlite-core";
 import type { ReplicaDb } from "../open.ts";
 import { ledgerSchema } from "../schema-map.ts";
+import {
+  ledgerRowsQuery,
+  signRow,
+  structuralWhere as structuralWhereFor,
+} from "./transaction-query.ts";
 
-const { accounts, categories, currencies, transactionLines, transactions } = ledgerSchema;
+const { accounts, currencies, transactionLines, transactions } = ledgerSchema;
 
 /** S10 §3 — the four values `SegmentControl` offers, exactly `SPEC.md` §6.7's partition. */
 export type TransactionSearchScope = "all" | "mine" | "shared" | "business";
@@ -283,21 +275,6 @@ function lineDescriptionsBy<TRun, TSchema extends typeof ledgerSchema>(
   return byTransaction;
 }
 
-function scopeCondition(scope: TransactionSearchScope) {
-  switch (scope) {
-    case "all":
-      return undefined;
-    // `SPEC.md` §6.7: Mine = own accounts, not business. Business = always own.
-    // Shared = ownership=shared, never business (constrained against on `accounts`).
-    case "mine":
-      return and(eq(accounts.ownership, "own"), eq(transactions.isBusiness, false));
-    case "business":
-      return eq(transactions.isBusiness, true);
-    case "shared":
-      return eq(accounts.ownership, "shared");
-  }
-}
-
 /**
  * A page of `search_transactions` (`operations.md`) over the replica — S10.
  *
@@ -363,36 +340,9 @@ export function searchTransactions<TRun, TSchema extends typeof ledgerSchema>(
   cursor?: TransactionSearchCursor,
   options?: TransactionSearchOptions,
 ): TransactionSearchPage {
-  const toAccounts = alias(accounts, "to_accounts");
   const toCurrencies = alias(currencies, "to_currencies");
 
-  const accountIds = filter.accountIds ?? [];
-  const categoryIds = filter.categoryIds ?? [];
-  const scope = filter.scope ?? "all";
-
-  const structuralConditions: (SQL | undefined)[] = [
-    isNull(transactions.deletedAt),
-    filter.from !== undefined ? gte(transactions.date, filter.from) : undefined,
-    filter.to !== undefined ? lte(transactions.date, filter.to) : undefined,
-    accountIds.length > 0
-      ? or(
-          inArray(transactions.accountId, accountIds),
-          inArray(transactions.toAccountId, accountIds),
-        )
-      : undefined,
-    categoryIds.length > 0 ? inArray(transactions.categoryId, categoryIds) : undefined,
-    filter.currency !== undefined
-      ? or(eq(transactions.currency, filter.currency), eq(transactions.toCurrency, filter.currency))
-      : undefined,
-    scopeCondition(scope),
-    filter.counterpartyId !== undefined
-      ? eq(transactions.counterpartyId, filter.counterpartyId)
-      : undefined,
-    filter.counterpartyRole !== undefined
-      ? eq(transactions.counterpartyRole, filter.counterpartyRole)
-      : undefined,
-  ];
-  const structuralWhere = and(...structuralConditions.filter((c): c is SQL => c !== undefined));
+  const structuralWhere = structuralWhereFor(filter);
 
   const needle = filter.text !== undefined ? fold(filter.text.trim()) : "";
   // M6 — the whole query must *be* an amount, not merely contain one:
@@ -451,54 +401,7 @@ export function searchTransactions<TRun, TSchema extends typeof ledgerSchema>(
     return { rows: [], nextCursor: undefined, total: { count: matched.length, currencies: [] } };
   }
 
-  const rowsQuery = () =>
-    db
-      .select({
-        id: transactions.id,
-        date: transactions.date,
-        type: transactions.type,
-        payee: transactions.payee,
-        note: transactions.note,
-        brandKey: transactions.brandKey,
-        categoryName: categories.name,
-        accountId: transactions.accountId,
-        accountName: accounts.name,
-        toAccountId: transactions.toAccountId,
-        toAccountName: toAccounts.name,
-        amountOriginal: transactions.amountOriginal,
-        toAmountRaw: transactions.toAmount,
-        currency: transactions.currency,
-        decimals: currencies.decimals,
-        toCurrency: transactions.toCurrency,
-        toDecimals: toCurrencies.decimals,
-        isBusiness: transactions.isBusiness,
-        isCapital: transactions.isCapital,
-        counterpartyRole: transactions.counterpartyRole,
-      })
-      .from(transactions)
-      .innerJoin(accounts, eq(transactions.accountId, accounts.id))
-      .innerJoin(currencies, eq(transactions.currency, currencies.code))
-      .leftJoin(toAccounts, eq(transactions.toAccountId, toAccounts.id))
-      .leftJoin(toCurrencies, eq(transactions.toCurrency, toCurrencies.code))
-      .leftJoin(categories, eq(transactions.categoryId, categories.id));
-
-  const signRow = <
-    Row extends { amountOriginal: Money; toAmountRaw: Money | null; type: TxnType },
-  >({
-    amountOriginal,
-    toAmountRaw,
-    type,
-    ...row
-  }: Row) => ({
-    ...row,
-    amount: money.signed({ type, amountOriginal, toAmount: toAmountRaw }, "from"),
-    toAmount:
-      type === "transfer"
-        ? money.signed({ type, amountOriginal, toAmount: toAmountRaw }, "to")
-        : null,
-    type,
-    amountOriginal,
-  });
+  const rowsQuery = () => ledgerRowsQuery(db);
 
   if (needle === "") {
     const cursorCondition =
