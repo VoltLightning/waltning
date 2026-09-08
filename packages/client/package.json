@@ -47,6 +47,7 @@
     "./transactions/accept-proposed-category": "./src/transactions/accept-proposed-category/accept-proposed-category.ts",
     "./transactions/group-by-day": "./src/transactions/group-by-day/group-by-day.ts",
     "./transactions/last-capture": "./src/transactions/last-capture/last-capture.ts",
+    "./transactions/ledger-days": "./src/transactions/ledger-days/ledger-days.ts",
     "./transactions/use-command-bar": "./src/transactions/use-command-bar/use-command-bar.ts",
     "./transactions/use-ledger-table-selection": "./src/transactions/use-ledger-table-selection/use-ledger-table-selection.ts",
     "./transactions/use-ledger-table-sort": "./src/transactions/use-ledger-table-sort/use-ledger-table-sort.ts",

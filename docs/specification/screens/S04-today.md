@@ -291,11 +291,11 @@ everything between needs a rule.
 | Boundary | Rule |
 |---|---|
 | **Cold open** | Anchored on today, whether or not today holds anything |
-| **Forward horizon** | Expected entries are drawn to the end of the fourth month ahead, then stop with a stated reason. Recurring rules repeat forever; past a season, expected money describes the rule rather than the person |
+| **Forward horizon** | Expected entries stop at the **end of the current month**, with a stated reason. Recurring rules repeat forever, so a horizon is not optional; this one answers *what is still coming before the month turns* and nothing wider. S21 Recurring and S34 Subscriptions are where a rule's whole future lives, and a list that projected a quarter would be answering their question badly on a screen that cannot show a rule |
 | **Expected that arrived** | The real transaction replaces the expected one in place and is marked as having been expected. Never both |
 | **Expected that did not arrive** | Stays in its own past day, still dashed, still uncoloured. It is a rule that did not fire, not a debt |
 | **Backward end** | The opening balance, marked as first. There is nothing before it by construction: every figure above is derived from it |
-| **Replica window** | The phone holds 18 months. Past it the list states plainly that the rest is on the machine, and **months outside the window show no totals rather than partial ones** |
+| **The far end is reachable offline** | There is no window to hit. The replica is a complete copy of the whole ledger (`architecture/14` §14.0 — *no 400-row window*, no TTL, not evicted), so scrolling to 2021 on a plane reads local rows like every other day. Offline changes what this screen can *compute*, never what it can reach: §6's cached banner and the class **S** figure are the whole story |
 | **Quiet day** | One line |
 | **Quiet run** | Two or more consecutive: one row naming the span and its length, with *Show*. Twenty-five days is not twenty-five rows |
 | **A jump** | Picking a far date loads that date's neighbourhood and **nothing between**. Scrolling from there walks outward day by day; `TodayPill` is the only way back. The list is never asked to guess a scroll position for content it has not loaded, which is the defect that makes infinite lists jump under the reader |
@@ -338,11 +338,22 @@ list at the destination without traversal.
 
 ## 9. Open questions
 
-1. **Is the forward horizon four months?** Drawn as end-of-fourth-month. The
-   alternative is a fixed count of expected entries, which is steadier for a
-   sparse ledger and jumpier for a dense one.
-2. **Is the replica window 18 months?** It sets how much of the ledger is
-   readable on a plane, and how much SQLite the phone carries.
+1. ~~**How far forward?**~~ **Decided: to the end of the current month.** The
+   alternative was a fixed count of expected entries, which is steadier for a
+   sparse ledger and jumpier for a dense one — adding four monthly bills would
+   silently pull the horizon from ten months out to five, and *what is left this
+   month* would stop being answerable by looking.
+
+   The narrow horizon is also what keeps S21 and S34 worth their screens: this
+   list says what is still coming before the month turns; a rule's whole future
+   is a different question and belongs where a rule can be edited.
+2. ~~**Is there a replica window?**~~ **There never was one.**
+   `architecture/14` §14.0 already states it — *the replica holds the whole
+   ledger, no 400-row window* — and `SPEC.md` §14.3 that it is not evicted and
+   has no TTL. An earlier draft of this screen invented an eighteen-month window
+   and a boundary notice to go with it; both are removed. The whole ledger is
+   reachable offline, and offline constrains only what can be **computed** (§5's
+   class **S** figure), never what can be reached.
 3. ~~**Are the picker's per-tile figures readable offline?**~~ **Decided by
    `computations.md`: yes.** §5 period spend is class **R** for the base figure,
    so the strip's figure and every picker tile compute from the replica. The
