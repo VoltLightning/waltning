@@ -1,7 +1,7 @@
 # S11 · Calendar
 
-**Surface** both · **Journeys** J5, J6, J13 · **Frequency** weekly
-**Design** none
+**Surface** desk · **Journeys** J5, J6, J13 · **Frequency** weekly
+**Design** [S11.html](design/S11.html)
 **Status** specified · tier 1
 
 > Absorbs the former S23 (Calendar · web). It was the same component at a wider
@@ -33,34 +33,16 @@ Scale and navigation are independent, and both persist.
 
 ### Mobile — 390pt
 
-```
-┌ period header ──────────────────────────────────┐
-│  ‹   August 2026   ›              Today         │
-│  −3 210,40 zł  ·  84 entries                    │
-├─────────────────────────────────────────────────┤
-│  [Day] [Week] [Month] [Year]      [⇅ stepped]   │
-├─────────────────────────────────────────────────┤
-│  Mo   Tu   We   Th   Fr   Sa   Su               │
-│               1    2    3    4    5             │
-│   6    7    8    9   10   11   12               │  ← density from the ramp,
-│  ▓▓   ░░   ▒▒   ░░   ──   ▓▓   ▒▒               │     figure always present
-│ −340  −12  −86  −20        −210  −64            │
-│  13   14   15   16   17   18   19               │
-│                          ╌╌╌╌  ← projected      │
-└─────────────────────────────────────────────────┘
-```
+**S11 does not exist at phone width.** S04's `PeriodPicker` is the calendar
+there: the same month grid, the same per-day marks, expanding over the list
+instead of replacing it. A calendar that has to hand you off to a list — *see
+as list* — is confessing it cannot show you one; as a panel over the list it
+never has to.
 
-| Scale | Cell | Shows |
-|---|---|---|
-| Day | `TransactionRow` | Chronological entries, running day total, projections last |
-| Week | `DayCell` | Seven columns — net, count, category dots |
-| Month | `DayCell` compact | Grid — per-day net, density shading |
-| Year | `MonthCell` | Twelve tiles — month net plus a daily sparkline. **One figure**, scope from the shell; both totals live in the period header, which is the headline (§6.7) |
-
-**Density shading is reinforcement, never the encoding.** A heavy day and a
-moderate day are adjacent steps on a single-hue ramp, so every cell carries its
-figure as text (Q8, P5). A count alone is never shown — a number of transactions
-answers nothing.
+The four scales and two navigation modes below are what the phone cannot carry.
+`PeriodPicker` offers three depths (days, months, years) and one navigation
+mode, because a phone-width cell has room for a number and a mark and nothing
+that would make a stepped-versus-continuous choice mean anything.
 
 ### Web — ≥1024px
 

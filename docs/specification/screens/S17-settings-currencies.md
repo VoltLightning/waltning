@@ -1,7 +1,7 @@
 # S17 · Settings · Currencies
 
 **Surface** both · **Journeys** J10, J1 · **Frequency** rare
-**Design** none
+**Design** [S17.html](design/S17.html)
 **Status** specified · tier 3
 
 ---

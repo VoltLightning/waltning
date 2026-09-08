@@ -1,7 +1,7 @@
 # S25 · Reports
 
 **Surface** wide · **Journeys** J6, J11 · **Frequency** weekly to monthly
-**Design** none
+**Design** [S25.html](design/S25.html)
 **Status** specified · tier 2
 
 ---
@@ -18,7 +18,8 @@ Compare periods and drill into categories, without exporting anything.
 | S01 | Any chart widget | S01 |
 | S11 | *See as report* for a period | S11 |
 
-**Exits** — any chart element → S10 filtered · S27 to export the current view.
+**Exits** — any chart element → S10 filtered on the desk, S04 scrolled to the
+period on the phone · S27 to export the current view.
 
 ## 3. Layout
 

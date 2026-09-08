@@ -1,7 +1,7 @@
 # S33 · Settings · Models and providers
 
 **Surface** both · **Journeys** J09 · **Frequency** rare
-**Design** none
+**Design** [S33.html](design/S33.html)
 **Status** specified
 
 ---

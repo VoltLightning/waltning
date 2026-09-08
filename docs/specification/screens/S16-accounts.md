@@ -1,7 +1,7 @@
 # S16 · Accounts
 
 **Surface** both · **Journeys** J14, J1, J2 · **Frequency** rare
-**Design** none
+**Design** [S16.html](design/S16.html)
 **Status** specified · tier 2
 
 ---
@@ -18,6 +18,23 @@ The register: what accounts exist, what is in them, and which total they feed.
 | S01 | `balances` widget | S01 |
 | S05 | Account chip → *new* | S05, with it selected |
 | S29a | First-run step 3 | S29a |
+| S04 | The net-worth strip | S04 |
+
+**Exits** — an account row → its transactions, **filtered and visibly so**:
+S04 on the phone, S10 on the desk · a group's title → the same, filtered to
+every account in it · *Add account* → the create form · a clearing account's
+amber marker → J8 allocation.
+
+**Tapping an account is a filter, not a screen.** The register answers *what
+exists and what is in it*; *what happened in it* is the ledger with one clause
+added, and the ledger is a screen that already exists on both surfaces. A
+third list of the same rows, reachable only from here, would be S10's phone
+layout invented a second time — which is the thing S04 §3 just retired.
+
+**A group's title filters to its members, and this is why groups are worth
+having on a phone.** `account_groups` earns its place on the desk through
+`FX Cost` by `institution` (§5); on a phone it earns it by being the only way
+to ask *what did everything at this bank cost me* in one tap.
 
 ## 3. Layout
 
@@ -58,6 +75,8 @@ account is an ordinary account that belongs to a different total (`SPEC.md`
 §6.7 — where *jointly-owned* is the system's own word for it, as it is in
 `flows/J14` §4), and **a negative balance here gets no warning treatment**,
 because a shared account being overdrawn is a real fact.
+
+**An account is not named after its group.** *Cash* holding an account called *Cash* spends a row saying what the card's title already said; the register names the account — *Wallet*, *Travel float*, *Everyday*, *Studio* — and the group names the kind. Where a migration produces the repetition, the row keeps the imported name and the rename is an ordinary edit; nothing is renamed on the user's behalf.
 
 Each group — kind or `SharedGroup` — is a card of grouped rows: the group name
 is the card's title, its per-currency subtotals the card's one header figure,

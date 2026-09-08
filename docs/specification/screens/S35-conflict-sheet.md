@@ -1,7 +1,7 @@
 # S35 · Conflict sheet
 
 **Surface** both · **Journeys** J2 · **Frequency** a few times a year
-**Design** none
+**Design** [S35.html](design/S35.html)
 **Status** specified · tier 2
 
 ---

@@ -65,6 +65,54 @@ describe("screens and flows", () => {
   });
 });
 
+describe("screen designs", () => {
+  // A drawing that no doc points at, or a Design link that resolves to nothing,
+  // is how the two halves drift: the prose stops describing the picture and
+  // nobody notices, because neither half fails on its own.
+  const screensRoot = join(specRoot, "screens");
+  const designRoot = join(screensRoot, "design");
+  const docs = readdirSync(screensRoot).filter((f) => /^S\d\d.*\.md$/.test(f));
+
+  it("has every Design link resolving to a file that exists", () => {
+    const broken: string[] = [];
+    for (const doc of docs) {
+      const line = readFileSync(join(screensRoot, doc), "utf8")
+        .split("\n")
+        .find((l) => l.startsWith("**Design**"));
+      expect(line, `${doc} has no **Design** line`).toBeDefined();
+      for (const match of (line ?? "").matchAll(/\]\((design\/[^)]+)\)/g)) {
+        const target = match[1] ?? "";
+        if (!existsSync(join(screensRoot, target))) broken.push(`${doc}: ${target}`);
+      }
+    }
+    expect(broken, "Design links pointing at nothing").toEqual([]);
+  });
+
+  it("has every drawing owned by a screen that exists", () => {
+    const ids = new Set(docs.map((d) => d.slice(0, 3)));
+    const orphans = readdirSync(designRoot)
+      .filter((f) => f.endsWith(".html"))
+      .filter((f) => !ids.has(f.slice(0, 3)));
+    expect(orphans, "drawings under design/ with no screen document").toEqual([]);
+  });
+
+  it("has every drawing claimed by its own screen document", () => {
+    const claimed = new Set<string>();
+    for (const doc of docs) {
+      const line = readFileSync(join(screensRoot, doc), "utf8")
+        .split("\n")
+        .find((l) => l.startsWith("**Design**"));
+      for (const match of (line ?? "").matchAll(/\]\((design\/[^)]+)\)/g)) {
+        claimed.add((match[1] ?? "").replace("design/", ""));
+      }
+    }
+    const unclaimed = readdirSync(designRoot)
+      .filter((f) => f.endsWith(".html"))
+      .filter((f) => !claimed.has(f));
+    expect(unclaimed, "drawings no screen document names").toEqual([]);
+  });
+});
+
 describe("screen documents", () => {
   const REQUIRED = [
     "## 1. Purpose",

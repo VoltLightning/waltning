@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>S18 · Rates — Waltning</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap');
+body{margin:0;background:#efe9dd;font-family:'IBM Plex Sans',system-ui,sans-serif;
+     display:flex;flex-direction:column;align-items:center;gap:12px;padding:28px 16px 40px}
+h1{font-size:15px;font-weight:600;color:#4a4438;margin:0;letter-spacing:-.1px}
+p.note{max-width:390px;margin:0;font-size:12px;line-height:1.5;color:#6f6759;text-align:center}
+p.note code{font-size:11.5px;background:#e4dccd;border-radius:4px;padding:1px 4px}
+.frame{width:390px;height:844px;overflow:hidden;border-radius:22px;
+       box-shadow:0 10px 34px -14px rgba(51,48,42,.42);flex-shrink:0}
+.n{font-variant-numeric:tabular-nums}
+.k{font-size:11px;font-weight:600;letter-spacing:.5px;color:#8a8478;text-transform:uppercase}
+a{color:#5c7357}
+</style></head><body>
+<h1>S18 · Rates</h1>
+<p class="note">A drawing of the intent, not a source to copy. The screen ships as React Native
+against <code>packages/ui</code>; this file exists so <code>S18-settings-exchange-rates.md</code> has something to point at.</p>
+<div class="frame"><div style="width: 390px; height: 844px; background: #faf6ef; color: #33302a; display: flex; flex-direction: column; padding: 64px 20px 32px 20px; box-sizing: border-box; gap: 16px; overflow: hidden; font-family: 'IBM Plex Sans', system-ui, sans-serif;">
+  <div style="flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 0 4px;">
+    <div style="display: flex; flex-direction: column; gap: 2px; min-width: 0;">
+      <div style="font-size: 22px; font-weight: 600; letter-spacing: -0.3px;">Exchange rates</div>
+      <div style="font-size: 13px; color: #8a8478;">What is held, and what has stopped</div>
+    </div>
+    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="#8a8478" stroke-width="1.6" stroke-linecap="round"><path d="M11 4l-5 5 5 5"></path></svg>
+  </div>  <div style="flex-shrink: 0; background: #f6efe2; border: 1px solid #e3d5b8; border-radius: 12px; padding: 13px 15px; display: flex; gap: 11px;"><div style="width: 5px; border-radius: 3px; background: #c99a3f; flex-shrink: 0;"></div><div style="display: flex; flex-direction: column; gap: 2px;"><div style="font-size: 13px; font-weight: 600;">NBP has not answered since 2 September</div><div style="font-size: 12px; line-height: 1.45; color: #8a6d28;">Rates are carried forward for ten days and then figures that need one say so, rather than quietly using a stale number.</div></div></div>
+  <div style="flex-shrink: 0; display: flex; gap: 10px;">
+    <div style="background: #f8f4ec; border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 2px;"><div style="flex: 1; display: flex; flex-direction: column; gap: 2px;"><div style="font-size: 11px; color: #8a8478;">Pairs held</div><div class="n" style="font-size: 20px; font-weight: 600; color: #33302a;">4</div></div></div>
+    <div style="background: #f8f4ec; border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 2px;"><div style="flex: 1; display: flex; flex-direction: column; gap: 2px;"><div style="font-size: 11px; color: #8a8478;">Oldest</div><div class="n" style="font-size: 20px; font-weight: 600; color: #8a6d28;">5 days</div></div></div>
+    <div style="background: #f8f4ec; border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 2px;"><div style="flex: 1; display: flex; flex-direction: column; gap: 2px;"><div style="font-size: 11px; color: #8a8478;">Manual</div><div class="n" style="font-size: 20px; font-weight: 600; color: #33302a;">3</div></div></div>
+  </div>
+  <div style="flex-shrink: 0; display: flex; flex-wrap: wrap; gap: 7px;">
+    <span style="padding: 7px 12px; border-radius: 9px; font-size: 13px; font-weight: 600; background: #eef0e6; color: #4c6247; border: 1px solid #cfdcc6;">EUR/PLN</span><span style="padding: 7px 12px; border-radius: 9px; font-size: 13px; color: #8a8478; border: 1px solid #eae3d5;">GBP/PLN</span><span style="padding: 7px 12px; border-radius: 9px; font-size: 13px; color: #8a8478; border: 1px solid #eae3d5;">CHF/PLN</span><span style="padding: 7px 12px; border-radius: 9px; font-size: 13px; color: #8a8478; border: 1px solid #eae3d5;">USD/PLN</span>
+  </div>
+  <div style="flex-shrink: 0; display: flex; flex-direction: column; gap: 8px;">
+    <div class="k">EUR / PLN</div>
+      <div style="background: #ffffff; border: 1px solid #eae3d5; border-radius: 14px; padding: 0; display: flex; flex-direction: column; gap: 0; overflow: hidden;">
+<div style="display: flex; align-items: center; gap: 10px; padding: 11px 16px; border-bottom: 1px solid #f1ebe0;"><span class="n" style="width: 56px; font-size: 12px; color: #8a8478;">5 Sep</span><div style="flex: 1; display: flex; flex-direction: column; gap: 1px;"><span style="font-size: 14px; font-weight: 600;">EUR → PLN</span><span style="font-size: 11px; color: #8a6d28;">carried forward · 3 days old</span></div><span class="n" style="font-size: 14px; font-weight: 600;">4,3120</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 11px 16px; border-bottom: 1px solid #f1ebe0;"><span class="n" style="width: 56px; font-size: 12px; color: #8a8478;">2 Sep</span><div style="flex: 1; display: flex; flex-direction: column; gap: 1px;"><span style="font-size: 14px; font-weight: 600;">EUR → PLN</span><span style="font-size: 11px; color: #8a8478;">NBP · table A</span></div><span class="n" style="font-size: 14px; font-weight: 600;">4,3120</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 11px 16px; border-bottom: 1px solid #f1ebe0;"><span class="n" style="width: 56px; font-size: 12px; color: #8a8478;">1 Sep</span><div style="flex: 1; display: flex; flex-direction: column; gap: 1px;"><span style="font-size: 14px; font-weight: 600;">EUR → PLN</span><span style="font-size: 11px; color: #8a8478;">NBP · table A</span></div><span class="n" style="font-size: 14px; font-weight: 600;">4,3088</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 11px 16px; "><span class="n" style="width: 56px; font-size: 12px; color: #8a8478;">29 Aug</span><div style="flex: 1; display: flex; flex-direction: column; gap: 1px;"><span style="font-size: 14px; font-weight: 600;">EUR → PLN</span><span style="font-size: 11px; color: #8a8478;">you set this one</span></div><span class="n" style="font-size: 14px; font-weight: 600;">4,2960</span></div>
+  </div>
+  </div>
+  <div style="flex-shrink: 0; flex-grow: 1;"></div>
+  <div style="flex-shrink: 0; background: #5c7357; border-radius: 12px; padding: 15px; text-align: center; font-size: 15px; font-weight: 600; color: #ffffff;">Set a rate by hand</div>
+  <div style="flex-shrink: 0; text-align: center; font-size: 13px; color: #8a8478;">Try NBP again</div>
+</div></div>
+</body></html>

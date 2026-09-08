@@ -19,8 +19,10 @@ restating them.
 | Dashboard first meaningful paint | < 800 ms | S01 | It is the app's front door |
 | Simple ledger query (row fetch, filtered list) | < 100 ms | §15 | Small database; anything slower is a missing index |
 | Any **aggregate** (period spend, category) | < 200 ms warm · < 400 ms cold | — | A different class from the above: grouping over 25k rows. Only stays fast because every index carries `WHERE deleted_at IS NULL` |
-| Transaction search, trigram | < 300 ms | S10 | 2 100 days of history, permanently mixed-language archive |
-| Calendar month render | < 150 ms | S11 | Virtualized; continuous scroll must not stutter |
+| Transaction search, trigram | < 300 ms | S04 · S10 | 2 100 days of history, permanently mixed-language archive |
+| Calendar month render | < 150 ms | S11 · S04's picker | Virtualized; continuous scroll must not stutter |
+| S04 scroll, either direction | 60 fps sustained | S04 | Windowed around an anchor. The budget is held by loading a bounded neighbourhood, never the span between a jump and today (S04 §10) |
+| S04 strip, tracking the list | < 1 frame behind | S04 | The label follows the list, so it must not relabel per frame under a fling — sample, do not subscribe |
 | Statement import, 300 rows | < 90 s end-to-end | J04 | Dominated by model latency, batched ~50/call |
 | Receipt extraction, one pass | < 15 s | J03 | Background, queued — not blocking |
 | Offline write → local ack | **< 50 ms** | J02 | The outbox must feel instant or capture fails |

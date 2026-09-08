@@ -1,7 +1,7 @@
 # S24 · Dashboard layout
 
 **Surface** wide · **Journeys** J6 · **Frequency** rare
-**Design** none
+**Design** [S24.html](design/S24.html)
 **Status** specified · tier 3
 
 ---

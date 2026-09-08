@@ -1,7 +1,7 @@
 # S03 · Agent
 
 **Surface** both · **Journeys** J9, J12 · **Frequency** a few times a week
-**Design** Claude Design project
+**Design** [S03.html](design/S03.html)
 **Status** specified · tier 1
 
 ---

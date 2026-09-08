@@ -1,7 +1,7 @@
 # S19 · Settings · Categories
 
 **Surface** both · **Journeys** J12 · **Frequency** rare
-**Design** none
+**Design** [S19.html](design/S19.html)
 **Status** specified · tier 3
 
 ---

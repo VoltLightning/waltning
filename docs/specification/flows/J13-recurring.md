@@ -1,7 +1,7 @@
 # J13 · Recurring
 
 **Frequency** monthly review · **Surface** both
-**Screens** S21, S34, S11, S09, S05
+**Screens** S21, S34, S09, S05 · S04 above today (phone) / S11 (desk)
 **Status** specified
 
 ---
@@ -31,7 +31,7 @@ S21 Settings · Recurring
         ▸ Run now  → materialize this occurrence immediately
         │
    PROJECTION
-        │  rules project forward into S11
+        │  rules project forward — above today in S04, into the grid in S11
         │  rendered DASHED, tagged `scheduled`
         │  EXCLUDED from any total labelled actual
         │

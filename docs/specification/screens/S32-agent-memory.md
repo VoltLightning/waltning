@@ -1,7 +1,7 @@
 # S32 · Settings · What the agent remembers
 
 **Surface** both · **Journeys** J9, J2 · **Frequency** rare
-**Design** none
+**Design** [S32.html](design/S32.html)
 **Status** specified · tier 3
 
 > Added with `SPEC.md` §11.6. Memory is the one thing the agent writes without a

@@ -1,7 +1,7 @@
 # S13 · Counterparty detail
 
 **Surface** both · **Journeys** J7, J8 · **Frequency** weekly
-**Design** none
+**Design** [S13.html](design/S13.html)
 **Status** specified · tier 2
 
 ---
@@ -18,8 +18,8 @@ One person's full position, across every currency at once.
 | S09 | Counterparty field | S09 |
 | S03 | An agent result | S03 |
 
-**Exits** — S14 settle · S15 edit · S05 prefilled · S10 filtered to their
-history.
+**Exits** — S14 settle · S15 edit · S05 prefilled · their history filtered:
+S10 on the desk, S04 on the phone.
 
 ## 3. Layout
 

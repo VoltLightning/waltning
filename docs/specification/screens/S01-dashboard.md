@@ -1,7 +1,7 @@
 # S01 · Dashboard
 
 **Surface** wide (RN Web / DeX / iPad) · **Journeys** J6, J4, J8, J11 · **Frequency** daily
-**Design** Claude Design project
+**Design** none — the desk layout is not drawn yet
 **Status** specified · tier 1
 
 ---
@@ -18,7 +18,8 @@ Where do I stand, and what needs action — with the canvas to actually look.
 | Any screen | Brand mark in the shell | — |
 | S24 | Layout saved | S01, new arrangement live |
 
-**Exits** — any widget → its drill-through (S10 filtered, S11, S12, S25) ·
+**Exits** — any widget → its drill-through (S10 filtered, S11, S12, S25), all
+of them desk screens like S01 itself ·
 unsettled banner → the unallocated transaction · S24 to rearrange.
 
 ## 3. Layout

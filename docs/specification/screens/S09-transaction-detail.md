@@ -1,7 +1,7 @@
 # S09 · Transaction detail
 
 **Surface** both · **Journeys** J5, J3, J7, J11, J13 · **Frequency** several times a week
-**Design** none
+**Design** [S09.html](design/S09.html)
 **Status** specified · tier 1
 
 ---
@@ -14,8 +14,9 @@ Show everything one transaction is, and let all of it be corrected.
 
 | From | Via | Back to |
 |---|---|---|
-| S10 | Tap a row | S10, scroll position kept |
-| S11 | Tap an entry | S11, anchor kept |
+| S04 | Tap a row | S04, scroll position kept |
+| S10 | Tap a row · desk | S10, scroll position kept |
+| S11 | Tap an entry · desk | S11, anchor kept |
 | S04 | Tap a Recent row | S04 |
 | S03 | A row in an agent result | S03 |
 | S28 | *Fix inline* on a completeness warning | S28, warning cleared |

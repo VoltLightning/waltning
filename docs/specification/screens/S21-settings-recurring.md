@@ -1,7 +1,7 @@
 # S21 · Settings · Recurring
 
 **Surface** both · **Journeys** J13 · **Frequency** monthly review
-**Design** none
+**Design** [S21.html](design/S21.html)
 **Status** specified · tier 3
 
 ---
@@ -15,7 +15,7 @@ Keep the 24 migrated rules working, and notice when one has stopped.
 | From | Via | Back to |
 |---|---|---|
 | Settings | Recurring | Settings |
-| S11 | A projected entry → *edit rule* | S11 |
+| S04 / S11 | A projected entry → *edit rule* | The caller |
 
 ## 3. Layout
 
@@ -64,7 +64,8 @@ index on `(recurring_id, occurrence_date)` rejects a second insert (§6.5).
 
 ## 8. Rules this screen must obey
 
-- **§14.4** — projections appear in S11 dashed and tagged `scheduled`, and are
+- **§14.4** — projections appear dashed and tagged `scheduled` — above today in
+  S04's list, in the grid in S11 — and are
   excluded from every total labelled actual.
 - **§6.5** — an occurrence fills exactly once, enforced by the database rather
   than by the scheduler.

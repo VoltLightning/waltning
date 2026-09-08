@@ -1,7 +1,7 @@
 # S10 · Transactions list
 
-**Surface** both · **Journeys** J5, J6, J7, J12 · **Frequency** several times a week
-**Design** none
+**Surface** desk · **Journeys** J5, J6, J7, J12 · **Frequency** several times a week
+**Design** [S10.html](design/S10.html)
 **Status** specified · tier 1
 
 ---
@@ -14,8 +14,8 @@ Find the thing you remember.
 
 | From | Via | Back to |
 |---|---|---|
-| Tab bar | Ledger | — |
-| S04 | *Show all* | S04 |
+| Shell | Ledger | — |
+| S01 | A widget's drill-through | S01, filter carried and **visible** |
 | S25 | Tap a chart segment | S25, filter carried and **visible** |
 | S11 | Tap a day → *see as list* | S11 |
 | S13 | A counterparty's history | S13, filtered to them |
@@ -27,42 +27,16 @@ Find the thing you remember.
 
 ### Mobile — 390pt
 
-```
-┌─────────────────────────────────────────────────┐
-│  🔍  Search payee, note, amount                 │
-│                                                 │
-│  [Business ✕] [Feb 2026 ✕] [+ Filter]           │  ← active filters as chips
-│                                                 │
-│  ┌ 1 284 transactions · −18 940,20 zł ───────┐  │  ← running total for filter
-│  └───────────────────────────────────────────┘  │
-├─────────────────────────────────────────────────┤
-│  6 Aug                                          │
-│  Corner Café · Eating out        −48,90 zł      │
-│  Salary · Employment          +9 200,00 zł      │
-│  5 Aug                                          │
-│  Shop A · Groceries        62,40 € · 4,0231     │
-│                                251,04 zł        │
-│  Cash → BANK-A            −500,00 → +500,00 zł  │  ← TransferRow, one row
-└─────────────────────────────────────────────────┘
-```
+**S10 does not exist at phone width.** S04 Today answers *find the thing you
+remember* at thumb scale: its list is the whole ledger and its search lives in
+the date strip, so a second scrolling list of the same rows would be the same
+screen reached by a longer route. Two surfaces competing for one job is how
+both get half-designed — the mirror of S01's own density rule.
 
-**Active filters are chips carrying their value, not their name** — `Business`,
-not `Scope: Business`. Each has its own `✕`, and there is a separate clear-all,
-because clearing one filter and clearing six are different intentions.
-
-**The running total is the point of the filter bar.** *"What did I spend on the
-flat this year"* is a filter plus a total, and if the total is not on screen the
-filter has only narrowed a list. On mobile the running total is the screen's
-hero figure and sits in a `Card`; the search field, filter chips and the row
-list stay on the ground.
-
-When the filtered set contains a capital event, the total **splits into two
-lines** — the full figure, and the figure without one-offs (§6.8). Both, always,
-neither a setting. One property purchase is 96% of its category, so a `Home`
-filter without this reads as broken.
-
-Rows group by date. Foreign rows carry `FxAmount`; transfers render as
-`TransferRow` — one row showing both accounts, never two rows to re-pair.
+This is a density limit, not a platform one. The same phone renders S10 once it
+has the width to give it — RN Web, DeX, an external display
+(`architecture/14` §14.4) — because what the table below needs is columns, and
+a 390pt viewport has no columns to give.
 
 ### Web — ≥1024px
 

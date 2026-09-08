@@ -1,7 +1,7 @@
 # S34 · Subscriptions
 
 **Surface** both · **Journeys** J13 · **Frequency** monthly review
-**Design** none
+**Design** [S34.html](design/S34.html)
 **Status** specified · tier 3
 
 ---

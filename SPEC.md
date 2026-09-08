@@ -293,7 +293,7 @@ writes the first file that needs it, which is how a stack becomes an accident.
 | **Test runner** | **Vitest** | ESM and TS native, no transform config. The database tests need a real Postgres, not a mock, so the runner's job is orchestration |
 | **Device SQLite** | **`expo-sqlite`** | First-party, async API, tracks each SDK, does not fight EAS. `op-sqlite` is genuinely faster via JSI — and for the whole ledger (~8,000 rows, single-digit megabytes — §14.0) the bottleneck is a Pi over WireGuard, not the driver |
 | **Client cache** | **TanStack Query** (tRPC's client is built on it) | **Memory-only persistence.** Persisting it to disk is the standard Expo pattern and would silently promote arbitrary server responses into the encrypted container, breaking §14.3's account of what the replica holds |
-| **List virtualization** | **`@shopify/flash-list`** | The calendar is ~2 100 days and the transactions list reaches ~25 000 rows. `FlatList` does not hold S11's 150 ms budget at that size |
+| **List virtualization** | **`@shopify/flash-list`** | The calendar is ~2 100 days and the ledger reaches ~25 000 rows. `FlatList` does not hold S11's 150 ms budget at that size — and S04's list is now the whole ledger in one scroll, bidirectional and windowed around an anchor, which is the harder case: it must hold position while content loads on both sides |
 | **Routing** | **`expo-router`** | File-based, one tree for native and web — which matters because they are one codebase (§14.6) |
 | **Charts** | **`victory-native`** + `react-native-svg` | Already flagged as the RN Web friction point (`platform-notes` §11). Line, bar, donut, pie, area and sparkline are fine; **treemap is the one that likely needs a web-only path**, and it is S25-only |
 | **Password hash** | **`@node-rs/argon2`** | Rust napi bindings with prebuilt arm64. The node-gyp `argon2` package builds from source on the Pi, which is slow and fragile |
@@ -1363,7 +1363,7 @@ covering indexes every aggregate needed.
 | `receipt_lines` → **`transaction_lines`**, keyed on `transaction_id` | Lines belong to the payment, not the photograph (§6.10, §10.3). Today a hand-entered card payment cannot be broken down at all |
 | `ryczalt_rate` on `transactions`; `ryczalt_rates` table; `counterparties.default_activity` | Revenue is live (§13.6) |
 | `tax_period_locks` | Closing a period is an explicit act (§13.4) |
-| GIN index on `receipts.merchant` and line descriptions | Receipt search (S10) |
+| GIN index on `receipts.merchant` and line descriptions | Receipt search (S04 · S10) |
 | `import_rows.rule_snapshot` | Rule conditions as they were when they fired (§9.2) |
 
 ### 6.6 Counterparties and debt
@@ -2674,7 +2674,7 @@ cost a reading that had not happened yet. Retention stays unlimited, which is
 what the evidence argument requires; this only removes the growth rate as a
 concern on a Pi with a finite SSD.
 
-**The merchant and line descriptions are indexed for search** (S10). They are
+**The merchant and line descriptions are indexed for search** (S04 · S10). They are
 already structured columns, so this is a GIN index rather than a pipeline, and
 it makes a business expense provable from its contents rather than only its
 total. The raw response stays unindexed — it carries confidence scores and model
@@ -4324,7 +4324,7 @@ is S34's job, and `BrandIcon`'s `brandKey` prop is exactly the seam that
 wiring lands on without another transaction-facing change. Renders on S04's
 Recent list, S09's hero (beside the account line — `FieldsCard` draws every
 field through one generic row and singling out Payee for an icon would be
-the special case that component exists to avoid), S10's ledger, and S13's
+the special case that component exists to avoid), S04's and S10's ledger, and S13's
 counterparty history (the same `TransactionRow`); a screen that has not been
 updated to pass `brandKey` draws no icon at all rather than a fallback
 monogram on every row, which would read as "recognised nothing" on a screen
