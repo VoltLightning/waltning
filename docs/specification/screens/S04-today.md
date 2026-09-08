@@ -71,10 +71,11 @@ header has two layouts and the scroll chooses between them, continuously —
 it is one control resizing, not two headers swapping.
 
 - **At rest** the month is a large title and **the whole title is the picker**:
-  tapping it opens Months, which is where you go when the month you want is not
-  the next one. There are no arrows. At the top of a screen the answer to
-  "somewhere else" is usually not "one step", and a stepper flanking a title
-  makes the title look like a value being scrubbed.
+  tapping it opens `PeriodPicker` — a sheet holding the year and its twelve
+  months — which is where you go when the month you want is not the next one.
+  There are no arrows. At the top of a screen the answer to "somewhere else" is
+  usually not "one step", and a stepper flanking a title makes the title look
+  like a value being scrubbed.
 - **Scrolled** the title shrinks to a single row and **the stepper appears**
   beside search, as one control with a divider rather than two loose chevrons.
   The title is no longer a target worth aiming at, and stepping is what you
@@ -87,6 +88,18 @@ the midpoint of the travel — one has finished leaving before the other starts
 arriving, because two layouts at half opacity are two ghosts. Exactly one of
 them is ever in the accessibility tree: opacity is continuous and reachability
 is not, and a reader walking both hears the month twice.
+
+**The picker is a sheet, not a page.** The title routed straight to the Months
+page first, and rendered that read as a bug: tapping *September* collapsed the
+header and left a year on screen, with nothing to choose from and no sign the
+pager had changed page at all. A control whose affordance says *choose* has to
+answer with a choice. The sheet holds a year of months at once — twelve is the
+whole set and it fits in four columns, where a list would make the reader
+scroll to find out there was nothing more to find. Its year steps
+independently, so looking at 2024 is not choosing a month in it. Every month is
+offered including the empty ones, because a grid that hid them would change
+shape as the ledger fills; the forward horizon is the exception, and a month
+that has not happened is disabled rather than absent (§6).
 
 **The collapse is spread over the height the header gives up**, not a round
 number, so the header rises at exactly the speed of the content beneath it and

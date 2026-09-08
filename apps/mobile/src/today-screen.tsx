@@ -7,7 +7,7 @@ import { usePhoneLedger } from "@waltning/client/ledger/use-phone-ledger";
 import { useSpendByCategory } from "@waltning/client/ledger/use-spend-by-category";
 import { useUnsettledBanner } from "@waltning/client/ledger/use-unsettled-banner";
 import { useWhereItWent } from "@waltning/client/ledger/use-where-it-went";
-import { accountingDate, shiftMonth, yearMonth } from "@waltning/core/date";
+import { accountingDate, shiftMonth, type YearMonth, yearMonth } from "@waltning/core/date";
 import * as money from "@waltning/core/money";
 import { SpendRows } from "@waltning/ui/dashboard/spend-rows";
 import { monthLabel } from "@waltning/ui/i18n/locales";
@@ -18,6 +18,7 @@ import { GatewayGrid } from "@waltning/ui/shell/molecules/gateway-grid/gateway-g
 import { MonthSummary } from "@waltning/ui/shell/month-summary";
 import { NetWorthStrip } from "@waltning/ui/shell/net-worth-strip";
 import { PagerFrame } from "@waltning/ui/shell/organisms/pager-frame/pager-frame";
+import { PeriodPicker } from "@waltning/ui/shell/period-picker";
 import {
   ArrowsLeftRightIcon,
   CircleHalfIcon,
@@ -247,11 +248,29 @@ export default function Today() {
     [pager.showPage],
   );
   /**
-   * The title at rest is the picker, and Months is where it goes (S04 §3).
-   * The page is already the year as a grid of twelve, so the picker is a page
-   * this screen has rather than a sheet it would have to grow.
+   * The title is the picker, and it opens one (S04 §3).
+   *
+   * It routed to the Months page first, and rendered that read as a bug:
+   * tapping *September* collapsed the header and left a year on screen, with
+   * nothing to choose from and no sign the pager had changed page at all. A
+   * control whose affordance says *choose* has to answer with a choice.
+   *
+   * The sheet's year is its own state, so stepping to 2024 to look does not
+   * move the ledger — only picking a month does.
    */
-  const handlePickPeriod = useCallback(() => pager.showPage("months"), [pager.showPage]);
+  const [pickerYear, setPickerYear] = useState<number | null>(null);
+  const openPicker = useCallback(
+    () => setPickerYear(Number(pager.state.date.slice(0, 4))),
+    [pager.state.date],
+  );
+  const closePicker = useCallback(() => setPickerYear(null), []);
+  const handlePickMonth = useCallback(
+    (month: YearMonth) => {
+      setPickerYear(null);
+      pager.showMonth(month);
+    },
+    [pager.showMonth],
+  );
 
   /**
    * One offset, shared with the header, written by whichever page is scrolling.
@@ -571,24 +590,39 @@ export default function Today() {
   );
 
   return (
-    <PagerFrame
-      periodLabel={
-        pager.label.unit === "year"
-          ? String(pager.label.year)
-          : // The year is the caption underneath, so the title is the month
-            // alone whichever year it is in.
-            monthLabel(month, locale).replace(/\s+\d{4}$/, "")
-      }
-      periodDetail={pager.label.unit === "year" ? null : String(pager.label.year)}
-      onPickPeriod={handlePickPeriod}
-      scrollY={scrollY}
-      onPrevious={pager.previous}
-      onNext={pager.next}
-      onSearch={handleShowAll}
-      barLabels={barLabels}
-      pages={pages}
-      activeKey={pager.state.page}
-      onPageChange={handlePageChange}
-    />
+    <>
+      <PagerFrame
+        periodLabel={
+          pager.label.unit === "year"
+            ? String(pager.label.year)
+            : // The year is the caption underneath, so the title is the month
+              // alone whichever year it is in.
+              monthLabel(month, locale).replace(/\s+\d{4}$/, "")
+        }
+        periodDetail={pager.label.unit === "year" ? null : String(pager.label.year)}
+        onPickPeriod={openPicker}
+        scrollY={scrollY}
+        onPrevious={pager.previous}
+        onNext={pager.next}
+        onSearch={handleShowAll}
+        barLabels={barLabels}
+        pages={pages}
+        activeKey={pager.state.page}
+        onPageChange={handlePageChange}
+      />
+      {/*
+        The horizon is this month: S04 §6 does not go past the end of it, so a
+        month that has not happened is offered as disabled rather than hidden.
+      */}
+      <PeriodPicker
+        visible={pickerYear !== null}
+        year={pickerYear ?? Number(pager.state.date.slice(0, 4))}
+        current={month}
+        horizon={yearMonth(today.slice(0, 7))}
+        onYearChange={setPickerYear}
+        onPick={handlePickMonth}
+        onDismiss={closePicker}
+      />
+    </>
   );
 }

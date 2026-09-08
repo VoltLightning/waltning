@@ -108,6 +108,7 @@
     "./shell/organisms/pager-frame/pager-frame": "./src/shell/organisms/pager-frame/pager-frame.tsx",
     "./shell/organisms/pager/pager": "./src/shell/organisms/pager/pager.tsx",
     "./shell/period-header": "./src/shell/molecules/period-header/period-header.tsx",
+    "./shell/period-picker": "./src/shell/organisms/period-picker/period-picker.tsx",
     "./shell/phosphor": "./src/shell/phosphor.tsx",
     "./shell/screen-reader-destination": "./src/shell/atoms/screen-reader-destination.tsx",
     "./shell/sheet-geometry": "./src/shell/sheet-geometry.ts",

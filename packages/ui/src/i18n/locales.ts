@@ -92,6 +92,25 @@ export function dayLabel(date: AccountingDate, locale: Locale): string {
 }
 
 /**
+ * One month, abbreviated — "Sep", "wrz" — for `PeriodPicker`'s grid.
+ *
+ * **`short`, and a whole formatted name rather than a slice of the long one.**
+ * Cutting three characters off *September* happens to work in English and
+ * gives "wrz" for Polish only by luck; a locale whose abbreviation is not a
+ * prefix of its full name gets a word that does not exist. `Intl` knows which
+ * is which.
+ *
+ * The same `timeZone: "UTC"` as its siblings: an accounting month is a bare
+ * date, and parsing it in a negative offset would name the month before.
+ */
+export function monthShort(month: YearMonth, locale: Locale): string {
+  const [year, mo] = month.split("-").map(Number) as [number, number];
+  return new Intl.DateTimeFormat(locale, { month: "short", timeZone: "UTC" }).format(
+    new Date(Date.UTC(year, mo - 1, 1)),
+  );
+}
+
+/**
  * One letter — the weekday, for `DayRibbon`'s cells.
  *
  * **`narrow`, not the first character of `short`.** Slicing a short name is a
