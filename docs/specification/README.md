@@ -130,6 +130,13 @@ density, which is exactly what a web subsection is for. Their numbers are
 retired rather than reused: a screen ID is a stable identifier that flows and
 commits refer to, not a position in a sequence.
 
+**Three screens are single-surface by density, not by platform.** S01 has no
+phone layout, S04 no desk one, and S10 and S11 lost their phone layouts to S04
+when its list became the whole ledger and its picker became the calendar. In
+every case the same device renders the other screen once it has the width
+(`architecture/14` §14.4); what differs is how many columns the layout needs,
+not what the machine can do.
+
 ### Depth is declared, not uniform
 
 Specifying S28 Tax view to the same depth as S05 Quick add would be speculative
@@ -158,8 +165,8 @@ more than its prose.
 | [S07](screens/S07-receipt-capture-and-review.md) | Receipt capture and review | mobile · review both | ✅ | 1 | specified |
 | [S08](screens/S08-voice-multi-intent.md) | Voice multi-intent | mobile | ✅ | 2 | specified |
 | [S09](screens/S09-transaction-detail.md) | Transaction detail | both | — | 1 | specified |
-| [S10](screens/S10-transactions-list.md) | Transactions list | both | — | 1 | specified |
-| [S11](screens/S11-calendar.md) | Calendar | both | — | 1 | specified |
+| [S10](screens/S10-transactions-list.md) | Transactions list | desk | — | 1 | specified |
+| [S11](screens/S11-calendar.md) | Calendar | desk | — | 1 | specified |
 | [S12](screens/S12-debt-counterparties.md) | Debt | both | — | 2 | specified |
 | [S13](screens/S13-counterparty-detail.md) | Counterparty detail | both | — | 2 | specified |
 | [S14](screens/S14-settle-sheet.md) | Settle sheet | both | — | 2 | specified |

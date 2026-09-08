@@ -242,7 +242,7 @@ separate figure using `categories.is_earnings` (§6.7).
 **Capital rows are included here and excluded from comparison** (§6.8). Any
 figure presented as a comparison, trend or target excludes `is_capital` and
 **states the exclusion inline**. Any figure presented as a record includes it
-and breaks it out when present (S10).
+and breaks it out when present (S04 · S10).
 
 **My spending nets the shared boundary** (§6.7):
 
@@ -434,7 +434,7 @@ suppressed for date ranges where a device reports unsynced writes.
 ## 10 · Recurring materialization
 
 **Manual.** A projection posts only when you press *run now* (S21) or *post now*
-on a calendar projection (S11). Nothing runs on a schedule.
+on a calendar projection (S11 · S04's expected entries). Nothing runs on a schedule.
 
 That resolves the contradiction the review found: `RuleHealthTag = overdue` is
 only reachable if posting is not automatic, and a deliberate skip is only
@@ -580,7 +580,7 @@ alone.
 
 The exclusions are the rule, not a shortfall of it. The amount match runs
 *beside* the text match rather than instead of it, so every spelling the
-grammar accepts adds rows to what S10 §3 promises is the total of what you
+grammar accepts adds rows to what S10 §3 and S04 §7 promise is the total of what you
 filtered to. A currency token cannot be told from an ordinary payee word
 without knowing every currency in the ledger, and a point cannot be told from a
 decimal mark without knowing what was meant — so a grammar loose enough to

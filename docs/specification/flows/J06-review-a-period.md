@@ -1,7 +1,7 @@
 # J6 · Review a period
 
 **Frequency** weekly to monthly · **Surface** both
-**Screens** S01, S04, S11, S24, S25, S10, S09, S27
+**Screens** S04 (phone) · S01, S11, S24, S25, S10 (desk) · S09, S27
 **Status** specified
 
 ---
@@ -34,7 +34,7 @@ S11 Calendar                  S25 Reports        S24 Dashboard layout
  nav: continuous | stepped     donut · line       per-widget config
  per-day net, density shading  bar · treemap
    │                               │
-   └──── tap a day or segment ─────┴──→ filtered S10 Transactions list
+   └──── tap a day or segment ─────┴──→ filtered S10 (desk) · S04 scrolled (phone)
                                                     │
                                               → S09 Detail
                                               → S27 Export

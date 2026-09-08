@@ -1,7 +1,7 @@
 # J12 · Maintain categories
 
 **Frequency** rare, but overdue · **Surface** both
-**Screens** S19, S06, S10, S03
+**Screens** S19, S06, S03 · S04 (phone) / S10 (desk)
 **Status** specified
 
 ---

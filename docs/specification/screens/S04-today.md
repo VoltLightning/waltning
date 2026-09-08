@@ -8,8 +8,9 @@
 
 ## 1. Purpose
 
-Answer the only question a daily user opens the app for: **where do I stand, and
-does anything need me.**
+Answer the only question a daily user opens the app for — **where do I stand,
+and does anything need me** — and then keep going, because the same list that
+shows today is the list that shows every day before it.
 
 ## 2. Entry and exit
 
@@ -17,128 +18,157 @@ does anything need me.**
 |---|---|---|
 | App launch | Default tab | — |
 | Any tab | Tab bar | — |
-| S05 | Save | S04, with the new row at the top of Recent |
+| S05 | Save | S04, with the new row in today's group |
 | Push notification | Unsettled clearing, failed backup | The thing it names |
 
 **Exits** — `+` → S05 · Scan → S07a · say-a-transaction → S05 in voice mode ·
-a Recent row → S09 · balances → S16 · unsettled banner → J8 allocation ·
-tab bar → S10, S11, S12, S03.
+a row → S09 · balances → S16 · unsettled banner → J8 allocation ·
+tab bar → S12, S03.
+
+**S04 has no *show all*, and the tab bar has no Ledger or Calendar tab.**
+Browsing the ledger and picking a date are this screen, at a different scroll
+position and with the picker open. See §10.
 
 ## 3. Layout
 
 ### Mobile — 390pt
 
+**At rest** — the header is present, so the strip is not:
+
 ```
-┌ shell · sage band ──────────────────────────────┐
-│  Today                              Appearance  │
-│  Saturday, 5 September                          │
+┌ shell ──────────────────────────────────────────┐
+│  September                            [ 📅 ]    │  ← header · picker action
+│  Three days in — all quiet                      │
 └─────────────────────────────────────────────────┘
-┌ ground panel · radius-xl, lifts over the shell ─┐
+┌ ground panel ───────────────────────────────────┐
 │  ┌ mine   48 620,84 zł                       › ┐│  ← NetWorthStrip → S16
-│  └───────────────────────────────────────────  ┘│
-│  ┌ September 2026 ─────────────────── ‹  ›  ────┐│  ← MonthSummary, the hero
-│  │ Kept so far                     +3 529,82 zł ││
-│  │ ┌ Came in ─────────┐ ┌ Went out ───────────┐ ││
-│  │ │ +7 850,00        │ │ 4 320,18            │ ││
-│  │ └──────────────────┘ └─────────────────────┘ ││
-│  └──────────────────────────────────────────────┘│
+│  ┌ Kept so far ────────────────────────────────┐│  ← MonthSummary, the hero
+│  │ +3 529,82 zł                                ││
+│  │ ████████████████░░░░░░░░░░░░░░░░░░░░░░░░░░░ ││  ← out, against in
+│  │ Came in                            Went out ││
+│  │ +7 850,00 zł                  −4 320,18 zł  ││
+│  └─────────────────────────────────────────────┘│
 │  ⚠ 340,00 zł unallocated · dinner, 6 Aug        │  ← only when non-zero
-│                                       [Allocate]│
-│                                                 │
-│  ┌ Recent ───────────────────────────────────┐  │
-│  │ Today     Coffee · Eating out   −48,90 zł │  │
-│  │ Today     Salary · Employment +9 200,00 zł│  │
-│  │ Yesterday Shop A · Food    62,40 € · 4,02 │  │  ← FxAmount, foreign
-│  │                                 251,04 zł │  │
-│  │                                Show all → │  │
-│  └───────────────────────────────────────────┘  │
 │  ┌ Where it went ────────────────────────────┐  │  ← SpendRows, §6
 │  │ Groceries  ███████████████     1 240,50   │  │
-│  │ Home       ██████████             980,00  │  │
-│  │ Transport  ██████                 610,40  │  │
+│  └───────────────────────────────────────────┘  │
+│  ┌ TODAY                            −184,50 ─┐  │  ← the list begins, and
+│  │ Market B     Groceries · Bank A  −96,00   │  │    does not end
+│  │ Café A       Eating out · Cash   −48,90   │  │
+│  └───────────────────────────────────────────┘  │
+│  ┌ FRIDAY 4 SEPTEMBER               −213,40 ─┐  │
+│  │ Clinic G     Health · Bank A    −180,00   │  │
 │  └───────────────────────────────────────────┘  │
 └─────────────────────────────────────────────────┘
-│                                          (＋)   │  ← floats, §2.9
-┌ tab bar · 4 ────────────────────────────────────┐
-│  Today   Ledger   Debt   Settings               │
+│                                          (＋)   │
+┌ tab bar · 3 ────────────────────────────────────┐
+│  Today        Debt          Settings            │
 └─────────────────────────────────────────────────┘
 ```
 
-**The month is the hero, and net worth is a line.** The band used to carry
-`DualTotal` at 54px plus the period and its two stat tiles — about 350pt of an
-844pt screen, two fifths of it — and everything the day had actually changed began below the
-fold. A total you own moves slowly and is checked occasionally; what changed
-*this period* is what the app is opened for. So `MonthSummary` leads the ground
-with §5's three figures in the shape `net = inflow − spend`, and `NetWorthStrip`
-carries the total above it in one line, with S16 one tap away for the currencies
-and the shared figures it cannot fit.
+**Scrolled** — the header has gone, so the strip has arrived and stays:
 
-**`inflow` is stated, not implied.** `spent` and `net` alone leave the reader
-subtracting to find out what came in — §5 computes all three and the card shows
-all three.
+```
+┌ DateStrip · pinned ─────────────────────────────┐
+│  August 2026        −3 210,40            [ 🔍 ] │  ← label · figure · one icon
+│ ‹│ S  │ M  │ T  │ W  │ T  │ F  │ S  │ S │›      │  ← DayRibbon, scrolls with
+│  │10  │11  │12  │13  │14 ●│15  │16  │17│        │    the list, clipped both ends
+└─────────────────────────────────────────────────┘
+┌ the list ───────────────────────────────────────┐
+│  ┌ THURSDAY 14 AUGUST               −296,00 ┐    │
+│  │ Clinic G     Health · Bank A    −180,00  │    │
+│  └──────────────────────────────────────────┘    │
+│    Wednesday 13 August ············· nothing     │  ← one quiet day
+│  ┌ 3 – 27 August · 25 days           [Show] ┐    │  ← a quiet run
+│  └──────────────────────────────────────────┘    │
+│                  ( ↑ Today )                     │  ← floats, only when away
+└─────────────────────────────────────────────────┘
+```
 
-**Where it went is §6, at leaf granularity, capped at five plus a named
-remainder — six buckets give six named rows, because folding one category into
-*Other* costs a name and saves no room.** The lead currency's categories only: arc-phone converts nothing
-(§6 is class **S**), so a bar summing two currencies would be an invented
-figure. An uncategorised bucket keeps its own name rather than folding into
-*Other* — it is the one bucket a person can act on.
+**The header and the strip are one control in two states.** At rest the screen
+is the layout it has always been and there is no strip; scrolling collapses the
+header into `DateStrip`, which then carries the month and its running figure, so
+the month summary never actually leaves — it gets small. A strip drawn *as well
+as* the header is a band wedged between two cards: a seam, not an element.
 
-**The strip still refuses a toggle.** `NetWorthStrip` shows *mine* with *ours*
-on a muted second line — never one at a time, because showing one at a time
-invites reading the wrong number (`SPEC.md` §6.7). Where the ledger holds more
-than one currency the strip says so, for the same reason: a partial total that
-does not admit it is the same defect in a different shape.
+**`MonthSummary` puts the label above the figure and the figure on its own
+line.** A label to the left of a number on one baseline leaves the number
+nowhere to breathe and shrinks the currency to fit beside it; S05's amount field
+already solved this and this card uses its shape. Every figure on the card
+carries its currency — `<Amount>` renders `1 234,56 zł` and a figure without the
+suffix is not a quieter design, it is a different component
+(`design-system/04` §4.1).
 
-**The period is steppable and selectable.** Arrows move one period at a time in
-the current granularity, *Today* returns to the present, and tapping the label
-or the stat row opens `PeriodPicker` — granularity (day · week · month · year)
-plus presets and an arbitrary range. Both components already exist: the arrows
-are the calendar's `PeriodHeader` (§6.3), the sheet is Reports' `PeriodPicker`
-(§7). Nothing is invented here.
+**The bar is the arithmetic, not two shares.** Its track is *came in* and its
+fill is *went out*, so the gap that remains is *kept so far* — the same
+subtraction the three figures state, in a form readable without reading any of
+them. Two proportional halves would say something else and something less: how
+the month's flow divided, which nobody asks.
 
-**Only the card is period-scoped.** Net worth is a balance *as of now* and does
-not move when you step back to July; everything inside `MonthSummary` does, and
-so does *where it went* below it. The arrows sit inside the card they govern,
-under the strip rather than above it, so the boundary is positional rather than
-something you have to be told.
+**When the month spent more than it took in, the bar fills and stops.** *Kept
+so far* goes negative and takes the expense ink; the fill does not overrun its
+track, because a bar longer than its own container is a graphic that has to be
+explained. The figures carry the overshoot, which is what figures are for.
 
-Recent shows five rows, non-scrolling. It is a *confirmation surface*, not a
-browsing one — S10 is a tap away for browsing.
+**The list is the whole ledger, and it is continuous in both directions.**
+Scrolling down passes into August, July, and back to the opening balance;
+scrolling up passes into what is expected. There is no *show all*, because
+there is nowhere else for it to go.
 
-**The Recent card is drawn only when there are rows to group.** An account
-exists but nothing has been captured yet is `EmptyState(first-run)` on the
-ground — *No transactions yet*, the same wording S10's first run uses — never
-a *Recent* card with *Show all* over an empty column, which would be chrome
-claiming a list exists and an action that shows nothing.
+**Only the top month carries a summary.** `MonthSummary` and `SpendRows`
+describe the month you are in when the screen opens. Scroll back and you get
+days and their figures; the strip's month total is the one aggregate that
+follows you. Laying a fresh summary at every month boundary would turn the
+scroll into a stack of monthly reports, which is S25's job and needs S25's
+width.
 
-**Which empty it is, is a count, not a window.** Recent is the five most
-recent rows; a window that came back empty is not the claim *this ledger has
-never held a transaction*. Only an unfiltered count of the whole ledger may
-choose the first-run wording — the same `searchTransactions({})` count S10
-uses to tell its own two empties apart. A ledger that does hold rows gets
-this screen's own ordinary empty and *Show all*, which goes where the rows
-are — its own, because S10's ordinary empty names a filter as the reason and
-Recent has no filter: it has a window. *Nothing recent* says the window came
-back empty and the full list is where the rows are.
+**The strip carries three things and no more.** The month, its figure, one
+icon. It had four — a bordered pill inside a bordered band, a figure, and two
+buttons — and at 388px of content in a 326px row it could not fit, which is
+what made it read as clutter. Return-to-today is a floating pill over the list
+that exists only when you are away from today.
 
-**What earns it the space is the pending row.** Outbox writes appear at the top
-with their `pending` marker until they sync, so an offline save is visibly
-landed on the screen you saved from. That is the one thing S10 cannot do for
-you, and it is exactly when confirmation matters most — a save with no network
-and no feedback is indistinguishable from a save that failed.
+**Where the visible days span two months the label says both** — `Aug – Sep
+2026` — rather than naming one and being wrong for half the strip. The label
+follows the list, not the week.
 
-That marker exists only when the phone has a backend relationship and the write
-is awaiting admission. On a phone-alone ledger, successful local
-materialisation is the final save: the row appears as ordinary ledger data with
-no sync-status marker.
+**`DayRibbon` scrolls; it does not page.** It is a continuous run of days
+clipped at both edges, translating with the list rather than advancing a week
+at a time. The slivers at each end are load-bearing: they are what says there
+is more in both directions.
 
-Under the disposable preview profile, S04 renders the net-worth strip, the
-month card (*kept so far*, *came in*, *went out*, stepped by month), the
-unsettled-clearing banner when one exists, five Recent rows, *where it went*,
-the Create account first-run action, the floating `+`, and the appearance
-action. That profile omits the tab bar, voice, scan, sync state, and FX
-presentation.
+**The strip reports; it does not select.** It marks whichever day the list is
+showing, and tapping a day scrolls there. A selector alongside a scroll gives
+two sources of truth for *what day am I on*, and they diverge on the first
+fling.
+
+**A day's mark means activity, never direction.** `DayRibbon`'s dot varies in
+size and darkness with how much moved that day, and never in hue. A salary day,
+a day of transfers between your own accounts, and a day netting to zero all
+read wrong the moment the mark means *spending*; and a mark whose only signal is
+colour fails WCAG 1.4.1 besides. Direction lives in the list and in the day's
+figure, where a sign can be read.
+
+**What this screen absorbed.**
+
+**S10 · Transactions list, at phone width.** This screen scrolled, with search
+in the strip. A separate browsing surface existed because Recent was a five-row
+window; once the window is the whole ledger there is nothing left for a phone
+ledger to do that a scroll position does not. **S10 survives on the desk**,
+where it is a sortable table with a filter rail — a shape 390pt has no columns
+for, and the destination S01's widgets and S25's charts drill into.
+
+**S11 · Calendar, at phone width.** `PeriodPicker` at day depth is the calendar
+here: the same grid and marks, expanding over the list rather than replacing
+it. *See as list* was always a calendar admitting it could not show you one.
+**S11 survives on the desk**, where a wide cell carries per-day entry previews
+and the four scales and two navigation modes a phone cell has no room to mean.
+
+**S01 · Dashboard is untouched.** It does not exist at phone width and this
+screen does not exist on web; neither absorbs the other.
+
+**Nothing is deleted, and no screen ID retires.** Each of the three keeps the
+surface it is good at, which is the same rule S01 already states about itself.
 
 ### Web — ≥1024px
 
@@ -152,32 +182,43 @@ happened*.
 
 | Component | Notes |
 |---|---|
-| `Shell` | The sage band: the heading, the day, and the appearance action. **No `hero`** — see §3 |
+| `Shell` | The heading, the day, and the picker action. Present at rest only; scrolling replaces it with `DateStrip` |
 | `NetWorthStrip` | *Mine* on the ground in one line, *ours* and any second currency muted beneath it. Pressable → S16. Renders above the error branch, so a failed refresh keeps it (§6) |
-| `MonthSummary` | The hero. `PeriodHeader` + *kept so far* + the `StatTile` pair. Draws three zeroes for a period the ledger did not exist in — that is the true answer, not an empty state |
-| `SpendRows` | *Where it went* — §6 at leaf granularity, five rows plus a named remainder (six buckets give six named rows), bars proportional to the largest row, one colour |
-| `PeriodHeader` | `‹ label ›` + *Today*. Steps by the current granularity (§6.3) |
-| `PeriodPicker` | Opened by tapping the label or stat row — granularity, presets, arbitrary range (§7) |
-| `StatTile` | *Came in* and *went out*, inside `MonthSummary`. **Period-scoped**; the strip above it is not |
-| `Banner(warn)` | Unsettled clearing — rendered **only when non-zero**, with one action |
-| `Card` | Wraps Recent — a grouped list of rows, `title="Recent"` + `action="Show all"`. **Only when Recent has rows**; an empty ledger renders `EmptyState(first-run)` on the ground instead |
-| `TransactionRow` | Recent; `TransferRow` for transfers; `BIZ` tag where business |
-| `BrandIcon` | `TransactionRow`'s own leading mark for a recognised merchant — ORLEN, YouTube, or another the bundled catalogue carries (§14.4b). Offline, never blank: an unmatched payee falls back to its monogram |
+| `MonthSummary` | The hero, opening month only. *Kept so far* stacked over its figure, a `FlowBar`, then the labelled pair. Draws three zeroes for a period the ledger did not exist in — that is the true answer, not an empty state |
+| `FlowBar` | Track is *came in*, fill is *went out*, gap is *kept*. Fill clamps at 100%; a deficit is carried by the figures, not by an overrunning bar |
+| `SpendRows` | *Where it went* — §6 at leaf granularity, five rows plus a named remainder, bars proportional to the largest row, one colour. Opening month only |
+| `DateStrip` | Pinned once the header has gone. Label + period figure + one icon. Label opens `PeriodPicker`; icon is search |
+| `DayRibbon` | Inside `DateStrip`. Continuous, horizontally scrollable, clipped at both edges. Cells ≥44×44 with the day number at 17px. Activity dot per §3 |
+| `PeriodPicker` | Expands over the list. Three depths — days, months, years — one panel, one grammar: the label goes up a level, a tile comes back down. Tiles ≥44px carrying their own figure. Replaces S11 |
+| `DayGroup` | A day's rows under its date and total. The list's only grouping |
+| `QuietDay` | One empty day: a single muted line |
+| `QuietRun` | Two or more consecutive empty days: one row naming the span and its length, with *Show* |
+| `ExpectedGroup` | A future day. Dashed border, muted type, figures in neither the income nor the expense colour — it is not money yet |
+| `TransactionRow` | `TransferRow` for transfers; `BIZ` tag where business |
+| `BrandIcon` | `TransactionRow`'s leading mark for a recognised merchant (§14.4b). Offline, never blank: an unmatched payee falls back to its monogram |
 | `FxAmount` | Any foreign row — `local · rate · display`, the rate for that row's own date (P1) |
-| `TabBar` | 4 tabs, all ≥44px. `+` is not one of them |
+| `Banner(warn)` | Unsettled clearing — rendered **only when non-zero**, with one action |
+| `TodayPill` | Floats over the list when the list is away from today. The only way back from a jump (§10) |
+| `TabBar` | 3 tabs, all ≥44px — Today · Debt · Settings. Ledger's tab went when this screen absorbed it; the freed slot stays empty rather than being filled for symmetry. S03 Agent is the only other phone screen with the frequency to earn it, and that is a decision, not a consequence. `+` is not a tab |
 | `FloatingAdd` | The `+`, above everything, wherever it was last put (`02-tokens` §2.9) |
-| `EmptyState(first-run)` | Two of them. No accounts — offers create; the import path is S29's, and arrives with it (no route exists yet, and this screen invents none). Accounts but no transactions — *No transactions yet*, S10's own wording, in place of the Recent card. *No transactions yet* is chosen by an unfiltered count, never by an empty Recent window: a ledger holding rows Recent did not return gets `transactions.emptyRecentTitle`/`emptyRecentBody` and *Show all* instead |
-| `AppearanceButton` | Header action; opens the appearance sheet |
-| `BottomSheet(appearance)` | Radio choices: System, Light, Dark |
+| `EmptyState(first-run)` | No accounts — offers create; the import path is S29's and arrives with it. No transactions — §6 |
+| `AppearanceButton` · `BottomSheet(appearance)` | Moved to S30 · Settings. The header has one action, and it is the picker |
+
+**`PeriodPicker` is the existing component, not a new one.** Reports' picker
+already carries granularity, presets and an arbitrary range (§7); this screen
+opens it from the strip's label and it gains the per-tile figures. `PeriodHeader`
+retires — its arrows and *Today* are the ribbon and the pill.
 
 ## 5. Data
 
 | Reads | Writes |
 |---|---|
 | `get_balances` — scoped to *mine* and *ours* | — |
-| `spend_by_period` — the shown month: `spend`, `inflow`, `net` | — |
-| `spend_by_category` — the same month, scope `mine` | — |
-| `search_transactions` — 5 most recent | — |
+| `spend_by_period` — the visible period: `spend`, `inflow`, `net` | — |
+| `spend_by_category` — the opening month, scope `mine` | — |
+| `search_transactions` — a windowed page around the anchor date, both directions | — |
+| `spend_by_period` — one row per picker tile, at the picker's granularity | — |
+| `get_projections(period)` from `recurring_transactions` — expected entries, to the horizon (§6) | — |
 | `find_unsettled` — clearing balances ≠ 0 | — |
 | FX sync state | `sync_fx_rates` on foreground (§7.6) |
 
@@ -185,77 +226,100 @@ happened*.
 keeps it fast and what makes it safe to render from cache offline.
 
 **Both period figures are `mine` — own accounts only — and the screen has no
-scope control to say so.** `spend_by_period` has always been own-accounts
-(§5); `spend_by_category` is asked for the same scope so *where it went* breaks
-down the *went out* directly above it rather than a larger number. The cost is
-that a shared-account expense you paid appears in neither, on a screen with
-nothing to explain that. §6.7's named shared row is a desk figure (`S10`'s
-scope control, `S01`'s widgets); the phone shows the half it can total
-honestly, and S16 is where the shared accounts are.
+scope control to say so.** `spend_by_period` has always been own-accounts (§5);
+`spend_by_category` is asked for the same scope so *where it went* breaks down
+the *went out* directly above it. §6.7's named shared row is a desk figure
+(`S01`'s widgets); the phone shows the half it can total honestly, and S16 is
+where the shared accounts are.
+
+**A day's total is only drawn when it can be computed.** Where a day holds more
+than one currency the total converts at each row's **accounting date** and is
+marked approximate (`≈`). Where a rate for that date has not arrived the day
+shows **no total at all** and says why — never a total that silently omits the
+rows it could not convert. Transfers between own accounts appear in the day's
+rows and in neither its spend nor its inflow.
 
 ## 6. States
 
 | State | Treatment |
 |---|---|
-| Loading | Not modelled — the replica read is synchronous SQLite, with no in-between moment to show a skeleton for (`09-state-matrix.md`) |
+| Loading | Not modelled for the replica window — the read is synchronous SQLite. Beyond it, §10 |
 | Populated | As drawn |
-| Empty | `EmptyState(first-run)` when no accounts exist. Reachable if J1 was abandoned; offers *Add an account*. *Import from Money Manager* is S29's path — the setup wizard, which S16 enters by that name — and arrives with it; until then this state offers create alone rather than an action with nowhere to go. Accounts with no transactions is the second empty: the strip and the month card stay — three zeroes is the true answer for that period — and *No transactions yet* replaces the Recent card rather than emptying it. *Where it went* draws nothing at all, because there is no row to name. That wording is chosen by the unfiltered count — a ledger that holds rows Recent did not return gets this screen's ordinary empty, `transactions.emptyRecentTitle` (*Nothing recent*) and `emptyRecentBody`, with *Show all*. Its own pair rather than S10's: S10's body names an excluding filter, and Recent has a window, not a filter |
-| Error | Balance query failed → `ErrorState(recoverable)` in the ground panel; **the strip and the month card keep their last known figures** rather than blanking. They render above the error branch for that reason, which a test pins |
-| Offline | Cached, with `Banner(neutral)` — *showing data as of 14:06*. Capture stays fully available; that is the point of the outbox |
+| Empty · no accounts | `EmptyState(first-run)`, offering create. **No summary, no strip, no empty chart** — nothing has happened, so the screen says so and offers the two ways to make it happen |
+| Empty · no transactions | Strip and month card stay: three zeroes is the true answer for that period. *No transactions yet*, S10's wording, in place of the list. *Where it went* draws nothing |
+| Empty · today only | The month card stays; today gets a named card saying nothing is recorded and what is next, with one action. The list continues into yesterday beneath it |
+| Error | Balance query failed → `ErrorState(recoverable)` in the ground panel; **the strip and the month card keep their last known figures** rather than blanking. They render above the error branch, which a test pins |
+| Offline | Cached, with `Banner(neutral)`. Capture stays fully available; that is the point of the outbox. Past the replica window, §10 |
 | Gated | n/a — single user |
+
+**The list is infinite in both directions, so both directions need an end, and everything between needs a rule.**
+
+The list is infinite in both directions, so both directions need an end, and
+everything between needs a rule.
+
+| Boundary | Rule |
+|---|---|
+| **Cold open** | Anchored on today, whether or not today holds anything |
+| **Forward horizon** | Expected entries are drawn to the end of the fourth month ahead, then stop with a stated reason. Recurring rules repeat forever; past a season, expected money describes the rule rather than the person |
+| **Expected that arrived** | The real transaction replaces the expected one in place and is marked as having been expected. Never both |
+| **Expected that did not arrive** | Stays in its own past day, still dashed, still uncoloured. It is a rule that did not fire, not a debt |
+| **Backward end** | The opening balance, marked as first. There is nothing before it by construction: every figure above is derived from it |
+| **Replica window** | The phone holds 18 months. Past it the list states plainly that the rest is on the machine, and **months outside the window show no totals rather than partial ones** |
+| **Quiet day** | One line |
+| **Quiet run** | Two or more consecutive: one row naming the span and its length, with *Show*. Twenty-five days is not twenty-five rows |
+| **A jump** | Picking a far date loads that date's neighbourhood and **nothing between**. Scrolling from there walks outward day by day; `TodayPill` is the only way back. The list is never asked to guess a scroll position for content it has not loaded, which is the defect that makes infinite lists jump under the reader |
+| **In flight** | An outbox row appears in its day with a `pending` marker until it syncs — the one thing a separate list could never do, and exactly when confirmation matters most. On a phone-alone ledger, local materialisation is the final save and no marker is drawn |
+| **A conflict** | S35 arriving for an older entry surfaces as one banner in the list at the current position, naming the month it concerns. It does not scroll the reader to it |
 
 ## 7. Interaction
 
-### Mobile
-`+` floats and is placed by the thumb that uses it — dragged to either side, or parked on the bottom edge — so it is reachable from either hand by construction. Pull to
-refresh re-syncs rates and balances. Recent rows swipe to categorize (short) and
-to edit (long) — never to delete (`design-system/05` §5.6). Haptic on save
-arrival.
+`+` floats and is placed by the thumb that uses it. Pull to refresh re-syncs
+rates and balances. Rows swipe to categorize (short) and to edit (long) — never
+to delete (`design-system/05` §5.6). Haptic on save arrival.
 
-The appearance action in the header opens a bottom sheet containing exactly
-System, Light, and Dark. The choice persists across launch. System follows the
-device scheme; choosing Light or Dark overrides it. A change repaints S04 in
-place and does not remount the screen or discard navigation or form state.
-
-Until C4's ledger list merges, the unsettled banner's `Open` action lands on
-`/ledger?account=<id>` — the stub §3 names — rather than the Shared rule
-below; that needs a real, filterable transaction list this card does not
-build.
-
-### Shared
 Tapping the unsettled banner goes **straight to the unallocated transaction**,
 not to a list. A warning that costs you a search is a warning you learn to
 ignore.
+
+**Search is the strip's icon, and it filters this list.** Day grouping survives,
+month rules mark the gaps, and `PeriodPicker`'s tiles carry **match counts**
+instead of totals — so *how often, and when* is answered by the control you were
+already going to use to jump. Search needs no navigation of its own.
+
+**Accessibility is a constraint, not a review note.** Every target in the strip
+and the picker is ≥44×44. Nothing encodes meaning in hue alone. A ribbon cell's
+accessible name is its full date and what happened — *Thursday 14 August, 296
+złoty out, three entries* — never the bare number the eye reads. The
+scroll-to-date transition is suppressed under reduce-motion, which lands the
+list at the destination without traversal.
 
 ## 8. Rules this screen must obey
 
 - **P1** — every foreign row carries its basis. The hero total is one currency,
   so it carries none; each row beneath it does.
-- **P4** — the unsettled banner is the only amber on this screen.
-- **P5** — the banner states its meaning in words; the tint is reinforcement.
+- **P4** — the unsettled banner is the only amber on this screen, except the
+  two boundary notices in §10, which state their meaning in words first.
+- **P5** — a banner states its meaning in words; the tint is reinforcement.
 - **§6.7** — both totals, always, and never placed where summing them suggests
   itself.
+- **WCAG 1.4.1** — no meaning carried by colour alone, which is why the ribbon's
+  dot varies in size as well as darkness.
 
 ## 9. Open questions
 
-1. ~~**Does Recent belong here at all?**~~ **Decided: yes, five rows, and it
-   carries pending writes.** It stops being a duplicate of S10 the moment
-   unsynced rows surface there — an offline save then has visible confirmation on
-   the screen it was made from, which nothing else provides. A single *last
-   saved* row would do the confirmation job in less space but loses the
-   at-a-glance sense of the last day or two, which is most of why the screen is
-   opened.
-2. ~~**Should the hero show the period selector?**~~ **Decided: yes — arrows
-   plus a tappable label.** `‹ August 2026 ›` with *Today*, stepping by the
-   selected granularity; tapping the label or the stat row opens `PeriodPicker`
-   for granularity, presets and arbitrary ranges.
+1. **Is the forward horizon four months?** Drawn as end-of-fourth-month. The
+   alternative is a fixed count of expected entries, which is steadier for a
+   sparse ledger and jumpier for a dense one.
+2. **Is the replica window 18 months?** It sets how much of the ledger is
+   readable on a plane, and how much SQLite the phone carries.
+3. ~~**Are the picker's per-tile figures readable offline?**~~ **Decided by
+   `computations.md`: yes.** §5 period spend is class **R** for the base figure,
+   so the strip's figure and every picker tile compute from the replica. The
+   **S** half of §5 is shared-boundary netting, which this screen never reaches
+   — both its period figures are `mine`, own accounts only. Search counts are
+   replica rows, not an aggregate.
 
-   **It costs no new components.** The arrows are the calendar's `PeriodHeader`,
-   the sheet is Reports' `PeriodPicker` — so the most-used screen in the system
-   gains a real period control by reusing two things that already exist, which
-   is what working rule 1 is for.
-
-   The one thing it required deciding: **net worth does not respond to it.** A
-   balance is as-of-now; the month's figures are period figures. Putting the
-   arrows inside the card they govern, under the net-worth strip, makes that
-   positional instead of something the interface has to explain.
+   The one figure on this screen that is genuinely **S** is *where it went*
+   (§6, two `UNION ALL` branches that miscount a multi-line transaction). It is
+   already server-only and stays so; offline it does not draw, which is the
+   existing behaviour and not something the infinite list changes.

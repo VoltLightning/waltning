@@ -1,7 +1,7 @@
 # J5 · Find and fix
 
 **Frequency** several times a week · **Surface** both
-**Screens** S10, S11, S09, S06, S07c, S15
+**Screens** S04 (phone) · S10, S11 (desk) · S09, S06, S07c, S15
 **Status** specified
 
 ---
@@ -51,10 +51,11 @@ a transaction.
 
 | At | Condition | Goes to |
 |---|---|---|
-| S10 | Filter by counterparty | Same list, scoped — the bridge into J7 |
-| S10 | Row is a transfer | `TransferRow` — both accounts, one row, never two |
-| S11 | Tap a day | Day scale, **anchor preserved** — switching scale never resets to today |
-| S11 | Cell is projected only | Read-only. A projection is not a transaction until it posts (J13) |
+| S04 / S10 | Filter by counterparty | Same list, scoped — the bridge into J7 |
+| S04 / S10 | Row is a transfer | `TransferRow` — both accounts, one row, never two |
+| S11 · desk | Tap a day | Day scale, **anchor preserved** — switching scale never resets to today |
+| S04 · phone | Tap a day in the picker or the ribbon | The list scrolls there; the picker closes. Nothing navigates |
+| S04 / S11 | Cell is projected only | Read-only. A projection is not a transaction until it posts (J13) |
 | S09 | Has a receipt | Viewer with the extraction beside it, both retained permanently |
 | S09 | Add a breakdown | Line editor, available with or without a receipt (§6.10). The parent keeps the total, so balances cannot move |
 | S09 | Flip to business | Refused if the account is `shared` (`SPEC.md` §6.7); otherwise written to `audit_log` with the actor |

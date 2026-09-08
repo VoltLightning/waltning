@@ -14,7 +14,7 @@ figure three screens read and nothing writes.
 
 | Check | Query | Result |
 |---|---|---|
-| Screen numbering | Sequence gaps in `screens/S*.md` | ✅ S23, S26 absent **by design** — merged into S11 and S12, documented in both |
+| Screen numbering | Sequence gaps in `screens/S*.md` | ✅ S23, S26 absent **by design** — merged into S11 and S12, documented in both. S10 and S11 keep their IDs and lose only their phone layouts (S04 §9); an ID never retires for a layout change |
 | Flow → screen | Every `S\d\d` in a flow resolves | ✅ no dangling references |
 | **Screen → flow** | Every screen reachable from ≥1 journey | ⚠️ **found 3 orphans** — S31, S32, S33 |
 | Screen → registry | Every operation a screen names exists | ⚠️ **found 6 missing** |
@@ -49,14 +49,14 @@ justification rested on a surface with no path to it.
 column list from `schema.ts` and searching for a specification of how each is
 set.
 
-One had none: **`is_capital`.** §6.8 defines it, S10 splits its running total
+One had none: **`is_capital`.** §6.8 defines it, S04 and S10 split their running total
 when one is in range, and S25 excludes them from every comparison — three
 consumers, no producer. Now a toggle on S09, deliberately *not* on the capture
 sheet, because you rarely know at the till that a purchase will distort a trend.
 
 Creation paths, all specified: keypad (S05) · voice (S08) · receipt (S07) ·
 import (S02) · agent (S03) · transfer (S31) · settlement (S14) · recurring
-(S21/S11) · migration (S29) · reassignment (§6.6a) · **reconciliation (S16, new)**.
+(S21/S11/S04) · migration (S29) · reassignment (§6.6a) · **reconciliation (S16, new)**.
 
 **`adjustment` was in the type enum, in `signed()`, and in H5's sign fix — and
 nothing could create one.** C19 is why that matters: the ledger is faithful to
