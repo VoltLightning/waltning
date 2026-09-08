@@ -19,6 +19,8 @@ shows today is the list that shows every day before it.
 | App launch | Default tab | — |
 | Any tab | Tab bar | — |
 | S05 | Save | S04, with the new row in today's group |
+| S16 | An account row or a group title | S16, **filter carried and visible** |
+| S25 | A chart element | S25, scrolled to the period |
 | Push notification | Unsettled clearing, failed backup | The thing it names |
 
 **Exits** — `+` → S05 · Scan → S07a · say-a-transaction → S05 in voice mode ·
@@ -142,6 +144,33 @@ showing, and tapping a day scrolls there. A selector alongside a scroll gives
 two sources of truth for *what day am I on*, and they diverge on the first
 fling.
 
+**Filtered, this is the same screen with one clause added.** S16 hands it an
+account or a group, S25 a period; the filter pins under the strip as a chip
+that says what it is and dismisses, the same *carried and visible* contract
+S10 states for every drill-through it receives. The list, the strip, the
+ribbon and the picker are unchanged — they simply describe less.
+
+```
+┌ DateStrip · pinned ─────────────────────────────┐
+│  August 2026        −1 120,40            [ 🔍 ] │
+│ ‹│ S  │ M  │ T  │ W  │ T  │ F  │ S  │ S │›      │
+│  ┌ Bank A · PLN                           ✕ ┐  │  ← the filter, dismissible
+│  └──────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────┘
+```
+
+**Everything on the screen scopes to the filter, including the month card.**
+The strip's figure, the ribbon's activity marks, the picker's per-tile figures
+and `MonthSummary` all describe the filtered set. A summary of everything
+sitting above a list of one account is the §5 defect — a figure whose scope the
+screen has no way to state — and here the chip states it, so the honest thing
+is to make the figures obey it.
+
+***Where it went* does not scope, and is not drawn.** §6 is class **S** and
+takes no account clause; a category breakdown of everything above a filtered
+list would be the same defect the paragraph above avoids. Filtered, the card
+is absent rather than wrong.
+
 **A day's mark means activity, never direction.** `DayRibbon`'s dot varies in
 size and darkness with how much moved that day, and never in hue. A salary day,
 a day of transfers between your own accounts, and a day netting to zero all
@@ -198,7 +227,8 @@ happened*.
 | `BrandIcon` | `TransactionRow`'s leading mark for a recognised merchant (§14.4b). Offline, never blank: an unmatched payee falls back to its monogram |
 | `FxAmount` | Any foreign row — `local · rate · display`, the rate for that row's own date (P1) |
 | `Banner(warn)` | Unsettled clearing — rendered **only when non-zero**, with one action |
-| `TodayPill` | Floats over the list when the list is away from today. The only way back from a jump (§10) |
+| `TodayPill` | Floats over the list when the list is away from today. The only way back from a jump (§6) |
+| `FilterChip` | The carried filter, pinned under the ribbon: what it is, and an `✕` that clears it. One chip — this screen receives a filter, it does not compose them. Composing is `FilterBar`, and it is S10's, on the desk |
 | `TabBar` | 3 tabs, all ≥44px — Today · Debt · Settings. Ledger's tab went when this screen absorbed it; the freed slot stays empty rather than being filled for symmetry. S03 Agent is the only other phone screen with the frequency to earn it, and that is a decision, not a consequence. `+` is not a tab |
 | `FloatingAdd` | The `+`, above everything, wherever it was last put (`02-tokens` §2.9) |
 | `EmptyState(first-run)` | No accounts — offers create; the import path is S29's and arrives with it. No transactions — §6 |
@@ -216,7 +246,7 @@ retires — its arrows and *Today* are the ribbon and the pill.
 | `get_balances` — scoped to *mine* and *ours* | — |
 | `spend_by_period` — the visible period: `spend`, `inflow`, `net` | — |
 | `spend_by_category` — the opening month, scope `mine` | — |
-| `search_transactions` — a windowed page around the anchor date, both directions | — |
+| `search_transactions` — a windowed page around the anchor date, both directions, with the carried filter | — |
 | `spend_by_period` — one row per picker tile, at the picker's granularity | — |
 | `get_projections(period)` from `recurring_transactions` — expected entries, to the horizon (§6) | — |
 | `find_unsettled` — clearing balances ≠ 0 | — |
@@ -247,6 +277,7 @@ rows and in neither its spend nor its inflow.
 | Populated | As drawn |
 | Empty · no accounts | `EmptyState(first-run)`, offering create. **No summary, no strip, no empty chart** — nothing has happened, so the screen says so and offers the two ways to make it happen |
 | Empty · no transactions | Strip and month card stay: three zeroes is the true answer for that period. *No transactions yet*, S10's wording, in place of the list. *Where it went* draws nothing |
+| Empty · filtered | `EmptyState(filtered)` — names the account or group and the count it excluded, with a *Clear* that drops the chip. Never the first-run wording: the ledger holds rows, this filter does not |
 | Empty · today only | The month card stays; today gets a named card saying nothing is recorded and what is next, with one action. The list continues into yesterday beneath it |
 | Error | Balance query failed → `ErrorState(recoverable)` in the ground panel; **the strip and the month card keep their last known figures** rather than blanking. They render above the error branch, which a test pins |
 | Offline | Cached, with `Banner(neutral)`. Capture stays fully available; that is the point of the outbox. Past the replica window, §10 |

@@ -18,6 +18,23 @@ The register: what accounts exist, what is in them, and which total they feed.
 | S01 | `balances` widget | S01 |
 | S05 | Account chip → *new* | S05, with it selected |
 | S29a | First-run step 3 | S29a |
+| S04 | The net-worth strip | S04 |
+
+**Exits** — an account row → its transactions, **filtered and visibly so**:
+S04 on the phone, S10 on the desk · a group's title → the same, filtered to
+every account in it · *Add account* → the create form · a clearing account's
+amber marker → J8 allocation.
+
+**Tapping an account is a filter, not a screen.** The register answers *what
+exists and what is in it*; *what happened in it* is the ledger with one clause
+added, and the ledger is a screen that already exists on both surfaces. A
+third list of the same rows, reachable only from here, would be S10's phone
+layout invented a second time — which is the thing S04 §3 just retired.
+
+**A group's title filters to its members, and this is why groups are worth
+having on a phone.** `account_groups` earns its place on the desk through
+`FX Cost` by `institution` (§5); on a phone it earns it by being the only way
+to ask *what did everything at this bank cost me* in one tap.
 
 ## 3. Layout
 
