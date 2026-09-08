@@ -198,6 +198,8 @@ export const en = {
     otherGroup: "Other",
   },
   transactions: {
+    /** What the dash in a day header means, for a reader who cannot see it. */
+    noTotalToday: "No total — a rate has not arrived for this day",
     /**
      * `DayRibbon`'s accessible name — the full date and what happened on it.
      *

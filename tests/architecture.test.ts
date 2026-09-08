@@ -3373,6 +3373,7 @@ describe("every scroller declares which kind it is", () => {
       .sort();
 
     expect(census).toEqual([
+      "apps/mobile/src/home-list-page.tsx#0 <FlatList> pageScrollProps",
       "apps/mobile/src/ledger-screen.tsx#0 <FlatList> pageScrollProps",
       "packages/ui/src/accounts/organisms/account-picker/account-picker.tsx#0 <ScrollView> nestedScrollProps",
       "packages/ui/src/categories/organisms/category-sheet/category-sheet.tsx#0 <ScrollView> horizontalScrollProps",

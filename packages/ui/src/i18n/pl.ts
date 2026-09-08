@@ -114,6 +114,7 @@ export const pl: Messages = {
     otherGroup: "Inne",
   },
   transactions: {
+    noTotalToday: "Brak sumy — kurs na ten dzień jeszcze nie dotarł",
     /** `DayRibbon`'s accessible name — the full date and what happened on it. */
     ribbonDayOne: "{{date}}, {{count}} wpis",
     ribbonDayMany: "{{date}}, {{count}} wpisów",
