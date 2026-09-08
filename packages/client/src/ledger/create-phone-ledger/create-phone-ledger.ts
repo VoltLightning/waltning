@@ -717,6 +717,8 @@ export type PhoneLedgerPort = {
   ])[];
   listNetWorth: () => readonly PhoneNetWorth[];
   readPeriodSpend: (period: money.Period) => readonly PhonePeriodSpend[];
+  /** The same figure cut by day — S04's calendar. Bounded by the period, never paged. */
+  readDayFlows: (period: money.Period) => readonly money.DayFlowRow[];
   /** §6, on demand — `S01`'s donut. `DESK4`. */
   readSpendByCategory: (
     period: money.Period,
@@ -1351,6 +1353,17 @@ export type PhoneLedgerController = {
    * `refresh()` recomputes for every subscriber on every write.
    */
   readPeriodSpend: (period: money.Period) => readonly PhonePeriodSpend[];
+  /**
+   * The same figure cut by day — S04's calendar (§3). On demand for the same
+   * reason `readPeriodSpend` is: the month is the pager's own state, so a
+   * swipe reads through the port rather than widening what `refresh()`
+   * recomputes for every subscriber on every write.
+   *
+   * Bounded by the period and never paged: a grid missing its 30th day because
+   * a page ended at 29 is a silently wrong picture, where a short list is only
+   * short.
+   */
+  readDayFlows: (period: money.Period) => readonly money.DayFlowRow[];
   /** §6, on demand — `S01`'s donut. Same reasoning as `readPeriodSpend` above. `DESK4`. */
   readSpendByCategory: (
     period: money.Period,
@@ -2106,6 +2119,7 @@ export function createPhoneLedger(
     },
     refresh,
     readPeriodSpend: (period) => port.readPeriodSpend(period),
+    readDayFlows: (period) => port.readDayFlows(period),
     readSpendByCategory: (period, scope) => port.readSpendByCategory(period, scope),
     readIncomeVsExpense: (buckets, scope) => port.readIncomeVsExpense(buckets, scope),
     readActiveDashboardLayout: () => port.readActiveDashboardLayout(),

@@ -890,6 +890,8 @@ export const en = {
     /** `PageTabs` — the four views of one date (S04 §3). */
     summary: "Summary",
     list: "List",
+    calendar: "Calendar",
+    months: "Months",
     /** `PagerHeader`'s arrows name the unit they step; the label only says it to the eye. */
     previousMonth: "Previous month",
     nextMonth: "Next month",
@@ -919,6 +921,15 @@ export const en = {
     alsoInOtherCurrencies_few: "Also held in {{count}} other currencies",
     alsoInOtherCurrencies_many: "Also held in {{count}} other currencies",
     alsoInOtherCurrencies_other: "Also held in {{count}} other currencies",
+    /**
+     * A month on S04's Months page that held a currency the figures leave out.
+     * Arc-phone converts nothing, so the row states its lead-currency totals
+     * and names what it could not add to them rather than dropping it silently.
+     */
+    plusOtherCurrencies_one: "+ {{count}} other currency",
+    plusOtherCurrencies_few: "+ {{count}} other currencies",
+    plusOtherCurrencies_many: "+ {{count}} other currencies",
+    plusOtherCurrencies_other: "+ {{count}} other currencies",
     keptSoFar: "Kept so far",
     cameIn: "Came in",
     wentOut: "Went out",

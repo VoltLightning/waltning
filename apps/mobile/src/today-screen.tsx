@@ -2,15 +2,18 @@ import { useAppearance } from "@waltning/client/appearance/use-appearance";
 import type { PhoneRecentTransaction } from "@waltning/client/ledger/create-phone-ledger";
 import { deviceRuntime } from "@waltning/client/ledger/device-runtime";
 import { isPagerPageKey } from "@waltning/client/ledger/pager-date";
+import { useDayFlows } from "@waltning/client/ledger/use-day-flows";
 import { useLedgerController } from "@waltning/client/ledger/use-ledger-controller";
 import { usePhoneLedger } from "@waltning/client/ledger/use-phone-ledger";
 import { useSpendByCategory } from "@waltning/client/ledger/use-spend-by-category";
 import { useUnsettledBanner } from "@waltning/client/ledger/use-unsettled-banner";
 import { useWhereItWent } from "@waltning/client/ledger/use-where-it-went";
-import { accountingDate, shiftMonth, type YearMonth, yearMonth } from "@waltning/core/date";
+import { monthGrid, weekdayHeadings } from "@waltning/client/transactions/month-grid";
+import { busiestMonth, yearMonths } from "@waltning/client/transactions/year-months";
+import { accountingDate, addDays, monthRange, shiftMonth, yearMonth } from "@waltning/core/date";
 import * as money from "@waltning/core/money";
 import { SpendRows } from "@waltning/ui/dashboard/spend-rows";
-import { monthLabel } from "@waltning/ui/i18n/locales";
+import { dayLabel, monthLabel, weekdayInitial, weekStart } from "@waltning/ui/i18n/locales";
 import { useLocale, useT } from "@waltning/ui/i18n/provider";
 import { Button } from "@waltning/ui/primitives/button";
 import { Card, GroundPanel } from "@waltning/ui/shell/card";
@@ -32,6 +35,9 @@ import { Toast } from "@waltning/ui/states/toast";
 import { text } from "@waltning/ui/theme/fonts";
 import { useTheme } from "@waltning/ui/theme/provider";
 import { makeStyles } from "@waltning/ui/theme/styles";
+import { MonthGrid } from "@waltning/ui/transactions/organisms/month-grid/month-grid";
+import type { MonthRow } from "@waltning/ui/transactions/organisms/month-list/month-list";
+import { MonthList } from "@waltning/ui/transactions/organisms/month-list/month-list";
 import {
   TransactionList,
   type TransactionListItem,
@@ -265,9 +271,12 @@ export default function Today() {
   );
   const closePicker = useCallback(() => setPickerYear(null), []);
   const handlePickMonth = useCallback(
-    (month: YearMonth) => {
+    (month: string) => {
+      // `yearMonth` rather than a cast: the picker and the Months page both
+      // hand back a plain string, and a `YearMonth` that was never checked is
+      // a brand asserting something nobody verified.
       setPickerYear(null);
-      pager.showMonth(month);
+      pager.showMonth(yearMonth(month));
     },
     [pager.showMonth],
   );
@@ -559,6 +568,89 @@ export default function Today() {
     </>
   );
 
+  /* ── Calendar ─────────────────────────────────────────────────────────── */
+
+  // Half-open, `money.Period`'s own shape: `monthRange` gives the inclusive
+  // last day and `end` is exclusive.
+  const monthPeriod = useMemo<money.Period>(() => {
+    const range = monthRange(month);
+    return { start: range.from, end: addDays(range.to, 1) };
+  }, [month]);
+  const monthFlows = useDayFlows(ledger, monthPeriod, snapshot);
+  const weeks = useMemo(
+    () => monthGrid(monthFlows, month, today, weekStart(locale)),
+    [monthFlows, month, today, locale],
+  );
+  const headingDates = useMemo(() => weekdayHeadings(weekStart(locale)), [locale]);
+  // The date is the column's key: two columns can share a letter — English has
+  // two "T"s — so the letter cannot identify one.
+  const dayHeadings = useMemo(
+    () => headingDates.map((date) => ({ key: date, label: weekdayInitial(date, locale) })),
+    [headingDates, locale],
+  );
+  // The letter in the heading is ambiguous by construction, so every cell says
+  // its whole date — and whether anything happened on it, which is what a
+  // reader who cannot see the mark would otherwise lose entirely.
+  const dayName = useCallback(
+    (date: string) => {
+      const cell = weeks.flat().find((day) => !("blank" in day) && day.date === date);
+      const name = dayLabel(accountingDate(date), locale);
+      if (cell === undefined || "blank" in cell || cell.activity === "none") {
+        return t("transactions.ribbonDayEmpty", { date: name });
+      }
+      return name;
+    },
+    [weeks, locale, t],
+  );
+
+  /* ── Months ───────────────────────────────────────────────────────────── */
+
+  const shownYear = Number(pager.state.date.slice(0, 4));
+  const yearPeriod = useMemo<money.Period>(
+    () => ({
+      start: accountingDate(`${shownYear}-01-01`),
+      end: accountingDate(`${shownYear + 1}-01-01`),
+    }),
+    [shownYear],
+  );
+  const yearFlows = useDayFlows(ledger, yearPeriod, snapshot);
+  const yearRows = useMemo(
+    () =>
+      yearMonths(
+        yearFlows,
+        shownYear,
+        // With no account there is no lead currency, and the year is twelve
+        // empty rows either way — the fold has nothing to leave out.
+        leadNetWorth?.currency ?? money.currencyCode("PLN"),
+        yearMonth(today.slice(0, 7)),
+      ),
+    [yearFlows, shownYear, leadNetWorth, today],
+  );
+  const monthRows = useMemo<readonly MonthRow[]>(() => {
+    // Relative to the busiest month of this year, never to an absolute figure:
+    // the question the page answers is which months were heavy, and that is a
+    // question about this year.
+    const busiest = busiestMonth(yearRows);
+    const share = (value: money.Money) =>
+      money.isZero(busiest) ? 0 : Number(money.dec(value).div(money.dec(busiest)).toFixed(4));
+    return yearRows.map((row) => ({
+      month: row.month,
+      label: monthLabel(row.month, locale).replace(/\s+\d{4}$/, ""),
+      inflow: row.inflow,
+      spend: row.spend,
+      currency: leadNetWorth?.currency ?? "",
+      decimals: leadNetWorth?.decimals ?? 2,
+      inflowShare: share(row.inflow),
+      spendShare: share(row.spend),
+      note:
+        row.otherCurrencies === 0
+          ? null
+          : t("shell.plusOtherCurrencies", { count: row.otherCurrencies }),
+      ahead: row.ahead,
+    }));
+  }, [yearRows, locale, leadNetWorth, t]);
+  const flowLabels = useMemo(() => ({ inflow: t("shell.cameIn"), spend: t("shell.wentOut") }), [t]);
+
   const pages = useMemo(
     () => [
       {
@@ -585,8 +677,54 @@ export default function Today() {
           />
         ) : null,
       },
+      {
+        key: "calendar",
+        label: t("shell.calendar"),
+        node: (
+          <GroundPanel onScroll={handleScroll}>
+            <MonthGrid
+              weeks={weeks}
+              headings={dayHeadings}
+              current={pager.state.date}
+              today={today}
+              labelFor={dayName}
+              onPickDay={handlePickDay}
+            />
+          </GroundPanel>
+        ),
+      },
+      {
+        key: "months",
+        label: t("shell.months"),
+        node: (
+          <GroundPanel onScroll={handleScroll}>
+            <MonthList
+              rows={monthRows}
+              current={month}
+              labels={flowLabels}
+              onPickMonth={handlePickMonth}
+            />
+          </GroundPanel>
+        ),
+      },
     ],
-    [body, handlePickDay, handleScroll, ledger, leadNetWorth, pager.state.date, t, today],
+    [
+      body,
+      weeks,
+      dayHeadings,
+      dayName,
+      flowLabels,
+      handlePickDay,
+      handlePickMonth,
+      handleScroll,
+      ledger,
+      leadNetWorth,
+      month,
+      monthRows,
+      pager.state.date,
+      t,
+      today,
+    ],
   );
 
   return (

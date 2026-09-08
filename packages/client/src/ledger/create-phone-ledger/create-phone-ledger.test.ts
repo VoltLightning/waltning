@@ -319,6 +319,7 @@ function harness(
     listPayeeHistory: () => [],
     listNetWorth: () => [],
     readPeriodSpend: () => [],
+    readDayFlows: () => [],
     readSpendByCategory: () => [],
     readIncomeVsExpense: () => [],
     readActiveDashboardLayout: () => null,

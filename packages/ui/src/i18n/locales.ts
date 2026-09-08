@@ -92,6 +92,19 @@ export function dayLabel(date: AccountingDate, locale: Locale): string {
 }
 
 /**
+ * Which weekday a calendar row starts on — `0` Sunday, `1` Monday.
+ *
+ * **A table, not `Intl.Locale.prototype.weekInfo`.** That API is still
+ * unshipped on enough runtimes that reading it would mean a fallback anyway,
+ * and a fallback that is wrong half the time is worse than a table naming the
+ * two locales this app has. When a third arrives it gets a line here, in the
+ * open, rather than a silent guess.
+ */
+export function weekStart(locale: Locale): 0 | 1 {
+  return locale === "en" ? 0 : 1;
+}
+
+/**
  * One month, abbreviated — "Sep", "wrz" — for `PeriodPicker`'s grid.
  *
  * **`short`, and a whole formatted name rather than a slice of the long one.**

@@ -154,6 +154,8 @@
     "./transactions/molecules/day-ribbon/day-ribbon": "./src/transactions/molecules/day-ribbon/day-ribbon.tsx",
     "./transactions/molecules/ledger-row-item/ledger-row-item": "./src/transactions/molecules/ledger-row-item/ledger-row-item.tsx",
     "./transactions/molecules/quiet-days/quiet-days": "./src/transactions/molecules/quiet-days/quiet-days.tsx",
+    "./transactions/organisms/month-grid/month-grid": "./src/transactions/organisms/month-grid/month-grid.tsx",
+    "./transactions/organisms/month-list/month-list": "./src/transactions/organisms/month-list/month-list.tsx",
     "./transactions/period-field": "./src/transactions/molecules/period-field/period-field.tsx",
     "./transactions/quick-add-composer": "./src/transactions/organisms/quick-add-composer/quick-add-composer.tsx",
     "./transactions/quick-add-form": "./src/transactions/organisms/quick-add-form/quick-add-form.tsx",

@@ -35,8 +35,16 @@ export type DayActivity = "none" | "some" | "heavy";
 export type DayDirection = "out" | "in" | "flat";
 
 export type DayCellProps = {
-  /** One letter, already localised — the ribbon resolves it once for the week. */
-  weekday: string;
+  /**
+   * One letter, already localised — the ribbon resolves it once for the week.
+   *
+   * **Absent in a grid**, where the weekday is a column heading and repeating
+   * it in all thirty cells would say the same thing thirty times. The cell
+   * loses the line and its height with it; everything else about it — the
+   * mark's three channels, the today fill, the 44pt floor — is the same cell,
+   * which is the point of the prop rather than a second component.
+   */
+  weekday?: string | undefined;
   /** The day of the month, as drawn. */
   day: number;
   activity: DayActivity;
@@ -88,12 +96,13 @@ function DayCellView({
       {...handlers}
       style={[
         styles.cell,
+        weekday === undefined ? styles.cellBare : null,
         fill,
         ahead && !today ? styles.ahead : null,
         focused ? styles.focused : null,
       ]}
     >
-      <Text style={sub}>{weekday}</Text>
+      {weekday === undefined ? null : <Text style={sub}>{weekday}</Text>}
       <Text style={ink}>{day}</Text>
       <View style={[styles.mark, ...markStyle(styles, activity, direction, today)]} />
     </Pressable>
@@ -139,6 +148,9 @@ const useStyles = makeStyles((theme) => ({
     justifyContent: "center",
     gap: space.sm,
   },
+  // No weekday line: the cell keeps the 44pt floor and drops the height the
+  // letter was taking, so a grid of them is a grid rather than a wall.
+  cellBare: { width: "100%", height: 46, gap: space.xs },
   plain: { backgroundColor: "transparent" },
   current: { backgroundColor: theme.accentFill },
   today: { backgroundColor: theme.accent },

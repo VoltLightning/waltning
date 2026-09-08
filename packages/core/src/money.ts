@@ -676,6 +676,63 @@ export const periodSpend = (
     }));
 };
 
+export type DayFlowRow = {
+  /** The accounting date, bare (§7.0a) — the key the calendar draws by. */
+  date: AccountingDate;
+  currency: CurrencyCode;
+  decimals: number;
+  /** The day's expense magnitude, stored positive — same convention as `periodSpend`. */
+  spend: Money;
+  /** The day's income. */
+  inflow: Money;
+};
+
+/**
+ * §5's figure, cut by day instead of by period — S04's calendar.
+ *
+ * **The same fold as `periodSpend`, one bucket deeper**, and deliberately not
+ * a second implementation of it: same ownership filter, same period bound,
+ * same `type` restriction, same refusal to sum across currencies, and `spend`
+ * is the same positive magnitude rather than a signed delta. A calendar whose
+ * marks disagreed with the card above them would be two answers to §5 on one
+ * screen, and the way that happens is two functions.
+ *
+ * **A day with nothing in it is absent, not zero.** The grid draws a cell for
+ * every day of the month whether or not the ledger has one, so an empty row
+ * here would be a claim ("nothing happened") where absence is the truth
+ * ("nothing was captured") — and the two are the same picture only until a
+ * sync arrives. The caller fills the gaps, which is where it can also say
+ * which days are in the future.
+ *
+ * **Grouped by day *and* currency.** A day holding a PLN expense and a USD one
+ * is two rows, for the reason `periodSpend` gives at length: folding them is
+ * inventing a figure. What the calendar does with a two-currency day is the
+ * caller's decision, and it is a rendering one.
+ */
+export const dayFlows = (
+  rows: readonly PeriodTransactionRow[],
+  period: Period,
+): readonly DayFlowRow[] => {
+  const byDay = new Map<string, { decimals: number; spend: Decimal; inflow: Decimal }>();
+  for (const row of rows) {
+    if (row.ownership !== "own") continue;
+    if (row.type !== "income" && row.type !== "expense") continue;
+    if (!inPeriod(row.date, period)) continue;
+    const key = `${row.date}\u0000${row.currency}`;
+    const bucket = byDay.get(key) ?? { decimals: row.decimals, spend: dec(0), inflow: dec(0) };
+    const amount = dec(row.amountOriginal);
+    if (row.type === "expense") bucket.spend = bucket.spend.plus(amount);
+    else bucket.inflow = bucket.inflow.plus(amount);
+    byDay.set(key, bucket);
+  }
+  return [...byDay.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([key, { decimals, spend, inflow }]) => {
+      const [date, currency] = key.split("\u0000") as [AccountingDate, CurrencyCode];
+      return { date, currency, decimals, spend: toMoney(spend), inflow: toMoney(inflow) };
+    });
+};
+
 /* ── §6 · Spend by category, and §12's `income_vs_expense` — DESK4 ────────
  *
  * Both are listed **S** in `computations.md` §0 — "a documented way to be

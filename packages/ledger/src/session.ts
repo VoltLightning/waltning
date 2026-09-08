@@ -3,6 +3,7 @@ import type { AccountingDate } from "@waltning/core/date";
 import type { Id } from "@waltning/core/id";
 import type {
   CurrencyCode,
+  DayFlowRow,
   IncomeExpenseBucket,
   IncomeExpenseRow,
   LedgerScope,
@@ -163,6 +164,7 @@ import {
 } from "./transactions/create-transaction.executor.ts";
 import { deleteTransactionExecutor } from "./transactions/delete-transaction.executor.ts";
 import { type AuditLogResult, readAuditLog } from "./transactions/read-audit-log.ts";
+import { readDayFlows } from "./transactions/read-day-flows.ts";
 import { readIncomeVsExpense } from "./transactions/read-income-vs-expense.ts";
 import {
   type LedgerDirection,
@@ -262,6 +264,8 @@ export type LocalLedgerSession = {
   listNetWorth: () => readonly LocalNetWorth[];
   /** §5's base figure, per currency. `period` is screen state, not store state — C2. */
   readPeriodSpend: (period: Period) => readonly PeriodSpendRow[];
+  /** The same figure cut by day — S04's calendar. Bounded by the period, never paged. */
+  readDayFlows: (period: Period) => readonly DayFlowRow[];
   /** §6, per currency and category — `S01`'s donut. `scope` is the desk band's own segment. `DESK4`. */
   readSpendByCategory: (period: Period, scope: LedgerScope) => readonly SpendByCategoryRow[];
   /** §12, per bucket and currency — `S01`'s line chart. `buckets` and `scope` are screen state, same reasoning as `readPeriodSpend`. `DESK4`. */
@@ -651,6 +655,7 @@ export function createLocalLedgerSession<TRun>(
     listDistinctCounterpartyPairs: () => readDistinctCounterpartyPairs(requireOpen().replica.db),
     listNetWorth: () => readNetWorth(requireOpen().replica.db),
     readPeriodSpend: (period) => readPeriodSpend(requireOpen().replica.db, period),
+    readDayFlows: (period) => readDayFlows(requireOpen().replica.db, period),
     readSpendByCategory: (period, scope) =>
       readSpendByCategory(requireOpen().replica.db, period, scope),
     readIncomeVsExpense: (buckets, scope) =>

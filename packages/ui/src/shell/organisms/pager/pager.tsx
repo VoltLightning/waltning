@@ -19,8 +19,8 @@
  * would have to be told about the tab bar, and they would drift.
  */
 
-import { memo, useCallback, useEffect, useRef, useState } from "react";
-import { type LayoutChangeEvent, type NativeSyntheticEvent, ScrollView, View } from "react-native";
+import { memo, useCallback, useEffect, useRef } from "react";
+import { type NativeSyntheticEvent, ScrollView, useWindowDimensions, View } from "react-native";
 import { pageScrollProps } from "../../../primitives/nested-scroll.ts";
 import { makeStyles } from "../../../theme/styles.ts";
 
@@ -46,11 +46,24 @@ export type PagerProps = {
 function PagerView({ pages, activeKey, onActiveKeyChange }: PagerProps) {
   const styles = useStyles();
   const scroller = useRef<ScrollView>(null);
-  // Only the width is measured. The height is `100%` in the stylesheet, for
-  // the reason measuring it cannot work: a slot's height is what the
-  // measurement would be derived *from*, so the first pass sizes the slots to
-  // their content and every pass after that measures that mistake.
-  const [width, setWidth] = useState(0);
+  /**
+   * **The window's width, not a measured one.**
+   *
+   * `onLayout` fires on neither the scroller nor a plain `View` around it in
+   * `react-native-web`, and the failure is silent: the width stayed 0, so
+   * `scrollTo` was asked for `index * 0`, and the pager moved its tab marker
+   * while the pages never went anywhere. A measurement that can quietly be
+   * zero is the wrong source for the one number this component needs.
+   *
+   * The window is the right source because `PagerFrame` is positioned to the
+   * screen's edges — the pager *is* the width of the device, by construction
+   * rather than by measurement, and it follows a rotation for free.
+   *
+   * The height needs no equivalent: `100%` in the stylesheet resolves against
+   * the track, and measuring it could not work anyway — a slot's height is
+   * what the measurement would be derived from.
+   */
+  const width = useWindowDimensions().width;
   // Resolved once, and everything downstream reads the resolution rather than
   // the prop. A caller holding a stale key otherwise scrolls to page 0 while
   // no page is marked current — the offset and the mark disagreeing, which is
@@ -59,16 +72,19 @@ function PagerView({ pages, activeKey, onActiveKeyChange }: PagerProps) {
   const index = found === -1 ? 0 : found;
   const currentKey = pages[index]?.key;
 
-  const onLayout = useCallback((event: LayoutChangeEvent) => {
-    setWidth(event.nativeEvent.layout.width);
-  }, []);
-
   // A tab tap changes `activeKey` and the offset follows. Not the other way
   // round: the scroll is a view of the state, so a page that arrived by swipe
   // is already where it needs to be and this is a no-op for it.
+  //
+  // **`animated: false`, and it is not a preference.** `pagingEnabled` is CSS
+  // scroll-snap on the web, and a smooth programmatic scroll fights it: the
+  // glide starts, the snap pulls it back to the page it left, and it settles
+  // six pixels from where it began. An instant scroll lands exactly on a snap
+  // point, so there is nothing to argue with. The swipe keeps its own momentum
+  // either way — that is the browser's, not this.
   useEffect(() => {
     if (width === 0) return;
-    scroller.current?.scrollTo({ x: index * width, y: 0, animated: true });
+    scroller.current?.scrollTo({ x: index * width, y: 0, animated: false });
   }, [index, width]);
 
   const onMomentumScrollEnd = useCallback(
@@ -84,32 +100,34 @@ function PagerView({ pages, activeKey, onActiveKeyChange }: PagerProps) {
   );
 
   return (
-    <ScrollView
-      horizontal
-      pagingEnabled
-      showsHorizontalScrollIndicator={false}
-      onLayout={onLayout}
-      onMomentumScrollEnd={onMomentumScrollEnd}
-      // The slots have to be as tall as the track, not as tall as what is in
-      // them. `flexGrow` on the scroller's own `style` does not reach them —
-      // it sizes the viewport — so a page whose content ran past the fold got
-      // an unbounded height, and the vertical scroller inside it had nothing
-      // to scroll within: Summary's *Go to* grid was simply cut off, with no
-      // gesture that could reach it.
-      contentContainerStyle={styles.track}
-      {...pageScrollProps(styles.viewport)}
-    >
-      {pages.map((page) => (
-        <PagerSlot
-          key={page.key}
-          width={width}
-          label={page.label}
-          current={page.key === currentKey}
-        >
-          {page.node}
-        </PagerSlot>
-      ))}
-    </ScrollView>
+    <View style={styles.frame}>
+      <ScrollView
+        ref={scroller}
+        horizontal
+        pagingEnabled
+        showsHorizontalScrollIndicator={false}
+        onMomentumScrollEnd={onMomentumScrollEnd}
+        // The slots have to be as tall as the track, not as tall as what is in
+        // them. `flexGrow` on the scroller's own `style` does not reach them —
+        // it sizes the viewport — so a page whose content ran past the fold got
+        // an unbounded height, and the vertical scroller inside it had nothing
+        // to scroll within: Summary's *Go to* grid was simply cut off, with no
+        // gesture that could reach it.
+        contentContainerStyle={styles.track}
+        {...pageScrollProps(styles.viewport)}
+      >
+        {pages.map((page) => (
+          <PagerSlot
+            key={page.key}
+            width={width}
+            label={page.label}
+            current={page.key === currentKey}
+          >
+            {page.node}
+          </PagerSlot>
+        ))}
+      </ScrollView>
+    </View>
   );
 }
 
@@ -165,7 +183,16 @@ const PagerSlot = memo(PagerSlotView);
 export const Pager = memo(PagerView);
 
 const useStyles = makeStyles(() => ({
-  viewport: { flex: 1 },
+  frame: { flex: 1, minWidth: 0 },
+  /**
+   * **`minWidth: 0` is what makes this scroll rather than stretch.** A flex
+   * item's `min-width` resolves to `auto`, which is its content's minimum — and
+   * this scroller's content is four pages side by side. Without the override
+   * the viewport widened to 1600pt inside a 400pt phone, the pages sat in a row
+   * off the edge of the screen, and `scrollTo` had nothing to scroll: the tab
+   * marker moved and the content never did.
+   */
+  viewport: { flex: 1, minWidth: 0 },
   // `flexGrow` so the track is as tall as the scroller even when its slots
   // are not, which is what gives the percentage below something definite to
   // resolve against.

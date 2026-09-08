@@ -176,8 +176,7 @@ this page.
 #### Calendar
 
 The month's shape as a grid of days, each carrying the same activity mark
-`DayRibbon` uses, with the tapped day's entries open beneath it. **This is
-S11's phone layout, restored.** An earlier draft folded the calendar into the
+`DayRibbon` uses. **This is S11's phone layout, restored.** An earlier draft folded the calendar into the
 list as a drop-down panel, on the reasoning that *see as list* was a handoff
 worth removing. The handoff was never the problem — its price was. A swipe
 costs nothing, so the calendar can be a view again, and a whole page serves it
@@ -188,6 +187,25 @@ better than a panel dropped over something else.
 Every month of the year with its income and spend, the current one marked.
 Tapping one moves the shared date and stays on the page, so a year can be read
 without leaving it.
+
+**Both pages are folds of one read.** `readDayFlows` is §5's figure cut by day
+— the same query, the same filters and the same refusal to sum across
+currencies as the card's own figure — and the calendar groups it by day while
+Months groups it by month. Three implementations of §5 on one screen is how a
+screen comes to say two different things about the same month; there is one,
+and a test adds the days up and compares them to the card.
+
+**Both scale to what is on screen, never to an absolute figure.** A day is
+*heavy* against the busiest day of its month and a month's bars are drawn
+against the busiest month of its year, for the reason `DayRibbon` gives: a
+ledger whose largest day is 200 zł and one whose largest is 20 000 would
+otherwise draw every mark the same, and the mark exists to say *this was
+unusual for you*.
+
+**A day or a month holding two currencies keeps its mark and loses its
+figure.** Arc-phone converts nothing, so no single number is true; the calendar
+draws the mark without a total and a month's row names the currencies its
+figures leave out. Dropping them silently would be worse than saying so.
 
 ### Web — ≥1024px
 
