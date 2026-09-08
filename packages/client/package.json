@@ -36,6 +36,7 @@
     "./ledger/use-lead-currency": "./src/ledger/use-lead-currency/use-lead-currency.ts",
     "./ledger/use-ledger-controller": "./src/ledger/use-ledger-controller.ts",
     "./ledger/use-ledger-filters": "./src/ledger/use-ledger-filters/use-ledger-filters.ts",
+    "./ledger/use-ledger-list": "./src/ledger/use-ledger-list/use-ledger-list.ts",
     "./ledger/use-pager-date": "./src/ledger/use-pager-date/use-pager-date.ts",
     "./ledger/use-phone-ledger": "./src/ledger/use-phone-ledger/use-phone-ledger.ts",
     "./ledger/use-phone-ledger-startup": "./src/ledger/use-phone-ledger-startup/use-phone-ledger-startup.ts",
