@@ -10,13 +10,23 @@
 
 Answer what needs Excel today, and perform bounded writes that you approve.
 
+**This screen is the front of the registry, not a feature beside it.**
+`SPEC.md` §11.0 makes every capability one named, typed operation and
+generates the tRPC router and the agent's tools from the same declaration, so
+anything the app can do the agent can do — including building what you look
+at. `get_widget_catalogue` is introspection over the widget kinds that exist,
+and `add_widget`/`update_widget_config` are ordinary writes, which is what
+makes *"put family spending on my dashboard"* a sentence rather than a
+feature request. The dashboards, the charts and the analysis are reached this
+way by construction; nothing here is a special case.
+
 ## 2. Entry and exit
 
 | From | Via | Back to |
 |---|---|---|
 | Nav | Agent | — |
-| S04 | Agent tab | S04 |
-| Any screen | `⌘K` | Where you were |
+| S04 | The agent button in `PeriodBar` — every page of the pager | S04, on the page you left |
+| Any screen | `⌘K` on a keyboard | Where you were |
 
 **Exits** — a result row → S09 · a workbook → S27 · a proposed category → S19.
 

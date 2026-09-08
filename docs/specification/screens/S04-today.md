@@ -38,7 +38,7 @@ Browsing the ledger and picking a date are this screen, one swipe away. See §3.
 
 ```
 ┌ shell ──────────────────────────────────────────┐
-│  ‹  September 2026  ›        −4 320,18     [🔍] │  ← PeriodBar, shared
+│  ‹  September  ›       −4 320,18    [🔍]  [✦] │  ← PeriodBar, shared
 │   Summary    List    Calendar    Months         │  ← PageTabs, marker under one
 │  ─────────────────────────────────────────────  │
 └─────────────────────────────────────────────────┘
@@ -60,7 +60,21 @@ date to that month's newest day** — a reverse-chronological list is entered
 from its end, not its start.
 
 **The chrome is shared and does not move.** One row: the period with its
-arrows, the figure for whatever period the current page is in, and search.
+arrows, the figure for whatever period the current page is in, search, and the
+agent.
+
+**The year appears only when it is not this one.** *September* while you are
+in 2026; *March 2024* once you have stepped out of it. Five things share
+326pt, and the year is the one of them that is usually already known — a bar
+that wrapped to two lines to repeat it would be spending a row on the least
+surprising word on the screen.
+
+**The agent has a button, because `⌘K` is a desk gesture.** S03 has been
+reachable from any screen since it was written, and on the phone it was
+reachable from nowhere. It sits in the shared bar rather than on Summary,
+because *ask the ledger* is not a place you go from one page — it is the thing
+you do while looking at any of them, and a question is usually about what is
+already on screen.
 **The arrows step the unit the page is in** — a month on Summary, List and
 Calendar; a year on Months — and the label always says which, so the control
 never has to be explained.
@@ -81,19 +95,19 @@ same action as swiping to it; neither is the primary.
 │  ┌ Where it went ──────────────────────────────┐│  ← SpendRows, §6
 │  └─────────────────────────────────────────────┘│
 │  GO TO                                          │
-│    Import              Ask the ledger           │
-│    Recurring           Subscriptions            │
-│    Categories          Tax timeline             │
+│    Import              Recurring                │
+│    Subscriptions       Categories               │
+│    Tax timeline        Reports                  │
 ```
 
 **The landing page, and the one the app opens on.** §1's question is answered
 here; the other three are where you go once it has been.
 
-***Go to* carries only what the tab bar does not.** Accounts and Debt are
-tabs, so a card for either would be a second door into the same room — and a
-second door is worse than none, because now there are two things to keep
-current. Each card carries a figure, so the grid reads as status rather than
-as a menu.
+***Go to* carries only what nothing else does.** Accounts and Debt are tabs
+and the agent is in the bar, so a card for any of them would be a second door
+into the same room — and a second door is worse than none, because now there
+are two things to keep current. Each card carries a figure, so the grid reads
+as status rather than as a menu.
 
 #### List
 
@@ -130,10 +144,11 @@ happened*.
 | Component | Notes |
 |---|---|
 | `Shell` | `PeriodBar` + `PageTabs`, shared by all four pages and never scrolled away |
-| `PeriodBar` | The period with its arrows, the current page's figure, and search. The arrows step **the unit the page is in** |
+| `PeriodBar` | The period with its arrows, the current page's figure, search, and the agent. The arrows step **the unit the page is in**; the year is drawn only when it is not the current one |
+| `AgentButton` | In the bar, on every page → S03. The phone's answer to a desk's `⌘K` |
 | `PageTabs` | Summary · List · Calendar · Months, a marker on a hairline. What makes the swipe discoverable |
 | `Pager` | The four pages, swiped or tapped between, over one shared date |
-| `GatewayGrid` | Summary's *Go to* — six cards, each with a figure. Only destinations the tab bar does not carry |
+| `GatewayGrid` | Summary's *Go to* — six cards, each with a figure. Only destinations neither the tab bar **nor the shared bar** carries, which is why Accounts, Debt and the agent are absent from it |
 | `NetWorthStrip` | *Mine* on the ground in one line, *ours* and any second currency muted beneath it. Pressable → S16. Renders above the error branch, so a failed refresh keeps it (§6) |
 | `MonthSummary` | The hero, opening month only. *Kept so far* stacked over its figure, a `FlowBar`, then the labelled pair. Draws three zeroes for a period the ledger did not exist in — that is the true answer, not an empty state |
 | `FlowBar` | Track is *came in*, fill is *went out*, gap is *kept*. Fill clamps at 100%; a deficit is carried by the figures, not by an overrunning bar |
