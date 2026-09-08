@@ -1,6 +1,6 @@
 import type { AccountingDate } from "@waltning/core/date";
 import type { Id } from "@waltning/core/id";
-import type { CurrencyCode, Money } from "@waltning/core/money";
+import type { CurrencyCode, Money, PivotPerUnit } from "@waltning/core/money";
 import * as money from "@waltning/core/money";
 import type { CounterpartyRole, TxnType } from "@waltning/schema/enums";
 import { and, eq, gte, inArray, isNull, lte, or, type SQL } from "drizzle-orm";
@@ -96,9 +96,19 @@ export type SignedLedgerRow = {
   toAccountName: string | null;
   amountOriginal: Money;
   amount: Money;
+  /** Pivot per unit of `currency`, for this row's own accounting date (P1). Never null. */
+  fxRate: PivotPerUnit;
+  /** The rate was inferred rather than observed — a total built on it is approximate twice over. */
+  fxRateEstimated: boolean;
   currency: CurrencyCode;
   decimals: number;
   toAmount: Money | null;
+  /**
+   * The destination leg's own rate. **Nullable, and that is load-bearing**: a
+   * transfer into a currency the ledger could not price has no rate here, and
+   * a day holding one has no honest total (S04 §5).
+   */
+  toFxRate: PivotPerUnit | null;
   toCurrency: CurrencyCode | null;
   toDecimals: number | null;
   isBusiness: boolean;
@@ -130,7 +140,10 @@ export function ledgerRowsQuery<TRun, TSchema extends typeof ledgerSchema>(
       toAccountId: transactions.toAccountId,
       toAccountName: toAccounts.name,
       amountOriginal: transactions.amountOriginal,
+      fxRate: transactions.fxRate,
+      fxRateEstimated: transactions.fxRateEstimated,
       toAmountRaw: transactions.toAmount,
+      toFxRate: transactions.toFxRate,
       currency: transactions.currency,
       decimals: currencies.decimals,
       toCurrency: transactions.toCurrency,

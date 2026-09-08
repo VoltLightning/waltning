@@ -1,7 +1,7 @@
 import { fold } from "@waltning/core/capture/names";
 import type { AccountingDate } from "@waltning/core/date";
 import { id as brandId, type Id } from "@waltning/core/id";
-import type { CurrencyCode, Money } from "@waltning/core/money";
+import type { CurrencyCode, Money, PivotPerUnit } from "@waltning/core/money";
 import * as money from "@waltning/core/money";
 import type { CounterpartyRole, TxnType } from "@waltning/schema/enums";
 import { and, count, desc, eq, exists, lt, or, type SQL } from "drizzle-orm";
@@ -54,10 +54,15 @@ export type LocalSearchTransaction = {
   toAccountName: string | null;
   /** Already signed, the "from" leg — `money.ts#signed`. */
   amount: Money;
+  /** Pivot per unit of `currency`, for this row's own accounting date (P1). */
+  fxRate: PivotPerUnit;
+  fxRateEstimated: boolean;
   currency: CurrencyCode;
   decimals: number;
   /** Already signed, the "to" leg. `null` off a transfer. */
   toAmount: Money | null;
+  /** The destination leg's rate — `null` where the ledger could not price it. */
+  toFxRate: PivotPerUnit | null;
   toCurrency: CurrencyCode | null;
   toDecimals: number | null;
   isBusiness: boolean;
