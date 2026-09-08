@@ -28,176 +28,94 @@ a row → S09 · the net-worth strip → S16 · unsettled banner → J8 allocati
 tab bar → S16, S12, S30.
 
 **S04 has no *show all*, and the tab bar has no Ledger or Calendar tab.**
-Browsing the ledger and picking a date are this screen, at a different scroll
-position and with the picker open. See §10.
+Browsing the ledger and picking a date are this screen, one swipe away. See §3.
 
 ## 3. Layout
 
 ### Mobile — 390pt
 
-**At rest** — the header is present, so the strip is not:
+**S04 is four views of one date, and a swipe moves between them.**
 
 ```
 ┌ shell ──────────────────────────────────────────┐
-│  September                            [ 📅 ]    │  ← header · picker action
-│  Three days in — all quiet                      │
+│  ‹  September 2026  ›        −4 320,18     [🔍] │  ← PeriodBar, shared
+│   Summary    List    Calendar    Months         │  ← PageTabs, marker under one
+│  ─────────────────────────────────────────────  │
 └─────────────────────────────────────────────────┘
-┌ ground panel ───────────────────────────────────┐
-│  ┌ mine   48 620,84 zł                       › ┐│  ← NetWorthStrip → S16
-│  ┌ Kept so far ────────────────────────────────┐│  ← MonthSummary, the hero
+```
+
+| Page | Answers | Granularity |
+|---|---|---|
+| **Summary** | Where do I stand, and how do I get to the rest | the month |
+| **List** | Everything, in order, forever | the day |
+| **Calendar** | What did this month look like | the day |
+| **Months** | What did this year look like | the month |
+
+**There is one date, and the four pages are four ways of looking at it.** That
+is what makes a swipe feel like turning a page rather than opening a screen.
+Pick August on Months and List is in August; scroll to 25 May on List and
+Calendar has 25 May marked. Day-precision pages read and write the date
+exactly. Summary and Months read its month, and **picking a month sets the
+date to that month's newest day** — a reverse-chronological list is entered
+from its end, not its start.
+
+**The chrome is shared and does not move.** One row: the period with its
+arrows, the figure for whatever period the current page is in, and search.
+**The arrows step the unit the page is in** — a month on Summary, List and
+Calendar; a year on Months — and the label always says which, so the control
+never has to be explained.
+
+**`PageTabs` is what makes the swipe exist.** A gesture with no visible
+affordance is a gesture only its author knows about, so the four names are
+drawn and the marker rides a hairline beneath them. Tapping a name is the
+same action as swiping to it; neither is the primary.
+
+#### Summary
+
+```
+│  ┌ Kept so far ────────────────────────────────┐│  ← MonthSummary
 │  │ +3 529,82 zł                                ││
-│  │ ████████████████░░░░░░░░░░░░░░░░░░░░░░░░░░░ ││  ← out, against in
+│  │ ████████████████░░░░░░░░░░░░░░░░░░░░░░░░░░░ ││  ← FlowBar: out against in
 │  │ Came in                            Went out ││
-│  │ +7 850,00 zł                  −4 320,18 zł  ││
 │  └─────────────────────────────────────────────┘│
-│  ⚠ 340,00 zł unallocated · dinner, 6 Aug        │  ← only when non-zero
-│  ┌ Where it went ────────────────────────────┐  │  ← SpendRows, §6
-│  │ Groceries  ███████████████     1 240,50   │  │
-│  └───────────────────────────────────────────┘  │
-│  ┌ TODAY                            −184,50 ─┐  │  ← the list begins, and
-│  │ Market B     Groceries · Bank A  −96,00   │  │    does not end
-│  │ Café A       Eating out · Cash   −48,90   │  │
-│  └───────────────────────────────────────────┘  │
-│  ┌ FRIDAY 4 SEPTEMBER               −213,40 ─┐  │
-│  │ Clinic G     Health · Bank A    −180,00   │  │
-│  └───────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────┘
-│                                          (＋)   │
-┌ tab bar · 4 ────────────────────────────────────┐
-│  Home    Accounts    Debt    Settings     (＋)  │
-└─────────────────────────────────────────────────┘
+│  ┌ Where it went ──────────────────────────────┐│  ← SpendRows, §6
+│  └─────────────────────────────────────────────┘│
+│  GO TO                                          │
+│    Import              Ask the ledger           │
+│    Recurring           Subscriptions            │
+│    Categories          Tax timeline             │
 ```
 
-**Scrolled** — the header has gone, so the strip has arrived and stays:
+**The landing page, and the one the app opens on.** §1's question is answered
+here; the other three are where you go once it has been.
 
-```
-┌ DateStrip · pinned ─────────────────────────────┐
-│  August 2026        −3 210,40            [ 🔍 ] │  ← label · figure · one icon
-│ ‹│ S  │ M  │ T  │ W  │ T  │ F  │ S  │ S │›      │  ← DayRibbon, scrolls with
-│  │10  │11  │12  │13  │14 ●│15  │16  │17│        │    the list, clipped both ends
-└─────────────────────────────────────────────────┘
-┌ the list ───────────────────────────────────────┐
-│  ┌ THURSDAY 14 AUGUST               −296,00 ┐    │
-│  │ Clinic G     Health · Bank A    −180,00  │    │
-│  └──────────────────────────────────────────┘    │
-│    Wednesday 13 August ············· nothing     │  ← one quiet day
-│  ┌ 3 – 27 August · 25 days           [Show] ┐    │  ← a quiet run
-│  └──────────────────────────────────────────┘    │
-│                  ( ↑ Today )                     │  ← floats, only when away
-└─────────────────────────────────────────────────┘
-```
+***Go to* carries only what the tab bar does not.** Accounts and Debt are
+tabs, so a card for either would be a second door into the same room — and a
+second door is worse than none, because now there are two things to keep
+current. Each card carries a figure, so the grid reads as status rather than
+as a menu.
 
-**The header and the strip are one control in two states.** At rest the screen
-is the layout it has always been and there is no strip; scrolling collapses the
-header into `DateStrip`, which then carries the month and its running figure, so
-the month summary never actually leaves — it gets small. A strip drawn *as well
-as* the header is a band wedged between two cards: a seam, not an element.
+#### List
 
-**`MonthSummary` puts the label above the figure and the figure on its own
-line.** A label to the left of a number on one baseline leaves the number
-nowhere to breathe and shrinks the currency to fit beside it; S05's amount field
-already solved this and this card uses its shape. Every figure on the card
-carries its currency — `<Amount>` renders `1 234,56 zł` and a figure without the
-suffix is not a quieter design, it is a different component
-(`design-system/04` §4.1).
+The whole ledger, continuous in both directions, with `DayRibbon` under the
+tabs reporting where it is. Everything §5, §6 and §7 say about the list is
+this page.
 
-**The bar is the arithmetic, not two shares.** Its track is *came in* and its
-fill is *went out*, so the gap that remains is *kept so far* — the same
-subtraction the three figures state, in a form readable without reading any of
-them. Two proportional halves would say something else and something less: how
-the month's flow divided, which nobody asks.
+#### Calendar
 
-**When the month spent more than it took in, the bar fills and stops.** *Kept
-so far* goes negative and takes the expense ink; the fill does not overrun its
-track, because a bar longer than its own container is a graphic that has to be
-explained. The figures carry the overshoot, which is what figures are for.
+The month's shape as a grid of days, each carrying the same activity mark
+`DayRibbon` uses, with the tapped day's entries open beneath it. **This is
+S11's phone layout, restored.** An earlier draft folded the calendar into the
+list as a drop-down panel, on the reasoning that *see as list* was a handoff
+worth removing. The handoff was never the problem — its price was. A swipe
+costs nothing, so the calendar can be a view again, and a whole page serves it
+better than a panel dropped over something else.
 
-**The list is the whole ledger, and it is continuous in both directions.**
-Scrolling down passes into August, July, and back to the opening balance;
-scrolling up passes into what is expected. There is no *show all*, because
-there is nowhere else for it to go.
+#### Months
 
-**Only the top month carries a summary.** `MonthSummary` and `SpendRows`
-describe the month you are in when the screen opens. Scroll back and you get
-days and their figures; the strip's month total is the one aggregate that
-follows you. Laying a fresh summary at every month boundary would turn the
-scroll into a stack of monthly reports, which is S25's job and needs S25's
-width.
-
-**The strip carries three things and no more.** The month, its figure, one
-icon. It had four — a bordered pill inside a bordered band, a figure, and two
-buttons — and at 388px of content in a 326px row it could not fit, which is
-what made it read as clutter. Return-to-today is a floating pill over the list
-that exists only when you are away from today.
-
-**Where the visible days span two months the label says both** — `Aug – Sep
-2026` — rather than naming one and being wrong for half the strip. The label
-follows the list, not the week.
-
-**`DayRibbon` scrolls; it does not page.** It is a continuous run of days
-clipped at both edges, translating with the list rather than advancing a week
-at a time. The slivers at each end are load-bearing: they are what says there
-is more in both directions.
-
-**The strip reports; it does not select.** It marks whichever day the list is
-showing, and tapping a day scrolls there. A selector alongside a scroll gives
-two sources of truth for *what day am I on*, and they diverge on the first
-fling.
-
-**Filtered, this is the same screen with one clause added.** S16 hands it an
-account or a group, S25 a period; the filter pins under the strip as a chip
-that says what it is and dismisses, the same *carried and visible* contract
-S10 states for every drill-through it receives. The list, the strip, the
-ribbon and the picker are unchanged — they simply describe less.
-
-```
-┌ DateStrip · pinned ─────────────────────────────┐
-│  August 2026        −1 120,40            [ 🔍 ] │
-│ ‹│ S  │ M  │ T  │ W  │ T  │ F  │ S  │ S │›      │
-│  ┌ Bank A · PLN                           ✕ ┐  │  ← the filter, dismissible
-│  └──────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────┘
-```
-
-**Everything on the screen scopes to the filter, including the month card.**
-The strip's figure, the ribbon's activity marks, the picker's per-tile figures
-and `MonthSummary` all describe the filtered set. A summary of everything
-sitting above a list of one account is the §5 defect — a figure whose scope the
-screen has no way to state — and here the chip states it, so the honest thing
-is to make the figures obey it.
-
-***Where it went* does not scope, and is not drawn.** §6 is class **S** and
-takes no account clause; a category breakdown of everything above a filtered
-list would be the same defect the paragraph above avoids. Filtered, the card
-is absent rather than wrong.
-
-**A day's mark means activity, never direction.** `DayRibbon`'s dot varies in
-size and darkness with how much moved that day, and never in hue. A salary day,
-a day of transfers between your own accounts, and a day netting to zero all
-read wrong the moment the mark means *spending*; and a mark whose only signal is
-colour fails WCAG 1.4.1 besides. Direction lives in the list and in the day's
-figure, where a sign can be read.
-
-**What this screen absorbed.**
-
-**S10 · Transactions list, at phone width.** This screen scrolled, with search
-in the strip. A separate browsing surface existed because Recent was a five-row
-window; once the window is the whole ledger there is nothing left for a phone
-ledger to do that a scroll position does not. **S10 survives on the desk**,
-where it is a sortable table with a filter rail — a shape 390pt has no columns
-for, and the destination S01's widgets and S25's charts drill into.
-
-**S11 · Calendar, at phone width.** `PeriodPicker` at day depth is the calendar
-here: the same grid and marks, expanding over the list rather than replacing
-it. *See as list* was always a calendar admitting it could not show you one.
-**S11 survives on the desk**, where a wide cell carries per-day entry previews
-and the four scales and two navigation modes a phone cell has no room to mean.
-
-**S01 · Dashboard is untouched.** It does not exist at phone width and this
-screen does not exist on web; neither absorbs the other.
-
-**Nothing is deleted, and no screen ID retires.** Each of the three keeps the
-surface it is good at, which is the same rule S01 already states about itself.
+Every month of the year with its income and spend, the current one marked.
+Tapping one moves the shared date and stays on the page, so a year can be read
+without leaving it.
 
 ### Web — ≥1024px
 
@@ -211,14 +129,18 @@ happened*.
 
 | Component | Notes |
 |---|---|
-| `Shell` | The heading, the day, and the picker action. Present at rest only; scrolling replaces it with `DateStrip` |
+| `Shell` | `PeriodBar` + `PageTabs`, shared by all four pages and never scrolled away |
+| `PeriodBar` | The period with its arrows, the current page's figure, and search. The arrows step **the unit the page is in** |
+| `PageTabs` | Summary · List · Calendar · Months, a marker on a hairline. What makes the swipe discoverable |
+| `Pager` | The four pages, swiped or tapped between, over one shared date |
+| `GatewayGrid` | Summary's *Go to* — six cards, each with a figure. Only destinations the tab bar does not carry |
 | `NetWorthStrip` | *Mine* on the ground in one line, *ours* and any second currency muted beneath it. Pressable → S16. Renders above the error branch, so a failed refresh keeps it (§6) |
 | `MonthSummary` | The hero, opening month only. *Kept so far* stacked over its figure, a `FlowBar`, then the labelled pair. Draws three zeroes for a period the ledger did not exist in — that is the true answer, not an empty state |
 | `FlowBar` | Track is *came in*, fill is *went out*, gap is *kept*. Fill clamps at 100%; a deficit is carried by the figures, not by an overrunning bar |
 | `SpendRows` | *Where it went* — §6 at leaf granularity, five rows plus a named remainder, bars proportional to the largest row, one colour. Opening month only |
-| `DateStrip` | Pinned once the header has gone. Label + period figure + one icon. Label opens `PeriodPicker`; icon is search |
-| `DayRibbon` | Inside `DateStrip`. Continuous, horizontally scrollable, clipped at both edges. Cells ≥44×44 with the day number at 17px. Activity dot per §3 |
-| `PeriodPicker` | Expands over the list. Three depths — days, months, years — one panel, one grammar: the label goes up a level, a tile comes back down. Tiles ≥44px carrying their own figure. Replaces S11 |
+| `DayRibbon` | Under `PageTabs`, on the List page only. Continuous, horizontally scrollable, clipped at both edges. 48×66 cells with the day number at 17px and room around the weekday letter. Activity mark per §3 |
+| `MonthGrid` | Calendar's own grid — a day per cell with `DayRibbon`'s activity mark, ≥44px |
+| `MonthRows` | Months' twelve rows, income and spend per month |
 | `DayGroup` | A day's rows under its date and total. The list's only grouping |
 | `QuietDay` | One empty day: a single muted line |
 | `QuietRun` | Two or more consecutive empty days: one row naming the span and its length, with *Show* |
@@ -228,16 +150,20 @@ happened*.
 | `FxAmount` | Any foreign row — `local · rate · display`, the rate for that row's own date (P1) |
 | `Banner(warn)` | Unsettled clearing — rendered **only when non-zero**, with one action |
 | `TodayPill` | Floats over the list when the list is away from today. The only way back from a jump (§6) |
-| `FilterChip` | The carried filter, pinned under the ribbon: what it is, and an `✕` that clears it. One chip — this screen receives a filter, it does not compose them. Composing is `FilterBar`, and it is S10's, on the desk |
+| `FilterChip` | The carried filter, pinned under `PageTabs`: what it is, and an `✕` that clears it. One chip — this screen receives a filter, it does not compose them. Composing is `FilterBar`, and it is S10's, on the desk |
 | `TabBar` | 4 tabs, all ≥44px — Home · Accounts · Debt · Settings. **No Ledger tab**: this screen is the ledger, so one would lead where you already are. `+` is not a tab, though it may come to rest in the bar (`02-tokens` §2.9) |
 | `FloatingAdd` | The `+`, above everything, wherever it was last put (`02-tokens` §2.9) |
 | `EmptyState(first-run)` | No accounts — offers create; the import path is S29's and arrives with it. No transactions — §6 |
 | `AppearanceButton` · `BottomSheet(appearance)` | Moved to S30 · Settings. The header has one action, and it is the picker |
 
-**`PeriodPicker` is the existing component, not a new one.** Reports' picker
-already carries granularity, presets and an arbitrary range (§7); this screen
-opens it from the strip's label and it gains the per-tile figures. `PeriodHeader`
-retires — its arrows and *Today* are the ribbon and the pill.
+**`PeriodPicker` is not used here, and Reports keeps it.** A panel offering
+day/week/month/year over a list was the earlier answer to *reach a far date*;
+the pager answers it with two of its own pages and a swipe, which is the same
+reach without a panel to open and close. Reports (§7) still wants a picker,
+because a report has no pager to borrow.
+
+**`PeriodHeader` retires into `PeriodBar`.** Its arrows and its *Today* are
+here, stepping whatever unit the page is in.
 
 ## 5. Data
 
@@ -313,9 +239,10 @@ not to a list. A warning that costs you a search is a warning you learn to
 ignore.
 
 **Search is the strip's icon, and it filters this list.** Day grouping survives,
-month rules mark the gaps, and `PeriodPicker`'s tiles carry **match counts**
-instead of totals — so *how often, and when* is answered by the control you were
-already going to use to jump. Search needs no navigation of its own.
+month rules mark the gaps, and **Calendar and Months carry match counts instead
+of their figures** — so *how often, and when* is answered by the pages you were
+already going to swipe to. Search needs no navigation of its own, and it holds
+across the pages the way the date does.
 
 **Accessibility is a constraint, not a review note.** Every target in the strip
 and the picker is ≥44×44. Nothing encodes meaning in hue alone. A ribbon cell's
