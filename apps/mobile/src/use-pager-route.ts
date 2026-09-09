@@ -13,7 +13,7 @@ import {
 } from "@waltning/client/ledger/pager-date";
 import type { AccountingDate, YearMonth } from "@waltning/core/date";
 import { router, useLocalSearchParams } from "expo-router";
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, useRef } from "react";
 
 export type PagerRoute = {
   state: PagerState;
@@ -66,19 +66,36 @@ export function usePagerRoute(today: AccountingDate): PagerRoute {
     router.setParams(pagerStateParams(next));
   }, []);
 
-  const previous = useCallback(() => write(step(state, -1)), [state, write]);
-  const next = useCallback(() => write(step(state, 1)), [state, write]);
+  /**
+   * **The state these read, without depending on it.**
+   *
+   * Every one of them is a function of the current state, so closing over it
+   * made all five new on every param change — and S04 builds its four page
+   * elements from two of them, so a tab tap handed the pager four fresh pages
+   * and React re-rendered the whole screen. Measured at 40ms of React work per
+   * tab change, against a 16ms frame.
+   *
+   * Written during render rather than in an effect: an effect runs after the
+   * commit, so a tap between the two would step from the state before last.
+   * The only thing that changes this state is these functions, and the value
+   * is never read during rendering — only inside a handler, after it.
+   */
+  const latest = useRef(state);
+  latest.current = state;
+
+  const previous = useCallback(() => write(step(latest.current, -1)), [write]);
+  const next = useCallback(() => write(step(latest.current, 1)), [write]);
   const showPage = useCallback(
-    (page: PagerPageKey) => write(goToPage(state, page)),
-    [state, write],
+    (page: PagerPageKey) => write(goToPage(latest.current, page)),
+    [write],
   );
   const showMonth = useCallback(
-    (month: YearMonth) => write(enterMonth(state, month, today)),
-    [state, today, write],
+    (month: YearMonth) => write(enterMonth(latest.current, month, today)),
+    [today, write],
   );
   const showDay = useCallback(
-    (date: AccountingDate) => write(enterDay(state, date)),
-    [state, write],
+    (date: AccountingDate) => write(enterDay(latest.current, date)),
+    [write],
   );
 
   const label = useMemo(() => periodLabel(state), [state]);

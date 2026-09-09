@@ -55,6 +55,17 @@ export type HomeListPageProps = {
    * thing that can report the offset the header collapses from.
    */
   onScroll?: ScrollHandler | undefined;
+  /**
+   * What stands in place of the list when there is nothing in it (§6, *Empty ·
+   * no transactions*).
+   *
+   * **The screen composes it, not this page.** Which emptiness it is — a
+   * ledger nobody has captured into yet, or a month that happens to be quiet —
+   * is a question about the whole ledger, and the action it offers belongs to
+   * the screen that owns navigation. A list that guessed would be a list with
+   * an opinion about the app around it.
+   */
+  empty: React.ReactNode;
 };
 
 type DayTotal = { pivot: Money; approximate: boolean } | { pivot: null };
@@ -74,6 +85,7 @@ export function HomeListPage({
   onPickDay,
   onOpenTransaction,
   onScroll,
+  empty,
 }: HomeListPageProps) {
   const t = useT();
   const locale = useLocale();
@@ -170,6 +182,17 @@ export function HomeListPage({
   }, [hasOlder, loadOlder]);
 
   const styles = useStyles();
+  // `ListEmptyComponent` takes an element or a component type, and an element
+  // built in the prop would be a new one every render.
+  //
+  // **A `View`, never a fragment.** `FlatList` clones this element and hands it
+  // an `onLayout`, which a fragment cannot carry — it logged an error on every
+  // render of an empty list and the empty state still drew, which is the kind
+  // of breakage only the console reports.
+  const emptyElement = useMemo(
+    () => <View style={styles.empty}>{empty}</View>,
+    [empty, styles.empty],
+  );
 
   return (
     <View style={styles.root}>
@@ -178,6 +201,10 @@ export function HomeListPage({
         data={entries}
         renderItem={renderItem}
         keyExtractor={keyExtractor}
+        ListEmptyComponent={emptyElement}
+        // So the empty state has the page to sit in rather than a strip at the
+        // top of one: with no rows the content is shorter than the scroller.
+        contentContainerStyle={styles.content}
         onEndReached={handleEndReached}
         onEndReachedThreshold={END_REACHED_THRESHOLD}
         onScroll={onScroll}
@@ -274,5 +301,8 @@ const END_REACHED_THRESHOLD = 0.6;
 const useStyles = makeStyles((theme) => ({
   root: { flex: 1 },
   list: { flex: 1 },
+  content: { flexGrow: 1 },
+  // Centred in the page it was given, not stacked at the top of it.
+  empty: { flex: 1, justifyContent: "center" },
   unpriced: { color: theme.textMuted, ...text.ui("caption") },
 }));

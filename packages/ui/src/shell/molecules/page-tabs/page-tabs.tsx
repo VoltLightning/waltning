@@ -126,9 +126,19 @@ function PageTabsView({ tabs, activeKey, onSelect, progress }: PageTabsProps) {
   const slot = useMemo(() => ({ width: `${100 / count}%` }) as const, [count]);
   // One marker for the row, not one per tab: a bar that slides between two
   // positions is a different object from four bars taking turns being visible.
+  //
+  // **`translateX`, never `left`.** `left` is a layout property: setting it on
+  // every scroll event made the browser re-lay-out the row each frame, and a
+  // tab change cost a 63ms task on the main thread — measured, and the same
+  // 63ms whichever page it went to, which is what gave it away as chrome
+  // rather than content. A transform is composited and costs nothing.
+  //
+  // The percentage is of the slot's own width, and the slot is exactly one tab
+  // wide — so one page of progress is one slot of travel, with nothing
+  // measured.
   const slide = useAnimatedStyle(
-    () => ({ left: `${(progress.value * 100) / count}%` }),
-    [progress, count],
+    () => ({ transform: [{ translateX: `${progress.value * 100}%` }] }),
+    [progress],
   );
 
   return (
@@ -193,6 +203,7 @@ const useStyles = makeStyles((theme) => ({
   markerSlot: {
     position: "absolute",
     bottom: 0,
+    left: 0,
     alignItems: "center",
   },
   marker: {

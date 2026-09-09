@@ -11,6 +11,7 @@ import { currencyCode, pivotPerUnit, toMoney } from "@waltning/core/money";
 import { I18nProvider } from "@waltning/ui/i18n/provider";
 import { ThemeProvider } from "@waltning/ui/theme/provider";
 import { light } from "@waltning/ui/theme/roles";
+import { Text } from "react-native";
 import { expect, it, vi } from "vitest";
 import { HomeListPage } from "./home-list-page";
 
@@ -67,6 +68,7 @@ function draw(ledger: PhoneLedgerController, onPickDay = vi.fn()) {
           pivotDecimals={2}
           onPickDay={onPickDay}
           onOpenTransaction={vi.fn()}
+          empty={<Text>nothing yet</Text>}
         />
       </I18nProvider>
     </ThemeProvider>,

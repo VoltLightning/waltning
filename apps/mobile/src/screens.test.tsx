@@ -11,7 +11,7 @@
  * ledger, and where they *ask* to go — not expo-router's own behaviour.
  */
 
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import {
   createPhoneLedger,
   type PhoneClearingAccount,
@@ -476,12 +476,17 @@ describe("Today", () => {
   it("draws no Recent card when an account exists but nothing has been captured", () => {
     withLedger(<Today />, fakeController({ accounts: [PLN_ACCOUNT] }));
 
+    // **Scoped to the page on screen.** All four of the pager's pages are
+    // mounted at once and List carries the same empty state, so an unscoped
+    // text query finds two of everything. `getByRole` skips the pages hidden
+    // from the accessibility tree, which is the same set a reader cannot see.
+    const summary = within(screen.getByRole("tabpanel"));
     expect(screen.queryByText("No accounts yet")).toBeNull();
-    expect(screen.queryByText("Recent")).toBeNull();
-    expect(screen.queryByText("Show all →")).toBeNull();
-    expect(screen.getByText("No transactions yet")).toBeDefined();
+    expect(summary.queryByText("Recent")).toBeNull();
+    expect(summary.queryByText("Show all →")).toBeNull();
+    expect(summary.getByText("No transactions yet")).toBeDefined();
 
-    fireEvent.click(screen.getByText("Add"));
+    fireEvent.click(summary.getByText("Add"));
     expect(router.push).toHaveBeenCalledWith("/quick-add");
   });
 
@@ -504,15 +509,16 @@ describe("Today", () => {
       fakeController({ accounts: [PLN_ACCOUNT], recent: [], transactionCount: 12 }),
     );
 
-    expect(screen.queryByText("Recent")).toBeNull();
-    expect(screen.queryByText("No transactions yet")).toBeNull();
+    const summary = within(screen.getByRole("tabpanel"));
+    expect(summary.queryByText("Recent")).toBeNull();
+    expect(summary.queryByText("No transactions yet")).toBeNull();
     // S04 §6's own copy, not S10's — no sentence about a filter on a screen
     // that has none.
-    expect(screen.queryByText("No matching transactions")).toBeNull();
-    expect(screen.getByText("Nothing recent")).toBeDefined();
-    expect(screen.getByText(/just none among the latest few/)).toBeDefined();
+    expect(summary.queryByText("No matching transactions")).toBeNull();
+    expect(summary.getByText("Nothing recent")).toBeDefined();
+    expect(summary.getByText(/just none among the latest few/)).toBeDefined();
 
-    fireEvent.click(screen.getByText("Show all →"));
+    fireEvent.click(summary.getByText("Show all →"));
     expect(router.push).toHaveBeenCalledWith("/ledger");
   });
 

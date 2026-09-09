@@ -293,11 +293,18 @@ export default function Today() {
    * it moves.
    */
   const scrollY = useSharedValue(0);
-  const handleScroll = useAnimatedScrollHandler({
-    onScroll: (event) => {
-      scrollY.value = event.contentOffset.y;
+  // **The dependency array is not optional here.** Without it Reanimated
+  // rebuilds the handler on every render, and `pages` is built from it — so a
+  // stable handler is what lets the four page elements stay the same objects
+  // and React skip the pages it did not change.
+  const handleScroll = useAnimatedScrollHandler(
+    {
+      onScroll: (event) => {
+        scrollY.value = event.contentOffset.y;
+      },
     },
-  });
+    [scrollY],
+  );
 
   const barLabels = useMemo(
     () => ({
@@ -352,27 +359,38 @@ export default function Today() {
    * is not what the app is opened to find out. The register it summarises is
    * one tap away, where every currency and the shared totals live.
    */
-  const netWorthStrip = leadNetWorth ? (
-    <NetWorthStrip
-      mine={leadNetWorth.mine}
-      ours={leadNetWorth.hasShared ? leadNetWorth.ours : null}
-      currency={leadNetWorth.currency}
-      decimals={leadNetWorth.decimals}
-      otherCurrencies={snapshot.netWorth.length - 1}
-      onPress={handleOpenAccounts}
-    />
-  ) : null;
+  // Each of the three pieces below is memoised for the same reason `body` is:
+  // `pages` is built from them, so a fresh element here is a fresh page node
+  // there, and a tab tap re-renders every page in the pager.
+  const netWorthStrip = useMemo(
+    () =>
+      leadNetWorth ? (
+        <NetWorthStrip
+          mine={leadNetWorth.mine}
+          ours={leadNetWorth.hasShared ? leadNetWorth.ours : null}
+          currency={leadNetWorth.currency}
+          decimals={leadNetWorth.decimals}
+          otherCurrencies={snapshot.netWorth.length - 1}
+          onPress={handleOpenAccounts}
+        />
+      ) : null,
+    [leadNetWorth, snapshot.netWorth.length, handleOpenAccounts],
+  );
 
   /** The hero, and §5's three figures in the shape `net = inflow − spend`. */
-  const monthCard = leadNetWorth ? (
-    <MonthSummary
-      spend={leadPeriodSpend?.spend ?? money.ZERO}
-      inflow={leadPeriodSpend?.inflow ?? money.ZERO}
-      net={leadPeriodSpend?.net ?? money.ZERO}
-      currency={leadNetWorth.currency}
-      decimals={leadNetWorth.decimals}
-    />
-  ) : null;
+  const monthCard = useMemo(
+    () =>
+      leadNetWorth ? (
+        <MonthSummary
+          spend={leadPeriodSpend?.spend ?? money.ZERO}
+          inflow={leadPeriodSpend?.inflow ?? money.ZERO}
+          net={leadPeriodSpend?.net ?? money.ZERO}
+          currency={leadNetWorth.currency}
+          decimals={leadNetWorth.decimals}
+        />
+      ) : null,
+    [leadNetWorth, leadPeriodSpend],
+  );
 
   // One object per language rather than per render, so a re-render for an
   // unrelated reason does not re-rank the rows.
@@ -427,7 +445,13 @@ export default function Today() {
   // The derivation and the wording moved out at `S01`'s third use — the model
   // is `packages/client`'s, the words are `packages/ui`'s, and this screen
   // keeps only the route `Open` lands on, which is the app's own.
-  const unsettledBanner = <UnsettledBanner model={unsettledModel} onOpen={handleOpenUnsettled} />;
+  // The model is memoised; without this the element around it was not, and a
+  // fresh element here made `ledgerBody` fresh, which made `body` fresh, which
+  // rebuilt all four pages.
+  const unsettledBanner = useMemo(
+    () => <UnsettledBanner model={unsettledModel} onOpen={handleOpenUnsettled} />,
+    [unsettledModel, handleOpenUnsettled],
+  );
 
   // Error > empty > populated. An error keeps the hero (`snapshot`'s other
   // fields are untouched by a failed refresh, S04 §6) and replaces only the
@@ -466,17 +490,19 @@ export default function Today() {
     [gatewayInk, t],
   );
 
-  const ledgerBody = snapshot.error ? (
-    <ErrorState
-      variant="recoverable"
-      what={t("shell.balanceQueryFailed")}
-      why={t("shell.balanceQueryFailedBody")}
-      action={{ label: t("common.retry"), onPress: handleRetry }}
-    />
-  ) : hasAccounts ? (
-    <>
-      {unsettledBanner}
-      {/*
+  const ledgerBody = useMemo(
+    () =>
+      snapshot.error ? (
+        <ErrorState
+          variant="recoverable"
+          what={t("shell.balanceQueryFailed")}
+          why={t("shell.balanceQueryFailedBody")}
+          action={{ label: t("common.retry"), onPress: handleRetry }}
+        />
+      ) : hasAccounts ? (
+        <>
+          {unsettledBanner}
+          {/*
         S04 §3 — the card *is* the group of Recent rows, so with no rows there
         is no group to draw, and *Show all* has nothing to show. What replaces
         it depends on the count, never on the window: an account exists and the
@@ -489,37 +515,42 @@ export default function Today() {
         a filter is excluding every row, and Recent has no filter to blame — it
         has a five-row window, and *Show all* goes where the rows are.
       */}
-      {snapshot.recent.length === 0 ? (
-        everCaptured ? (
-          <EmptyState
-            variant="filtered"
-            title={t("transactions.emptyRecentTitle")}
-            body={t("transactions.emptyRecentBody")}
-            primaryAction={showAllAction}
-          />
-        ) : (
-          <EmptyState
-            variant="first-run"
-            title={t("transactions.emptyFirstRunTitle")}
-            body={t("transactions.emptyFirstRunBody")}
-            primaryAction={addTransactionAction}
-          />
-        )
-      ) : (
-        <Card
-          title={t("shell.recent")}
-          action={
-            <Button label={t("shell.showAll")} onPress={handleShowAll} variant="ghost" size="sm" />
-          }
-        >
-          <TransactionList
-            transactions={snapshot.recent.map(toRow)}
-            onPress={handleOpenTransaction}
-          />
-        </Card>
-      )}
-      {whereItWent}
-      {/*
+          {snapshot.recent.length === 0 ? (
+            everCaptured ? (
+              <EmptyState
+                variant="filtered"
+                title={t("transactions.emptyRecentTitle")}
+                body={t("transactions.emptyRecentBody")}
+                primaryAction={showAllAction}
+              />
+            ) : (
+              <EmptyState
+                variant="first-run"
+                title={t("transactions.emptyFirstRunTitle")}
+                body={t("transactions.emptyFirstRunBody")}
+                primaryAction={addTransactionAction}
+              />
+            )
+          ) : (
+            <Card
+              title={t("shell.recent")}
+              action={
+                <Button
+                  label={t("shell.showAll")}
+                  onPress={handleShowAll}
+                  variant="ghost"
+                  size="sm"
+                />
+              }
+            >
+              <TransactionList
+                transactions={snapshot.recent.map(toRow)}
+                onPress={handleOpenTransaction}
+              />
+            </Card>
+          )}
+          {whereItWent}
+          {/*
         The appearance control, which the band used to carry in its action
         slot. `PagerFrame` has no such slot — the bar carries the period,
         search and nothing else (S04 §3) — and S04 §4 puts this in S30 ·
@@ -528,33 +559,62 @@ export default function Today() {
         beside the heading for low-frequency destinations it at least has
         company and a reason.
       */}
-      <View style={sectionStyles.goToRow}>
-        <SectionLabel>{t("shell.goTo")}</SectionLabel>
-        <View style={sectionStyles.spacer} />
-        <PreviewAppearanceControls
-          tone="ground"
-          preference={resolved.preference}
-          resetEnabled={PREVIEW_RESET_ENABLED}
-          onPreference={handlePreference}
-          onReset={handleReset}
+          <View style={sectionStyles.goToRow}>
+            <SectionLabel>{t("shell.goTo")}</SectionLabel>
+            <View style={sectionStyles.spacer} />
+            <PreviewAppearanceControls
+              tone="ground"
+              preference={resolved.preference}
+              resetEnabled={PREVIEW_RESET_ENABLED}
+              onPreference={handlePreference}
+              onReset={handleReset}
+            />
+          </View>
+          <GatewayGrid gateways={gateways} onSelect={handleGateway} />
+        </>
+      ) : (
+        <EmptyState
+          variant="first-run"
+          title={t("shell.noAccounts")}
+          body={t("shell.noAccountsBody")}
+          primaryAction={createAccountAction}
         />
-      </View>
-      <GatewayGrid gateways={gateways} onSelect={handleGateway} />
-    </>
-  ) : (
-    <EmptyState
-      variant="first-run"
-      title={t("shell.noAccounts")}
-      body={t("shell.noAccountsBody")}
-      primaryAction={createAccountAction}
-    />
+      ),
+    [
+      snapshot,
+      everCaptured,
+      handleRetry,
+      hasAccounts,
+      unsettledBanner,
+      t,
+      showAllAction,
+      addTransactionAction,
+      createAccountAction,
+      whereItWent,
+      gateways,
+      resolved.preference,
+      handleReset,
+      sectionStyles,
+    ],
   );
-  const body = (
-    <>
-      {typeof message === "string" && !toastDismissed ? (
-        <Toast message={message} onDismiss={handleDismissToast} token={toastToken} />
-      ) : null}
-      {/*
+  /**
+   * **Memoised, because `pages` depends on it.**
+   *
+   * Built inline it was a new element on every render of this screen, so every
+   * tab tap handed all four pages new children and re-rendered the whole of
+   * Summary — the net-worth strip, the month card, the register — plus the
+   * calendar's thirty cells and the year's twelve rows. Measured at a 60ms
+   * task on the main thread per tab change, and the same 60ms whichever page
+   * it went to, which is what said it was the chrome rebuilding everything
+   * rather than the destination drawing itself.
+   */
+  const body = useMemo(
+    () => (
+      <>
+        {typeof message === "string" && !toastDismissed ? (
+          <Toast message={message} onDismiss={handleDismissToast} token={toastToken} />
+        ) : null}
+        {/*
         Above the error branch, not inside the populated one. S04 §6: a failed
         refresh leaves `snapshot`'s other fields untouched, so the figures it
         did not touch stay on screen and only the part that failed is replaced.
@@ -562,10 +622,33 @@ export default function Today() {
         free; on the ground it has to be said. With no accounts both are
         `null`, so the first run is unaffected.
       */}
-      {netWorthStrip}
-      {monthCard}
-      {ledgerBody}
-    </>
+        {netWorthStrip}
+        {monthCard}
+        {ledgerBody}
+      </>
+    ),
+    [message, toastDismissed, handleDismissToast, toastToken, netWorthStrip, monthCard, ledgerBody],
+  );
+
+  /**
+   * What stands in place of the List page when the ledger is empty (§6).
+   *
+   * **The first-run pair, not Recent's own.** Recent's ordinary empty says a
+   * five-row window returned nothing and offers *Show all*; List is where
+   * *Show all* goes, so offering it here would be a door back into the room
+   * you are standing in. A ledger that has never held a transaction is the
+   * same fact on both screens and gets the same words.
+   */
+  const listEmpty = useMemo(
+    () => (
+      <EmptyState
+        variant="first-run"
+        title={t("transactions.emptyFirstRunTitle")}
+        body={t("transactions.emptyFirstRunBody")}
+        primaryAction={addTransactionAction}
+      />
+    ),
+    [t, addTransactionAction],
   );
 
   /* ── Calendar ─────────────────────────────────────────────────────────── */
@@ -674,6 +757,7 @@ export default function Today() {
             onPickDay={handlePickDay}
             onOpenTransaction={handleOpenTransaction}
             onScroll={handleScroll}
+            empty={listEmpty}
           />
         ) : null,
       },
@@ -719,6 +803,7 @@ export default function Today() {
       handleScroll,
       ledger,
       leadNetWorth,
+      listEmpty,
       month,
       monthRows,
       pager.state.date,
