@@ -2,6 +2,7 @@
 
 import { render, screen } from "@testing-library/react";
 import { Text } from "react-native";
+import type { SharedValue } from "react-native-reanimated";
 import { beforeEach, expect, it, vi } from "vitest";
 import { ThemeProvider } from "../../../theme/provider";
 import { light } from "../../../theme/roles.ts";
@@ -24,7 +25,12 @@ const PAGES: readonly PagerPage[] = [
 function tree(activeKey: string, onActiveKeyChange = vi.fn()) {
   return (
     <ThemeProvider theme={light}>
-      <Pager pages={PAGES} activeKey={activeKey} onActiveKeyChange={onActiveKeyChange} />
+      <Pager
+        pages={PAGES}
+        activeKey={activeKey}
+        onActiveKeyChange={onActiveKeyChange}
+        progress={{ value: 0 } as SharedValue<number>}
+      />
     </ThemeProvider>
   );
 }

@@ -20,7 +20,13 @@
  */
 
 import { memo, useCallback, useEffect, useRef } from "react";
-import { type NativeSyntheticEvent, ScrollView, useWindowDimensions, View } from "react-native";
+import {
+  type NativeSyntheticEvent,
+  type ScrollView,
+  useWindowDimensions,
+  View,
+} from "react-native";
+import Reanimated, { type SharedValue, useAnimatedScrollHandler } from "react-native-reanimated";
 import { pageScrollProps } from "../../../primitives/nested-scroll.ts";
 import { makeStyles } from "../../../theme/styles.ts";
 
@@ -41,9 +47,15 @@ export type PagerProps = {
   pages: readonly PagerPage[];
   activeKey: string;
   onActiveKeyChange: (key: string) => void;
+  /**
+   * Where the swipe is, in pages — `1.5` is halfway between the second and the
+   * third. Written every frame on the UI thread so the chrome above can follow
+   * the finger; a boolean "which page" could only ever snap.
+   */
+  progress: SharedValue<number>;
 };
 
-function PagerView({ pages, activeKey, onActiveKeyChange }: PagerProps) {
+function PagerView({ pages, activeKey, onActiveKeyChange, progress }: PagerProps) {
   const styles = useStyles();
   const scroller = useRef<ScrollView>(null);
   /**
@@ -87,6 +99,19 @@ function PagerView({ pages, activeKey, onActiveKeyChange }: PagerProps) {
     scroller.current?.scrollTo({ x: index * width, y: 0, animated: false });
   }, [index, width]);
 
+  // The offset in page units, on the UI thread. `width` is captured by the
+  // worklet rather than read from a ref: it changes only on rotation, and the
+  // handler is rebuilt when it does.
+  const onScroll = useAnimatedScrollHandler(
+    {
+      onScroll: (event) => {
+        if (width === 0) return;
+        progress.value = event.contentOffset.x / width;
+      },
+    },
+    [width, progress],
+  );
+
   const onMomentumScrollEnd = useCallback(
     (event: ScrollEvent) => {
       if (width === 0) return;
@@ -101,11 +126,15 @@ function PagerView({ pages, activeKey, onActiveKeyChange }: PagerProps) {
 
   return (
     <View style={styles.frame}>
-      <ScrollView
+      <Reanimated.ScrollView
         ref={scroller}
         horizontal
         pagingEnabled
         showsHorizontalScrollIndicator={false}
+        onScroll={onScroll}
+        // 16ms: the marker above follows this, and the default reports once per
+        // gesture — a marker that jumps when the finger lifts.
+        scrollEventThrottle={16}
         onMomentumScrollEnd={onMomentumScrollEnd}
         // The slots have to be as tall as the track, not as tall as what is in
         // them. `flexGrow` on the scroller's own `style` does not reach them —
@@ -126,7 +155,7 @@ function PagerView({ pages, activeKey, onActiveKeyChange }: PagerProps) {
             {page.node}
           </PagerSlot>
         ))}
-      </ScrollView>
+      </Reanimated.ScrollView>
     </View>
   );
 }

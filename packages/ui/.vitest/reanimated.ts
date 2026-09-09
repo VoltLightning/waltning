@@ -38,3 +38,18 @@ export const Extrapolation = m.Extrapolation;
 export const interpolate = m.interpolate;
 export const useAnimatedReaction = m.useAnimatedReaction;
 export const useAnimatedScrollHandler = m.useAnimatedScrollHandler;
+/**
+ * **The mock omits `interpolateColor` entirely**, and `useAnimatedStyle` calls
+ * its worklet immediately — so a component that tints with it crashed every
+ * test that rendered the shell, not just its own. The end colour is what a
+ * component test can assert, so this returns the middle stop: the value at
+ * rest, which is what every story and every screenshot is taken at.
+ */
+export const interpolateColor = (
+  value: number,
+  input: readonly number[],
+  output: readonly (string | number)[],
+): string | number => {
+  const at = input.findIndex((stop) => stop >= value);
+  return output[at === -1 ? output.length - 1 : at] ?? output[0] ?? "";
+};

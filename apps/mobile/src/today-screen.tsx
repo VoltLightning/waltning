@@ -730,14 +730,15 @@ export default function Today() {
   return (
     <>
       <PagerFrame
-        periodLabel={
-          pager.label.unit === "year"
-            ? String(pager.label.year)
-            : // The year is the caption underneath, so the title is the month
-              // alone whichever year it is in.
-              monthLabel(month, locale).replace(/\s+\d{4}$/, "")
-        }
-        periodDetail={pager.label.unit === "year" ? null : String(pager.label.year)}
+        // **The same title on all four pages, Months included.** It named the
+        // year there at first, because the arrows step years on that page —
+        // and the header changing shape as you swipe was the thing that read
+        // as broken: the picker's affordance disappeared exactly where a
+        // reader is most likely to want it. The month is the date every page
+        // shares (§3), so it is what the header says; what the arrows step is
+        // said by the arrows' own names.
+        periodLabel={monthLabel(month, locale).replace(/\s+\d{4}$/, "")}
+        periodDetail={String(pager.label.year)}
         onPickPeriod={openPicker}
         scrollY={scrollY}
         onPrevious={pager.previous}

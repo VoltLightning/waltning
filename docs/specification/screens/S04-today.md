@@ -66,6 +66,23 @@ exactly. Summary and Months read its month, and **picking a month sets the
 date to that month's newest day** — a reverse-chronological list is entered
 from its end, not its start.
 
+**The chrome clears the status bar itself.** It is the top of the screen on a
+tab root, so the inset is its own — nothing above it can apply one.
+
+**The marker follows the finger, and so does the ink.** `PageTabs` reads the
+pager's offset in page units rather than which page is active, so a
+half-finished swipe leaves the marker half-way between two names and the two
+labels half-toned. A marker driven by the active page can only jump when the
+gesture ends, which makes the bar look like it is reacting to the swipe rather
+than being part of it.
+
+**The title is the month on all four pages, Months included.** It named the
+year there at first, because the arrows step years on that page — and the
+header changing shape as you swipe was the thing that read as broken: the
+picker's affordance disappeared exactly where a reader is most likely to want
+it. The month is the date every page shares, so it is what the header says;
+what the arrows step is said by the arrows' own names.
+
 **The chrome is shared and never scrolls away, but it changes shape.** The
 header has two layouts and the scroll chooses between them, continuously —
 it is one control resizing, not two headers swapping.

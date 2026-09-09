@@ -18,7 +18,8 @@
 
 import { memo } from "react";
 import { View } from "react-native";
-import type { SharedValue } from "react-native-reanimated";
+import { type SharedValue, useSharedValue } from "react-native-reanimated";
+import { useSafeArea } from "../../../primitives/safe-area";
 import { makeStyles } from "../../../theme/styles.ts";
 import { space } from "../../../tokens.ts";
 import { type PageTab, PageTabs } from "../../molecules/page-tabs/page-tabs";
@@ -65,13 +66,23 @@ function PagerFrameView({
   onPageChange,
 }: PagerFrameProps) {
   const styles = useStyles();
+  const insets = useSafeArea();
+  // One value, written by the pager as it scrolls and read by the tabs as they
+  // draw. It lives here because this is what both of them have in common —
+  // neither owns the other, and a callback between them would put a JS
+  // round-trip in the middle of a gesture.
+  const progress = useSharedValue(0);
+  // Not in `useStyles`: that cache is keyed on the theme and this is keyed on
+  // the device. The chrome is the top of the screen, so it clears the status
+  // bar — without this the month sits under the clock.
+  const clearStatusBar = { paddingTop: insets.top + space.xs };
   // `PageTabs` wants the labels only; the pages carry the same strings for
   // their panels, so one list is the source and neither can drift from it.
   const tabs: readonly PageTab[] = pages.map((page) => ({ key: page.key, label: page.label }));
 
   return (
     <View style={styles.root}>
-      <View style={styles.chrome}>
+      <View style={[styles.chrome, clearStatusBar]}>
         <PagerHeader
           label={periodLabel}
           detail={periodDetail}
@@ -82,9 +93,14 @@ function PagerFrameView({
           onSearch={onSearch}
           labels={barLabels}
         />
-        <PageTabs tabs={tabs} activeKey={activeKey} onSelect={onPageChange} />
+        <PageTabs tabs={tabs} activeKey={activeKey} onSelect={onPageChange} progress={progress} />
       </View>
-      <Pager pages={pages} activeKey={activeKey} onActiveKeyChange={onPageChange} />
+      <Pager
+        pages={pages}
+        activeKey={activeKey}
+        onActiveKeyChange={onPageChange}
+        progress={progress}
+      />
     </View>
   );
 }
@@ -122,7 +138,6 @@ const useStyles = makeStyles((theme) => ({
   chrome: {
     backgroundColor: theme.surface,
     paddingHorizontal: space.x3,
-    paddingTop: space.xs,
     gap: space.sm,
   },
 }));
