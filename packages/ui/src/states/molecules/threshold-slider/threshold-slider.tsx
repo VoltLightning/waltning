@@ -37,7 +37,8 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import { type AccessibilityActionEvent, type LayoutChangeEvent, Text, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
-import Animated, { runOnJS, useAnimatedStyle, useSharedValue } from "react-native-reanimated";
+import Animated, { useAnimatedStyle, useSharedValue } from "react-native-reanimated";
+import { scheduleOnRN } from "react-native-worklets";
 import { useT } from "../../../i18n/provider";
 import { useInteraction } from "../../../primitives/interaction.ts";
 import { usePressScale } from "../../../primitives/press-scale.ts";
@@ -211,16 +212,16 @@ export function ThresholdSlider({ value, onChange }: ThresholdSliderProps) {
         .minDistance(0)
         .onStart((event) => {
           "worklet";
-          if (!reduced) runOnJS(handlePressIn)();
-          runOnJS(handleChange)(offsetToValue(event.x, usableShared.value));
+          if (!reduced) scheduleOnRN(handlePressIn);
+          scheduleOnRN(handleChange, offsetToValue(event.x, usableShared.value));
         })
         .onUpdate((event) => {
           "worklet";
-          runOnJS(handleChange)(offsetToValue(event.x, usableShared.value));
+          scheduleOnRN(handleChange, offsetToValue(event.x, usableShared.value));
         })
         .onEnd(() => {
           "worklet";
-          if (!reduced) runOnJS(handlePressOut)();
+          if (!reduced) scheduleOnRN(handlePressOut);
         })
     );
   }, [reduced, handleChange, handlePressIn, handlePressOut]);

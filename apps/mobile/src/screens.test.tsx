@@ -936,15 +936,15 @@ describe("Today", () => {
    * the second confirmation would vanish 1 s later instead of living its
    * own full window.
    */
-  it("re-arms the toast's window when a second delete arrives with the same message", () => {
+  it("re-arms the toast's window when a second delete arrives with the same message", async () => {
     vi.useFakeTimers();
     try {
       useLocalSearchParams.mockReturnValue({ message: "Transaction deleted.", nonce: "1" });
       const { rerender } = withLedger(<Today />, fakeController({ accounts: [PLN_ACCOUNT] }));
       expect(screen.getByRole("alert").textContent).toContain("Transaction deleted.");
 
-      act(() => {
-        vi.advanceTimersByTime(3_000);
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(3_000);
       });
       useLocalSearchParams.mockReturnValue({ message: "Transaction deleted.", nonce: "2" });
       rerender(
@@ -955,14 +955,14 @@ describe("Today", () => {
       expect(screen.getByRole("alert").textContent).toContain("Transaction deleted.");
 
       // The un-rearmed bug: the first window would expire 1 s from here.
-      act(() => {
-        vi.advanceTimersByTime(1_000);
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1_000);
       });
       expect(screen.getByRole("alert")).toBeDefined();
 
       // The re-armed window lives its own full 4 s from the second arrival.
-      act(() => {
-        vi.advanceTimersByTime(3_000);
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(3_000);
       });
       expect(screen.queryByRole("alert")).toBeNull();
     } finally {
