@@ -29,7 +29,7 @@
 
 import { Text, View } from "react-native";
 import { useSafeArea } from "../../../primitives/safe-area";
-import { text } from "../../../theme/fonts.ts";
+import { text, textCap } from "../../../theme/fonts.ts";
 import { makeStyles } from "../../../theme/styles.ts";
 import { space } from "../../../tokens.ts";
 
@@ -53,7 +53,7 @@ export function TabHeader({ title, action }: TabHeaderProps) {
 
   return (
     <View style={[styles.header, clearance]}>
-      <Text style={styles.title} numberOfLines={1}>
+      <Text maxFontSizeMultiplier={textCap("displayTwo")} style={styles.title} numberOfLines={1}>
         {title}
       </Text>
       {action}

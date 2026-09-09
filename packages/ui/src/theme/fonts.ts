@@ -30,7 +30,7 @@
  * family is tried the test says whether it is allowed to be.
  */
 
-import { lineHeightFor, type TypeStep, type } from "../tokens.ts";
+import { lineHeightFor, maxFontScale, type TypeStep, type } from "../tokens.ts";
 
 /** The families §2.2 names. `mono` is the platform's, so it loads nothing. */
 export type FaceFamily = "ui" | "display" | "mono";
@@ -177,3 +177,31 @@ export const text = {
    */
   mono: (name: TypeStep) => step(name, FACES.mono[400]),
 };
+
+/**
+ * How far this step may grow under the OS text-size setting — for the `<Text>`
+ * that draws it, not for the stylesheet that describes it.
+ *
+ * **This exists because the cap cannot live where the step is named.**
+ * `maxFontScale` in `tokens.ts` has said since it was written that
+ * `displayHero` stops at 1.4, `displayOne` at 1.5 and `displayTwo` at 1.6, and
+ * it reached nothing: React Native takes the cap as a *prop*, `text.display()`
+ * returns a *style*, and a `StyleSheet` cannot carry a prop. So the decision
+ * sat in the tokens looking applied while every headline in the app grew
+ * without limit — a 54pt figure at an uncapped 200% is 108pt in a layout built
+ * for 54, and it stops being a headline and becomes the whole screen.
+ *
+ * `undefined` for every uncapped step, which is most of them and deliberately
+ * so: body text is what someone who turned the setting up turned it up *for*,
+ * and capping it defeats the setting for the person it exists for. Passing
+ * `undefined` is what React Native's own default is, so a component may hand
+ * this to any `<Text>` without asking whether its step is one of the three.
+ *
+ * **It does nothing on the web**, where there is no OS text scale for
+ * `react-native-web` to multiply by — so this is a rule about the two
+ * platforms whose type actually scales, and one that no browser screenshot
+ * will ever show you.
+ */
+export function textCap(name: TypeStep): number | undefined {
+  return maxFontScale[name];
+}
