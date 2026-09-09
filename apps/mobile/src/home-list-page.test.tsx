@@ -127,3 +127,35 @@ it("asks the list to move when a collapsed run is opened", () => {
   screen.getByRole("button", { name: /Show:/ }).click();
   expect(onPickDay).toHaveBeenCalledExactlyOnceWith("2026-08-13");
 });
+
+/**
+ * **§6 says the ledger is continuous in both directions, and only one of them
+ * was wired.** `useLedgerList` has paged forwards and backwards since it was
+ * written, but the list was given `onEndReached` alone — so a reader who
+ * jumped to a day could walk backwards from it forever and never forwards.
+ * The newer half loaded once, at the anchor, and then froze.
+ *
+ * Asserted through the port rather than by firing a scroll: what the list
+ * *asks the ledger for* is the behaviour, and a scroll event in jsdom has no
+ * layout to make `onStartReached` fire from.
+ */
+it("asks the ledger for both directions, not only for older rows", () => {
+  const ledger = ledgerWith([row("2026-08-14", 1, "-96")], [row("2026-08-16", 2, "-48.90")]);
+  draw(ledger);
+
+  const asked = vi.mocked(ledger.readLedgerPage).mock.calls.map(([options]) => options.direction);
+  expect(asked, "the list must page both ways").toContain("older");
+  expect(asked).toContain("newer");
+});
+
+it("draws the newer rows above the older ones", () => {
+  // The order is the claim: a page walked `newer` is prepended, and a reader
+  // scrolling up must find later days rather than the same day twice.
+  draw(ledgerWith([row("2026-08-14", 1, "-96")], [row("2026-08-16", 2, "-48.90")]));
+  const shown = screen
+    .getAllByRole("button", { name: /Payee/ })
+    .map((node) => node.getAttribute("aria-label") ?? node.textContent ?? "");
+  expect(shown, "both rows drawn").toHaveLength(2);
+  expect(shown[0]).toMatch(/Payee 2/);
+  expect(shown[1]).toMatch(/Payee 1/);
+});

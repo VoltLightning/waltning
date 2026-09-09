@@ -257,7 +257,9 @@ low-frequency destination is better off in it.
 
 #### List
 
-The whole ledger, continuous in both directions, with `DayRibbon` under the
+The whole ledger, continuous in both directions — the list pages backwards at
+its end and forwards at its start, and a page arriving above keeps the row the
+reader is on where it is rather than pushing it off screen. With `DayRibbon` under the
 tabs reporting where it is. Everything §5, §6 and §7 say about the list is
 this page.
 

@@ -91,7 +91,7 @@ export function HomeListPage({
 }: HomeListPageProps) {
   const t = useT();
   const locale = useLocale();
-  const { rows, hasOlder, loadOlder } = useLedgerList(ledger, { anchor });
+  const { rows, hasOlder, hasNewer, loadOlder, loadNewer } = useLedgerList(ledger, { anchor });
   const items = useMemo(() => toLedgerItems(rows, pivotCurrency), [rows, pivotCurrency]);
 
   const days = useMemo<readonly RibbonDay[]>(
@@ -182,6 +182,18 @@ export function HomeListPage({
   const handleEndReached = useCallback(() => {
     if (hasOlder) loadOlder();
   }, [hasOlder, loadOlder]);
+  /**
+   * The other direction, which the list had no way to ask for.
+   *
+   * §6 says the ledger is continuous **in both directions**, and
+   * `useLedgerList` has paged both since it was written — but `FlatList` was
+   * only ever given `onEndReached`, so a reader who jumped to a day could walk
+   * backwards from it forever and never forwards. The newer half was loaded
+   * once, at the anchor, and then frozen.
+   */
+  const handleStartReached = useCallback(() => {
+    if (hasNewer) loadNewer();
+  }, [hasNewer, loadNewer]);
 
   const styles = useStyles();
   const inset = useGroundInset();
@@ -223,6 +235,14 @@ export function HomeListPage({
         contentContainerStyle={content}
         onEndReached={handleEndReached}
         onEndReachedThreshold={END_REACHED_THRESHOLD}
+        onStartReached={handleStartReached}
+        onStartReachedThreshold={END_REACHED_THRESHOLD}
+        // **Without this the list jumps.** A newer page is *prepended*, so
+        // everything below it moves down by the height of what arrived and the
+        // row the reader was looking at leaves the screen. This pins the first
+        // visible item and lets the content grow above it instead — which is
+        // the whole difference between paging forward and being thrown.
+        maintainVisibleContentPosition={KEEP_POSITION}
         onScroll={onScroll}
         // 16ms: the header interpolates from this, and the default reports
         // once per gesture — a header that jumps when the finger lifts.
@@ -313,6 +333,15 @@ function UnpricedDay() {
  * page still being read.
  */
 const END_REACHED_THRESHOLD = 0.6;
+
+/**
+ * Keep the row the reader is on where it is when a page arrives above it.
+ *
+ * `minIndexForVisible: 1` rather than `0`: index 0 is the topmost rendered
+ * item, and anchoring to it is what makes a list refuse to scroll into new
+ * content at all.
+ */
+const KEEP_POSITION = { minIndexForVisible: 1 } as const;
 
 const useStyles = makeStyles((theme) => ({
   root: { flex: 1 },
