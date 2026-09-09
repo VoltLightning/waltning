@@ -183,8 +183,8 @@ describe("the token spec and the tokens agree", () => {
     // that pair is enforced. Splitting the alias into its own light row would
     // not help: it would name a value `tokens.ts` does not hold either.
     expect(compared, "a drop here means rows stopped being compared").toEqual({
-      light: 40,
-      dark: 33,
+      light: 41,
+      dark: 34,
     });
   });
 
@@ -528,6 +528,48 @@ describe("a component follows the active theme", () => {
     ["dark", dark],
   ])("keeps the %s chart bar readable on the track behind it", (_name, theme) => {
     expect(contrastRatio(theme.chartBar, theme.subtleFill)).toBeGreaterThanOrEqual(3);
+  });
+
+  /**
+   * **A money bar's track was `subtleFill`, and on a phone the Months page drew
+   * twelve rows of nothing.** `subtleFill` is a fill for a box on a card —
+   * 1.10:1 on `ground` light, 1.16 dark, 1.02 and 1.14 on `accentFill`, which is
+   * what the pager's current month sits on. Every ratio in this file was green:
+   * the bars' *fills* clear the page comfortably, so nothing here was measuring
+   * the thing that was invisible. What a reader loses is the scale — a bar at
+   * 4% and a bar at nothing are the same picture when the track cannot be seen.
+   *
+   * **The floor is the shell pair's 1.5, for the shell pair's reason**: no
+   * border draws a track's edge, so the two fills carry the separation alone.
+   * Not 3:1 — that is WCAG 1.4.11's *boundary* number, for an edge you must
+   * locate precisely, and it is unreachable here from both sides at once (see
+   * the bar floor below).
+   */
+  it.each([
+    ["light", light],
+    ["dark", dark],
+  ])("keeps the %s bar track visible on every fill it is drawn on", (_name, theme) => {
+    // `accentFill` because `MonthList` draws the pager's current month on it,
+    // and it was the tightest of the five in both themes.
+    for (const fill of ["ground", "surface", "insetFill", "subtleFill", "accentFill"] as const) {
+      expect(contrastRatio(theme.trackFill, theme[fill]), fill).toBeGreaterThanOrEqual(1.5);
+    }
+  });
+
+  /**
+   * **The other side of the squeeze.** A track dark enough to see is a track
+   * the bar has to clear, and 1.4.11's 3:1 applies to the fill because the
+   * fill *is* the datum. Light theme binds: `income` clears the cream ground by
+   * 5.80, so the track's 1.85 leaves 3.14 and there is nowhere else to go. This
+   * pair of floors is why `chartBar` keeps `subtleFill` — it clears the page by
+   * 3.76 dark, so a `trackFill` track would put it at ~2.1.
+   */
+  it.each([
+    ["light", light],
+    ["dark", dark],
+  ])("keeps the %s money bars readable on that track", (_name, theme) => {
+    expect(contrastRatio(theme.income, theme.trackFill)).toBeGreaterThanOrEqual(3);
+    expect(contrastRatio(theme.spend, theme.trackFill)).toBeGreaterThanOrEqual(3);
   });
 
   it.each([

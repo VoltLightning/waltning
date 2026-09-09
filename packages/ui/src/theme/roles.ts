@@ -60,6 +60,14 @@ export type Theme = {
   surface: string;
   /** Table headers, inset boxes, filled chips — quieter than `surface`. */
   subtleFill: string;
+  /**
+   * The unfilled part of a money bar. Visibly a shape on the page — `subtleFill`
+   * is a fill on a card and drew the Months bars at 1.10:1, so a short bar and
+   * no bar looked the same. 1.5:1 on every fill a track sits on; `income` and
+   * `spend` keep 3:1 on it. The category chart keeps `subtleFill` — see
+   * `chartBar`.
+   */
+  trackFill: string;
   /** The fill under a pointer. Between `subtleFill` and `pressedFill`. */
   hoverFill: string;
   /** The transient fill under a finger or cursor. */
@@ -148,7 +156,11 @@ export type Theme = {
    */
   chartRamp: readonly string[];
   /**
-   * One bar's fill, where the bars are separate and each sits on `subtleFill`.
+   * One bar's fill, where the bars are separate and each sits on `subtleFill`
+   * — **not `trackFill`**, which the money bars take. This value clears the
+   * page by 4.29 light and 3.76 dark, so on a track visible enough for
+   * `trackFill`'s floor it would land at ~2.1:1; the ramp is one set of
+   * values for both themes, so it cannot lift to meet it.
    *
    * **Not a step of `chartRamp`, because a ramp cannot do this job.** The ramp
    * tells *adjacent* segments of one stacked bar apart, so its steps are
@@ -258,6 +270,7 @@ export const light: Theme = {
   ground: color.ground,
   surface: color.surface,
   subtleFill: color.subtle,
+  trackFill: color.track,
   hoverFill: color.hover,
   pressedFill: color.pressed,
 
@@ -319,6 +332,7 @@ export const dark: Theme = {
   ground: darkColor.ground,
   surface: darkColor.surface,
   subtleFill: darkColor.subtle,
+  trackFill: darkColor.track,
   hoverFill: darkColor.hover,
   pressedFill: darkColor.pressed,
 

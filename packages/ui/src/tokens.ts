@@ -49,6 +49,31 @@ export const color = {
   inset: "#f8f4ec",
   /** Table headers, tracks, filled chips — quieter than `surface`. */
   subtle: "#f1ebe0",
+  /**
+   * The unfilled part of a bar — `<FlowBar>`'s empty track, `<MonthList>`'s two
+   * tracks, any track a money bar is drawn in.
+   *
+   * **`subtle` is a fill on a card; a track is a shape on a page, and the two
+   * are not the same job.** The bars took `subtle`, which sits at 1.10:1 on
+   * `ground` and 1.02 on `accent-fill` — on a phone the Months page drew twelve
+   * rows of nothing, and a month with a short bar was indistinguishable from a
+   * month with none. The track is what states the scale the fill is measured
+   * against, so it has to be a shape you can see.
+   *
+   * **Held from both sides, and the squeeze is why it is this dark.** Above:
+   * the shell pair's 1.5:1 (§2.1, "a surface pair needs a floor only where no
+   * border draws the edge") against every fill a track is drawn on — `ground`,
+   * `surface`, `inset`, `subtle`, `accent-fill` — 1.68 at the tightest. Below:
+   * `income` and `spend` keep WCAG 1.4.11's 3:1 *on the track*, 3.12 at the
+   * tightest. Light theme is the binding side: `income` clears the cream ground
+   * by only 5.80, so every step the track darkens is a step the bar loses.
+   *
+   * **Not the chart's track.** `chart-bar` clears `ground` by 4.29 light and
+   * 3.76 dark, so a track this dark would put the category bars at ~2.1:1. That
+   * ramp is one set of values for both themes (see `chartRamp`), so it cannot
+   * move to meet this; the chart keeps `subtle` and the reason is stated there.
+   */
+  track: "#c8b59b",
   /** The fill under a pointer, between `subtle` and `pressed`. */
   hover: "#ece5d7",
   /** The transient fill under a finger. */
@@ -235,6 +260,8 @@ export const darkColor = {
   /** `inset`'s dark half — a panel inside a card, a step up from the card. */
   inset: "#2b2620",
   subtle: "#2b2620",
+  /** `track`'s dark half — the same two-sided squeeze, 1.75 and 3.10. */
+  track: "#5c5347",
   hover: "#302a23",
   pressed: "#363027",
   border: "#38332a",

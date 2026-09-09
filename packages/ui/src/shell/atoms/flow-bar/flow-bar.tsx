@@ -80,6 +80,6 @@ const useStyles = makeStyles((theme) => ({
     overflow: "hidden",
     backgroundColor: theme.income,
   },
-  trackEmpty: { backgroundColor: theme.subtleFill },
+  trackEmpty: { backgroundColor: theme.trackFill },
   fill: { height: "100%", backgroundColor: theme.spend },
 }));
