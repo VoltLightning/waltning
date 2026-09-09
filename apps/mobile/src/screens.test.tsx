@@ -18,6 +18,7 @@ import {
   type PhoneCurrency,
   type PhoneNetWorth,
   type PhoneRecentTransaction,
+  type PhoneSearchTransaction,
   type PhoneSpendByCategory,
 } from "@waltning/client/ledger/create-phone-ledger";
 import { deviceRuntime } from "@waltning/client/ledger/device-runtime";
@@ -25,6 +26,7 @@ import { LedgerProvider } from "@waltning/client/ledger/ledger-provider";
 import { basePort } from "@waltning/client/ledger/test-port";
 import { accountingDate } from "@waltning/core/date";
 import { type Id, id } from "@waltning/core/id";
+import * as money from "@waltning/core/money";
 import {
   type BalanceRow,
   type CurrencyCode,
@@ -205,6 +207,16 @@ type FakeControllerOptions = {
   categoryUsage?: ReadonlyMap<Id<"categories">, number>;
   /** H2 — a caller testing the opening-balance banner hands its own rows rather than `unsettledOf`'s generic ones. */
   unsettled?: readonly PhoneClearingAccount[];
+  /**
+   * The rows S04's List page walks, and the day panel its Calendar opens.
+   *
+   * **One list, three reads.** `readLedgerPage` pages it, `readDayRows` cuts
+   * one day out of it and `readDayFlows` folds it by day — exactly as the
+   * replica's three reads do over one table. A fixture that let them disagree
+   * could not catch a screen that says two different things about one month,
+   * which is the defect those reads are shaped to prevent.
+   */
+  ledger?: readonly PhoneSearchTransaction[];
   /** S04's Recent rows. Empty by default: most callers here are not about Recent, and an empty ledger is the honest default for a fixture that captures nothing. */
   recent?: readonly PhoneRecentTransaction[];
   /**
@@ -221,6 +233,44 @@ type FakeControllerOptions = {
   currencies?: readonly PhoneCurrency[];
 };
 
+/** Newest first — a page walked `older` is descending by date. */
+function byDateDesc(a: PhoneSearchTransaction, b: PhoneSearchTransaction): number {
+  return a.date < b.date ? 1 : a.date > b.date ? -1 : 0;
+}
+
+/**
+ * The same fold `money.dayFlows` performs, over the fixture's own rows.
+ *
+ * Written out rather than imported so the fixture states what it means by a
+ * day: an amount stored signed on the row (§12's display convention, which is
+ * what `signRow` produces) split back into the magnitudes §5 sums.
+ */
+function dayFlowsOf(
+  rows: readonly PhoneSearchTransaction[],
+  period: money.Period,
+): readonly money.DayFlowRow[] {
+  const byDay = new Map<string, { spend: Money; inflow: Money }>();
+  for (const row of rows) {
+    if (row.date < period.start || row.date >= period.end) continue;
+    const bucket = byDay.get(row.date) ?? { spend: money.ZERO, inflow: money.ZERO };
+    byDay.set(
+      row.date,
+      money.cmp(row.amount, money.ZERO) < 0
+        ? { ...bucket, spend: money.add(bucket.spend, money.abs(row.amount)) }
+        : { ...bucket, inflow: money.add(bucket.inflow, row.amount) },
+    );
+  }
+  return [...byDay.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([date, flow]) => ({
+      date: accountingDate(date),
+      currency: currencyCode("PLN"),
+      decimals: 2,
+      spend: flow.spend,
+      inflow: flow.inflow,
+    }));
+}
+
 function fakeController(options: FakeControllerOptions = {}) {
   const {
     accounts: initialAccounts = [],
@@ -229,6 +279,7 @@ function fakeController(options: FakeControllerOptions = {}) {
     categoryUsage = new Map<Id<"categories">, number>(),
     spendByCategory = () => [],
     unsettled: unsettledOverride,
+    ledger: ledgerRows = [],
     recent: recentRows = [],
     transactionCount = 0,
     currencies = [
@@ -272,6 +323,13 @@ function fakeController(options: FakeControllerOptions = {}) {
     listCategoryUsage: () => categoryUsage,
     listNetWorth: () => netWorthOf(accounts),
     readPeriodSpend: () => periodSpendRows,
+    // Newest first, the way `readLedgerPage` returns a page walked older.
+    readLedgerPage: ({ direction }) => ({
+      rows: direction === "older" ? [...ledgerRows].sort(byDateDesc) : [],
+      nextCursor: undefined,
+    }),
+    readDayRows: (date) => ledgerRows.filter((row) => row.date === date),
+    readDayFlows: (period) => dayFlowsOf(ledgerRows, period),
     readSpendByCategory: (_period, scope) => spendByCategory(scope),
     listUnsettledClearing: () => unsettledOverride ?? unsettledOf(accounts),
     // No screen under test here drives S10 yet (`ledger-screen.test.tsx`
@@ -1273,5 +1331,154 @@ describe("CategoriesScreen", () => {
     expect(
       screen.queryByText("Food belongs to the expense side — a category cannot move across kinds"),
     ).toBeNull();
+  });
+});
+
+/**
+ * **The pager's four pages, driven with rows.**
+ *
+ * Every other test here runs S04 on an empty ledger, which is the state that
+ * says *nothing yet* and nothing else. These drive the real screen with a
+ * month of transactions and read back what each page composed — the one check
+ * that the pieces, each proven on its own in Storybook, add up to the screen
+ * the spec describes.
+ *
+ * **Scoped to the page on screen.** All four pages are mounted at once, so an
+ * unscoped text query finds rows from pages a reader cannot see. `getByRole`
+ * skips what is hidden from the accessibility tree, which is the same set.
+ */
+describe("Today — the pager, with a month in it", () => {
+  const TODAY = deviceRuntime().capture().date;
+  const MONTH = TODAY.slice(0, 7);
+
+  function row(day: string, payee: string, amount: string): PhoneSearchTransaction {
+    return {
+      id: id<"transactions">(`33333333-3333-4333-8333-3333333333${day.slice(-2)}`),
+      date: accountingDate(`${MONTH}-${day}`),
+      type: amount.startsWith("-") ? "expense" : "income",
+      payee,
+      note: "",
+      categoryName: "Groceries",
+      brandKey: null,
+      accountId: PLN_ACCOUNT.id,
+      accountName: PLN_ACCOUNT.name,
+      toAccountId: null,
+      toAccountName: null,
+      amount: toMoney(amount),
+      currency: currencyCode("PLN"),
+      decimals: 2,
+      fxRate: money.pivotPerUnit("1"),
+      fxRateEstimated: false,
+      toAmount: null,
+      toFxRate: null,
+      toCurrency: null,
+      toDecimals: null,
+      isBusiness: false,
+      isCapital: false,
+      counterpartyRole: null,
+    };
+  }
+
+  const LEDGER = [
+    row("02", "Market B", "-96.00"),
+    row("02", "Café A", "-48.90"),
+    row("05", "Salary", "7850.00"),
+    row("09", "Clinic G", "-180.00"),
+  ];
+
+  function open(view: "summary" | "list" | "calendar" | "months") {
+    useLocalSearchParams.mockReturnValue({ view, date: `${MONTH}-09` });
+    withLedger(
+      <Today />,
+      fakeController({
+        accounts: [PLN_ACCOUNT],
+        ledger: LEDGER,
+        recent: [],
+        transactionCount: LEDGER.length,
+        periodSpend: [
+          {
+            currency: currencyCode("PLN"),
+            decimals: 2,
+            spend: toMoney("324.90"),
+            inflow: toMoney("7850.00"),
+            net: toMoney("7525.10"),
+          },
+        ],
+      }),
+    );
+    return within(screen.getByRole("tabpanel"));
+  }
+
+  it("offers all four pages, and says which one is showing", () => {
+    open("summary");
+    for (const name of ["Summary", "List", "Calendar", "Months"]) {
+      expect(screen.getByRole("tab", { name })).toBeTruthy();
+    }
+    expect(screen.getByRole("tab", { name: "Summary" }).getAttribute("aria-selected")).toBe("true");
+  });
+
+  it("draws Summary's month as three labelled figures, each with its currency", () => {
+    // §3's hero. The bar between them is decorative and says the same
+    // subtraction, so what a reader must be able to read is these.
+    const summary = open("summary");
+    expect(summary.getByText("Kept so far")).toBeTruthy();
+    expect(summary.getByText("Came in")).toBeTruthy();
+    expect(summary.getByText("Went out")).toBeTruthy();
+    expect(summary.getAllByText("PLN").length).toBeGreaterThanOrEqual(3);
+  });
+
+  it("gives Summary's Go-to cards their figures, not just their names", () => {
+    // §3: every card carries one, which is what makes the grid a status board
+    // rather than a menu.
+    open("summary");
+    expect(screen.getByRole("button", { name: /^Currencies, / })).toBeTruthy();
+  });
+
+  it("walks List across days, and carries the ribbon that says where it is", () => {
+    const list = open("list");
+    // Every day of the loaded page, and every row on it — the list is the one
+    // page that is the whole ledger rather than one period of it (§6).
+    expect(list.getByRole("button", { name: /Clinic G/ })).toBeTruthy();
+    expect(list.getByRole("button", { name: /Market B/ })).toBeTruthy();
+    expect(list.getByRole("button", { name: /Salary/ })).toBeTruthy();
+    // The ribbon reports the days, each named in full: a run of bare numbers
+    // says nothing about which month or whether the day held anything (§7).
+    const ribbon = list
+      .getAllByRole("button")
+      .filter((node) => /^[A-Z][a-z]+ \d+, \d{4}/.test(node.getAttribute("aria-label") ?? ""));
+    expect(ribbon.length).toBeGreaterThan(0);
+  });
+
+  it("marks the days that held something on Calendar, and leaves the rest bare", () => {
+    const calendar = open("calendar");
+    // Every day of the month is a cell whether or not it holds anything — the
+    // grid's shape must not change with its contents.
+    const cells = calendar.getAllByRole("button").filter((node) => {
+      const label = node.getAttribute("aria-label") ?? "";
+      return /^[A-Z][a-z]+ \d+, \d{4}/.test(label);
+    });
+    expect(cells.length).toBeGreaterThanOrEqual(28);
+    const quiet = cells.filter((node) =>
+      (node.getAttribute("aria-label") ?? "").includes("nothing"),
+    );
+    expect(quiet.length).toBeGreaterThan(0);
+    expect(quiet.length).toBeLessThan(cells.length);
+  });
+
+  it("opens the tapped day's entries under the Calendar's grid", () => {
+    // §3, and the reason `readDayRows` is bounded by the date: the panel shows
+    // the day, not the first page of a ledger that happens to start there.
+    const calendar = open("calendar");
+    expect(calendar.getByRole("button", { name: /Clinic G/ })).toBeTruthy();
+    expect(calendar.queryByRole("button", { name: /Market B/ })).toBeNull();
+  });
+
+  it("gives Months twelve rows, the current one marked", () => {
+    const months = open("months");
+    const rows = months
+      .getAllByRole("button")
+      .filter((node) => /Came in/.test(node.getAttribute("aria-label") ?? ""));
+    expect(rows).toHaveLength(12);
+    expect(rows.filter((node) => node.getAttribute("aria-selected") === "true")).toHaveLength(1);
   });
 });
