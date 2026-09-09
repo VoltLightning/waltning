@@ -1,6 +1,6 @@
 import { accountingDate, yearMonth } from "@waltning/core/date";
 import { expect, it } from "vitest";
-import { matchesByDay, matchesByMonth, totalMatches } from "./match-counts.ts";
+import { matchesByDay, matchesByMonth } from "./match-counts.ts";
 
 const days = [
   { date: accountingDate("2026-03-02"), count: 2 },
@@ -21,11 +21,6 @@ it("adds a month's days together", () => {
   expect(byMonth.get(yearMonth("2026-03"))).toBe(3);
   expect(byMonth.get(yearMonth("2026-05"))).toBe(4);
   expect(byMonth.get(yearMonth("2026-04"))).toBeUndefined();
-});
-
-it("totals the period, which is what the field's own line states", () => {
-  expect(totalMatches(days)).toBe(7);
-  expect(totalMatches([])).toBe(0);
 });
 
 /**

@@ -183,8 +183,16 @@ it.each(["", "   ", "\t"])("reads %o as no search at all", (raw) => {
   expect(parsePagerState({ view: "list", date: "2026-09-08", q: raw }, TODAY).query).toBeNull();
 });
 
-it("trims a query rather than searching for the spaces", () => {
-  expect(parsePagerState({ q: "  market  " }, TODAY).query).toBe("market");
+/**
+ * **Not trimmed, and that is the point.** The field is a controlled input, so a
+ * trim on every keystroke deletes a space as it is typed: `market rent` came
+ * out `marketrent`, and §13's grouped-amount grammar (`1 500,00`) could not be
+ * entered at all. Blank is still no search; everything else is verbatim.
+ */
+it("keeps a query exactly as it was typed, spaces included", () => {
+  expect(parsePagerState({ q: "market rent" }, TODAY).query).toBe("market rent");
+  expect(parsePagerState({ q: "1 500,00" }, TODAY).query).toBe("1 500,00");
+  expect(search(on("2026-09-08"), "Shop ").query, "a space mid-typing survives").toBe("Shop ");
 });
 
 /**

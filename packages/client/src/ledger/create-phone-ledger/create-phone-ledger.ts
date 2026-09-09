@@ -753,7 +753,14 @@ export type PhoneLedgerPort = {
     anchor: AccountingDate;
     direction: PhoneLedgerDirection;
     cursor?: PhoneSearchCursor;
-    filter?: Omit<PhoneSearchFilter, "text" | "from" | "to">;
+    /**
+     * No date bounds — the anchor walk owns those. **`text` is in**, and it is
+     * the key this seam used to drop: the hook's option type allowed it, the
+     * object was built in a variable so no excess-property check fired, and the
+     * forwarding below enumerated fields by hand. The list drew the whole
+     * ledger under a search field reporting three matches.
+     */
+    filter?: Omit<PhoneSearchFilter, "from" | "to">;
     limit?: number;
   }) => PhoneLedgerPage;
   createAccount: (input: CreateAccountInput, capture: PhoneCapture) => void;
@@ -1442,7 +1449,14 @@ export type PhoneLedgerController = {
     anchor: AccountingDate;
     direction: PhoneLedgerDirection;
     cursor?: PhoneSearchCursor;
-    filter?: Omit<PhoneSearchFilter, "text" | "from" | "to">;
+    /**
+     * No date bounds — the anchor walk owns those. **`text` is in**, and it is
+     * the key this seam used to drop: the hook's option type allowed it, the
+     * object was built in a variable so no excess-property check fired, and the
+     * forwarding below enumerated fields by hand. The list drew the whole
+     * ledger under a search field reporting three matches.
+     */
+    filter?: Omit<PhoneSearchFilter, "from" | "to">;
     limit?: number;
   }) => PhoneLedgerPage;
   categorizeBatch: (
@@ -2193,6 +2207,9 @@ export function createPhoneLedger(
         ...(filter
           ? {
               filter: {
+                // `text` first, and stated rather than spread: this object is
+                // the enumeration that lost it once already.
+                ...(filter.text === undefined ? {} : { text: filter.text }),
                 ...(filter.accountIds
                   ? { accountIds: filter.accountIds.map((a) => id<"accounts">(a)) }
                   : {}),

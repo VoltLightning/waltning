@@ -22,6 +22,8 @@ const { accounts, currencies, transactions } = ledgerSchema;
 const PLN = currencyCode("PLN");
 const ACCOUNT = id<"accounts">("11111111-1111-4111-8111-111111111111");
 const SEPTEMBER = { start: accountingDate("2026-09-01"), end: accountingDate("2026-10-01") };
+/** `money.Period.end` is exclusive; `structuralWhere`'s `to` compares with `lte`. */
+const LAST_DAY_OF_SEPTEMBER = accountingDate("2026-09-30");
 
 let stores: ScratchStores;
 
@@ -89,6 +91,13 @@ it("adds up to what the search field says", () => {
       tx("02", { payee: "market b", date: accountingDate("2026-09-07") }),
       tx("03", { payee: "Shop A", note: "market run" }),
       tx("04", { payee: "Shop A" }),
+      // **On the boundary, deliberately.** The first version of this test
+      // compared `readMatchDays`' half-open period against `searchTransactions`
+      // with `to: period.end` — and `structuralWhere` compares `to` with `lte`,
+      // so the two bounds differed by a day. It passed because the fixture had
+      // no row there: a test named for an invariant, vacuous at exactly the
+      // boundary the invariant is about.
+      tx("05", { payee: "Market B", date: accountingDate("2026-10-01") }),
     ])
     .run();
 
@@ -96,7 +105,7 @@ it("adds up to what the search field says", () => {
   const summed = days.reduce((total, day) => total + day.count, 0);
   const page = searchTransactions(
     stores.ledger.replica.db,
-    { text: "market", from: SEPTEMBER.start, to: SEPTEMBER.end },
+    { text: "market", from: SEPTEMBER.start, to: LAST_DAY_OF_SEPTEMBER },
     undefined,
     { countOnly: true },
   );

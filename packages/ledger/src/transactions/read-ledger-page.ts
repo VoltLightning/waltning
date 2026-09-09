@@ -1,3 +1,4 @@
+import { fold } from "@waltning/core/capture/names";
 import type { AccountingDate } from "@waltning/core/date";
 import { and, asc, desc, eq, gt, lt, lte, or, type SQL } from "drizzle-orm";
 import type { ReplicaDb } from "../open.ts";
@@ -7,7 +8,13 @@ import type {
   TransactionSearchCursor,
   TransactionSearchFilter,
 } from "./search-transactions.ts";
-import { ledgerRowsQuery, signRow, structuralWhere } from "./transaction-query.ts";
+import { lineDescriptionsBy, matchesText, parseSearchAmount } from "./text-match.ts";
+import {
+  ledgerRowsQuery,
+  type SignedLedgerRow,
+  signRow,
+  structuralWhere,
+} from "./transaction-query.ts";
 
 const { transactions } = ledgerSchema;
 
@@ -18,8 +25,18 @@ const { transactions } = ledgerSchema;
  */
 export type LedgerDirection = "older" | "newer";
 
-/** Everything a filter can say to this reader — no `text`, and no date bounds. */
-export type LedgerFilter = Omit<TransactionSearchFilter, "text" | "from" | "to">;
+/**
+ * Everything a filter can say to this reader — no date bounds, which the
+ * anchor walk owns.
+ *
+ * **`text` is in, and it was the seam a search fell through.** S04 §7's search
+ * narrows this list; the option was widened at the hook and at the controller
+ * and stopped here, where the type said `Omit<…, "text">`. A caller passing
+ * `{ text }` in a variable is not excess-property-checked, so it compiled,
+ * forwarded nothing, and the list drew the whole ledger under a field
+ * reporting three matches. `contract.types.ts` now pins the two ends together.
+ */
+export type LedgerFilter = Omit<TransactionSearchFilter, "from" | "to">;
 
 export type LedgerPage = {
   /**
@@ -117,14 +134,25 @@ export function readLedgerPage<TRun, TSchema extends typeof ledgerSchema>(
       ? [desc(transactions.date), desc(transactions.id)]
       : [asc(transactions.date), asc(transactions.id)];
 
+  const needle = filter.text === undefined ? "" : fold(filter.text.trim());
+
   // One row more than asked for: its presence is what says another page
   // exists, without a second query and without a count.
-  const read = ledgerRowsQuery(db)
-    .where(where)
-    .orderBy(...order)
-    .limit(limit + 1)
-    .all()
-    .map(signRow);
+  //
+  // **Except under a text filter, which SQL cannot decide** (`matchesText`'s
+  // own doc). There the window is read whole, folded, filtered, and only then
+  // paged — `searchTransactions` does exactly this, for exactly this reason,
+  // and a `LIMIT` applied before the filter would return a page of rows the
+  // reader never asked to see and call it the end of the ledger.
+  const read =
+    needle === ""
+      ? ledgerRowsQuery(db)
+          .where(where)
+          .orderBy(...order)
+          .limit(limit + 1)
+          .all()
+          .map(signRow)
+      : matchingRows(db, where, order, needle, filter.text ?? "", limit);
 
   const page = read.slice(0, limit);
   const last = page[page.length - 1];
@@ -136,4 +164,36 @@ export function readLedgerPage<TRun, TSchema extends typeof ledgerSchema>(
     rows: direction === "older" ? page : [...page].reverse(),
     nextCursor,
   };
+}
+
+/**
+ * The window read whole, folded and filtered — the text path.
+ *
+ * One row past `limit` is kept for the same reason the SQL path keeps one: its
+ * presence is what says another page exists. The slice happens after the
+ * filter, so the extra row is an extra *match*, not an extra candidate.
+ */
+function matchingRows<TRun, TSchema extends typeof ledgerSchema>(
+  db: ReplicaDb<TRun, TSchema>,
+  where: SQL | undefined,
+  order: SQL[],
+  needle: string,
+  text: string,
+  limit: number,
+): SignedLedgerRow[] {
+  const rows = ledgerRowsQuery(db)
+    .where(where)
+    .orderBy(...order)
+    .all()
+    .map(signRow);
+  if (rows.length === 0) return [];
+  const lines = lineDescriptionsBy(db, where);
+  const needleAmount = parseSearchAmount(text);
+  const matched: SignedLedgerRow[] = [];
+  for (const row of rows) {
+    if (!matchesText(row, needle, needleAmount, lines.get(row.id) ?? [])) continue;
+    matched.push(row);
+    if (matched.length > limit) break;
+  }
+  return matched;
 }

@@ -313,7 +313,15 @@ export default function Today() {
   const handlePickCategory = useCallback(
     (categoryId: string) => {
       if (categorize === null) return;
-      ledger.categorizeBatch({ transactionIds: [categorize.transactionId], categoryId });
+      const result = ledger.categorizeBatch({
+        transactionIds: [categorize.transactionId],
+        categoryId,
+      });
+      // **A refusal keeps the sheet open.** Closing on a rejected write is the
+      // failure that looks like health: the row is unchanged, the sheet is
+      // gone, and the reader has every reason to believe it worked. The desk
+      // path checks the same envelope (`ledger-screen.tsx`).
+      if ("fieldErrors" in result) return;
       setCategorize(null);
     },
     [categorize, ledger],
@@ -349,14 +357,25 @@ export default function Today() {
    * §7's live count, and the whole ledger's — not the loaded page's. The field
    * says how many rows match, which is a fact about the ledger; the list under
    * it walks them a page at a time.
+   *
+   * **`countOnly`, because that is the whole question.** Without it this takes
+   * `searchTransactions`' full path: five joins over every matching row, a
+   * `Decimal` or two constructed per row by `signRow`, and `totalsOf` folding
+   * currencies nobody reads — on the JS thread, once per keystroke, over the
+   * whole ledger. The option exists for exactly this caller.
+   *
+   * **`snapshot` is a dependency, and it was missing.** `ledger` is stable for
+   * the app's life, so without it the count froze at whatever it was when the
+   * search began: capture a matching row and the grid gained a mark while the
+   * field went on saying three. Every sibling read on this screen names the
+   * snapshot for this reason.
    */
-  const matchCount = useMemo(
-    () =>
-      pager.state.query === null
-        ? null
-        : ledger.searchTransactions({ text: pager.state.query }).total.count,
-    [ledger, pager.state.query],
-  );
+  const matchCount = useMemo(() => {
+    void snapshot;
+    if (pager.state.query === null) return null;
+    return ledger.searchTransactions({ text: pager.state.query }, undefined, { countOnly: true })
+      .total.count;
+  }, [ledger, pager.state.query, snapshot]);
   const openPicker = useCallback(
     () => setPickerYear(Number(pager.state.date.slice(0, 4))),
     [pager.state.date],
@@ -807,14 +826,29 @@ export default function Today() {
   // reader who cannot see the mark would otherwise lose entirely.
   const dayName = useCallback(
     (date: string) => {
-      const cell = weeks.flat().find((day) => !("blank" in day) && day.date === date);
       const name = dayLabel(accountingDate(date), locale);
+      /*
+        **While searching, the name is the count.** The cell draws a number
+        instead of its activity mark, and a reader who cannot see the number
+        was being told about the mark that is no longer there — or, worse,
+        "nothing" over a cell reading `1`, because the mark and the match are
+        two different populations (a shared-account row has no mark and does
+        match). §7's own accessibility line asks for *the full date and what
+        happened*; under a search, what happened is how many matched.
+      */
+      if (dayMatches !== undefined) {
+        const found = dayMatches.get(date) ?? 0;
+        return found === 0
+          ? t("transactions.ribbonDayEmpty", { date: name })
+          : `${name}, ${monthMatch(t, found).label}`;
+      }
+      const cell = weeks.flat().find((day) => !("blank" in day) && day.date === date);
       if (cell === undefined || "blank" in cell || cell.activity === "none") {
         return t("transactions.ribbonDayEmpty", { date: name });
       }
       return name;
     },
-    [weeks, locale, t],
+    [weeks, locale, dayMatches, t],
   );
 
   /**

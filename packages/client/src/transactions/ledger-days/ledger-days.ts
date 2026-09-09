@@ -48,7 +48,15 @@ export type DayTotal =
       /** Some contributing rate was inferred rather than observed. */
       estimated: boolean;
     }
-  | { kind: "unpriced" };
+  | { kind: "unpriced" }
+  /**
+   * The rows are a filtered subset, so the day has no figure of its own to
+   * state. **A distinct kind from `unpriced`**, which means *a rate has not
+   * arrived* and is rendered with that explanation: a filtered day is not
+   * missing a rate, and telling the reader it is would be a wrong reason
+   * attached to a right blank.
+   */
+  | { kind: "filtered" };
 
 export type LedgerItem<Row extends LedgerDayRow> =
   | { kind: "day"; date: AccountingDate; rows: readonly Row[]; total: DayTotal }
@@ -106,9 +114,30 @@ function totalOf(rows: readonly LedgerDayRow[], pivotCurrency: CurrencyCode): Da
  * contiguous runs rather than re-sorting, so out-of-order rows surface as
  * out-of-order items instead of a silent re-sort hiding the bug.
  */
+export type LedgerItemOptions = {
+  /**
+   * The rows are a *filtered* set — S04 §7's search — so the gaps between them
+   * are days the filter excluded, not days the ledger is quiet on.
+   *
+   * **A filtered list says less, on purpose.** This file's own header draws the
+   * line: S10's grouping "stops there, which is all a filtered list needs",
+   * because "a filtered list has no gaps to explain". Run a filtered set
+   * through the unfiltered rules and both of this module's answers become
+   * false — a day holding six rows of which one matched reports that one row's
+   * amount as *the day's total*, and a day full of rows that did not match
+   * collapses into a `QuietRun` labelled *nothing recorded*. Neither is a
+   * rounding error; both are the list stating something it did not read.
+   *
+   * So under a filter: no day totals, and no quiet days. The days that appear
+   * are the days that matched.
+   */
+  filtered?: boolean;
+};
+
 export function toLedgerItems<Row extends LedgerDayRow>(
   rows: readonly Row[],
   pivotCurrency: CurrencyCode,
+  options: LedgerItemOptions = {},
 ): readonly LedgerItem<Row>[] {
   const days: { date: AccountingDate; rows: Row[] }[] = [];
   for (const row of rows) {
@@ -123,11 +152,14 @@ export function toLedgerItems<Row extends LedgerDayRow>(
       kind: "day",
       date: day.date,
       rows: day.rows,
-      total: totalOf(day.rows, pivotCurrency),
+      // `unpriced` is the shape that already means *no honest figure here*,
+      // and a filtered day has none: the rows on screen are a subset chosen by
+      // a query, so their sum is not the day's own.
+      total: options.filtered === true ? { kind: "filtered" } : totalOf(day.rows, pivotCurrency),
     });
 
     const next = days[index + 1];
-    if (next === undefined) return;
+    if (next === undefined || options.filtered === true) return;
     // `next` is the OLDER day — rows arrive newest-first — so the earlier
     // date is the first argument. Backwards here counts every gap negative
     // and draws no quiet days at all, which looks exactly like a ledger
@@ -187,7 +219,11 @@ export function ribbonDays<Row extends LedgerDayRow>(
   const half = money.mul(largest, 0.5);
 
   const marked = days.map((day): RibbonDayModel => {
-    if (day.total.kind === "unpriced") {
+    // Two kinds with no figure, and the ribbon draws them the same: a day that
+    // held rows, with nothing to say about how much. A filtered day has a
+    // figure the query is not entitled to state; an unpriced one has none at
+    // all. Neither can be sized, and both are `some`.
+    if (day.total.kind !== "total") {
       return {
         date: day.date,
         activity: "some",

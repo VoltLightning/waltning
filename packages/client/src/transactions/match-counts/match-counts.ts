@@ -35,9 +35,11 @@ export function matchesByMonth(days: readonly MatchDay[]): ReadonlyMap<YearMonth
   return out;
 }
 
-/** Every match in the period — the figure the search field's own line states. */
-export function totalMatches(days: readonly MatchDay[]): number {
-  let total = 0;
-  for (const day of days) total += day.count;
-  return total;
-}
+/*
+ * **There is deliberately no `totalMatches` here.** One was written, and its
+ * doc claimed it was "the figure the search field's own line states" — which
+ * was false and would have stayed false: the field reports matches across the
+ * *whole ledger and every date*, while these days are one month or one year.
+ * An exported helper asserting an identity the code does not hold is worse than
+ * no helper, because the next caller believes it.
+ */

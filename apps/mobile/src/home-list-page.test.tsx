@@ -247,3 +247,40 @@ it("leaves a transfer tap-only, because it has no category to choose", () => {
     "a swipe onto a sheet with nothing in it is worse than no swipe",
   ).toBeNull();
 });
+
+/**
+ * **C1 — the search reached the hook and stopped.** `useLedgerList`'s option
+ * type was widened to admit `text`, and every layer below it — the controller's
+ * parameter type, its hand-written forwarding, and `readLedgerPage`'s own
+ * `LedgerFilter` — omitted the key. A filter built in a variable is not
+ * excess-property checked, so it compiled, forwarded nothing, and the list drew
+ * the whole ledger under a field reporting three matches. It *looked* like
+ * search working, because a query change re-keys the list and both halves
+ * visibly reload on every keystroke.
+ *
+ * Asserted at the port, which is the seam that dropped it.
+ */
+it("hands the search down to the read, not just to the hook", () => {
+  const ledger = ledgerWith([row("2026-08-14", 1, "-96")]);
+  draw(ledger, vi.fn(), { query: "market" });
+
+  const filters = vi
+    .mocked(ledger.readLedgerPage)
+    .mock.calls.map(([options]) => (options as { filter?: { text?: string } }).filter);
+  expect(filters.length).toBeGreaterThan(0);
+  for (const filter of filters) expect(filter?.text).toBe("market");
+});
+
+/**
+ * §7: a filtered list has no gaps to explain and no day totals to state. Run a
+ * filtered set through the unfiltered rules and a day holding six rows of which
+ * one matched reports that row's amount as *the day's total*.
+ */
+it("states no day total while the rows are a filtered subset", () => {
+  draw(ledgerWith([row("2026-08-14", 1, "-96")]), vi.fn(), { query: "market" });
+  expect(
+    screen.queryByLabelText(/No total/),
+    "not the dash either — that one means a rate has not arrived",
+  ).toBeNull();
+  expect(screen.queryByText("−96,00"), "and not the matched row's own amount").toBeNull();
+});

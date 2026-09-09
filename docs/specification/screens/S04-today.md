@@ -337,7 +337,7 @@ happened*.
 | `BrandIcon` | `TransactionRow`'s leading mark for a recognised merchant (§14.4b). Offline, never blank: an unmatched payee falls back to its monogram |
 | `FxAmount` | Any foreign row — `local · rate · display`, the rate for that row's own date (P1) |
 | `Banner(warn)` | Unsettled clearing — rendered **only when non-zero**, with one action |
-| `TodayPill` | Floats over the list when the list is away from today. The only way back from a jump (§6). Top-centre, because the add button owns the bottom corners and settles against either side edge at any height (`02-tokens` §2.9). Its edge says *above the page*, not `shadow-float`, which §2.5 keeps for the add button and the toast — the things above the whole screen rather than above one list |
+| `TodayPill` | Floats over the list when the list's **anchor** is not today — which is what a jump moves, and a jump is what §6 says this exists for. Deliberately not *scrolled away from today*: paging backwards walks day by day and can be walked back, where a jump loaded a neighbourhood with nothing between it and here. The only way back from a jump (§6). Top-centre, because the add button owns the bottom corners and settles against either side edge at any height (`02-tokens` §2.9). Its edge says *above the page*, not `shadow-float`, which §2.5 keeps for the add button and the toast — the things above the whole screen rather than above one list |
 | `FilterChip` | The carried filter, pinned under `PageTabs`: what it is, and an `✕` that clears it. One chip — this screen receives a filter, it does not compose them. Composing is `FilterBar`, and it is S10's, on the desk |
 | `TabBar` | 4 tabs, all ≥44px — Home · Accounts · **Agent** · Settings. **No Ledger tab**: this screen is the ledger, so one would lead where you already are. **No Debt tab**: it is a figure you check, not a place you live, and it reads better in *Go to* where it can carry one. `+` is not a tab, though it may come to rest between Accounts and Agent (`02-tokens` §2.9) |
 | `FloatingAdd` | The `+`, above everything, wherever it was last put (`02-tokens` §2.9) |
@@ -444,6 +444,23 @@ disagree.
 month* is part of *how often, and when*. But a searched grid draws an empty cell
 rather than a zero in each of thirty, and a searched year draws its empty months
 in muted ink: a page that says nothing thirty times has stopped answering.
+
+**A count and a mark are two populations, and the count is the wider one.** The
+unsearched calendar's mark is §5's figure — own accounts, income and expense —
+because it is the same answer the month card gives. A search searches the
+*ledger*: every row the query matches, whatever account it sits on and whatever
+type it is, which is the set the list beneath it draws and the field above it
+counts. So a day holding one matching row on a shared account has no mark and a
+count of one, and that is the honest pair — the alternative is a search that
+silently cannot find half the ledger.
+
+**A searched list states no day totals and marks no quiet days.** The rows on
+screen are a subset chosen by a query, so their sum is not the day's own figure,
+and a day whose rows all failed the query is not a day the ledger was quiet on.
+Both are answers this list gives about the ledger, and under a filter it has not
+read enough to give either: a day holding six rows of which one matched would
+report that row's amount as the day's, and a full day would collapse into a row
+reading *nothing recorded*.
 
 **Accessibility is a constraint, not a review note.** Every target in the strip
 and the picker is ≥44×44. Nothing encodes meaning in hue alone. A ribbon cell's

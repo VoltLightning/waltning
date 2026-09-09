@@ -88,7 +88,12 @@ export type HomeListPageProps = {
   empty: React.ReactNode;
 };
 
-type DayTotal = { pivot: Money; approximate: boolean } | { pivot: null };
+type DayTotal =
+  | { pivot: Money; approximate: boolean }
+  /** No rate arrived — the dash, with its reason. */
+  | { pivot: null }
+  /** A filtered day, which has no figure of its own. Nothing is drawn at all. */
+  | { pivot: "filtered" };
 
 type Entry =
   | { key: string; kind: "day"; label: string; total: DayTotal }
@@ -120,7 +125,12 @@ export function HomeListPage({
     anchor,
     filter,
   });
-  const items = useMemo(() => toLedgerItems(rows, pivotCurrency), [rows, pivotCurrency]);
+  const items = useMemo(
+    // A filtered set has no gaps to explain and no day totals to state —
+    // `ledger-days`' own `filtered` option carries the whole argument.
+    () => toLedgerItems(rows, pivotCurrency, { filtered: query !== null }),
+    [rows, pivotCurrency, query],
+  );
 
   const days = useMemo<readonly RibbonDay[]>(
     () =>
@@ -170,9 +180,11 @@ export function HomeListPage({
         kind: "day",
         label: dayLabel(item.date, locale),
         total:
-          item.total.kind === "unpriced"
-            ? { pivot: null }
-            : { pivot: item.total.pivot, approximate: item.total.approximate },
+          item.total.kind === "filtered"
+            ? { pivot: "filtered" as const }
+            : item.total.kind === "unpriced"
+              ? { pivot: null }
+              : { pivot: item.total.pivot, approximate: item.total.approximate },
       });
       for (const row of item.rows) out.push({ key: row.id, kind: "row", row });
     }
@@ -384,6 +396,9 @@ function DayTotalFigure({
   currency: CurrencyCode;
   decimals: number;
 }) {
+  // Nothing at all, not a dash: a dash is `UnpricedDay`'s and carries *a rate
+  // has not arrived*, which is a wrong reason attached to a right blank.
+  if (total.pivot === "filtered") return null;
   if (total.pivot === null) return <UnpricedDay />;
   return (
     <Amount

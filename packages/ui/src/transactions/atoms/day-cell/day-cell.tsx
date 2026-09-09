@@ -125,9 +125,13 @@ function DayCellView({
       {matches === undefined ? (
         <View style={[styles.mark, ...markStyle(styles, activity, direction, today)]} />
       ) : matches === 0 ? (
-        // The mark's own room, kept empty: a grid whose cells changed height
-        // when a search started would reflow the month under the reader.
-        <View style={styles.mark} />
+        // **A quiet mark's own box, drawn in nothing.** `styles.mark` alone is
+        // a border radius — the size comes from `markNone`/`markSome`, so an
+        // empty `View` was 0×0 and the day number shifted between a searched
+        // cell with no match, one with a count, and an unsearched cell. The
+        // cell's fixed height stopped the *grid* reflowing and hid that the
+        // numbers inside it did not line up.
+        <View style={[styles.mark, styles.markNone, styles.markEmpty]} />
       ) : (
         <Text style={today ? styles.countOnFill : styles.count}>{matches}</Text>
       )}
@@ -219,6 +223,8 @@ const useStyles = makeStyles((theme) => ({
   count: { ...text.ui("caption", 600), color: theme.accentText },
   countOnFill: { ...text.ui("caption", 600), color: theme.textOnAccent },
   markNone: { width: 5, height: 5, backgroundColor: theme.insetFill },
+  /** The room a mark takes, with no mark in it. */
+  markEmpty: { backgroundColor: "transparent" },
   markSome: { width: 8, height: 8 },
   markHeavy: { width: 12, height: 12 },
   // Filled for out, a ring for in — the money colours, unchanged. A saturated

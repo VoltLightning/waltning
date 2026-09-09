@@ -18,7 +18,7 @@ const OTHER = id<"accounts">("00000000-0000-4000-8000-00000000000b");
 let stores: ScratchStores;
 
 /** `nn` is both the id suffix and the ordering tiebreak, so a day's rows have a total order. */
-function insert(date: string, nn: number, accountId = OWN) {
+function insert(date: string, nn: number, accountId = OWN, payee?: string) {
   stores.ledger.replica.db
     .insert(transactions)
     .values({
@@ -30,7 +30,7 @@ function insert(date: string, nn: number, accountId = OWN) {
       amountOriginal: money.toMoney("10"),
       currency: PLN,
       fxRate: money.pivotPerUnit("1"),
-      payee: `Row ${nn}`,
+      payee: payee ?? `Row ${nn}`,
       note: "",
       isBusiness: false,
       isCapital: false,
@@ -171,5 +171,60 @@ describe("readLedgerPage", () => {
       direction: "older",
     });
     expect(dates(page)).toEqual(["2026-08-12"]);
+  });
+
+  /**
+   * **S04 §7's search, and the seam it fell through.** The option type allowed
+   * `text` at the hook and at the controller and stopped here, where it was
+   * `Omit<…, "text">` — a filter built in a variable is not excess-property
+   * checked, so it compiled, forwarded nothing, and the list drew the whole
+   * ledger under a field reporting three matches.
+   */
+  it("narrows the page to the rows a text filter matches", () => {
+    insert("2026-08-10", 1, OWN, "Market B");
+    insert("2026-08-12", 2, OWN, "Shop A");
+    insert("2026-08-14", 3, OWN, "Market B");
+
+    const page = readLedgerPage(stores.ledger.replica.db, {
+      anchor: accountingDate("2026-08-14"),
+      direction: "older",
+      filter: { text: "market" },
+    });
+    expect(dates(page)).toEqual(["2026-08-14", "2026-08-10"]);
+  });
+
+  /**
+   * **The limit applies to matches, not to candidates.** A `LIMIT` pushed into
+   * SQL ahead of a filter SQL cannot decide returns a page of rows the reader
+   * never asked to see — and, worse, an absent cursor, which says the ledger
+   * ended there.
+   */
+  it("pages matches rather than candidates, and knows there are more", () => {
+    insert("2026-08-10", 1, OWN, "Market B");
+    for (let n = 2; n <= 9; n++) insert(`2026-08-1${n}`, n, OWN, "Shop A");
+    insert("2026-08-20", 10, OWN, "Market B");
+
+    const page = readLedgerPage(stores.ledger.replica.db, {
+      anchor: accountingDate("2026-08-20"),
+      direction: "older",
+      filter: { text: "market" },
+      limit: 1,
+    });
+    expect(dates(page)).toEqual(["2026-08-20"]);
+    expect(page.nextCursor, "a second match is still to come").toBeDefined();
+  });
+
+  it("says the filtered ledger ended when it has", () => {
+    insert("2026-08-10", 1, OWN, "Market B");
+    insert("2026-08-12", 2, OWN, "Shop A");
+
+    const page = readLedgerPage(stores.ledger.replica.db, {
+      anchor: accountingDate("2026-08-14"),
+      direction: "older",
+      filter: { text: "market" },
+      limit: 5,
+    });
+    expect(dates(page)).toEqual(["2026-08-10"]);
+    expect(page.nextCursor).toBeUndefined();
   });
 });

@@ -154,15 +154,23 @@ export function parsePagerState(
 }
 
 /**
- * **A blank query is no query.** `?q=` and `?q=%20%20` arrive as a string and
- * would both filter the ledger by the empty string — which matches everything
- * and draws a chip saying the screen is narrowed when it is not. Trimmed and
- * folded to `null` in one place, so no caller has to remember to.
+ * **A blank query is no query; a query with a space in it is a query.**
+ *
+ * `?q=` and `?q=%20%20` would both filter by the empty string, which matches
+ * every row while the field says the screen is narrowed — so blank folds to
+ * `null` here.
+ *
+ * **What is emphatically not done is trimming.** The first version returned
+ * `raw.trim()`, and the field is a controlled input: typing a space wrote
+ * `"Shop "`, the trim gave back `"Shop"`, React restored the DOM node to the
+ * unchanged value, and the space was deleted as it was typed. `market rent`
+ * came out `marketrent`, and §13's own grouped-amount grammar — `1 500,00` —
+ * was unreachable from the field it was written for. The matcher trims its own
+ * needle; this only decides whether there is a search at all.
  */
 function normalizeQuery(raw: string | undefined): string | null {
   if (raw === undefined) return null;
-  const trimmed = raw.trim();
-  return trimmed === "" ? null : trimmed;
+  return raw.trim() === "" ? null : raw;
 }
 
 export function pagerStateParams(state: PagerState): {
