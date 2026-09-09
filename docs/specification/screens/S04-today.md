@@ -99,12 +99,44 @@ it is one control resizing, not two headers swapping.
   want while reading a month — so the control arrives exactly when the reason
   for it does.
 
-The month never moves sideways and never changes colour; it changes size, and
-the stepper fades in beside it. The two layouts are stacked and cross-faded at
-the midpoint of the travel — one has finished leaving before the other starts
-arriving, because two layouts at half opacity are two ghosts. Exactly one of
-them is ever in the accessibility tree: opacity is continuous and reachability
-is not, and a reader walking both hears the month twice.
+The month never moves sideways and never changes colour; it changes size. The
+year travels: it sits under the month at rest at a caption's size and stands
+beside it collapsed at the month's own, and it crosses between the two in one
+motion — out from under the month first, then up onto its row and growing as it
+rises, never both at once. It is one element throughout, so it carries one
+weight: `displayThree`'s, at the caption's size while it is up there rather
+than the caption's own lighter weight. That is the price of the year being a
+thing that moves rather than two things that trade places, and it is the right
+price. The caret follows whatever the title now ends with, and the stepper is
+the one thing that fades, because it is the one thing that is genuinely new
+rather than a smaller version of something already on screen.
+
+**Every part has to fit inside the header at every offset, not only at the
+ends.** The header clips, so a part drawn past its bottom edge is cut with no
+error and no warning — and both ends of the travel still look perfect. The year
+grew to full size while it was still in the caption's slot once, and a third of
+its digits were sliced for a third of the travel before a baseline caught it.
+The year therefore grows on the rise, and the room under the row is only
+reclaimed as the year leaves it.
+
+**Nothing in the title is ever drawn twice, and nothing in it fades.** Each
+part is one element that moves. Two stacked layouts cross-faded is the obvious
+way to build this and it was the wrong one: the two fades met at zero, so the
+header was *blank* at the midpoint of the travel and under half lit across
+fourteen of the thirty-six points it collapses over — which is a bar that
+flickers out and back for any reader who scrolls slowly, and a second copy of
+the month in the accessibility tree the whole time. The same rule the page
+transition is held to (§ *the opacity dips and never reaches zero*) is the rule
+here, and one element that moves is how it is kept rather than a fade that is
+careful.
+
+The parts are laid out once at their larger size and *scaled* down from there,
+never re-typeset: type that reflows every frame puts a text layout in the
+scroll's critical path, and type scaled up is a raster stretched past the size
+it was drawn at. Where the year lands is the month's own width plus a gap, and
+a month's width is its word in the reader's language — so the two words report
+their widths and the arithmetic is done from those, with the resting layout as
+the base so a header draws correctly before it has measured anything.
 
 **The pages arrive from the side you stepped from, when the page on screen
 actually changed.** Months shows a year and the other three show a month, so
@@ -137,6 +169,29 @@ that has not happened is disabled rather than absent (§6).
 **The collapse is spread over the height the header gives up**, not a round
 number, so the header rises at exactly the speed of the content beneath it and
 the two read as one sheet sliding under another.
+
+**The chrome never resizes the page it is reading.** It gives up 36 points of
+height and takes the same 36 back as a negative margin, so its footprint is the
+collapsed one at every offset and the pager below it is the same box the whole
+way; the pager is then moved down by that number as a transform. Without that
+the chrome's height *was* the pager's height, and the pager is the scroller the
+header reads: the offset set the header's height, the height set the scroll
+viewport, and the viewport set the largest offset the scroller would hold. On
+any page whose content is within one collapse of a screenful that closes — the
+scroller pulls the offset back, the header re-opens, and the bar flickers in and
+out for as long as the gesture is held. It also laid out four mounted pages
+every frame. Measured in Chrome, the viewport moved 640 → 676 with the header
+before and holds at 732 across the whole travel after.
+
+The pager therefore hangs one collapse below the screen while the header is
+open, and the frame clips it. **That is only invisible while a page can be
+scrolled far enough to close the header**: content is lost when a page's
+scrollable travel is shorter than the collapse by more than its own bottom
+padding, because then the header never closes, the pager never rises, and no
+gesture reveals the bottom. Every page in the pager clears that today by ~94
+points of bottom inset from `useGroundInset`, which is the condition to check
+before adding a page that does not use it, or before this shell renders
+anywhere `useFloatingClearance()` is zero.
 
 **The header navigates; the page reports.** It carries no figure. A draft put
 the current period's total in the row's trailing half and it did not survive
