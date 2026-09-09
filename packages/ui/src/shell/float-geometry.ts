@@ -10,7 +10,7 @@
  *
  * **Every function is a worklet.** The gesture that calls them runs on the UI
  * thread, so the arithmetic that decides where a drop lands has to be there
- * too — a `runOnJS` round-trip per frame is the lag this library exists to
+ * too — a hop to the JS thread per frame is the lag this library exists to
  * remove. The directive is a string the web and the tests ignore.
  *
  * Coordinates are the button's **top-left corner in the frame it floats

@@ -21,7 +21,7 @@
  * shared values the style reads on the UI thread. A list rendering on the JS
  * thread cannot make the button lag the finger — which is the reason this
  * package uses Reanimated and gesture-handler and nothing else for motion.
- * The only crossings are `runOnJS`: the lifted-shadow state on start and
+ * The only crossings are `scheduleOnRN`: the lifted-shadow state on start and
  * end, and the drop, which is a device preference the JS side stores.
  *
  * **Where it is comes from outside.** The component neither reads nor writes
@@ -41,12 +41,12 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { type LayoutChangeEvent, Pressable, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
-  runOnJS,
   useAnimatedStyle,
   useSharedValue,
   withSpring,
   withTiming,
 } from "react-native-reanimated";
+import { scheduleOnRN } from "react-native-worklets";
 import { useT } from "../../../i18n/provider";
 import { Button } from "../../../primitives/atoms/button/button";
 import { easing } from "../../../primitives/easing.ts";
@@ -206,7 +206,7 @@ function FloatingButton({
         "worklet";
         startX.value = tx.value;
         startY.value = ty.value;
-        runOnJS(setDragging)(true);
+        scheduleOnRN(setDragging, true);
       })
       .onUpdate((e) => {
         "worklet";
@@ -216,12 +216,12 @@ function FloatingButton({
       })
       .onEnd((e) => {
         "worklet";
-        runOnJS(setDragging)(false);
+        scheduleOnRN(setDragging, false);
         const x = startX.value + e.translationX;
         const y = startY.value + e.translationY;
         const next = releaseAt(shown, x, y, bounds, insets);
         if (next.dock === null) {
-          runOnJS(onPositionChange)(next);
+          scheduleOnRN(onPositionChange, next);
           if (reduced) {
             tx.value = next.x;
             ty.value = next.y;
@@ -231,7 +231,7 @@ function FloatingButton({
           settling.value = true;
           tx.value = withSpring(next.x, spring);
           ty.value = withSpring(next.y, spring, (finished) => {
-            if (finished) runOnJS(finishSettling)();
+            if (finished) scheduleOnRN(finishSettling);
           });
           return;
         }
@@ -244,7 +244,7 @@ function FloatingButton({
         if (reduced) {
           tx.value = to.x;
           ty.value = to.y;
-          runOnJS(onPositionChange)(next);
+          scheduleOnRN(onPositionChange, next);
           return;
         }
         settling.value = true;
@@ -252,7 +252,7 @@ function FloatingButton({
         ty.value = withTiming(to.y, MOVE, (finished) => {
           if (finished) {
             settling.value = false;
-            runOnJS(onPositionChange)(next);
+            scheduleOnRN(onPositionChange, next);
           }
         });
       });
@@ -284,7 +284,7 @@ function FloatingButton({
         .enabled(!disabled)
         .onStart(() => {
           "worklet";
-          runOnJS(onLongPress)();
+          scheduleOnRN(onLongPress);
         }),
     [disabled, onLongPress],
   );
@@ -305,7 +305,7 @@ function FloatingButton({
     settling.value = true;
     tx.value = withTiming(shown.x, MOVE);
     ty.value = withTiming(shown.y, MOVE, (finished) => {
-      if (finished) runOnJS(finishSettling)();
+      if (finished) scheduleOnRN(finishSettling);
     });
   }, [shown, bounds, insets, reduced, onPositionChange, finishSettling, settling, tx, ty]);
 

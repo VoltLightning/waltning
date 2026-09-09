@@ -163,6 +163,11 @@ describe("ThresholdSlider", () => {
     const builder = panSpy.mock.results[0]?.value as StubbedPanBuilder;
 
     builder.onStartCallback?.({ x: 0 });
+    // The gesture runs on the UI thread and reports through `scheduleOnRN`,
+    // which is a `queueMicrotask` — so the handler is queued by the call and
+    // run by the await. It was always a hop; Reanimated's jsdom mock used to
+    // stand in for `runOnJS` with a direct call and hide it.
+    await Promise.resolve();
     expect(onChange).toHaveBeenLastCalledWith(THRESHOLD_MIN);
 
     await layout.resize(432); // trackWidth=432 → usable=404 — layout changes mid-drag
@@ -170,6 +175,7 @@ describe("ThresholdSlider", () => {
     // `onUpdate` fires again, still mid-gesture: it must use the *new*
     // width, and `pan` itself must still be the one gesture built at mount.
     builder.onUpdateCallback?.({ x: 404 + 28 / 2 });
+    await Promise.resolve();
     expect(onChange).toHaveBeenLastCalledWith(THRESHOLD_MAX);
     expect(panSpy).toHaveBeenCalledTimes(1);
   });

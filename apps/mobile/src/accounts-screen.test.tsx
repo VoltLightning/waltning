@@ -7,7 +7,7 @@
  * one) does not fit the three-route file's narrower `FakeAccount`.
  */
 
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { createPhoneLedger } from "@waltning/client/ledger/create-phone-ledger";
 import { LedgerProvider } from "@waltning/client/ledger/ledger-provider";
 import { basePort } from "@waltning/client/ledger/test-port";
@@ -235,12 +235,15 @@ describe("Accounts", () => {
    * on every arrival, not only at mount (`useState(message ?? null)` would
    * miss a second one entirely).
    */
-  it("shows the archive toast again after a dismissTo that arrives on the mounted screen", () => {
+  it("shows the archive toast again after a dismissTo that arrives on the mounted screen", async () => {
     useLocalSearchParams.mockReturnValue({ message: "Account archived.", nonce: "1" });
     const { rerender } = withLedger([]);
     expect(screen.getByRole("alert").textContent).toContain("Account archived.");
 
     fireEvent.click(screen.getByRole("button", { name: "Dismiss" }));
+    // The toast reports its exit through `scheduleOnRN`, a `queueMicrotask` —
+    // the press queues the dismissal and the await runs it.
+    await act(async () => {});
     expect(screen.queryByRole("alert")).toBeNull();
 
     useLocalSearchParams.mockReturnValue({ message: "Account archived.", nonce: "2" });

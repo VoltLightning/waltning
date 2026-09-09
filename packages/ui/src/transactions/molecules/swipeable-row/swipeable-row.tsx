@@ -25,12 +25,8 @@
 
 import { useCallback, useMemo } from "react";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
-import Animated, {
-  runOnJS,
-  useAnimatedStyle,
-  useSharedValue,
-  withSpring,
-} from "react-native-reanimated";
+import Animated, { useAnimatedStyle, useSharedValue, withSpring } from "react-native-reanimated";
+import { scheduleOnRN } from "react-native-worklets";
 
 /** Finger travel before a touch stops being a tap — matches `FloatingAdd`'s own slop. */
 const DRAG_SLOP = 4;
@@ -72,11 +68,11 @@ export function SwipeableRow({ onShortSwipe, onLongSwipe, children }: SwipeableR
         .onEnd((e) => {
           "worklet";
           const distance = Math.abs(startX.value + e.translationX);
-          runOnJS(settle)();
+          scheduleOnRN(settle);
           if (distance >= LONG_THRESHOLD) {
-            runOnJS(onLongSwipe)();
+            scheduleOnRN(onLongSwipe);
           } else if (distance >= SHORT_THRESHOLD) {
-            runOnJS(onShortSwipe)();
+            scheduleOnRN(onShortSwipe);
           }
         }),
     [onLongSwipe, onShortSwipe, settle, startX, translateX],

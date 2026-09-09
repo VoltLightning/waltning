@@ -43,12 +43,8 @@
 
 import { useCallback, useEffect, useRef } from "react";
 import { Pressable, Text, View } from "react-native";
-import Animated, {
-  runOnJS,
-  useAnimatedStyle,
-  useSharedValue,
-  withTiming,
-} from "react-native-reanimated";
+import Animated, { useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
+import { scheduleOnRN } from "react-native-worklets";
 import { useT } from "../../../i18n/provider";
 import { easing } from "../../../primitives/easing.ts";
 import { useInteraction } from "../../../primitives/interaction.ts";
@@ -128,7 +124,7 @@ function useToastMotion<TResetKey>(reduced: boolean, resetKey?: TResetKey) {
         0,
         { duration: motion.move.duration, easing: easing.move },
         (finished) => {
-          if (finished) runOnJS(onComplete)();
+          if (finished) scheduleOnRN(onComplete);
         },
       );
     },

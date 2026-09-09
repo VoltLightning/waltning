@@ -27,6 +27,22 @@ vi.mock("../../use-timer.ts", async (importOriginal) => {
   };
 });
 
+/**
+ * Let the toast's exit reach the JS thread.
+ *
+ * The exit animation reports completion through `scheduleOnRN`, which is a
+ * `queueMicrotask` — so a press is not a callback, it is a callback *queued*.
+ * Fake timers do not flush microtasks, and awaiting a resolved promise does.
+ *
+ * This is the real boundary, not a test artefact: it was always a hop under
+ * `runOnJS` too, and the only reason these assertions used to read
+ * synchronously is that Reanimated's jsdom mock stood in for `runOnJS` with a
+ * direct call. Nothing here waits on a *duration*; it waits on a turn.
+ */
+async function settled(): Promise<void> {
+  await Promise.resolve();
+}
+
 beforeEach(() => {
   vi.useFakeTimers();
   onExpireSpies.length = 0;
@@ -37,11 +53,11 @@ afterEach(() => {
 });
 
 describe("Toast", () => {
-  it("dismisses itself after 4 s", () => {
+  it("dismisses itself after 4 s", async () => {
     const onDismiss = vi.fn();
     render(<Toast message="Saved" onDismiss={onDismiss} token={TOKEN} />);
     expect(onDismiss).not.toHaveBeenCalled();
-    vi.advanceTimersByTime(4_000);
+    await vi.advanceTimersByTimeAsync(4_000);
     expect(onDismiss).toHaveBeenCalledOnce();
   });
 
@@ -51,10 +67,11 @@ describe("Toast", () => {
     expect(screen.getByText("Saved")).toBeDefined();
   });
 
-  it("still fires dismiss when the action is pressed", () => {
+  it("still fires dismiss when the action is pressed", async () => {
     const onDismiss = vi.fn();
     render(<Toast message="Saved" onDismiss={onDismiss} token={TOKEN} />);
     screen.getByRole("button", { name: "Dismiss" }).click();
+    await settled();
     expect(onDismiss).toHaveBeenCalledOnce();
   });
 
@@ -64,7 +81,7 @@ describe("Toast", () => {
   // only stops that stale call from reaching `onDismiss` a second time, so
   // `onDismiss`'s own call count can't tell the two apart). Spying on the
   // wrapped `onExpire` directly is the one place a missing `cancel()` shows.
-  it("cancels the pending auto-expiry timer once a manual dismiss starts", () => {
+  it("cancels the pending auto-expiry timer once a manual dismiss starts", async () => {
     const onDismiss = vi.fn();
     render(<Toast message="Saved" onDismiss={onDismiss} token={TOKEN} />);
     const onExpireSpy = onExpireSpies.at(-1);
@@ -72,58 +89,59 @@ describe("Toast", () => {
 
     screen.getByRole("button", { name: "Dismiss" }).click();
     onExpireSpy.mockClear();
-    vi.advanceTimersByTime(4_000);
+    await vi.advanceTimersByTimeAsync(4_000);
 
     expect(onExpireSpy).not.toHaveBeenCalled();
   });
 });
 
 describe("UndoToast", () => {
-  it("calls onUndo when Undo is pressed within 8 s", () => {
+  it("calls onUndo when Undo is pressed within 8 s", async () => {
     const onUndo = vi.fn();
     const onDismiss = vi.fn();
     render(<UndoToast message="Row deleted" onUndo={onUndo} onDismiss={onDismiss} token={TOKEN} />);
-    vi.advanceTimersByTime(3_000);
+    await vi.advanceTimersByTimeAsync(3_000);
     screen.getByRole("button", { name: "Undo" }).click();
+    await settled();
     expect(onUndo).toHaveBeenCalledOnce();
     // Advancing past 8 s no longer matters to the assertion, but it should
     // not throw if the timer is still armed.
-    vi.advanceTimersByTime(6_000);
+    await vi.advanceTimersByTimeAsync(6_000);
   });
 
-  it("auto-dismisses after 8 s with no undo", () => {
+  it("auto-dismisses after 8 s with no undo", async () => {
     const onDismiss = vi.fn();
     render(
       <UndoToast message="Row deleted" onUndo={vi.fn()} onDismiss={onDismiss} token={TOKEN} />,
     );
-    vi.advanceTimersByTime(7_999);
+    await vi.advanceTimersByTimeAsync(7_999);
     expect(onDismiss).not.toHaveBeenCalled();
-    vi.advanceTimersByTime(1);
+    await vi.advanceTimersByTimeAsync(1);
     expect(onDismiss).toHaveBeenCalledOnce();
   });
 
   // C1 — Undo pressed right at the 8 s edge raced the auto-dismiss timer:
   // the timer was never cancelled, so it could still fire and overwrite the
   // undo animation already in flight, and `onUndo` never reached the caller.
-  it("fires onUndo, never onDismiss, when Undo is pressed at 7.9 s", () => {
+  it("fires onUndo, never onDismiss, when Undo is pressed at 7.9 s", async () => {
     const onUndo = vi.fn();
     const onDismiss = vi.fn();
     render(<UndoToast message="Row deleted" onUndo={onUndo} onDismiss={onDismiss} token={TOKEN} />);
-    vi.advanceTimersByTime(7_900);
+    await vi.advanceTimersByTimeAsync(7_900);
     screen.getByRole("button", { name: "Undo" }).click();
-    vi.advanceTimersByTime(200); // crosses the original 8 s deadline
+    await vi.advanceTimersByTimeAsync(200); // crosses the original 8 s deadline
     expect(onUndo).toHaveBeenCalledOnce();
     expect(onDismiss).not.toHaveBeenCalled();
   });
 
   // C1 — same race, checked far from the edge: once Undo has fired, the
   // stale auto-dismiss timer must never land a second callback.
-  it("never fires a second callback once Undo has already fired", () => {
+  it("never fires a second callback once Undo has already fired", async () => {
     const onUndo = vi.fn();
     const onDismiss = vi.fn();
     render(<UndoToast message="Row deleted" onUndo={onUndo} onDismiss={onDismiss} token={TOKEN} />);
     screen.getByRole("button", { name: "Undo" }).click();
-    vi.advanceTimersByTime(8_000);
+    await vi.advanceTimersByTimeAsync(8_000);
     expect(onUndo).toHaveBeenCalledOnce();
     expect(onDismiss).not.toHaveBeenCalled();
   });
@@ -132,22 +150,22 @@ describe("UndoToast", () => {
   // sharing both meant the second show's 8 s window never re-armed, and it
   // could dismiss almost immediately. `token` is required precisely so a
   // caller cannot repeat it by accident the way it can `message`.
-  it("re-arms the 8 s window when the same message shows again with a new token", () => {
+  it("re-arms the 8 s window when the same message shows again with a new token", async () => {
     const onDismiss = vi.fn();
     const { rerender } = render(
       <UndoToast message="Row deleted" onUndo={vi.fn()} onDismiss={onDismiss} token={1} />,
     );
-    vi.advanceTimersByTime(7_000);
+    await vi.advanceTimersByTimeAsync(7_000);
     rerender(<UndoToast message="Row deleted" onUndo={vi.fn()} onDismiss={onDismiss} token={2} />);
 
     // Past the *first* show's own 8 s deadline (7_000 + 1_999 = 8_999), but
     // well short of the second show's own — proves the window actually
     // re-armed rather than the first timer having simply been slow to fire.
-    vi.advanceTimersByTime(1_999);
+    await vi.advanceTimersByTimeAsync(1_999);
     expect(onDismiss).not.toHaveBeenCalled();
 
     // Now past the second show's own 8 s from when it re-rendered.
-    vi.advanceTimersByTime(6_001);
+    await vi.advanceTimersByTimeAsync(6_001);
     expect(onDismiss).toHaveBeenCalledOnce();
   });
 
