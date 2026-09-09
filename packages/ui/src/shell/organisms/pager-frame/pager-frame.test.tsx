@@ -30,6 +30,7 @@ function draw(props: Partial<Parameters<typeof PagerFrame>[0]> = {}) {
       <PagerFrame
         periodLabel="September"
         periodDetail="2026"
+        periodKey="2026-09"
         onPickPeriod={vi.fn()}
         scrollY={{ value: 0 } as SharedValue<number>}
         onPrevious={vi.fn()}

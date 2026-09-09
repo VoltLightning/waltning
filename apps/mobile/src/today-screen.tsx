@@ -881,6 +881,8 @@ export default function Today() {
         // said by the arrows' own names.
         periodLabel={monthLabel(month, locale).replace(/\s+\d{4}$/, "")}
         periodDetail={String(pager.label.year)}
+        // Sortable, which is what tells the pages which side to come in from.
+        periodKey={month}
         onPickPeriod={openPicker}
         scrollY={scrollY}
         onPrevious={pager.previous}

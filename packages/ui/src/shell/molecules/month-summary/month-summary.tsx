@@ -37,10 +37,10 @@ export type MonthSummaryProps = {
    * The period's own header — label and arrows — or nothing.
    *
    * **Absent where something above already carries the period.** S04's pager
-   * puts it in `PeriodBar`, shared by all four pages, and a card drawing its
+   * puts it in `PagerHeader`, shared by all four pages, and a card drawing its
    * own beneath that would be two controls over one date: the drift the pager
-   * exists to avoid, and visibly two rows of the same month. S01's widget grid
-   * has no such bar and passes them.
+   * exists to avoid, and visibly two rows of the same month. S04 passes
+   * nothing; S01's widget grid has no such bar and will pass them.
    *
    * All five together or none: a label with no arrows is a heading pretending
    * to be a control, and arrows with no label do not say what they step.

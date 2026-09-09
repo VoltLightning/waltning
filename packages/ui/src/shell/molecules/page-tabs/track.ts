@@ -32,20 +32,18 @@ export function slotWidth(count: number): `${number}%` {
  */
 export function markerShift(progress: number): `${number}%` {
   "worklet";
-  return `${clampProgress(progress) * 100}%`;
-}
-
-/**
- * A swipe that has run past either end.
- *
- * iOS rubber-bands at both edges and a browser's overscroll does the same, so
- * the offset can be negative or past the last page. The marker stops at the
- * ends: a bar that slid off the row would be a bar drawn where no tab is.
- */
-function clampProgress(progress: number): number {
-  "worklet";
-  if (Number.isNaN(progress) || progress <= 0) return 0;
-  return progress;
+  // **The clamp is inline, and it was a helper once.** Reanimated's Babel
+  // plugin rewrites a worklet into a `const`, so a worklet calling one declared
+  // below it throws `Cannot access … before initialization` — at run time, in
+  // the app, while `vitest` passed every case because plain JavaScript hoists a
+  // function declaration. A worklet's dependencies have to be above it or in
+  // it; this one is small enough to be in it.
+  //
+  // iOS rubber-bands past the top and a browser's overscroll does the same, so
+  // the offset arrives negative: the marker stops at the first page rather than
+  // sliding off the row, where no tab is.
+  if (Number.isNaN(progress) || progress <= 0) return "0%";
+  return `${progress * 100}%`;
 }
 
 /**

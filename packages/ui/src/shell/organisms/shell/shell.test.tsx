@@ -6,13 +6,14 @@
 
 import { render, screen } from "@testing-library/react";
 import * as money from "@waltning/core/money";
+import { View } from "react-native";
 import { describe, expect, it } from "vitest";
 import { NO_INSETS, type SafeAreaInsets, SafeAreaProvider } from "../../../primitives/safe-area";
 import { ThemeProvider } from "../../../theme/provider";
 import { dark, light } from "../../../theme/roles.ts";
-import { Card } from "../../molecules/card/card";
+import { Card, GroundPanel } from "../../molecules/card/card";
 import { DualTotal } from "../../molecules/dual-total/dual-total";
-import { TodayFrame } from "../today-frame/today-frame";
+import { Shell } from "./shell";
 
 /**
  * The group separator, **as Testing Library sees it.**
@@ -28,6 +29,9 @@ import { TodayFrame } from "../today-frame/today-frame";
  * arrives grouped at all.
  */
 const GROUP = " ";
+
+/** A screen: the band, then the panel that fills what is left. */
+const FRAME = { flex: 1 } as const;
 
 describe("DualTotal", () => {
   it("shows both figures at once", () => {
@@ -143,16 +147,25 @@ describe("the frame clears the device's chrome", () => {
     return Number.parseFloat(raw || "0");
   }
 
-  /** The shell band, which is the frame's first child. */
+  /**
+   * A band over a panel — the two-part shape every tab root has.
+   *
+   * **Composed here rather than taken from a screen.** It used to render
+   * `TodayFrame`, which S04 stopped using when it became a pager and which has
+   * since been deleted; the arithmetic below was never about that frame, only
+   * about a `Shell` above a `GroundPanel`. Composing the two directly says so.
+   */
   function renderFrame(insets: SafeAreaInsets) {
     const { container } = render(
       <SafeAreaProvider insets={insets}>
-        <TodayFrame appearanceAction={null} date="Saturday, 5 September" body={null} />
+        <View style={FRAME}>
+          <Shell leading={null} />
+          <GroundPanel>{null}</GroundPanel>
+        </View>
       </SafeAreaProvider>,
     );
     const root = container.firstElementChild;
-    // Shell, then panel — the floating button no longer mounts inside this
-    // frame (`(tabs)/_layout.tsx` owns it now), so the panel is the last child.
+    // Shell, then panel.
     const outer = root?.children[1] ?? null;
     // `GroundPanel`'s default `scroll="page"` wraps the panel's content in a
     // `ScrollView`, and the clearance moved with it — onto the scroll's own
@@ -221,7 +234,10 @@ describe("the shell owns the strip it clears", () => {
     const { container } = render(
       <ThemeProvider name="light">
         <SafeAreaProvider insets={{ top: 59, right: 0, bottom: 34, left: 0 }}>
-          <TodayFrame appearanceAction={null} date="Saturday, 5 September" body={null} />
+          <View style={FRAME}>
+            <Shell leading={null} />
+            <GroundPanel>{null}</GroundPanel>
+          </View>
         </SafeAreaProvider>
       </ThemeProvider>,
     );

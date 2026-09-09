@@ -1347,8 +1347,14 @@ describe("a card groups rows or holds a figure — never a whole screen", () => 
     const files = screenFiles();
     expect(files.length, "screen files found").toBeGreaterThan(5);
     const tabRoots = tabRootScreens();
+    // **Not asserted to be non-empty any more.** It was, while `TodayFrame`
+    // took a screen's body as a prop and drew the panel for it — the one
+    // component that could hide a screen's whole `Card` behind an indirection.
+    // S04 became a pager, nothing renders that frame, and it is gone; every
+    // screen now composes its own `GroundPanel`, which the first list already
+    // covers. A precondition that survives the shape it was guarding fails as
+    // soon as the shape is fixed, which is exactly what it did.
     const frames = panelFrames();
-    expect(frames.size, "packages/ui frames that hold a screen's panel found").toBeGreaterThan(0);
     const offenders: string[] = [];
     for (const file of files) {
       const text = readFileSync(file, "utf8");

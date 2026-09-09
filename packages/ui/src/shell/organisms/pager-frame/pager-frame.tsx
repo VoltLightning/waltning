@@ -18,13 +18,14 @@
 
 import { memo } from "react";
 import { View } from "react-native";
-import { type SharedValue, useSharedValue } from "react-native-reanimated";
+import Animated, { type SharedValue, useSharedValue } from "react-native-reanimated";
 import { useSafeArea } from "../../../primitives/safe-area";
 import { makeStyles } from "../../../theme/styles.ts";
 import { space } from "../../../tokens.ts";
 import { type PageTab, PageTabs } from "../../molecules/page-tabs/page-tabs";
 import { PagerHeader } from "../../molecules/pager-header/pager-header";
 import { Pager, type PagerPage } from "../pager/pager";
+import { usePeriodMotion } from "./use-period-motion.ts";
 
 export type PagerFrameProps = {
   /** Already formatted and localised — `September`, `2026`, `March 2024`. */
@@ -50,6 +51,16 @@ export type PagerFrameProps = {
   pages: readonly PagerPage[];
   activeKey: string;
   onPageChange: (key: string) => void;
+  /**
+   * The period on screen, as a sortable string — `2026-09`.
+   *
+   * Stepping or picking one replaces every figure on all four pages at once,
+   * and swapped instantly that reads as a redraw rather than as a move: nothing
+   * says which way you went. The pages come in from the side you stepped from,
+   * which is the one thing the figures cannot say themselves. Sortable because
+   * that comparison is what knows the side.
+   */
+  periodKey: string;
 };
 
 function PagerFrameView({
@@ -64,6 +75,7 @@ function PagerFrameView({
   pages,
   activeKey,
   onPageChange,
+  periodKey,
 }: PagerFrameProps) {
   const styles = useStyles();
   const insets = useSafeArea();
@@ -72,6 +84,7 @@ function PagerFrameView({
   // neither owns the other, and a callback between them would put a JS
   // round-trip in the middle of a gesture.
   const progress = useSharedValue(0);
+  const period = usePeriodMotion(periodKey);
   // Not in `useStyles`: that cache is keyed on the theme and this is keyed on
   // the device. The chrome is the top of the screen, so it clears the status
   // bar — without this the month sits under the clock.
@@ -95,12 +108,14 @@ function PagerFrameView({
         />
         <PageTabs tabs={tabs} activeKey={activeKey} onSelect={onPageChange} progress={progress} />
       </View>
-      <Pager
-        pages={pages}
-        activeKey={activeKey}
-        onActiveKeyChange={onPageChange}
-        progress={progress}
-      />
+      <Animated.View style={[styles.pages, period]}>
+        <Pager
+          pages={pages}
+          activeKey={activeKey}
+          onActiveKeyChange={onPageChange}
+          progress={progress}
+        />
+      </Animated.View>
     </View>
   );
 }
@@ -124,6 +139,7 @@ const useStyles = makeStyles((theme) => ({
    * downward from a real number. Measuring the pager instead cannot work: the
    * measurement is derived from the very heights it would be setting.
    */
+  pages: { flex: 1 },
   root: {
     position: "absolute",
     top: 0,

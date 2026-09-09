@@ -34,7 +34,6 @@ import * as chip from "./primitives/atoms/chip/chip.stories";
 import * as unsettledBanner from "./shell/molecules/unsettled-banner/unsettled-banner.stories";
 import * as shell from "./shell/organisms/shell/shell.stories";
 import * as tabBar from "./shell/organisms/tab-bar/tab-bar.stories";
-import * as todayFrame from "./shell/organisms/today-frame/today-frame.stories";
 import * as tabIcons from "./shell/tab-icons.stories";
 import * as ruleHealthTag from "./states/atoms/rule-health-tag/rule-health-tag.stories";
 import * as skeleton from "./states/atoms/skeleton/skeleton.stories";
@@ -74,7 +73,6 @@ const MODULES = {
   ThinkingIndicator: thinkingIndicator,
   ThresholdSlider: thresholdSlider,
   Toast: toast,
-  TodayFrame: todayFrame,
   UndoToast: undoToast,
   UnsettledBanner: unsettledBanner,
 };

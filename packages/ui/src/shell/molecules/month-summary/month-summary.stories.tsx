@@ -13,16 +13,10 @@ function noop() {}
 const meta = {
   title: "Shell/MonthSummary",
   component: MonthSummary,
-  args: {
-    period: {
-      label: "September 2026",
-      onPrevious: noop,
-      onNext: noop,
-      onToday: noop,
-      isCurrent: true,
-    },
-    currency: "PLN",
-  },
+  // **No period, which is the shape S04 uses.** The pager's header carries it
+  // for all four pages; a card drawing its own beneath that would be two
+  // controls over one date. `WithItsOwnStepper` is the other caller's shape.
+  args: { currency: "PLN" },
 } satisfies Meta<typeof MonthSummary>;
 
 export default meta;
@@ -47,10 +41,11 @@ export const Overspent: Story = {
 };
 
 /**
- * A past month — the stepper offers *Today* only when there is somewhere to
- * come back from.
+ * **The card carrying its own stepper**, for a surface with no bar above it —
+ * S01's widget grid. *Today* is offered only when there is somewhere to come
+ * back from, so a past month shows it and the current one does not.
  */
-export const PastMonth: Story = {
+export const WithItsOwnStepper: Story = {
   args: {
     period: {
       label: "August 2026",

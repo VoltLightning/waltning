@@ -106,6 +106,15 @@ arriving, because two layouts at half opacity are two ghosts. Exactly one of
 them is ever in the accessibility tree: opacity is continuous and reachability
 is not, and a reader walking both hears the month twice.
 
+**The pages arrive from the side you stepped from.** Stepping or picking a
+month replaces every figure on all four pages at once, and swapped instantly
+that reads as a redraw rather than as a move — nothing says which way you went,
+and on a slow read it is not obvious anything happened. A later period comes in
+from the right, an earlier one from the left, which is the one thing the figures
+cannot say themselves. The opacity dips and never reaches zero: a page that
+vanishes and returns flickered, where one that dips moved, and the figures stay
+readable on the step a reader is watching a number for.
+
 **The picker is a sheet, not a page.** The title routed straight to the Months
 page first, and rendered that read as a bug: tapping *September* collapsed the
 header and left a year on screen, with nothing to choose from and no sign the
