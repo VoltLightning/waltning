@@ -62,7 +62,7 @@ import { horizontalScrollProps, nestedScrollProps } from "../../../primitives/ne
 import { usePressScale } from "../../../primitives/press-scale.ts";
 import { BottomSheet } from "../../../shell/organisms/bottom-sheet/bottom-sheet";
 import { EmptyState } from "../../../states/organisms/empty-state/empty-state";
-import { text } from "../../../theme/fonts.ts";
+import { text, textCap } from "../../../theme/fonts.ts";
 import { makeStyles } from "../../../theme/styles.ts";
 import { focus, radius, space, touchTarget } from "../../../tokens.ts";
 
@@ -390,7 +390,9 @@ export function CategorySheet({
               // and inviting one this sheet cannot perform is the promise
               // this state exists to avoid.
               <View style={styles.emptyTree}>
-                <Text style={styles.emptyTreeTitle}>{t("categories.pickerEmptyTitle")}</Text>
+                <Text maxFontSizeMultiplier={textCap("displayTwo")} style={styles.emptyTreeTitle}>
+                  {t("categories.pickerEmptyTitle")}
+                </Text>
                 <Text style={styles.emptyTreeBody}>{t("categories.pickerEmptyReadOnlyBody")}</Text>
               </View>
             ) : (

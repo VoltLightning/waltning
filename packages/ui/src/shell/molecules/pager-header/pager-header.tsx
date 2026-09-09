@@ -71,7 +71,7 @@ import Animated, {
 } from "react-native-reanimated";
 import { scheduleOnRN } from "react-native-worklets";
 import { useInteraction } from "../../../primitives/interaction.ts";
-import { text } from "../../../theme/fonts.ts";
+import { text, textCap } from "../../../theme/fonts.ts";
 import { useTheme } from "../../../theme/provider";
 import { makeStyles } from "../../../theme/styles.ts";
 import { focus, radius, touchTarget } from "../../../tokens.ts";
@@ -297,6 +297,7 @@ function PagerHeaderView({
             <Animated.Text
               accessibilityRole="header"
               onLayout={measureMonth}
+              maxFontSizeMultiplier={textCap("displayTwo")}
               style={[styles.month, month]}
               numberOfLines={1}
             >

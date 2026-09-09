@@ -23,7 +23,7 @@ import { Text, View } from "react-native";
 import { useT } from "../../../i18n/provider";
 import { Button } from "../../../primitives/atoms/button/button";
 import { Tag, type TagVariant } from "../../../primitives/atoms/tag";
-import { text } from "../../../theme/fonts.ts";
+import { text, textCap } from "../../../theme/fonts.ts";
 import { makeStyles } from "../../../theme/styles.ts";
 import { space } from "../../../tokens.ts";
 
@@ -58,7 +58,9 @@ export function ErrorState({ variant, what, why, cost, action }: ErrorStateProps
   return (
     <View style={styles.root}>
       <Tag variant={TAG_VARIANT[variant]}>{t(BADGE_KEY[variant])}</Tag>
-      <Text style={styles.what}>{what}</Text>
+      <Text maxFontSizeMultiplier={textCap("displayTwo")} style={styles.what}>
+        {what}
+      </Text>
       <Text style={styles.why}>{why}</Text>
       {cost ? <Text style={styles.cost}>{cost}</Text> : null}
       {action ? (

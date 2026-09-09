@@ -20,7 +20,7 @@
 import { Text, View } from "react-native";
 import { useT } from "../../../i18n/provider";
 import { Button } from "../../../primitives/atoms/button/button";
-import { text } from "../../../theme/fonts.ts";
+import { text, textCap } from "../../../theme/fonts.ts";
 import { makeStyles } from "../../../theme/styles.ts";
 import { space } from "../../../tokens.ts";
 
@@ -48,7 +48,9 @@ export function EmptyState({
   const styles = useStyles();
   return (
     <View style={styles.root}>
-      <Text style={styles.title}>{title}</Text>
+      <Text maxFontSizeMultiplier={textCap("displayTwo")} style={styles.title}>
+        {title}
+      </Text>
       <Text style={styles.body}>{body}</Text>
       {variant === "filtered" && count !== undefined ? (
         <Text style={styles.count}>{t("states.filteredHidden", { count })}</Text>

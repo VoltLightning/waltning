@@ -3,6 +3,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { light, type Theme, themes } from "./theme/roles.ts";
+import { maxFontScale } from "./tokens.ts";
 
 // From `import.meta.url` (a string) rather than `new URL(...)`: this package
 // compiles against the DOM lib, where `URL` is the DOM's and not Node's.
@@ -255,6 +256,43 @@ describe("a component names a scale step, never a size (§2.2)", () => {
 
     expect(offenders, "components reaching into a scale step").toEqual([]);
     expect(all.length, "components found").toBeGreaterThan(8);
+  });
+
+  /**
+   * **A capped step and its cap live in two different places, so nothing paired
+   * them for the whole life of the design system.**
+   *
+   * `maxFontScale` in `tokens.ts` has said since it was written that
+   * `displayHero` stops at 1.4, `displayOne` at 1.5 and `displayTwo` at 1.6.
+   * It reached nothing: React Native takes the cap as a **prop** and
+   * `text.display()` returns a **style**, so the decision sat in the tokens
+   * looking applied while every headline in the app grew without limit. At an
+   * uncapped 200% the 54pt figure is 108pt in a layout built for 54.
+   *
+   * The failure is invisible where it is easiest to look. `react-native-web`
+   * has no OS text scale to multiply by, so no story, no screenshot and no
+   * jsdom test can show it — it exists only on the two platforms whose type
+   * actually scales. That is exactly the shape of defect a source rule is for,
+   * and it is why this is checked here rather than by rendering something.
+   *
+   * So: a component that names a capped step must also hand a `<Text>` its
+   * cap. `textCap()` is how, and it answers `undefined` for the uncapped steps
+   * — so the rule costs a component that names `body` nothing at all.
+   */
+  it("a component that names a capped step also caps its text", () => {
+    const capped = Object.keys(maxFontScale);
+    expect(capped.length, "capped steps").toBeGreaterThan(0);
+
+    const NAMES_CAPPED = new RegExp(`text\\.(display|ui|mono)\\("(${capped.join("|")})"`);
+
+    const offenders = all
+      .filter((c) => {
+        const source = c.text.replace(/^\s*\*.*$/gm, "");
+        return NAMES_CAPPED.test(source) && !source.includes("maxFontSizeMultiplier");
+      })
+      .map((c) => c.name);
+
+    expect(offenders, "components naming a capped step without capping it").toEqual([]);
   });
 
   /**

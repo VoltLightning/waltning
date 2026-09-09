@@ -7,14 +7,18 @@
 import type { Meta, StoryObj } from "@storybook/react-native-web-vite";
 import * as money from "@waltning/core/money";
 import { Text } from "react-native";
-import { text } from "../../../theme/fonts.ts";
+import { text, textCap } from "../../../theme/fonts.ts";
 import { makeStyles } from "../../../theme/styles.ts";
 import { DualTotal } from "../../molecules/dual-total/dual-total";
 import { Shell } from "./shell";
 
 function Heading({ children }: { children: string }) {
   const styles = useStyles();
-  return <Text style={styles.heading}>{children}</Text>;
+  return (
+    <Text maxFontSizeMultiplier={textCap("displayTwo")} style={styles.heading}>
+      {children}
+    </Text>
+  );
 }
 
 const useStyles = makeStyles((theme) => ({

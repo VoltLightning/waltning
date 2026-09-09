@@ -20,9 +20,9 @@ import * as money from "@waltning/core/money";
 import { Text, type TextStyle } from "react-native";
 import { decimalMark } from "../../../i18n/locales.ts";
 import { useLocale } from "../../../i18n/provider";
-import { text } from "../../../theme/fonts.ts";
+import { text, textCap } from "../../../theme/fonts.ts";
 import { makeStyles } from "../../../theme/styles.ts";
-import { tabularNums } from "../../../tokens.ts";
+import { type TypeStep, tabularNums } from "../../../tokens.ts";
 
 export type AmountSize = "hero" | "medium" | "large" | "body" | "small" | "compact";
 export type AmountEmphasis = "default" | "muted" | "shell" | "shellMuted";
@@ -75,6 +75,25 @@ const SIZES: Record<AmountSize, TextStyle> = {
   compact: text.display("displayThree"),
 };
 
+/**
+ * The step behind each size, named again so the OS text-size cap can be found.
+ *
+ * **A second map rather than a field on the first**, because `SIZES` is a
+ * `TextStyle` and the cap is a *prop*: React Native takes
+ * `maxFontSizeMultiplier` on the `<Text>`, and a stylesheet cannot carry it.
+ * Keeping the two keyed on the same union is what makes a new size fail to
+ * compile until it has said how far it may grow — which is the whole reason
+ * `maxFontScale` reached nothing for as long as it did.
+ */
+const STEPS: Record<AmountSize, TypeStep> = {
+  hero: "displayHero",
+  medium: "displayOne",
+  large: "displayTwo",
+  body: "body",
+  small: "bodySm",
+  compact: "displayThree",
+};
+
 export function Amount({
   value,
   currency,
@@ -121,7 +140,10 @@ export function Amount({
           : null;
 
   return (
-    <Text style={[styles.base, SIZES[size], tone, emphasis === "muted" ? styles.muted : null]}>
+    <Text
+      maxFontSizeMultiplier={textCap(STEPS[size])}
+      style={[styles.base, SIZES[size], tone, emphasis === "muted" ? styles.muted : null]}
+    >
       {prefix}
       {figure}
       <Text style={[styles.currency, onShell ? styles.shellCurrency : null]}> {currency}</Text>

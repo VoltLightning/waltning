@@ -12,7 +12,7 @@ import type { AgeBucket } from "@waltning/core/money";
 import { Text, View } from "react-native";
 import { useT } from "../../../i18n/provider";
 import { monogramFor } from "../../../primitives/monogram.ts";
-import { text } from "../../../theme/fonts.ts";
+import { text, textCap } from "../../../theme/fonts.ts";
 import { useTheme } from "../../../theme/provider";
 import { makeStyles } from "../../../theme/styles.ts";
 import { radius, space } from "../../../tokens.ts";
@@ -48,7 +48,9 @@ export function CounterpartyCard({
         <Text style={[styles.monogramText, monogramInk]}>{monogram.letter}</Text>
       </View>
       <View style={styles.identity}>
-        <Text style={styles.name}>{name}</Text>
+        <Text maxFontSizeMultiplier={textCap("displayTwo")} style={styles.name}>
+          {name}
+        </Text>
         <Text style={styles.meta}>
           {t(kind === "company" ? "counterparties.kindCompany" : "counterparties.kindPerson")}
           {settlementCurrency
