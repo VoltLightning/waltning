@@ -9,6 +9,8 @@
 
 import { Decimal as GlobalDecimal } from "decimal.js";
 import { describe, expect, it } from "vitest";
+import { accountingDate } from "./date.ts";
+import type { CurrencyCode } from "./money.ts";
 import * as money from "./money.ts";
 
 describe("exactness", () => {
@@ -428,5 +430,72 @@ describe("directionTotals — dust at scale (H2, H4)", () => {
       { currency: money.currencyCode("PLN"), balance: money.toMoney("5"), decimals: 0 },
     ];
     expect(() => money.directionTotals(rows)).toThrow(/decimals/);
+  });
+});
+
+describe("dayFlows", () => {
+  const period = { start: accountingDate("2026-09-01"), end: accountingDate("2026-10-01") };
+  const row = (over: Partial<money.PeriodTransactionRow>): money.PeriodTransactionRow => ({
+    type: "expense",
+    date: accountingDate("2026-09-04"),
+    ownership: "own",
+    currency: "PLN" as CurrencyCode,
+    decimals: 2,
+    amountOriginal: money.toMoney("10.00"),
+    ...over,
+  });
+
+  it("cuts §5's figure by day without changing it", () => {
+    // The calendar's marks and the card above them are one answer to §5. Two
+    // answers on one screen is what two implementations produce.
+    const rows = [
+      row({ amountOriginal: money.toMoney("30.00") }),
+      row({ amountOriginal: money.toMoney("12.50") }),
+      row({ type: "income", amountOriginal: money.toMoney("100.00") }),
+    ];
+    expect(money.dayFlows(rows, period)).toEqual([
+      {
+        date: "2026-09-04",
+        currency: "PLN",
+        decimals: 2,
+        spend: money.toMoney("42.50"),
+        inflow: money.toMoney("100.00"),
+      },
+    ]);
+    const [total] = money.periodSpend(rows, period);
+    expect(total?.spend).toEqual(money.toMoney("42.50"));
+  });
+
+  it("leaves an empty day absent rather than zero", () => {
+    // The grid draws every day of the month. A zero row here would claim
+    // nothing happened where the truth is that nothing was captured.
+    const flows = money.dayFlows([row({})], period);
+    expect(flows.map((f) => f.date)).toEqual(["2026-09-04"]);
+  });
+
+  it("never folds two currencies into one day", () => {
+    const flows = money.dayFlows(
+      [row({}), row({ currency: "USD" as CurrencyCode, amountOriginal: money.toMoney("7.00") })],
+      period,
+    );
+    expect(flows).toHaveLength(2);
+    expect(flows.map((f) => f.currency)).toEqual(["PLN", "USD"]);
+  });
+
+  it("applies §5's own filters — own accounts, the period, income and expense", () => {
+    const flows = money.dayFlows(
+      [
+        row({ ownership: "shared" }),
+        row({ date: accountingDate("2026-08-31") }),
+        row({ type: "transfer" }),
+      ],
+      period,
+    );
+    expect(flows).toEqual([]);
+  });
+
+  it("keeps spend a magnitude, so it can be compared to inflow", () => {
+    const [day] = money.dayFlows([row({ amountOriginal: money.toMoney("25.00") })], period);
+    expect(money.isPositive(day?.spend ?? money.ZERO)).toBe(true);
   });
 });

@@ -1347,8 +1347,14 @@ describe("a card groups rows or holds a figure — never a whole screen", () => 
     const files = screenFiles();
     expect(files.length, "screen files found").toBeGreaterThan(5);
     const tabRoots = tabRootScreens();
+    // **Not asserted to be non-empty any more.** It was, while `TodayFrame`
+    // took a screen's body as a prop and drew the panel for it — the one
+    // component that could hide a screen's whole `Card` behind an indirection.
+    // S04 became a pager, nothing renders that frame, and it is gone; every
+    // screen now composes its own `GroundPanel`, which the first list already
+    // covers. A precondition that survives the shape it was guarding fails as
+    // soon as the shape is fixed, which is exactly what it did.
     const frames = panelFrames();
-    expect(frames.size, "packages/ui frames that hold a screen's panel found").toBeGreaterThan(0);
     const offenders: string[] = [];
     for (const file of files) {
       const text = readFileSync(file, "utf8");
@@ -2921,6 +2927,10 @@ describe("a control's edge is not the divider colour", () => {
    */
   const AREA_EDGES = new Map([
     [
+      "packages/ui/src/transactions/molecules/quiet-days/quiet-days.tsx#run",
+      "a card standing in for the days it collapsed — an area in the list, with its own pressable inside it",
+    ],
+    [
       "packages/ui/src/primitives/atoms/select/select.tsx#panel",
       "the dropdown's own surface, not the control that opens it",
     ],
@@ -3369,6 +3379,7 @@ describe("every scroller declares which kind it is", () => {
       .sort();
 
     expect(census).toEqual([
+      "apps/mobile/src/home-list-page.tsx#0 <FlatList> pageScrollProps",
       "apps/mobile/src/ledger-screen.tsx#0 <FlatList> pageScrollProps",
       "packages/ui/src/accounts/organisms/account-picker/account-picker.tsx#0 <ScrollView> nestedScrollProps",
       "packages/ui/src/categories/organisms/category-sheet/category-sheet.tsx#0 <ScrollView> horizontalScrollProps",

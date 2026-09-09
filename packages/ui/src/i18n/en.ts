@@ -198,6 +198,24 @@ export const en = {
     otherGroup: "Other",
   },
   transactions: {
+    /** What the dash in a day header means, for a reader who cannot see it. */
+    noTotalToday: "No total — a rate has not arrived for this day",
+    /**
+     * `DayRibbon`'s accessible name — the full date and what happened on it.
+     *
+     * A cell reads "14" to the eye and must not to a screen reader: a run of
+     * bare numbers says nothing about which month, which year, or whether the
+     * day held anything (S04 §7).
+     */
+    ribbonDayOne: "{{date}}, {{count}} entry",
+    ribbonDayMany: "{{date}}, {{count}} entries",
+    /** The same cell on a day with nothing on it. */
+    ribbonDayEmpty: "{{date}}, nothing",
+    /** One quiet day in the list — the line beside its date. */
+    nothingThatDay: "nothing",
+    /** A collapsed run of quiet days. Two flat forms, as `resultsOne` explains. */
+    quietRunOne: "{{count}} day · nothing recorded",
+    quietRunMany: "{{count}} days · nothing recorded",
     amount: "Amount",
     account: "Account",
     /**
@@ -858,6 +876,29 @@ export const en = {
     flowRange: "{{count}} months + this month to date",
   },
   shell: {
+    /** Summary's gateway grid — a kicker over the cards. */
+    goTo: "Go to",
+    /** `PagerHeader`'s magnifier. */
+    search: "Search",
+    /**
+     * `PagerHeader`'s title, which is the picker. Named for what it does
+     * rather than for the month it shows: "September" is already read out as
+     * the heading, and a button called *September* says nothing about what
+     * tapping it will do.
+     */
+    pickPeriod: "Choose a month",
+    /** `PageTabs` — the four views of one date (S04 §3). */
+    summary: "Summary",
+    list: "List",
+    calendar: "Calendar",
+    months: "Months",
+    /** `PagerHeader`'s arrows name the unit they step; the label only says it to the eye. */
+    previousMonth: "Previous month",
+    nextMonth: "Next month",
+    previousYear: "Previous year",
+    nextYear: "Next year",
+    /** `QuietRun`'s action — opens the days it collapsed. */
+    show: "Show",
     today: "Today",
     /**
      * The floating add button. A verb, because a `+` has no name a screen
@@ -880,6 +921,32 @@ export const en = {
     alsoInOtherCurrencies_few: "Also held in {{count}} other currencies",
     alsoInOtherCurrencies_many: "Also held in {{count}} other currencies",
     alsoInOtherCurrencies_other: "Also held in {{count}} other currencies",
+    /**
+     * A month on S04's Months page that held a currency the figures leave out.
+     * Arc-phone converts nothing, so the row states its lead-currency totals
+     * and names what it could not add to them rather than dropping it silently.
+     */
+    plusOtherCurrencies_one: "+ {{count}} other currency",
+    plusOtherCurrencies_few: "+ {{count}} other currencies",
+    plusOtherCurrencies_many: "+ {{count}} other currencies",
+    plusOtherCurrencies_other: "+ {{count}} other currencies",
+    /**
+     * The *Go to* cards' figures (S04 §3). **Every card carries one**, which is
+     * what makes the grid a status board rather than a menu — *Between us* as a
+     * tab was a word and an icon; as a card it is a balance and a count.
+     *
+     * A destination the ledger has nothing to say about yet gets no line at
+     * all rather than a zero: a card with an empty line looks broken, and one
+     * that has simply not been given a figure is a different, honest thing.
+     */
+    gatewayPeople_one: "{{count}} person",
+    gatewayPeople_few: "{{count}} people",
+    gatewayPeople_many: "{{count}} people",
+    gatewayPeople_other: "{{count}} people",
+    gatewayCategories_one: "{{count}} used this month",
+    gatewayCategories_few: "{{count}} used this month",
+    gatewayCategories_many: "{{count}} used this month",
+    gatewayCategories_other: "{{count}} used this month",
     keptSoFar: "Kept so far",
     cameIn: "Came in",
     wentOut: "Went out",

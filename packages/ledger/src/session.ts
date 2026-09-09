@@ -3,6 +3,7 @@ import type { AccountingDate } from "@waltning/core/date";
 import type { Id } from "@waltning/core/id";
 import type {
   CurrencyCode,
+  DayFlowRow,
   IncomeExpenseBucket,
   IncomeExpenseRow,
   LedgerScope,
@@ -163,7 +164,15 @@ import {
 } from "./transactions/create-transaction.executor.ts";
 import { deleteTransactionExecutor } from "./transactions/delete-transaction.executor.ts";
 import { type AuditLogResult, readAuditLog } from "./transactions/read-audit-log.ts";
+import { readDayFlows } from "./transactions/read-day-flows.ts";
+import { readDayRows } from "./transactions/read-day-rows.ts";
 import { readIncomeVsExpense } from "./transactions/read-income-vs-expense.ts";
+import {
+  type LedgerDirection,
+  type LedgerFilter,
+  type LedgerPage,
+  readLedgerPage,
+} from "./transactions/read-ledger-page.ts";
 import { readPayeeHistory } from "./transactions/read-payee-history.ts";
 import { readPeriodSpend } from "./transactions/read-period-spend.ts";
 import { type LocalRecentTransaction, readRecent } from "./transactions/read-recent.ts";
@@ -177,6 +186,7 @@ import {
   type TransactionSearchPage,
 } from "./transactions/search-transactions.ts";
 import { setTransactionLinesExecutor } from "./transactions/set-transaction-lines.executor.ts";
+import type { SignedLedgerRow } from "./transactions/transaction-query.ts";
 import { updateTransactionExecutor } from "./transactions/update-transaction.executor.ts";
 import { type Capture, writeLocally } from "./write.ts";
 
@@ -256,6 +266,10 @@ export type LocalLedgerSession = {
   listNetWorth: () => readonly LocalNetWorth[];
   /** §5's base figure, per currency. `period` is screen state, not store state — C2. */
   readPeriodSpend: (period: Period) => readonly PeriodSpendRow[];
+  /** The same figure cut by day — S04's calendar. Bounded by the period, never paged. */
+  readDayFlows: (period: Period) => readonly DayFlowRow[];
+  /** Every row on one day — the entries the calendar opens. Bounded by the date. */
+  readDayRows: (date: AccountingDate) => readonly SignedLedgerRow[];
   /** §6, per currency and category — `S01`'s donut. `scope` is the desk band's own segment. `DESK4`. */
   readSpendByCategory: (period: Period, scope: LedgerScope) => readonly SpendByCategoryRow[];
   /** §12, per bucket and currency — `S01`'s line chart. `buckets` and `scope` are screen state, same reasoning as `readPeriodSpend`. `DESK4`. */
@@ -275,6 +289,22 @@ export type LocalLedgerSession = {
     cursor?: TransactionSearchCursor,
     options?: TransactionSearchOptions,
   ) => TransactionSearchPage;
+  /**
+   * S04's List page — one page walking away from an anchor, in one direction.
+   *
+   * Beside `searchTransactions` rather than folded into it: that one answers
+   * *find the thing you remember* and carries a running total every page,
+   * because S10's filter bar promises one. This answers *where am I in the
+   * ledger* and has a position instead. `read-ledger-page.ts`'s own doc has
+   * the argument.
+   */
+  readLedgerPage: (options: {
+    anchor: AccountingDate;
+    direction: LedgerDirection;
+    cursor?: TransactionSearchCursor;
+    filter?: LedgerFilter;
+    limit?: number;
+  }) => LedgerPage;
   createAccount: (input: CreateAccountInput, capture: Capture) => LocalAccountRow;
   createTransaction: (input: CreateTransactionInput, capture: Capture) => LocalTransactionRow;
   createCategory: (input: CreateCategoryInput, capture: Capture) => LocalCategoryRow;
@@ -629,6 +659,8 @@ export function createLocalLedgerSession<TRun>(
     listDistinctCounterpartyPairs: () => readDistinctCounterpartyPairs(requireOpen().replica.db),
     listNetWorth: () => readNetWorth(requireOpen().replica.db),
     readPeriodSpend: (period) => readPeriodSpend(requireOpen().replica.db, period),
+    readDayFlows: (period) => readDayFlows(requireOpen().replica.db, period),
+    readDayRows: (date) => readDayRows(requireOpen().replica.db, date),
     readSpendByCategory: (period, scope) =>
       readSpendByCategory(requireOpen().replica.db, period, scope),
     readIncomeVsExpense: (buckets, scope) =>
@@ -638,6 +670,7 @@ export function createLocalLedgerSession<TRun>(
     balanceAsOf: (accountId, asOf) => readBalanceAsOf(requireOpen().replica.db, accountId, asOf),
     searchTransactions: (filter, cursor, options) =>
       searchTransactions(requireOpen().replica.db, filter, cursor, options),
+    readLedgerPage: (options) => readLedgerPage(requireOpen().replica.db, options),
     getTransaction: (id) => readTransaction(requireOpen().replica.db, id),
     getAuditLog: (entity, entityId) => {
       requireOpen();

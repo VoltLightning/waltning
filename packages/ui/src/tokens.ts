@@ -579,6 +579,23 @@ export const floating = {
   tab: { width: 44, height: 22 },
   band: 22,
   clearance: 16 + 56,
+  /**
+   * The top band the button may not rest in — a tab root's own chrome.
+   *
+   * §2.9 puts the button over everything including the header, which is what
+   * makes it findable, and `releaseAt` already refuses to magnetise it to the
+   * top because it "would sit over the header's figures". Nothing bounded the
+   * *drag*, so it could be parked over them anyway — and once S04's chrome
+   * became a period bar over a row of page tabs, a button left up there
+   * covered a tab and made a page unreachable. A control that can hide
+   * navigation is worse than one that is slightly harder to reach.
+   *
+   * 88: the bar and the tab row, both 44 (`touchTarget.min`). A constant
+   * rather than a measurement because the chrome is a fixed height by
+   * design, and because the button is mounted by the shell, which cannot see
+   * inside the screen it floats over.
+   */
+  headroom: 44 + 44,
 } as const;
 
 /* ── 2.10 The desk breakpoint ────────────────────────────────────────────── */

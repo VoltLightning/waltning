@@ -89,11 +89,12 @@ describe("phone-alone preview presentation", () => {
   });
 
   /**
-   * `PeriodHeader` and *ours* (§3's shared total) shipped in C2 — the S04
-   * hero and period row this profile always specified, so they moved out of
-   * this list. `PeriodPicker` (granularity, presets, an arbitrary range)
-   * stays deferred: `PeriodHeader`'s arrows step a month and nothing here
-   * opens a sheet.
+   * The S04 hero, the period row and its picker are all part of this profile,
+   * so none of them is on this list. What stays deferred is the picker's
+   * *range* work — granularity below a month, presets, and an arbitrary
+   * start-to-end span (S25). The sheet this screen opens picks one month out
+   * of one year and nothing else, which is why it is checked by name in
+   * `period-picker.test.tsx` rather than kept out by name here.
    *
    * `"Voice"` moved out in D4b: `Dock`'s mode row (`123 · ◉ · ▣ · 💬`, D3)
    * names voice, receipt and converse **disabled** so the row's eventual
@@ -103,7 +104,7 @@ describe("phone-alone preview presentation", () => {
    * in the mode row, so it stays checked.
    */
   it("keeps deferred capture and dashboard affordances out", () => {
-    const deferred = ["PeriodPicker", "Scan", "Sync status", "FxAmount", "TabBar"];
+    const deferred = ["Scan", "Sync status", "FxAmount", "TabBar"];
     for (const affordance of deferred) {
       expect(`${today}\n${quickAdd}`).not.toContain(affordance);
     }

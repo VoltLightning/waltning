@@ -1,7 +1,7 @@
 import { accountingDate } from "@waltning/core/date";
 import { currencyCode, pivotPerUnit, toMoney } from "@waltning/core/money";
 import { describe, expect, it } from "vitest";
-import { type LedgerDayRow, toLedgerItems } from "./ledger-days.ts";
+import { type LedgerDayRow, ribbonDays, toLedgerItems } from "./ledger-days.ts";
 
 const PLN = currencyCode("PLN");
 const EUR = currencyCode("EUR");
@@ -150,5 +150,85 @@ describe("toLedgerItems", () => {
 
   it("returns nothing for no rows", () => {
     expect(toLedgerItems([], PLN)).toEqual([]);
+  });
+});
+
+describe("ribbonDays", () => {
+  const day = (date: string, ...amounts: string[]) => amounts.map((a) => row(date, a));
+
+  it("makes heavy relative to what is on screen, not to an absolute figure", () => {
+    // A ledger whose largest day is 200 and one whose largest is 20 000 would
+    // otherwise draw every mark the same size — the mark exists to say this
+    // day was unusual for you.
+    const items = toLedgerItems(
+      [...day("2026-08-14", "-200"), ...day("2026-08-13", "-20"), ...day("2026-08-12", "-120")],
+      PLN,
+    );
+    expect(ribbonDays(items).map((d) => d.activity)).toEqual(["heavy", "some", "heavy"]);
+  });
+
+  it("calls a day that nets to zero with rows on it flat, never in or out", () => {
+    // Transfers between your own accounts: money moved and none of it left.
+    const items = toLedgerItems([...day("2026-08-14", "-100", "100")], PLN);
+    expect(ribbonDays(items)[0]).toMatchObject({ direction: "flat", activity: "some" });
+  });
+
+  it("reads a positive day as in", () => {
+    const items = toLedgerItems([...day("2026-08-14", "7850")], PLN);
+    expect(ribbonDays(items)[0]).toMatchObject({ direction: "in" });
+  });
+
+  it("says something happened on a day it cannot price, and no more", () => {
+    const items = toLedgerItems(
+      [row("2026-08-14", "-50", { toAmount: toMoney("50"), toCurrency: EUR, toFxRate: null })],
+      PLN,
+    );
+    expect(ribbonDays(items)[0]).toMatchObject({
+      activity: "some",
+      direction: "flat",
+      pivot: null,
+    });
+  });
+
+  it("counts the entries, so the label can say how many", () => {
+    const items = toLedgerItems([...day("2026-08-14", "-10", "-20", "-30")], PLN);
+    expect(ribbonDays(items)[0]?.entries).toBe(3);
+  });
+});
+
+describe("the ribbon is continuous", () => {
+  it("draws a cell for every day between the first and the last, not only the busy ones", () => {
+    // §7.2 says continuous. A strip built only from the days that hold rows is
+    // not a strip: one transaction drew one cell, which reads as a broken
+    // control rather than as a quiet month, and the gap between two marks said
+    // nothing about whether they were a day or a fortnight apart.
+    const items = toLedgerItems([row("2026-09-01", "-10"), row("2026-09-05", "-20")], PLN);
+    // Kept in the order the list had them, which on the phone is newest first
+    // and in this fixture is oldest — the fill does not reorder the ledger.
+    const days = ribbonDays(items);
+    expect(days.map((day) => day.date)).toEqual([
+      "2026-09-01",
+      "2026-09-02",
+      "2026-09-03",
+      "2026-09-04",
+      "2026-09-05",
+    ]);
+  });
+
+  it("marks a filled day and leaves a quiet one bare", () => {
+    const items = toLedgerItems([row("2026-09-01", "-10"), row("2026-09-03", "-20")], PLN);
+    const byDate = new Map(ribbonDays(items).map((day) => [day.date as string, day]));
+    expect(byDate.get("2026-09-02")?.activity).toBe("none");
+    expect(byDate.get("2026-09-02")?.entries).toBe(0);
+    expect(byDate.get("2026-09-03")?.activity).not.toBe("none");
+  });
+
+  it("draws one cell for a list that loaded one day", () => {
+    const items = toLedgerItems([row("2026-09-01", "-10")], PLN);
+    expect(ribbonDays(items).map((day) => day.date)).toEqual(["2026-09-01"]);
+  });
+
+  it("is empty for a list that loaded nothing", () => {
+    expect(ribbonDays([])).toEqual([]);
   });
 });

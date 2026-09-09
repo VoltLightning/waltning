@@ -92,6 +92,55 @@ export function dayLabel(date: AccountingDate, locale: Locale): string {
 }
 
 /**
+ * Which weekday a calendar row starts on — `0` Sunday, `1` Monday.
+ *
+ * **A table, not `Intl.Locale.prototype.weekInfo`.** That API is still
+ * unshipped on enough runtimes that reading it would mean a fallback anyway,
+ * and a fallback that is wrong half the time is worse than a table naming the
+ * two locales this app has. When a third arrives it gets a line here, in the
+ * open, rather than a silent guess.
+ */
+export function weekStart(locale: Locale): 0 | 1 {
+  return locale === "en" ? 0 : 1;
+}
+
+/**
+ * One month, abbreviated — "Sep", "wrz" — for `PeriodPicker`'s grid.
+ *
+ * **`short`, and a whole formatted name rather than a slice of the long one.**
+ * Cutting three characters off *September* happens to work in English and
+ * gives "wrz" for Polish only by luck; a locale whose abbreviation is not a
+ * prefix of its full name gets a word that does not exist. `Intl` knows which
+ * is which.
+ *
+ * The same `timeZone: "UTC"` as its siblings: an accounting month is a bare
+ * date, and parsing it in a negative offset would name the month before.
+ */
+export function monthShort(month: YearMonth, locale: Locale): string {
+  const [year, mo] = month.split("-").map(Number) as [number, number];
+  return new Intl.DateTimeFormat(locale, { month: "short", timeZone: "UTC" }).format(
+    new Date(Date.UTC(year, mo - 1, 1)),
+  );
+}
+
+/**
+ * One letter — the weekday, for `DayRibbon`'s cells.
+ *
+ * **`narrow`, not the first character of `short`.** Slicing a short name is a
+ * Latin-alphabet assumption: it breaks on any script whose weekday does not
+ * begin with a standalone letter, and gives "Ni" for Polish *niedziela* where
+ * the platform's own narrow form is "N". The ambiguity that comes with it —
+ * two Tuesdays and two Thursdays reading "T" in English — is why every cell
+ * also carries its full date as an accessible name.
+ */
+export function weekdayInitial(date: AccountingDate, locale: Locale): string {
+  const [year, mo, day] = date.split("-").map(Number) as [number, number, number];
+  return new Intl.DateTimeFormat(locale, { weekday: "narrow", timeZone: "UTC" }).format(
+    new Date(Date.UTC(year, mo - 1, day)),
+  );
+}
+
+/**
  * "Saturday, 5 September" — the weekday and the day, for a band whose heading
  * is already the word *Today*.
  *

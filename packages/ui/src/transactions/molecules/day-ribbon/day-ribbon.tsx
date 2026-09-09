@@ -116,7 +116,17 @@ function DayRibbonView({ days, current, onPickDay }: DayRibbonProps) {
 export const DayRibbon = memo(DayRibbonView);
 
 const useStyles = makeStyles(() => ({
-  band: { paddingVertical: space.sm },
+  /**
+   * **`flexGrow: 0` is what keeps this a strip.**
+   *
+   * `react-native-web` gives a `ScrollView` a growing base style, so in the
+   * column this sits in it took every point the page had and pushed the list
+   * under it to the bottom of the screen — a ribbon with one cell and a
+   * screen's worth of nothing beneath it. It was invisible while the pager's
+   * slots were unbounded and appeared the moment they were sized, which is
+   * where the bug had been waiting.
+   */
+  band: { flexGrow: 0, flexShrink: 0, paddingVertical: space.sm },
   track: { flexDirection: "row", gap: space.xs, paddingHorizontal: space.x3 },
 }));
 

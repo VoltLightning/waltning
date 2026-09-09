@@ -37,9 +37,16 @@ Browsing the ledger and picking a date are this screen, one swipe away. See §3.
 **S04 is four views of one date, and a swipe moves between them.**
 
 ```
-┌ shell ──────────────────────────────────────────┐
-│  ‹  September  ›            −4 320,18     [🔍] │  ← PeriodBar, shared
+┌ at rest ────────────────────────────────────────┐
+│  September  ⌄                             [🔍]  │  ← PagerHeader, shared
+│  2026                                           │
 │   Summary    List    Calendar    Months         │  ← PageTabs, marker under one
+│  ─────────────────────────────────────────────  │
+└─────────────────────────────────────────────────┘
+
+┌ scrolled ───────────────────────────────────────┐
+│  September 2026 ⌄            [‹│›]        [🔍]  │  ← the same header, collapsed
+│   Summary    List    Calendar    Months         │
 │  ─────────────────────────────────────────────  │
 └─────────────────────────────────────────────────┘
 ```
@@ -59,14 +66,92 @@ exactly. Summary and Months read its month, and **picking a month sets the
 date to that month's newest day** — a reverse-chronological list is entered
 from its end, not its start.
 
-**The chrome is shared and does not move.** One row: the period with its
-arrows, the figure for whatever period the current page is in, and search.
+**The chrome clears the status bar itself.** It is the top of the screen on a
+tab root, so the inset is its own — nothing above it can apply one.
 
-**The year appears only when it is not this one.** *September* while you are
-in 2026; *March 2024* once you have stepped out of it. Five things share
-326pt, and the year is the one of them that is usually already known — a bar
-that wrapped to two lines to repeat it would be spending a row on the least
-surprising word on the screen.
+**The marker follows the finger, and so does the ink.** `PageTabs` reads the
+pager's offset in page units rather than which page is active, so a
+half-finished swipe leaves the marker half-way between two names and the two
+labels half-toned. A marker driven by the active page can only jump when the
+gesture ends, which makes the bar look like it is reacting to the swipe rather
+than being part of it.
+
+**The title is the month on all four pages, Months included.** It named the
+year there at first, because the arrows step years on that page — and the
+header changing shape as you swipe was the thing that read as broken: the
+picker's affordance disappeared exactly where a reader is most likely to want
+it. The month is the date every page shares, so it is what the header says;
+what the arrows step is said by the arrows' own names.
+
+**The chrome is shared and never scrolls away, but it changes shape.** The
+header has two layouts and the scroll chooses between them, continuously —
+it is one control resizing, not two headers swapping.
+
+- **At rest** the month is a large title and **the whole title is the picker**:
+  tapping it opens `PeriodPicker` — a sheet holding the year and its twelve
+  months — which is where you go when the month you want is not the next one.
+  There are no arrows. At the top of a screen the answer to "somewhere else" is
+  usually not "one step", and a stepper flanking a title makes the title look
+  like a value being scrubbed.
+- **Scrolled** the title shrinks to a single row and **the stepper appears**
+  beside search, as one control with a divider rather than two loose chevrons.
+  The title is no longer a target worth aiming at, and stepping is what you
+  want while reading a month — so the control arrives exactly when the reason
+  for it does.
+
+The month never moves sideways and never changes colour; it changes size, and
+the stepper fades in beside it. The two layouts are stacked and cross-faded at
+the midpoint of the travel — one has finished leaving before the other starts
+arriving, because two layouts at half opacity are two ghosts. Exactly one of
+them is ever in the accessibility tree: opacity is continuous and reachability
+is not, and a reader walking both hears the month twice.
+
+**The pages arrive from the side you stepped from, when the page on screen
+actually changed.** Months shows a year and the other three show a month, so
+tapping a row on Months moves nothing — that page draws the same twelve rows
+either way, with a different one marked, and a page that moves when its own
+contents did not reads as a remount. Swiping between pages moves nothing
+either: the pager is already animating that gesture, and two motions over one
+gesture is a screen that looks like it reloaded.
+
+Stepping or picking a month replaces every figure on the pages that show one, and swapped instantly
+that reads as a redraw rather than as a move — nothing says which way you went,
+and on a slow read it is not obvious anything happened. A later period comes in
+from the right, an earlier one from the left, which is the one thing the figures
+cannot say themselves. The opacity dips and never reaches zero: a page that
+vanishes and returns flickered, where one that dips moved, and the figures stay
+readable on the step a reader is watching a number for.
+
+**The picker is a sheet, not a page.** The title routed straight to the Months
+page first, and rendered that read as a bug: tapping *September* collapsed the
+header and left a year on screen, with nothing to choose from and no sign the
+pager had changed page at all. A control whose affordance says *choose* has to
+answer with a choice. The sheet holds a year of months at once — twelve is the
+whole set and it fits in four columns, where a list would make the reader
+scroll to find out there was nothing more to find. Its year steps
+independently, so looking at 2024 is not choosing a month in it. Every month is
+offered including the empty ones, because a grid that hid them would change
+shape as the ledger fills; the forward horizon is the exception, and a month
+that has not happened is disabled rather than absent (§6).
+
+**The collapse is spread over the height the header gives up**, not a round
+number, so the header rises at exactly the speed of the content beneath it and
+the two read as one sheet sliding under another.
+
+**The header navigates; the page reports.** It carries no figure. A draft put
+the current period's total in the row's trailing half and it did not survive
+being rendered: a bare number with no label to say which figure it was, no room
+for its currency, and close enough to the magnifier to read as its caption —
+while the card 100pt below said the same month as three labelled figures with
+the currency on each. The header was carrying a worse copy of what the screen
+already said better.
+
+**The year is a caption, and it is always drawn.** It used to be dropped inside
+the current year, because five things shared 326pt and the year was the one of
+them usually already known. It now sets under the month rather than beside it,
+so it costs a line nobody was using instead of a share of the row — and a rule
+that exists to save width has nothing left to save. Months is the exception:
+there the year is the period, and `2026` under `2026` is the year twice.
 
 **The agent is a tab, because `⌘K` is a desk gesture and the top-right corner
 is the hardest point on a 390pt phone to reach.** S03 has been reachable from
@@ -125,7 +210,13 @@ this page.
 
 The month's shape as a grid of days, each carrying the same activity mark
 `DayRibbon` uses, with the tapped day's entries open beneath it. **This is
-S11's phone layout, restored.** An earlier draft folded the calendar into the
+S11's phone layout, restored.**
+
+**The day's entries are read for that day, never filtered out of a page.**
+`readLedgerPage` stops at thirty rows because a ledger does not end; a day does,
+and a calendar showing the first thirty rows of one would be a shorter truth
+than the mark above it, which counted all of them. A day with nothing on it says
+so rather than showing an empty header. An earlier draft folded the calendar into the
 list as a drop-down panel, on the reasoning that *see as list* was a handoff
 worth removing. The handoff was never the problem — its price was. A swipe
 costs nothing, so the calendar can be a view again, and a whole page serves it
@@ -136,6 +227,25 @@ better than a panel dropped over something else.
 Every month of the year with its income and spend, the current one marked.
 Tapping one moves the shared date and stays on the page, so a year can be read
 without leaving it.
+
+**Both pages are folds of one read.** `readDayFlows` is §5's figure cut by day
+— the same query, the same filters and the same refusal to sum across
+currencies as the card's own figure — and the calendar groups it by day while
+Months groups it by month. Three implementations of §5 on one screen is how a
+screen comes to say two different things about the same month; there is one,
+and a test adds the days up and compares them to the card.
+
+**Both scale to what is on screen, never to an absolute figure.** A day is
+*heavy* against the busiest day of its month and a month's bars are drawn
+against the busiest month of its year, for the reason `DayRibbon` gives: a
+ledger whose largest day is 200 zł and one whose largest is 20 000 would
+otherwise draw every mark the same, and the mark exists to say *this was
+unusual for you*.
+
+**A day or a month holding two currencies keeps its mark and loses its
+figure.** Arc-phone converts nothing, so no single number is true; the calendar
+draws the mark without a total and a month's row names the currencies its
+figures leave out. Dropping them silently would be worse than saying so.
 
 ### Web — ≥1024px
 
@@ -149,8 +259,8 @@ happened*.
 
 | Component | Notes |
 |---|---|
-| `Shell` | `PeriodBar` + `PageTabs`, shared by all four pages and never scrolled away |
-| `PeriodBar` | The period with its arrows, the current page's figure, search, and the agent. The arrows step **the unit the page is in**; the year is drawn only when it is not the current one |
+| `Shell` | `PagerHeader` + `PageTabs`, shared by all four pages and never scrolled away |
+| `PagerHeader` | The period and search, in two layouts the scroll moves between: a large title that is itself the picker, collapsing to a compact title with a stepper beside it. The arrows step **the unit the page is in**; the year is a caption under the title |
 | `PageTabs` | Summary · List · Calendar · Months, a marker on a hairline. What makes the swipe discoverable |
 | `Pager` | The four pages, swiped or tapped between, over one shared date |
 | `GatewayGrid` | Summary's *Go to* — six cards, each with a figure. Only destinations neither the tab bar **nor the shared bar** carries, which is why Accounts, Debt and the agent are absent from it |
@@ -158,7 +268,7 @@ happened*.
 | `MonthSummary` | The hero, opening month only. *Kept so far* stacked over its figure, a `FlowBar`, then the labelled pair. Draws three zeroes for a period the ledger did not exist in — that is the true answer, not an empty state |
 | `FlowBar` | Track is *came in*, fill is *went out*, gap is *kept*. Fill clamps at 100%; a deficit is carried by the figures, not by an overrunning bar |
 | `SpendRows` | *Where it went* — §6 at leaf granularity, five rows plus a named remainder, bars proportional to the largest row, one colour. Opening month only |
-| `DayRibbon` | Under `PageTabs`, on the List page only. Continuous, horizontally scrollable, clipped at both edges. 48×66 cells with the day number at 17px and room around the weekday letter. Activity mark per §3 |
+| `DayRibbon` | Under `PageTabs`, on the List page only. Continuous — a cell for **every** day between the first and the last the list has loaded, not only the days holding rows, because the distance between two marks is part of what the strip draws. Horizontally scrollable, clipped at both edges. 48×66 cells with the day number at 17px and room around the weekday letter. Activity mark per §3 |
 | `MonthGrid` | Calendar's own grid — a day per cell with `DayRibbon`'s activity mark, ≥44px |
 | `MonthRows` | Months' twelve rows, income and spend per month |
 | `DayGroup` | A day's rows under its date and total. The list's only grouping |
@@ -182,7 +292,7 @@ the pager answers it with two of its own pages and a swipe, which is the same
 reach without a panel to open and close. Reports (§7) still wants a picker,
 because a report has no pager to borrow.
 
-**`PeriodHeader` retires into `PeriodBar`.** Its arrows and its *Today* are
+**`PeriodHeader` retires into `PagerHeader`.** Its arrows and its *Today* are
 here, stepping whatever unit the page is in.
 
 ## 5. Data

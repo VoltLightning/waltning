@@ -1,35 +1,62 @@
 import { useAppearance } from "@waltning/client/appearance/use-appearance";
 import type { PhoneRecentTransaction } from "@waltning/client/ledger/create-phone-ledger";
 import { deviceRuntime } from "@waltning/client/ledger/device-runtime";
+import { isPagerPageKey } from "@waltning/client/ledger/pager-date";
+import { useDayFlows } from "@waltning/client/ledger/use-day-flows";
+import { useDayRows } from "@waltning/client/ledger/use-day-rows";
 import { useLedgerController } from "@waltning/client/ledger/use-ledger-controller";
 import { usePhoneLedger } from "@waltning/client/ledger/use-phone-ledger";
 import { useSpendByCategory } from "@waltning/client/ledger/use-spend-by-category";
 import { useUnsettledBanner } from "@waltning/client/ledger/use-unsettled-banner";
 import { useWhereItWent } from "@waltning/client/ledger/use-where-it-went";
-import { accountingDate, shiftMonth, type YearMonth, yearMonth } from "@waltning/core/date";
+import { toLedgerItems } from "@waltning/client/transactions/ledger-days";
+import { monthGrid, weekdayHeadings } from "@waltning/client/transactions/month-grid";
+import { busiestMonth, yearMonths } from "@waltning/client/transactions/year-months";
+import { accountingDate, addDays, monthRange, shiftMonth, yearMonth } from "@waltning/core/date";
 import * as money from "@waltning/core/money";
 import { SpendRows } from "@waltning/ui/dashboard/spend-rows";
-import { monthLabel, weekdayLabel } from "@waltning/ui/i18n/locales";
+import { Amount } from "@waltning/ui/fx/amount";
+import { dayLabel, monthLabel, weekdayInitial, weekStart } from "@waltning/ui/i18n/locales";
 import { useLocale, useT } from "@waltning/ui/i18n/provider";
 import { Button } from "@waltning/ui/primitives/button";
-import { Card } from "@waltning/ui/shell/card";
+import { Card, GroundPanel } from "@waltning/ui/shell/card";
+import { GatewayGrid } from "@waltning/ui/shell/molecules/gateway-grid/gateway-grid";
 import { MonthSummary } from "@waltning/ui/shell/month-summary";
 import { NetWorthStrip } from "@waltning/ui/shell/net-worth-strip";
-import { TodayFrame } from "@waltning/ui/shell/today-frame";
+import { PagerFrame } from "@waltning/ui/shell/organisms/pager-frame/pager-frame";
+import { PeriodPicker } from "@waltning/ui/shell/period-picker";
+import {
+  ArrowsLeftRightIcon,
+  CircleHalfIcon,
+  ListBulletsIcon,
+  SlidersHorizontalIcon,
+} from "@waltning/ui/shell/phosphor";
 import { UnsettledBanner } from "@waltning/ui/shell/unsettled-banner";
 import { EmptyState } from "@waltning/ui/states/empty-state";
 import { ErrorState } from "@waltning/ui/states/error-state";
 import { Toast } from "@waltning/ui/states/toast";
+import { text } from "@waltning/ui/theme/fonts";
+import { useTheme } from "@waltning/ui/theme/provider";
+import { makeStyles } from "@waltning/ui/theme/styles";
+import { space } from "@waltning/ui/tokens";
+import { DayHeader } from "@waltning/ui/transactions/day-header";
+import { LedgerRowItem } from "@waltning/ui/transactions/molecules/ledger-row-item/ledger-row-item";
+import { MonthGrid } from "@waltning/ui/transactions/organisms/month-grid/month-grid";
+import type { MonthRow } from "@waltning/ui/transactions/organisms/month-list/month-list";
+import { MonthList } from "@waltning/ui/transactions/organisms/month-list/month-list";
 import {
   TransactionList,
   type TransactionListItem,
 } from "@waltning/ui/transactions/transaction-list";
 import { router, useLocalSearchParams } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
-import { useColorScheme } from "react-native";
+import { Text as RNText, useColorScheme, View } from "react-native";
+import { useAnimatedScrollHandler, useSharedValue } from "react-native-reanimated";
+import { HomeListPage } from "./home-list-page";
 import { openUnsettled } from "./open-unsettled.ts";
 import { appearance, PREVIEW_RESET_ENABLED } from "./platform";
 import { PreviewAppearanceControls } from "./preview-appearance-controls";
+import { usePagerRoute } from "./use-pager-route.ts";
 
 function handleCreateAccount() {
   router.push({ pathname: "/account/new", params: { returnTo: "today" } });
@@ -41,6 +68,21 @@ function handlePreference(next: "system" | "light" | "dark") {
 
 function handleShowAll() {
   router.push("/ledger");
+}
+
+/**
+ * Summary's *Go to* — only what neither the tab bar nor the shared bar
+ * carries (S04 §3). Debt is here rather than in the bar because it is a figure
+ * you check, not a place you live, and here it can carry the figure.
+ */
+function handleGateway(key: string) {
+  // A literal per branch rather than a lookup table: expo-router types its
+  // routes, and a `Record<string, string>` throws that away — a typo would
+  // become a runtime 404 instead of a compile error.
+  if (key === "debt") router.push("/debt");
+  else if (key === "categories") router.push("/settings/categories");
+  else if (key === "currencies") router.push("/settings/currencies");
+  else if (key === "rates") router.push("/settings/rates");
 }
 
 /**
@@ -101,6 +143,23 @@ function toRow(transaction: PhoneRecentTransaction): TransactionListItem {
  * store's. Everything in `MonthSummary` moves when it steps, and so does
  * *where it went*; the strip does not, because a balance is as of now.
  */
+const GATEWAY_ICON = 16;
+
+/** The grid's kicker. `DayHeader`'s step, on the ground rather than in a card. */
+function SectionLabel({ children }: { children: string }) {
+  const styles = useSectionStyles();
+  return <RNText style={styles.label}>{children}</RNText>;
+}
+
+const useSectionStyles = makeStyles((theme) => ({
+  label: { color: theme.textMuted, ...text.ui("kicker") },
+  goToRow: { flexDirection: "row", alignItems: "center" },
+  // The day's entries, set off from the grid above them by the ground.
+  dayPanel: { gap: space.xs },
+  nothing: { color: theme.textMuted, ...text.ui("caption") },
+  spacer: { flex: 1 },
+}));
+
 export default function Today() {
   const t = useT();
   const locale = useLocale();
@@ -181,13 +240,91 @@ export default function Today() {
   // The device's own calendar (§7.0a), the same call `quick-add-screen.tsx`
   // makes — `deviceRuntime` reads `Intl`/`Date` only, not a platform API.
   const today = deviceRuntime().capture().date;
-  const currentMonth = yearMonth(today.slice(0, 7));
   /** The band's second line — the weekday and the day, under the word *Today*. */
-  const todayLabel = weekdayLabel(today, locale);
-  const [month, setMonth] = useState<YearMonth>(currentMonth);
-  const handlePreviousMonth = useCallback(() => setMonth((current) => shiftMonth(current, -1)), []);
-  const handleNextMonth = useCallback(() => setMonth((current) => shiftMonth(current, 1)), []);
-  const handleToday = useCallback(() => setMonth(currentMonth), [currentMonth]);
+  // The period, the page and the day all live in the URL (`use-pager-route`),
+  // so the agent can link to one — S03's *see them in the ledger* is
+  // `/?view=list&date=2026-05-25` rather than a screen's own default.
+  const gatewayInk = useTheme().accentText;
+  const sectionStyles = useSectionStyles();
+  const pager = usePagerRoute(today);
+  // `DayRibbon` hands back the date it drew; this is where a bare string
+  // becomes an `AccountingDate`, and the only place it needs to.
+  const handlePickDay = useCallback(
+    (date: string) => pager.showDay(accountingDate(date)),
+    [pager.showDay],
+  );
+  // The frame speaks in page keys as strings; `showPage` takes the four this
+  // screen knows. `parsePagerState` is what makes a stray one safe, so this
+  // narrows rather than validates.
+  const handlePageChange = useCallback(
+    (key: string) => {
+      if (isPagerPageKey(key)) pager.showPage(key);
+    },
+    [pager.showPage],
+  );
+  /**
+   * The title is the picker, and it opens one (S04 §3).
+   *
+   * It routed to the Months page first, and rendered that read as a bug:
+   * tapping *September* collapsed the header and left a year on screen, with
+   * nothing to choose from and no sign the pager had changed page at all. A
+   * control whose affordance says *choose* has to answer with a choice.
+   *
+   * The sheet's year is its own state, so stepping to 2024 to look does not
+   * move the ledger — only picking a month does.
+   */
+  const [pickerYear, setPickerYear] = useState<number | null>(null);
+  const openPicker = useCallback(
+    () => setPickerYear(Number(pager.state.date.slice(0, 4))),
+    [pager.state.date],
+  );
+  const closePicker = useCallback(() => setPickerYear(null), []);
+  const handlePickMonth = useCallback(
+    (month: string) => {
+      // `yearMonth` rather than a cast: the picker and the Months page both
+      // hand back a plain string, and a `YearMonth` that was never checked is
+      // a brand asserting something nobody verified.
+      setPickerYear(null);
+      pager.showMonth(yearMonth(month));
+    },
+    [pager.showMonth],
+  );
+
+  /**
+   * One offset, shared with the header, written by whichever page is scrolling.
+   *
+   * A shared value rather than state: the header's shape is read on the UI
+   * thread every frame, and routing 60 scroll events a second through React
+   * would re-render this whole screen for a header that moved 1pt.
+   *
+   * Only the visible page can scroll, so there is no contention between the
+   * two — and switching pages carries the offset the new page is at as soon as
+   * it moves.
+   */
+  const scrollY = useSharedValue(0);
+  // **The dependency array is not optional here.** Without it Reanimated
+  // rebuilds the handler on every render, and `pages` is built from it — so a
+  // stable handler is what lets the four page elements stay the same objects
+  // and React skip the pages it did not change.
+  const handleScroll = useAnimatedScrollHandler(
+    {
+      onScroll: (event) => {
+        scrollY.value = event.contentOffset.y;
+      },
+    },
+    [scrollY],
+  );
+
+  const barLabels = useMemo(
+    () => ({
+      previous: t(pager.stepUnit === "year" ? "shell.previousYear" : "shell.previousMonth"),
+      next: t(pager.stepUnit === "year" ? "shell.nextYear" : "shell.nextMonth"),
+      search: t("shell.search"),
+      pickPeriod: t("shell.pickPeriod"),
+    }),
+    [pager.stepUnit, t],
+  );
+  const month = yearMonth(pager.state.date.slice(0, 7));
 
   // Half-open — `money.Period`'s own shape — so the range needs no notion of
   // how many days the month has, only `shiftMonth`.
@@ -231,32 +368,38 @@ export default function Today() {
    * is not what the app is opened to find out. The register it summarises is
    * one tap away, where every currency and the shared totals live.
    */
-  const netWorthStrip = leadNetWorth ? (
-    <NetWorthStrip
-      mine={leadNetWorth.mine}
-      ours={leadNetWorth.hasShared ? leadNetWorth.ours : null}
-      currency={leadNetWorth.currency}
-      decimals={leadNetWorth.decimals}
-      otherCurrencies={snapshot.netWorth.length - 1}
-      onPress={handleOpenAccounts}
-    />
-  ) : null;
+  // Each of the three pieces below is memoised for the same reason `body` is:
+  // `pages` is built from them, so a fresh element here is a fresh page node
+  // there, and a tab tap re-renders every page in the pager.
+  const netWorthStrip = useMemo(
+    () =>
+      leadNetWorth ? (
+        <NetWorthStrip
+          mine={leadNetWorth.mine}
+          ours={leadNetWorth.hasShared ? leadNetWorth.ours : null}
+          currency={leadNetWorth.currency}
+          decimals={leadNetWorth.decimals}
+          otherCurrencies={snapshot.netWorth.length - 1}
+          onPress={handleOpenAccounts}
+        />
+      ) : null,
+    [leadNetWorth, snapshot.netWorth.length, handleOpenAccounts],
+  );
 
   /** The hero, and §5's three figures in the shape `net = inflow − spend`. */
-  const monthCard = leadNetWorth ? (
-    <MonthSummary
-      label={monthLabel(month, locale)}
-      onPrevious={handlePreviousMonth}
-      onNext={handleNextMonth}
-      onToday={handleToday}
-      isCurrent={month === currentMonth}
-      spend={leadPeriodSpend?.spend ?? money.ZERO}
-      inflow={leadPeriodSpend?.inflow ?? money.ZERO}
-      net={leadPeriodSpend?.net ?? money.ZERO}
-      currency={leadNetWorth.currency}
-      decimals={leadNetWorth.decimals}
-    />
-  ) : null;
+  const monthCard = useMemo(
+    () =>
+      leadNetWorth ? (
+        <MonthSummary
+          spend={leadPeriodSpend?.spend ?? money.ZERO}
+          inflow={leadPeriodSpend?.inflow ?? money.ZERO}
+          net={leadPeriodSpend?.net ?? money.ZERO}
+          currency={leadNetWorth.currency}
+          decimals={leadNetWorth.decimals}
+        />
+      ) : null,
+    [leadNetWorth, leadPeriodSpend],
+  );
 
   // One object per language rather than per render, so a re-render for an
   // unrelated reason does not re-rank the rows.
@@ -291,16 +434,23 @@ export default function Today() {
     leadNetWorth?.currency,
     whereItWentLabels,
   );
-  const whereItWent =
-    whereItWentRows.length === 0 || leadNetWorth === undefined ? null : (
-      <Card title={t("shell.whereItWent")}>
-        <SpendRows
-          rows={whereItWentRows}
-          currency={leadNetWorth.currency}
-          decimals={leadNetWorth.decimals}
-        />
-      </Card>
-    );
+  // Memoised for the reason the banner and the month card are: `ledgerBody` is
+  // built from it, `body` from that and `pages` from that, so a fresh element
+  // here re-renders all four of the pager's pages. Opening the month picker
+  // did exactly that — a sheet appearing redrew the calendar behind it.
+  const whereItWent = useMemo(
+    () =>
+      whereItWentRows.length === 0 || leadNetWorth === undefined ? null : (
+        <Card title={t("shell.whereItWent")}>
+          <SpendRows
+            rows={whereItWentRows}
+            currency={leadNetWorth.currency}
+            decimals={leadNetWorth.decimals}
+          />
+        </Card>
+      ),
+    [whereItWentRows, leadNetWorth, t],
+  );
 
   // S04 §3 draws exactly one banner row, and `Banner`'s own doc is explicit —
   // "page-level, one tone, one action." A second (or third) unsettled
@@ -311,23 +461,85 @@ export default function Today() {
   // The derivation and the wording moved out at `S01`'s third use — the model
   // is `packages/client`'s, the words are `packages/ui`'s, and this screen
   // keeps only the route `Open` lands on, which is the app's own.
-  const unsettledBanner = <UnsettledBanner model={unsettledModel} onOpen={handleOpenUnsettled} />;
+  // The model is memoised; without this the element around it was not, and a
+  // fresh element here made `ledgerBody` fresh, which made `body` fresh, which
+  // rebuilt all four pages.
+  const unsettledBanner = useMemo(
+    () => <UnsettledBanner model={unsettledModel} onOpen={handleOpenUnsettled} />,
+    [unsettledModel, handleOpenUnsettled],
+  );
 
   // Error > empty > populated. An error keeps the hero (`snapshot`'s other
   // fields are untouched by a failed refresh, S04 §6) and replaces only the
   // ground panel's body — never the account list, which a query failure did
   // not touch.
-  const ledgerBody = snapshot.error ? (
-    <ErrorState
-      variant="recoverable"
-      what={t("shell.balanceQueryFailed")}
-      why={t("shell.balanceQueryFailedBody")}
-      action={{ label: t("common.retry"), onPress: handleRetry }}
-    />
-  ) : hasAccounts ? (
-    <>
-      {unsettledBanner}
-      {/*
+  // Every card carries a figure, which is what makes the grid a status board
+  // rather than a menu. A destination with nothing true to say yet passes
+  // `null` and draws no second line — an empty line looks broken.
+  /**
+   * **Every card carries a figure** (§3), which is what makes the grid a status
+   * board rather than a menu: *Between us* as a tab was a word and an icon;
+   * here it is a count of the people something is open with.
+   *
+   * `null` where the ledger genuinely has nothing to say yet — a card with an
+   * empty line looks broken, and one with no line has simply not been given a
+   * figure, which is a different and honest thing. Rates is always `null` on
+   * the phone: it has no rate table of its own to count (`architecture/14`).
+   */
+  const gateways = useMemo(
+    () => [
+      {
+        key: "debt",
+        label: t("routes.debt"),
+        detail:
+          snapshot.counterparties.length === 0
+            ? null
+            : t("shell.gatewayPeople", { count: snapshot.counterparties.length }),
+        icon: <ArrowsLeftRightIcon size={GATEWAY_ICON} color={gatewayInk} />,
+      },
+      {
+        key: "categories",
+        label: t("routes.categories"),
+        detail:
+          whereItWentRows.length === 0
+            ? null
+            : t("shell.gatewayCategories", { count: whereItWentRows.length }),
+        icon: <ListBulletsIcon size={GATEWAY_ICON} color={gatewayInk} />,
+      },
+      {
+        key: "currencies",
+        // The codes the ledger actually holds, in the order net worth reports
+        // them — which is the ledger's own, not an alphabet.
+        label: t("routes.currencies"),
+        detail:
+          snapshot.netWorth.length === 0
+            ? null
+            : snapshot.netWorth.map((row) => row.currency).join(" · "),
+        icon: <CircleHalfIcon size={GATEWAY_ICON} color={gatewayInk} />,
+      },
+      {
+        key: "rates",
+        label: t("routes.rates"),
+        detail: null,
+        icon: <SlidersHorizontalIcon size={GATEWAY_ICON} color={gatewayInk} />,
+      },
+    ],
+    [gatewayInk, t, snapshot.counterparties, snapshot.netWorth, whereItWentRows],
+  );
+
+  const ledgerBody = useMemo(
+    () =>
+      snapshot.error ? (
+        <ErrorState
+          variant="recoverable"
+          what={t("shell.balanceQueryFailed")}
+          why={t("shell.balanceQueryFailedBody")}
+          action={{ label: t("common.retry"), onPress: handleRetry }}
+        />
+      ) : hasAccounts ? (
+        <>
+          {unsettledBanner}
+          {/*
         S04 §3 — the card *is* the group of Recent rows, so with no rows there
         is no group to draw, and *Show all* has nothing to show. What replaces
         it depends on the count, never on the window: an account exists and the
@@ -340,51 +552,106 @@ export default function Today() {
         a filter is excluding every row, and Recent has no filter to blame — it
         has a five-row window, and *Show all* goes where the rows are.
       */}
-      {snapshot.recent.length === 0 ? (
-        everCaptured ? (
-          <EmptyState
-            variant="filtered"
-            title={t("transactions.emptyRecentTitle")}
-            body={t("transactions.emptyRecentBody")}
-            primaryAction={showAllAction}
-          />
-        ) : (
-          <EmptyState
-            variant="first-run"
-            title={t("transactions.emptyFirstRunTitle")}
-            body={t("transactions.emptyFirstRunBody")}
-            primaryAction={addTransactionAction}
-          />
-        )
+          {snapshot.recent.length === 0 ? (
+            everCaptured ? (
+              <EmptyState
+                variant="filtered"
+                title={t("transactions.emptyRecentTitle")}
+                body={t("transactions.emptyRecentBody")}
+                primaryAction={showAllAction}
+              />
+            ) : (
+              <EmptyState
+                variant="first-run"
+                title={t("transactions.emptyFirstRunTitle")}
+                body={t("transactions.emptyFirstRunBody")}
+                primaryAction={addTransactionAction}
+              />
+            )
+          ) : (
+            <Card
+              title={t("shell.recent")}
+              action={
+                <Button
+                  label={t("shell.showAll")}
+                  onPress={handleShowAll}
+                  variant="ghost"
+                  size="sm"
+                />
+              }
+            >
+              <TransactionList
+                transactions={snapshot.recent.map(toRow)}
+                onPress={handleOpenTransaction}
+              />
+            </Card>
+          )}
+          {whereItWent}
+          {/*
+        The appearance control, which the band used to carry in its action
+        slot. `PagerFrame` has no such slot — the bar carries the period,
+        search and nothing else (S04 §3) — and S04 §4 puts this in S30 ·
+        Settings, which does not have it yet. It rides the *Go to* kicker
+        until then: an icon alone on the ground is an unexplained circle, and
+        beside the heading for low-frequency destinations it at least has
+        company and a reason.
+      */}
+          <View style={sectionStyles.goToRow}>
+            <SectionLabel>{t("shell.goTo")}</SectionLabel>
+            <View style={sectionStyles.spacer} />
+            <PreviewAppearanceControls
+              tone="ground"
+              preference={resolved.preference}
+              resetEnabled={PREVIEW_RESET_ENABLED}
+              onPreference={handlePreference}
+              onReset={handleReset}
+            />
+          </View>
+          <GatewayGrid gateways={gateways} onSelect={handleGateway} />
+        </>
       ) : (
-        <Card
-          title={t("shell.recent")}
-          action={
-            <Button label={t("shell.showAll")} onPress={handleShowAll} variant="ghost" size="sm" />
-          }
-        >
-          <TransactionList
-            transactions={snapshot.recent.map(toRow)}
-            onPress={handleOpenTransaction}
-          />
-        </Card>
-      )}
-      {whereItWent}
-    </>
-  ) : (
-    <EmptyState
-      variant="first-run"
-      title={t("shell.noAccounts")}
-      body={t("shell.noAccountsBody")}
-      primaryAction={createAccountAction}
-    />
+        <EmptyState
+          variant="first-run"
+          title={t("shell.noAccounts")}
+          body={t("shell.noAccountsBody")}
+          primaryAction={createAccountAction}
+        />
+      ),
+    [
+      snapshot,
+      everCaptured,
+      handleRetry,
+      hasAccounts,
+      unsettledBanner,
+      t,
+      showAllAction,
+      addTransactionAction,
+      createAccountAction,
+      whereItWent,
+      gateways,
+      resolved.preference,
+      handleReset,
+      sectionStyles,
+    ],
   );
-  const body = (
-    <>
-      {typeof message === "string" && !toastDismissed ? (
-        <Toast message={message} onDismiss={handleDismissToast} token={toastToken} />
-      ) : null}
-      {/*
+  /**
+   * **Memoised, because `pages` depends on it.**
+   *
+   * Built inline it was a new element on every render of this screen, so every
+   * tab tap handed all four pages new children and re-rendered the whole of
+   * Summary — the net-worth strip, the month card, the register — plus the
+   * calendar's thirty cells and the year's twelve rows. Measured at a 60ms
+   * task on the main thread per tab change, and the same 60ms whichever page
+   * it went to, which is what said it was the chrome rebuilding everything
+   * rather than the destination drawing itself.
+   */
+  const body = useMemo(
+    () => (
+      <>
+        {typeof message === "string" && !toastDismissed ? (
+          <Toast message={message} onDismiss={handleDismissToast} token={toastToken} />
+        ) : null}
+        {/*
         Above the error branch, not inside the populated one. S04 §6: a failed
         refresh leaves `snapshot`'s other fields untouched, so the figures it
         did not touch stay on screen and only the part that failed is replaced.
@@ -392,24 +659,291 @@ export default function Today() {
         free; on the ground it has to be said. With no accounts both are
         `null`, so the first run is unaffected.
       */}
-      {netWorthStrip}
-      {monthCard}
-      {ledgerBody}
-    </>
+        {netWorthStrip}
+        {monthCard}
+        {ledgerBody}
+      </>
+    ),
+    [message, toastDismissed, handleDismissToast, toastToken, netWorthStrip, monthCard, ledgerBody],
+  );
+
+  /**
+   * What stands in place of the List page when the ledger is empty (§6).
+   *
+   * **The first-run pair, not Recent's own.** Recent's ordinary empty says a
+   * five-row window returned nothing and offers *Show all*; List is where
+   * *Show all* goes, so offering it here would be a door back into the room
+   * you are standing in. A ledger that has never held a transaction is the
+   * same fact on both screens and gets the same words.
+   */
+  const listEmpty = useMemo(
+    () => (
+      <EmptyState
+        variant="first-run"
+        title={t("transactions.emptyFirstRunTitle")}
+        body={t("transactions.emptyFirstRunBody")}
+        primaryAction={addTransactionAction}
+      />
+    ),
+    [t, addTransactionAction],
+  );
+
+  /* ── Calendar ─────────────────────────────────────────────────────────── */
+
+  // Half-open, `money.Period`'s own shape: `monthRange` gives the inclusive
+  // last day and `end` is exclusive.
+  const monthPeriod = useMemo<money.Period>(() => {
+    const range = monthRange(month);
+    return { start: range.from, end: addDays(range.to, 1) };
+  }, [month]);
+  const monthFlows = useDayFlows(ledger, monthPeriod, snapshot);
+  const weeks = useMemo(
+    () => monthGrid(monthFlows, month, today, weekStart(locale)),
+    [monthFlows, month, today, locale],
+  );
+  const headingDates = useMemo(() => weekdayHeadings(weekStart(locale)), [locale]);
+  // The date is the column's key: two columns can share a letter — English has
+  // two "T"s — so the letter cannot identify one.
+  const dayHeadings = useMemo(
+    () => headingDates.map((date) => ({ key: date, label: weekdayInitial(date, locale) })),
+    [headingDates, locale],
+  );
+  // The letter in the heading is ambiguous by construction, so every cell says
+  // its whole date — and whether anything happened on it, which is what a
+  // reader who cannot see the mark would otherwise lose entirely.
+  const dayName = useCallback(
+    (date: string) => {
+      const cell = weeks.flat().find((day) => !("blank" in day) && day.date === date);
+      const name = dayLabel(accountingDate(date), locale);
+      if (cell === undefined || "blank" in cell || cell.activity === "none") {
+        return t("transactions.ribbonDayEmpty", { date: name });
+      }
+      return name;
+    },
+    [weeks, locale, t],
+  );
+
+  /**
+   * The tapped day's entries, open under the grid (§3).
+   *
+   * **Read for the one day, not filtered out of a page.** `readLedgerPage`
+   * stops at thirty rows because a ledger does not end; a day does, and a
+   * calendar showing the first thirty rows of one would be a shorter truth
+   * than the mark above it, which counted all of them.
+   */
+  const dayRows = useDayRows(ledger, pager.state.date, snapshot);
+  const dayEntries = useMemo(
+    () => (leadNetWorth ? toLedgerItems(dayRows, leadNetWorth.currency) : []),
+    [dayRows, leadNetWorth],
+  );
+  const dayPanel = useMemo(() => {
+    const day = dayEntries.find((item) => item.kind === "day");
+    return (
+      <View style={sectionStyles.dayPanel}>
+        {/*
+          One line for the date, never two. A `DayHeader` over a `QuietDay`
+          printed it twice — the header's own label and the quiet day's — which
+          is what a component composed out of two things that each name the day
+          looks like. An empty day says *nothing* where its figure would be.
+        */}
+        <DayHeader
+          label={dayLabel(pager.state.date, locale)}
+          total={
+            day === undefined ? (
+              <RNText style={sectionStyles.nothing}>{t("transactions.nothingThatDay")}</RNText>
+            ) : day.total.kind !== "total" ? null : (
+              <Amount
+                value={day.total.pivot}
+                currency={leadNetWorth?.currency ?? ""}
+                decimals={leadNetWorth?.decimals ?? 2}
+                size="compact"
+                kind="auto"
+              />
+            )
+          }
+        />
+        {day?.rows.map((row) => (
+          <LedgerRowItem key={row.id} row={row} onPress={handleOpenTransaction} />
+        ))}
+      </View>
+    );
+  }, [dayEntries, pager.state.date, locale, leadNetWorth, t, sectionStyles]);
+
+  /* ── Months ───────────────────────────────────────────────────────────── */
+
+  const shownYear = Number(pager.state.date.slice(0, 4));
+  const yearPeriod = useMemo<money.Period>(
+    () => ({
+      start: accountingDate(`${shownYear}-01-01`),
+      end: accountingDate(`${shownYear + 1}-01-01`),
+    }),
+    [shownYear],
+  );
+  const yearFlows = useDayFlows(ledger, yearPeriod, snapshot);
+  const yearRows = useMemo(
+    () =>
+      yearMonths(
+        yearFlows,
+        shownYear,
+        // With no account there is no lead currency, and the year is twelve
+        // empty rows either way — the fold has nothing to leave out.
+        leadNetWorth?.currency ?? money.currencyCode("PLN"),
+        yearMonth(today.slice(0, 7)),
+      ),
+    [yearFlows, shownYear, leadNetWorth, today],
+  );
+  const monthRows = useMemo<readonly MonthRow[]>(() => {
+    // Relative to the busiest month of this year, never to an absolute figure:
+    // the question the page answers is which months were heavy, and that is a
+    // question about this year.
+    const busiest = busiestMonth(yearRows);
+    const share = (value: money.Money) =>
+      money.isZero(busiest) ? 0 : Number(money.dec(value).div(money.dec(busiest)).toFixed(4));
+    return yearRows.map((row) => ({
+      month: row.month,
+      label: monthLabel(row.month, locale).replace(/\s+\d{4}$/, ""),
+      inflow: row.inflow,
+      spend: row.spend,
+      currency: leadNetWorth?.currency ?? "",
+      decimals: leadNetWorth?.decimals ?? 2,
+      inflowShare: share(row.inflow),
+      spendShare: share(row.spend),
+      note:
+        row.otherCurrencies === 0
+          ? null
+          : t("shell.plusOtherCurrencies", { count: row.otherCurrencies }),
+      ahead: row.ahead,
+    }));
+  }, [yearRows, locale, leadNetWorth, t]);
+  const flowLabels = useMemo(() => ({ inflow: t("shell.cameIn"), spend: t("shell.wentOut") }), [t]);
+
+  const pages = useMemo(
+    () => [
+      {
+        // The gutter and the scroll belong to the page, not to the pager: the
+        // List page is a full-bleed virtualised list and would be ruined by
+        // the same wrapper Summary needs.
+        key: "summary",
+        label: t("shell.summary"),
+        node: <GroundPanel onScroll={handleScroll}>{body}</GroundPanel>,
+      },
+      {
+        key: "list",
+        label: t("shell.list"),
+        node: leadNetWorth ? (
+          <HomeListPage
+            ledger={ledger}
+            anchor={pager.state.date}
+            today={today}
+            pivotCurrency={leadNetWorth.currency}
+            pivotDecimals={leadNetWorth.decimals}
+            onPickDay={handlePickDay}
+            onOpenTransaction={handleOpenTransaction}
+            onScroll={handleScroll}
+            empty={listEmpty}
+          />
+        ) : null,
+      },
+      {
+        key: "calendar",
+        label: t("shell.calendar"),
+        node: (
+          <GroundPanel onScroll={handleScroll}>
+            <MonthGrid
+              weeks={weeks}
+              headings={dayHeadings}
+              current={pager.state.date}
+              today={today}
+              labelFor={dayName}
+              onPickDay={handlePickDay}
+            />
+            {dayPanel}
+          </GroundPanel>
+        ),
+      },
+      {
+        key: "months",
+        label: t("shell.months"),
+        node: (
+          <GroundPanel onScroll={handleScroll}>
+            <MonthList
+              rows={monthRows}
+              current={month}
+              labels={flowLabels}
+              onPickMonth={handlePickMonth}
+            />
+          </GroundPanel>
+        ),
+      },
+    ],
+    [
+      body,
+      weeks,
+      dayHeadings,
+      dayName,
+      dayPanel,
+      flowLabels,
+      handlePickDay,
+      handlePickMonth,
+      handleScroll,
+      ledger,
+      leadNetWorth,
+      listEmpty,
+      month,
+      monthRows,
+      pager.state.date,
+      t,
+      today,
+    ],
   );
 
   return (
-    <TodayFrame
-      appearanceAction={
-        <PreviewAppearanceControls
-          preference={resolved.preference}
-          resetEnabled={PREVIEW_RESET_ENABLED}
-          onPreference={handlePreference}
-          onReset={handleReset}
-        />
-      }
-      date={todayLabel}
-      body={body}
-    />
+    <>
+      <PagerFrame
+        // **The same title on all four pages, Months included.** It named the
+        // year there at first, because the arrows step years on that page —
+        // and the header changing shape as you swipe was the thing that read
+        // as broken: the picker's affordance disappeared exactly where a
+        // reader is most likely to want it. The month is the date every page
+        // shares (§3), so it is what the header says; what the arrows step is
+        // said by the arrows' own names.
+        periodLabel={monthLabel(month, locale).replace(/\s+\d{4}$/, "")}
+        periodDetail={String(pager.label.year)}
+        /*
+          **The period the page on screen is actually showing**, which is the
+          month for three of them and the year for Months.
+
+          Keyed on the month for all four, tapping a row on Months animated the
+          whole year sliding — and that page draws the same twelve rows either
+          way, with a different one marked. A page that moves when its own
+          contents did not reads as a remount, which is what it was mistaken
+          for. Sortable in both spellings, which is what tells the pages which
+          side to come in from.
+        */
+        periodKey={pager.state.page === "months" ? String(pager.label.year) : month}
+        onPickPeriod={openPicker}
+        scrollY={scrollY}
+        onPrevious={pager.previous}
+        onNext={pager.next}
+        onSearch={handleShowAll}
+        barLabels={barLabels}
+        pages={pages}
+        activeKey={pager.state.page}
+        onPageChange={handlePageChange}
+      />
+      {/*
+        The horizon is this month: S04 §6 does not go past the end of it, so a
+        month that has not happened is offered as disabled rather than hidden.
+      */}
+      <PeriodPicker
+        visible={pickerYear !== null}
+        year={pickerYear ?? Number(pager.state.date.slice(0, 4))}
+        current={month}
+        horizon={yearMonth(today.slice(0, 7))}
+        onYearChange={setPickerYear}
+        onPick={handlePickMonth}
+        onDismiss={closePicker}
+      />
+    </>
   );
 }

@@ -1,6 +1,7 @@
 /** @vitest-environment jsdom */
 
 import { render, screen } from "@testing-library/react";
+import type { SharedValue } from "react-native-reanimated";
 import { beforeEach, expect, it, vi } from "vitest";
 import { ThemeProvider } from "../../../theme/provider";
 import { light } from "../../../theme/roles.ts";
@@ -25,7 +26,13 @@ function draw(props: Partial<Parameters<typeof PageTabs>[0]> = {}) {
   const onSelect = props.onSelect ?? vi.fn();
   const view = render(
     <ThemeProvider theme={light}>
-      <PageTabs tabs={TABS} activeKey="list" onSelect={onSelect} {...props} />
+      <PageTabs
+        tabs={TABS}
+        activeKey="list"
+        onSelect={onSelect}
+        progress={{ value: 1 } as SharedValue<number>}
+        {...props}
+      />
     </ThemeProvider>,
   );
   return { ...view, onSelect };

@@ -143,3 +143,121 @@ export function toLedgerItems<Row extends LedgerDayRow>(
   });
   return items;
 }
+
+/** One day as `DayRibbon` draws it — no words, because words are the screen's. */
+export type RibbonDayModel = {
+  date: AccountingDate;
+  /** `none` · `some` · `heavy` — how much moved, not which way. */
+  activity: "none" | "some" | "heavy";
+  /** Which way the day netted. `flat` is movement that left nothing behind. */
+  direction: "out" | "in" | "flat";
+  /** The day's own total, for the label the screen writes. `null` where it could not be priced. */
+  pivot: Money | null;
+  entries: number;
+};
+
+/**
+ * The days of a loaded list, classed for the ribbon.
+ *
+ * **`heavy` is relative to what is on screen, not to an absolute figure.**
+ * A ledger where the largest day is 200 zł and one where it is 20 000 would
+ * otherwise draw every mark the same size — one all small, the other all
+ * large — and the mark exists precisely to say *this day was unusual for
+ * you*. Half the largest visible day is the threshold: it makes the biggest
+ * day heavy by construction and leaves the ordinary ones small.
+ *
+ * **Direction is the day's net, and a day that nets to zero with rows on it
+ * is `flat`.** That is a day of transfers between your own accounts: money
+ * moved and none of it left, which is neither an expense nor income and must
+ * not be painted as either.
+ *
+ * A day whose total could not be computed is `some` and `flat` — something
+ * happened, and the screen may not say what.
+ */
+export function ribbonDays<Row extends LedgerDayRow>(
+  items: readonly LedgerItem<Row>[],
+): readonly RibbonDayModel[] {
+  const days = items.filter((item) => item.kind === "day");
+  let largest = money.ZERO;
+  for (const day of days) {
+    if (day.total.kind !== "total") continue;
+    const size = money.abs(day.total.pivot);
+    if (money.cmp(size, largest) > 0) largest = size;
+  }
+  const half = money.mul(largest, 0.5);
+
+  const marked = days.map((day): RibbonDayModel => {
+    if (day.total.kind === "unpriced") {
+      return {
+        date: day.date,
+        activity: "some",
+        direction: "flat",
+        pivot: null,
+        entries: day.rows.length,
+      };
+    }
+    const size = money.abs(day.total.pivot);
+    const activity = money.isZero(size)
+      ? day.rows.length === 0
+        ? ("none" as const)
+        : ("some" as const)
+      : money.cmp(size, half) >= 0
+        ? ("heavy" as const)
+        : ("some" as const);
+    const direction = money.isZero(day.total.pivot)
+      ? ("flat" as const)
+      : money.isPositive(day.total.pivot)
+        ? ("in" as const)
+        : ("out" as const);
+    return {
+      date: day.date,
+      activity,
+      direction,
+      pivot: day.total.pivot,
+      entries: day.rows.length,
+    };
+  });
+
+  return fillQuietDays(marked);
+}
+
+/**
+ * **The ribbon is continuous** (S04 §7.2): a cell for every day between the
+ * first and the last the list has loaded, whether or not the ledger has
+ * anything for it.
+ *
+ * A strip built only from the days that hold rows is not a strip — a ledger
+ * with one transaction drew one cell, which reads as a broken control rather
+ * than as a quiet month, and the gaps between two marks said nothing about
+ * whether they were a day or a fortnight apart. The list itself collapses a
+ * quiet run into one row, because a list of nothings is unreadable; the ribbon
+ * cannot, because the distance *is* what it draws.
+ *
+ * A day with nothing on it is `none` and `flat`, which is the mark's absence —
+ * the same shape a month grid's empty cell has.
+ */
+function fillQuietDays(marked: readonly RibbonDayModel[]): readonly RibbonDayModel[] {
+  const first = marked[0];
+  const last = marked[marked.length - 1];
+  if (first === undefined || last === undefined) return marked;
+
+  // The list runs newest first, so the span is from the last to the first.
+  const from = first.date <= last.date ? first.date : last.date;
+  const to = first.date <= last.date ? last.date : first.date;
+  const held = new Map(marked.map((day) => [day.date as string, day]));
+
+  const run: RibbonDayModel[] = [];
+  for (let date = from; date <= to; date = addDays(date, 1)) {
+    run.push(
+      held.get(date) ?? {
+        date,
+        activity: "none",
+        direction: "flat",
+        pivot: money.ZERO,
+        entries: 0,
+      },
+    );
+  }
+  // Back into the order the caller had them in.
+  return first.date <= last.date ? run : run.reverse();
+}

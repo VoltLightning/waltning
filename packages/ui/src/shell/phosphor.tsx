@@ -130,7 +130,7 @@ export function CircleHalfIcon({ size, color }: PhosphorIconProps) {
 }
 
 /**
- * Three regular-weight glyphs for `PeriodBar`, not duotone.
+ * Four regular-weight glyphs for `PagerHeader`, not duotone.
  *
  * §2.8 gives duotone to *navigation* — the tab bar is the navigation, and a
  * chevron that steps a month is a control. A duotone caret at 18px is a
@@ -141,6 +141,18 @@ export function CaretLeftIcon({ size, color }: PhosphorIconProps) {
     <Svg width={size} height={size} viewBox={VIEW_BOX}>
       <Path
         d="M165.66 202.34a8 8 0 0 1-11.32 11.32l-80-80a8 8 0 0 1 0-11.32l80-80a8 8 0 0 1 11.32 11.32L91.31 128Z"
+        fill={color}
+      />
+    </Svg>
+  );
+}
+
+/** The affordance on a title that opens a picker — never a step. */
+export function CaretDownIcon({ size, color }: PhosphorIconProps) {
+  return (
+    <Svg width={size} height={size} viewBox={VIEW_BOX}>
+      <Path
+        d="M213.66 101.66l-80 80a8 8 0 0 1-11.32 0l-80-80a8 8 0 0 1 11.32-11.32L128 164.69l74.34-74.35a8 8 0 0 1 11.32 11.32Z"
         fill={color}
       />
     </Svg>

@@ -3,7 +3,7 @@
 import { act, renderHook } from "@testing-library/react";
 import { accountingDate } from "@waltning/core/date";
 import { id } from "@waltning/core/id";
-import { currencyCode } from "@waltning/core/money";
+import { currencyCode, pivotPerUnit } from "@waltning/core/money";
 import { describe, expect, it } from "vitest";
 import {
   createPhoneLedger,
@@ -31,7 +31,10 @@ function row(n: number): PhoneSearchTransaction {
     amount: "-10.00000000" as never,
     currency: PLN,
     decimals: 2,
+    fxRate: pivotPerUnit("1"),
+    fxRateEstimated: false,
     toAmount: null,
+    toFxRate: null,
     toCurrency: null,
     toDecimals: null,
     isBusiness: false,

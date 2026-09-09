@@ -6,7 +6,7 @@ import type { DiagnosticError } from "@waltning/core/diagnostics";
 import { errorFromThrown } from "@waltning/core/diagnostics";
 import { id as brandId, type Id, type IdTable, id } from "@waltning/core/id";
 import type { JsonValue } from "@waltning/core/json";
-import type { CurrencyCode, Money, UnitsPerPivot } from "@waltning/core/money";
+import type { CurrencyCode, Money, PivotPerUnit, UnitsPerPivot } from "@waltning/core/money";
 import * as money from "@waltning/core/money";
 import {
   type AccountKind,
@@ -476,8 +476,17 @@ export type PhoneSearchTransaction = {
   amount: Money;
   currency: CurrencyCode;
   decimals: number;
+  /**
+   * Pivot per unit of `currency`, for this row's own accounting date (P1).
+   * A day total converts at it rather than looking a rate up, which is what
+   * keeps that figure class **R** and readable offline.
+   */
+  fxRate: PivotPerUnit;
+  fxRateEstimated: boolean;
   /** Already signed, the "to" leg. `null` off a transfer. */
   toAmount: Money | null;
+  /** `null` where the ledger could not price the destination — S04 §5. */
+  toFxRate: PivotPerUnit | null;
   toCurrency: CurrencyCode | null;
   toDecimals: number | null;
   isBusiness: boolean;
@@ -496,6 +505,23 @@ export type PhoneCurrencyTotal = {
   /** How many legs of `sum` were capital — 0 means the second total is not worth drawing. */
   capitalCount: number;
 };
+
+/**
+ * S04's List page — rows in display order and a cursor, and no total.
+ *
+ * The absence of a total is the difference from `PhoneSearchPage`, and the
+ * reason the two exist side by side: S10's filter bar promises a running
+ * figure over the whole filtered set, recomputed every page. This list has a
+ * position instead, and would pay for that figure on every page of a scroll
+ * through five years without drawing it anywhere.
+ */
+export type PhoneLedgerPage = {
+  rows: readonly PhoneSearchTransaction[];
+  nextCursor: PhoneSearchCursor | undefined;
+};
+
+/** Which way the reader is walking away from the anchor. */
+export type PhoneLedgerDirection = "older" | "newer";
 
 export type PhoneSearchPage = {
   rows: readonly PhoneSearchTransaction[];
@@ -691,6 +717,10 @@ export type PhoneLedgerPort = {
   ])[];
   listNetWorth: () => readonly PhoneNetWorth[];
   readPeriodSpend: (period: money.Period) => readonly PhonePeriodSpend[];
+  /** The same figure cut by day — S04's calendar. Bounded by the period, never paged. */
+  readDayFlows: (period: money.Period) => readonly money.DayFlowRow[];
+  /** Every row on one day — the entries S04's calendar opens. Bounded by the date. */
+  readDayRows: (date: AccountingDate) => PhoneLedgerPage["rows"];
   /** §6, on demand — `S01`'s donut. `DESK4`. */
   readSpendByCategory: (
     period: money.Period,
@@ -712,6 +742,18 @@ export type PhoneLedgerPort = {
     cursor?: PhoneSearchCursor,
     options?: PhoneSearchOptions,
   ) => PhoneSearchPage;
+  /**
+   * S04's List page — one page walking away from an anchor, in one direction.
+   * Beside `searchTransactions` because the two answer different questions:
+   * that one carries a running total every page, this one carries a position.
+   */
+  readLedgerPage: (options: {
+    anchor: AccountingDate;
+    direction: PhoneLedgerDirection;
+    cursor?: PhoneSearchCursor;
+    filter?: Omit<PhoneSearchFilter, "text" | "from" | "to">;
+    limit?: number;
+  }) => PhoneLedgerPage;
   createAccount: (input: CreateAccountInput, capture: PhoneCapture) => void;
   createTransaction: (input: CreateTransactionInput, capture: PhoneCapture) => void;
   createCategory: (input: CreateCategoryInput, capture: PhoneCapture) => void;
@@ -1313,6 +1355,24 @@ export type PhoneLedgerController = {
    * `refresh()` recomputes for every subscriber on every write.
    */
   readPeriodSpend: (period: money.Period) => readonly PhonePeriodSpend[];
+  /**
+   * The same figure cut by day — S04's calendar (§3). On demand for the same
+   * reason `readPeriodSpend` is: the month is the pager's own state, so a
+   * swipe reads through the port rather than widening what `refresh()`
+   * recomputes for every subscriber on every write.
+   *
+   * Bounded by the period and never paged: a grid missing its 30th day because
+   * a page ended at 29 is a silently wrong picture, where a short list is only
+   * short.
+   */
+  readDayFlows: (period: money.Period) => readonly money.DayFlowRow[];
+  /**
+   * Every row on one day — the entries S04's calendar opens under its grid
+   * (§3). Bounded by the date rather than by a row count: a day ends, and a
+   * calendar showing the first thirty rows of one would be a shorter truth
+   * than the mark above it, which counted all of them.
+   */
+  readDayRows: (date: AccountingDate) => PhoneLedgerPage["rows"];
   /** §6, on demand — `S01`'s donut. Same reasoning as `readPeriodSpend` above. `DESK4`. */
   readSpendByCategory: (
     period: money.Period,
@@ -1359,6 +1419,18 @@ export type PhoneLedgerController = {
     cursor?: TransactionSearchCursorDraft,
     options?: PhoneSearchOptions,
   ) => PhoneSearchPage;
+  /**
+   * S04's List page — one page walking away from an anchor, in one direction.
+   * Beside `searchTransactions` because the two answer different questions:
+   * that one carries a running total every page, this one carries a position.
+   */
+  readLedgerPage: (options: {
+    anchor: AccountingDate;
+    direction: PhoneLedgerDirection;
+    cursor?: PhoneSearchCursor;
+    filter?: Omit<PhoneSearchFilter, "text" | "from" | "to">;
+    limit?: number;
+  }) => PhoneLedgerPage;
   categorizeBatch: (
     draft: CategorizeBatchDraft,
   ) => { count: number } | { fieldErrors: readonly FieldError[] };
@@ -2056,6 +2128,8 @@ export function createPhoneLedger(
     },
     refresh,
     readPeriodSpend: (period) => port.readPeriodSpend(period),
+    readDayFlows: (period) => port.readDayFlows(period),
+    readDayRows: (date) => port.readDayRows(date),
     readSpendByCategory: (period, scope) => port.readSpendByCategory(period, scope),
     readIncomeVsExpense: (buckets, scope) => port.readIncomeVsExpense(buckets, scope),
     readActiveDashboardLayout: () => port.readActiveDashboardLayout(),
@@ -2094,6 +2168,33 @@ export function createPhoneLedger(
           : undefined,
         options,
       ),
+    readLedgerPage: ({ anchor, direction, cursor, filter, limit }) =>
+      port.readLedgerPage({
+        anchor: accountingDate(anchor),
+        direction,
+        ...(cursor
+          ? { cursor: { date: accountingDate(cursor.date), id: id<"transactions">(cursor.id) } }
+          : {}),
+        ...(filter
+          ? {
+              filter: {
+                ...(filter.accountIds
+                  ? { accountIds: filter.accountIds.map((a) => id<"accounts">(a)) }
+                  : {}),
+                ...(filter.categoryIds
+                  ? { categoryIds: filter.categoryIds.map((c) => id<"categories">(c)) }
+                  : {}),
+                ...(filter.scope ? { scope: filter.scope } : {}),
+                ...(filter.currency ? { currency: money.currencyCode(filter.currency) } : {}),
+                ...(filter.counterpartyId
+                  ? { counterpartyId: id<"counterparties">(filter.counterpartyId) }
+                  : {}),
+                ...(filter.counterpartyRole ? { counterpartyRole: filter.counterpartyRole } : {}),
+              },
+            }
+          : {}),
+        ...(limit !== undefined ? { limit } : {}),
+      }),
     categorizeBatch: (draft) => {
       emitClientDiagnostic(diagnostics, {
         scope: "client_action",

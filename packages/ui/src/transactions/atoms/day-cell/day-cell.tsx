@@ -35,8 +35,16 @@ export type DayActivity = "none" | "some" | "heavy";
 export type DayDirection = "out" | "in" | "flat";
 
 export type DayCellProps = {
-  /** One letter, already localised — the ribbon resolves it once for the week. */
-  weekday: string;
+  /**
+   * One letter, already localised — the ribbon resolves it once for the week.
+   *
+   * **Absent in a grid**, where the weekday is a column heading and repeating
+   * it in all thirty cells would say the same thing thirty times. The cell
+   * loses the line and its height with it; everything else about it — the
+   * mark's three channels, the today fill, the 44pt floor — is the same cell,
+   * which is the point of the prop rather than a second component.
+   */
+  weekday?: string | undefined;
   /** The day of the month, as drawn. */
   day: number;
   activity: DayActivity;
@@ -67,7 +75,11 @@ function DayCellView({
   const styles = useStyles();
   const { focused, handlers } = useInteraction();
   const fill = today ? styles.today : current ? styles.current : styles.plain;
-  const ink = today ? styles.inkOnFill : styles.ink;
+  // A day still ahead is quieter in ink, not in opacity. `opacity: 0.48` over
+  // the whole cell put the number at 2.7:1 on the ground where 4.5 is
+  // required — invisible in a ribbon holding two future days and impossible to
+  // miss in a grid where most of the month is one.
+  const ink = today ? styles.inkOnFill : ahead ? styles.inkAhead : styles.ink;
   const sub = today ? styles.subOnFill : styles.sub;
 
   // `react-native-web` never reads the `accessibilityState` object:
@@ -88,12 +100,12 @@ function DayCellView({
       {...handlers}
       style={[
         styles.cell,
+        weekday === undefined ? styles.cellBare : null,
         fill,
-        ahead && !today ? styles.ahead : null,
         focused ? styles.focused : null,
       ]}
     >
-      <Text style={sub}>{weekday}</Text>
+      {weekday === undefined ? null : <Text style={sub}>{weekday}</Text>}
       <Text style={ink}>{day}</Text>
       <View style={[styles.mark, ...markStyle(styles, activity, direction, today)]} />
     </Pressable>
@@ -139,10 +151,13 @@ const useStyles = makeStyles((theme) => ({
     justifyContent: "center",
     gap: space.sm,
   },
+  // No weekday line: the cell keeps the 44pt floor and drops the height the
+  // letter was taking, so a grid of them is a grid rather than a wall.
+  cellBare: { width: "100%", height: 46, gap: space.xs },
   plain: { backgroundColor: "transparent" },
   current: { backgroundColor: theme.accentFill },
   today: { backgroundColor: theme.accent },
-  ahead: { opacity: 0.48 },
+
   // §2.6: never removed, never a colour change alone — a colour-only focus
   // state is invisible to exactly the people it exists for.
   focused: {
@@ -154,6 +169,17 @@ const useStyles = makeStyles((theme) => ({
   // face is what says so. Tabular, because a ribbon of numbers that shift
   // width as it scrolls reads as jitter.
   ink: { ...text.display("displayThree"), color: theme.text, fontVariant: [...tabularNums] },
+  /**
+   * A day the ledger has not reached. Quieter in ink rather than in opacity:
+   * a translucent number is the same colour mixed with the ground, and on this
+   * ground that came out at 2.7:1 where 4.5 is required. `textMuted` is the
+   * token for *present but secondary*, and it clears the check by definition.
+   */
+  inkAhead: {
+    ...text.display("displayThree"),
+    color: theme.textMuted,
+    fontVariant: [...tabularNums],
+  },
   inkOnFill: {
     ...text.display("displayThree"),
     color: theme.textOnAccent,

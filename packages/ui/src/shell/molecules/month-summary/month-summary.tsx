@@ -27,18 +27,34 @@ import { Amount } from "../../../fx/atoms/amount/amount";
 import { useT } from "../../../i18n/provider";
 import { text } from "../../../theme/fonts.ts";
 import { makeStyles } from "../../../theme/styles.ts";
-import { radius, space } from "../../../tokens.ts";
+import { space } from "../../../tokens.ts";
+import { FlowBar } from "../../atoms/flow-bar/flow-bar";
 import { Card } from "../card/card";
 import { PeriodHeader } from "../period-header/period-header";
-import { StatTile } from "../stat-tile/stat-tile";
 
 export type MonthSummaryProps = {
-  /** The period's display label — "September 2026". Formatted by the caller. */
-  label: string;
-  onPrevious: () => void;
-  onNext: () => void;
-  onToday: () => void;
-  isCurrent: boolean;
+  /**
+   * The period's own header — label and arrows — or nothing.
+   *
+   * **Absent where something above already carries the period.** S04's pager
+   * puts it in `PagerHeader`, shared by all four pages, and a card drawing its
+   * own beneath that would be two controls over one date: the drift the pager
+   * exists to avoid, and visibly two rows of the same month. S04 passes
+   * nothing; S01's widget grid has no such bar and will pass them.
+   *
+   * All five together or none: a label with no arrows is a heading pretending
+   * to be a control, and arrows with no label do not say what they step.
+   */
+  period?:
+    | {
+        /** "September 2026", formatted by the caller. */
+        label: string;
+        onPrevious: () => void;
+        onNext: () => void;
+        onToday: () => void;
+        isCurrent: boolean;
+      }
+    | undefined;
   /** §5's figures for the lead currency: `net = inflow − spend`. */
   spend: money.Money;
   inflow: money.Money;
@@ -48,11 +64,7 @@ export type MonthSummaryProps = {
 };
 
 export function MonthSummary({
-  label,
-  onPrevious,
-  onNext,
-  onToday,
-  isCurrent,
+  period,
   spend,
   inflow,
   net,
@@ -64,48 +76,47 @@ export function MonthSummary({
 
   return (
     <Card>
-      <PeriodHeader
-        label={label}
-        onPrevious={onPrevious}
-        onNext={onNext}
-        onToday={onToday}
-        isCurrent={isCurrent}
-        tone="surface"
-      />
+      {period === undefined ? null : (
+        <PeriodHeader
+          label={period.label}
+          onPrevious={period.onPrevious}
+          onNext={period.onNext}
+          onToday={period.onToday}
+          isCurrent={period.isCurrent}
+          tone="surface"
+        />
+      )}
+      {/*
+        **Label above, figure on its own line.** Label-left and figure-right
+        shared one baseline, which left the number nowhere to breathe and
+        shrank the currency to fit beside it; S05's amount field had already
+        solved this and this card takes its shape.
+
+        `signed` — a kept month is a gain, and the `+` is the difference
+        between "you have 3 529,82" and "you kept 3 529,82".
+      */}
       <View style={styles.hero}>
         <Text style={styles.heroLabel}>{t("shell.keptSoFar")}</Text>
-        {/*
-          `signed` — a kept month is a gain, and the `+` is the difference
-          between "you have 3 529,82" and "you kept 3 529,82". `auto` would
-          leave a positive figure in plain ink with no sign at all.
-        */}
         <Amount value={net} currency={currency} decimals={decimals} size="large" signed />
       </View>
-      <View style={styles.tiles}>
-        <View style={styles.tile}>
-          <StatTile
-            label={t("shell.cameIn")}
+
+      <FlowBar inflow={inflow} spend={spend} />
+
+      <View style={styles.pair}>
+        <View style={styles.pairItem}>
+          <Text style={styles.pairLabel}>{t("shell.cameIn")}</Text>
+          <Amount
             value={inflow}
             currency={currency}
             decimals={decimals}
+            size="small"
             kind="income"
-            tone="surface"
-            // `signed` on the inflow and not on the outflow, which looks
-            // asymmetric and is not: §12 defines `spend` as a positive
-            // *magnitude*, so a `−` there would be a sign the figure does not
-            // carry. The `+` says this one is money arriving.
             signed
           />
         </View>
-        <View style={styles.tile}>
-          <StatTile
-            label={t("shell.wentOut")}
-            value={spend}
-            currency={currency}
-            decimals={decimals}
-            kind="spend"
-            tone="surface"
-          />
+        <View style={styles.pairItemEnd}>
+          <Text style={styles.pairLabel}>{t("shell.wentOut")}</Text>
+          <Amount value={spend} currency={currency} decimals={decimals} size="small" kind="spend" />
         </View>
       </View>
     </Card>
@@ -113,23 +124,10 @@ export function MonthSummary({
 }
 
 const useStyles = makeStyles((theme) => ({
-  hero: {
-    flexDirection: "row",
-    alignItems: "baseline",
-    justifyContent: "space-between",
-    gap: space.x3,
-  },
+  hero: { gap: space.xs },
   heroLabel: { color: theme.textMuted, ...text.ui("bodySm") },
-  tiles: { flexDirection: "row", gap: space.lg },
-  /**
-   * The inset fill, so the two components of the figure above read as parts of
-   * this card rather than as two more cards. `subtleFill` is the token
-   * `02-tokens` gives an inset box.
-   */
-  tile: {
-    flex: 1,
-    padding: space.x3,
-    borderRadius: radius.sm,
-    backgroundColor: theme.subtleFill,
-  },
+  pair: { flexDirection: "row", justifyContent: "space-between", gap: space.x3 },
+  pairItem: { gap: space.xxs },
+  pairItemEnd: { gap: space.xxs, alignItems: "flex-end" },
+  pairLabel: { color: theme.textMuted, ...text.ui("caption") },
 }));

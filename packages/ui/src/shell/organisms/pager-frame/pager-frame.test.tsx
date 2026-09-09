@@ -2,6 +2,7 @@
 
 import { render, screen } from "@testing-library/react";
 import { Text } from "react-native";
+import type { SharedValue } from "react-native-reanimated";
 import { expect, it, vi } from "vitest";
 import { ThemeProvider } from "../../../theme/provider";
 import { light } from "../../../theme/roles.ts";
@@ -15,7 +16,12 @@ const PAGES: readonly PagerPage[] = [
   { key: "months", label: "Months", node: <Text>months body</Text> },
 ];
 
-const BAR = { previous: "Previous month", next: "Next month", search: "Search" };
+const BAR = {
+  previous: "Previous month",
+  next: "Next month",
+  search: "Search",
+  pickPeriod: "Choose a month",
+};
 
 function draw(props: Partial<Parameters<typeof PagerFrame>[0]> = {}) {
   const onPageChange = props.onPageChange ?? vi.fn();
@@ -23,7 +29,10 @@ function draw(props: Partial<Parameters<typeof PagerFrame>[0]> = {}) {
     <ThemeProvider theme={light}>
       <PagerFrame
         periodLabel="September"
-        periodFigure="−4 320,18 zł"
+        periodDetail="2026"
+        periodKey="2026-09"
+        onPickPeriod={vi.fn()}
+        scrollY={{ value: 0 } as SharedValue<number>}
         onPrevious={vi.fn()}
         onNext={vi.fn()}
         onSearch={vi.fn()}
