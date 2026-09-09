@@ -295,6 +295,11 @@ const useStyles = makeStyles((theme) => ({
     height: space.lg,
     borderRadius: radius.xs,
     overflow: "hidden",
+    // The remainder was a bare `<View>` with no fill, so the card showed
+    // through at 1.00:1 and every bar was measured against nothing. The two
+    // series share one `max`, which is the comparison this widget exists to
+    // make, and a scale you cannot see is not one.
+    backgroundColor: theme.trackFill,
   },
   fill: { minWidth: BAR_MIN_WIDTH, overflow: "hidden" },
   incomeFill: { backgroundColor: theme.income },

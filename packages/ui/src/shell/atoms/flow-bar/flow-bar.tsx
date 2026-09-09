@@ -17,6 +17,14 @@
  * **A month with nothing in it draws an empty track**, not a full one: zero
  * arrived and zero left, and a bar filled by `0 / 0` would say the month was
  * entirely spent.
+ *
+ * **The track is `incomeFill`, not `income`.** This is the one component that
+ * draws one money colour *on* the other, and the two are the same lightness in
+ * this palette on purpose — a figure is told apart by hue. So `spend` on
+ * `income` was 1.0045:1 in light and the whole bar rendered as one uniform
+ * rectangle, with no boundary at the very place "what you kept" is supposed to
+ * be readable. Income as a *field* is a paler green; `spend` reads on it at
+ * 3.60. Both floors are in `theme/theme.test.tsx`.
  */
 
 import * as money from "@waltning/core/money";
@@ -78,8 +86,8 @@ const useStyles = makeStyles((theme) => ({
     height: 12,
     borderRadius: radius.sm,
     overflow: "hidden",
-    backgroundColor: theme.income,
+    backgroundColor: theme.incomeFill,
   },
-  trackEmpty: { backgroundColor: theme.subtleFill },
+  trackEmpty: { backgroundColor: theme.trackFill },
   fill: { height: "100%", backgroundColor: theme.spend },
 }));

@@ -180,7 +180,7 @@ const useStyles = makeStyles((theme) => ({
   track: {
     height: 6,
     borderRadius: radius.xs,
-    backgroundColor: theme.subtleFill,
+    backgroundColor: theme.trackFill,
     overflow: "hidden",
   },
   fillIn: { height: "100%", backgroundColor: theme.income },
