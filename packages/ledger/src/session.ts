@@ -165,6 +165,7 @@ import {
 import { deleteTransactionExecutor } from "./transactions/delete-transaction.executor.ts";
 import { type AuditLogResult, readAuditLog } from "./transactions/read-audit-log.ts";
 import { readDayFlows } from "./transactions/read-day-flows.ts";
+import { readDayRows } from "./transactions/read-day-rows.ts";
 import { readIncomeVsExpense } from "./transactions/read-income-vs-expense.ts";
 import {
   type LedgerDirection,
@@ -185,6 +186,7 @@ import {
   type TransactionSearchPage,
 } from "./transactions/search-transactions.ts";
 import { setTransactionLinesExecutor } from "./transactions/set-transaction-lines.executor.ts";
+import type { SignedLedgerRow } from "./transactions/transaction-query.ts";
 import { updateTransactionExecutor } from "./transactions/update-transaction.executor.ts";
 import { type Capture, writeLocally } from "./write.ts";
 
@@ -266,6 +268,8 @@ export type LocalLedgerSession = {
   readPeriodSpend: (period: Period) => readonly PeriodSpendRow[];
   /** The same figure cut by day — S04's calendar. Bounded by the period, never paged. */
   readDayFlows: (period: Period) => readonly DayFlowRow[];
+  /** Every row on one day — the entries the calendar opens. Bounded by the date. */
+  readDayRows: (date: AccountingDate) => readonly SignedLedgerRow[];
   /** §6, per currency and category — `S01`'s donut. `scope` is the desk band's own segment. `DESK4`. */
   readSpendByCategory: (period: Period, scope: LedgerScope) => readonly SpendByCategoryRow[];
   /** §12, per bucket and currency — `S01`'s line chart. `buckets` and `scope` are screen state, same reasoning as `readPeriodSpend`. `DESK4`. */
@@ -656,6 +660,7 @@ export function createLocalLedgerSession<TRun>(
     listNetWorth: () => readNetWorth(requireOpen().replica.db),
     readPeriodSpend: (period) => readPeriodSpend(requireOpen().replica.db, period),
     readDayFlows: (period) => readDayFlows(requireOpen().replica.db, period),
+    readDayRows: (date) => readDayRows(requireOpen().replica.db, date),
     readSpendByCategory: (period, scope) =>
       readSpendByCategory(requireOpen().replica.db, period, scope),
     readIncomeVsExpense: (buckets, scope) =>

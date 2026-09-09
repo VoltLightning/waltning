@@ -43,6 +43,7 @@ export function basePort(overrides: Partial<PhoneLedgerPort> = {}): PhoneLedgerP
     listNetWorth: () => [],
     readPeriodSpend: () => [],
     readDayFlows: () => [],
+    readDayRows: () => [],
     readSpendByCategory: () => [],
     readIncomeVsExpense: () => [],
     readActiveDashboardLayout: () => null,

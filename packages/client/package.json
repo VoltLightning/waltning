@@ -32,6 +32,7 @@
     "./ledger/use-counterparty-history": "./src/ledger/use-counterparty-history/use-counterparty-history.ts",
     "./ledger/use-dashboard-layout": "./src/ledger/use-dashboard-layout/use-dashboard-layout.ts",
     "./ledger/use-day-flows": "./src/ledger/use-day-flows/use-day-flows.ts",
+    "./ledger/use-day-rows": "./src/ledger/use-day-rows/use-day-rows.ts",
     "./ledger/use-filter-exclusion-counts": "./src/ledger/use-filter-exclusion-counts/use-filter-exclusion-counts.ts",
     "./ledger/use-income-vs-expense": "./src/ledger/use-income-vs-expense/use-income-vs-expense.ts",
     "./ledger/use-lead-currency": "./src/ledger/use-lead-currency/use-lead-currency.ts",

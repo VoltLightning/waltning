@@ -87,14 +87,16 @@ function MonthRowView({
       {...(current ? SELECTED : UNSELECTED)}
       onPress={press}
       {...handlers}
-      style={[
-        styles.row,
-        current ? styles.rowCurrent : null,
-        row.ahead ? styles.ahead : null,
-        focused ? styles.focused : null,
-      ]}
+      style={[styles.row, current ? styles.rowCurrent : null, focused ? styles.focused : null]}
     >
-      <Text style={styles.label} numberOfLines={1}>
+      {/*
+        **A month still ahead is quieter in ink, never in opacity.** Dimming the
+        whole row put its label at 2.7:1, its figures at 2.07 and its note at
+        1.69, where 4.5 is required — a month nobody could read, drawn that way
+        to say it holds nothing. Only the name steps back; the figures are
+        already zero and say the same thing in their own colours.
+      */}
+      <Text style={[styles.label, row.ahead ? styles.labelAhead : null]} numberOfLines={1}>
         {row.label}
       </Text>
 
@@ -172,7 +174,7 @@ const useStyles = makeStyles((theme) => ({
     gap: space.xs,
   },
   rowCurrent: { backgroundColor: theme.accentFill },
-  ahead: { opacity: 0.48 },
+  labelAhead: { color: theme.textMuted },
   label: { ...text.ui("bodySm", 600), color: theme.text },
   bars: { gap: space.xxs },
   track: {

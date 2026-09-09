@@ -41,6 +41,7 @@ import { text } from "../../../theme/fonts.ts";
 import { useTheme } from "../../../theme/provider";
 import { makeStyles } from "../../../theme/styles.ts";
 import { focus, radius, space, touchTarget } from "../../../tokens.ts";
+import { markerShift, slotWidth, tintRange } from "./track.ts";
 
 export type PageTab = {
   /** Stable across renders — the page's identity, not its position. */
@@ -81,11 +82,11 @@ function TabItem({
   // midpoint, where the reader has already committed to the next page.
   const ink = useAnimatedStyle(
     () => ({
-      color: interpolateColor(
-        progress.value,
-        [index - 1, index, index + 1],
-        [theme.textMuted, theme.text, theme.textMuted],
-      ),
+      color: interpolateColor(progress.value, tintRange(index), [
+        theme.textMuted,
+        theme.text,
+        theme.textMuted,
+      ]),
     }),
     [progress, index, theme.text, theme.textMuted],
   );
@@ -123,7 +124,7 @@ const MemoTabItem = memo(TabItem);
 function PageTabsView({ tabs, activeKey, onSelect, progress }: PageTabsProps) {
   const styles = useStyles();
   const count = tabs.length;
-  const slot = useMemo(() => ({ width: `${100 / count}%` }) as const, [count]);
+  const slot = useMemo(() => ({ width: slotWidth(count) }) as const, [count]);
   // One marker for the row, not one per tab: a bar that slides between two
   // positions is a different object from four bars taking turns being visible.
   //
@@ -137,7 +138,7 @@ function PageTabsView({ tabs, activeKey, onSelect, progress }: PageTabsProps) {
   // wide — so one page of progress is one slot of travel, with nothing
   // measured.
   const slide = useAnimatedStyle(
-    () => ({ transform: [{ translateX: `${progress.value * 100}%` }] }),
+    () => ({ transform: [{ translateX: markerShift(progress.value) }] }),
     [progress],
   );
 

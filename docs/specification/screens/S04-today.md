@@ -193,7 +193,14 @@ this page.
 #### Calendar
 
 The month's shape as a grid of days, each carrying the same activity mark
-`DayRibbon` uses. **This is S11's phone layout, restored.** An earlier draft folded the calendar into the
+`DayRibbon` uses, with the tapped day's entries open beneath it. **This is
+S11's phone layout, restored.**
+
+**The day's entries are read for that day, never filtered out of a page.**
+`readLedgerPage` stops at thirty rows because a ledger does not end; a day does,
+and a calendar showing the first thirty rows of one would be a shorter truth
+than the mark above it, which counted all of them. A day with nothing on it says
+so rather than showing an empty header. An earlier draft folded the calendar into the
 list as a drop-down panel, on the reasoning that *see as list* was a handoff
 worth removing. The handoff was never the problem — its price was. A swipe
 costs nothing, so the calendar can be a view again, and a whole page serves it

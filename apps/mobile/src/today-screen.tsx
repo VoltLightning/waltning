@@ -3,16 +3,19 @@ import type { PhoneRecentTransaction } from "@waltning/client/ledger/create-phon
 import { deviceRuntime } from "@waltning/client/ledger/device-runtime";
 import { isPagerPageKey } from "@waltning/client/ledger/pager-date";
 import { useDayFlows } from "@waltning/client/ledger/use-day-flows";
+import { useDayRows } from "@waltning/client/ledger/use-day-rows";
 import { useLedgerController } from "@waltning/client/ledger/use-ledger-controller";
 import { usePhoneLedger } from "@waltning/client/ledger/use-phone-ledger";
 import { useSpendByCategory } from "@waltning/client/ledger/use-spend-by-category";
 import { useUnsettledBanner } from "@waltning/client/ledger/use-unsettled-banner";
 import { useWhereItWent } from "@waltning/client/ledger/use-where-it-went";
+import { toLedgerItems } from "@waltning/client/transactions/ledger-days";
 import { monthGrid, weekdayHeadings } from "@waltning/client/transactions/month-grid";
 import { busiestMonth, yearMonths } from "@waltning/client/transactions/year-months";
 import { accountingDate, addDays, monthRange, shiftMonth, yearMonth } from "@waltning/core/date";
 import * as money from "@waltning/core/money";
 import { SpendRows } from "@waltning/ui/dashboard/spend-rows";
+import { Amount } from "@waltning/ui/fx/amount";
 import { dayLabel, monthLabel, weekdayInitial, weekStart } from "@waltning/ui/i18n/locales";
 import { useLocale, useT } from "@waltning/ui/i18n/provider";
 import { Button } from "@waltning/ui/primitives/button";
@@ -35,6 +38,9 @@ import { Toast } from "@waltning/ui/states/toast";
 import { text } from "@waltning/ui/theme/fonts";
 import { useTheme } from "@waltning/ui/theme/provider";
 import { makeStyles } from "@waltning/ui/theme/styles";
+import { space } from "@waltning/ui/tokens";
+import { DayHeader } from "@waltning/ui/transactions/day-header";
+import { LedgerRowItem } from "@waltning/ui/transactions/molecules/ledger-row-item/ledger-row-item";
 import { MonthGrid } from "@waltning/ui/transactions/organisms/month-grid/month-grid";
 import type { MonthRow } from "@waltning/ui/transactions/organisms/month-list/month-list";
 import { MonthList } from "@waltning/ui/transactions/organisms/month-list/month-list";
@@ -148,6 +154,9 @@ function SectionLabel({ children }: { children: string }) {
 const useSectionStyles = makeStyles((theme) => ({
   label: { color: theme.textMuted, ...text.ui("kicker") },
   goToRow: { flexDirection: "row", alignItems: "center" },
+  // The day's entries, set off from the grid above them by the ground.
+  dayPanel: { gap: space.xs },
+  nothing: { color: theme.textMuted, ...text.ui("caption") },
   spacer: { flex: 1 },
 }));
 
@@ -686,6 +695,52 @@ export default function Today() {
     [weeks, locale, t],
   );
 
+  /**
+   * The tapped day's entries, open under the grid (§3).
+   *
+   * **Read for the one day, not filtered out of a page.** `readLedgerPage`
+   * stops at thirty rows because a ledger does not end; a day does, and a
+   * calendar showing the first thirty rows of one would be a shorter truth
+   * than the mark above it, which counted all of them.
+   */
+  const dayRows = useDayRows(ledger, pager.state.date, snapshot);
+  const dayEntries = useMemo(
+    () => (leadNetWorth ? toLedgerItems(dayRows, leadNetWorth.currency) : []),
+    [dayRows, leadNetWorth],
+  );
+  const dayPanel = useMemo(() => {
+    const day = dayEntries.find((item) => item.kind === "day");
+    return (
+      <View style={sectionStyles.dayPanel}>
+        {/*
+          One line for the date, never two. A `DayHeader` over a `QuietDay`
+          printed it twice — the header's own label and the quiet day's — which
+          is what a component composed out of two things that each name the day
+          looks like. An empty day says *nothing* where its figure would be.
+        */}
+        <DayHeader
+          label={dayLabel(pager.state.date, locale)}
+          total={
+            day === undefined ? (
+              <RNText style={sectionStyles.nothing}>{t("transactions.nothingThatDay")}</RNText>
+            ) : day.total.kind !== "total" ? null : (
+              <Amount
+                value={day.total.pivot}
+                currency={leadNetWorth?.currency ?? ""}
+                decimals={leadNetWorth?.decimals ?? 2}
+                size="compact"
+                kind="auto"
+              />
+            )
+          }
+        />
+        {day?.rows.map((row) => (
+          <LedgerRowItem key={row.id} row={row} onPress={handleOpenTransaction} />
+        ))}
+      </View>
+    );
+  }, [dayEntries, pager.state.date, locale, leadNetWorth, t, sectionStyles]);
+
   /* ── Months ───────────────────────────────────────────────────────────── */
 
   const shownYear = Number(pager.state.date.slice(0, 4));
@@ -774,6 +829,7 @@ export default function Today() {
               labelFor={dayName}
               onPickDay={handlePickDay}
             />
+            {dayPanel}
           </GroundPanel>
         ),
       },
@@ -797,6 +853,7 @@ export default function Today() {
       weeks,
       dayHeadings,
       dayName,
+      dayPanel,
       flowLabels,
       handlePickDay,
       handlePickMonth,

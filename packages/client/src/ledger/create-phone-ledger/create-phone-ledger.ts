@@ -719,6 +719,8 @@ export type PhoneLedgerPort = {
   readPeriodSpend: (period: money.Period) => readonly PhonePeriodSpend[];
   /** The same figure cut by day — S04's calendar. Bounded by the period, never paged. */
   readDayFlows: (period: money.Period) => readonly money.DayFlowRow[];
+  /** Every row on one day — the entries S04's calendar opens. Bounded by the date. */
+  readDayRows: (date: AccountingDate) => PhoneLedgerPage["rows"];
   /** §6, on demand — `S01`'s donut. `DESK4`. */
   readSpendByCategory: (
     period: money.Period,
@@ -1364,6 +1366,13 @@ export type PhoneLedgerController = {
    * short.
    */
   readDayFlows: (period: money.Period) => readonly money.DayFlowRow[];
+  /**
+   * Every row on one day — the entries S04's calendar opens under its grid
+   * (§3). Bounded by the date rather than by a row count: a day ends, and a
+   * calendar showing the first thirty rows of one would be a shorter truth
+   * than the mark above it, which counted all of them.
+   */
+  readDayRows: (date: AccountingDate) => PhoneLedgerPage["rows"];
   /** §6, on demand — `S01`'s donut. Same reasoning as `readPeriodSpend` above. `DESK4`. */
   readSpendByCategory: (
     period: money.Period,
@@ -2120,6 +2129,7 @@ export function createPhoneLedger(
     refresh,
     readPeriodSpend: (period) => port.readPeriodSpend(period),
     readDayFlows: (period) => port.readDayFlows(period),
+    readDayRows: (date) => port.readDayRows(date),
     readSpendByCategory: (period, scope) => port.readSpendByCategory(period, scope),
     readIncomeVsExpense: (buckets, scope) => port.readIncomeVsExpense(buckets, scope),
     readActiveDashboardLayout: () => port.readActiveDashboardLayout(),
