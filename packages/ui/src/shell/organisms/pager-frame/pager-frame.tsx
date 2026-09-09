@@ -84,7 +84,7 @@ function PagerFrameView({
   // neither owns the other, and a callback between them would put a JS
   // round-trip in the middle of a gesture.
   const progress = useSharedValue(0);
-  const period = usePeriodMotion(periodKey);
+  const period = usePeriodMotion(periodKey, activeKey);
   // Not in `useStyles`: that cache is keyed on the theme and this is keyed on
   // the device. The chrome is the top of the screen, so it clears the status
   // bar — without this the month sits under the clock.

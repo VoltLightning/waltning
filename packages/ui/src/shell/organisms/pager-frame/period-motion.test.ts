@@ -3,6 +3,7 @@ import {
   type Direction,
   enterOffset,
   enterOpacity,
+  movesFor,
   stepDirection,
   TRAVEL,
 } from "./period-motion.ts";
@@ -83,5 +84,45 @@ describe("enterOpacity", () => {
 
   it("draws the page rather than hiding it when the value is not a number", () => {
     expect(enterOpacity(Number.NaN)).toBe(1);
+  });
+});
+
+describe("movesFor", () => {
+  it("stays still on a swipe between pages, however much the key moved", () => {
+    // Months is keyed on its year and the other three on their month, so a
+    // swipe changes the string without changing what is being looked at — and
+    // the pager is already animating that swipe.
+    expect(
+      movesFor({ period: "2026", page: "months" }, { period: "2026-09", page: "summary" }),
+    ).toBe(0);
+    expect(
+      movesFor({ period: "2026-09", page: "summary" }, { period: "2026", page: "months" }),
+    ).toBe(0);
+  });
+
+  it("stays still when a month is tapped on the page that shows a year", () => {
+    // Months draws the same twelve rows either way, with a different one
+    // marked. A page that moves when its own contents did not reads as a
+    // remount, which is what this was mistaken for.
+    expect(movesFor({ period: "2026", page: "months" }, { period: "2026", page: "months" })).toBe(
+      0,
+    );
+  });
+
+  it("moves when the period changes and the page does not", () => {
+    expect(
+      movesFor({ period: "2026-08", page: "summary" }, { period: "2026-09", page: "summary" }),
+    ).toBe(1);
+    expect(movesFor({ period: "2026-09", page: "list" }, { period: "2026-08", page: "list" })).toBe(
+      -1,
+    );
+    // Stepping the year on Months is a real change to what that page shows.
+    expect(movesFor({ period: "2026", page: "months" }, { period: "2025", page: "months" })).toBe(
+      -1,
+    );
+  });
+
+  it("does not animate a screen on arrival", () => {
+    expect(movesFor(null, { period: "2026-09", page: "summary" })).toBe(0);
   });
 });

@@ -106,8 +106,15 @@ arriving, because two layouts at half opacity are two ghosts. Exactly one of
 them is ever in the accessibility tree: opacity is continuous and reachability
 is not, and a reader walking both hears the month twice.
 
-**The pages arrive from the side you stepped from.** Stepping or picking a
-month replaces every figure on all four pages at once, and swapped instantly
+**The pages arrive from the side you stepped from, when the page on screen
+actually changed.** Months shows a year and the other three show a month, so
+tapping a row on Months moves nothing — that page draws the same twelve rows
+either way, with a different one marked, and a page that moves when its own
+contents did not reads as a remount. Swiping between pages moves nothing
+either: the pager is already animating that gesture, and two motions over one
+gesture is a screen that looks like it reloaded.
+
+Stepping or picking a month replaces every figure on the pages that show one, and swapped instantly
 that reads as a redraw rather than as a move — nothing says which way you went,
 and on a slow read it is not obvious anything happened. A later period comes in
 from the right, an earlier one from the left, which is the one thing the figures

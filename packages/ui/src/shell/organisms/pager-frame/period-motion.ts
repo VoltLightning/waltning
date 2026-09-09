@@ -35,6 +35,25 @@ export function stepDirection(previous: string | null, next: string): Direction 
 }
 
 /**
+ * Whether a change is one the pages should move for.
+ *
+ * **A page change is not a period change**, however much the key moved. Months
+ * is keyed on the year it shows and the other three on their month, so swiping
+ * between them changes the string without changing what is being looked at —
+ * and the pager is already animating that swipe. Two motions over one gesture
+ * is a screen that looks like it reloaded, which is exactly what it was
+ * mistaken for.
+ */
+export function movesFor(
+  before: { period: string; page: string } | null,
+  after: { period: string; page: string },
+): Direction {
+  "worklet";
+  if (before === null || before.page !== after.page) return 0;
+  return stepDirection(before.period, after.period);
+}
+
+/**
  * Where a page sits at `progress` — `0` as it arrives, `1` once it has landed.
  *
  * A page entering from a **later** period comes in from the right, because

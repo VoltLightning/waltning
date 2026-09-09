@@ -22,20 +22,20 @@ import {
 import { easing } from "../../../primitives/easing.ts";
 import { useReducedMotion } from "../../../primitives/reduced-motion.ts";
 import { motion } from "../../../tokens.ts";
-import { type Direction, enterOffset, enterOpacity, stepDirection } from "./period-motion.ts";
+import { type Direction, enterOffset, enterOpacity, movesFor } from "./period-motion.ts";
 
-export function usePeriodMotion(periodKey: string): AnimatedStyle<ViewStyle> {
+export function usePeriodMotion(periodKey: string, pageKey: string): AnimatedStyle<ViewStyle> {
   const reduced = useReducedMotion();
   const progress = useSharedValue(1);
   const direction = useSharedValue<Direction>(0);
-  // The period this has already played. A ref rather than state: it must not
-  // re-render the shell, and only the effect below reads it.
-  const seen = useRef<string | null>(null);
+  // The period and the page this has already played. A ref rather than state:
+  // it must not re-render the shell, and only the effect below reads it.
+  const seen = useRef<{ period: string; page: string } | null>(null);
 
   useEffect(() => {
     const from = seen.current;
-    seen.current = periodKey;
-    const way = stepDirection(from, periodKey);
+    seen.current = { period: periodKey, page: pageKey };
+    const way = movesFor(from, { period: periodKey, page: pageKey });
     if (way === 0) {
       progress.value = 1;
       return;
@@ -46,7 +46,7 @@ export function usePeriodMotion(periodKey: string): AnimatedStyle<ViewStyle> {
       duration: reduced ? motion.none.duration : motion.move.duration,
       easing: easing.move,
     });
-  }, [periodKey, reduced, progress, direction]);
+  }, [periodKey, pageKey, reduced, progress, direction]);
 
   return useAnimatedStyle(
     () => ({

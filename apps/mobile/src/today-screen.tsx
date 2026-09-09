@@ -909,8 +909,18 @@ export default function Today() {
         // said by the arrows' own names.
         periodLabel={monthLabel(month, locale).replace(/\s+\d{4}$/, "")}
         periodDetail={String(pager.label.year)}
-        // Sortable, which is what tells the pages which side to come in from.
-        periodKey={month}
+        /*
+          **The period the page on screen is actually showing**, which is the
+          month for three of them and the year for Months.
+
+          Keyed on the month for all four, tapping a row on Months animated the
+          whole year sliding — and that page draws the same twelve rows either
+          way, with a different one marked. A page that moves when its own
+          contents did not reads as a remount, which is what it was mistaken
+          for. Sortable in both spellings, which is what tells the pages which
+          side to come in from.
+        */
+        periodKey={pager.state.page === "months" ? String(pager.label.year) : month}
         onPickPeriod={openPicker}
         scrollY={scrollY}
         onPrevious={pager.previous}
