@@ -1,0 +1,29 @@
+#!/bin/sh
+#
+# Pre-push gate: the whole suite.
+#
+# `architecture/07` records that there is no CI — four packages, one developer
+# — so a hook is the only automated thing between an edit and history. That
+# decision is unchanged; what moved is *which* hook carries which half.
+#
+# Commit runs `tools/verify-changed.sh`: the same checks over what changed,
+# in about a quarter of the time, so committing often stays cheap. Push runs
+# everything, because the affected-test mapping is a heuristic and this is the
+# last point at which a miss is still local. Both use the same commands; the
+# difference is the scope, never the standard.
+#
+# To bypass in a genuine emergency:  git push --no-verify
+
+set -eu
+
+RED='\033[31m'
+DIM='\033[2m'
+OFF='\033[0m'
+
+printf "${DIM}  pre-push: running the full suite — pnpm verify${OFF}\n"
+
+if ! pnpm verify; then
+  printf "\n${RED}✗ pre-push: verify failed.${OFF}\n" >&2
+  printf "${DIM}  pnpm fix (formatting), pnpm db:up (if a test cannot reach Postgres), or pnpm test:visual:update (if it was a screenshot diff).${OFF}\n" >&2
+  exit 1
+fi

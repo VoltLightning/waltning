@@ -55,7 +55,8 @@
     "storybook": "pnpm --filter @waltning/ui storybook",
     "storybook:build": "pnpm --filter @waltning/ui build-storybook",
     "test:visual": "pnpm --filter @waltning/ui build-storybook && pnpm --filter @waltning/ui test:visual",
-    "test:visual:update": "pnpm --filter @waltning/ui build-storybook && pnpm --filter @waltning/ui test:visual:update"
+    "test:visual:update": "pnpm --filter @waltning/ui build-storybook && pnpm --filter @waltning/ui test:visual:update",
+    "verify:changed": "sh tools/verify-changed.sh"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.8",

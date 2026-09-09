@@ -1,15 +1,14 @@
 /**
- * `pnpm verify` and the pre-commit hook must agree on when the Playwright
- * visual suite is worth several minutes, and the hook must never be the
- * place that decides wrong.
+ * The two hooks must run the same checks and differ only in scope, and neither
+ * may be the place that quietly decides not to run them.
  *
- * The decision lives in exactly one script, `.githooks/needs-visual.sh`,
- * driven by staged paths; the hook and `pnpm verify:fast`/`pnpm verify` are
- * the only two things that run afterward, so this file drives the real
- * script and the real git plumbing directly — the same way
- * `makefile.test.ts` runs `make help` rather than re-deriving what it
- * prints — instead of re-implementing either in TypeScript and asserting
- * against a second copy of the logic.
+ * Commit calls `pnpm verify:changed`, push calls `pnpm verify`. What each
+ * covers lives in `tools/verify-changed.sh` and `tools/affected/stories.mjs`,
+ * tested against the real scripts in `affected-stories.test.ts`; this file
+ * drives the real hooks and the real git plumbing — the same way
+ * `makefile.test.ts` runs `make help` rather than re-deriving what it prints —
+ * instead of re-implementing either in TypeScript and asserting against a
+ * second copy of the logic.
  *
  * It never actually runs Playwright, Biome, typecheck, or the test suite:
  * that is exactly the minutes this file exists to not pay for on every
@@ -17,196 +16,28 @@
  */
 
 import { execFileSync } from "node:child_process";
-import {
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readdirSync,
-  readFileSync,
-  rmSync,
-  statSync,
-  writeFileSync,
-} from "node:fs";
-import { tmpdir } from "node:os";
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import { assertIsolated, createTempGitRepo, git, removeTempGitRepo } from "./git-fixture.ts";
 
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
-const NEEDS_VISUAL = ".githooks/needs-visual.sh";
-
-/** Runs `.githooks/needs-visual.sh` with `stagedPaths` on stdin, returns its exit code. */
-function needsVisualExitCode(stagedPaths: string[]): number {
-  try {
-    execFileSync("sh", [NEEDS_VISUAL], {
-      cwd: repoRoot,
-      input: stagedPaths.length ? `${stagedPaths.join("\n")}\n` : "",
-    });
-    return 0;
-  } catch (error) {
-    const status = (error as { status: number | null }).status;
-    return status ?? -1;
-  }
-}
-
-/** Runs an arbitrary shell script by absolute path, returns its exit code. */
-function runShellScript(absolutePath: string, input = ""): number {
-  try {
-    execFileSync("sh", [absolutePath], { input });
-    return 0;
-  } catch (error) {
-    const status = (error as { status: number | null }).status;
-    return status ?? -1;
-  }
-}
-
 /**
- * The exit-code contract itself (H-1), independent of any shell text: only
- * a literal `1` may ever be read as "skip". This is what both
- * `.githooks/pre-commit` and `pnpm verify`'s callers must implement — an
- * undecidable answer (0, or anything unexpected) runs the suite.
+ * What `tools/affected/stories.mjs` decides for a changeset.
+ *
+ * The real script, not a copy of its rules: `affected-stories.test.ts` covers
+ * the mapping itself, and what the cases here add is that the paths git
+ * *actually stages* — a delete, a move — reach it in a form it can answer for.
  */
-function isSkipSignal(exitCode: number): boolean {
-  return exitCode === 1;
+function decideFor(files: readonly string[]): string {
+  return execFileSync("node", ["tools/affected/stories.mjs", "--files", ...files], {
+    cwd: repoRoot,
+    encoding: "utf8",
+  }).trim();
 }
 
-describe("needs-visual.sh — the trigger set is computed from staged paths (M-3)", () => {
-  it.each([
-    ["packages/ui/src/fx/atoms/amount/amount.tsx", "a component"],
-    [
-      "packages/ui/package.json",
-      "ui's own package.json — a react-native-web bump can move a pixel",
-    ],
-    ["packages/ui/.storybook/main.ts", "Storybook's own config"],
-    ["packages/ui/visual/stories.spec.ts", "the visual spec itself"],
-    ["packages/ui/visual/__screenshots__/Accounts-AccountCard--light.png", "a committed baseline"],
-    ["packages/ui/playwright.config.ts", "this suite's own config"],
-    ["packages/core/src/money.ts", "what Amount renders through"],
-    ["packages/core/package.json", 'its exports map is what "resolves under src/" means'],
-    ["pnpm-lock.yaml", "a dependency bump can move a pixel with no source change"],
-  ])("needs the suite for %s (%s)", (path) => {
-    expect(needsVisualExitCode([path])).toBe(0);
-  });
-
-  it.each([
-    ["packages/core/README.md", "prose cannot move a pixel"],
-    ["packages/core/tsconfig.json", "compiler options cannot move a pixel"],
-    ["docs/specification/README.md", "a doc commit"],
-    ["apps/api/drizzle/0002_x.sql", "a migration"],
-  ])("does not need the suite for %s (%s)", (path) => {
-    expect(needsVisualExitCode([path])).toBe(1);
-  });
-
-  it("does not need the suite for nothing staged", () => {
-    expect(needsVisualExitCode([])).toBe(1);
-  });
-
-  it("needs the suite when a trigger path is staged alongside unrelated ones", () => {
-    expect(
-      needsVisualExitCode([
-        "README.md",
-        "packages/ui/src/shell/molecules/dual-total/dual-total.tsx",
-        "apps/api/src/index.ts",
-      ]),
-    ).toBe(0);
-  });
-});
-
-describe("needs-visual.sh — its header list and its pattern are the same list (L-3)", () => {
-  const script = readFileSync(new URL("../.githooks/needs-visual.sh", import.meta.url), "utf8");
-
-  // Only the enumerated block, so the exit-code table below it (which is
-  // also `#   `-indented) cannot be mistaken for a trigger path.
-  const header = script.slice(
-    script.indexOf("The full trigger set"),
-    script.indexOf("Exit code is the whole contract"),
-  );
-  /** The paths the header tells a reader are triggers. */
-  const documented = [...header.matchAll(/^#\s{3}(\S+)\s+—/gm)].map((m) => m[1] ?? "");
-
-  /** The same list, read back out of the grep pattern the script actually runs. */
-  const enforced = (/grep -qE '([^']+)'/.exec(script)?.[1] ?? "")
-    .split("|")
-    .filter(Boolean)
-    .map((alternative) => alternative.replace(/^\^/, "").replace(/\$$/, "").replace(/\\\./g, "."))
-    // A prefix alternative (`packages/ui/`) is a whole subtree; the header
-    // writes that as `packages/ui/**`.
-    .map((path) => (path.endsWith("/") ? `${path}**` : path));
-
-  /** A concrete path a reader would expect that entry to cover. */
-  function exampleFor(entry: string): string {
-    return entry.endsWith("**") ? `${entry.slice(0, -2)}example.tsx` : entry;
-  }
-
-  it("documents exactly the paths it enforces, neither more nor fewer", () => {
-    // The prose is what anyone changing this script reads first. A comment
-    // that lists four paths while the regex matches three is worse than no
-    // comment: it is a wrong answer delivered confidently.
-    expect(documented.length, "trigger paths found in the header").toBeGreaterThan(3);
-    expect(enforced.length, "alternatives found in the grep pattern").toBe(documented.length);
-    expect([...documented].sort()).toEqual([...enforced].sort());
-  });
-
-  it("runs the real script against each documented path, and one off the list", () => {
-    for (const entry of documented) {
-      expect(needsVisualExitCode([exampleFor(entry)]), `${entry} must need the suite`).toBe(0);
-    }
-    // Off the list on purpose: a client-package source file is not in the
-    // trigger set today, and this is the assertion that notices if it
-    // quietly becomes one without the header saying so.
-    expect(needsVisualExitCode(["packages/client/src/accounts/use-accounts.ts"])).toBe(1);
-  });
-});
-
-describe("needs-visual.sh — only exit 1 skips; everything else runs the suite (H-1)", () => {
-  it("exits 0 on a match, 1 on no match — the two decided answers", () => {
-    expect(needsVisualExitCode(["packages/ui/src/x.tsx"])).toBe(0);
-    expect(needsVisualExitCode(["docs/x.md"])).toBe(1);
-  });
-
-  it("a missing script fails closed: it does not exit 1", () => {
-    const missing = join(repoRoot, ".githooks", "does-not-exist.sh");
-    expect(existsSync(missing)).toBe(false);
-    const code = runShellScript(missing);
-    expect(code).not.toBe(1);
-  });
-
-  it("a script that errors instead of deciding fails closed: it does not exit 1", () => {
-    const tmp = mkdtempSync(join(tmpdir(), "needs-visual-broken-"));
-    const broken = join(tmp, "broken.sh");
-    // Unmatched quote — a syntax error `sh` itself refuses, not a decision.
-    writeFileSync(broken, "#!/bin/sh\necho 'unterminated\n");
-    try {
-      const code = runShellScript(broken);
-      expect(code).not.toBe(1);
-    } finally {
-      rmSync(tmp, { recursive: true, force: true });
-    }
-  });
-
-  it("the skip-signal contract itself treats only exit 1 as skip", () => {
-    expect(isSkipSignal(1)).toBe(true);
-    expect(isSkipSignal(0)).toBe(false);
-    expect(isSkipSignal(2)).toBe(false);
-    expect(isSkipSignal(127)).toBe(false);
-    expect(isSkipSignal(-1)).toBe(false);
-  });
-
-  it("the hook implements the same contract: only `-eq 1` skips, and there is no early exit before the checks", () => {
-    const hook = readFileSync(new URL("../.githooks/pre-commit", import.meta.url), "utf8");
-    expect(hook).toMatch(/\$decision"\s+-eq\s+1/);
-    // The bug this guards: `if command-that-can-fail; then …` treats *any*
-    // nonzero exit as the else branch — the fail-open shape H-1 found.
-    expect(hook).not.toMatch(/if\s+printf[^|]*\|\s*sh\s+\.githooks\/needs-visual\.sh;\s*then/);
-    // A bare `exit 0` right after computing `$staged` is the H-2 bug: it
-    // skipped Biome, typecheck, and tests whenever the filtered list was
-    // empty (a delete-only commit, before `D` was added to the filter).
-    expect(hook).not.toMatch(/staged=\$\([^)]*\)\nif \[ -z "\$staged" \]; then\n\s*exit 0/);
-  });
-});
-
-describe("the ui→core trace needs-visual.sh assumes (M-2)", () => {
+describe("the ui→core trace the affected-story map assumes (M-2)", () => {
   const uiPkg: {
     dependencies?: Record<string, string>;
     devDependencies?: Record<string, string>;
@@ -347,7 +178,7 @@ describe("real staged state, not hand-written paths (H-2, M-1)", () => {
     expect(staged, "a delete-only commit must still show up in the staged-path list").toEqual([
       "packages/ui/src/component.tsx",
     ]);
-    expect(needsVisualExitCode(staged)).toBe(0);
+    expect(decideFor(staged), "a deleted ui file cannot be mapped").toBe("ALL");
 
     // The bug this regresses: the old `--diff-filter=ACMR` (no `D`) computed
     // an empty list for exactly this commit, which — combined with the old
@@ -374,7 +205,7 @@ describe("real staged state, not hand-written paths (H-2, M-1)", () => {
 
     const staged = stagedPaths(dir);
     expect(staged.sort()).toEqual(["docs/movable.tsx", "packages/ui/src/movable.tsx"]);
-    expect(needsVisualExitCode(staged)).toBe(0);
+    expect(decideFor(staged), "a moved ui file cannot be mapped").toBe("ALL");
 
     // The bug this regresses: git's default rename detection collapses this
     // to a single `R100` pair, and `--name-only` without `--no-renames`
@@ -474,22 +305,23 @@ describe("package.json and the hook share one decision, with no environment over
     expect(existsSync(new URL("../.githooks/verify-visual-gate.sh", import.meta.url))).toBe(false);
   });
 
-  it("routes the hook's decision through needs-visual.sh into pnpm verify:fast or pnpm verify, not a second copy of either", () => {
-    expect(hook).toContain(".githooks/needs-visual.sh");
-    expect(hook).toContain("pnpm verify:fast");
-    expect(hook).toMatch(/if\s+!\s+pnpm\s+verify;\s+then/);
+  it("routes commit through verify:changed and push through verify, not a second copy of either", () => {
+    // **The two hooks run the same checks and differ only in scope.** A
+    // commit-time gate that ran a *different* set would make the push a
+    // surprise; one that ran the same set at full size would be skipped.
+    expect(hook).toMatch(/if\s+!\s+pnpm\s+verify:changed;\s+then/);
+    expect(hook).not.toContain("pnpm verify:fast");
+    const push = readFileSync(new URL("../.githooks/pre-push", import.meta.url), "utf8");
+    expect(push).toMatch(/if\s+!\s+pnpm\s+verify;\s+then/);
     // The pattern the very first version hand-rolled must not reappear.
     expect(hook).not.toMatch(/packages\/\(ui\|core\)\//);
   });
 
-  it("cites needs-visual.sh as the trigger set's source rather than restating it (L-b)", () => {
-    // The hook's own comment and its runtime skip message must both point at
-    // needs-visual.sh instead of each keeping their own copy of the trigger
-    // list — three places (this file included) is one too many to trust
-    // staying in sync by hand.
-    const printfLine = hook.split("\n").find((line) => line.includes("running pnpm verify:fast"));
-    expect(printfLine, "the hook's skip message").toBeDefined();
-    expect(printfLine).toContain(".githooks/needs-visual.sh");
-    expect(printfLine).not.toMatch(/packages\/ui\/|packages\/core\/src\//);
+  it("keeps the scoping in one script, cited rather than restated (L-b)", () => {
+    // Three places that each keep their own copy of what a change can reach is
+    // one too many to trust staying in sync by hand. The hook points at the
+    // script; it does not list paths of its own.
+    expect(hook).toContain("tools/verify-changed.sh");
+    expect(hook).not.toMatch(/packages\/ui\/src\/tokens|packages\/core\/src\//);
   });
 });

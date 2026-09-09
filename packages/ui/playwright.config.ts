@@ -104,7 +104,7 @@ export default defineConfig({
   },
 
   /**
-   * Four workers, measured.
+   * Ten workers, measured.
    *
    * `testDir` holds exactly one spec file, and without `fullyParallel`
    * Playwright shards work by file, not by test — `workers` above 1 was
@@ -125,16 +125,23 @@ export default defineConfig({
    * occasionally wrong is worse than a slower one that is not — this is the
    * evidence that it isn't, not an assumption that it can't be.
    *
-   * **`4` is this machine's number, not a portable constant.** Playwright's
-   * own default is `cpus/2`; this machine has enough cores that `4` is
-   * conservative, and the same `4` would be aggressive on a small CI box or
-   * a 4-core laptop, where it would compete with the `vite preview` server
-   * for the same cores this measurement had spare. Re-measure before trusting
-   * this number on different hardware — the method above, not the result, is
-   * what travels.
+   * **Re-measured at 1705 tests, and `4` had become the wrong number.** The
+   * figure above was taken when the suite was 1097; it grew by half and the
+   * worker count did not, so the gate spent 230s on what ten workers do in
+   * 113. This machine has 18 cores, and the curve turns over past ten —
+   * 6: 169s · 8: 131s · **10: 113s** · 12: 135s, the last one losing to
+   * contention with the `vite preview` server the suite is reading from.
+   *
+   * **`10` is this machine's number, not a portable constant.** Playwright's
+   * own default is `cpus/2`; the same `10` would be aggressive on a small CI
+   * box or a 4-core laptop, where it would compete with that server for the
+   * cores this measurement had spare. Re-measure before trusting it on
+   * different hardware — the method above, not the result, is what travels.
+   * A suite that grows is a reason to re-run it: the number is a measurement,
+   * and a measurement goes stale.
    */
   fullyParallel: true,
-  workers: 4,
+  workers: 10,
 
   /**
    * **No retries.** A screenshot that passes on the second attempt did not

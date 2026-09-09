@@ -213,7 +213,7 @@ describe("every shell script the gate and the Makefile call is executable (L-9)"
 
   it("finds the scripts it is supposed to be checking", () => {
     expect(scriptPaths, "shell scripts under tools/ and .githooks/").toContain("tools/db-ready.sh");
-    expect(scriptPaths).toContain(".githooks/needs-visual.sh");
+    expect(scriptPaths).toContain("tools/verify-changed.sh");
     expect(scriptPaths.length, "*.sh files found").toBeGreaterThanOrEqual(3);
   });
 
