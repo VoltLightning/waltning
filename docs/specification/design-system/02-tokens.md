@@ -21,7 +21,8 @@ whatever the chrome around them does.
 | `ground` | `#faf6ef` | Page background; all cards sit on it |
 | `surface` | `#ffffff` | Cards, sheets, rows |
 | `subtle` | `#f1ebe0` | Table headers, inset boxes, neutral tag fills, the segment track |
-| `track` | `#c8b59b` | The unfilled part of a money bar — `FlowBar`'s empty track, `MonthList`'s two. **Not `subtle`**, which is a fill for a box on a card and sits at 1.10:1 on `ground` and 1.02 on `accent-fill`: the Months page drew twelve rows of nothing, and a 4% bar looked like no bar. Held from both sides — the shell pair's **1.5:1** against every fill a track is drawn on (`ground`, `surface`, `inset`, `subtle`, `accent-fill`; 1.68 at the tightest) and **3:1 for `income` and `spend` on it** (3.12 at the tightest). Light theme binds: `income` clears the cream ground by only 5.80 |
+| `track` | `#c5b299` | The unfilled part of a money bar — `MonthList`'s two, `FlowBar`'s empty one, `IncomeVsExpenseWidget`'s. **Not `subtle`**, which is a fill for a box on a card and sits at 1.10:1 on `ground` and 1.03 on `accent-fill`: the Months page drew twelve rows of nothing, and a 4% bar looked like no bar. Held from both sides — the shell pair's **1.5:1** against **all seven** fills, `hover` and `pressed` included (1.53 at the tightest, `pressed` in light) and **3:1 for `income` and `spend` on it** (3.02 at the tightest, light). The whole slack is 1.29: `income` clears the light ground by 5.80 and the two floors want 4.5 of it |
+| `income-fill` | `#bccaa9` | `FlowBar`'s track when the month has flow — income as a *field*, where `income` is income as *ink*. The two money colours are the same lightness by design (a figure is told apart by hue), so `spend` on `income` was **1.0045:1** and the bar was one uniform rectangle. `green-300`, so the ramp gives the value. `spend` reads on it at 3.60. **A card fill**: 1.5:1 on `ground`, `surface` and `inset` only — 1.46 on `subtle`, 1.38 on `hover`, 1.28 on `pressed`, so a money bar in a chip or under a finger is a bar this cannot carry |
 | `hover` | `#ece5d7` | The fill under a pointer |
 | `pressed` | `#e6ddcb` | The transient fill under a finger |
 | `border` | `#eae3d5` | Card edges and dividers — a boundary between two areas, which WCAG sets no floor for. **Never a control's edge**: at 1.19:1 on `ground` it cannot carry 1.4.11, so an unfilled chip takes `border-interactive` like every other control |
@@ -99,7 +100,8 @@ with dark text.
 | `ground` | `#1c1a15` |
 | `surface` | `#26221b` |
 | `subtleFill` / `tagNeutralFill` | `#2b2620` |
-| `trackFill` | `#5c5347` |
+| `trackFill` | `#585044` |
+| `incomeFill` | `#3b4d33` |
 | `hoverFill` | `#302a23` |
 | `pressedFill` | `#363027` |
 | `border` | `#38332a` |
@@ -152,15 +154,25 @@ reason.** Nothing draws a line around a track either, so the two fills carry
 the separation alone — 1.5:1, not 1.4.11's 3:1, which governs a boundary you
 must locate precisely. The track cannot reach 3:1 in any case: it is squeezed
 from below by `income` and `spend`, which must keep 3:1 **on it**, because the
-fill is the datum. In the light theme `income` clears `ground` by 5.80, so a
-track at 1.85 leaves the bar 3.14 and there is no third step to take.
+fill is the datum. The whole slack is the ratio the two floors do not already
+spend — in light, `income` clears `ground` by 5.804 against 1.5 × 3.0, so
+**1.29**; in dark, 9.832, so 2.18. **Dark binds the bar floor** (`spend` at 3.02
+light and 3.26 dark is the light side, but the headroom before a bar breaks 3:1
+is 96.0% consumed in light against 96.8% in dark). If either floor is ever
+missed the figure that moves is `income`, not the track.
+
+**The floor names all seven fills, not the five a track is drawn on today.**
+`hover` and `pressed` are in the list because leaving them out is how
+`border-interactive` was wrong twice — a floor met on the page and missed in
+the states — and a census of today's callers is not a property.
 
 **This is why the category chart keeps `subtle`.** `chart-bar` clears the page
-by 4.29 light and 3.76 dark; on a track visible enough for `track`'s floor it
-would land near 2.1:1. The green ramp is one set of values for both themes
-(§2.1), so it cannot lift to meet a lighter track — a track is only as light as
-the darkest bar drawn on it allows, and the money bars and the category bars do
-not have the same headroom.
+by 4.29 light and 3.76 dark; on `track` it lands at **2.32 and 1.63**. A
+per-theme chart track would not rescue it either: the best track meeting 1.5 on
+`ground` leaves it at 4.29/1.5 = 2.86 light and 3.76/1.5 = 2.51 dark, both under
+3. The ramp is simply too dark to sit in a track you can see — a track is only
+as light as the darkest bar drawn on it allows, and the money bars and the
+category bars do not have the same headroom.
 
 ### 2.1a Two floors, and which text gets which
 

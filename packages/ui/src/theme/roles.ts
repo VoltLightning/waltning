@@ -63,11 +63,22 @@ export type Theme = {
   /**
    * The unfilled part of a money bar. Visibly a shape on the page — `subtleFill`
    * is a fill on a card and drew the Months bars at 1.10:1, so a short bar and
-   * no bar looked the same. 1.5:1 on every fill a track sits on; `income` and
-   * `spend` keep 3:1 on it. The category chart keeps `subtleFill` — see
-   * `chartBar`.
+   * no bar looked the same. 1.5:1 on **all seven** fills; `income` and `spend`
+   * keep 3:1 on it. The category chart keeps `subtleFill` — see `chartBar`.
    */
   trackFill: string;
+  /**
+   * `<FlowBar>`'s track when the month has flow: income as a *field*, where
+   * `income` is income as *ink*. The two money colours are the same lightness —
+   * they are told apart by hue — so `spend` on `income` was 1.0045:1 and the bar
+   * was one uniform rectangle. `spend` reads on this at 3.60.
+   *
+   * **A card fill, not a page fill**: 1.5:1 on `ground`, `surface` and
+   * `insetFill` only. It does not clear `subtleFill`, `hoverFill` or
+   * `pressedFill`, and the floor names the three it does rather than claiming
+   * the seven `trackFill` carries.
+   */
+  incomeFill: string;
   /** The fill under a pointer. Between `subtleFill` and `pressedFill`. */
   hoverFill: string;
   /** The transient fill under a finger or cursor. */
@@ -158,9 +169,11 @@ export type Theme = {
   /**
    * One bar's fill, where the bars are separate and each sits on `subtleFill`
    * — **not `trackFill`**, which the money bars take. This value clears the
-   * page by 4.29 light and 3.76 dark, so on a track visible enough for
-   * `trackFill`'s floor it would land at ~2.1:1; the ramp is one set of
-   * values for both themes, so it cannot lift to meet it.
+   * page by 4.29 light and 3.76 dark, so on `trackFill` it lands at 2.32 and
+   * **1.63**. Nor would a per-theme chart track rescue it: the best track
+   * meeting the 1.5 floor on `ground` leaves this at 4.29/1.5 = 2.86 light and
+   * 3.76/1.5 = 2.51 dark, both under 3 — the ramp is simply too dark to sit in
+   * a track you can see, and it is one set of values for both themes besides.
    *
    * **Not a step of `chartRamp`, because a ramp cannot do this job.** The ramp
    * tells *adjacent* segments of one stacked bar apart, so its steps are
@@ -271,6 +284,7 @@ export const light: Theme = {
   surface: color.surface,
   subtleFill: color.subtle,
   trackFill: color.track,
+  incomeFill: color.incomeFill,
   hoverFill: color.hover,
   pressedFill: color.pressed,
 
@@ -333,6 +347,7 @@ export const dark: Theme = {
   surface: darkColor.surface,
   subtleFill: darkColor.subtle,
   trackFill: darkColor.track,
+  incomeFill: darkColor.incomeFill,
   hoverFill: darkColor.hover,
   pressedFill: darkColor.pressed,
 

@@ -175,7 +175,7 @@ describe("the token spec and the tokens agree", () => {
     // read — so a name the folder mangled (`green-100`) or a row shape it could
     // not match still counted, and nine chart colours plus six dark roles went
     // uncompared behind a green guard.
-    // **38 and 31, and the asymmetry is the point.** The light table lists
+    // **The two counts below, and the asymmetry is the point.** The light table lists
     // *tokens* and is read against `tokens.ts`; the dark one lists *roles* and
     // is read against `roles.ts`. A role that aliases a token — `focus-ring`
     // on `accent-icon`'s row, `shell-focus-ring` on `shell-text`'s — has no
@@ -183,8 +183,8 @@ describe("the token spec and the tokens agree", () => {
     // that pair is enforced. Splitting the alias into its own light row would
     // not help: it would name a value `tokens.ts` does not hold either.
     expect(compared, "a drop here means rows stopped being compared").toEqual({
-      light: 41,
-      dark: 34,
+      light: 42,
+      dark: 35,
     });
   });
 
@@ -211,6 +211,20 @@ describe("the token spec and the tokens agree", () => {
     }
   });
 });
+
+/**
+ * Every fill a component is drawn on. Named once because three rows below walk
+ * it and the one that wrote its own shorter list silently lost two of them.
+ */
+const FILLS = [
+  "ground",
+  "surface",
+  "insetFill",
+  "subtleFill",
+  "accentFill",
+  "hoverFill",
+  "pressedFill",
+] as const;
 
 describe("a component follows the active theme", () => {
   it("ships exactly light and dark", () => {
@@ -533,7 +547,7 @@ describe("a component follows the active theme", () => {
   /**
    * **A money bar's track was `subtleFill`, and on a phone the Months page drew
    * twelve rows of nothing.** `subtleFill` is a fill for a box on a card —
-   * 1.10:1 on `ground` light, 1.16 dark, 1.02 and 1.14 on `accentFill`, which is
+   * 1.10:1 on `ground` light, 1.16 dark, 1.03 and 1.14 on `accentFill`, which is
    * what the pager's current month sits on. Every ratio in this file was green:
    * the bars' *fills* clear the page comfortably, so nothing here was measuring
    * the thing that was invisible. What a reader loses is the scale — a bar at
@@ -544,25 +558,38 @@ describe("a component follows the active theme", () => {
    * Not 3:1 — that is WCAG 1.4.11's *boundary* number, for an edge you must
    * locate precisely, and it is unreachable here from both sides at once (see
    * the bar floor below).
+   *
+   * **All seven fills, and the first version of this test walked five.** It
+   * dropped `hoverFill` and `pressedFill` — which put the light track at 1.48 on
+   * `pressed`, under its own floor, with the suite green and the comment above
+   * it claiming "every fill a track is drawn on". That was a census of today's
+   * callers written as a property, and it is the third time this file has been
+   * caught by exactly that: see `borderInteractive` at the 3:1 boundary row
+   * ("*a filled chip's edge at 2.74 and a hovered one at 2.59*") and the focus
+   * ring's ("*2.89 and 2.69 on the two fills a control wears while it is being
+   * used*"). No component paints a track on a hover or pressed fill today. The
+   * point is that the floor holds when the first one does.
    */
   it.each([
     ["light", light],
     ["dark", dark],
-  ])("keeps the %s bar track visible on every fill it is drawn on", (_name, theme) => {
-    // `accentFill` because `MonthList` draws the pager's current month on it,
-    // and it was the tightest of the five in both themes.
-    for (const fill of ["ground", "surface", "insetFill", "subtleFill", "accentFill"] as const) {
+  ])("keeps the %s bar track visible on every fill", (_name, theme) => {
+    for (const fill of FILLS) {
       expect(contrastRatio(theme.trackFill, theme[fill]), fill).toBeGreaterThanOrEqual(1.5);
     }
   });
 
   /**
-   * **The other side of the squeeze.** A track dark enough to see is a track
-   * the bar has to clear, and 1.4.11's 3:1 applies to the fill because the
-   * fill *is* the datum. Light theme binds: `income` clears the cream ground by
-   * 5.80, so the track's 1.85 leaves 3.14 and there is nowhere else to go. This
-   * pair of floors is why `chartBar` keeps `subtleFill` — it clears the page by
-   * 3.76 dark, so a `trackFill` track would put it at ~2.1.
+   * **The other side of the squeeze.** A track dark enough to see is a track the
+   * bar has to clear, and 1.4.11's 3:1 applies to the fill because the fill *is*
+   * the datum.
+   *
+   * **The whole slack is 1.29 and there is none left over.** In light `income`
+   * clears `ground` by 5.804; the two floors want 1.5 × 3.0 = 4.5 of it. Dark
+   * has 9.832 to divide, so 2.18. That is why the values sit at 1.53/3.02 light
+   * and 1.64/3.26 dark rather than at a comfortable margin — the light palette
+   * has no margin to give, and if either floor is ever missed the figure that
+   * moves is `income`, not the track.
    */
   it.each([
     ["light", light],
@@ -570,6 +597,35 @@ describe("a component follows the active theme", () => {
   ])("keeps the %s money bars readable on that track", (_name, theme) => {
     expect(contrastRatio(theme.income, theme.trackFill)).toBeGreaterThanOrEqual(3);
     expect(contrastRatio(theme.spend, theme.trackFill)).toBeGreaterThanOrEqual(3);
+  });
+
+  /**
+   * **`<FlowBar>` drew `spend` on `income` at 1.0045:1 in light.**
+   *
+   * The two money colours are the same lightness in this palette on purpose:
+   * a figure is told apart by hue, and both clear the page (5.80 and 5.78).
+   * Every check in this file paired each of them with a *fill* — ground,
+   * surface, subtle, hover, pressed, accentFill — and none paired them with
+   * each other, so the one component that draws one on the other rendered a
+   * single uniform rectangle at the place "what you kept" is meant to be
+   * readable, and the suite was green.
+   *
+   * `incomeFill` is income as a field rather than as ink. Its floor names
+   * `ground`, `surface` and `insetFill` — the three fills a card or a page can
+   * be — and deliberately not the other four: it sits at 1.46 on `subtleFill`,
+   * 1.38 on `hoverFill` and 1.28 on `pressedFill`, so a money bar drawn in a
+   * chip or under a finger is a bar this token cannot carry. `trackFill` is the
+   * one held to all seven, and the difference between the two lists is the
+   * difference between the roles.
+   */
+  it.each([
+    ["light", light],
+    ["dark", dark],
+  ])("keeps the %s flow bar's two halves apart", (_name, theme) => {
+    expect(contrastRatio(theme.spend, theme.incomeFill)).toBeGreaterThanOrEqual(3);
+    for (const fill of ["ground", "surface", "insetFill"] as const) {
+      expect(contrastRatio(theme.incomeFill, theme[fill]), fill).toBeGreaterThanOrEqual(1.5);
+    }
   });
 
   it.each([
