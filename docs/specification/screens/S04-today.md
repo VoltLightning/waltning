@@ -317,8 +317,9 @@ happened*.
 | Component | Notes |
 |---|---|
 | `Shell` | `PagerHeader` + `PageTabs`, shared by all four pages and never scrolled away |
-| `PagerHeader` | The period and search, in two layouts the scroll moves between: a large title that is itself the picker, collapsing to a compact title with a stepper beside it. The arrows step **the unit the page is in**; the year is a caption under the title |
+| `PagerHeader` | The period and the search icon, in two layouts the scroll moves between: a large title that is itself the picker, collapsing to a compact title with a stepper beside it. The arrows step **the unit the page is in**; the year is a caption under the title |
 | `PageTabs` | Summary · List · Calendar · Months, a marker on a hairline. What makes the swipe discoverable |
+| `SearchField` | The search itself, pinned under `PageTabs` while one is on, with the live match count and an `✕` that clears it. **Under the tabs, not in the header**: the header's shape is a function of the scroll — the title travels, scales and hands its room to a stepper — so a field placed there would either inherit the collapse or fight it, and the period would leave the screen exactly when §7 wants the reader stepping through periods. It stays open for as long as the search is on, which is what says the screen is narrowed |
 | `Pager` | The four pages, swiped or tapped between, over one shared date |
 | `GatewayGrid` | Summary's *Go to* — six cards, each with a figure. Only destinations neither the tab bar **nor the shared bar** carries, which is why Accounts, Debt and the agent are absent from it |
 | `NetWorthStrip` | *Mine* on the ground in one line, *ours* and any second currency muted beneath it. Pressable → S16. Renders above the error branch, so a failed refresh keeps it (§6) |
@@ -336,7 +337,7 @@ happened*.
 | `BrandIcon` | `TransactionRow`'s leading mark for a recognised merchant (§14.4b). Offline, never blank: an unmatched payee falls back to its monogram |
 | `FxAmount` | Any foreign row — `local · rate · display`, the rate for that row's own date (P1) |
 | `Banner(warn)` | Unsettled clearing — rendered **only when non-zero**, with one action |
-| `TodayPill` | Floats over the list when the list is away from today. The only way back from a jump (§6) |
+| `TodayPill` | Floats over the list when the list is away from today. The only way back from a jump (§6). Top-centre, because the add button owns the bottom corners and settles against either side edge at any height (`02-tokens` §2.9). Its edge says *above the page*, not `shadow-float`, which §2.5 keeps for the add button and the toast — the things above the whole screen rather than above one list |
 | `FilterChip` | The carried filter, pinned under `PageTabs`: what it is, and an `✕` that clears it. One chip — this screen receives a filter, it does not compose them. Composing is `FilterBar`, and it is S10's, on the desk |
 | `TabBar` | 4 tabs, all ≥44px — Home · Accounts · **Agent** · Settings. **No Ledger tab**: this screen is the ledger, so one would lead where you already are. **No Debt tab**: it is a figure you check, not a place you live, and it reads better in *Go to* where it can carry one. `+` is not a tab, though it may come to rest between Accounts and Agent (`02-tokens` §2.9) |
 | `FloatingAdd` | The `+`, above everything, wherever it was last put (`02-tokens` §2.9) |
@@ -429,7 +430,20 @@ ignore.
 month rules mark the gaps, and **Calendar and Months carry match counts instead
 of their figures** — so *how often, and when* is answered by the pages you were
 already going to swipe to. Search needs no navigation of its own, and it holds
-across the pages the way the date does.
+across the pages the way the date does: the query is a parameter of the route
+beside the date, so a swipe, a step and a jump all keep it.
+
+**The counting is the search's own, not a second reading of it.** §13's text
+rule cannot be pushed into SQL — a query is matched against payee, note, every
+line's description and, when the whole query is one, an amount — so the per-day
+counts are produced by the same matcher that produces the list. Two readings of
+what a search means is how the field's total and the grid under it come to
+disagree.
+
+**A day or a month that matched nothing still says so, quietly.** *Not in this
+month* is part of *how often, and when*. But a searched grid draws an empty cell
+rather than a zero in each of thirty, and a searched year draws its empty months
+in muted ink: a page that says nothing thirty times has stopped answering.
 
 **Accessibility is a constraint, not a review note.** Every target in the strip
 and the picker is ≥44×44. Nothing encodes meaning in hue alone. A ribbon cell's
