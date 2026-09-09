@@ -2,30 +2,51 @@
  * `<PagerHeader>` — the row above `PageTabs`, shared by every page of S04's
  * pager and never scrolled away (S04 §3).
  *
- * **Two layouts, and the scroll is what chooses between them.**
+ * **Two shapes, and the scroll is what moves between them.**
  *
- * - *At rest* the month is a large title and the whole title is the picker:
- *   tapping it opens Months, which is where you go when the month you want is
- *   not the next one. There are no arrows, because at the top of a screen the
- *   answer to "somewhere else" is usually not "one step".
- * - *Scrolled* the title shrinks to a single row and the stepper appears
- *   beside search. The title is no longer a target worth aiming at, and
- *   stepping is the thing you want while reading a month — so the control
- *   arrives exactly when the reason for it does.
+ * - *At rest* the month is a large title with the year under it, and the whole
+ *   title is the picker: tapping it opens Months, which is where you go when
+ *   the month you want is not the next one. There are no arrows, because at
+ *   the top of a screen the answer to "somewhere else" is usually not "one
+ *   step".
+ * - *Scrolled* the month has shrunk to a single row, the year has come up
+ *   beside it, and the stepper has arrived next to search. The title is no
+ *   longer a target worth aiming at, and stepping is the thing you want while
+ *   reading a month — so the control arrives exactly when the reason for it
+ *   does.
  *
- * It is one control changing shape, not two headers. The month never moves
- * sideways and never changes colour; it changes size, and the stepper fades in
- * beside it.
+ * **It is one control changing shape, and it is one set of elements moving.**
+ * The month is a single `Text` that scales; the year is a single `Text` that
+ * travels from under the month to beside it; the caret is one glyph that
+ * follows the end of the title wherever the title now ends. Nothing is drawn
+ * twice and nothing cross-fades, so there is no offset at which the header can
+ * be showing neither of two copies of itself — which is exactly what the
+ * stacked-and-faded version did at the midpoint of its travel, where both
+ * layers were at zero and the bar was blank.
  *
- * **The two layers are stacked and cross-faded, rather than one layout whose
- * type animates.** A title that reflows every frame re-measures its text every
- * frame; two static layouts fading past each other are each laid out once.
+ * **Transforms, never type that reflows.** A title that re-measured its text
+ * every frame would put a text layout in the scroll's critical path, so the
+ * month is laid out once at `displayTwo` and *scaled* to `displayThree`, and
+ * the year is laid out once at `displayThree` and scaled down to a caption at
+ * rest. Every part is drawn at its larger end and shrunk from there: type
+ * scaled up is a raster stretched past its size, and type scaled down only
+ * loses detail it had.
  *
- * **Reanimated, and the geometry is not in here.** The style is a worklet, so
- * it runs on the UI thread and the header tracks the finger rather than the JS
- * queue — and every number it uses comes from `collapse.ts`, where `vitest`
- * can run the arithmetic for real (the test setup's `interpolate` is a no-op,
- * so a shape built from `interpolate` would be a shape nothing checks).
+ * **Two measured widths, and nothing else measured.** Where the year lands and
+ * where the caret sits are the month's own width plus a gap, and a month's
+ * width is its word in the reader's language — `wrzesień` is not `September`
+ * and no constant knows either. So the two `Text`s report their widths through
+ * `onLayout` into shared values, and `collapse.ts` does the arithmetic on the
+ * UI thread. Both are `0` until the first layout, which is the right answer at
+ * rest — the year is at the left edge and the caret is against the month — so
+ * the mount is correct before anything has been measured.
+ *
+ * **Reanimated, and the geometry is not in here.** The styles are worklets, so
+ * they run on the UI thread and the header tracks the finger rather than the
+ * JS queue — and every number they use comes from `collapse.ts`, where
+ * `vitest` can run the arithmetic for real (the test setup's `interpolate` is
+ * a no-op, so a shape built from `interpolate` would be a shape nothing
+ * checks).
  *
  * **The bar navigates; the page reports.** It carries no figure. A draft put
  * the period's total in the trailing half and it did not survive being
@@ -41,34 +62,51 @@
  */
 
 import { memo, useCallback, useState } from "react";
-import { Pressable, Text, View } from "react-native";
+import { type LayoutChangeEvent, Pressable, View } from "react-native";
 import Animated, {
-  runOnJS,
   type SharedValue,
   useAnimatedReaction,
   useAnimatedStyle,
   useSharedValue,
 } from "react-native-reanimated";
+import { scheduleOnRN } from "react-native-worklets";
 import { useInteraction } from "../../../primitives/interaction.ts";
 import { text } from "../../../theme/fonts.ts";
 import { useTheme } from "../../../theme/provider";
 import { makeStyles } from "../../../theme/styles.ts";
-import { focus, radius, space, touchTarget } from "../../../tokens.ts";
+import { focus, radius, touchTarget } from "../../../tokens.ts";
 import { CaretDownIcon, CaretLeftIcon, CaretRightIcon, MagnifyingGlassIcon } from "../../phosphor";
 import {
+  CARET_REST,
   COLLAPSED_HEIGHT,
+  caretScale,
+  caretShiftX,
   collapseProgress,
   headerHeight,
-  isCollapsed,
-  restLift,
-  restOpacity,
-  shutOpacity,
-  shutSettle,
+  MONTH_ROW,
+  monthScale,
+  stepperArrival,
+  stepperIsReal,
+  TITLE_GAP,
+  TITLE_PAD,
+  titleTop,
+  YEAR_SLOT,
+  yearScale,
+  yearShiftX,
+  yearShiftY,
 } from "./collapse.ts";
 
 /** One box for all of them, so a glyph never changes a row's height. */
 const ICON = 18;
-const TITLE_CARET = 16;
+
+/**
+ * The room the trailing controls take, which is the room the title may not.
+ *
+ * Three touch targets and the stepper's hairline — the stepper is laid out at
+ * this width whether or not it has arrived, so the reserve is the same at both
+ * ends of the travel and does not have to be animated.
+ */
+const CONTROLS_WIDTH = touchTarget.min * 3 + 1;
 
 export type PagerHeaderProps = {
   /** The unit itself — `September`, `2026`. Formatted and localised by the caller. */
@@ -142,11 +180,35 @@ function PagerHeaderView({
   const ink = useTheme().text;
   const { focused, handlers } = useInteraction();
 
+  /**
+   * The two widths the geometry cannot know, written where they are drawn.
+   *
+   * Shared values rather than state: they are read inside worklets on every
+   * frame, and a re-render per measurement would put React in a path that only
+   * ever runs when the reader's language or text size changes.
+   */
+  const monthWidth = useSharedValue(0);
+  const yearWidth = useSharedValue(0);
+  const hasYear = detail !== null;
+  const measureMonth = useCallback(
+    (event: LayoutChangeEvent) => {
+      monthWidth.value = event.nativeEvent.layout.width;
+    },
+    [monthWidth],
+  );
+  const measureYear = useCallback(
+    (event: LayoutChangeEvent) => {
+      yearWidth.value = event.nativeEvent.layout.width;
+    },
+    [yearWidth],
+  );
+
   // The styles read `scrollY` every frame on the UI thread; this crosses to JS
-  // once, at the handover. Opacity is continuous and reachability is not — a
-  // control at 4% opacity is invisible and still tappable, and a screen reader
-  // walking both layouts hears the month twice.
-  const [collapsed, setCollapsed] = useState(false);
+  // once, when the stepper becomes real. Its arrival is continuous and its
+  // reachability is not — a control at 4% opacity is invisible and still
+  // tappable, and a screen reader offers *previous month* on a screen where no
+  // arrow is drawn.
+  const [stepping, setStepping] = useState(false);
   // What JS has already been told, mirrored on the UI thread.
   //
   // **Not the reaction's own `previous`.** That is `null` on its first run, so
@@ -154,16 +216,16 @@ function PagerHeaderView({
   // costs a render that changes nothing — measured at two per crossing instead
   // of one. Guarding on `previous !== null` is worse and was tried: the first
   // run is the first *observation*, not the mount, so on a page opened
-  // already-scrolled it swallows the real transition and the header never
-  // collapses at all. This mirror starts where the state does, so exactly one
+  // already-scrolled it swallows the real transition and the stepper never
+  // arrives at all. This mirror starts where the state does, so exactly one
   // render happens per genuine crossing and none for anything else.
   const sent = useSharedValue(false);
   useAnimatedReaction(
-    () => isCollapsed(collapseProgress(scrollY.value)),
+    () => stepperIsReal(collapseProgress(scrollY.value)),
     (next) => {
       if (next === sent.value) return;
       sent.value = next;
-      runOnJS(setCollapsed)(next);
+      scheduleOnRN(setStepping, next);
     },
     [scrollY],
   );
@@ -172,91 +234,111 @@ function PagerHeaderView({
     () => ({ height: headerHeight(collapseProgress(scrollY.value)) }),
     [scrollY],
   );
-  const rest = useAnimatedStyle(() => {
+  const title = useAnimatedStyle(() => {
     const progress = collapseProgress(scrollY.value);
-    return { opacity: restOpacity(progress), transform: [{ translateY: restLift(progress) }] };
-  }, [scrollY]);
-  const shut = useAnimatedStyle(() => {
+    // The block's padding is above the row, so the row's own top is that much
+    // further down than the box the transform moves.
+    return { transform: [{ translateY: titleTop(progress, monthWidth.value) - TITLE_PAD }] };
+  }, [scrollY, monthWidth]);
+  const month = useAnimatedStyle(
+    () => ({ transform: [{ scale: monthScale(collapseProgress(scrollY.value)) }] }),
+    [scrollY],
+  );
+  const year = useAnimatedStyle(() => {
     const progress = collapseProgress(scrollY.value);
-    return { opacity: shutOpacity(progress), transform: [{ translateY: shutSettle(progress) }] };
-  }, [scrollY]);
+    return {
+      transform: [
+        { translateX: yearShiftX(progress, monthWidth.value) },
+        { translateY: yearShiftY(progress, monthWidth.value) },
+        { scale: yearScale(progress, monthWidth.value) },
+      ],
+    };
+  }, [scrollY, monthWidth]);
+  const caret = useAnimatedStyle(() => {
+    const progress = collapseProgress(scrollY.value);
+    // **`hasYear`, not the measured width.** A width is only stale evidence
+    // that something was drawn: `onLayout` does not fire on unmount, so a
+    // header whose `detail` went from `2026` to `null` would keep the last
+    // year's width and hold 40pt of empty room open beside a label with
+    // nothing in it. What the caret needs to know is whether a year is on
+    // screen now, and only the render knows that.
+    const width = hasYear ? yearWidth.value : 0;
+    return {
+      transform: [
+        { translateX: caretShiftX(progress, monthWidth.value, width) },
+        { scale: caretScale(progress) },
+      ],
+    };
+  }, [scrollY, monthWidth, yearWidth, hasYear]);
+  const stepper = useAnimatedStyle(
+    () => ({ opacity: stepperArrival(collapseProgress(scrollY.value)) }),
+    [scrollY],
+  );
 
   const pick = useCallback(() => onPickPeriod(), [onPickPeriod]);
 
   return (
     <Animated.View style={[styles.root, root]}>
-      {/* ── At rest ─────────────────────────────────────────────────────── */}
-      <Animated.View style={[styles.layer, rest]} pointerEvents={collapsed ? "none" : "auto"}>
+      {/*
+        The title is positioned rather than laid out in a row with the
+        controls: its vertical place is a function of the progress — the year
+        hangs under the month at rest and the pair is anchored to the header's
+        bottom — and a flex row can only ever put it where the box ends.
+      */}
+      <Animated.View style={[styles.title, title]}>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={labels.pickPeriod}
-          accessibilityElementsHidden={collapsed}
-          importantForAccessibility={collapsed ? "no-hide-descendants" : "yes"}
-          {...(collapsed ? HIDDEN : SHOWN)}
-          disabled={collapsed}
           onPress={pick}
           {...handlers}
           style={[styles.titleBlock, focused ? styles.focused : null]}
         >
           <View style={styles.titleRow}>
-            {/*
-              The heading is the title at rest and the same words collapsed, so
-              only one of the two is ever in the tree — the other is hidden by
-              the same flag that takes its pointer.
-            */}
-            <Text accessibilityRole="header" style={styles.title} numberOfLines={1}>
+            <Animated.Text
+              accessibilityRole="header"
+              onLayout={measureMonth}
+              style={[styles.month, month]}
+              numberOfLines={1}
+            >
               {label}
-            </Text>
-            <CaretDownIcon size={TITLE_CARET} color={ink} />
+            </Animated.Text>
+            <Animated.View style={caret}>
+              <CaretDownIcon size={CARET_REST} color={ink} />
+            </Animated.View>
           </View>
-          {detail === null ? null : <Text style={styles.detail}>{detail}</Text>}
+          {/*
+            Out of flow, so the row above keeps one height at both ends of the
+            travel: the year is *drawn* under the month at rest and beside it
+            collapsed, and a year that took a line in the layout would make the
+            title block change height every frame — the one thing this whole
+            file is arranged to avoid.
+          */}
+          {detail === null ? null : (
+            <Animated.Text onLayout={measureYear} style={[styles.year, year]} numberOfLines={1}>
+              {detail}
+            </Animated.Text>
+          )}
         </Pressable>
-
-        <View style={styles.spacer} />
-
-        <IconButton
-          onPress={onSearch}
-          accessibilityLabel={labels.search}
-          disabled={false}
-          hidden={collapsed}
-        >
-          <MagnifyingGlassIcon size={ICON} color={ink} />
-        </IconButton>
       </Animated.View>
 
-      {/* ── Scrolled ────────────────────────────────────────────────────── */}
-      <Animated.View style={[styles.layer, shut]} pointerEvents={collapsed ? "auto" : "none"}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={labels.pickPeriod}
-          accessibilityElementsHidden={!collapsed}
-          importantForAccessibility={collapsed ? "yes" : "no-hide-descendants"}
-          {...(collapsed ? SHOWN : HIDDEN)}
-          disabled={!collapsed}
-          onPress={pick}
-          style={styles.compactTitle}
-        >
-          <Text accessibilityRole="header" style={styles.compact} numberOfLines={1}>
-            {label}
-          </Text>
-          {detail === null ? null : <Text style={styles.compactDetail}>{detail}</Text>}
-          <CaretDownIcon size={TITLE_CARET - 2} color={ink} />
-        </Pressable>
-
-        <View style={styles.spacer} />
-
+      {/*
+        The controls keep the bottom 48pt at both ends of the travel — the row
+        the header closes down to. They do not move, which is what lets the
+        title move against something.
+      */}
+      <View style={styles.controls}>
         {/*
           One control, not two buttons that happen to be adjacent. Split by a
           hairline inside a single track, a pair of chevrons reads as *step*;
           floating free they read as two more glyphs in a row that already has
           one.
         */}
-        <View style={styles.stepper}>
+        <Animated.View style={[styles.stepper, stepper]}>
           <IconButton
             onPress={onPrevious}
             accessibilityLabel={labels.previous}
             disabled={onPrevious === undefined}
-            hidden={!collapsed}
+            hidden={!stepping}
           >
             <CaretLeftIcon size={ICON - 2} color={ink} />
           </IconButton>
@@ -265,29 +347,29 @@ function PagerHeaderView({
             onPress={onNext}
             accessibilityLabel={labels.next}
             disabled={onNext === undefined}
-            hidden={!collapsed}
+            hidden={!stepping}
           >
             <CaretRightIcon size={ICON - 2} color={ink} />
           </IconButton>
-        </View>
+        </Animated.View>
 
         <IconButton
           onPress={onSearch}
           accessibilityLabel={labels.search}
           disabled={false}
-          hidden={!collapsed}
+          hidden={false}
         >
           <MagnifyingGlassIcon size={ICON} color={ink} />
         </IconButton>
-      </Animated.View>
+      </View>
     </Animated.View>
   );
 }
 
 /**
- * `react-native-web` maps neither native hiding prop, so without these the
- * layer that has faded out stays in the web build's accessibility tree and the
- * month is announced twice (`conformance.test.ts`).
+ * `react-native-web` maps neither native hiding prop, so without these a
+ * control that has not arrived stays in the web build's accessibility tree and
+ * a reader is offered arrows that are not drawn (`conformance.test.ts`).
  */
 const HIDDEN: { "aria-hidden": true } = { "aria-hidden": true };
 const SHOWN: { "aria-hidden": false } = { "aria-hidden": false };
@@ -295,33 +377,72 @@ const SHOWN: { "aria-hidden": false } = { "aria-hidden": false };
 export const PagerHeader = memo(PagerHeaderView);
 
 const useStyles = makeStyles((theme) => ({
-  root: { justifyContent: "center", overflow: "hidden" },
-  // Stacked, so the two layouts occupy the same place and the height is the
-  // only thing that moves the content beneath them.
-  layer: {
+  root: { overflow: "hidden" },
+  /**
+   * **`right` is not optional.** The title and the controls used to share one
+   * flex row, so `flexShrink` truncated the month before it reached the
+   * magnifier. Positioned, they have no layout relationship at all and
+   * `numberOfLines={1}` truncates at the *header's* width — which is fine for
+   * `September` at the default text size and is not fine for a longer month at
+   * a large one, where the title runs under the stepper. The reserve is the
+   * controls' own width, which is a constant: they are fixed-size icon buttons
+   * and are laid out at that width whether or not the stepper is drawn yet.
+   */
+  title: { position: "absolute", left: 0, top: 0, right: CONTROLS_WIDTH },
+  controls: {
     position: "absolute",
-    left: 0,
     right: 0,
     bottom: 0,
+    height: COLLAPSED_HEIGHT,
     flexDirection: "row",
     alignItems: "center",
-    minHeight: COLLAPSED_HEIGHT,
   },
-  spacer: { flex: 1 },
-  titleBlock: { justifyContent: "center", paddingVertical: space.xs, borderRadius: radius.sm },
-  titleRow: { flexDirection: "row", alignItems: "center", gap: space.sm },
-  title: { ...text.display("displayTwo"), color: theme.text, flexShrink: 1 },
-  detail: { ...text.ui("caption"), color: theme.textMuted },
-  compactTitle: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: space.sm,
-    minHeight: touchTarget.min,
+  /**
+   * The picker's target: the row, plus the room the year sits in under it.
+   *
+   * **The year is drawn out of flow but has to be inside this box.** React
+   * Native delivers no touch to a child rendered outside its parent's bounds,
+   * so a block sized to the row alone would leave the lower half of `2026`
+   * tappable on web and dead on both phones — the worst kind of difference,
+   * because the surface that is easiest to check is the one that works. The
+   * padding is static: the title's own position is computed from where the row
+   * sits inside this box, so a padding that moved would move the title twice.
+   * Collapsed, the last few points hang below the header and are clipped with
+   * it, which still leaves more than the 44pt minimum.
+   */
+  titleBlock: {
+    paddingTop: TITLE_PAD,
+    paddingBottom: YEAR_SLOT,
     borderRadius: radius.sm,
+  },
+  titleRow: { flexDirection: "row", alignItems: "center", gap: TITLE_GAP, height: MONTH_ROW },
+  /**
+   * **The left edge and the vertical centre are pinned**, so the month grows
+   * and shrinks in place. S04 §3: the month never moves sideways.
+   */
+  month: {
+    ...text.display("displayTwo"),
+    color: theme.text,
+    transformOrigin: "left center",
+    // So a month too long for the reserve ellipsizes rather than pushing the
+    // caret out of the block. The measured width is then the truncated width,
+    // which is the width the year has to clear — still the right number.
     flexShrink: 1,
   },
-  compact: { ...text.display("displayThree"), color: theme.text, flexShrink: 1 },
-  compactDetail: { ...text.display("displayThree"), color: theme.textMuted },
+  /**
+   * Laid out at `displayThree` — the size it reaches — and scaled down to a
+   * caption at rest. Positioned from the row's own height so the drop under
+   * the month is the line height rather than a number that has to be kept in
+   * step with one.
+   */
+  year: {
+    ...text.display("displayThree"),
+    color: theme.textMuted,
+    position: "absolute",
+    left: 0,
+    top: TITLE_PAD + MONTH_ROW,
+    transformOrigin: "left center",
+  },
   stepper: {
     flexDirection: "row",
     alignItems: "center",

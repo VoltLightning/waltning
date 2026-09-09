@@ -18,11 +18,16 @@
 
 import { memo } from "react";
 import { View } from "react-native";
-import Animated, { type SharedValue, useSharedValue } from "react-native-reanimated";
+import Animated, {
+  type SharedValue,
+  useAnimatedStyle,
+  useSharedValue,
+} from "react-native-reanimated";
 import { useSafeArea } from "../../../primitives/safe-area";
 import { makeStyles } from "../../../theme/styles.ts";
 import { space } from "../../../tokens.ts";
 import { type PageTab, PageTabs } from "../../molecules/page-tabs/page-tabs";
+import { chromeSlack, collapseProgress } from "../../molecules/pager-header/collapse.ts";
 import { PagerHeader } from "../../molecules/pager-header/pager-header";
 import { Pager, type PagerPage } from "../pager/pager";
 import { usePeriodMotion } from "./use-period-motion.ts";
@@ -85,6 +90,20 @@ function PagerFrameView({
   // round-trip in the middle of a gesture.
   const progress = useSharedValue(0);
   const period = usePeriodMotion(periodKey, activeKey);
+  /**
+   * What the chrome has not yet given back, taken off its own footprint and
+   * handed to the pager as a transform — `chromeSlack` has the whole argument.
+   * The pair is what keeps the pager's layout box identical at every offset,
+   * so the header can no longer resize the scroller it is reading.
+   */
+  const give = useAnimatedStyle(
+    () => ({ marginBottom: -chromeSlack(collapseProgress(scrollY.value)) }),
+    [scrollY],
+  );
+  const take = useAnimatedStyle(
+    () => ({ transform: [{ translateY: chromeSlack(collapseProgress(scrollY.value)) }] }),
+    [scrollY],
+  );
   // Not in `useStyles`: that cache is keyed on the theme and this is keyed on
   // the device. The chrome is the top of the screen, so it clears the status
   // bar — without this the month sits under the clock.
@@ -95,7 +114,7 @@ function PagerFrameView({
 
   return (
     <View style={styles.root}>
-      <View style={[styles.chrome, clearStatusBar]}>
+      <Animated.View style={[styles.chrome, clearStatusBar, give]}>
         <PagerHeader
           label={periodLabel}
           detail={periodDetail}
@@ -107,14 +126,23 @@ function PagerFrameView({
           labels={barLabels}
         />
         <PageTabs tabs={tabs} activeKey={activeKey} onSelect={onPageChange} progress={progress} />
-      </View>
-      <Animated.View style={[styles.pages, period]}>
-        <Pager
-          pages={pages}
-          activeKey={activeKey}
-          onActiveKeyChange={onPageChange}
-          progress={progress}
-        />
+      </Animated.View>
+      {/*
+        Two views, because they carry two transforms and a style array does not
+        merge them — the later `transform` replaces the earlier one outright,
+        so a page step would cancel the follow or the follow would cancel the
+        page step. The outer one follows the chrome; the inner one is the
+        period's own motion, which knows nothing about the scroll.
+      */}
+      <Animated.View style={[styles.pages, take]}>
+        <Animated.View style={[styles.period, period]}>
+          <Pager
+            pages={pages}
+            activeKey={activeKey}
+            onActiveKeyChange={onPageChange}
+            progress={progress}
+          />
+        </Animated.View>
       </Animated.View>
     </View>
   );
@@ -140,6 +168,7 @@ const useStyles = makeStyles((theme) => ({
    * measurement is derived from the very heights it would be setting.
    */
   pages: { flex: 1 },
+  period: { flex: 1 },
   root: {
     position: "absolute",
     top: 0,
@@ -147,6 +176,16 @@ const useStyles = makeStyles((theme) => ({
     right: 0,
     bottom: 0,
     backgroundColor: theme.ground,
+    /**
+     * **The pager hangs one collapse below the screen at rest, and this is
+     * what stops that showing.** Its box is the collapsed size at every
+     * offset — that is the whole point of `chromeSlack` — so while the header
+     * is open the same box is pushed down past the bottom edge by exactly the
+     * height the header has not yet given up. The reader loses nothing: the
+     * part below the edge is the part they are about to scroll to, and
+     * scrolling to it is what brings it up.
+     */
+    overflow: "hidden",
   },
   // The chrome sits on the surface, not the ground: it is the thing the pages
   // move under, and a band the same colour as what scrolls past it stops

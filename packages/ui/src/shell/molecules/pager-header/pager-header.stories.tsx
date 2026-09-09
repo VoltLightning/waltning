@@ -52,6 +52,19 @@ export const AtRest: Story = { args: { scrollY: at(0) } };
 export const Scrolled: Story = { args: { scrollY: at(COLLAPSE_TRAVEL) } };
 
 /**
+ * **Mid-travel, which is where the header used to be blank.**
+ *
+ * Two stacked layouts cross-faded met at zero here: at exactly this offset
+ * neither was drawn, and either side of it the month sat under half lit. The
+ * baseline is worth having precisely because both ends of a transition can look
+ * right while the middle of it is empty — a story at rest and a story scrolled
+ * would both have passed the whole time the bar was flickering.
+ *
+ * It is also where the year is: past the month's edge, not yet up on its row.
+ */
+export const MidTravel: Story = { args: { scrollY: at(COLLAPSE_TRAVEL / 2) } };
+
+/**
  * **Months, where the year is the period.** `2026` under `2026` is the year
  * twice, so the caption is dropped rather than repeated.
  */
