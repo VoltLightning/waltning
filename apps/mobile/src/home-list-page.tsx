@@ -10,7 +10,8 @@ import { Amount } from "@waltning/ui/fx/amount";
 import { dayLabel, weekdayInitial } from "@waltning/ui/i18n/locales";
 import { useLocale, useT } from "@waltning/ui/i18n/provider";
 import { pageScrollProps } from "@waltning/ui/primitives/nested-scroll";
-import type { ScrollHandler } from "@waltning/ui/shell/card";
+import { GroundPanel, type ScrollHandler } from "@waltning/ui/shell/card";
+import { useGroundInset } from "@waltning/ui/shell/ground-inset";
 import { text } from "@waltning/ui/theme/fonts";
 import { makeStyles } from "@waltning/ui/theme/styles";
 import { DayHeader } from "@waltning/ui/transactions/day-header";
@@ -51,8 +52,9 @@ export type HomeListPageProps = {
   onOpenTransaction: (id: string) => void;
   /**
    * Forwarded to the list, for chrome that moves with the page. This screen
-   * owns its scroller (`GroundPanel` is not in the tree), so it is the only
-   * thing that can report the offset the header collapses from.
+   * owns its scroller — the panel around it is `scroll="own"`, a plain `View`
+   * — so it is the only thing that can report the offset the header collapses
+   * from.
    */
   onScroll?: ScrollHandler | undefined;
   /**
@@ -182,6 +184,11 @@ export function HomeListPage({
   }, [hasOlder, loadOlder]);
 
   const styles = useStyles();
+  const inset = useGroundInset();
+  // The gutter and the home-indicator clearance, on the content rather than on
+  // the scroller: a `View` around the list clips the scroll bar inside the page
+  // and slices a focused row's ring.
+  const content = useMemo(() => [styles.content, inset.content], [styles.content, inset.content]);
   // `ListEmptyComponent` takes an element or a component type, and an element
   // built in the prop would be a new one every render.
   //
@@ -195,7 +202,16 @@ export function HomeListPage({
   );
 
   return (
-    <View style={styles.root}>
+    /*
+      **`scroll="own"`, because this page owns a virtualised list.** Nesting a
+      `FlatList` inside the panel's default `ScrollView` is React Native's
+      double-scroll warning, not a second kind of page. The panel then carries
+      neither the gutter nor the bottom clearance — both have to land on the
+      content that scrolls, which is `inset.content` below. Without the panel
+      at all, which is how this shipped, the rows ran to both edges of the
+      device and the amounts on the right were cut off by the screen.
+    */
+    <GroundPanel scroll="own">
       <DayRibbon days={days} current={anchor} onPickDay={onPickDay} />
       <Animated.FlatList
         data={entries}
@@ -204,7 +220,7 @@ export function HomeListPage({
         ListEmptyComponent={emptyElement}
         // So the empty state has the page to sit in rather than a strip at the
         // top of one: with no rows the content is shorter than the scroller.
-        contentContainerStyle={styles.content}
+        contentContainerStyle={content}
         onEndReached={handleEndReached}
         onEndReachedThreshold={END_REACHED_THRESHOLD}
         onScroll={onScroll}
@@ -214,7 +230,7 @@ export function HomeListPage({
         // The page's own vertical scroller, inside the pager's horizontal one.
         {...pageScrollProps(styles.list)}
       />
-    </View>
+    </GroundPanel>
   );
 }
 

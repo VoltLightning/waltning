@@ -434,16 +434,23 @@ export default function Today() {
     leadNetWorth?.currency,
     whereItWentLabels,
   );
-  const whereItWent =
-    whereItWentRows.length === 0 || leadNetWorth === undefined ? null : (
-      <Card title={t("shell.whereItWent")}>
-        <SpendRows
-          rows={whereItWentRows}
-          currency={leadNetWorth.currency}
-          decimals={leadNetWorth.decimals}
-        />
-      </Card>
-    );
+  // Memoised for the reason the banner and the month card are: `ledgerBody` is
+  // built from it, `body` from that and `pages` from that, so a fresh element
+  // here re-renders all four of the pager's pages. Opening the month picker
+  // did exactly that — a sheet appearing redrew the calendar behind it.
+  const whereItWent = useMemo(
+    () =>
+      whereItWentRows.length === 0 || leadNetWorth === undefined ? null : (
+        <Card title={t("shell.whereItWent")}>
+          <SpendRows
+            rows={whereItWentRows}
+            currency={leadNetWorth.currency}
+            decimals={leadNetWorth.decimals}
+          />
+        </Card>
+      ),
+    [whereItWentRows, leadNetWorth, t],
+  );
 
   // S04 §3 draws exactly one banner row, and `Banner`'s own doc is explicit —
   // "page-level, one tone, one action." A second (or third) unsettled

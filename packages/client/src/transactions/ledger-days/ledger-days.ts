@@ -186,7 +186,7 @@ export function ribbonDays<Row extends LedgerDayRow>(
   }
   const half = money.mul(largest, 0.5);
 
-  return days.map((day) => {
+  const marked = days.map((day): RibbonDayModel => {
     if (day.total.kind === "unpriced") {
       return {
         date: day.date,
@@ -217,4 +217,47 @@ export function ribbonDays<Row extends LedgerDayRow>(
       entries: day.rows.length,
     };
   });
+
+  return fillQuietDays(marked);
+}
+
+/**
+ * **The ribbon is continuous** (S04 §7.2): a cell for every day between the
+ * first and the last the list has loaded, whether or not the ledger has
+ * anything for it.
+ *
+ * A strip built only from the days that hold rows is not a strip — a ledger
+ * with one transaction drew one cell, which reads as a broken control rather
+ * than as a quiet month, and the gaps between two marks said nothing about
+ * whether they were a day or a fortnight apart. The list itself collapses a
+ * quiet run into one row, because a list of nothings is unreadable; the ribbon
+ * cannot, because the distance *is* what it draws.
+ *
+ * A day with nothing on it is `none` and `flat`, which is the mark's absence —
+ * the same shape a month grid's empty cell has.
+ */
+function fillQuietDays(marked: readonly RibbonDayModel[]): readonly RibbonDayModel[] {
+  const first = marked[0];
+  const last = marked[marked.length - 1];
+  if (first === undefined || last === undefined) return marked;
+
+  // The list runs newest first, so the span is from the last to the first.
+  const from = first.date <= last.date ? first.date : last.date;
+  const to = first.date <= last.date ? last.date : first.date;
+  const held = new Map(marked.map((day) => [day.date as string, day]));
+
+  const run: RibbonDayModel[] = [];
+  for (let date = from; date <= to; date = addDays(date, 1)) {
+    run.push(
+      held.get(date) ?? {
+        date,
+        activity: "none",
+        direction: "flat",
+        pivot: money.ZERO,
+        entries: 0,
+      },
+    );
+  }
+  // Back into the order the caller had them in.
+  return first.date <= last.date ? run : run.reverse();
 }

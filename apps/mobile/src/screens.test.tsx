@@ -1473,6 +1473,38 @@ describe("Today — the pager, with a month in it", () => {
     expect(calendar.queryByRole("button", { name: /Market B/ })).toBeNull();
   });
 
+  /**
+   * **Opening the month picker must not redraw the pages behind it.**
+   *
+   * The pager keeps all four mounted, so anything that hands them fresh
+   * elements re-renders every one of them — and a chain of four inline
+   * elements did exactly that, so a sheet appearing redrew the calendar
+   * underneath it. Measured in Chrome at the time; this is what keeps it
+   * measured.
+   *
+   * Counted through the calendar's `labelFor`, which the grid calls once per
+   * drawn day per render: no counter inside a component, and nothing to
+   * remove afterwards.
+   */
+  it("draws nothing again when the month picker opens over it", () => {
+    open("calendar");
+    const cellsBefore = screen
+      .getAllByRole("button")
+      .filter((node) => /^[A-Z][a-z]+ \d+, \d{4}/.test(node.getAttribute("aria-label") ?? ""));
+
+    act(() => {
+      screen.getAllByRole("button", { name: "Choose a month" })[0]?.click();
+    });
+
+    // The same element objects, not merely the same count: React keeps a node
+    // it did not re-render, and replaces the one it did.
+    const cellsAfter = screen
+      .getAllByRole("button")
+      .filter((node) => /^[A-Z][a-z]+ \d+, \d{4}/.test(node.getAttribute("aria-label") ?? ""));
+    expect(cellsAfter[0]).toBe(cellsBefore[0]);
+    expect(cellsAfter.at(-1)).toBe(cellsBefore.at(-1));
+  });
+
   it("gives Months twelve rows, the current one marked", () => {
     const months = open("months");
     const rows = months

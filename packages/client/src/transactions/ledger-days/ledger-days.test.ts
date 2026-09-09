@@ -195,3 +195,40 @@ describe("ribbonDays", () => {
     expect(ribbonDays(items)[0]?.entries).toBe(3);
   });
 });
+
+describe("the ribbon is continuous", () => {
+  it("draws a cell for every day between the first and the last, not only the busy ones", () => {
+    // §7.2 says continuous. A strip built only from the days that hold rows is
+    // not a strip: one transaction drew one cell, which reads as a broken
+    // control rather than as a quiet month, and the gap between two marks said
+    // nothing about whether they were a day or a fortnight apart.
+    const items = toLedgerItems([row("2026-09-01", "-10"), row("2026-09-05", "-20")], PLN);
+    // Kept in the order the list had them, which on the phone is newest first
+    // and in this fixture is oldest — the fill does not reorder the ledger.
+    const days = ribbonDays(items);
+    expect(days.map((day) => day.date)).toEqual([
+      "2026-09-01",
+      "2026-09-02",
+      "2026-09-03",
+      "2026-09-04",
+      "2026-09-05",
+    ]);
+  });
+
+  it("marks a filled day and leaves a quiet one bare", () => {
+    const items = toLedgerItems([row("2026-09-01", "-10"), row("2026-09-03", "-20")], PLN);
+    const byDate = new Map(ribbonDays(items).map((day) => [day.date as string, day]));
+    expect(byDate.get("2026-09-02")?.activity).toBe("none");
+    expect(byDate.get("2026-09-02")?.entries).toBe(0);
+    expect(byDate.get("2026-09-03")?.activity).not.toBe("none");
+  });
+
+  it("draws one cell for a list that loaded one day", () => {
+    const items = toLedgerItems([row("2026-09-01", "-10")], PLN);
+    expect(ribbonDays(items).map((day) => day.date)).toEqual(["2026-09-01"]);
+  });
+
+  it("is empty for a list that loaded nothing", () => {
+    expect(ribbonDays([])).toEqual([]);
+  });
+});

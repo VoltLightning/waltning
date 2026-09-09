@@ -261,7 +261,7 @@ happened*.
 | `MonthSummary` | The hero, opening month only. *Kept so far* stacked over its figure, a `FlowBar`, then the labelled pair. Draws three zeroes for a period the ledger did not exist in — that is the true answer, not an empty state |
 | `FlowBar` | Track is *came in*, fill is *went out*, gap is *kept*. Fill clamps at 100%; a deficit is carried by the figures, not by an overrunning bar |
 | `SpendRows` | *Where it went* — §6 at leaf granularity, five rows plus a named remainder, bars proportional to the largest row, one colour. Opening month only |
-| `DayRibbon` | Under `PageTabs`, on the List page only. Continuous, horizontally scrollable, clipped at both edges. 48×66 cells with the day number at 17px and room around the weekday letter. Activity mark per §3 |
+| `DayRibbon` | Under `PageTabs`, on the List page only. Continuous — a cell for **every** day between the first and the last the list has loaded, not only the days holding rows, because the distance between two marks is part of what the strip draws. Horizontally scrollable, clipped at both edges. 48×66 cells with the day number at 17px and room around the weekday letter. Activity mark per §3 |
 | `MonthGrid` | Calendar's own grid — a day per cell with `DayRibbon`'s activity mark, ≥44px |
 | `MonthRows` | Months' twelve rows, income and spend per month |
 | `DayGroup` | A day's rows under its date and total. The list's only grouping |
