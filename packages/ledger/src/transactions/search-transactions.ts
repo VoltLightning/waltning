@@ -547,3 +547,77 @@ function totalsOf(rows: readonly FoldedRow[]): TransactionSearchTotals {
 
   return { count: rows.length, currencies: [...byCurrency.values()] };
 }
+
+/** One day of the period, and how many rows in it matched. */
+export type MatchDay = { date: AccountingDate; count: number };
+
+/**
+ * §7's match counts, cut by day — what Calendar and Months draw while the
+ * screen is searching.
+ *
+ * **In this file, sharing this file's matcher.** §13's text rule cannot be
+ * pushed into SQL (`matchesText`'s own doc), so a count taken anywhere else
+ * would be a *second* reading of what a search means — and the two would
+ * disagree the first time §13 changed. The candidate query, `fold`,
+ * `parseSearchAmount`, `lineDescriptionsBy` and `matchesText` are the same
+ * ones `searchTransactions` uses, four lines above.
+ *
+ * **A period, not a page.** The same reason `readDayFlows` gives: a calendar
+ * cannot be paged, and a grid whose 30th day was missing because the page ended
+ * at 29 is a silently wrong picture rather than a short list.
+ *
+ * **Days with no match are absent, not zero.** A caller draws a grid or twelve
+ * rows and knows which days it wants; a read that invented an entry per empty
+ * day would be returning the calendar's own shape back to it.
+ */
+export function readMatchDays<TRun, TSchema extends typeof ledgerSchema>(
+  db: ReplicaDb<TRun, TSchema>,
+  period: money.Period,
+  text: string,
+): readonly MatchDay[] {
+  const needle = fold(text.trim());
+  if (needle === "") return [];
+  const needleAmount = parseSearchAmount(text);
+
+  /**
+   * **The period's end is exclusive; `structuralWhere`'s `to` is inclusive.**
+   * `money.Period` is half-open — `readDayFlows` bounds itself with
+   * `lt(date, end)` — and handing `end` straight to a filter that compares with
+   * `lte` puts the first day of the *next* month into this month's grid. Caught
+   * by a test that inserted a row on 1 October and found it counted in
+   * September.
+   *
+   * Bounded here rather than by shifting the date: a date subtraction would be
+   * arithmetic on an accounting date, which this project does not do, and the
+   * predicate is the thing that was wrong.
+   */
+  const structuralWhere = and(
+    structuralWhereFor({ from: period.start }),
+    lt(transactions.date, period.end),
+  );
+  const candidates = db
+    .select({
+      id: transactions.id,
+      date: transactions.date,
+      payee: transactions.payee,
+      note: transactions.note,
+      amountOriginal: transactions.amountOriginal,
+    })
+    .from(transactions)
+    .innerJoin(accounts, eq(transactions.accountId, accounts.id))
+    .innerJoin(currencies, eq(transactions.currency, currencies.code))
+    .where(structuralWhere)
+    .all();
+
+  const lines =
+    candidates.length > 0
+      ? lineDescriptionsBy(db, structuralWhere)
+      : new Map<Id<"transactions">, string[]>();
+
+  const byDay = new Map<AccountingDate, number>();
+  for (const row of candidates) {
+    if (!matchesText(row, needle, needleAmount, lines.get(row.id) ?? [])) continue;
+    byDay.set(row.date, (byDay.get(row.date) ?? 0) + 1);
+  }
+  return [...byDay].map(([date, count]) => ({ date, count }));
+}

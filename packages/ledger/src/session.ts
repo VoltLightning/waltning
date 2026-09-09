@@ -179,6 +179,8 @@ import { type LocalRecentTransaction, readRecent } from "./transactions/read-rec
 import { readSpendByCategory } from "./transactions/read-spend-by-category.ts";
 import { type LocalTransactionDetail, readTransaction } from "./transactions/read-transaction.ts";
 import {
+  type MatchDay,
+  readMatchDays,
   searchTransactions,
   type TransactionSearchCursor,
   type TransactionSearchFilter,
@@ -268,6 +270,8 @@ export type LocalLedgerSession = {
   readPeriodSpend: (period: Period) => readonly PeriodSpendRow[];
   /** The same figure cut by day — S04's calendar. Bounded by the period, never paged. */
   readDayFlows: (period: Period) => readonly DayFlowRow[];
+  /** §7's match counts by day, for Calendar and Months while searching. */
+  readMatchDays: (period: Period, text: string) => readonly MatchDay[];
   /** Every row on one day — the entries the calendar opens. Bounded by the date. */
   readDayRows: (date: AccountingDate) => readonly SignedLedgerRow[];
   /** §6, per currency and category — `S01`'s donut. `scope` is the desk band's own segment. `DESK4`. */
@@ -660,6 +664,7 @@ export function createLocalLedgerSession<TRun>(
     listNetWorth: () => readNetWorth(requireOpen().replica.db),
     readPeriodSpend: (period) => readPeriodSpend(requireOpen().replica.db, period),
     readDayFlows: (period) => readDayFlows(requireOpen().replica.db, period),
+    readMatchDays: (period, text) => readMatchDays(requireOpen().replica.db, period, text),
     readDayRows: (date) => readDayRows(requireOpen().replica.db, date),
     readSpendByCategory: (period, scope) =>
       readSpendByCategory(requireOpen().replica.db, period, scope),

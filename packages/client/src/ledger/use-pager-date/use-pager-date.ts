@@ -40,7 +40,7 @@ export function usePagerDate(
   today: AccountingDate,
   initialPage: PagerPageKey = "summary",
 ): PagerDate {
-  const [state, setState] = useState<PagerState>({ date: today, page: initialPage });
+  const [state, setState] = useState<PagerState>({ date: today, page: initialPage, query: null });
 
   const previous = useCallback(() => setState((s) => step(s, -1)), []);
   const next = useCallback(() => setState((s) => step(s, 1)), []);

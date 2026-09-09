@@ -63,6 +63,12 @@ export type HomeListPageProps = {
    */
   onReturnToToday: () => void;
   /**
+   * The screen's search (§7), or `null`. It narrows the rows; the day grouping
+   * and the quiet-day rules above are unchanged, which is what §7 means by
+   * *"day grouping survives, month rules mark the gaps"*.
+   */
+  query: string | null;
+  /**
    * Forwarded to the list, for chrome that moves with the page. This screen
    * owns its scroller — the panel around it is `scroll="own"`, a plain `View`
    * — so it is the only thing that can report the offset the header collapses
@@ -100,12 +106,20 @@ export function HomeListPage({
   onOpenTransaction,
   onCategorize,
   onReturnToToday,
+  query,
   onScroll,
   empty,
 }: HomeListPageProps) {
   const t = useT();
   const locale = useLocale();
-  const { rows, hasOlder, hasNewer, loadOlder, loadNewer } = useLedgerList(ledger, { anchor });
+  // A new object per render would re-key the list and discard both halves on
+  // every keystroke — `useLedgerList` treats a filter change as a jump, which
+  // is right for a *different* filter and ruinous for an identical one.
+  const filter = useMemo(() => (query === null ? undefined : { text: query }), [query]);
+  const { rows, hasOlder, hasNewer, loadOlder, loadNewer } = useLedgerList(ledger, {
+    anchor,
+    filter,
+  });
   const items = useMemo(() => toLedgerItems(rows, pivotCurrency), [rows, pivotCurrency]);
 
   const days = useMemo<readonly RibbonDay[]>(

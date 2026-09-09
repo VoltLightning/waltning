@@ -214,6 +214,14 @@ export const en = {
     /** One quiet day in the list — the line beside its date. */
     nothingThatDay: "nothing",
     /**
+     * §7's count on a Months row while the screen is searching. Two flat forms
+     * — the resolver picks; `resultsOne` explains why they are not one key.
+     */
+    matchesCountOne: "{{count}} match",
+    matchesCountMany: "{{count}} matches",
+    /** The field under the tabs while S04 is searching (§7). */
+    searchThisLedger: "Search this ledger",
+    /**
      * `TodayPill`'s accessible name (S04 §6).
      *
      * **It names where the list *is*, not just where it goes.** "Today" alone

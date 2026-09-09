@@ -39,7 +39,14 @@ export type LedgerList = {
 export type LedgerListOptions = {
   /** Where the list is centred. Changing it is a jump, and discards both halves. */
   anchor: AccountingDate;
-  filter?: Omit<PhoneSearchFilter, "text" | "from" | "to"> | undefined;
+  /**
+   * **`from`/`to` are excluded, `text` is not.** The anchor walk owns the date
+   * window — a filter that also bounded it would be two things deciding which
+   * rows exist. Text is the screen's search (S04 §7: *"Search is the strip's
+   * icon, and it filters this list"*), and it was excluded here for no reason
+   * beyond the desk owning search when this was written.
+   */
+  filter?: Omit<PhoneSearchFilter, "from" | "to"> | undefined;
 };
 
 /**

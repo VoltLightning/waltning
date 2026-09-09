@@ -66,6 +66,7 @@ const ROWS: readonly MonthRow[] = NAMES.map((label, index) => {
     inflowShare: share(inflow),
     spendShare: share(spend),
     note: index === 4 ? "+ 1 other currency" : null,
+    matches: null,
     ahead: index > 8,
   };
 });
@@ -104,6 +105,28 @@ export const Nothing: Story = {
       inflowShare: 0,
       spendShare: 0,
       note: null,
+      matches: null,
+    })),
+  },
+};
+
+/**
+ * **Searching (S04 §7).** Each month states how often it matched, in place of
+ * its bars and figures — the bars are drawn against the busiest month of the
+ * year, which under a search would still be scaled by money nobody asked about.
+ * A month with nothing found says so rather than disappearing: *not in this
+ * month* is part of *how often, and when*.
+ */
+export const Searching: Story = {
+  args: {
+    rows: ROWS.map((row, index) => ({
+      ...row,
+      matches:
+        index === 2
+          ? { label: "5 matches", found: true }
+          : index === 4
+            ? { label: "1 match", found: true }
+            : { label: "0 matches", found: false },
     })),
   },
 };

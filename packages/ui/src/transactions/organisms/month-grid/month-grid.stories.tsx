@@ -132,3 +132,21 @@ export const Nothing: Story = {
 export const AnotherMonth: Story = {
   args: { today: "2026-11-02", current: "2026-09-03" },
 };
+
+/**
+ * **Searching (S04 §7).** Every cell carries its match count *instead of* its
+ * activity mark — the mark is this grid's figure, and a cell drawing both would
+ * answer the reader's search and a question nobody asked in the same 44pt box.
+ * A day with no match keeps the mark's room and draws nothing in it, so the
+ * month does not reflow when a search starts.
+ */
+export const Searching: Story = {
+  args: {
+    matches: new Map([
+      ["2026-09-03", 2],
+      ["2026-09-04", 1],
+      ["2026-09-17", 5],
+      ["2026-09-24", 1],
+    ]),
+  },
+};

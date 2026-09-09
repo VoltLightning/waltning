@@ -56,6 +56,20 @@ export type DayCellProps = {
   today?: boolean;
   /** Beyond today: still reachable, drawn quieter. */
   ahead?: boolean;
+  /**
+   * How many rows on this day matched the screen's search (S04 §7).
+   *
+   * **Present replaces the activity mark; it does not sit beside it.** §7 says
+   * Calendar carries match counts *instead of* its figures, and the mark is
+   * this cell's figure — how much money moved. A cell drawing both would be
+   * answering the reader's search and a question nobody asked, in the same
+   * 44pt box.
+   *
+   * `undefined` is *not searching*. `0` is *searching, nothing here* — drawn as
+   * a blank cell rather than a zero, because thirty zeroes is a grid that says
+   * nothing thirty times.
+   */
+  matches?: number | undefined;
   /** The full date and what happened, for a reader who cannot see the number. */
   accessibilityLabel: string;
   onPress: () => void;
@@ -69,6 +83,7 @@ function DayCellView({
   current = false,
   today = false,
   ahead = false,
+  matches,
   accessibilityLabel,
   onPress,
 }: DayCellProps) {
@@ -107,7 +122,15 @@ function DayCellView({
     >
       {weekday === undefined ? null : <Text style={sub}>{weekday}</Text>}
       <Text style={ink}>{day}</Text>
-      <View style={[styles.mark, ...markStyle(styles, activity, direction, today)]} />
+      {matches === undefined ? (
+        <View style={[styles.mark, ...markStyle(styles, activity, direction, today)]} />
+      ) : matches === 0 ? (
+        // The mark's own room, kept empty: a grid whose cells changed height
+        // when a search started would reflow the month under the reader.
+        <View style={styles.mark} />
+      ) : (
+        <Text style={today ? styles.countOnFill : styles.count}>{matches}</Text>
+      )}
     </Pressable>
   );
 }
@@ -188,6 +211,13 @@ const useStyles = makeStyles((theme) => ({
   sub: { ...text.ui("caption", 600), color: theme.textMuted },
   subOnFill: { ...text.ui("caption", 600), color: theme.textOnAccent },
   mark: { borderRadius: radius.pill },
+  /**
+   * The count, in the mark's place. `caption` at 600 rather than the day's own
+   * size: the number a reader is scanning for is still the date, and a count
+   * drawn as large would make every searched month read as a grid of totals.
+   */
+  count: { ...text.ui("caption", 600), color: theme.accentText },
+  countOnFill: { ...text.ui("caption", 600), color: theme.textOnAccent },
   markNone: { width: 5, height: 5, backgroundColor: theme.insetFill },
   markSome: { width: 8, height: 8 },
   markHeavy: { width: 12, height: 12 },

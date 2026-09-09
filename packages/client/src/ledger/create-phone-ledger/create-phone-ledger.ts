@@ -719,6 +719,8 @@ export type PhoneLedgerPort = {
   readPeriodSpend: (period: money.Period) => readonly PhonePeriodSpend[];
   /** The same figure cut by day — S04's calendar. Bounded by the period, never paged. */
   readDayFlows: (period: money.Period) => readonly money.DayFlowRow[];
+  /** §7's match counts by day, for Calendar and Months while the screen searches. */
+  readMatchDays: (period: money.Period, text: string) => readonly PhoneMatchDay[];
   /** Every row on one day — the entries S04's calendar opens. Bounded by the date. */
   readDayRows: (date: AccountingDate) => PhoneLedgerPage["rows"];
   /** §6, on demand — `S01`'s donut. `DESK4`. */
@@ -867,6 +869,9 @@ export type PhoneCurrencySubtotal = {
  * when no shared account exists (`LocalNetWorth`'s own comment says why it is
  * a field rather than a `mine === ours` comparison).
  */
+/** One day of a searched period, and how many rows in it matched (S04 §7). */
+export type PhoneMatchDay = { date: AccountingDate; count: number };
+
 export type PhoneNetWorth = {
   currency: CurrencyCode;
   decimals: number;
@@ -1366,6 +1371,15 @@ export type PhoneLedgerController = {
    * short.
    */
   readDayFlows: (period: money.Period) => readonly money.DayFlowRow[];
+  /**
+   * §7's match counts by day — *how often, and when*, which is what Calendar
+   * and Months answer in place of their figures while a search is on.
+   *
+   * The counting runs through `searchTransactions`' own matcher, in its own
+   * file: §13's text rule cannot be pushed into SQL, so a second reading of
+   * what a search means is exactly how a count and a list come to disagree.
+   */
+  readMatchDays: (period: money.Period, text: string) => readonly PhoneMatchDay[];
   /**
    * Every row on one day — the entries S04's calendar opens under its grid
    * (§3). Bounded by the date rather than by a row count: a day ends, and a
@@ -2129,6 +2143,7 @@ export function createPhoneLedger(
     refresh,
     readPeriodSpend: (period) => port.readPeriodSpend(period),
     readDayFlows: (period) => port.readDayFlows(period),
+    readMatchDays: (period, text) => port.readMatchDays(period, text),
     readDayRows: (date) => port.readDayRows(date),
     readSpendByCategory: (period, scope) => port.readSpendByCategory(period, scope),
     readIncomeVsExpense: (buckets, scope) => port.readIncomeVsExpense(buckets, scope),

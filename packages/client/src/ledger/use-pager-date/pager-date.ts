@@ -25,6 +25,16 @@ export type PagerState = {
   /** Day precision, always — Summary and Months read its month. */
   date: AccountingDate;
   page: PagerPageKey;
+  /**
+   * What the screen is searching for, or `null`.
+   *
+   * **Beside the date because it behaves like the date** (S04 §7: *"it holds
+   * across the pages the way the date does"*). A query held by the List page
+   * would be a query the other three cannot see, and §7 asks Calendar and
+   * Months to answer *how often, and when* about the same search — which they
+   * can only do if the search is the screen's rather than one page's.
+   */
+  query: string | null;
 };
 
 /**
@@ -132,7 +142,7 @@ export function isPagerPageKey(value: string): value is PagerPageKey {
 }
 
 export function parsePagerState(
-  params: { view?: string | undefined; date?: string | undefined },
+  params: { view?: string | undefined; date?: string | undefined; q?: string | undefined },
   today: AccountingDate,
 ): PagerState {
   const page = params.view !== undefined && isPagerPageKey(params.view) ? params.view : "summary";
@@ -140,9 +150,32 @@ export function parsePagerState(
     params.date !== undefined && isRealCalendarDate(params.date)
       ? accountingDate(params.date)
       : today;
-  return { date, page };
+  return { date, page, query: normalizeQuery(params.q) };
 }
 
-export function pagerStateParams(state: PagerState): { view: PagerPageKey; date: AccountingDate } {
-  return { view: state.page, date: state.date };
+/**
+ * **A blank query is no query.** `?q=` and `?q=%20%20` arrive as a string and
+ * would both filter the ledger by the empty string — which matches everything
+ * and draws a chip saying the screen is narrowed when it is not. Trimmed and
+ * folded to `null` in one place, so no caller has to remember to.
+ */
+function normalizeQuery(raw: string | undefined): string | null {
+  if (raw === undefined) return null;
+  const trimmed = raw.trim();
+  return trimmed === "" ? null : trimmed;
+}
+
+export function pagerStateParams(state: PagerState): {
+  view: PagerPageKey;
+  date: AccountingDate;
+  // Empty rather than absent: `setParams` merges, so an omitted key leaves the
+  // old one in the URL and clearing a search would not clear it.
+  q: string;
+} {
+  return { view: state.page, date: state.date, q: state.query ?? "" };
+}
+
+/** The screen's search, changed. Every other part of the state survives it. */
+export function search(state: PagerState, query: string | null): PagerState {
+  return { ...state, query: normalizeQuery(query ?? undefined) };
 }

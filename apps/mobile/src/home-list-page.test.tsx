@@ -59,7 +59,12 @@ function ledgerWith(older: PhoneSearchTransaction[], newer: PhoneSearchTransacti
 function draw(
   ledger: PhoneLedgerController,
   onPickDay = vi.fn(),
-  over: { anchor?: AccountingDate; onReturnToToday?: () => void; onCategorize?: () => void } = {},
+  over: {
+    anchor?: AccountingDate;
+    onReturnToToday?: () => void;
+    onCategorize?: () => void;
+    query?: string | null;
+  } = {},
 ) {
   render(
     <ThemeProvider theme={light}>
@@ -74,6 +79,7 @@ function draw(
           onOpenTransaction={vi.fn()}
           onCategorize={over.onCategorize ?? vi.fn()}
           onReturnToToday={over.onReturnToToday ?? vi.fn()}
+          query={over.query ?? null}
           empty={<Text>nothing yet</Text>}
         />
       </I18nProvider>

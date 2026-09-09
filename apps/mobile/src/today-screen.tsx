@@ -5,11 +5,13 @@ import { isPagerPageKey } from "@waltning/client/ledger/pager-date";
 import { useDayFlows } from "@waltning/client/ledger/use-day-flows";
 import { useDayRows } from "@waltning/client/ledger/use-day-rows";
 import { useLedgerController } from "@waltning/client/ledger/use-ledger-controller";
+import { useMatchDays } from "@waltning/client/ledger/use-match-days";
 import { usePhoneLedger } from "@waltning/client/ledger/use-phone-ledger";
 import { useSpendByCategory } from "@waltning/client/ledger/use-spend-by-category";
 import { useUnsettledBanner } from "@waltning/client/ledger/use-unsettled-banner";
 import { useWhereItWent } from "@waltning/client/ledger/use-where-it-went";
 import { toLedgerItems } from "@waltning/client/transactions/ledger-days";
+import { matchesByDay, matchesByMonth } from "@waltning/client/transactions/match-counts";
 import { monthGrid, weekdayHeadings } from "@waltning/client/transactions/month-grid";
 import { busiestMonth, yearMonths } from "@waltning/client/transactions/year-months";
 import { accountingDate, addDays, monthRange, shiftMonth, yearMonth } from "@waltning/core/date";
@@ -65,6 +67,22 @@ function handleCreateAccount() {
 
 function handlePreference(next: "system" | "light" | "dark") {
   return appearance.setPreference(next);
+}
+
+/**
+ * §7's count for one month. Two flat keys rather than one with a plural,
+ * `resultsOne`'s own reason — the resolver picks, and the catalogue is checked
+ * for both.
+ */
+function monthMatch(t: ReturnType<typeof useT>, count: number): { label: string; found: boolean } {
+  return {
+    label: t(count === 1 ? "transactions.matchesCountOne" : "transactions.matchesCountMany", {
+      count,
+    }),
+    // Zero is still an answer — *not in this month* — but a quiet one, or
+    // twelve rows say nothing twelve times.
+    found: count > 0,
+  };
 }
 
 function handleShowAll() {
@@ -302,6 +320,43 @@ export default function Today() {
   );
   /** §6's *the only way back from a jump* — the pill's whole job. */
   const returnToToday = useCallback(() => pager.showDay(today), [pager.showDay, today]);
+  /**
+   * The search (§7), which lives in the route beside the date because it
+   * behaves like one: it survives a swipe, a step and a jump, so Calendar and
+   * Months answer *how often, and when* about the search the reader typed.
+   *
+   * **Opening it writes an empty string, not `null`.** `null` is *no search*
+   * and is what closes the field; `""` is *a search with nothing typed yet*,
+   * which is the field open and waiting. The two states have to be different
+   * or the field could never be opened before a word arrives.
+   */
+  const [searchOpen, setSearchOpen] = useState(false);
+  const openSearch = useCallback(() => setSearchOpen(true), []);
+  const closeSearch = useCallback(() => {
+    setSearchOpen(false);
+    pager.setQuery(null);
+  }, [pager.setQuery]);
+  const changeSearch = useCallback((value: string) => pager.setQuery(value), [pager.setQuery]);
+  /**
+   * **The field is open whenever there is a search, however it arrived.** The
+   * flag above is this session's tap on the icon; a query in the URL is a link
+   * someone followed. Both are a screen that is narrowed, and a narrowed screen
+   * that did not say so would be a ledger quietly missing rows.
+   */
+  const searching = searchOpen || pager.state.query !== null;
+  const searchText = pager.state.query ?? "";
+  /**
+   * §7's live count, and the whole ledger's — not the loaded page's. The field
+   * says how many rows match, which is a fact about the ledger; the list under
+   * it walks them a page at a time.
+   */
+  const matchCount = useMemo(
+    () =>
+      pager.state.query === null
+        ? null
+        : ledger.searchTransactions({ text: pager.state.query }).total.count,
+    [ledger, pager.state.query],
+  );
   const openPicker = useCallback(
     () => setPickerYear(Number(pager.state.date.slice(0, 4))),
     [pager.state.date],
@@ -725,6 +780,17 @@ export default function Today() {
     return { start: range.from, end: addDays(range.to, 1) };
   }, [month]);
   const monthFlows = useDayFlows(ledger, monthPeriod, snapshot);
+  /**
+   * §7's counts for the month on screen. `null` while the screen is not
+   * searching, and then the grid draws its activity marks as usual — the read
+   * is skipped entirely rather than matching the empty needle against the
+   * month.
+   */
+  const monthMatchDays = useMatchDays(ledger, monthPeriod, pager.state.query, snapshot);
+  const dayMatches = useMemo(
+    () => (pager.state.query === null ? undefined : matchesByDay(monthMatchDays)),
+    [monthMatchDays, pager.state.query],
+  );
   const weeks = useMemo(
     () => monthGrid(monthFlows, month, today, weekStart(locale)),
     [monthFlows, month, today, locale],
@@ -808,6 +874,11 @@ export default function Today() {
     [shownYear],
   );
   const yearFlows = useDayFlows(ledger, yearPeriod, snapshot);
+  const yearMatchDays = useMatchDays(ledger, yearPeriod, pager.state.query, snapshot);
+  const monthMatches = useMemo(
+    () => (pager.state.query === null ? null : matchesByMonth(yearMatchDays)),
+    [yearMatchDays, pager.state.query],
+  );
   const yearRows = useMemo(
     () =>
       yearMonths(
@@ -841,8 +912,11 @@ export default function Today() {
           ? null
           : t("shell.plusOtherCurrencies", { count: row.otherCurrencies }),
       ahead: row.ahead,
+      // Absent from the map is nothing found, which is a fact worth drawing —
+      // §7's *how often, and when* includes *not in this month*.
+      matches: monthMatches === null ? null : monthMatch(t, monthMatches.get(row.month) ?? 0),
     }));
-  }, [yearRows, locale, leadNetWorth, t]);
+  }, [yearRows, locale, leadNetWorth, monthMatches, t]);
   const flowLabels = useMemo(() => ({ inflow: t("shell.cameIn"), spend: t("shell.wentOut") }), [t]);
 
   const pages = useMemo(
@@ -869,6 +943,7 @@ export default function Today() {
             onOpenTransaction={handleOpenTransaction}
             onCategorize={handleCategorize}
             onReturnToToday={returnToToday}
+            query={pager.state.query}
             onScroll={handleScroll}
             empty={listEmpty}
           />
@@ -886,6 +961,7 @@ export default function Today() {
               today={today}
               labelFor={dayName}
               onPickDay={handlePickDay}
+              {...(dayMatches === undefined ? {} : { matches: dayMatches })}
             />
             {dayPanel}
           </GroundPanel>
@@ -912,9 +988,11 @@ export default function Today() {
       dayHeadings,
       dayName,
       dayPanel,
+      dayMatches,
       flowLabels,
       handleCategorize,
       handlePickDay,
+      pager.state.query,
       returnToToday,
       handlePickMonth,
       handleScroll,
@@ -957,7 +1035,13 @@ export default function Today() {
         scrollY={scrollY}
         onPrevious={pager.previous}
         onNext={pager.next}
-        onSearch={handleShowAll}
+        onSearch={openSearch}
+        searchOpen={searching}
+        searchQuery={searchText}
+        onSearchChange={changeSearch}
+        onSearchClose={closeSearch}
+        searchPlaceholder={t("transactions.searchThisLedger")}
+        {...(matchCount === null ? {} : { searchCount: matchCount })}
         barLabels={barLabels}
         pages={pages}
         activeKey={pager.state.page}

@@ -69,6 +69,14 @@ export type MonthGridProps = {
   /** The full date and what happened, for a reader who cannot see the number. */
   labelFor: (date: string) => string;
   onPickDay: (date: string) => void;
+  /**
+   * §7's match counts, keyed by date — present only while the screen is
+   * searching, and then every cell carries one *instead of* its activity mark.
+   *
+   * A map rather than a field on `GridDay`: the weeks come from `monthGrid`,
+   * which folds flows and has no business knowing what a search is.
+   */
+  matches?: ReadonlyMap<string, number> | undefined;
 };
 
 function GridCell({
@@ -81,10 +89,12 @@ function GridCell({
   today,
   label,
   onPickDay,
+  matches,
 }: GridDay & {
   current: boolean;
   today: boolean;
   label: string;
+  matches: number | undefined;
   onPickDay: (date: string) => void;
 }) {
   const press = useCallback(() => onPickDay(date), [onPickDay, date]);
@@ -96,6 +106,7 @@ function GridCell({
       ahead={ahead}
       current={current}
       today={today}
+      {...(matches === undefined ? {} : { matches })}
       accessibilityLabel={label}
       onPress={press}
     />
@@ -104,7 +115,15 @@ function GridCell({
 
 const MemoGridCell = memo(GridCell);
 
-function MonthGridView({ weeks, headings, current, today, labelFor, onPickDay }: MonthGridProps) {
+function MonthGridView({
+  weeks,
+  headings,
+  current,
+  today,
+  labelFor,
+  onPickDay,
+  matches,
+}: MonthGridProps) {
   const styles = useStyles();
   return (
     <View style={styles.root}>
@@ -141,6 +160,7 @@ function MonthGridView({ weeks, headings, current, today, labelFor, onPickDay }:
                   current={cell.date === current}
                   today={cell.date === today}
                   label={labelFor(cell.date)}
+                  matches={matches === undefined ? undefined : (matches.get(cell.date) ?? 0)}
                   onPickDay={onPickDay}
                 />
               </View>

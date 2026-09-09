@@ -320,6 +320,7 @@ function harness(
     listNetWorth: () => [],
     readPeriodSpend: () => [],
     readDayFlows: () => [],
+    readMatchDays: () => [],
     readDayRows: () => [],
     readSpendByCategory: () => [],
     readIncomeVsExpense: () => [],
