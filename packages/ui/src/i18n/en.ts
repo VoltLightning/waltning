@@ -930,6 +930,23 @@ export const en = {
     plusOtherCurrencies_few: "+ {{count}} other currencies",
     plusOtherCurrencies_many: "+ {{count}} other currencies",
     plusOtherCurrencies_other: "+ {{count}} other currencies",
+    /**
+     * The *Go to* cards' figures (S04 §3). **Every card carries one**, which is
+     * what makes the grid a status board rather than a menu — *Between us* as a
+     * tab was a word and an icon; as a card it is a balance and a count.
+     *
+     * A destination the ledger has nothing to say about yet gets no line at
+     * all rather than a zero: a card with an empty line looks broken, and one
+     * that has simply not been given a figure is a different, honest thing.
+     */
+    gatewayPeople_one: "{{count}} person",
+    gatewayPeople_few: "{{count}} people",
+    gatewayPeople_many: "{{count}} people",
+    gatewayPeople_other: "{{count}} people",
+    gatewayCategories_one: "{{count}} used this month",
+    gatewayCategories_few: "{{count}} used this month",
+    gatewayCategories_many: "{{count}} used this month",
+    gatewayCategories_other: "{{count}} used this month",
     keptSoFar: "Kept so far",
     cameIn: "Came in",
     wentOut: "Went out",

@@ -469,24 +469,45 @@ export default function Today() {
   // Every card carries a figure, which is what makes the grid a status board
   // rather than a menu. A destination with nothing true to say yet passes
   // `null` and draws no second line — an empty line looks broken.
+  /**
+   * **Every card carries a figure** (§3), which is what makes the grid a status
+   * board rather than a menu: *Between us* as a tab was a word and an icon;
+   * here it is a count of the people something is open with.
+   *
+   * `null` where the ledger genuinely has nothing to say yet — a card with an
+   * empty line looks broken, and one with no line has simply not been given a
+   * figure, which is a different and honest thing. Rates is always `null` on
+   * the phone: it has no rate table of its own to count (`architecture/14`).
+   */
   const gateways = useMemo(
     () => [
       {
         key: "debt",
         label: t("routes.debt"),
-        detail: null,
+        detail:
+          snapshot.counterparties.length === 0
+            ? null
+            : t("shell.gatewayPeople", { count: snapshot.counterparties.length }),
         icon: <ArrowsLeftRightIcon size={GATEWAY_ICON} color={gatewayInk} />,
       },
       {
         key: "categories",
         label: t("routes.categories"),
-        detail: null,
+        detail:
+          whereItWentRows.length === 0
+            ? null
+            : t("shell.gatewayCategories", { count: whereItWentRows.length }),
         icon: <ListBulletsIcon size={GATEWAY_ICON} color={gatewayInk} />,
       },
       {
         key: "currencies",
+        // The codes the ledger actually holds, in the order net worth reports
+        // them — which is the ledger's own, not an alphabet.
         label: t("routes.currencies"),
-        detail: null,
+        detail:
+          snapshot.netWorth.length === 0
+            ? null
+            : snapshot.netWorth.map((row) => row.currency).join(" · "),
         icon: <CircleHalfIcon size={GATEWAY_ICON} color={gatewayInk} />,
       },
       {
@@ -496,7 +517,7 @@ export default function Today() {
         icon: <SlidersHorizontalIcon size={GATEWAY_ICON} color={gatewayInk} />,
       },
     ],
-    [gatewayInk, t],
+    [gatewayInk, t, snapshot.counterparties, snapshot.netWorth, whereItWentRows],
   );
 
   const ledgerBody = useMemo(
