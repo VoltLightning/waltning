@@ -120,6 +120,7 @@ export const pl: Messages = {
     ribbonDayMany: "{{date}}, {{count}} wpisów",
     ribbonDayEmpty: "{{date}}, nic",
     nothingThatDay: "nic",
+    backToToday: "Wróć do dziś — lista pokazuje {{date}}",
     quietRunOne: "{{count}} dzień · nic nie zapisano",
     quietRunMany: "{{count}} dni · nic nie zapisano",
     amount: "Kwota",

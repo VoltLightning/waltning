@@ -117,6 +117,7 @@
     "./shell/tab-bar": "./src/shell/organisms/tab-bar/tab-bar.tsx",
     "./shell/tab-header": "./src/shell/organisms/tab-header/tab-header.tsx",
     "./shell/tab-icons": "./src/shell/tab-icons.tsx",
+    "./shell/today-pill": "./src/shell/atoms/today-pill/today-pill.tsx",
     "./shell/unsettled-banner": "./src/shell/molecules/unsettled-banner/unsettled-banner.tsx",
     "./states/banner": "./src/states/molecules/banner/banner.tsx",
     "./states/empty-state": "./src/states/organisms/empty-state/empty-state.tsx",

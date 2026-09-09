@@ -12,6 +12,7 @@ import { useLocale, useT } from "@waltning/ui/i18n/provider";
 import { pageScrollProps } from "@waltning/ui/primitives/nested-scroll";
 import { GroundPanel, type ScrollHandler } from "@waltning/ui/shell/card";
 import { useGroundInset } from "@waltning/ui/shell/ground-inset";
+import { TodayPill } from "@waltning/ui/shell/today-pill";
 import { text } from "@waltning/ui/theme/fonts";
 import { makeStyles } from "@waltning/ui/theme/styles";
 import { DayHeader } from "@waltning/ui/transactions/day-header";
@@ -21,7 +22,7 @@ import {
 } from "@waltning/ui/transactions/molecules/day-ribbon/day-ribbon";
 import { LedgerRowItem } from "@waltning/ui/transactions/molecules/ledger-row-item/ledger-row-item";
 import { QuietDay, QuietRun } from "@waltning/ui/transactions/molecules/quiet-days/quiet-days";
-import { useCallback, useMemo } from "react";
+import { memo, useCallback, useMemo } from "react";
 import { Text, View } from "react-native";
 import Animated from "react-native-reanimated";
 
@@ -50,6 +51,17 @@ export type HomeListPageProps = {
   pivotDecimals: number;
   onPickDay: (date: string) => void;
   onOpenTransaction: (id: string) => void;
+  /**
+   * Short swipe (S04 §7). The kind travels with the id because the screen owns
+   * the sheet and the sheet needs to know which tree to open — and this page
+   * is the only thing holding the row.
+   */
+  onCategorize: (id: string, kind: "income" | "expense") => void;
+  /**
+   * The way back from a jump (§6). The pill is drawn only when the anchor is
+   * not today, so this is never the no-op it looks like.
+   */
+  onReturnToToday: () => void;
   /**
    * Forwarded to the list, for chrome that moves with the page. This screen
    * owns its scroller — the panel around it is `scroll="own"`, a plain `View`
@@ -86,6 +98,8 @@ export function HomeListPage({
   pivotDecimals,
   onPickDay,
   onOpenTransaction,
+  onCategorize,
+  onReturnToToday,
   onScroll,
   empty,
 }: HomeListPageProps) {
@@ -155,7 +169,7 @@ export function HomeListPage({
     ({ item }: { item: Entry }) => {
       switch (item.kind) {
         case "row":
-          return <LedgerRowItem row={item.row} onPress={onOpenTransaction} />;
+          return <ListRow row={item.row} onOpen={onOpenTransaction} onCategorize={onCategorize} />;
         case "quiet":
           return <QuietDay label={item.label} emptyLabel={t("transactions.nothingThatDay")} />;
         case "run":
@@ -175,7 +189,7 @@ export function HomeListPage({
           );
       }
     },
-    [onOpenTransaction, onPickDay, pivotCurrency, pivotDecimals, t],
+    [onOpenTransaction, onCategorize, onPickDay, pivotCurrency, pivotDecimals, t],
   );
 
   const keyExtractor = useCallback((entry: Entry) => entry.key, []);
@@ -250,9 +264,62 @@ export function HomeListPage({
         // The page's own vertical scroller, inside the pager's horizontal one.
         {...pageScrollProps(styles.list)}
       />
+      {/*
+        **After the list, so it paints over it**, and only when the anchor has
+        moved: a pill offering *today* while the list is already on today is a
+        control that does nothing, which is how a reader learns to stop
+        believing it (§6).
+      */}
+      {anchor === today ? null : (
+        <TodayPill
+          label={t("shell.today")}
+          accessibilityLabel={t("transactions.backToToday", {
+            date: dayLabel(anchor, locale),
+          })}
+          onPress={onReturnToToday}
+        />
+      )}
     </GroundPanel>
   );
 }
+
+/**
+ * One row, and the two gestures S04 §7 gives it.
+ *
+ * **A component rather than two arrows in `renderItem`.** `architecture/11`
+ * refuses an inline function in JSX, and this row is why the rule exists: a
+ * fresh pair per render would make `LedgerRowItem`'s `memo` compare unequal on
+ * every scroll frame and re-render every visible row.
+ *
+ * `LedgerRowItem` decides *whether* the row swipes — a transfer and an
+ * adjustment have no category by constraint — so the kind read here is only
+ * ever the kind that reaches the sheet.
+ */
+function ListRowView({
+  row,
+  onOpen,
+  onCategorize,
+}: {
+  row: PhoneSearchTransaction;
+  onOpen: (id: string) => void;
+  onCategorize: (id: string, kind: "income" | "expense") => void;
+}) {
+  const kind = row.type === "income" ? "income" : "expense";
+  const categorize = useCallback((id: string) => onCategorize(id, kind), [onCategorize, kind]);
+  return (
+    <LedgerRowItem
+      row={row}
+      onPress={onOpen}
+      onShortSwipe={categorize}
+      // Long swipe is *edit*, and editing a row is opening it — S09 is where
+      // every field of it lives, so a second editor here would be a second
+      // place the same row can be changed.
+      onLongSwipe={onOpen}
+    />
+  );
+}
+
+const ListRow = memo(ListRowView);
 
 /**
  * A collapsed run, with its own handler.

@@ -14,6 +14,7 @@ import { monthGrid, weekdayHeadings } from "@waltning/client/transactions/month-
 import { busiestMonth, yearMonths } from "@waltning/client/transactions/year-months";
 import { accountingDate, addDays, monthRange, shiftMonth, yearMonth } from "@waltning/core/date";
 import * as money from "@waltning/core/money";
+import { CategorySheet } from "@waltning/ui/categories/category-sheet";
 import { SpendRows } from "@waltning/ui/dashboard/spend-rows";
 import { Amount } from "@waltning/ui/fx/amount";
 import { dayLabel, monthLabel, weekdayInitial, weekStart } from "@waltning/ui/i18n/locales";
@@ -274,6 +275,33 @@ export default function Today() {
    * move the ledger — only picking a month does.
    */
   const [pickerYear, setPickerYear] = useState<number | null>(null);
+  /**
+   * The short swipe's sheet (S04 §7).
+   *
+   * **The screen owns it, not the list.** A sheet is a layer over the whole
+   * screen, and a page inside a pager cannot open one without it sliding
+   * horizontally with the page under it. The list knows which row was swiped;
+   * this knows where a sheet goes.
+   */
+  const [categorize, setCategorize] = useState<{
+    transactionId: string;
+    kind: "income" | "expense";
+  } | null>(null);
+  const handleCategorize = useCallback(
+    (id: string, kind: "income" | "expense") => setCategorize({ transactionId: id, kind }),
+    [],
+  );
+  const dismissCategorize = useCallback(() => setCategorize(null), []);
+  const handlePickCategory = useCallback(
+    (categoryId: string) => {
+      if (categorize === null) return;
+      ledger.categorizeBatch({ transactionIds: [categorize.transactionId], categoryId });
+      setCategorize(null);
+    },
+    [categorize, ledger],
+  );
+  /** §6's *the only way back from a jump* — the pill's whole job. */
+  const returnToToday = useCallback(() => pager.showDay(today), [pager.showDay, today]);
   const openPicker = useCallback(
     () => setPickerYear(Number(pager.state.date.slice(0, 4))),
     [pager.state.date],
@@ -839,6 +867,8 @@ export default function Today() {
             pivotDecimals={leadNetWorth.decimals}
             onPickDay={handlePickDay}
             onOpenTransaction={handleOpenTransaction}
+            onCategorize={handleCategorize}
+            onReturnToToday={returnToToday}
             onScroll={handleScroll}
             empty={listEmpty}
           />
@@ -883,7 +913,9 @@ export default function Today() {
       dayName,
       dayPanel,
       flowLabels,
+      handleCategorize,
       handlePickDay,
+      returnToToday,
       handlePickMonth,
       handleScroll,
       ledger,
@@ -943,6 +975,18 @@ export default function Today() {
         onYearChange={setPickerYear}
         onPick={handlePickMonth}
         onDismiss={closePicker}
+      />
+      {/*
+        The short swipe's destination (§7). Rendered beside the picker rather
+        than inside a page: both are layers over the screen, and a layer that
+        lived in a pager page would slide sideways with it.
+      */}
+      <CategorySheet
+        visible={categorize !== null}
+        kind={categorize?.kind ?? "expense"}
+        tree={snapshot.categoryTree}
+        onPick={handlePickCategory}
+        onDismiss={dismissCategorize}
       />
     </>
   );

@@ -213,6 +213,15 @@ export const en = {
     ribbonDayEmpty: "{{date}}, nothing",
     /** One quiet day in the list — the line beside its date. */
     nothingThatDay: "nothing",
+    /**
+     * `TodayPill`'s accessible name (S04 §6).
+     *
+     * **It names where the list *is*, not just where it goes.** "Today" alone
+     * is what the eye reads off the pill; a reader who cannot see the list
+     * around it needs to be told the list has moved at all, which is the whole
+     * reason the control appeared.
+     */
+    backToToday: "Back to today — the list is on {{date}}",
     /** A collapsed run of quiet days. Two flat forms, as `resultsOne` explains. */
     quietRunOne: "{{count}} day · nothing recorded",
     quietRunMany: "{{count}} days · nothing recorded",
