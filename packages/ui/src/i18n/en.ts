@@ -211,6 +211,13 @@ export const en = {
     ribbonDayMany: "{{date}}, {{count}} entries",
     /** The same cell on a day with nothing on it. */
     ribbonDayEmpty: "{{date}}, nothing",
+    /**
+     * A ribbon cell while the screen is searching. **It does not count.** The
+     * ribbon holds the *loaded* rows, which is a page of them; the Calendar
+     * grid counts every match, and two numbers for one day is the
+     * disagreement §7 exists to prevent.
+     */
+    ribbonDayMatched: "{{date}}, matched",
     /** One quiet day in the list — the line beside its date. */
     nothingThatDay: "nothing",
     /**

@@ -24,6 +24,20 @@ import { text } from "../../../theme/fonts.ts";
 import { makeStyles } from "../../../theme/styles.ts";
 import { focus, radius, space, tabularNums, touchTarget } from "../../../tokens.ts";
 
+/**
+ * The tallest mark, and therefore the slot a searched cell draws in.
+ *
+ * **The unsearched grid does not align its day numbers, by design**: `none` is
+ * 5px, `some` 8, `heavy` 12, the cell centres its column, so a heavy day's
+ * number already sits 3.5px above a quiet day's. That is the mark carrying
+ * magnitude in size (WCAG 1.4.1's third channel), and it is not a defect.
+ *
+ * A *searched* grid has no magnitude to carry — every cell says a count or
+ * nothing — so all of its cells take one slot, and it is the largest of the
+ * three so that a search never makes the grid shorter than the month beside it.
+ */
+const COUNT_BOX = 12;
+
 /** How much moved that day, in three steps a reader can tell apart at a glance. */
 export type DayActivity = "none" | "some" | "heavy";
 
@@ -133,7 +147,9 @@ function DayCellView({
         // numbers inside it did not line up.
         <View style={[styles.mark, styles.markNone, styles.markEmpty]} />
       ) : (
-        <Text style={today ? styles.countOnFill : styles.count}>{matches}</Text>
+        <Text style={[styles.count, today ? styles.countOnFill : null]} numberOfLines={1}>
+          {matches}
+        </Text>
       )}
     </Pressable>
   );
@@ -220,11 +236,24 @@ const useStyles = makeStyles((theme) => ({
    * size: the number a reader is scanning for is still the date, and a count
    * drawn as large would make every searched month read as a grid of totals.
    */
-  count: { ...text.ui("caption", 600), color: theme.accentText },
-  countOnFill: { ...text.ui("caption", 600), color: theme.textOnAccent },
+  /**
+   * **One slot for every searched cell.** A `caption` line is 16px against the
+   * marks' 5–12, so a count and an empty cell put their day numbers 5.5px
+   * apart — the cell centres its column, and its fixed height hid that from the
+   * grid while every number inside it moved. Both branches now take
+   * `COUNT_BOX`.
+   */
+  count: {
+    ...text.ui("caption", 600),
+    color: theme.accentText,
+    height: COUNT_BOX,
+    lineHeight: COUNT_BOX,
+    textAlign: "center",
+  },
+  countOnFill: { color: theme.textOnAccent },
   markNone: { width: 5, height: 5, backgroundColor: theme.insetFill },
-  /** The room a mark takes, with no mark in it. */
-  markEmpty: { backgroundColor: "transparent" },
+  /** A searched cell with no match: the count's own slot, drawn in nothing. */
+  markEmpty: { width: COUNT_BOX, height: COUNT_BOX, backgroundColor: "transparent" },
   markSome: { width: 8, height: 8 },
   markHeavy: { width: 12, height: 12 },
   // Filled for out, a ring for in — the money colours, unchanged. A saturated

@@ -63,9 +63,13 @@ export type HomeListPageProps = {
    */
   onReturnToToday: () => void;
   /**
-   * The screen's search (§7), or `null`. It narrows the rows; the day grouping
-   * and the quiet-day rules above are unchanged, which is what §7 means by
-   * *"day grouping survives, month rules mark the gaps"*.
+   * The screen's search (§7), or `null`.
+   *
+   * **It narrows more than the rows.** A filtered set has no day totals to
+   * state and no quiet days to mark — its gaps are days the query excluded, not
+   * days the ledger was quiet on — so it reaches `toLedgerItems` and
+   * `ribbonDays` as their `filtered` option too. §7 says the day grouping
+   * survives; it is the *rules about what the gaps mean* that do not.
    */
   query: string | null;
   /**
@@ -134,7 +138,7 @@ export function HomeListPage({
 
   const days = useMemo<readonly RibbonDay[]>(
     () =>
-      ribbonDays(items).map((day) => ({
+      ribbonDays(items, { filtered: query !== null }).map((day) => ({
         date: day.date,
         day: Number(day.date.slice(8, 10)),
         weekday: weekdayInitial(day.date, locale),
@@ -144,15 +148,22 @@ export function HomeListPage({
         ...(day.date > today ? { ahead: true } : {}),
         // The full date and what happened, never the bare number the eye
         // reads: a run of them says nothing about which month or which year.
+        // **`entries` is the *loaded* rows, which is a third reading of the
+        // search and disagrees with the other two.** A day holding forty
+        // matches renders thirty of them in one page, so "30 entries" would
+        // stand under a grid cell reading 40. Under a filter the cell says it
+        // matched and leaves the counting to the pages built to count.
         label:
-          day.entries === 0
-            ? t("transactions.ribbonDayEmpty", { date: dayLabel(day.date, locale) })
-            : t(day.entries === 1 ? "transactions.ribbonDayOne" : "transactions.ribbonDayMany", {
-                date: dayLabel(day.date, locale),
-                count: day.entries,
-              }),
+          query !== null
+            ? t("transactions.ribbonDayMatched", { date: dayLabel(day.date, locale) })
+            : day.entries === 0
+              ? t("transactions.ribbonDayEmpty", { date: dayLabel(day.date, locale) })
+              : t(day.entries === 1 ? "transactions.ribbonDayOne" : "transactions.ribbonDayMany", {
+                  date: dayLabel(day.date, locale),
+                  count: day.entries,
+                }),
       })),
-    [items, locale, t, today],
+    [items, locale, query, t, today],
   );
 
   const entries = useMemo<readonly Entry[]>(() => {

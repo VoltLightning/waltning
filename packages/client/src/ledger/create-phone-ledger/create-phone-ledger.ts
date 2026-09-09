@@ -759,6 +759,9 @@ export type PhoneLedgerPort = {
      * object was built in a variable so no excess-property check fired, and the
      * forwarding below enumerated fields by hand. The list drew the whole
      * ledger under a search field reporting three matches.
+     *
+     * `ForwardedLedgerFilterKeys` below is what stops the eighth key going the
+     * same way — the enumeration and this type fail to compile apart.
      */
     filter?: Omit<PhoneSearchFilter, "from" | "to">;
     limit?: number;
@@ -876,6 +879,41 @@ export type PhoneCurrencySubtotal = {
  * when no shared account exists (`LocalNetWorth`'s own comment says why it is
  * a field rather than a `mine === ours` comparison).
  */
+/**
+ * **Every key the list's filter can carry, and the enumeration that carries
+ * them, fail to compile apart.**
+ *
+ * `readLedgerPage`'s forwarding below is written out field by field, because
+ * each one is branded or narrowed on the way through. That makes it the kind of
+ * code a new key is silently left out of — and `text` was, for a whole feature:
+ * the type allowed it, the object was built in a variable so no excess-property
+ * check fired, and S04's search filtered nothing while its field reported three
+ * matches.
+ *
+ * A comment asking the next person to remember is what was there. This is the
+ * check instead: add a key to `PhoneSearchFilter` and this assertion stops
+ * compiling until the enumeration below names it.
+ */
+type ForwardedLedgerFilterKeys =
+  | "text"
+  | "accountIds"
+  | "categoryIds"
+  | "scope"
+  | "currency"
+  | "counterpartyId"
+  | "counterpartyRole";
+
+type LedgerFilterKeys = keyof Omit<PhoneSearchFilter, "from" | "to">;
+
+/** Both directions, so neither a missing key nor a stale one can hide. */
+type _EveryFilterKeyIsForwarded = LedgerFilterKeys extends ForwardedLedgerFilterKeys
+  ? ForwardedLedgerFilterKeys extends LedgerFilterKeys
+    ? true
+    : ["forwarded but not a filter key", Exclude<ForwardedLedgerFilterKeys, LedgerFilterKeys>]
+  : ["a filter key nothing forwards", Exclude<LedgerFilterKeys, ForwardedLedgerFilterKeys>];
+const _filterKeysForwarded: _EveryFilterKeyIsForwarded = true;
+void _filterKeysForwarded;
+
 /** One day of a searched period, and how many rows in it matched (S04 §7). */
 export type PhoneMatchDay = { date: AccountingDate; count: number };
 
@@ -1455,6 +1493,9 @@ export type PhoneLedgerController = {
      * object was built in a variable so no excess-property check fired, and the
      * forwarding below enumerated fields by hand. The list drew the whole
      * ledger under a search field reporting three matches.
+     *
+     * `ForwardedLedgerFilterKeys` below is what stops the eighth key going the
+     * same way — the enumeration and this type fail to compile apart.
      */
     filter?: Omit<PhoneSearchFilter, "from" | "to">;
     limit?: number;

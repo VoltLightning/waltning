@@ -208,6 +208,7 @@ export type RibbonDayModel = {
  */
 export function ribbonDays<Row extends LedgerDayRow>(
   items: readonly LedgerItem<Row>[],
+  options: LedgerItemOptions = {},
 ): readonly RibbonDayModel[] {
   const days = items.filter((item) => item.kind === "day");
   let largest = money.ZERO;
@@ -254,7 +255,19 @@ export function ribbonDays<Row extends LedgerDayRow>(
     };
   });
 
-  return fillQuietDays(marked);
+  /*
+    **A filtered ribbon is not continuous, and cannot be.** `fillQuietDays`
+    invents a cell for every date between two it holds, marked `none` with zero
+    entries — which the screen then names *"3 September, nothing"*. Under a
+    filter those are days the query excluded, and most of them hold rows: the
+    ribbon would assert the ledger was quiet on a day the reader can see six
+    transactions on by clearing the search.
+
+    §7.2's continuity is a property of the *unfiltered* list, where a gap
+    between two loaded days really is a gap in the ledger. `toLedgerItems` stops
+    emitting quiet items under the same option and for the same reason.
+  */
+  return options.filtered === true ? marked : fillQuietDays(marked);
 }
 
 /**

@@ -119,6 +119,7 @@ export const pl: Messages = {
     ribbonDayOne: "{{date}}, {{count}} wpis",
     ribbonDayMany: "{{date}}, {{count}} wpisów",
     ribbonDayEmpty: "{{date}}, nic",
+    ribbonDayMatched: "{{date}}, dopasowano",
     nothingThatDay: "nic",
     matchesCountOne: "{{count}} wynik",
     matchesCountMany: "{{count}} wyników",

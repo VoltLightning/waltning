@@ -426,12 +426,19 @@ Tapping the unsettled banner goes **straight to the unallocated transaction**,
 not to a list. A warning that costs you a search is a warning you learn to
 ignore.
 
-**Search is the strip's icon, and it filters this list.** Day grouping survives,
-month rules mark the gaps, and **Calendar and Months carry match counts instead
-of their figures** — so *how often, and when* is answered by the pages you were
+**Search is the strip's icon, and it filters this list.** Day grouping survives
+— and nothing else about the gaps does, for the reason two paragraphs down —
+and **Calendar and Months carry match counts instead of their figures** — so *how often, and when* is answered by the pages you were
 already going to swipe to. Search needs no navigation of its own, and it holds
 across the pages the way the date does: the query is a parameter of the route
 beside the date, so a swipe, a step and a jump all keep it.
+
+**The field counts the ledger; the pages count their period.** The line in the
+field is every row the query matches, at any date — that is what a search box
+reports. The grid is the month on screen and the year's rows are that year, so
+the field's figure is larger than the grid's marks add up to whenever the query
+matches outside the month. Two questions, both worth answering, and the field is
+the only place the wider one is asked.
 
 **The counting is the search's own, not a second reading of it.** §13's text
 rule cannot be pushed into SQL — a query is matched against payee, note, every
@@ -454,13 +461,17 @@ counts. So a day holding one matching row on a shared account has no mark and a
 count of one, and that is the honest pair — the alternative is a search that
 silently cannot find half the ledger.
 
-**A searched list states no day totals and marks no quiet days.** The rows on
+**A searched list states no day totals, marks no quiet days, and its ribbon is
+not continuous.** The rows on
 screen are a subset chosen by a query, so their sum is not the day's own figure,
 and a day whose rows all failed the query is not a day the ledger was quiet on.
 Both are answers this list gives about the ledger, and under a filter it has not
 read enough to give either: a day holding six rows of which one matched would
 report that row's amount as the day's, and a full day would collapse into a row
-reading *nothing recorded*.
+reading *nothing recorded*. §7.2's continuous ribbon goes the same way — a cell
+invented between two matches is named *nothing*, about a day the reader can see
+six transactions on by clearing the search. Continuity is a property of the
+unfiltered list, where a gap between two loaded days really is a gap.
 
 **Accessibility is a constraint, not a review note.** Every target in the strip
 and the picker is ≥44×44. Nothing encodes meaning in hue alone. A ribbon cell's

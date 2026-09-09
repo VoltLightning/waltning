@@ -224,7 +224,20 @@ export default function Today() {
     setToastToken((token) => token + 1);
     setToastDismissed(false);
   }
-  const handleDismissToast = useCallback(() => setToastDismissed(true), []);
+  const handleDismissToast = useCallback(() => {
+    setToastDismissed(true);
+    setRefusal(null);
+  }, []);
+  /**
+   * A write this screen made and the ledger refused.
+   *
+   * **The same slot as the arrival toast, not a second one.** Two toasts fight
+   * for one corner; and a refusal is the more recent event, so it wins the slot
+   * while it is on screen.
+   */
+  const [refusal, setRefusal] = useState<string | null>(null);
+  /** Its own counter, so a second refusal with the same wording still shows. */
+  const [refusalToken, setRefusalToken] = useState(0);
   const hasAccounts = snapshot.accounts.length > 0;
   /**
    * **An empty Recent is not by itself a first run.** `snapshot.recent` is a
@@ -317,14 +330,19 @@ export default function Today() {
         transactionIds: [categorize.transactionId],
         categoryId,
       });
-      // **A refusal keeps the sheet open.** Closing on a rejected write is the
-      // failure that looks like health: the row is unchanged, the sheet is
-      // gone, and the reader has every reason to believe it worked. The desk
-      // path checks the same envelope (`ledger-screen.tsx`).
-      if ("fieldErrors" in result) return;
+      // **A refusal says so.** Closing on a rejected write is the failure that
+      // looks like health — the row unchanged, the sheet gone, and every reason
+      // to believe it worked. Keeping the sheet open and saying nothing is the
+      // second half of the same failure: taps that do nothing, forever, with no
+      // message. So the sheet closes either way and the toast carries the
+      // refusal, which is where this screen already puts one.
+      if ("fieldErrors" in result) {
+        setRefusal(result.fieldErrors[0]?.message ?? t("common.couldNotSave"));
+        setRefusalToken((token) => token - 1);
+      }
       setCategorize(null);
     },
-    [categorize, ledger],
+    [categorize, ledger, t],
   );
   /** §6's *the only way back from a jump* — the pill's whole job. */
   const returnToToday = useCallback(() => pager.showDay(today), [pager.showDay, today]);
@@ -747,12 +765,20 @@ export default function Today() {
    * it went to, which is what said it was the chrome rebuilding everything
    * rather than the destination drawing itself.
    */
+  /**
+   * What the toast is saying, and the token that re-arms its window. A refusal
+   * carries its own token so a second refusal with the same wording still shows
+   * (`Toast`'s H1).
+   */
+  const notice = refusal ?? (typeof message === "string" && !toastDismissed ? message : null);
+  const noticeToken = refusal === null ? toastToken : refusalToken;
+
   const body = useMemo(
     () => (
       <>
-        {typeof message === "string" && !toastDismissed ? (
-          <Toast message={message} onDismiss={handleDismissToast} token={toastToken} />
-        ) : null}
+        {notice === null ? null : (
+          <Toast message={notice} onDismiss={handleDismissToast} token={noticeToken} />
+        )}
         {/*
         Above the error branch, not inside the populated one. S04 §6: a failed
         refresh leaves `snapshot`'s other fields untouched, so the figures it
@@ -766,7 +792,7 @@ export default function Today() {
         {ledgerBody}
       </>
     ),
-    [message, toastDismissed, handleDismissToast, toastToken, netWorthStrip, monthCard, ledgerBody],
+    [notice, noticeToken, handleDismissToast, netWorthStrip, monthCard, ledgerBody],
   );
 
   /**
@@ -838,9 +864,11 @@ export default function Today() {
       */
       if (dayMatches !== undefined) {
         const found = dayMatches.get(date) ?? 0;
-        return found === 0
-          ? t("transactions.ribbonDayEmpty", { date: name })
-          : `${name}, ${monthMatch(t, found).label}`;
+        // **Never "nothing" here.** That word is the unsearched grid's, and it
+        // is about the ledger; a searched cell with no match is a day the
+        // *query* did not find, which may hold six rows. The count says which
+        // — `0 matches` is an answer, `nothing` is a different claim.
+        return `${name}, ${monthMatch(t, found).label}`;
       }
       const cell = weeks.flat().find((day) => !("blank" in day) && day.date === date);
       if (cell === undefined || "blank" in cell || cell.activity === "none") {
