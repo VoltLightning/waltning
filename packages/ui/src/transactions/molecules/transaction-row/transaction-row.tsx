@@ -48,6 +48,17 @@ export type TransactionType = "expense" | "income" | "transfer" | "adjustment";
 export type TransactionRowProps = {
   /** Bare `YYYY-MM-DD`. Rendered as given — never through a `Date` (C28). */
   date: string;
+  /**
+   * Draw the date on the row. Default `true`, which is S10's desk table: an
+   * ungrouped list of a thousand rows, where the date is the column that says
+   * where you are.
+   *
+   * **`false` inside a `<DayGroup>`**, which has already said it. S04's list
+   * headed a group *September 10, 2026* and then stamped `09-10` on all four
+   * rows under it — the same fact four times, in the slot every board gives to
+   * the category glyph.
+   */
+  withDate?: boolean;
   payee: string;
   category?: string | null;
   account?: string | null;
@@ -96,6 +107,7 @@ export const TRANSACTION_AMOUNT_KIND: Record<TransactionType, AmountKind> = {
 
 export function TransactionRow({
   date,
+  withDate = true,
   payee,
   category,
   account,
@@ -122,7 +134,7 @@ export function TransactionRow({
         rendering one through a `Date` is how a capture lands on the wrong day
         when the phone is still on the previous timezone (C28).
       */}
-      <Text style={styles.date}>{date.slice(5)}</Text>
+      {withDate ? <Text style={styles.date}>{date.slice(5)}</Text> : null}
       {/* `SPEC.md` §14.4b — absent entirely, not a fallback monogram, for a
           caller that has not passed `brandKey` yet (see the prop's own doc). */}
       {brandKey === undefined ? null : <BrandIcon brandKey={brandKey} payee={payee} size={24} />}
@@ -224,6 +236,6 @@ const useStyles = makeStyles((theme) => ({
    * looks for when scanning a ledger — at the same weight as its own category
    * and account it is just the first of three strings.
    */
-  payee: { color: theme.text, ...text.ui("bodySm", 500) },
+  payee: { color: theme.text, ...text.ui("bodySm", 600) },
   meta: { color: theme.textMuted, ...text.ui("caption") },
 }));

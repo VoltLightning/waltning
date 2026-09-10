@@ -273,7 +273,13 @@ const useStyles = makeStyles((theme) => ({
     paddingBottom: space.xl,
   },
   heading: { flexDirection: "row", alignItems: "center", gap: space.x3, flexShrink: 1 },
-  title: { color: theme.text, ...text.ui("displayThree") },
+  /**
+   * **A label, not a heading.** This was `displayThree` in full ink — 17/600,
+   * the step §2.2 used to hand to *card titles* — and every board draws a
+   * card's own line at 13/500 muted. One component, fourteen callers, and a
+   * section label shouting on every screen it appeared on.
+   */
+  title: { color: theme.textMuted, ...text.ui("label") },
   // Background and radius only. The padding lives on whichever style can
   // carry it without clipping something: `scrollContent` in the page-scrolling
   // default, and in `scroll="own"` only `panelTop` — the sides and the bottom

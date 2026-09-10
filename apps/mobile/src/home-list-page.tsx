@@ -15,6 +15,7 @@ import { useGroundInset } from "@waltning/ui/shell/ground-inset";
 import { TodayPill } from "@waltning/ui/shell/today-pill";
 import { text } from "@waltning/ui/theme/fonts";
 import { makeStyles } from "@waltning/ui/theme/styles";
+import { type DayRowPlace, DayRowSurface } from "@waltning/ui/transactions/day-group";
 import { DayHeader } from "@waltning/ui/transactions/day-header";
 import {
   DayRibbon,
@@ -101,7 +102,7 @@ type DayTotal =
 
 type Entry =
   | { key: string; kind: "day"; label: string; total: DayTotal }
-  | { key: string; kind: "row"; row: PhoneSearchTransaction }
+  | { key: string; kind: "row"; row: PhoneSearchTransaction; place: DayRowPlace }
   | { key: string; kind: "quiet"; label: string }
   | { key: string; kind: "run"; label: string; days: number; from: string };
 
@@ -197,7 +198,19 @@ export function HomeListPage({
               ? { pivot: null }
               : { pivot: item.total.pivot, approximate: item.total.approximate },
       });
-      for (const row of item.rows) out.push({ key: row.id, kind: "row", row });
+      // Where a row sits in its day decides its corners, which is what makes
+      // the day read as one surface rather than a run of separate ones.
+      item.rows.forEach((row, at) => {
+        const place: DayRowPlace =
+          item.rows.length === 1
+            ? "only"
+            : at === 0
+              ? "first"
+              : at === item.rows.length - 1
+                ? "last"
+                : "middle";
+        out.push({ key: row.id, kind: "row", row, place });
+      });
     }
     return out;
   }, [items, locale]);
@@ -206,7 +219,11 @@ export function HomeListPage({
     ({ item }: { item: Entry }) => {
       switch (item.kind) {
         case "row":
-          return <ListRow row={item.row} onOpen={onOpenTransaction} onCategorize={onCategorize} />;
+          return (
+            <DayRowSurface place={item.place}>
+              <ListRow row={item.row} onOpen={onOpenTransaction} onCategorize={onCategorize} />
+            </DayRowSurface>
+          );
         case "quiet":
           return <QuietDay label={item.label} emptyLabel={t("transactions.nothingThatDay")} />;
         case "run":
@@ -346,6 +363,9 @@ function ListRowView({
   return (
     <LedgerRowItem
       row={row}
+      // The group's header already gave the date. S10's desk table is the list
+      // that needs it per row, because it does not group by day.
+      withDate={false}
       onPress={onOpen}
       onShortSwipe={categorize}
       // Long swipe is *edit*, and editing a row is opening it — S09 is where

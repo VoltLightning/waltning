@@ -97,7 +97,15 @@ export function MonthSummary({
       */}
       <View style={styles.hero}>
         <Text style={styles.heroLabel}>{t("shell.keptSoFar")}</Text>
-        <Amount value={net} currency={currency} decimals={decimals} size="large" signed />
+        {/*
+          **`medium`, which is larger than `large`.** The size names do not
+          order — `large` is `displayTwo` at 23 and `medium` is `displayOne` at
+          38 — so this card's hero was set at the same size as the month title
+          in the chrome above it, and the screen had no hero at all. The board
+          draws it at 40. `medium` had zero callers before this one, which is
+          what a name nobody reaches for looks like.
+        */}
+        <Amount value={net} currency={currency} decimals={decimals} size="medium" signed />
       </View>
 
       <FlowBar inflow={inflow} spend={spend} />
@@ -125,7 +133,7 @@ export function MonthSummary({
 
 const useStyles = makeStyles((theme) => ({
   hero: { gap: space.xs },
-  heroLabel: { color: theme.textMuted, ...text.ui("bodySm") },
+  heroLabel: { color: theme.textMuted, ...text.ui("label") },
   pair: { flexDirection: "row", justifyContent: "space-between", gap: space.x3 },
   pairItem: { gap: space.xxs },
   pairItemEnd: { gap: space.xxs, alignItems: "flex-end" },

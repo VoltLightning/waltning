@@ -31,6 +31,8 @@ export type LedgerRowItemProps = {
   onLongSwipe?: ((id: string) => void) | undefined;
   /** Draw the account beside the category — off for a list already scoped to one. */
   withAccount?: boolean;
+  /** Draw the date — off inside a `<DayGroup>`, which has already given it. */
+  withDate?: boolean;
 };
 
 function LedgerRowItemView({
@@ -39,10 +41,18 @@ function LedgerRowItemView({
   onShortSwipe,
   onLongSwipe,
   withAccount = true,
+  withDate,
 }: LedgerRowItemProps) {
   const shortSwipe = useCallback(() => onShortSwipe?.(row.id), [onShortSwipe, row.id]);
   const longSwipe = useCallback(() => onLongSwipe?.(row.id), [onLongSwipe, row.id]);
-  const entry = <EntryRow row={row} onPress={onPress} withAccount={withAccount} />;
+  const entry = (
+    <EntryRow
+      row={row}
+      onPress={onPress}
+      withAccount={withAccount}
+      {...(withDate === undefined ? {} : { withDate })}
+    />
+  );
 
   // Both handlers, or the row is tap-only: a half-wired `SwipeableRow` would
   // answer one gesture and swallow the other.

@@ -2927,6 +2927,14 @@ describe("a control's edge is not the divider colour", () => {
    */
   const AREA_EDGES = new Map([
     [
+      "packages/ui/src/transactions/molecules/day-group/day-group.tsx#rows",
+      "a day's rows as one surface — an area in the list, with its own pressable rows inside it",
+    ],
+    [
+      "packages/ui/src/transactions/molecules/day-group/day-group.tsx#rowSurface",
+      "the same area, cut into rows for a virtualised list — the edge belongs to the day, not to the row that happens to carry it",
+    ],
+    [
       "packages/ui/src/transactions/molecules/quiet-days/quiet-days.tsx#run",
       "a card standing in for the days it collapsed — an area in the list, with its own pressable inside it",
     ],

@@ -109,7 +109,7 @@ function share(amount: money.Money, widest: money.Money): number {
 const useStyles = makeStyles((theme) => ({
   root: { gap: space.lg },
   row: { flexDirection: "row", alignItems: "center", gap: space.x3 },
-  label: { width: 74, color: theme.text, ...text.ui("bodySm") },
+  label: { width: 74, color: theme.text, ...text.ui("label") },
   track: {
     flex: 1,
     height: BAR_HEIGHT,
