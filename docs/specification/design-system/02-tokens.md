@@ -192,6 +192,15 @@ and no picker; a chosen one can be added later and simply wins over the
 derivation. Folded before hashing, so `Groceries` and `groceries ` are one
 category to the eye and to this.
 
+**Six, and lightness carries what hue cannot.** Green is the accent and
+`income`; yellow is `asserted`'s one meaning; purple this product refuses; and a
+tint within 58 of `spend` in RGB is a tile the colour of the amount beside it.
+Measured across the wheel, that leaves **eight usable hues at any single
+lightness** — five blues and three plums. So the ramp is spread 0.060 → 0.455 in
+relative luminance rather than sitting in one band, and the top is capped there:
+running to 0.579 bought a wider separation and cost the last two steps their
+colour, a pale pink and a near-white tile on a cream ground.
+
 **Three floors, and the third is the one a drawn palette fails.** Each tint
 clears **1.5:1** against all four grounds — cream surface and ground, charcoal
 surface and ground — because a tile is an area and the ramp is one set of values
@@ -200,7 +209,7 @@ for both themes, the same property `chart-ramp` has. Each carries its own ink at
 *in lightness*, because hue alone is not separation: a colourblind reader and a
 greyscale screenshot both see luminance. Measured, the four hues on the boards
 sit 1.0–1.3 apart and three of them fail their ink — one colour wearing four
-names. Ours are 1.34 at the tightest.
+names. Ours are 1.21 at the tightest.
 
 **The ramp skips a band.** A fill between 0.183 and 0.264 relative luminance
 carries neither white nor `green-900` at 4.5, so three tints sit below that gap

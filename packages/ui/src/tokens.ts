@@ -361,9 +361,9 @@ export const categoryRamp = [
   { fill: "#534236", light: true },
   { fill: "#2a6963", light: true },
   { fill: "#6773a4", light: true },
-  { fill: "#6b99bb", light: false },
-  { fill: "#db9bb9", light: false },
-  { fill: "#bbcbd1", light: false },
+  { fill: "#7a94a6", light: false },
+  { fill: "#b299a6", light: false },
+  { fill: "#d2ad8d", light: false },
 ] as const;
 
 /* ── 2.2 Typography ──────────────────────────────────────────────────────── */
