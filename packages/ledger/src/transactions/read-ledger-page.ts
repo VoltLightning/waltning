@@ -1,5 +1,7 @@
+import { fold } from "@waltning/core/capture/names";
 import type { AccountingDate } from "@waltning/core/date";
-import { and, asc, desc, eq, gt, lt, lte, or, type SQL } from "drizzle-orm";
+import type { Id } from "@waltning/core/id";
+import { and, asc, desc, eq, gt, inArray, lt, lte, or, type SQL } from "drizzle-orm";
 import type { ReplicaDb } from "../open.ts";
 import { ledgerSchema } from "../schema-map.ts";
 import type {
@@ -7,9 +9,15 @@ import type {
   TransactionSearchCursor,
   TransactionSearchFilter,
 } from "./search-transactions.ts";
-import { ledgerRowsQuery, signRow, structuralWhere } from "./transaction-query.ts";
+import { lineDescriptionsBy, matchesText, parseSearchAmount } from "./text-match.ts";
+import {
+  ledgerRowsQuery,
+  type SignedLedgerRow,
+  signRow,
+  structuralWhere,
+} from "./transaction-query.ts";
 
-const { transactions } = ledgerSchema;
+const { accounts, currencies, transactions } = ledgerSchema;
 
 /**
  * Which way the reader walks away from the anchor. `older` runs descending
@@ -18,8 +26,18 @@ const { transactions } = ledgerSchema;
  */
 export type LedgerDirection = "older" | "newer";
 
-/** Everything a filter can say to this reader — no `text`, and no date bounds. */
-export type LedgerFilter = Omit<TransactionSearchFilter, "text" | "from" | "to">;
+/**
+ * Everything a filter can say to this reader — no date bounds, which the
+ * anchor walk owns.
+ *
+ * **`text` is in, and it was the seam a search fell through.** S04 §7's search
+ * narrows this list; the option was widened at the hook and at the controller
+ * and stopped here, where the type said `Omit<…, "text">`. A caller passing
+ * `{ text }` in a variable is not excess-property-checked, so it compiled,
+ * forwarded nothing, and the list drew the whole ledger under a field
+ * reporting three matches. `contract.types.ts` now pins the two ends together.
+ */
+export type LedgerFilter = Omit<TransactionSearchFilter, "from" | "to">;
 
 export type LedgerPage = {
   /**
@@ -69,12 +87,24 @@ export const LEDGER_PAGE_SIZE = 30;
  * share — which rows a filter admits, what a row looks like, what sign its
  * money carries — is shared, in `transaction-query.ts`.
  *
- * **Text search is not accepted here.** Folding in JS over a
- * structurally-narrowed set is honest for a bounded page walking one way
- * (`searchTransactions`'s own doc) and quietly quadratic for a list being
- * flung through in two. Filtering S04 by text (§7 — the strip's search)
- * re-anchors the list and pages through `searchTransactions`, which is the
- * operation that answers that question correctly.
+ * **Text search is accepted here, and this doc used to refuse it.** The
+ * refusal was right about the cost and wrong about the remedy: it sent S04's
+ * search to `searchTransactions`, which folds the same unbounded set — the two
+ * readers pay the same price, and only this one walks both directions from an
+ * anchor, which is what §7's list is.
+ *
+ * **What made it quadratic was the projection, not the fold.** Scanning the
+ * window as *display rows* — five joins, a `Decimal` per row — cost 137 ms per
+ * page at 25 000 rows, and 141 ms for a query that matched nothing, because
+ * the work was in the scan rather than in the matching. `matchingRows` below
+ * scans the four columns a match can be decided from and reads whole rows only
+ * for the page.
+ *
+ * **It is still linear in the window, and there is no index that would make it
+ * otherwise.** §13 names a trigram index; the replica has none, so a query
+ * matching nothing still walks every row below the anchor. That is a schema
+ * change, not a reader change, and until it lands this is the honest cost of a
+ * text filter on a phone-local ledger.
  */
 export function readLedgerPage<TRun, TSchema extends typeof ledgerSchema>(
   db: ReplicaDb<TRun, TSchema>,
@@ -117,14 +147,25 @@ export function readLedgerPage<TRun, TSchema extends typeof ledgerSchema>(
       ? [desc(transactions.date), desc(transactions.id)]
       : [asc(transactions.date), asc(transactions.id)];
 
+  const needle = filter.text === undefined ? "" : fold(filter.text.trim());
+
   // One row more than asked for: its presence is what says another page
   // exists, without a second query and without a count.
-  const read = ledgerRowsQuery(db)
-    .where(where)
-    .orderBy(...order)
-    .limit(limit + 1)
-    .all()
-    .map(signRow);
+  //
+  // **Except under a text filter, which SQL cannot decide** (`matchesText`'s
+  // own doc). There the window is read whole, folded, filtered, and only then
+  // paged — `searchTransactions` does exactly this, for exactly this reason,
+  // and a `LIMIT` applied before the filter would return a page of rows the
+  // reader never asked to see and call it the end of the ledger.
+  const read =
+    needle === ""
+      ? ledgerRowsQuery(db)
+          .where(where)
+          .orderBy(...order)
+          .limit(limit + 1)
+          .all()
+          .map(signRow)
+      : matchingRows(db, where, order, needle, filter.text ?? "", limit);
 
   const page = read.slice(0, limit);
   const last = page[page.length - 1];
@@ -136,4 +177,71 @@ export function readLedgerPage<TRun, TSchema extends typeof ledgerSchema>(
     rows: direction === "older" ? page : [...page].reverse(),
     nextCursor,
   };
+}
+
+/**
+ * The window read whole, folded and filtered — the text path.
+ *
+ * One row past `limit` is kept for the same reason the SQL path keeps one: its
+ * presence is what says another page exists. The slice happens after the
+ * filter, so the extra row is an extra *match*, not an extra candidate.
+ */
+function matchingRows<TRun, TSchema extends typeof ledgerSchema>(
+  db: ReplicaDb<TRun, TSchema>,
+  where: SQL | undefined,
+  order: SQL[],
+  needle: string,
+  text: string,
+  limit: number,
+): SignedLedgerRow[] {
+  /*
+    **The scan reads four columns; the page reads the row.**
+
+    The first version scanned the window through `ledgerRowsQuery` — five joins
+    — and `signRow`, which builds a `Decimal` or two per row, and only then
+    filtered. Measured at 25 000 rows that is **137 ms per page**, and 141 ms
+    for a query matching nothing at all: the work was in the scan, so the early
+    `break` bought nothing. Ten pages of a dense query cost 1.28 s.
+
+    `matchesText` reads `payee`, `note`, `amount_original` and the line
+    descriptions. Nothing else in a display row can decide a match, so nothing
+    else needs reading to find one — `countOnly` already takes exactly this
+    shape for exactly this reason. The joins and the money fold are paid for
+    the page's own rows, of which there are at most `limit + 1`.
+  */
+  const candidates = db
+    .select({
+      id: transactions.id,
+      payee: transactions.payee,
+      note: transactions.note,
+      amountOriginal: transactions.amountOriginal,
+    })
+    .from(transactions)
+    .innerJoin(accounts, eq(transactions.accountId, accounts.id))
+    .innerJoin(currencies, eq(transactions.currency, currencies.code))
+    .where(where)
+    .orderBy(...order)
+    .all();
+  if (candidates.length === 0) return [];
+
+  const lines = lineDescriptionsBy(db, where);
+  const needleAmount = parseSearchAmount(text);
+  const ids: Id<"transactions">[] = [];
+  for (const row of candidates) {
+    if (!matchesText(row, needle, needleAmount, lines.get(row.id) ?? [])) continue;
+    ids.push(row.id);
+    // One past the page, the same convention the SQL path uses: its presence
+    // is what says another page exists.
+    if (ids.length > limit) break;
+  }
+  if (ids.length === 0) return [];
+
+  // Bounded by `limit + 1`, so `inArray`'s parameter count is bounded too —
+  // the objection `lineDescriptionsBy` raises against `inArray` over an
+  // unbounded set does not apply to a page.
+  return ledgerRowsQuery(db)
+    .where(inArray(transactions.id, ids))
+    .orderBy(...order)
+    .all()
+    .map(signRow);
 }

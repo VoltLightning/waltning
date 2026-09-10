@@ -299,6 +299,10 @@ function harness(
     (accountId) =>
       accounts.find((candidate) => candidate.id === accountId)?.balance ?? money.toMoney("0"),
   );
+  const readLedgerPageSpy = vi.fn((_options: { filter?: { text?: string } }) => ({
+    rows: [],
+    nextCursor: undefined,
+  }));
   const reset = vi.fn(() => {
     accounts = [];
     recent = [];
@@ -320,13 +324,14 @@ function harness(
     listNetWorth: () => [],
     readPeriodSpend: () => [],
     readDayFlows: () => [],
+    readMatchDays: () => [],
     readDayRows: () => [],
     readSpendByCategory: () => [],
     readIncomeVsExpense: () => [],
     readActiveDashboardLayout: () => null,
     listUnsettledClearing: () => [],
     balanceAsOf,
-    readLedgerPage: () => ({ rows: [], nextCursor: undefined }),
+    readLedgerPage: readLedgerPageSpy,
     searchTransactions: () => ({
       rows: [],
       nextCursor: undefined,
@@ -394,6 +399,7 @@ function harness(
   return {
     controller,
     capture,
+    readLedgerPageSpy,
     createAccount,
     createTransaction,
     updateAccount,
@@ -3401,4 +3407,26 @@ describe("category collisions", () => {
     const collisions = controller.getSnapshot().categoryCollisions;
     expect(collisions.map((c) => `${c.a.name} <-> ${c.b.name}`)).toEqual([]);
   });
+});
+
+/**
+ * **C1 — the seam that swallowed S04's search.** This forwarding is written out
+ * field by field, so a key added to the type above it is silently *not* passed:
+ * `text` reached the hook, reached this parameter, and stopped. The list drew
+ * the whole ledger under a search field reporting three matches, and it looked
+ * like search working because a query change re-keys the list and both halves
+ * reload on every keystroke.
+ *
+ * Asserted here rather than at the hook, which mocks this away.
+ */
+it("forwards a text filter to the read, like every other filter key", () => {
+  const { controller, readLedgerPageSpy } = harness();
+  controller.readLedgerPage({
+    anchor: accountingDate("2026-08-23"),
+    direction: "older",
+    filter: { text: "market" },
+  });
+  expect(readLedgerPageSpy).toHaveBeenCalledOnce();
+  const forwarded = readLedgerPageSpy.mock.calls.map(([options]) => options.filter?.text);
+  expect(forwarded).toEqual(["market"]);
 });

@@ -5,15 +5,18 @@ import { isPagerPageKey } from "@waltning/client/ledger/pager-date";
 import { useDayFlows } from "@waltning/client/ledger/use-day-flows";
 import { useDayRows } from "@waltning/client/ledger/use-day-rows";
 import { useLedgerController } from "@waltning/client/ledger/use-ledger-controller";
+import { useMatchDays } from "@waltning/client/ledger/use-match-days";
 import { usePhoneLedger } from "@waltning/client/ledger/use-phone-ledger";
 import { useSpendByCategory } from "@waltning/client/ledger/use-spend-by-category";
 import { useUnsettledBanner } from "@waltning/client/ledger/use-unsettled-banner";
 import { useWhereItWent } from "@waltning/client/ledger/use-where-it-went";
 import { toLedgerItems } from "@waltning/client/transactions/ledger-days";
+import { matchesByDay, matchesByMonth } from "@waltning/client/transactions/match-counts";
 import { monthGrid, weekdayHeadings } from "@waltning/client/transactions/month-grid";
 import { busiestMonth, yearMonths } from "@waltning/client/transactions/year-months";
 import { accountingDate, addDays, monthRange, shiftMonth, yearMonth } from "@waltning/core/date";
 import * as money from "@waltning/core/money";
+import { CategorySheet } from "@waltning/ui/categories/category-sheet";
 import { SpendRows } from "@waltning/ui/dashboard/spend-rows";
 import { Amount } from "@waltning/ui/fx/amount";
 import { dayLabel, monthLabel, weekdayInitial, weekStart } from "@waltning/ui/i18n/locales";
@@ -64,6 +67,22 @@ function handleCreateAccount() {
 
 function handlePreference(next: "system" | "light" | "dark") {
   return appearance.setPreference(next);
+}
+
+/**
+ * §7's count for one month. Two flat keys rather than one with a plural,
+ * `resultsOne`'s own reason — the resolver picks, and the catalogue is checked
+ * for both.
+ */
+function monthMatch(t: ReturnType<typeof useT>, count: number): { label: string; found: boolean } {
+  return {
+    label: t(count === 1 ? "transactions.matchesCountOne" : "transactions.matchesCountMany", {
+      count,
+    }),
+    // Zero is still an answer — *not in this month* — but a quiet one, or
+    // twelve rows say nothing twelve times.
+    found: count > 0,
+  };
 }
 
 function handleShowAll() {
@@ -205,7 +224,20 @@ export default function Today() {
     setToastToken((token) => token + 1);
     setToastDismissed(false);
   }
-  const handleDismissToast = useCallback(() => setToastDismissed(true), []);
+  const handleDismissToast = useCallback(() => {
+    setToastDismissed(true);
+    setRefusal(null);
+  }, []);
+  /**
+   * A write this screen made and the ledger refused.
+   *
+   * **The same slot as the arrival toast, not a second one.** Two toasts fight
+   * for one corner; and a refusal is the more recent event, so it wins the slot
+   * while it is on screen.
+   */
+  const [refusal, setRefusal] = useState<string | null>(null);
+  /** Its own counter, so a second refusal with the same wording still shows. */
+  const [refusalToken, setRefusalToken] = useState(0);
   const hasAccounts = snapshot.accounts.length > 0;
   /**
    * **An empty Recent is not by itself a first run.** `snapshot.recent` is a
@@ -274,6 +306,94 @@ export default function Today() {
    * move the ledger — only picking a month does.
    */
   const [pickerYear, setPickerYear] = useState<number | null>(null);
+  /**
+   * The short swipe's sheet (S04 §7).
+   *
+   * **The screen owns it, not the list.** A sheet is a layer over the whole
+   * screen, and a page inside a pager cannot open one without it sliding
+   * horizontally with the page under it. The list knows which row was swiped;
+   * this knows where a sheet goes.
+   */
+  const [categorize, setCategorize] = useState<{
+    transactionId: string;
+    kind: "income" | "expense";
+  } | null>(null);
+  const handleCategorize = useCallback(
+    (id: string, kind: "income" | "expense") => setCategorize({ transactionId: id, kind }),
+    [],
+  );
+  const dismissCategorize = useCallback(() => setCategorize(null), []);
+  const handlePickCategory = useCallback(
+    (categoryId: string) => {
+      if (categorize === null) return;
+      const result = ledger.categorizeBatch({
+        transactionIds: [categorize.transactionId],
+        categoryId,
+      });
+      // **A refusal says so.** Closing on a rejected write is the failure that
+      // looks like health — the row unchanged, the sheet gone, and every reason
+      // to believe it worked. Keeping the sheet open and saying nothing is the
+      // second half of the same failure: taps that do nothing, forever, with no
+      // message. So the sheet closes either way and the toast carries the
+      // refusal, which is where this screen already puts one.
+      if ("fieldErrors" in result) {
+        setRefusal(result.fieldErrors[0]?.message ?? t("common.couldNotSave"));
+        setRefusalToken((token) => token - 1);
+      }
+      setCategorize(null);
+    },
+    [categorize, ledger, t],
+  );
+  /** §6's *the only way back from a jump* — the pill's whole job. */
+  const returnToToday = useCallback(() => pager.showDay(today), [pager.showDay, today]);
+  /**
+   * The search (§7), which lives in the route beside the date because it
+   * behaves like one: it survives a swipe, a step and a jump, so Calendar and
+   * Months answer *how often, and when* about the search the reader typed.
+   *
+   * **Opening it writes an empty string, not `null`.** `null` is *no search*
+   * and is what closes the field; `""` is *a search with nothing typed yet*,
+   * which is the field open and waiting. The two states have to be different
+   * or the field could never be opened before a word arrives.
+   */
+  const [searchOpen, setSearchOpen] = useState(false);
+  const openSearch = useCallback(() => setSearchOpen(true), []);
+  const closeSearch = useCallback(() => {
+    setSearchOpen(false);
+    pager.setQuery(null);
+  }, [pager.setQuery]);
+  const changeSearch = useCallback((value: string) => pager.setQuery(value), [pager.setQuery]);
+  /**
+   * **The field is open whenever there is a search, however it arrived.** The
+   * flag above is this session's tap on the icon; a query in the URL is a link
+   * someone followed. Both are a screen that is narrowed, and a narrowed screen
+   * that did not say so would be a ledger quietly missing rows.
+   */
+  const searching = searchOpen || pager.state.query !== null;
+  const searchText = pager.state.query ?? "";
+  /**
+   * §7's live count, and the whole ledger's — not the loaded page's. The field
+   * says how many rows match, which is a fact about the ledger; the list under
+   * it walks them a page at a time.
+   *
+   * **`countOnly`, because that is the whole question.** Without it this takes
+   * `searchTransactions`' full path: five joins over every matching row, a
+   * `Decimal` or two constructed per row by `signRow`, and `totalsOf` folding
+   * currencies nobody reads — on the JS thread, once per keystroke, over the
+   * whole ledger. The option exists for exactly this caller.
+   *
+   * **`snapshot` is a dependency, and it was missing.** `ledger` is stable for
+   * the app's life, so without it the count froze at whatever it was when the
+   * search began: capture a matching row and the grid gained a mark while the
+   * field went on saying three. Every sibling read on this screen names the
+   * snapshot for this reason.
+   */
+  const matchCount = useMemo(() => {
+    void snapshot;
+    if (pager.state.query === null) return null;
+    return ledger.searchTransactions({ text: pager.state.query }, undefined, { countOnly: true })
+      .total.count;
+  }, [ledger, pager.state.query, snapshot]);
   const openPicker = useCallback(
     () => setPickerYear(Number(pager.state.date.slice(0, 4))),
     [pager.state.date],
@@ -645,12 +765,20 @@ export default function Today() {
    * it went to, which is what said it was the chrome rebuilding everything
    * rather than the destination drawing itself.
    */
+  /**
+   * What the toast is saying, and the token that re-arms its window. A refusal
+   * carries its own token so a second refusal with the same wording still shows
+   * (`Toast`'s H1).
+   */
+  const notice = refusal ?? (typeof message === "string" && !toastDismissed ? message : null);
+  const noticeToken = refusal === null ? toastToken : refusalToken;
+
   const body = useMemo(
     () => (
       <>
-        {typeof message === "string" && !toastDismissed ? (
-          <Toast message={message} onDismiss={handleDismissToast} token={toastToken} />
-        ) : null}
+        {notice === null ? null : (
+          <Toast message={notice} onDismiss={handleDismissToast} token={noticeToken} />
+        )}
         {/*
         Above the error branch, not inside the populated one. S04 §6: a failed
         refresh leaves `snapshot`'s other fields untouched, so the figures it
@@ -664,7 +792,7 @@ export default function Today() {
         {ledgerBody}
       </>
     ),
-    [message, toastDismissed, handleDismissToast, toastToken, netWorthStrip, monthCard, ledgerBody],
+    [notice, noticeToken, handleDismissToast, netWorthStrip, monthCard, ledgerBody],
   );
 
   /**
@@ -697,6 +825,17 @@ export default function Today() {
     return { start: range.from, end: addDays(range.to, 1) };
   }, [month]);
   const monthFlows = useDayFlows(ledger, monthPeriod, snapshot);
+  /**
+   * §7's counts for the month on screen. `null` while the screen is not
+   * searching, and then the grid draws its activity marks as usual — the read
+   * is skipped entirely rather than matching the empty needle against the
+   * month.
+   */
+  const monthMatchDays = useMatchDays(ledger, monthPeriod, pager.state.query, snapshot);
+  const dayMatches = useMemo(
+    () => (pager.state.query === null ? undefined : matchesByDay(monthMatchDays)),
+    [monthMatchDays, pager.state.query],
+  );
   const weeks = useMemo(
     () => monthGrid(monthFlows, month, today, weekStart(locale)),
     [monthFlows, month, today, locale],
@@ -713,14 +852,31 @@ export default function Today() {
   // reader who cannot see the mark would otherwise lose entirely.
   const dayName = useCallback(
     (date: string) => {
-      const cell = weeks.flat().find((day) => !("blank" in day) && day.date === date);
       const name = dayLabel(accountingDate(date), locale);
+      /*
+        **While searching, the name is the count.** The cell draws a number
+        instead of its activity mark, and a reader who cannot see the number
+        was being told about the mark that is no longer there — or, worse,
+        "nothing" over a cell reading `1`, because the mark and the match are
+        two different populations (a shared-account row has no mark and does
+        match). §7's own accessibility line asks for *the full date and what
+        happened*; under a search, what happened is how many matched.
+      */
+      if (dayMatches !== undefined) {
+        const found = dayMatches.get(date) ?? 0;
+        // **Never "nothing" here.** That word is the unsearched grid's, and it
+        // is about the ledger; a searched cell with no match is a day the
+        // *query* did not find, which may hold six rows. The count says which
+        // — `0 matches` is an answer, `nothing` is a different claim.
+        return `${name}, ${monthMatch(t, found).label}`;
+      }
+      const cell = weeks.flat().find((day) => !("blank" in day) && day.date === date);
       if (cell === undefined || "blank" in cell || cell.activity === "none") {
         return t("transactions.ribbonDayEmpty", { date: name });
       }
       return name;
     },
-    [weeks, locale, t],
+    [weeks, locale, dayMatches, t],
   );
 
   /**
@@ -780,6 +936,11 @@ export default function Today() {
     [shownYear],
   );
   const yearFlows = useDayFlows(ledger, yearPeriod, snapshot);
+  const yearMatchDays = useMatchDays(ledger, yearPeriod, pager.state.query, snapshot);
+  const monthMatches = useMemo(
+    () => (pager.state.query === null ? null : matchesByMonth(yearMatchDays)),
+    [yearMatchDays, pager.state.query],
+  );
   const yearRows = useMemo(
     () =>
       yearMonths(
@@ -813,8 +974,11 @@ export default function Today() {
           ? null
           : t("shell.plusOtherCurrencies", { count: row.otherCurrencies }),
       ahead: row.ahead,
+      // Absent from the map is nothing found, which is a fact worth drawing —
+      // §7's *how often, and when* includes *not in this month*.
+      matches: monthMatches === null ? null : monthMatch(t, monthMatches.get(row.month) ?? 0),
     }));
-  }, [yearRows, locale, leadNetWorth, t]);
+  }, [yearRows, locale, leadNetWorth, monthMatches, t]);
   const flowLabels = useMemo(() => ({ inflow: t("shell.cameIn"), spend: t("shell.wentOut") }), [t]);
 
   const pages = useMemo(
@@ -839,6 +1003,9 @@ export default function Today() {
             pivotDecimals={leadNetWorth.decimals}
             onPickDay={handlePickDay}
             onOpenTransaction={handleOpenTransaction}
+            onCategorize={handleCategorize}
+            onReturnToToday={returnToToday}
+            query={pager.state.query}
             onScroll={handleScroll}
             empty={listEmpty}
           />
@@ -856,6 +1023,7 @@ export default function Today() {
               today={today}
               labelFor={dayName}
               onPickDay={handlePickDay}
+              {...(dayMatches === undefined ? {} : { matches: dayMatches })}
             />
             {dayPanel}
           </GroundPanel>
@@ -882,8 +1050,12 @@ export default function Today() {
       dayHeadings,
       dayName,
       dayPanel,
+      dayMatches,
       flowLabels,
+      handleCategorize,
       handlePickDay,
+      pager.state.query,
+      returnToToday,
       handlePickMonth,
       handleScroll,
       ledger,
@@ -925,7 +1097,13 @@ export default function Today() {
         scrollY={scrollY}
         onPrevious={pager.previous}
         onNext={pager.next}
-        onSearch={handleShowAll}
+        onSearch={openSearch}
+        searchOpen={searching}
+        searchQuery={searchText}
+        onSearchChange={changeSearch}
+        onSearchClose={closeSearch}
+        searchPlaceholder={t("transactions.searchThisLedger")}
+        {...(matchCount === null ? {} : { searchCount: matchCount })}
         barLabels={barLabels}
         pages={pages}
         activeKey={pager.state.page}
@@ -943,6 +1121,18 @@ export default function Today() {
         onYearChange={setPickerYear}
         onPick={handlePickMonth}
         onDismiss={closePicker}
+      />
+      {/*
+        The short swipe's destination (§7). Rendered beside the picker rather
+        than inside a page: both are layers over the screen, and a layer that
+        lived in a pager page would slide sideways with it.
+      */}
+      <CategorySheet
+        visible={categorize !== null}
+        kind={categorize?.kind ?? "expense"}
+        tree={snapshot.categoryTree}
+        onPick={handlePickCategory}
+        onDismiss={dismissCategorize}
       />
     </>
   );

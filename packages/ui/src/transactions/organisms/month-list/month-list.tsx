@@ -40,6 +40,18 @@ export type MonthRow = {
   /** A note where the month held currencies the figures leave out, else `null`. */
   note: string | null;
   ahead: boolean;
+  /**
+   * §7's match count for this month, already localised — *3 matches* — or
+   * `null` when the screen is not searching.
+   *
+   * **It replaces the bars and the figures; it does not join them.** §7 says
+   * Months carries match counts *instead of* its figures, and for a reason the
+   * row makes obvious: the bars are drawn against the busiest month of the
+   * year, which under a search would still be scaled by money nobody asked
+   * about. A localised string rather than a number, the way `note` already is —
+   * plurals are the caller's, and this component holds no catalogue.
+   */
+  matches: { label: string; found: boolean } | null;
 };
 
 export type MonthListProps = {
@@ -82,7 +94,11 @@ function MonthRowView({
       accessibilityRole="button"
       // The month, then both figures: a row that announced only its name would
       // make a reader open every month to find out which were heavy.
-      accessibilityLabel={`${row.label}, ${labels.inflow} ${row.inflow}, ${labels.spend} ${row.spend}`}
+      accessibilityLabel={
+        row.matches === null
+          ? `${row.label}, ${labels.inflow} ${row.inflow}, ${labels.spend} ${row.spend}`
+          : `${row.label}, ${row.matches.label}`
+      }
       accessibilityState={{ selected: current }}
       {...(current ? SELECTED : UNSELECTED)}
       onPress={press}
@@ -100,37 +116,51 @@ function MonthRowView({
         {row.label}
       </Text>
 
+      {row.matches === null ? (
+        <>
+          {/*
+            Decorative: both figures are stated beside the bars and in the row's
+            accessible name, so a reader who cannot see them loses nothing.
+          */}
+          <View style={styles.bars} accessibilityElementsHidden {...HIDDEN}>
+            <View style={styles.track}>
+              <View style={[styles.fillIn, inflowWidth]} />
+            </View>
+            <View style={styles.track}>
+              <View style={[styles.fillOut, spendWidth]} />
+            </View>
+          </View>
+
+          <View style={styles.figures}>
+            <Amount
+              value={row.inflow}
+              currency={row.currency}
+              decimals={row.decimals}
+              kind="income"
+              size="compact"
+            />
+            <Amount
+              value={row.spend}
+              currency={row.currency}
+              decimals={row.decimals}
+              kind="spend"
+              size="compact"
+            />
+          </View>
+        </>
+      ) : (
+        <Text style={row.matches.found ? styles.matches : styles.matchesNone}>
+          {row.matches.label}
+        </Text>
+      )}
+
       {/*
-        Decorative: both figures are stated beside the bars and in the row's
-        accessible name, so a reader who cannot see them loses nothing.
+        The currency note is about the figures, so it goes with them. Under a
+        search there are no figures for it to qualify.
       */}
-      <View style={styles.bars} accessibilityElementsHidden {...HIDDEN}>
-        <View style={styles.track}>
-          <View style={[styles.fillIn, inflowWidth]} />
-        </View>
-        <View style={styles.track}>
-          <View style={[styles.fillOut, spendWidth]} />
-        </View>
-      </View>
-
-      <View style={styles.figures}>
-        <Amount
-          value={row.inflow}
-          currency={row.currency}
-          decimals={row.decimals}
-          kind="income"
-          size="compact"
-        />
-        <Amount
-          value={row.spend}
-          currency={row.currency}
-          decimals={row.decimals}
-          kind="spend"
-          size="compact"
-        />
-      </View>
-
-      {row.note === null ? null : <Text style={styles.note}>{row.note}</Text>}
+      {row.note === null || row.matches !== null ? null : (
+        <Text style={styles.note}>{row.note}</Text>
+      )}
     </Pressable>
   );
 }
@@ -187,6 +217,15 @@ const useStyles = makeStyles((theme) => ({
   fillOut: { height: "100%", backgroundColor: theme.spend },
   figures: { flexDirection: "row", justifyContent: "space-between" },
   note: { ...text.ui("caption"), color: theme.textMuted },
+  matches: { ...text.ui("bodySm"), color: theme.accentText },
+  /**
+   * **A month with nothing found is quiet, not absent.** *Not in this month* is
+   * part of §7's *how often, and when*, so the row keeps its answer — but
+   * twelve rows shouting `0 matches` in accent ink is a page that says nothing
+   * twelve times, which is the same reason the grid draws an empty cell rather
+   * than a zero.
+   */
+  matchesNone: { ...text.ui("bodySm"), color: theme.textMuted },
   focused: {
     outlineWidth: focus.width,
     outlineColor: theme.focusRing,

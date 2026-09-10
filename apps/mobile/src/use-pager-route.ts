@@ -8,6 +8,7 @@ import {
   pagerStateParams,
   parsePagerState,
   periodLabel,
+  search,
   step,
   stepUnitOf,
 } from "@waltning/client/ledger/pager-date";
@@ -24,6 +25,8 @@ export type PagerRoute = {
   showPage: (page: PagerPageKey) => void;
   showMonth: (month: YearMonth) => void;
   showDay: (date: AccountingDate) => void;
+  /** The screen's search (S04 §7). `null` clears it. */
+  setQuery: (query: string | null) => void;
 };
 
 /**
@@ -51,15 +54,15 @@ export type PagerRoute = {
  * wrong.
  */
 export function usePagerRoute(today: AccountingDate): PagerRoute {
-  const params = useLocalSearchParams<{ view?: string; date?: string }>();
+  const params = useLocalSearchParams<{ view?: string; date?: string; q?: string }>();
 
   // Parsed on every render rather than kept in state: the URL is the state,
   // and a copy of it would be a second thing to keep in step. Everything
   // arriving here is untrusted — an unknown view lands on the summary, a date
   // that is not a real calendar day lands on today.
   const state = useMemo(
-    () => parsePagerState({ view: params.view, date: params.date }, today),
-    [params.view, params.date, today],
+    () => parsePagerState({ view: params.view, date: params.date, q: params.q }, today),
+    [params.view, params.date, params.q, today],
   );
 
   const write = useCallback((next: PagerState) => {
@@ -97,6 +100,10 @@ export function usePagerRoute(today: AccountingDate): PagerRoute {
     (date: AccountingDate) => write(enterDay(latest.current, date)),
     [write],
   );
+  const setQuery = useCallback(
+    (query: string | null) => write(search(latest.current, query)),
+    [write],
+  );
 
   const label = useMemo(() => periodLabel(state), [state]);
 
@@ -109,5 +116,6 @@ export function usePagerRoute(today: AccountingDate): PagerRoute {
     showPage,
     showMonth,
     showDay,
+    setQuery,
   };
 }

@@ -12,6 +12,7 @@ import { useLocale, useT } from "@waltning/ui/i18n/provider";
 import { pageScrollProps } from "@waltning/ui/primitives/nested-scroll";
 import { GroundPanel, type ScrollHandler } from "@waltning/ui/shell/card";
 import { useGroundInset } from "@waltning/ui/shell/ground-inset";
+import { TodayPill } from "@waltning/ui/shell/today-pill";
 import { text } from "@waltning/ui/theme/fonts";
 import { makeStyles } from "@waltning/ui/theme/styles";
 import { DayHeader } from "@waltning/ui/transactions/day-header";
@@ -21,7 +22,7 @@ import {
 } from "@waltning/ui/transactions/molecules/day-ribbon/day-ribbon";
 import { LedgerRowItem } from "@waltning/ui/transactions/molecules/ledger-row-item/ledger-row-item";
 import { QuietDay, QuietRun } from "@waltning/ui/transactions/molecules/quiet-days/quiet-days";
-import { useCallback, useMemo } from "react";
+import { memo, useCallback, useMemo } from "react";
 import { Text, View } from "react-native";
 import Animated from "react-native-reanimated";
 
@@ -51,6 +52,27 @@ export type HomeListPageProps = {
   onPickDay: (date: string) => void;
   onOpenTransaction: (id: string) => void;
   /**
+   * Short swipe (S04 §7). The kind travels with the id because the screen owns
+   * the sheet and the sheet needs to know which tree to open — and this page
+   * is the only thing holding the row.
+   */
+  onCategorize: (id: string, kind: "income" | "expense") => void;
+  /**
+   * The way back from a jump (§6). The pill is drawn only when the anchor is
+   * not today, so this is never the no-op it looks like.
+   */
+  onReturnToToday: () => void;
+  /**
+   * The screen's search (§7), or `null`.
+   *
+   * **It narrows more than the rows.** A filtered set has no day totals to
+   * state and no quiet days to mark — its gaps are days the query excluded, not
+   * days the ledger was quiet on — so it reaches `toLedgerItems` and
+   * `ribbonDays` as their `filtered` option too. §7 says the day grouping
+   * survives; it is the *rules about what the gaps mean* that do not.
+   */
+  query: string | null;
+  /**
    * Forwarded to the list, for chrome that moves with the page. This screen
    * owns its scroller — the panel around it is `scroll="own"`, a plain `View`
    * — so it is the only thing that can report the offset the header collapses
@@ -70,7 +92,12 @@ export type HomeListPageProps = {
   empty: React.ReactNode;
 };
 
-type DayTotal = { pivot: Money; approximate: boolean } | { pivot: null };
+type DayTotal =
+  | { pivot: Money; approximate: boolean }
+  /** No rate arrived — the dash, with its reason. */
+  | { pivot: null }
+  /** A filtered day, which has no figure of its own. Nothing is drawn at all. */
+  | { pivot: "filtered" };
 
 type Entry =
   | { key: string; kind: "day"; label: string; total: DayTotal }
@@ -86,17 +113,32 @@ export function HomeListPage({
   pivotDecimals,
   onPickDay,
   onOpenTransaction,
+  onCategorize,
+  onReturnToToday,
+  query,
   onScroll,
   empty,
 }: HomeListPageProps) {
   const t = useT();
   const locale = useLocale();
-  const { rows, hasOlder, hasNewer, loadOlder, loadNewer } = useLedgerList(ledger, { anchor });
-  const items = useMemo(() => toLedgerItems(rows, pivotCurrency), [rows, pivotCurrency]);
+  // A new object per render would re-key the list and discard both halves on
+  // every keystroke — `useLedgerList` treats a filter change as a jump, which
+  // is right for a *different* filter and ruinous for an identical one.
+  const filter = useMemo(() => (query === null ? undefined : { text: query }), [query]);
+  const { rows, hasOlder, hasNewer, loadOlder, loadNewer } = useLedgerList(ledger, {
+    anchor,
+    filter,
+  });
+  const items = useMemo(
+    // A filtered set has no gaps to explain and no day totals to state —
+    // `ledger-days`' own `filtered` option carries the whole argument.
+    () => toLedgerItems(rows, pivotCurrency, { filtered: query !== null }),
+    [rows, pivotCurrency, query],
+  );
 
   const days = useMemo<readonly RibbonDay[]>(
     () =>
-      ribbonDays(items).map((day) => ({
+      ribbonDays(items, { filtered: query !== null }).map((day) => ({
         date: day.date,
         day: Number(day.date.slice(8, 10)),
         weekday: weekdayInitial(day.date, locale),
@@ -106,15 +148,22 @@ export function HomeListPage({
         ...(day.date > today ? { ahead: true } : {}),
         // The full date and what happened, never the bare number the eye
         // reads: a run of them says nothing about which month or which year.
+        // **`entries` is the *loaded* rows, which is a third reading of the
+        // search and disagrees with the other two.** A day holding forty
+        // matches renders thirty of them in one page, so "30 entries" would
+        // stand under a grid cell reading 40. Under a filter the cell says it
+        // matched and leaves the counting to the pages built to count.
         label:
-          day.entries === 0
-            ? t("transactions.ribbonDayEmpty", { date: dayLabel(day.date, locale) })
-            : t(day.entries === 1 ? "transactions.ribbonDayOne" : "transactions.ribbonDayMany", {
-                date: dayLabel(day.date, locale),
-                count: day.entries,
-              }),
+          query !== null
+            ? t("transactions.ribbonDayMatched", { date: dayLabel(day.date, locale) })
+            : day.entries === 0
+              ? t("transactions.ribbonDayEmpty", { date: dayLabel(day.date, locale) })
+              : t(day.entries === 1 ? "transactions.ribbonDayOne" : "transactions.ribbonDayMany", {
+                  date: dayLabel(day.date, locale),
+                  count: day.entries,
+                }),
       })),
-    [items, locale, t, today],
+    [items, locale, query, t, today],
   );
 
   const entries = useMemo<readonly Entry[]>(() => {
@@ -142,9 +191,11 @@ export function HomeListPage({
         kind: "day",
         label: dayLabel(item.date, locale),
         total:
-          item.total.kind === "unpriced"
-            ? { pivot: null }
-            : { pivot: item.total.pivot, approximate: item.total.approximate },
+          item.total.kind === "filtered"
+            ? { pivot: "filtered" as const }
+            : item.total.kind === "unpriced"
+              ? { pivot: null }
+              : { pivot: item.total.pivot, approximate: item.total.approximate },
       });
       for (const row of item.rows) out.push({ key: row.id, kind: "row", row });
     }
@@ -155,7 +206,7 @@ export function HomeListPage({
     ({ item }: { item: Entry }) => {
       switch (item.kind) {
         case "row":
-          return <LedgerRowItem row={item.row} onPress={onOpenTransaction} />;
+          return <ListRow row={item.row} onOpen={onOpenTransaction} onCategorize={onCategorize} />;
         case "quiet":
           return <QuietDay label={item.label} emptyLabel={t("transactions.nothingThatDay")} />;
         case "run":
@@ -175,7 +226,7 @@ export function HomeListPage({
           );
       }
     },
-    [onOpenTransaction, onPickDay, pivotCurrency, pivotDecimals, t],
+    [onOpenTransaction, onCategorize, onPickDay, pivotCurrency, pivotDecimals, t],
   );
 
   const keyExtractor = useCallback((entry: Entry) => entry.key, []);
@@ -250,9 +301,62 @@ export function HomeListPage({
         // The page's own vertical scroller, inside the pager's horizontal one.
         {...pageScrollProps(styles.list)}
       />
+      {/*
+        **After the list, so it paints over it**, and only when the anchor has
+        moved: a pill offering *today* while the list is already on today is a
+        control that does nothing, which is how a reader learns to stop
+        believing it (§6).
+      */}
+      {anchor === today ? null : (
+        <TodayPill
+          label={t("shell.today")}
+          accessibilityLabel={t("transactions.backToToday", {
+            date: dayLabel(anchor, locale),
+          })}
+          onPress={onReturnToToday}
+        />
+      )}
     </GroundPanel>
   );
 }
+
+/**
+ * One row, and the two gestures S04 §7 gives it.
+ *
+ * **A component rather than two arrows in `renderItem`.** `architecture/11`
+ * refuses an inline function in JSX, and this row is why the rule exists: a
+ * fresh pair per render would make `LedgerRowItem`'s `memo` compare unequal on
+ * every scroll frame and re-render every visible row.
+ *
+ * `LedgerRowItem` decides *whether* the row swipes — a transfer and an
+ * adjustment have no category by constraint — so the kind read here is only
+ * ever the kind that reaches the sheet.
+ */
+function ListRowView({
+  row,
+  onOpen,
+  onCategorize,
+}: {
+  row: PhoneSearchTransaction;
+  onOpen: (id: string) => void;
+  onCategorize: (id: string, kind: "income" | "expense") => void;
+}) {
+  const kind = row.type === "income" ? "income" : "expense";
+  const categorize = useCallback((id: string) => onCategorize(id, kind), [onCategorize, kind]);
+  return (
+    <LedgerRowItem
+      row={row}
+      onPress={onOpen}
+      onShortSwipe={categorize}
+      // Long swipe is *edit*, and editing a row is opening it — S09 is where
+      // every field of it lives, so a second editor here would be a second
+      // place the same row can be changed.
+      onLongSwipe={onOpen}
+    />
+  );
+}
+
+const ListRow = memo(ListRowView);
 
 /**
  * A collapsed run, with its own handler.
@@ -303,6 +407,9 @@ function DayTotalFigure({
   currency: CurrencyCode;
   decimals: number;
 }) {
+  // Nothing at all, not a dash: a dash is `UnpricedDay`'s and carries *a rate
+  // has not arrived*, which is a wrong reason attached to a right blank.
+  if (total.pivot === "filtered") return null;
   if (total.pivot === null) return <UnpricedDay />;
   return (
     <Amount

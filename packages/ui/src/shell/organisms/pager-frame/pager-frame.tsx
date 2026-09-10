@@ -23,6 +23,7 @@ import Animated, {
   useAnimatedStyle,
   useSharedValue,
 } from "react-native-reanimated";
+import { SearchField } from "../../../primitives/atoms/search-field/search-field";
 import { useSafeArea } from "../../../primitives/safe-area";
 import { makeStyles } from "../../../theme/styles.ts";
 import { space } from "../../../tokens.ts";
@@ -48,9 +49,35 @@ export type PagerFrameProps = {
   /** Absent where the ledger cannot go further. */
   onPrevious?: (() => void) | undefined;
   onNext?: (() => void) | undefined;
+  /** Opens the field below the tabs. The icon is the affordance (§4). */
   onSearch: () => void;
   /** Accessible names for the header's controls, localised by the caller. */
   barLabels: { previous: string; next: string; search: string; pickPeriod: string };
+
+  /**
+   * The screen's search (S04 §7), pinned under `PageTabs` while it is on.
+   *
+   * **Under the tabs, not inside the header.** The header's whole shape is a
+   * function of the scroll — the title travels, scales and hands its room to a
+   * stepper — and a field swapped into that would either inherit the collapse
+   * or fight it. Under the tabs the field is a row of the chrome, and the
+   * period stays where it is: §7 asks Calendar and Months to carry match counts
+   * *while* the reader keeps stepping periods, which cannot happen on a screen
+   * whose title the search replaced.
+   *
+   * **It stays open while the search is on**, which is what says the screen is
+   * narrowed. §4's `FilterChip` is a different thing — a filter this screen
+   * *receives* from elsewhere — and nothing routes one here yet.
+   */
+  searchOpen: boolean;
+  /** The text in the field. `""` is the field open with nothing typed yet. */
+  searchQuery: string;
+  onSearchChange: (value: string) => void;
+  /** Clears the query and closes the field. The field's own ✕ calls it. */
+  onSearchClose: () => void;
+  searchPlaceholder: string;
+  /** Live matches, for the field's own count line. */
+  searchCount?: number | undefined;
 
   /** The four pages, in the order they are swiped through. */
   pages: readonly PagerPage[];
@@ -77,6 +104,12 @@ function PagerFrameView({
   onNext,
   onSearch,
   barLabels,
+  searchOpen,
+  searchQuery,
+  onSearchChange,
+  onSearchClose,
+  searchPlaceholder,
+  searchCount,
   pages,
   activeKey,
   onPageChange,
@@ -126,6 +159,18 @@ function PagerFrameView({
           labels={barLabels}
         />
         <PageTabs tabs={tabs} activeKey={activeKey} onSelect={onPageChange} progress={progress} />
+        {searchOpen ? (
+          <View style={styles.search}>
+            <SearchField
+              value={searchQuery}
+              onChangeText={onSearchChange}
+              placeholder={searchPlaceholder}
+              onClear={onSearchClose}
+              autoFocus
+              {...(searchCount === undefined ? {} : { resultCount: searchCount })}
+            />
+          </View>
+        ) : null}
       </Animated.View>
       {/*
         Two views, because they carry two transforms and a style array does not
@@ -195,4 +240,7 @@ const useStyles = makeStyles((theme) => ({
     paddingHorizontal: space.x3,
     gap: space.sm,
   },
+  // The tabs' own hairline runs edge to edge; the field sits inside the same
+  // gutter every other row of the chrome does, with room under it.
+  search: { paddingBottom: space.xs },
 }));

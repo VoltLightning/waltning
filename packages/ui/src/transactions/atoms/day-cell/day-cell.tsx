@@ -24,6 +24,20 @@ import { text } from "../../../theme/fonts.ts";
 import { makeStyles } from "../../../theme/styles.ts";
 import { focus, radius, space, tabularNums, touchTarget } from "../../../tokens.ts";
 
+/**
+ * The tallest mark, and therefore the slot a searched cell draws in.
+ *
+ * **The unsearched grid does not align its day numbers, by design**: `none` is
+ * 5px, `some` 8, `heavy` 12, the cell centres its column, so a heavy day's
+ * number already sits 3.5px above a quiet day's. That is the mark carrying
+ * magnitude in size (WCAG 1.4.1's third channel), and it is not a defect.
+ *
+ * A *searched* grid has no magnitude to carry — every cell says a count or
+ * nothing — so all of its cells take one slot, and it is the largest of the
+ * three so that a search never makes the grid shorter than the month beside it.
+ */
+const COUNT_BOX = 12;
+
 /** How much moved that day, in three steps a reader can tell apart at a glance. */
 export type DayActivity = "none" | "some" | "heavy";
 
@@ -56,6 +70,20 @@ export type DayCellProps = {
   today?: boolean;
   /** Beyond today: still reachable, drawn quieter. */
   ahead?: boolean;
+  /**
+   * How many rows on this day matched the screen's search (S04 §7).
+   *
+   * **Present replaces the activity mark; it does not sit beside it.** §7 says
+   * Calendar carries match counts *instead of* its figures, and the mark is
+   * this cell's figure — how much money moved. A cell drawing both would be
+   * answering the reader's search and a question nobody asked, in the same
+   * 44pt box.
+   *
+   * `undefined` is *not searching*. `0` is *searching, nothing here* — drawn as
+   * a blank cell rather than a zero, because thirty zeroes is a grid that says
+   * nothing thirty times.
+   */
+  matches?: number | undefined;
   /** The full date and what happened, for a reader who cannot see the number. */
   accessibilityLabel: string;
   onPress: () => void;
@@ -69,6 +97,7 @@ function DayCellView({
   current = false,
   today = false,
   ahead = false,
+  matches,
   accessibilityLabel,
   onPress,
 }: DayCellProps) {
@@ -107,7 +136,21 @@ function DayCellView({
     >
       {weekday === undefined ? null : <Text style={sub}>{weekday}</Text>}
       <Text style={ink}>{day}</Text>
-      <View style={[styles.mark, ...markStyle(styles, activity, direction, today)]} />
+      {matches === undefined ? (
+        <View style={[styles.mark, ...markStyle(styles, activity, direction, today)]} />
+      ) : matches === 0 ? (
+        // **A quiet mark's own box, drawn in nothing.** `styles.mark` alone is
+        // a border radius — the size comes from `markNone`/`markSome`, so an
+        // empty `View` was 0×0 and the day number shifted between a searched
+        // cell with no match, one with a count, and an unsearched cell. The
+        // cell's fixed height stopped the *grid* reflowing and hid that the
+        // numbers inside it did not line up.
+        <View style={[styles.mark, styles.markNone, styles.markEmpty]} />
+      ) : (
+        <Text style={[styles.count, today ? styles.countOnFill : null]} numberOfLines={1}>
+          {matches}
+        </Text>
+      )}
     </Pressable>
   );
 }
@@ -188,7 +231,29 @@ const useStyles = makeStyles((theme) => ({
   sub: { ...text.ui("caption", 600), color: theme.textMuted },
   subOnFill: { ...text.ui("caption", 600), color: theme.textOnAccent },
   mark: { borderRadius: radius.pill },
+  /**
+   * The count, in the mark's place. `caption` at 600 rather than the day's own
+   * size: the number a reader is scanning for is still the date, and a count
+   * drawn as large would make every searched month read as a grid of totals.
+   */
+  /**
+   * **One slot for every searched cell.** A `caption` line is 16px against the
+   * marks' 5–12, so a count and an empty cell put their day numbers 5.5px
+   * apart — the cell centres its column, and its fixed height hid that from the
+   * grid while every number inside it moved. Both branches now take
+   * `COUNT_BOX`.
+   */
+  count: {
+    ...text.ui("caption", 600),
+    color: theme.accentText,
+    height: COUNT_BOX,
+    lineHeight: COUNT_BOX,
+    textAlign: "center",
+  },
+  countOnFill: { color: theme.textOnAccent },
   markNone: { width: 5, height: 5, backgroundColor: theme.insetFill },
+  /** A searched cell with no match: the count's own slot, drawn in nothing. */
+  markEmpty: { width: COUNT_BOX, height: COUNT_BOX, backgroundColor: "transparent" },
   markSome: { width: 8, height: 8 },
   markHeavy: { width: 12, height: 12 },
   // Filled for out, a ring for in — the money colours, unchanged. A saturated

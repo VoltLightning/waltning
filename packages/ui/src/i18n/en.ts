@@ -211,8 +211,32 @@ export const en = {
     ribbonDayMany: "{{date}}, {{count}} entries",
     /** The same cell on a day with nothing on it. */
     ribbonDayEmpty: "{{date}}, nothing",
+    /**
+     * A ribbon cell while the screen is searching. **It does not count.** The
+     * ribbon holds the *loaded* rows, which is a page of them; the Calendar
+     * grid counts every match, and two numbers for one day is the
+     * disagreement §7 exists to prevent.
+     */
+    ribbonDayMatched: "{{date}}, matched",
     /** One quiet day in the list — the line beside its date. */
     nothingThatDay: "nothing",
+    /**
+     * §7's count on a Months row while the screen is searching. Two flat forms
+     * — the resolver picks; `resultsOne` explains why they are not one key.
+     */
+    matchesCountOne: "{{count}} match",
+    matchesCountMany: "{{count}} matches",
+    /** The field under the tabs while S04 is searching (§7). */
+    searchThisLedger: "Search this ledger",
+    /**
+     * `TodayPill`'s accessible name (S04 §6).
+     *
+     * **It names where the list *is*, not just where it goes.** "Today" alone
+     * is what the eye reads off the pill; a reader who cannot see the list
+     * around it needs to be told the list has moved at all, which is the whole
+     * reason the control appeared.
+     */
+    backToToday: "Back to today — the list is on {{date}}",
     /** A collapsed run of quiet days. Two flat forms, as `resultsOne` explains. */
     quietRunOne: "{{count}} day · nothing recorded",
     quietRunMany: "{{count}} days · nothing recorded",

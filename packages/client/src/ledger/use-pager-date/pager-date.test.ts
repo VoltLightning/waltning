@@ -8,6 +8,7 @@ import {
   pagerStateParams,
   parsePagerState,
   periodLabel,
+  search,
   step,
   stepUnitOf,
 } from "./pager-date.ts";
@@ -16,6 +17,7 @@ const TODAY = accountingDate("2026-09-08");
 const on = (date: string, page: PagerState["page"] = "list"): PagerState => ({
   date: accountingDate(date),
   page,
+  query: null,
 });
 
 describe("stepUnitOf", () => {
@@ -84,13 +86,14 @@ describe("enterMonth", () => {
 describe("enterDay and goToPage", () => {
   it("keeps the date when only the page changes, which is the whole point", () => {
     const state = goToPage(on("2026-05-25", "list"), "calendar");
-    expect(state).toEqual({ date: "2026-05-25", page: "calendar" });
+    expect(state).toEqual({ date: "2026-05-25", page: "calendar", query: null });
   });
 
   it("keeps the page when only the day changes", () => {
     expect(enterDay(on("2026-09-08", "calendar"), accountingDate("2026-05-25"))).toEqual({
       date: "2026-05-25",
       page: "calendar",
+      query: null,
     });
   });
 });
@@ -131,6 +134,7 @@ describe("parsePagerState", () => {
     expect(parsePagerState({ view: "list", date: "2026-05-25" }, TODAY)).toEqual({
       page: "list",
       date: "2026-05-25",
+      query: null,
     });
   });
 
@@ -150,7 +154,58 @@ describe("parsePagerState", () => {
   });
 
   it("round-trips through the parameters it writes", () => {
-    const state = { page: "calendar", date: accountingDate("2024-03-04") } as const;
+    const state = { page: "calendar", date: accountingDate("2024-03-04"), query: null } as const;
     expect(parsePagerState(pagerStateParams(state), TODAY)).toEqual(state);
   });
+});
+
+/**
+ * S04 §7: the search *"holds across the pages the way the date does"*. So it
+ * travels in the state the URL carries, and every move preserves it — a query
+ * dropped by a swipe would make Calendar and Months answer §7's *how often, and
+ * when* about a different question than the one the reader asked.
+ */
+it("carries the query through a step, a page change and a jump", () => {
+  const searching: PagerState = { ...on("2026-09-08", "list"), query: "market" };
+  expect(step(searching, -1).query).toBe("market");
+  expect(goToPage(searching, "calendar").query).toBe("market");
+  expect(enterDay(searching, accountingDate("2021-03-02")).query).toBe("market");
+  expect(enterMonth(searching, yearMonth("2024-03"), TODAY).query).toBe("market");
+});
+
+/**
+ * **A blank query is no query.** `?q=` and `?q=%20` arrive as strings; filtering
+ * by the empty string matches every row while drawing a chip that says the
+ * screen is narrowed. Folded to `null` where the URL is read, so nothing
+ * downstream has to remember.
+ */
+it.each(["", "   ", "\t"])("reads %o as no search at all", (raw) => {
+  expect(parsePagerState({ view: "list", date: "2026-09-08", q: raw }, TODAY).query).toBeNull();
+});
+
+/**
+ * **Not trimmed, and that is the point.** The field is a controlled input, so a
+ * trim on every keystroke deletes a space as it is typed: `market rent` came
+ * out `marketrent`, and §13's grouped-amount grammar (`1 500,00`) could not be
+ * entered at all. Blank is still no search; everything else is verbatim.
+ */
+it("keeps a query exactly as it was typed, spaces included", () => {
+  expect(parsePagerState({ q: "market rent" }, TODAY).query).toBe("market rent");
+  expect(parsePagerState({ q: "1 500,00" }, TODAY).query).toBe("1 500,00");
+  expect(search(on("2026-09-08"), "Shop ").query, "a space mid-typing survives").toBe("Shop ");
+});
+
+/**
+ * **The empty string, not an absent key.** `setParams` merges, so a cleared
+ * search that wrote nothing would leave the old `q` in the URL — the chip would
+ * go and the filter would stay.
+ */
+it("writes a cleared search as a parameter, not as an omission", () => {
+  expect(pagerStateParams(on("2026-09-08")).q).toBe("");
+  expect(pagerStateParams(search(on("2026-09-08"), "market")).q).toBe("market");
+});
+
+it("round-trips a search through the parameters it writes", () => {
+  const state = search(on("2024-03-04", "calendar"), "market");
+  expect(parsePagerState(pagerStateParams(state), TODAY)).toEqual(state);
 });

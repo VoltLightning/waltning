@@ -719,6 +719,8 @@ export type PhoneLedgerPort = {
   readPeriodSpend: (period: money.Period) => readonly PhonePeriodSpend[];
   /** The same figure cut by day — S04's calendar. Bounded by the period, never paged. */
   readDayFlows: (period: money.Period) => readonly money.DayFlowRow[];
+  /** §7's match counts by day, for Calendar and Months while the screen searches. */
+  readMatchDays: (period: money.Period, text: string) => readonly PhoneMatchDay[];
   /** Every row on one day — the entries S04's calendar opens. Bounded by the date. */
   readDayRows: (date: AccountingDate) => PhoneLedgerPage["rows"];
   /** §6, on demand — `S01`'s donut. `DESK4`. */
@@ -751,7 +753,17 @@ export type PhoneLedgerPort = {
     anchor: AccountingDate;
     direction: PhoneLedgerDirection;
     cursor?: PhoneSearchCursor;
-    filter?: Omit<PhoneSearchFilter, "text" | "from" | "to">;
+    /**
+     * No date bounds — the anchor walk owns those. **`text` is in**, and it is
+     * the key this seam used to drop: the hook's option type allowed it, the
+     * object was built in a variable so no excess-property check fired, and the
+     * forwarding below enumerated fields by hand. The list drew the whole
+     * ledger under a search field reporting three matches.
+     *
+     * `ForwardedLedgerFilterKeys` below is what stops the eighth key going the
+     * same way — the enumeration and this type fail to compile apart.
+     */
+    filter?: Omit<PhoneSearchFilter, "from" | "to">;
     limit?: number;
   }) => PhoneLedgerPage;
   createAccount: (input: CreateAccountInput, capture: PhoneCapture) => void;
@@ -867,6 +879,44 @@ export type PhoneCurrencySubtotal = {
  * when no shared account exists (`LocalNetWorth`'s own comment says why it is
  * a field rather than a `mine === ours` comparison).
  */
+/**
+ * **Every key the list's filter can carry, and the enumeration that carries
+ * them, fail to compile apart.**
+ *
+ * `readLedgerPage`'s forwarding below is written out field by field, because
+ * each one is branded or narrowed on the way through. That makes it the kind of
+ * code a new key is silently left out of — and `text` was, for a whole feature:
+ * the type allowed it, the object was built in a variable so no excess-property
+ * check fired, and S04's search filtered nothing while its field reported three
+ * matches.
+ *
+ * A comment asking the next person to remember is what was there. This is the
+ * check instead: add a key to `PhoneSearchFilter` and this assertion stops
+ * compiling until the enumeration below names it.
+ */
+type ForwardedLedgerFilterKeys =
+  | "text"
+  | "accountIds"
+  | "categoryIds"
+  | "scope"
+  | "currency"
+  | "counterpartyId"
+  | "counterpartyRole";
+
+type LedgerFilterKeys = keyof Omit<PhoneSearchFilter, "from" | "to">;
+
+/** Both directions, so neither a missing key nor a stale one can hide. */
+type _EveryFilterKeyIsForwarded = LedgerFilterKeys extends ForwardedLedgerFilterKeys
+  ? ForwardedLedgerFilterKeys extends LedgerFilterKeys
+    ? true
+    : ["forwarded but not a filter key", Exclude<ForwardedLedgerFilterKeys, LedgerFilterKeys>]
+  : ["a filter key nothing forwards", Exclude<LedgerFilterKeys, ForwardedLedgerFilterKeys>];
+const _filterKeysForwarded: _EveryFilterKeyIsForwarded = true;
+void _filterKeysForwarded;
+
+/** One day of a searched period, and how many rows in it matched (S04 §7). */
+export type PhoneMatchDay = { date: AccountingDate; count: number };
+
 export type PhoneNetWorth = {
   currency: CurrencyCode;
   decimals: number;
@@ -1367,6 +1417,15 @@ export type PhoneLedgerController = {
    */
   readDayFlows: (period: money.Period) => readonly money.DayFlowRow[];
   /**
+   * §7's match counts by day — *how often, and when*, which is what Calendar
+   * and Months answer in place of their figures while a search is on.
+   *
+   * The counting runs through `searchTransactions`' own matcher, in its own
+   * file: §13's text rule cannot be pushed into SQL, so a second reading of
+   * what a search means is exactly how a count and a list come to disagree.
+   */
+  readMatchDays: (period: money.Period, text: string) => readonly PhoneMatchDay[];
+  /**
    * Every row on one day — the entries S04's calendar opens under its grid
    * (§3). Bounded by the date rather than by a row count: a day ends, and a
    * calendar showing the first thirty rows of one would be a shorter truth
@@ -1428,7 +1487,17 @@ export type PhoneLedgerController = {
     anchor: AccountingDate;
     direction: PhoneLedgerDirection;
     cursor?: PhoneSearchCursor;
-    filter?: Omit<PhoneSearchFilter, "text" | "from" | "to">;
+    /**
+     * No date bounds — the anchor walk owns those. **`text` is in**, and it is
+     * the key this seam used to drop: the hook's option type allowed it, the
+     * object was built in a variable so no excess-property check fired, and the
+     * forwarding below enumerated fields by hand. The list drew the whole
+     * ledger under a search field reporting three matches.
+     *
+     * `ForwardedLedgerFilterKeys` below is what stops the eighth key going the
+     * same way — the enumeration and this type fail to compile apart.
+     */
+    filter?: Omit<PhoneSearchFilter, "from" | "to">;
     limit?: number;
   }) => PhoneLedgerPage;
   categorizeBatch: (
@@ -2129,6 +2198,7 @@ export function createPhoneLedger(
     refresh,
     readPeriodSpend: (period) => port.readPeriodSpend(period),
     readDayFlows: (period) => port.readDayFlows(period),
+    readMatchDays: (period, text) => port.readMatchDays(period, text),
     readDayRows: (date) => port.readDayRows(date),
     readSpendByCategory: (period, scope) => port.readSpendByCategory(period, scope),
     readIncomeVsExpense: (buckets, scope) => port.readIncomeVsExpense(buckets, scope),
@@ -2178,6 +2248,9 @@ export function createPhoneLedger(
         ...(filter
           ? {
               filter: {
+                // `text` first, and stated rather than spread: this object is
+                // the enumeration that lost it once already.
+                ...(filter.text === undefined ? {} : { text: filter.text }),
                 ...(filter.accountIds
                   ? { accountIds: filter.accountIds.map((a) => id<"accounts">(a)) }
                   : {}),

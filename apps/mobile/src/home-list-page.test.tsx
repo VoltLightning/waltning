@@ -1,11 +1,11 @@
 /** @vitest-environment jsdom */
 
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import type {
   PhoneLedgerController,
   PhoneSearchTransaction,
 } from "@waltning/client/ledger/create-phone-ledger";
-import { accountingDate } from "@waltning/core/date";
+import { type AccountingDate, accountingDate } from "@waltning/core/date";
 import { id } from "@waltning/core/id";
 import { currencyCode, pivotPerUnit, toMoney } from "@waltning/core/money";
 import { I18nProvider } from "@waltning/ui/i18n/provider";
@@ -56,18 +56,30 @@ function ledgerWith(older: PhoneSearchTransaction[], newer: PhoneSearchTransacti
   } as unknown as PhoneLedgerController;
 }
 
-function draw(ledger: PhoneLedgerController, onPickDay = vi.fn()) {
+function draw(
+  ledger: PhoneLedgerController,
+  onPickDay = vi.fn(),
+  over: {
+    anchor?: AccountingDate;
+    onReturnToToday?: () => void;
+    onCategorize?: () => void;
+    query?: string | null;
+  } = {},
+) {
   render(
     <ThemeProvider theme={light}>
       <I18nProvider>
         <HomeListPage
           ledger={ledger}
-          anchor={TODAY}
+          anchor={over.anchor ?? TODAY}
           today={TODAY}
           pivotCurrency={PLN}
           pivotDecimals={2}
           onPickDay={onPickDay}
           onOpenTransaction={vi.fn()}
+          onCategorize={over.onCategorize ?? vi.fn()}
+          onReturnToToday={over.onReturnToToday ?? vi.fn()}
+          query={over.query ?? null}
           empty={<Text>nothing yet</Text>}
         />
       </I18nProvider>
@@ -158,4 +170,117 @@ it("draws the newer rows above the older ones", () => {
   expect(shown, "both rows drawn").toHaveLength(2);
   expect(shown[0]).toMatch(/Payee 2/);
   expect(shown[1]).toMatch(/Payee 1/);
+});
+
+/**
+ * **A jump is one-way without the pill** (S04 §6). Picking a far date loads
+ * that date's neighbourhood and nothing between, so walking home from 2021 is
+ * four years of scrolling. The pill was specified in §4 and never built.
+ */
+it("offers the way back only once the list has left today", () => {
+  const rows = [row("2026-08-14", 1, "-96")];
+  draw(ledgerWith(rows));
+  expect(
+    screen.queryByRole("button", { name: /Back to today/ }),
+    "a pill offering today while the list is on today does nothing",
+  ).toBeNull();
+});
+
+it("names where the list is, and returns it", () => {
+  const onReturnToToday = vi.fn();
+  draw(ledgerWith([row("2021-03-02", 1, "-96")]), vi.fn(), {
+    anchor: accountingDate("2021-03-02"),
+    onReturnToToday,
+  });
+
+  // The name carries the date the list is on: "Today" alone is what the eye
+  // reads off the pill, and tells a reader who cannot see the list nothing
+  // about why it appeared.
+  const pill = screen.getByRole("button", { name: /Back to today/ });
+  expect(pill.getAttribute("aria-label")).toMatch(/March 2, 2021/);
+
+  fireEvent.click(pill);
+  expect(onReturnToToday).toHaveBeenCalledTimes(1);
+});
+
+/**
+ * **§7 gives every row two gestures, and the phone list passed neither.**
+ * `LedgerRowItem` has taken `onShortSwipe`/`onLongSwipe` since S10 wired them
+ * on the desk; this page rendered it with `onPress` alone, so every row was
+ * tap-only and the component silently fell back to a plain `EntryRow`.
+ *
+ * The swipe itself is `SwipeableRow`'s and is tested there. What this pins is
+ * that the row is wrapped in one at all, which is the thing that was missing.
+ */
+it("wraps a categorisable row in the layer its gestures move", () => {
+  draw(ledgerWith([row("2026-08-14", 1, "-96")]));
+  // `SwipeableRow` is the only thing on this row that can travel sideways, so
+  // a `translateX` above the button is the wrapper's own signature. Asserting
+  // the handler props instead would prove the page passes them, not that
+  // `LedgerRowItem` accepted both and built the row it builds when it does.
+  const button = screen.getByRole("button", { name: /Payee 1/ });
+  const travelled = button.closest("[style*='translateX']");
+  expect(travelled, "an expense takes both gestures (§7)").not.toBeNull();
+});
+
+it("leaves a transfer tap-only, because it has no category to choose", () => {
+  draw(
+    ledgerWith([
+      row("2026-08-14", 1, "-96", {
+        type: "transfer",
+        toAccountName: "Bank B",
+        toAmount: toMoney("96.00"),
+        toCurrency: PLN,
+        toDecimals: 2,
+        toFxRate: pivotPerUnit("1"),
+      }),
+    ]),
+  );
+  // A transfer is drawn by `TransferRow`, which names the two accounts rather
+  // than a payee — the row a transfer has instead of one.
+  // By text, not by role: `TransferRow` is not pressable at all — it states
+  // two accounts rather than offering one target — so there is no button here
+  // to find.
+  const row1 = screen.getByText(/Bank B/);
+  expect(
+    row1.closest("[style*='translateX']"),
+    "a swipe onto a sheet with nothing in it is worse than no swipe",
+  ).toBeNull();
+});
+
+/**
+ * **C1 — the search reached the hook and stopped.** `useLedgerList`'s option
+ * type was widened to admit `text`, and every layer below it — the controller's
+ * parameter type, its hand-written forwarding, and `readLedgerPage`'s own
+ * `LedgerFilter` — omitted the key. A filter built in a variable is not
+ * excess-property checked, so it compiled, forwarded nothing, and the list drew
+ * the whole ledger under a field reporting three matches. It *looked* like
+ * search working, because a query change re-keys the list and both halves
+ * visibly reload on every keystroke.
+ *
+ * Asserted at the port, which is the seam that dropped it.
+ */
+it("hands the search down to the read, not just to the hook", () => {
+  const ledger = ledgerWith([row("2026-08-14", 1, "-96")]);
+  draw(ledger, vi.fn(), { query: "market" });
+
+  const filters = vi
+    .mocked(ledger.readLedgerPage)
+    .mock.calls.map(([options]) => (options as { filter?: { text?: string } }).filter);
+  expect(filters.length).toBeGreaterThan(0);
+  for (const filter of filters) expect(filter?.text).toBe("market");
+});
+
+/**
+ * §7: a filtered list has no gaps to explain and no day totals to state. Run a
+ * filtered set through the unfiltered rules and a day holding six rows of which
+ * one matched reports that row's amount as *the day's total*.
+ */
+it("states no day total while the rows are a filtered subset", () => {
+  draw(ledgerWith([row("2026-08-14", 1, "-96")]), vi.fn(), { query: "market" });
+  expect(
+    screen.queryByLabelText(/No total/),
+    "not the dash either — that one means a rate has not arrived",
+  ).toBeNull();
+  expect(screen.queryByText("−96,00"), "and not the matched row's own amount").toBeNull();
 });
