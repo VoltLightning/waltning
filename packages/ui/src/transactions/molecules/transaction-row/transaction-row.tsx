@@ -137,7 +137,9 @@ export function TransactionRow({
       {withDate ? <Text style={styles.date}>{date.slice(5)}</Text> : null}
       {/* `SPEC.md` §14.4b — absent entirely, not a fallback monogram, for a
           caller that has not passed `brandKey` yet (see the prop's own doc). */}
-      {brandKey === undefined ? null : <BrandIcon brandKey={brandKey} payee={payee} size={24} />}
+      {brandKey === undefined ? null : (
+        <BrandIcon brandKey={brandKey} payee={payee} category={category} size={24} />
+      )}
       <View style={styles.identity}>
         <View style={styles.payeeLine}>
           {/* A blank row reads as missing data; imported rows often have no

@@ -16,7 +16,7 @@ import { dirname, join } from "node:path";
 import { render, screen } from "@testing-library/react";
 import { useEffect, useRef } from "react";
 import { describe, expect, it } from "vitest";
-import { color, radius } from "../tokens.ts";
+import { categoryRamp, color, radius } from "../tokens.ts";
 import { ThemeProvider, useTheme } from "./provider";
 import { dark, light, themes } from "./roles.ts";
 import { makeStyles } from "./styles.ts";
@@ -676,6 +676,57 @@ describe("a component follows the active theme", () => {
   ])("keeps the %s shell separate from the page it bands", (_name, theme) => {
     expect(contrastRatio(theme.shell, theme.ground)).toBeGreaterThanOrEqual(1.5);
     expect(contrastRatio(theme.shell, theme.surface)).toBeGreaterThanOrEqual(1.5);
+  });
+
+  /**
+   * **The categorical ramp, which the drawn palette could not have passed.**
+   *
+   * Four category hues are drawn on the boards. Measured: three of the four
+   * fail 3:1 in dark, and all four sit **1.0–1.3:1 from each other** — the same
+   * lightness, so in greyscale or to a colourblind reader they are one colour.
+   * A palette whose entire job is telling categories apart that does not tell
+   * them apart is drawn rather than designed, and this is the check that keeps
+   * the replacement honest.
+   *
+   * Three properties, and the third is the one the drawing failed:
+   *
+   * 1. **Visible in both themes from one set of values.** A tile is an area, so
+   *    the floor is the shell pair's 1.5 rather than 1.4.11's 3:1 — and it has
+   *    to clear on all four grounds, because a categorical ramp is theme-fixed
+   *    for the reason `chartRamp` is: its job is separating categories from
+   *    each other, not from the page.
+   * 2. **Carries its own ink at 4.5.** `design-system/07` §7.2 already states
+   *    this rule for a treemap tile; a category tile is the same object.
+   * 3. **Separated from each other in lightness, not only in hue.**
+   */
+  it("keeps every category tint visible on both themes' grounds", () => {
+    for (const step of categoryRamp) {
+      for (const ground of [light.surface, light.ground, dark.surface, dark.ground]) {
+        expect(contrastRatio(step.fill, ground), step.fill).toBeGreaterThanOrEqual(1.5);
+      }
+    }
+  });
+
+  it("gives every category tint an ink that reads on it", () => {
+    for (const step of categoryRamp) {
+      const ink = step.light ? light.textOnAccent : color.green900;
+      expect(contrastRatio(ink, step.fill), step.fill).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+
+  /**
+   * **The one the boards fail.** Hue alone is not separation: a colourblind
+   * reader and a greyscale screenshot both see lightness. 1.2 is where two
+   * tints stop reading as the same colour; the drawn four are at 1.01.
+   */
+  it("separates the category tints from each other in lightness", () => {
+    for (let i = 0; i < categoryRamp.length; i++) {
+      for (let j = i + 1; j < categoryRamp.length; j++) {
+        const a = categoryRamp[i]?.fill ?? "";
+        const b = categoryRamp[j]?.fill ?? "";
+        expect(contrastRatio(a, b), `${a} vs ${b}`).toBeGreaterThanOrEqual(1.2);
+      }
+    }
   });
 
   /**

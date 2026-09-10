@@ -29,7 +29,7 @@
 
 import { fold } from "@waltning/core/capture/names";
 import type { Theme } from "../theme/roles.ts";
-import { color } from "../tokens.ts";
+import { categoryRamp, color } from "../tokens.ts";
 
 /** Six steps, skipping the near-white and near-black ends of the ramp. */
 const RAMP_STEPS: readonly [string, number][] = [
@@ -90,4 +90,34 @@ export function monogramFor(name: string, theme: Theme): Monogram {
     fill,
     ink: step >= 500 ? theme.textOnAccent : DARK_INK,
   };
+}
+
+/** A category's tint, and the ink that reads on it. */
+export type CategoryTint = { fill: string; ink: string };
+
+/**
+ * `categoryTintFor` — the colour a category is recognised by, from its name.
+ *
+ * **The same move `monogramFor` makes, on the palette that can carry it.** A
+ * counterparty gets a step of the green ramp because it needs to be *stable*,
+ * not *distinguishable* — two people sharing a tint costs nothing. A category
+ * is read across a ledger row, a *Where it went* bar and, later, a report's
+ * slices, and there the whole job is telling one from another. `categoryRamp`
+ * is the palette built for that; its own doc has the measurements.
+ *
+ * **Derived, not stored, and that is a decision rather than a shortcut.** The
+ * schema has no colour on a category and no icon — the drawn palette assumed
+ * both. A derived tint gives every category a consistent identity today,
+ * across every screen, with no migration and no picker to build; a chosen one
+ * is a column and an editor, and it can be added later without moving this,
+ * because a stored value simply wins over the derivation.
+ *
+ * **Folded, so the tint survives a rename that is not one.** `Groceries` and
+ * `groceries ` are the same category to a reader and hash the same here.
+ * Renaming it to something genuinely different moves the tint, which is
+ * correct: it is a different name.
+ */
+export function categoryTintFor(name: string, theme: Theme): CategoryTint {
+  const step = categoryRamp[hashOf(fold(name.trim())) % categoryRamp.length] ?? categoryRamp[0];
+  return { fill: step.fill, ink: step.light ? theme.textOnAccent : DARK_INK };
 }

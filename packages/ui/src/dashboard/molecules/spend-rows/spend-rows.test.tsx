@@ -9,7 +9,7 @@
 import { render, screen } from "@testing-library/react";
 import * as money from "@waltning/core/money";
 import { describe, expect, it } from "vitest";
-import { light } from "../../../theme/roles.ts";
+import { categoryRamp } from "../../../tokens.ts";
 import { SpendRows } from "./spend-rows";
 
 /** `getComputedStyle` reports a hex as `rgb(r, g, b)`; the token is a hex. */
@@ -82,32 +82,49 @@ describe("SpendRows", () => {
   });
 
   /**
-   * **Every bar is the same colour.** The first version ranked into
-   * `chartRamp`, whose steps are measured against each other because they are
-   * segments of one stacked bar; separate bars are each measured against the
-   * same track. Two of its five steps clear 3:1 in light and four do in dark —
-   * from the *other* end, so the largest category's bar came out at 2.19:1
-   * there and the smallest at 8.68:1. Length is the encoding.
+   * **A bar wears its category's tint, and the tint is the category's
+   * everywhere.** Hue here is identity, not magnitude — length is magnitude,
+   * and length still is. The same colour marks this bar, the row in the
+   * ledger, and a report's slice, so a category is recognised without being
+   * read.
+   *
+   * **Not `chartRamp`, which was tried and cannot do it.** Its steps are
+   * measured against each other because they are segments of one stacked bar;
+   * separate bars are each measured against the same track, so the largest
+   * category came out at 2.19:1 in dark and the smallest at 8.68. That is a
+   * property of a *sequential* ramp and it is why `categoryRamp` exists.
    */
-  it("draws every bar in the theme's chart-bar colour", () => {
+  it("draws each category in its own tint, and the same one every time", () => {
     const rows = Array.from({ length: 6 }, (_, i) => ({
       key: `k${i}`,
       label: `Row ${i}`,
       amount: money.toMoney(`${60 - i * 10}.00`),
     }));
-    render(<SpendRows currency="PLN" rows={rows} />);
+    const { rerender } = render(<SpendRows currency="PLN" rows={rows} />);
     const colourOf = (label: string) => {
       const track = screen.getByText(label).parentElement?.children[1];
       const fill = track?.firstElementChild;
       return fill instanceof HTMLElement ? fill.style.backgroundColor : "";
     };
+    // Six labels do not have to land on six distinct steps — eight steps and a
+    // hash means collisions, and a shared tint costs nothing. What must hold is
+    // that more than one is in play, so this is a palette rather than a repaint
+    // of the single colour it replaced.
     const colours = new Set(rows.map((row) => colourOf(row.label)));
-    expect(colours.size).toBe(1);
-    // **The token, not merely "one colour".** A test that only counted
-    // distinct colours passed with the bars painted `accentFill` — 1.03:1
-    // against the track, an invisible bar — because the contrast assertion
-    // lives on the token in `theme.test.tsx` and nothing tied the component to
-    // it. Bound here, so the two cannot drift apart.
-    expect([...colours][0]).toBe(rgb(light.chartBar));
+    expect(colours.size).toBeGreaterThan(1);
+
+    // **The ramp, not merely "some colours".** A test that only counted
+    // distinct values passed with the bars painted `accentFill` — 1.03:1
+    // against the track, an invisible bar — because the contrast assertions
+    // live on the tokens and nothing tied the component to them.
+    for (const drawn of colours) {
+      expect(categoryRamp.map((step) => rgb(step.fill))).toContain(drawn);
+    }
+
+    // Stable across renders: a tint that moved on re-render would be a
+    // category with no identity at all.
+    const first = colourOf("Row 0");
+    rerender(<SpendRows currency="PLN" rows={[...rows].reverse()} />);
+    expect(colourOf("Row 0"), "the tint is the name's, not the row's position").toBe(first);
   });
 });

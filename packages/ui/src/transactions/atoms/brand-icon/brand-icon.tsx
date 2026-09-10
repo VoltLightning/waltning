@@ -26,7 +26,7 @@
 
 import { brandCatalogEntry } from "@waltning/core/brands/catalog";
 import { Text, View } from "react-native";
-import { monogramFor } from "../../../primitives/monogram.ts";
+import { categoryTintFor, monogramFor } from "../../../primitives/monogram.ts";
 import { text } from "../../../theme/fonts.ts";
 import { useTheme } from "../../../theme/provider";
 import { makeStyles } from "../../../theme/styles.ts";
@@ -37,11 +37,26 @@ export type BrandIconProps = {
   brandKey?: string | null;
   /** What the fallback monogram is derived from — never used when `brandKey` resolves. */
   payee: string;
+  /**
+   * The row's category, which tints the fallback.
+   *
+   * **A recognised brand keeps its own colour; everything else takes its
+   * category's.** §14.4b gives the catalogue the first claim — a brand's mark
+   * is the thing a reader recognises. Under it, the boards tint every row by
+   * what the money was *for*, and a ledger of one green is what we had
+   * instead. The letter stays the payee's: the category is already written on
+   * the line beneath, and two names in one tile would be a tile saying
+   * neither.
+   *
+   * Absent, or a row with no category, falls back to the payee's own tint,
+   * which is where this started.
+   */
+  category?: string | null | undefined;
   /** Row (24) and widget (20) — `design-system/05`'s own `ServiceIcon` sizing, reused here. */
   size?: 24 | 20;
 };
 
-export function BrandIcon({ brandKey, payee, size = 24 }: BrandIconProps) {
+export function BrandIcon({ brandKey, payee, category, size = 24 }: BrandIconProps) {
   const theme = useTheme();
   const styles = useStyles();
   const entry = brandKey ? brandCatalogEntry(brandKey) : undefined;
@@ -65,8 +80,9 @@ export function BrandIcon({ brandKey, payee, size = 24 }: BrandIconProps) {
   // Unrecognised — never blank (§14.4b). The same monogram `CounterpartyRow`
   // gives an unmatched name, derived from the payee rather than the brand.
   const monogram = monogramFor(payee, theme);
-  const fill = { backgroundColor: monogram.fill };
-  const ink = { color: monogram.ink };
+  const tint = category ? categoryTintFor(category, theme) : null;
+  const fill = { backgroundColor: tint?.fill ?? monogram.fill };
+  const ink = { color: tint?.ink ?? monogram.ink };
   return (
     <View style={[styles.badge, box, fill]} {...DECORATIVE}>
       <Text style={[styles.mark, ink]} numberOfLines={1}>
