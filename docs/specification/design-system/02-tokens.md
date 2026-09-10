@@ -174,6 +174,47 @@ per-theme chart track would not rescue it either: the best track meeting 1.5 on
 as light as the darkest bar drawn on it allows, and the money bars and the
 category bars do not have the same headroom.
 
+**A category is recognised by a colour, and the colour is derived from its
+name.** Six tints — cocoa, teal, indigo, slate, mauve, sky — carrying a
+category across a ledger row's tile, its *Where it went* bar and, later, a
+report's slices, so it is known without being read. **Not the green ramp**,
+which is sequential: one hue at nine lightnesses, built so adjacent slices of a
+stacked bar separate from each other, and unable to carry identity because every
+category would be a shade of the same green.
+
+**Hue is identity here, never magnitude.** Length is magnitude and remains so; a
+bar's colour says *which category*, and the two encodings answer different
+questions.
+
+**Derived rather than stored, and that is a decision.** A category has no colour
+column and no icon, so every category gets a stable tint today with no migration
+and no picker; a chosen one can be added later and simply wins over the
+derivation. Folded before hashing, so `Groceries` and `groceries ` are one
+category to the eye and to this.
+
+**Six, and lightness carries what hue cannot.** Green is the accent and
+`income`; yellow is `asserted`'s one meaning; purple this product refuses; and a
+tint within 58 of `spend` in RGB is a tile the colour of the amount beside it.
+Measured across the wheel, that leaves **eight usable hues at any single
+lightness** — five blues and three plums. So the ramp is spread 0.060 → 0.455 in
+relative luminance rather than sitting in one band, and the top is capped there:
+running to 0.579 bought a wider separation and cost the last two steps their
+colour, a pale pink and a near-white tile on a cream ground.
+
+**Three floors, and the third is the one a drawn palette fails.** Each tint
+clears **1.5:1** against all four grounds — cream surface and ground, charcoal
+surface and ground — because a tile is an area and the ramp is one set of values
+for both themes, the same property `chart-ramp` has. Each carries its own ink at
+**4.5:1**, which is §7.2's treemap rule. And each is **1.2:1** from every other
+*in lightness*, because hue alone is not separation: a colourblind reader and a
+greyscale screenshot both see luminance. Measured, the four hues on the boards
+sit 1.0–1.3 apart and three of them fail their ink — one colour wearing four
+names. Ours are 1.21 at the tightest.
+
+**The ramp skips a band.** A fill between 0.183 and 0.264 relative luminance
+carries neither white nor `green-900` at 4.5, so three tints sit below that gap
+and three above, and each step records which side it is on.
+
 ### 2.1a Two floors, and which text gets which
 
 **4.5:1 for anything a person acts on** — ink, every figure, a control's own

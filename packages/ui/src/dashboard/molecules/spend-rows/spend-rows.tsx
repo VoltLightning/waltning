@@ -35,6 +35,7 @@
 import * as money from "@waltning/core/money";
 import { Text, View } from "react-native";
 import { Amount } from "../../../fx/atoms/amount/amount";
+import { categoryTintFor } from "../../../primitives/monogram.ts";
 import { text } from "../../../theme/fonts.ts";
 import { useTheme } from "../../../theme/provider";
 import { makeStyles } from "../../../theme/styles.ts";
@@ -73,7 +74,25 @@ export function SpendRows({ rows, currency, decimals = 2 }: SpendRowsProps) {
   // precedent, and `tests/architecture.test.ts` enforces it.
   const drawn = rows.map((row) => ({
     ...row,
-    fill: { width: `${share(row.amount, widest)}%` as const, backgroundColor: theme.chartBar },
+    /*
+      **The category's own tint, not one colour for every row.**
+
+      This was `chartBar` — a single value — because the *sequential* green
+      ramp was tried first and could not do it: its steps are measured against
+      each other, so against one shared track the light end sat at 8.68:1 and
+      the dark end at 2.19. The conclusion drawn then was that colour was
+      encoding magnitude a second time and worse, which was true of that ramp.
+
+      It was the wrong conclusion about colour. Hue here is not magnitude —
+      length is, and length still is. Hue is *identity*: the same tint on this
+      bar, on the row in the ledger, and on a report's slice, so a category is
+      recognised without being read. `categoryRamp` is the palette built for
+      that job, and its own doc carries the measurements the drawn one failed.
+    */
+    fill: {
+      width: `${share(row.amount, widest)}%` as const,
+      backgroundColor: categoryTintFor(row.label, theme).fill,
+    },
   }));
 
   return (

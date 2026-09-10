@@ -326,6 +326,46 @@ export const darkColor = {
   shellDangerText: "#f2b5a2",
 } as const;
 
+/**
+ * **The categorical ramp — eight tints a category is recognised by.**
+ *
+ * A different kind of palette from `green100…900`, and the difference is the
+ * whole reason this exists. That ramp is *sequential*: one hue, nine
+ * lightnesses, built so adjacent slices of a stacked bar separate from each
+ * other. It cannot carry identity — every category would be a shade of the
+ * same green — and `chartBar`'s own doc records what happened when it was
+ * asked to.
+ *
+ * **The drawn palette was not usable.** The boards give four categories a
+ * hue each; measured, three of the four fail 3:1 in dark and all four sit
+ * **1.0–1.3:1 from each other**. They are the same lightness, so in
+ * greyscale, or to a colourblind reader, they are one colour — a palette
+ * whose entire job is telling categories apart that does not.
+ *
+ * **So these vary in lightness as well as hue**, spread 0.060 → 0.500 in
+ * relative luminance, and the worst pair here is **1.21:1**. Interleaved
+ * against hue too, so neighbours on the wheel are not neighbours on the
+ * ramp.
+ *
+ * **No green.** Sage is the accent and `income` is the other one; a category
+ * tile in either would be a tile that looks like a control or a credit.
+ *
+ * **One set of values for both themes**, like `chartRamp` and for the same
+ * reason: a categorical ramp's job is separating categories from each other,
+ * not from the page. Each clears 1.5:1 against all four grounds — cream
+ * surface and ground, charcoal surface and ground — so a tile is visible in
+ * either theme, and each carries its own ink at 4.5:1, which is the rule
+ * `design-system/07` §7.2 already states for a treemap tile.
+ */
+export const categoryRamp = [
+  { fill: "#534236", light: true },
+  { fill: "#2a6963", light: true },
+  { fill: "#6773a4", light: true },
+  { fill: "#7a94a6", light: false },
+  { fill: "#b299a6", light: false },
+  { fill: "#d2ad8d", light: false },
+] as const;
+
 /* ── 2.2 Typography ──────────────────────────────────────────────────────── */
 
 /**
