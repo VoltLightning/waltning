@@ -24,7 +24,18 @@ import { text, textCap } from "../../../theme/fonts.ts";
 import { makeStyles } from "../../../theme/styles.ts";
 import { type TypeStep, tabularNums } from "../../../tokens.ts";
 
-export type AmountSize = "hero" | "medium" | "large" | "body" | "small" | "compact";
+/**
+ * **These names do not order, and it has cost twice.** `medium` is 38 and
+ * `large` is 23; `compact` is 17 and `small` is 14.5. A caller reaching for the
+ * biggest figure picks `large` and lands two steps down — which is how the
+ * month card's hero ended up the same size as the month title above it — and a
+ * caller wanting the quietest picks `compact` and gets something larger than
+ * the rows it sits over. Sorted by the step each resolves to:
+ *
+ * `hero` 54 · `medium` 38 · `large` 23 · `compact` 17 · `body` 16 · `small`
+ * 14.5 · `caption` 12.
+ */
+export type AmountSize = "hero" | "medium" | "large" | "body" | "small" | "compact" | "caption";
 export type AmountEmphasis = "default" | "muted" | "shell" | "shellMuted";
 
 /**
@@ -73,6 +84,8 @@ const SIZES: Record<AmountSize, TextStyle> = {
   // phone header collapses its own total to — one row, no room for even
   // `displayOne`.
   compact: text.display("displayThree"),
+  // A day's own total over the rows it sums — the boards set it at 12/600.
+  caption: text.display("caption"),
 };
 
 /**
@@ -92,6 +105,7 @@ const STEPS: Record<AmountSize, TypeStep> = {
   body: "body",
   small: "bodySm",
   compact: "displayThree",
+  caption: "caption",
 };
 
 export function Amount({

@@ -436,8 +436,15 @@ function DayTotalFigure({
       value={total.pivot}
       currency={currency}
       decimals={decimals}
-      size="compact"
-      emphasis="muted"
+      /*
+        **12/600 and in its own colour, which is what every board draws.**
+        `compact` is `displayThree` at 17 — larger than the 14.5 rows beneath
+        it, so the day's summary outweighed the entries it summarises. And
+        muted made this the one day total in the app without a direction:
+        Calendar's own day panel has always drawn its figure `kind="auto"`.
+      */
+      size="caption"
+      kind="auto"
     />
   );
 }
