@@ -265,6 +265,12 @@ the screen, and an unbounded 2× is 108pt in a layout built for 54.
 | `display-2` | 1.6 |
 | everything else | uncapped |
 
+**A card's title is a label, not a heading.** `display-3` said *Card titles*, so
+`<Card>` set every one of them at 17/600 in full ink — a heading on a page whose
+every board draws that line at 13/500 in muted ink. One component, fourteen
+callers, and a section label shouting on every screen. `display-3` keeps the step
+and loses that job; `label` is the job.
+
 **Body is 16 on the phone.** It was 14.5 — a desktop size on a device held at
 arm's length. Apple's floor for that is 17; Material's and Carbon's body is 16.
 The dense-row size moves up with it and keeps the old body's number, so a
@@ -279,9 +285,10 @@ tracking is what makes a headline figure look engineered rather than typed.
 | `display-hero` | 54 / 1.05 | −0.02em | 600 | The one dominant total, in the display currency |
 | `display-1` | 38 / 1.1 | −0.015em | 600 | Board and page titles |
 | `display-2` | 23 / 1.2 | −0.01em | 600 | Section headings |
-| `display-3` | 17 / 1.3 | — | 600 | Card titles |
+| `display-3` | 17 / 1.3 | — | 600 | Screen titles inside a band |
 | `body` | 16 / 1.5 | — | 400 | Default |
 | `body-sm` | 14.5 / 1.52 | — | 400 | Table cells, dense rows |
+| `label` | 13 / 1.38 | — | 500 | **A card's own label, and any name beside a figure.** The most-used size in the deck by a distance — 224 occurrences against 216 for `caption` and 203 for `body-sm` — and the one step the scale did not have. Everything that needed it rounded up to `body-sm`, which is why the app read a size large through its whole secondary layer |
 | `caption` | 12 / 1.33 | — | 400 | Captions, metadata |
 | `kicker` | 11 / 1.2, `.08em`, uppercase | | 700 | Eyebrow labels |
 | `tag` | 10.5 / 1, `.08em`, uppercase | | 700 | Pills and tags. A ratio of exactly 1 is deliberate — uppercase-only, so no descenders to clip |

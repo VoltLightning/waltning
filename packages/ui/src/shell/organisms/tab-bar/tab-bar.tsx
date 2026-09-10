@@ -122,6 +122,12 @@ const useStyles = makeStyles((theme) => ({
     alignItems: "center",
     justifyContent: "center",
   },
-  label: { color: theme.textMuted, ...text.ui("caption", 600) },
+  /**
+   * The boards draw 10/500 and **`tag` is not that step**: its line-height
+   * ratio is exactly 1, which §2.2 calls deliberate because a tag is
+   * uppercase and has no descenders to clip. *Ledger*, *Settings* and *Today*
+   * all have one. So the size stays and only the weight moves.
+   */
+  label: { color: theme.textMuted, ...text.ui("caption", 500) },
   labelActive: { color: theme.accentText },
 }));

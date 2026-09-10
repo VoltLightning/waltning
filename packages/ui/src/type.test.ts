@@ -23,6 +23,7 @@ const PUBLISHED: Record<TypeStep, [size: number, lineHeight: number]> = {
   displayThree: [17, 22],
   body: [16, 24],
   bodySm: [14.5, 22],
+  label: [13, 18],
   caption: [12, 16],
   kicker: [11, 13],
   tag: [10.5, 10.5],

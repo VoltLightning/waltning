@@ -61,9 +61,14 @@ export type EntryRowProps = {
    * question there is who, not where.
    */
   withAccount?: boolean;
+  /**
+   * Draw the date on the row. Off inside a `<DayGroup>`, whose header has
+   * already given it — see `TransactionRow`'s own prop.
+   */
+  withDate?: boolean;
 };
 
-export function EntryRow({ row, onPress, withAccount }: EntryRowProps) {
+export function EntryRow({ row, onPress, withAccount, withDate }: EntryRowProps) {
   const t = useT();
   const handlePress = useCallback(() => onPress(row.id), [onPress, row.id]);
   /**
@@ -99,6 +104,7 @@ export function EntryRow({ row, onPress, withAccount }: EntryRowProps) {
       currency={row.currency}
       decimals={row.decimals}
       {...(withAccount === true ? { account: row.accountName } : {})}
+      {...(withDate === undefined ? {} : { withDate })}
       type={row.type}
       isBusiness={row.isBusiness}
       brandKey={row.brandKey}

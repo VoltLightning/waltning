@@ -398,6 +398,21 @@ export const type = {
    */
   body: { fontSize: 16, lineHeightRatio: 24 / 16, weight: 400 },
   bodySm: { fontSize: 14.5, lineHeightRatio: 22 / 14.5, weight: 400 },
+  /**
+   * A card's own label, and any name that sits beside a figure.
+   *
+   * **The step the scale was missing.** Measured across the 38 boards, 13px is
+   * the most-used size in the whole design — 224 elements against 216 at 12 and
+   * 203 at 14 — and there was no token for it, so every one of them rounded up
+   * to `bodySm`. That is why the app read a size large through its entire
+   * secondary layer while matching the design everywhere a figure or a day
+   * header was drawn.
+   *
+   * **Weight 500, and that is the step's own.** The boards set 500 or 600 on
+   * two thirds of their text; a label at 400 is the other half of the same
+   * softness.
+   */
+  label: { fontSize: 13, lineHeightRatio: 18 / 13, weight: 500 },
   caption: { fontSize: 12, lineHeightRatio: 16 / 12, weight: 400 },
   /** Eyebrow labels. */
   kicker: { fontSize: 11, lineHeightRatio: 13 / 11, letterSpacing: 0.88, weight: 700 },

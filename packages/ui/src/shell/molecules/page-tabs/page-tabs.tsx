@@ -196,8 +196,12 @@ const useStyles = makeStyles((theme) => ({
     outlineColor: theme.focusRing,
     outlineOffset: focus.offset,
   },
-  label: { ...text.ui("bodySm"), color: theme.textMuted },
-  labelActive: { ...text.ui("bodySm", 600), color: theme.text },
+  /**
+   * The boards draw these at 12.5/500 and 12.5/600. `bodySm` at 400 made four
+   * words the loudest row of the chrome.
+   */
+  label: { ...text.ui("caption", 500), color: theme.textMuted },
+  labelActive: { ...text.ui("caption", 600), color: theme.text },
   // One slot the width of a tab, slid across the row. `bottom: 0` and not
   // `-1`: a marker hung below the row is drawn under the panel that starts
   // there, so it came out sliced along its length.
