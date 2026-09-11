@@ -212,20 +212,6 @@ describe("the token spec and the tokens agree", () => {
   });
 });
 
-/**
- * Every fill a component is drawn on. Named once because three rows below walk
- * it and the one that wrote its own shorter list silently lost two of them.
- */
-const FILLS = [
-  "ground",
-  "surface",
-  "insetFill",
-  "subtleFill",
-  "accentFill",
-  "hoverFill",
-  "pressedFill",
-] as const;
-
 describe("a component follows the active theme", () => {
   it("ships exactly light and dark", () => {
     expect(Object.keys(themes)).toEqual(["light", "dark"]);
@@ -545,39 +531,25 @@ describe("a component follows the active theme", () => {
   });
 
   /**
-   * **A money bar's track was `subtleFill`, and on a phone the Months page drew
-   * twelve rows of nothing.** `subtleFill` is a fill for a box on a card —
-   * 1.10:1 on `ground` light, 1.16 dark, 1.03 and 1.14 on `accentFill`, which is
-   * what the pager's current month sits on. Every ratio in this file was green:
-   * the bars' *fills* clear the page comfortably, so nothing here was measuring
-   * the thing that was invisible. What a reader loses is the scale — a bar at
-   * 4% and a bar at nothing are the same picture when the track cannot be seen.
+   * **The track is deliberately quiet, and the fill is what must read.**
    *
-   * **The floor is the shell pair's 1.5, for the shell pair's reason**: no
-   * border draws a track's edge, so the two fills carry the separation alone.
-   * Not 3:1 — that is WCAG 1.4.11's *boundary* number, for an edge you must
-   * locate precisely, and it is unreachable here from both sides at once (see
-   * the bar floor below).
+   * There was a 1.5:1 floor here, on the argument that a track states the scale
+   * a fill is measured against and an invisible one cannot. That is true of a
+   * bar with something in it and false of a ledger with nothing: at 1.91 a year
+   * of empty months drew twelve full-width tan bars, and a month holding
+   * nothing looked like a month holding everything. The boards draw the track
+   * at 1.10 and the decision they encode is the right one — the fill is the
+   * signal, the track is only its room.
    *
-   * **All seven fills, and the first version of this test walked five.** It
-   * dropped `hoverFill` and `pressedFill` — which put the light track at 1.48 on
-   * `pressed`, under its own floor, with the suite green and the comment above
-   * it claiming "every fill a track is drawn on". That was a census of today's
-   * callers written as a property, and it is the third time this file has been
-   * caught by exactly that: see `borderInteractive` at the 3:1 boundary row
-   * ("*a filled chip's edge at 2.74 and a hovered one at 2.59*") and the focus
-   * ring's ("*2.89 and 2.69 on the two fills a control wears while it is being
-   * used*"). No component paints a track on a hover or pressed fill today. The
-   * point is that the floor holds when the first one does.
+   * So the floor that survives is the one on the **fill**: `income` and `spend`
+   * keep WCAG 1.4.11's 3:1 *on the track*, because the fill is the datum. A
+   * quiet track makes that easier, not harder — 5.25 at the tightest against
+   * the 3.02 the lifted track left.
+   *
+   * What is deliberately **not** checked is the track against the page. It is a
+   * decorative area whose figure is stated in words beside it on every screen
+   * that draws one, and holding it to a floor is what produced the twelve bars.
    */
-  it.each([
-    ["light", light],
-    ["dark", dark],
-  ])("keeps the %s bar track visible on every fill", (_name, theme) => {
-    for (const fill of FILLS) {
-      expect(contrastRatio(theme.trackFill, theme[fill]), fill).toBeGreaterThanOrEqual(1.5);
-    }
-  });
 
   /**
    * **The other side of the squeeze.** A track dark enough to see is a track the

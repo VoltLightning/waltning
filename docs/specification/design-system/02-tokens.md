@@ -21,7 +21,7 @@ whatever the chrome around them does.
 | `ground` | `#faf6ef` | Page background; all cards sit on it |
 | `surface` | `#ffffff` | Cards, sheets, rows |
 | `subtle` | `#f1ebe0` | Table headers, inset boxes, neutral tag fills, the segment track |
-| `track` | `#c5b299` | The unfilled part of a money bar — `MonthList`'s two, `FlowBar`'s empty one, `IncomeVsExpenseWidget`'s. **Not `subtle`**, which is a fill for a box on a card and sits at 1.10:1 on `ground` and 1.03 on `accent-fill`: the Months page drew twelve rows of nothing, and a 4% bar looked like no bar. Held from both sides — the shell pair's **1.5:1** against **all seven** fills, `hover` and `pressed` included (1.53 at the tightest, `pressed` in light) and **3:1 for `income` and `spend` on it** (3.02 at the tightest, light). The whole slack is 1.29: `income` clears the light ground by 5.80 and the two floors want 4.5 of it |
+| `track` | `#f1ebe0` | The unfilled part of a money bar — `MonthList`'s two, `FlowBar`'s empty one, `IncomeVsExpenseWidget`'s. **Quiet on purpose**: the fill is the signal and the track is only its room. A lifted track (1.91:1) drew a year of empty months as twelve full-width bars, so a month holding nothing looked like a month holding everything. `income` and `spend` keep **3:1 on it** — 5.25 at the tightest — which is the floor that matters, because the fill is the datum |
 | `income-fill` | `#bccaa9` | `FlowBar`'s track when the month has flow — income as a *field*, where `income` is income as *ink*. The two money colours are the same lightness by design (a figure is told apart by hue), so `spend` on `income` was **1.0045:1** and the bar was one uniform rectangle. `green-300`, so the ramp gives the value. `spend` reads on it at 3.60. **A card fill**: 1.5:1 on `ground`, `surface` and `inset` only — 1.46 on `subtle`, 1.38 on `hover`, 1.28 on `pressed`, so a money bar in a chip or under a finger is a bar this cannot carry |
 | `hover` | `#ece5d7` | The fill under a pointer |
 | `pressed` | `#e6ddcb` | The transient fill under a finger |
@@ -100,7 +100,7 @@ with dark text.
 | `ground` | `#1c1a15` |
 | `surface` | `#26221b` |
 | `subtleFill` / `tagNeutralFill` | `#2b2620` |
-| `trackFill` | `#585044` |
+| `trackFill` | `#2b2620` |
 | `incomeFill` | `#3b4d33` |
 | `hoverFill` | `#302a23` |
 | `pressedFill` | `#363027` |
@@ -149,17 +149,12 @@ on the warm charcoal ground the dark shell reads by rising, on cream by
 deepening, and the same lightness serves both. `theme/theme.test.tsx` holds
 both floors.
 
-**A bar track carries the shell pair's floor, and for the shell pair's
-reason.** Nothing draws a line around a track either, so the two fills carry
-the separation alone — 1.5:1, not 1.4.11's 3:1, which governs a boundary you
-must locate precisely. The track cannot reach 3:1 in any case: it is squeezed
-from below by `income` and `spend`, which must keep 3:1 **on it**, because the
-fill is the datum. The whole slack is the ratio the two floors do not already
-spend — in light, `income` clears `ground` by 5.804 against 1.5 × 3.0, so
-**1.29**; in dark, 9.832, so 2.18. **Dark binds the bar floor** (`spend` at 3.02
-light and 3.26 dark is the light side, but the headroom before a bar breaks 3:1
-is 96.0% consumed in light against 96.8% in dark). If either floor is ever
-missed the figure that moves is `income`, not the track.
+**A bar track has no floor against the page, and that is a decision.** It is a
+decorative area whose figure is stated in words beside it on every screen that
+draws one, and the floor it used to carry produced a year of empty months drawn
+as twelve full bars. What is held instead is the floor on the **fill**: `income` and `spend`
+keep 3:1 *on the track*, because the fill is the datum. A quiet track makes that
+easier rather than harder — 5.25 at the tightest.
 
 **The floor names all seven fills, not the five a track is drawn on today.**
 `hover` and `pressed` are in the list because leaving them out is how
