@@ -76,12 +76,15 @@ labels half-toned. A marker driven by the active page can only jump when the
 gesture ends, which makes the bar look like it is reacting to the swipe rather
 than being part of it.
 
-**The title is the month on all four pages, Months included.** It named the
-year there at first, because the arrows step years on that page — and the
-header changing shape as you swipe was the thing that read as broken: the
-picker's affordance disappeared exactly where a reader is most likely to want
-it. The month is the date every page shares, so it is what the header says;
-what the arrows step is said by the arrows' own names.
+**The title is the month on three pages and the year on Months.** It names the
+period the page in front of you is actually showing — three of them show a
+month, and Months shows twelve. *June* over a page of 2026 was the one label on
+this screen naming something the page was not drawing; the arrows already step
+a year there (§4), so the title and the control now agree. What does not change
+with the page is the title's *shape*: it is a large tappable title on all four,
+because a picker's affordance disappearing exactly where a reader wants it is
+the failure this label was first written to avoid. On Months it opens the year
+picker instead of the month one.
 
 **The chrome is shared and never scrolls away, but it changes shape.** The
 header has two layouts and the scroll chooses between them, continuously —
@@ -206,7 +209,7 @@ the current year, because five things shared 326pt and the year was the one of
 them usually already known. It now sets under the month rather than beside it,
 so it costs a line nobody was using instead of a share of the row — and a rule
 that exists to save width has nothing left to save. Months is the exception:
-there the year is the period, and `2026` under `2026` is the year twice.
+there the year *is* the title, and `2026` under `2026` is the year twice.
 
 **The agent is a tab, because `⌘K` is a desk gesture and the top-right corner
 is the hardest point on a 390pt phone to reach.** S03 has been reachable from
@@ -281,9 +284,39 @@ better than a panel dropped over something else.
 
 #### Months
 
-Every month of the year with its income and spend, the current one marked.
-Tapping one moves the shared date and stays on the page, so a year can be read
+**A chart of the year over a list of its months.** The chart is twelve paired
+columns — income and spend side by side, one pair per month — and under it the
+same twelve months as rows carrying the figures and what each kept. Tapping
+either moves the shared date and stays on the page, so a year can be read
 without leaving it.
+
+**The comparison is drawn once, at the top.** Every row used to draw its own
+two bars: twenty-four tracks down the page, each scaled to a year the reader
+had to reconstruct by looking at all of them. A chart answers *which months
+were heavy* in one glance, which frees the rows to answer *by how much* in
+figures — so the rows lost their bars and gained a **net**, the figure a row of
+two bars could never state.
+
+**A month with no entries draws a stub, not a track.** An empty month at zero
+share still has to occupy its slot — twelve of them drawn as full-width tracks
+is a year holding nothing rendered as a year holding everything, which is
+exactly what shipped once. The stub is 2pt of `border`: present, clearly
+nothing.
+
+**The year's own arrows live on the chart, not only in the chrome.** The chart
+*is* the year, so the control that changes it sits where the eye already is;
+the header's stepper still works, and both move the same date. Between them the
+year is a button that opens `YearPicker`.
+
+**Back to 1900, nine years to a page.** A ledger can hold a date older than the
+app, so the picker cannot stop at the years the ledger happens to contain —
+`1900` is the floor, and below it the back arrow goes quiet rather than
+vanishing, because a control that disappears leaves a reader wondering what they
+did. Nine at a time is a 3×3 grid that fits without scrolling, paged from
+*this* year backwards so the page a reader opens on is always full and always
+ends on the year they are in. A year the ledger has entries in carries a dot;
+everything else is offered anyway, because a grid that hid the empty years
+would change shape as the ledger filled.
 
 **Both pages are folds of one read.** `readDayFlows` is §5's figure cut by day
 — the same query, the same filters and the same refusal to sum across
@@ -293,8 +326,8 @@ screen comes to say two different things about the same month; there is one,
 and a test adds the days up and compares them to the card.
 
 **Both scale to what is on screen, never to an absolute figure.** A day is
-*heavy* against the busiest day of its month and a month's bars are drawn
-against the busiest month of its year, for the reason `DayRibbon` gives: a
+*heavy* against the busiest day of its month and a column on the year chart is
+drawn against the busiest month of its year, for the reason `DayRibbon` gives: a
 ledger whose largest day is 200 zł and one whose largest is 20 000 would
 otherwise draw every mark the same, and the mark exists to say *this was
 unusual for you*.
@@ -328,7 +361,9 @@ happened*.
 | `SpendRows` | *Where it went* — §6 at leaf granularity, five rows plus a named remainder, bars proportional to the largest row, one colour. Opening month only |
 | `DayRibbon` | Under `PageTabs`, on the List page only. Continuous — a cell for **every** day between the first and the last the list has loaded, not only the days holding rows, because the distance between two marks is part of what the strip draws. Horizontally scrollable, clipped at both edges. 48×66 cells with the day number at 17px and room around the weekday letter. Activity mark per §3 |
 | `MonthGrid` | Calendar's own grid — a day per cell with `DayRibbon`'s activity mark, ≥44px |
-| `MonthRows` | Months' twelve rows, income and spend per month |
+| `YearChart` | Months' hero — twelve paired columns scaled to the busiest month of the year, the current month ticked, empty months drawn as stubs. Carries the year, its net, its two arrows and the button that opens `YearPicker` |
+| `MonthRows` | Months' twelve rows: income, spend and **net** per month. No bars — `YearChart` above is the comparison, so a row states figures |
+| `YearPicker` | A sheet of nine years, paged back to 1900, a dot on the years holding entries. `PeriodPicker` at year granularity |
 | `DayGroup` | A day's rows under its date and total. The list's only grouping |
 | `QuietDay` | One empty day: a single muted line |
 | `QuietRun` | Two or more consecutive empty days: one row naming the span and its length, with *Show* |

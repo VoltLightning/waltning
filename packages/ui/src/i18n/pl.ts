@@ -451,6 +451,13 @@ export const pl: Messages = {
     /** `PagerHeader`'s magnifier. */
     search: "Szukaj",
     pickPeriod: "Wybierz miesiąc",
+    pickYear: "Wybierz rok",
+    earlierYears: "Wcześniejsze lata",
+    laterYears: "Późniejsze lata",
+    yearsMore: "Kropka oznacza rok, w którym coś jest.",
+    yearsFloor: "1900 to najwcześniejsza możliwa data.",
+    previousYearStep: "Poprzedni rok",
+    nextYearStep: "Następny rok",
     summary: "Podsumowanie",
     list: "Lista",
     calendar: "Kalendarz",

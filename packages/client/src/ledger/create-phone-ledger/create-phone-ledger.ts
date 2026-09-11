@@ -719,6 +719,8 @@ export type PhoneLedgerPort = {
   readPeriodSpend: (period: money.Period) => readonly PhonePeriodSpend[];
   /** The same figure cut by day — S04's calendar. Bounded by the period, never paged. */
   readDayFlows: (period: money.Period) => readonly money.DayFlowRow[];
+  /** Every year the ledger holds something in — the dot in S04's year picker. */
+  readLedgerYears: () => readonly number[];
   /** §7's match counts by day, for Calendar and Months while the screen searches. */
   readMatchDays: (period: money.Period, text: string) => readonly PhoneMatchDay[];
   /** Every row on one day — the entries S04's calendar opens. Bounded by the date. */
@@ -1425,6 +1427,8 @@ export type PhoneLedgerController = {
    * what a search means is exactly how a count and a list come to disagree.
    */
   readMatchDays: (period: money.Period, text: string) => readonly PhoneMatchDay[];
+  /** Every year the ledger holds something in — the dot in S04's year picker. */
+  readLedgerYears: () => readonly number[];
   /**
    * Every row on one day — the entries S04's calendar opens under its grid
    * (§3). Bounded by the date rather than by a row count: a day ends, and a
@@ -2199,6 +2203,7 @@ export function createPhoneLedger(
     readPeriodSpend: (period) => port.readPeriodSpend(period),
     readDayFlows: (period) => port.readDayFlows(period),
     readMatchDays: (period, text) => port.readMatchDays(period, text),
+    readLedgerYears: () => port.readLedgerYears(),
     readDayRows: (date) => port.readDayRows(date),
     readSpendByCategory: (period, scope) => port.readSpendByCategory(period, scope),
     readIncomeVsExpense: (buckets, scope) => port.readIncomeVsExpense(buckets, scope),

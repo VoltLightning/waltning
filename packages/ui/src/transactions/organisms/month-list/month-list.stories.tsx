@@ -46,12 +46,6 @@ const FIGURES: readonly (readonly [string, string])[] = [
   ["0", "0"],
 ];
 
-const BUSIEST = money.toMoney("9120.00");
-
-function share(value: money.Money): number {
-  return Number(money.dec(value).div(money.dec(BUSIEST)).toFixed(4));
-}
-
 const ROWS: readonly MonthRow[] = NAMES.map((label, index) => {
   const [inflowRaw, spendRaw] = FIGURES[index] ?? ["0", "0"];
   const inflow = money.toMoney(inflowRaw ?? "0");
@@ -63,8 +57,7 @@ const ROWS: readonly MonthRow[] = NAMES.map((label, index) => {
     spend,
     currency: "PLN",
     decimals: 2,
-    inflowShare: share(inflow),
-    spendShare: share(spend),
+    net: money.sub(inflow, spend),
     note: index === 4 ? "+ 1 other currency" : null,
     matches: null,
     ahead: index > 8,
@@ -102,8 +95,7 @@ export const Nothing: Story = {
       ...row,
       inflow: money.ZERO,
       spend: money.ZERO,
-      inflowShare: 0,
-      spendShare: 0,
+      net: money.ZERO,
       note: null,
       matches: null,
     })),

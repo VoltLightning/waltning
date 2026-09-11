@@ -61,6 +61,7 @@
     "./transactions/use-ledger-table-sort": "./src/transactions/use-ledger-table-sort/use-ledger-table-sort.ts",
     "./transactions/use-transactions": "./src/transactions/use-transactions.ts",
     "./transactions/year-months": "./src/transactions/year-months/year-months.ts",
+    "./transactions/year-pages": "./src/transactions/year-pages/year-pages.ts",
     "./transport/base-url": "./src/transport/base-url/base-url.ts",
     "./transport/build": "./src/transport/build.ts",
     "./transport/client": "./src/transport/client.ts",

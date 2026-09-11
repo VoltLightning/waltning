@@ -1,23 +1,28 @@
 /**
- * `<MonthList>` — the year, S04's Months page (§3).
+ * `<MonthList>` — the year's figures, under the chart that gives it a shape
+ * (S04 §3).
  *
- * **Every month carries its own two figures and a bar to compare them by.**
- * Money that came in and money that went out, drawn against the busiest month
- * of the year rather than against an absolute scale: the question the page
- * answers is *which months were heavy*, and that is a question about this year.
+ * **The rows carry what `<YearChart>` cannot.** The chart answers *which months
+ * were heavy* at a glance and cannot state a number; these state the numbers and
+ * cannot be glanced at. Each does one of the two jobs the page has.
  *
- * **Income and spend are separate bars, not one net.** A month that took 8 000
- * and spent 8 000 nets to nothing and was not a quiet month; a single bar would
- * draw it as one. `FlowBar` on Summary makes the opposite choice for the
- * opposite reason — there the subject is what is left of one month, here it is
- * how twelve compare.
+ * **The bars are gone from here, and they were the whole problem.** A row used
+ * to draw two of its own, scaled to the busiest month — twenty-four tracks down
+ * the page, and on a year holding nothing, twenty-four *full-width* tracks: a
+ * month with no entries drawn exactly like a month with everything. The chart
+ * carries the comparison now, where an empty month is a stub rather than a
+ * track.
+ *
+ * **In and out, then the net.** A month that took 8 000 and spent 8 000 nets to
+ * nothing and was not a quiet month, so the two figures lead and the net
+ * follows them rather than replacing them.
  *
  * **A month with nothing in it keeps its row.** A year is twelve months, and a
  * list that dropped the empty ones would change length as the ledger fills.
  */
 
 import type * as money from "@waltning/core/money";
-import { memo, useCallback, useMemo } from "react";
+import { memo, useCallback } from "react";
 import { Pressable, Text, View } from "react-native";
 import { Amount } from "../../../fx/atoms/amount/amount";
 import { useInteraction } from "../../../primitives/interaction.ts";
@@ -34,9 +39,8 @@ export type MonthRow = {
   spend: money.Money;
   currency: string;
   decimals: number;
-  /** `0`–`1` each, already measured against the year's busiest month. */
-  inflowShare: number;
-  spendShare: number;
+  /** `inflow − spend`, already computed — the row states it, never derives it. */
+  net: money.Money;
   /** A note where the month held currencies the figures leave out, else `null`. */
   note: string | null;
   ahead: boolean;
@@ -78,17 +82,6 @@ function MonthRowView({
   const month = row.month;
   const press = useCallback(() => onPickMonth(month), [onPickMonth, month]);
 
-  // Widths are the datum, not the design, so they are the one thing here that
-  // `makeStyles` cannot hold.
-  const inflowWidth = useMemo(
-    () => ({ width: `${row.inflowShare * 100}%` }) as const,
-    [row.inflowShare],
-  );
-  const spendWidth = useMemo(
-    () => ({ width: `${row.spendShare * 100}%` }) as const,
-    [row.spendShare],
-  );
-
   return (
     <Pressable
       accessibilityRole="button"
@@ -117,37 +110,31 @@ function MonthRowView({
       </Text>
 
       {row.matches === null ? (
-        <>
-          {/*
-            Decorative: both figures are stated beside the bars and in the row's
-            accessible name, so a reader who cannot see them loses nothing.
-          */}
-          <View style={styles.bars} accessibilityElementsHidden {...HIDDEN}>
-            <View style={styles.track}>
-              <View style={[styles.fillIn, inflowWidth]} />
-            </View>
-            <View style={styles.track}>
-              <View style={[styles.fillOut, spendWidth]} />
-            </View>
-          </View>
-
-          <View style={styles.figures}>
+        <View style={styles.figures}>
+          <Amount
+            value={row.inflow}
+            currency={row.currency}
+            decimals={row.decimals}
+            kind="income"
+            size="caption"
+          />
+          <Amount
+            value={row.spend}
+            currency={row.currency}
+            decimals={row.decimals}
+            kind="spend"
+            size="caption"
+          />
+          <View style={styles.net}>
             <Amount
-              value={row.inflow}
+              value={row.net}
               currency={row.currency}
               decimals={row.decimals}
-              kind="income"
-              size="compact"
-            />
-            <Amount
-              value={row.spend}
-              currency={row.currency}
-              decimals={row.decimals}
-              kind="spend"
-              size="compact"
+              size="small"
+              signed
             />
           </View>
-        </>
+        </View>
       ) : (
         <Text style={row.matches.found ? styles.matches : styles.matchesNone}>
           {row.matches.label}
@@ -184,13 +171,9 @@ function MonthListView({ rows, current, labels, onPickMonth }: MonthListProps) {
   );
 }
 
-/**
- * `react-native-web` maps neither `accessibilityState.selected` nor the native
- * hiding props, so both need their flat forms (`conformance.test.ts`).
- */
+/** `react-native-web` maps no `accessibilityState.selected`; the flat form does. */
 const SELECTED: { "aria-selected": true } = { "aria-selected": true };
 const UNSELECTED: { "aria-selected": false } = { "aria-selected": false };
-const HIDDEN: { "aria-hidden": true } = { "aria-hidden": true };
 
 export const MonthList = memo(MonthListView);
 
@@ -202,10 +185,11 @@ const useStyles = makeStyles((theme) => ({
     borderWidth: 1,
     borderColor: "transparent",
     minHeight: touchTarget.min,
-    paddingVertical: space.md,
+    justifyContent: "center",
+    paddingVertical: space.sm,
     paddingHorizontal: space.xl,
     borderRadius: radius.sm,
-    gap: space.xs,
+    gap: space.xxs,
   },
   /**
    * **A selected row has to be visible, and this one measured 1.07:1.**
@@ -221,17 +205,14 @@ const useStyles = makeStyles((theme) => ({
     borderColor: theme.accentFillBorder,
   },
   labelAhead: { color: theme.textMuted },
-  label: { ...text.ui("bodySm", 600), color: theme.text },
-  bars: { gap: space.xxs },
-  track: {
-    height: 6,
-    borderRadius: radius.xs,
-    backgroundColor: theme.trackFill,
-    overflow: "hidden",
-  },
-  fillIn: { height: "100%", backgroundColor: theme.income },
-  fillOut: { height: "100%", backgroundColor: theme.spend },
-  figures: { flexDirection: "row", justifyContent: "space-between" },
+  label: { ...text.ui("label"), color: theme.text },
+  /**
+   * The two figures lead and the net follows, on one line. The net is given
+   * fixed room so twelve of them align down the page — a column of figures that
+   * does not is a column you cannot compare.
+   */
+  figures: { flexDirection: "row", alignItems: "baseline", gap: space.xl },
+  net: { marginLeft: "auto", minWidth: 92, alignItems: "flex-end" },
   note: { ...text.ui("caption"), color: theme.textMuted },
   matches: { ...text.ui("bodySm"), color: theme.accentText },
   /**

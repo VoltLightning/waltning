@@ -10,13 +10,7 @@
 import { render, screen } from "@testing-library/react";
 import * as money from "@waltning/core/money";
 import { describe, expect, it } from "vitest";
-import { light } from "../../../theme/roles.ts";
 import { MonthList, type MonthRow } from "./month-list";
-
-function rgb(hex: string): string {
-  const [r, g, b] = [1, 3, 5].map((at) => Number.parseInt(hex.slice(at, at + 2), 16));
-  return `rgb(${r}, ${g}, ${b})`;
-}
 
 const ROW: MonthRow = {
   month: "2026-01",
@@ -25,8 +19,7 @@ const ROW: MonthRow = {
   spend: money.toMoney("5120.40"),
   currency: "PLN",
   decimals: 2,
-  inflowShare: 1,
-  spendShare: 0.65,
+  net: money.toMoney("2729.60"),
   note: null,
   ahead: false,
   matches: null,
@@ -46,64 +39,29 @@ function draw(rows: readonly MonthRow[]) {
 }
 
 describe("MonthList", () => {
-  it("draws both tracks in the bar-track fill, and each bar in its own money colour", () => {
-    render(
-      <MonthList
-        rows={[ROW]}
-        current="2026-01"
-        labels={{ inflow: "In", spend: "Out" }}
-        onPickMonth={noop}
-      />,
-    );
-    const bars = document.querySelector("[aria-hidden='true']");
-    if (!(bars instanceof HTMLElement)) throw new Error("no bars rendered");
-    const tracks = Array.from(bars.children).filter(
-      (node): node is HTMLElement => node instanceof HTMLElement,
-    );
-    expect(tracks).toHaveLength(2);
-    for (const one of tracks)
-      expect(getComputedStyle(one).backgroundColor).toBe(rgb(light.trackFill));
-
-    const fills = tracks.map((one) => one.firstElementChild);
-    expect(fills[0] instanceof HTMLElement && getComputedStyle(fills[0]).backgroundColor).toBe(
-      rgb(light.income),
-    );
-    expect(fills[1] instanceof HTMLElement && getComputedStyle(fills[1]).backgroundColor).toBe(
-      rgb(light.spend),
-    );
+  /**
+   * **The bars were the whole defect and they are gone.** A row used to draw
+   * two of its own, scaled to the busiest month — twenty-four tracks down the
+   * page, and on a year holding nothing, twenty-four *full-width* tracks. The
+   * chart above carries the comparison now; these carry the figures.
+   */
+  it("states the two figures and the net, and draws no bar", () => {
+    draw([ROW]);
+    expect(screen.getByText(/7 850/), "what came in").toBeTruthy();
+    expect(screen.getByText(/5 120/), "what went out").toBeTruthy();
+    expect(screen.getByText(/2 729/), "and what it kept").toBeTruthy();
+    // Nothing in the row is a proportional fill any more.
+    expect(document.querySelector("[style*='width: 1']")).toBeNull();
   });
 
   /**
-   * The row still exists at zero — a year is twelve months — so the track is
-   * the whole of what a reader sees, and it is the only thing saying the row
-   * has a scale at all.
+   * A year is twelve months, so an empty one keeps its row — a list that
+   * dropped them would change length as the ledger fills.
    */
-  it("keeps an empty month's tracks", () => {
-    render(
-      <MonthList
-        rows={[
-          {
-            ...ROW,
-            inflow: money.ZERO,
-            spend: money.ZERO,
-            inflowShare: 0,
-            spendShare: 0,
-            ahead: true,
-          },
-        ]}
-        current=""
-        labels={{ inflow: "In", spend: "Out" }}
-        onPickMonth={noop}
-      />,
-    );
-    const bars = document.querySelector("[aria-hidden='true']");
-    if (!(bars instanceof HTMLElement)) throw new Error("no bars rendered");
-    expect(bars.children).toHaveLength(2);
-    for (const one of Array.from(bars.children)) {
-      if (!(one instanceof HTMLElement)) throw new Error("not an element");
-      expect(getComputedStyle(one).backgroundColor).toBe(rgb(light.trackFill));
-    }
+  it("keeps an empty month, and says three zeroes rather than nothing", () => {
+    draw([{ ...ROW, inflow: money.ZERO, spend: money.ZERO, net: money.ZERO, ahead: true }]);
     expect(screen.getByText("January")).toBeTruthy();
+    expect(screen.getAllByText(/0[.,]00/).length).toBeGreaterThanOrEqual(3);
   });
 
   /**

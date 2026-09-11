@@ -911,6 +911,16 @@ export const en = {
      * tapping it will do.
      */
     pickPeriod: "Choose a month",
+    /** `<YearPicker>`'s sheet title, and its two page steps. */
+    pickYear: "Choose a year",
+    earlierYears: "Earlier years",
+    laterYears: "Later years",
+    /** Under the grid: what a dot means, or that there is no page before this. */
+    yearsMore: "A dot marks a year with something in it.",
+    yearsFloor: "1900 is as far back as a date goes.",
+    /** `<YearChart>`'s own steps — the year, not the month. */
+    previousYearStep: "Previous year",
+    nextYearStep: "Next year",
     /** `PageTabs` — the four views of one date (S04 §3). */
     summary: "Summary",
     list: "List",

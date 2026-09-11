@@ -325,6 +325,7 @@ function harness(
     readPeriodSpend: () => [],
     readDayFlows: () => [],
     readMatchDays: () => [],
+    readLedgerYears: () => [],
     readDayRows: () => [],
     readSpendByCategory: () => [],
     readIncomeVsExpense: () => [],

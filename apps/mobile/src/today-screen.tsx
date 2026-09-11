@@ -14,6 +14,7 @@ import { toLedgerItems } from "@waltning/client/transactions/ledger-days";
 import { matchesByDay, matchesByMonth } from "@waltning/client/transactions/match-counts";
 import { monthGrid, weekdayHeadings } from "@waltning/client/transactions/month-grid";
 import { busiestMonth, yearMonths } from "@waltning/client/transactions/year-months";
+import { FIRST_YEAR, stepYearPage, yearPage } from "@waltning/client/transactions/year-pages";
 import { accountingDate, addDays, monthRange, shiftMonth, yearMonth } from "@waltning/core/date";
 import * as money from "@waltning/core/money";
 import { CategorySheet } from "@waltning/ui/categories/category-sheet";
@@ -35,6 +36,7 @@ import {
   SlidersHorizontalIcon,
 } from "@waltning/ui/shell/phosphor";
 import { UnsettledBanner } from "@waltning/ui/shell/unsettled-banner";
+import { YearPicker } from "@waltning/ui/shell/year-picker";
 import { EmptyState } from "@waltning/ui/states/empty-state";
 import { ErrorState } from "@waltning/ui/states/error-state";
 import { Toast } from "@waltning/ui/states/toast";
@@ -51,6 +53,7 @@ import {
   TransactionList,
   type TransactionListItem,
 } from "@waltning/ui/transactions/transaction-list";
+import { YearChart, type YearColumn } from "@waltning/ui/transactions/year-chart";
 import { router, useLocalSearchParams } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
 import { Text as RNText, useColorScheme, View } from "react-native";
@@ -175,6 +178,8 @@ const useSectionStyles = makeStyles((theme) => ({
   goToRow: { flexDirection: "row", alignItems: "center" },
   // The day's entries, set off from the grid above them by the ground.
   dayPanel: { gap: space.xs },
+  /** The chart and the figures it gives a shape to, as one block. */
+  year: { gap: space.x3 },
   nothing: { color: theme.textMuted, ...text.ui("caption") },
   spacer: { flex: 1 },
 }));
@@ -954,21 +959,14 @@ export default function Today() {
     [yearFlows, shownYear, leadNetWorth, today],
   );
   const monthRows = useMemo<readonly MonthRow[]>(() => {
-    // Relative to the busiest month of this year, never to an absolute figure:
-    // the question the page answers is which months were heavy, and that is a
-    // question about this year.
-    const busiest = busiestMonth(yearRows);
-    const share = (value: money.Money) =>
-      money.isZero(busiest) ? 0 : Number(money.dec(value).div(money.dec(busiest)).toFixed(4));
     return yearRows.map((row) => ({
       month: row.month,
       label: monthLabel(row.month, locale).replace(/\s+\d{4}$/, ""),
       inflow: row.inflow,
       spend: row.spend,
+      net: row.net,
       currency: leadNetWorth?.currency ?? "",
       decimals: leadNetWorth?.decimals ?? 2,
-      inflowShare: share(row.inflow),
-      spendShare: share(row.spend),
       note:
         row.otherCurrencies === 0
           ? null
@@ -979,6 +977,85 @@ export default function Today() {
       matches: monthMatches === null ? null : monthMatch(t, monthMatches.get(row.month) ?? 0),
     }));
   }, [yearRows, locale, leadNetWorth, monthMatches, t]);
+
+  /**
+   * The chart's columns — the same rows, measured rather than stated.
+   *
+   * **Against the busiest month of this year, never an absolute figure.**
+   * `DayRibbon` gives the reason: a ledger whose largest month is 200 and one
+   * whose largest is 20 000 would draw every column the same, and the mark
+   * exists to say *this was unusual for you*.
+   */
+  const yearColumns = useMemo<readonly YearColumn[]>(() => {
+    const busiest = busiestMonth(yearRows);
+    const share = (value: money.Money) =>
+      money.isZero(busiest) ? 0 : Number(money.dec(value).div(money.dec(busiest)).toFixed(4));
+    return yearRows.map((row) => ({
+      month: row.month,
+      initial: monthLabel(row.month, locale).slice(0, 1),
+      inflowShare: share(row.inflow),
+      spendShare: share(row.spend),
+      empty: money.isZero(row.inflow) && money.isZero(row.spend),
+    }));
+  }, [yearRows, locale]);
+
+  /** What the year kept — the twelve nets, added up. */
+  const yearKept = useMemo(
+    () => yearRows.reduce((total, row) => money.add(total, row.net), money.ZERO),
+    [yearRows],
+  );
+
+  const thisYear = Number(today.slice(0, 4));
+  const [pickerYearPage, setPickerYearPage] = useState<number | null>(null);
+  const openYearPicker = useCallback(() => setPickerYearPage(shownYear), [shownYear]);
+  const closeYearPicker = useCallback(() => setPickerYearPage(null), []);
+  const yearPageShown = useMemo(
+    () => yearPage(pickerYearPage ?? shownYear, thisYear),
+    [pickerYearPage, shownYear, thisYear],
+  );
+  const olderYears = useCallback(
+    () => setPickerYearPage(stepYearPage(yearPageShown.years[0] ?? thisYear, -1, thisYear)),
+    [yearPageShown.years, thisYear],
+  );
+  const newerYears = useCallback(
+    () => setPickerYearPage(stepYearPage(yearPageShown.years[0] ?? thisYear, 1, thisYear)),
+    [yearPageShown.years, thisYear],
+  );
+  /**
+   * Which years the ledger holds something in — the dot in the grid.
+   *
+   * Read once per open rather than per cell: a grid that asked the ledger nine
+   * questions would ask ninety over ten pages of paging.
+   */
+  const yearsWithEntries = useMemo(() => {
+    void snapshot;
+    return pickerYearPage === null ? new Set<number>() : new Set(ledger.readLedgerYears());
+  }, [pickerYearPage, ledger, snapshot]);
+  const pickYear = useCallback(
+    (year: number) => {
+      setPickerYearPage(null);
+      // A year lands on its own newest month, the way picking a month lands on
+      // that month's newest day — a reverse-chronological screen is entered
+      // from its end.
+      pager.showMonth(yearMonth(`${year}-12`));
+    },
+    [pager.showMonth],
+  );
+  const stepYear = useCallback(
+    (direction: -1 | 1) => pager.showMonth(yearMonth(`${shownYear + direction}-12`)),
+    [pager.showMonth, shownYear],
+  );
+  const previousYear = useCallback(() => stepYear(-1), [stepYear]);
+  const nextYear = useCallback(() => stepYear(1), [stepYear]);
+  const chartLabels = useMemo(
+    () => ({
+      older: t("shell.previousYearStep"),
+      newer: t("shell.nextYearStep"),
+      pickYear: t("shell.pickYear"),
+    }),
+    [t],
+  );
+
   const flowLabels = useMemo(() => ({ inflow: t("shell.cameIn"), spend: t("shell.wentOut") }), [t]);
 
   const pages = useMemo(
@@ -1034,12 +1111,32 @@ export default function Today() {
         label: t("shell.months"),
         node: (
           <GroundPanel onScroll={handleScroll}>
-            <MonthList
-              rows={monthRows}
-              current={month}
-              labels={flowLabels}
-              onPickMonth={handlePickMonth}
-            />
+            <View style={sectionStyles.year}>
+              <YearChart
+                year={shownYear}
+                columns={yearColumns}
+                current={month}
+                kept={
+                  <Amount
+                    value={yearKept}
+                    currency={leadNetWorth?.currency ?? ""}
+                    decimals={leadNetWorth?.decimals ?? 2}
+                    size="caption"
+                    signed
+                  />
+                }
+                {...(shownYear > FIRST_YEAR ? { onOlder: previousYear } : {})}
+                {...(shownYear < Number(today.slice(0, 4)) ? { onNewer: nextYear } : {})}
+                onPickYear={openYearPicker}
+                labels={chartLabels}
+              />
+              <MonthList
+                rows={monthRows}
+                current={month}
+                labels={flowLabels}
+                onPickMonth={handlePickMonth}
+              />
+            </View>
           </GroundPanel>
         ),
       },
@@ -1050,8 +1147,17 @@ export default function Today() {
       dayHeadings,
       dayName,
       dayPanel,
+      chartLabels,
       dayMatches,
       flowLabels,
+      leadNetWorth,
+      nextYear,
+      openYearPicker,
+      previousYear,
+      shownYear,
+      today,
+      yearColumns,
+      yearKept,
       handleCategorize,
       handlePickDay,
       pager.state.query,
@@ -1059,13 +1165,12 @@ export default function Today() {
       handlePickMonth,
       handleScroll,
       ledger,
-      leadNetWorth,
       listEmpty,
       month,
       monthRows,
       pager.state.date,
+      sectionStyles.year,
       t,
-      today,
     ],
   );
 
@@ -1079,8 +1184,20 @@ export default function Today() {
         // reader is most likely to want it. The month is the date every page
         // shares (§3), so it is what the header says; what the arrows step is
         // said by the arrows' own names.
-        periodLabel={monthLabel(month, locale).replace(/\s+\d{4}$/, "")}
-        periodDetail={String(pager.label.year)}
+        /*
+          **On Months the title is the year.** Every other page is about a
+          month and says so; Months is about twelve of them, and a header
+          reading *June* over a page of 2026 was the one label on this screen
+          that named something the page was not showing. The arrows already
+          step a year here (§4: they step the unit the page is in), so the
+          title and the control now agree.
+        */
+        periodLabel={
+          pager.state.page === "months"
+            ? String(shownYear)
+            : monthLabel(month, locale).replace(/\s+\d{4}$/, "")
+        }
+        periodDetail={pager.state.page === "months" ? null : String(pager.label.year)}
         /*
           **The period the page on screen is actually showing**, which is the
           month for three of them and the year for Months.
@@ -1121,6 +1238,16 @@ export default function Today() {
         onYearChange={setPickerYear}
         onPick={handlePickMonth}
         onDismiss={closePicker}
+      />
+      <YearPicker
+        visible={pickerYearPage !== null}
+        page={yearPageShown}
+        current={shownYear}
+        withEntries={yearsWithEntries}
+        onOlder={olderYears}
+        onNewer={newerYears}
+        onPick={pickYear}
+        onDismiss={closeYearPicker}
       />
       {/*
         The short swipe's destination (§7). Rendered beside the picker rather
