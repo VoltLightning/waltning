@@ -611,34 +611,27 @@ describe("Today", () => {
 
   /**
    * S04 §3 — *which* empty it is, is a count over the whole ledger, never the
-   * emptiness of a five-row window. A ledger that holds rows Recent did not
-   * return has not had a first run, so it gets S04 §6's ordinary empty —
-   * *Nothing recent*, this screen's own pair rather than S10's, whose body
-   * blames an excluding filter Today's Recent does not have — and *Show all*,
-   * which goes where the rows are.
+   * emptiness of the page read older from today. A ledger whose rows are all
+   * dated ahead (§6's forward horizon) folds to no last days, and it has not
+   * had a first run: today is drawn as the List draws the same day — its own
+   * quiet line — with no first-run wording and no door to anywhere.
    *
-   * **Broken once**: with the screen deciding on `snapshot.recent.length`
-   * alone — the shape this replaces — the ledger below reads *No transactions
-   * yet* and offers *Add*, telling someone with a ledger full of rows to
-   * start one.
+   * **Broken once**: with the count asked on `snapshot.recent.length` while
+   * the branch tested `recentDays.length` — the shape this replaces — the
+   * ledger below read *No transactions yet* and offered *Add*, telling someone
+   * with a ledger of expected entries to start one.
    */
-  it("says the ledger is empty, not new, when the count knows the rows are there", () => {
+  it("draws today as a quiet line, not a first run, when the rows are all ahead of it", () => {
     withLedger(
       <Today />,
       fakeController({ accounts: [PLN_ACCOUNT], recent: [], transactionCount: 12 }),
     );
 
     const summary = within(screen.getByRole("tabpanel"));
-    expect(summary.queryByText("Recent")).toBeNull();
     expect(summary.queryByText("No transactions yet")).toBeNull();
-    // S04 §6's own copy, not S10's — no sentence about a filter on a screen
-    // that has none.
     expect(summary.queryByText("No matching transactions")).toBeNull();
-    expect(summary.getByText("Nothing recent")).toBeDefined();
-    expect(summary.getByText(/just none among the latest few/)).toBeDefined();
-
-    fireEvent.click(summary.getByText("Show all →"));
-    expect(router.push).toHaveBeenCalledWith("/ledger");
+    expect(summary.queryByText("Add")).toBeNull();
+    expect(summary.getByText("nothing")).toBeDefined();
   });
 
   it("shows mine and ours from net worth, per currency — never a summed total", () => {

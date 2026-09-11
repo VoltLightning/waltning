@@ -35,7 +35,7 @@
  */
 
 import { useSafeArea } from "../primitives/safe-area";
-import { space } from "../tokens.ts";
+import { gutter } from "../tokens.ts";
 import { useFloatingClearance } from "./atoms/floating-clearance";
 
 export type GroundInset = {
@@ -90,12 +90,12 @@ export function useGroundInset({ clearBottom = true }: GroundInsetOptions = {}):
   const insets = useSafeArea();
   const floatClearance = useFloatingClearance();
 
-  const gutter = {
-    paddingLeft: space.x4 + insets.left,
-    paddingRight: space.x4 + insets.right,
+  const edges = {
+    paddingLeft: gutter + insets.left,
+    paddingRight: gutter + insets.right,
   };
   const bottom = clearBottom ? insets.bottom + floatClearance : 0;
-  const withBottom = { ...gutter, paddingBottom: space.x4 + bottom };
+  const withBottom = { ...edges, paddingBottom: gutter + bottom };
 
-  return { gutter, content: withBottom, block: withBottom };
+  return { gutter: edges, content: withBottom, block: withBottom };
 }

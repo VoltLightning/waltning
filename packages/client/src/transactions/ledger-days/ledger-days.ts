@@ -144,6 +144,11 @@ export type LedgerItemOptions = {
    * landed on a page reading *nothing on or before*, over a ledger holding rows
    * three days newer. Under a filter it is not drawn: the anchor is a date the
    * query did not match, and the filtered list says nothing about those.
+   *
+   * `ribbonDays` takes it too, and separately: the page hands the list no
+   * anchor until both halves have answered — a quiet line drawn before the
+   * read is a statement nothing has read — while the strip above it names the
+   * day from the first frame, over an empty ledger included.
    */
   anchor?: AccountingDate;
 };
@@ -202,6 +207,20 @@ export function toLedgerItems<Row extends LedgerDayRow>(
   });
   return items;
 }
+
+/**
+ * How far the ribbon reaches either side of the day it is centred on, in days.
+ *
+ * **The strip is a neighbourhood, not the ledger.** It fills every day between
+ * the first and the last it holds, and the anchor is one of them — so a jump
+ * to 1950 in a ledger that begins in 2026 asked for twenty-seven thousand
+ * cells in a plain `ScrollView`, each with two `Intl` formats behind it. The
+ * list survives the same input because it collapses the gap into one row; the
+ * ribbon cannot, because the distance is what it draws, so it draws less of
+ * it. Forty-five is a quarter each way: further than a thumb scrolls a strip,
+ * and ninety-one cells at most, whatever the ledger's shape.
+ */
+export const RIBBON_REACH = 45;
 
 /** One day as `DayRibbon` draws it — no words, because words are the screen's. */
 export type RibbonDayModel = {
@@ -310,17 +329,25 @@ export function ribbonDays<Row extends LedgerDayRow>(
   // typed would be two controls wearing one name.
   const strip = [...marked].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
   if (options.filtered === true) return strip;
-  // The span is every item's, not only the busy days': the anchor is a quiet
-  // item and may sit past the last row on either side, and a strip that ran
-  // only between rows left the day the screen is named for with no cell.
-  let from: AccountingDate | undefined;
-  let to: AccountingDate | undefined;
+  // The span is every item's and the anchor's, not only the busy days': the
+  // anchor may sit past the last row on either side — or be the only thing
+  // there is, over a ledger holding nothing — and a strip that ran only
+  // between rows left the day the screen is named for with no cell.
+  let from: AccountingDate | undefined = options.anchor;
+  let to: AccountingDate | undefined = options.anchor;
   for (const item of items) {
     const [low, high] = item.kind === "day" ? [item.date, item.date] : [item.to, item.from];
     if (from === undefined || low < from) from = low;
     if (to === undefined || high > to) to = high;
   }
-  return fillQuietDays(strip, from, to);
+  if (from === undefined || to === undefined) return strip;
+  // Clipped to `RIBBON_REACH` either side of the anchor — or of the newest day,
+  // for a caller with no anchor — so the cell count is bounded by the constant
+  // and not by how far apart two loaded days happen to be.
+  const centre = options.anchor ?? to;
+  const nearest = addDays(centre, -RIBBON_REACH);
+  const furthest = addDays(centre, RIBBON_REACH);
+  return fillQuietDays(strip, from < nearest ? nearest : from, to > furthest ? furthest : to);
 }
 
 /**
@@ -340,11 +367,9 @@ export function ribbonDays<Row extends LedgerDayRow>(
  */
 function fillQuietDays(
   marked: readonly RibbonDayModel[],
-  from: AccountingDate | undefined,
-  to: AccountingDate | undefined,
+  from: AccountingDate,
+  to: AccountingDate,
 ): readonly RibbonDayModel[] {
-  if (from === undefined || to === undefined) return marked;
-
   const held = new Map(marked.map((day) => [day.date as string, day]));
 
   const run: RibbonDayModel[] = [];

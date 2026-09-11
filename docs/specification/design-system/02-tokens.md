@@ -370,8 +370,11 @@ The 18 (`space.x3b`) is a card's own padding, and it was added the way the 2
 was: sixteen of the deck's cards are drawn at 18 and none at 22, the step every
 card in the app had been wearing instead. The deck's density, stated on its
 own foundations board: a **20** gutter from screen edge to content, cards
-**14** apart, a ledger row **54** tall (`touchTarget.row`) with 11 above and
-below its 32 icon, and 44 as the floor for anything pressed.
+**14** apart, a ledger row **54** tall (`touchTarget.row`) — a two-line
+identity of 32, payee over category, with 11 above and below — and 44 as the
+floor for anything pressed. The gutter has its own name, `gutter`, because
+seven edges clear it and exist to agree; when it moved from 22 to 20, two
+stayed behind.
 
 ### 2.4 Radius
 

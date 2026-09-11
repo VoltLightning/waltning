@@ -177,12 +177,10 @@ export function useLedgerList(
   useEffect(() => {
     if (!older.loaded) loadOlder();
   }, [older.loaded, loadOlder]);
-  /**
-   * horizon rather than the rest of the ledger — see this hook's own header
-   * for the defect the unconditional version shipped. From a past anchor it
-   * waits for `loadNewer()`, which is the reader walking up out of the
-   * neighbourhood they jumped to.
-   */
+  // The newer half too, from any anchor. A past anchor once waited for the
+  // reader to pull down before loading anything newer, so a jump to a quiet
+  // day in a sparse ledger landed on *nothing on or before* over rows three
+  // days newer — with nothing on the page to walk up into (S04 §6, *A jump*).
   useEffect(() => {
     if (!newer.loaded) loadNewer();
   }, [newer.loaded, loadNewer]);

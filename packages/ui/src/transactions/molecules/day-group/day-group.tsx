@@ -50,8 +50,22 @@ function DayGroupView({ label, total, children }: DayGroupProps) {
         the detail that says the two were built separately.
       */}
       <View style={styles.rows}>
-        {Children.map(children, (child, index) =>
-          index === 0 ? child : <View style={styles.separated}>{child}</View>,
+        {/*
+          `toArray`, not `map`: `Children.map` counts `null` and `false`, so a
+          row behind a condition that failed took index 0 and put a hairline
+          above the first row the reader could see, and a `null` in the middle
+          drew a divider over nothing. `toArray` drops them, and flattens a
+          nested array; a fragment stays one child, so pass rows, not a
+          fragment of rows.
+        */}
+        {Children.toArray(children).map((child, index) =>
+          index === 0 ? (
+            child
+          ) : (
+            <View key={keyOf(child, index)} style={styles.separated}>
+              {child}
+            </View>
+          ),
         )}
       </View>
     </View>
@@ -60,6 +74,13 @@ function DayGroupView({ label, total, children }: DayGroupProps) {
 
 export const DayGroup = memo(DayGroupView);
 
+/** `toArray` keys every element it returns; the fallback is for a bare string or number. */
+function keyOf(child: ReturnType<typeof Children.toArray>[number], index: number) {
+  return typeof child === "object" && child !== null && "key" in child && child.key !== null
+    ? child.key
+    : index;
+}
+
 /** Where a row sits in its day, which is what decides its corners. */
 export type DayRowPlace = "only" | "first" | "middle" | "last";
 
@@ -67,7 +88,9 @@ export type DayRowSurfaceProps = { place: DayRowPlace; children: React.ReactNode
 
 /**
  * One row of a day, wearing the day's surface — for a list that cannot use
- * `<DayGroup>`.
+ * `<DayGroup>`, and **never inside one**: both carry the row inset and both
+ * draw the divider, so a surface nested in a group is two hairlines and twice
+ * the inset at every seam.
  *
  * **An infinite list virtualises rows, not days.** S04's List walks five years
  * in both directions, so its cells are rows; a `<DayGroup>` holding a day's

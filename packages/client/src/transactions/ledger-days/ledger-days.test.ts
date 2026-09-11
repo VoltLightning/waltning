@@ -1,7 +1,7 @@
 import { accountingDate } from "@waltning/core/date";
 import { currencyCode, pivotPerUnit, toMoney } from "@waltning/core/money";
 import { describe, expect, it } from "vitest";
-import { type LedgerDayRow, ribbonDays, toLedgerItems } from "./ledger-days.ts";
+import { type LedgerDayRow, RIBBON_REACH, ribbonDays, toLedgerItems } from "./ledger-days.ts";
 
 const PLN = currencyCode("PLN");
 const EUR = currencyCode("EUR");
@@ -316,13 +316,77 @@ describe("the anchor", () => {
   });
 
   it("gives the ribbon a cell, so the day the screen is named for is on it", () => {
-    const strip = ribbonDays(toLedgerItems([row("2026-09-09", "-10")], PLN, { anchor }));
+    const strip = ribbonDays(toLedgerItems([row("2026-09-09", "-10")], PLN, { anchor }), {
+      anchor,
+    });
     expect(strip.map((day) => day.date)).toEqual(["2026-09-09", "2026-09-10", "2026-09-11"]);
     expect(strip[2]).toMatchObject({ activity: "none", entries: 0 });
   });
 
-  it("is the whole ribbon when nothing at all is loaded yet", () => {
-    const strip = ribbonDays(toLedgerItems([], PLN, { anchor }));
+  /**
+   * The page hands the *list* no anchor until both halves have answered, and
+   * none at all over an empty ledger — the first-run state stands where the
+   * rows would. The strip still names the day, from its own option: that is
+   * the one cell an empty ledger's List has, and the page is named for it.
+   */
+  it("is the whole ribbon when the list holds nothing, from the ribbon's own option", () => {
+    const strip = ribbonDays([], { anchor });
     expect(strip.map((day) => day.date)).toEqual([anchor]);
+    expect(strip[0]).toMatchObject({ activity: "none", entries: 0 });
+  });
+
+  it("is not a cell under a filter, where the strip is not continuous", () => {
+    expect(ribbonDays([], { anchor, filtered: true })).toEqual([]);
+  });
+});
+
+/**
+ * **A jump to 1950 asked for 27 613 cells.** `YearPicker` pages back to 1900
+ * and the year it lands on becomes the List's anchor; the anchor became an
+ * item; the strip filled every day between its first item and its last. The
+ * list drew three rows for the same input. `DayRibbon` is a plain `ScrollView`
+ * with no virtualisation, and the page formats two `Intl` strings per cell.
+ */
+describe("the ribbon's reach", () => {
+  it("is bounded by the constant, not by how far apart two loaded days are", () => {
+    const anchor = accountingDate("1950-06-01");
+    const items = toLedgerItems([row("2026-01-05", "-10")], PLN, { anchor });
+    expect(kinds(items), "the list collapses the gap").toEqual(["day", "quiet", "quiet"]);
+
+    const strip = ribbonDays(items, { anchor });
+    expect(strip.length).toBe(RIBBON_REACH + 1);
+    expect(strip[0]?.date).toBe(anchor);
+    expect(strip.at(-1)?.date).toBe("1950-07-16");
+    expect(
+      strip.some((day) => day.date === "2026-01-05"),
+      "the far row is off the strip",
+    ).toBe(false);
+  });
+
+  it("reaches both ways from the anchor when the rows are on both sides", () => {
+    const anchor = accountingDate("2026-06-01");
+    const items = toLedgerItems([row("2026-12-25", "-10"), row("2026-01-05", "-10")], PLN, {
+      anchor,
+    });
+    const strip = ribbonDays(items, { anchor });
+    expect(strip.length).toBe(2 * RIBBON_REACH + 1);
+    expect(strip[0]?.date).toBe("2026-04-17");
+    expect(strip.at(-1)?.date).toBe("2026-07-16");
+    expect(strip[RIBBON_REACH]?.date).toBe(anchor);
+  });
+
+  it("centres on the newest day for a caller with no anchor", () => {
+    const strip = ribbonDays(
+      toLedgerItems([row("2026-12-25", "-10"), row("2026-01-05", "-10")], PLN),
+    );
+    expect(strip.length).toBe(RIBBON_REACH + 1);
+    expect(strip.at(-1)?.date).toBe("2026-12-25");
+  });
+
+  it("does not pad a short span out to the reach", () => {
+    const strip = ribbonDays(
+      toLedgerItems([row("2026-09-09", "-10"), row("2026-09-07", "-10")], PLN),
+    );
+    expect(strip.map((day) => day.date)).toEqual(["2026-09-07", "2026-09-08", "2026-09-09"]);
   });
 });

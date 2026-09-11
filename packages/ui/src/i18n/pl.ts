@@ -193,9 +193,6 @@ export const pl: Messages = {
     emptyFirstRunBody: "Zapisz pierwszy wydatek lub przychód, aby rozpocząć swoją księgę.",
     emptyFilteredTitle: "Brak pasujących transakcji",
     emptyFilteredBody: "Ten filtr wyklucza wszystkie wiersze.",
-    emptyRecentTitle: "Brak ostatnich",
-    emptyRecentBody:
-      "Twoja księga zawiera transakcje, ale żadnej wśród najnowszych. Pokaż wszystkie otwiera pełną listę.",
     calendarRangeTitle: "{{month}} — nic",
     calendarDrawsNothing:
       "Kalendarz pokazuje przychody i wydatki na Twoich własnych kontach. Ta księga nie ma ich jeszcze.",
@@ -527,7 +524,6 @@ export const pl: Messages = {
     periodNext: "Następny okres",
     spent: "wydano",
     net: "saldo",
-    showAll: "Pokaż wszystkie →",
     unsettled: "{{amount}} {{currency}} nierozliczone · {{account}}",
     unsettledMore: "{{amount}} {{currency}} nierozliczone · {{account}} · i {{count}} więcej",
     unsettledNamed: "{{remainder}} {{currency}} nierozliczone · {{payee}}",

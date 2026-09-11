@@ -31,7 +31,7 @@ import { Text, View } from "react-native";
 import { useSafeArea } from "../../../primitives/safe-area";
 import { text, textCap } from "../../../theme/fonts.ts";
 import { makeStyles } from "../../../theme/styles.ts";
-import { space } from "../../../tokens.ts";
+import { gutter, space } from "../../../tokens.ts";
 
 export type TabHeaderProps = {
   title: string;
@@ -46,9 +46,9 @@ export function TabHeader({ title, action }: TabHeaderProps) {
   // Per-device, so not in `useStyles` — the same arithmetic and the same
   // reason `Shell` states beside its own copy.
   const clearance = {
-    paddingTop: space.x4 + insets.top,
-    paddingLeft: space.x4 + insets.left,
-    paddingRight: space.x4 + insets.right,
+    paddingTop: gutter + insets.top,
+    paddingLeft: gutter + insets.left,
+    paddingRight: gutter + insets.right,
   };
 
   return (
@@ -64,7 +64,7 @@ export function TabHeader({ title, action }: TabHeaderProps) {
 const useStyles = makeStyles((theme) => ({
   header: {
     backgroundColor: theme.shell,
-    padding: space.x4,
+    padding: gutter,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
