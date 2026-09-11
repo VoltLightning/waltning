@@ -197,14 +197,16 @@ export const pl: Messages = {
     emptyRecentTitle: "Brak ostatnich",
     emptyRecentBody:
       "Twoja księga zawiera transakcje, ale żadnej wśród najnowszych. Pokaż wszystkie otwiera pełną listę.",
-    calendarRangeTitle: "Nic w {{month}}",
+    calendarRangeTitle: "{{month}} — nic",
+    calendarDrawsNothing:
+      "Kalendarz pokazuje przychody i wydatki na Twoich własnych kontach. Ta księga nie ma ich jeszcze.",
     calendarRangeBody_one: "{{nearest}} to najbliższy miesiąc z wpisami — {{count}} wpis.",
     calendarRangeBody_few: "{{nearest}} to najbliższy miesiąc z wpisami — {{count}} wpisy.",
     calendarRangeBody_many: "{{nearest}} to najbliższy miesiąc z wpisami — {{count}} wpisów.",
     calendarRangeBody_other: "{{nearest}} to najbliższy miesiąc z wpisami — {{count}} wpisów.",
     calendarGoToMonth: "Przejdź do {{month}}",
     calendarNearestDay: "Najbliższe wpisy: {{date}}",
-    calendarFilteredTitle: "Brak wyników w {{month}}",
+    calendarFilteredTitle: "{{month}} — brak wyników",
     calendarFilteredBody: "Nic w tym miesiącu nie pasuje do „{{query}}”.",
     calendarClearSearch: "Wyczyść wyszukiwanie",
     loadFailedTitle: "Nie udało się wczytać transakcji",

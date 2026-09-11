@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 
 import { renderHook } from "@testing-library/react";
-import { accountingDate } from "@waltning/core/date";
+import { accountingDate, yearMonth } from "@waltning/core/date";
 import { id } from "@waltning/core/id";
 import { describe, expect, it, vi } from "vitest";
 import {
@@ -38,7 +38,7 @@ describe("useNearestActivity", () => {
   });
 
   it("asks once, and holds the answer across renders", () => {
-    const nearest = { date: accountingDate("2026-09-09"), month: "2026-09", count: 2 };
+    const nearest = { date: accountingDate("2026-09-09"), month: yearMonth("2026-09"), count: 2 };
     const read = vi.fn(() => nearest);
     const ledger = fakeController(read);
     const { result, rerender } = renderHook(() =>

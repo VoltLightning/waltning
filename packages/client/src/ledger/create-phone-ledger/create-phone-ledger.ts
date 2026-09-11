@@ -1,7 +1,12 @@
 import { fold } from "@waltning/core/capture/names";
 import type { PayeeHistoryRow } from "@waltning/core/capture/payee-memory";
 import { jaccard, trigrams } from "@waltning/core/capture/trigrams";
-import { type AccountingDate, accountingDate, isAccountingDate } from "@waltning/core/date";
+import {
+  type AccountingDate,
+  accountingDate,
+  isAccountingDate,
+  type YearMonth,
+} from "@waltning/core/date";
 import type { DiagnosticError } from "@waltning/core/diagnostics";
 import { errorFromThrown } from "@waltning/core/diagnostics";
 import { id as brandId, type Id, type IdTable, id } from "@waltning/core/id";
@@ -990,8 +995,9 @@ export type PhoneDirectionTotal = money.DirectionTotalRow;
  */
 export type PhoneNearestActivity = {
   date: AccountingDate;
-  /** `2026-09` — the period the empty state names. */
-  month: string;
+  /** The period the empty state names — branded here rather than re-parsed in a
+   * render, where a bad value would throw mid-paint instead of at the seam. */
+  month: YearMonth;
   count: number;
 };
 

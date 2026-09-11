@@ -930,9 +930,16 @@ export default function Today() {
    * than the mark above it, which counted all of them.
    */
   const dayRows = useDayRows(ledger, pager.state.date, snapshot);
+  /**
+   * The fold takes its **pivot**, which is the currency it sums in — the same
+   * mistake as the label three lines below used to be: handed the lead
+   * currency, `totalOf` compares every row against it to decide whether the
+   * total is an approximation, so a converted figure was being flagged exact
+   * and a figure genuinely in the pivot flagged approximate.
+   */
   const dayEntries = useMemo(
-    () => (leadNetWorth ? toLedgerItems(dayRows, leadNetWorth.currency) : []),
-    [dayRows, leadNetWorth],
+    () => (pivotCurrency ? toLedgerItems(dayRows, pivotCurrency.code) : []),
+    [dayRows, pivotCurrency],
   );
   /**
    * **The blank half of the calendar page, which meant three different things
@@ -948,33 +955,58 @@ export default function Today() {
   const monthHasEntries = monthFlows.length > 0;
   const monthHasMatches = dayMatches === undefined || [...dayMatches.values()].some((n) => n > 0);
   const dayHasEntries = dayRows.length > 0;
+
   /**
-   * Where the entries actually are — asked only from a day that has none, and
-   * `readNearestActivity` is two index seeks rather than a scan. §8.1 requires
-   * `range` to offer *the nearest period that does, with its count*; an empty
-   * state that cannot say where anything is is the blank it replaced.
+   * **Two questions, each asked from the period it is about.**
+   *
+   * `readNearestActivity` answers relative to whatever period it is handed, and
+   * one read served both states: the month-level empty then measured from
+   * whichever *square* the reader last touched, so one empty July said *June —
+   * 1 entry* or *August — 50 entries* depending on how you arrived. The month's
+   * empty state asks about the month; the quiet line under a day asks about the
+   * day. The two gates are exclusive, so only ever one of them runs.
    */
   const dayPeriod = useMemo<money.Period>(
     () => ({ start: pager.state.date, end: addDays(pager.state.date, 1) }),
     [pager.state.date],
   );
-  const nearest = useNearestActivity(ledger, dayPeriod, !dayHasEntries, snapshot);
-  const goToNearest = useCallback(() => {
-    if (nearest !== null) pager.showDay(nearest.date);
-  }, [nearest, pager.showDay]);
+  const nearestToMonth = useNearestActivity(ledger, monthPeriod, !monthHasEntries, snapshot);
+  const nearestToDay = useNearestActivity(
+    ledger,
+    dayPeriod,
+    monthHasEntries && !dayHasEntries && dayMatches === undefined,
+    snapshot,
+  );
+  const goToNearestMonth = useCallback(() => {
+    if (nearestToMonth !== null) pager.showDay(nearestToMonth.date);
+  }, [nearestToMonth, pager.showDay]);
+  const goToNearestDay = useCallback(() => {
+    if (nearestToDay !== null) pager.showDay(nearestToDay.date);
+  }, [nearestToDay, pager.showDay]);
 
   /**
-   * **First-run is the same read, saying there is nowhere to go.**
-   * `readNearestActivity` looks both ways out of the day and finds nothing; the
-   * month holds nothing either, so the ledger draws nothing anywhere. Deriving
-   * it that way rather than from `recent` keeps one source: `recent` is a
-   * five-row window that a screen may legitimately be given empty while the
-   * ledger is full, and *no transactions yet* over a ledger that holds plenty
-   * is exactly the false claim §8.1 separates these variants to prevent.
+   * **The calendar drawing nothing anywhere is not the same claim as the ledger
+   * being empty**, and the page may only make the second when it is true.
+   *
+   * A ledger held entirely in shared accounts, or entirely in transfers, draws
+   * nothing on this page while List shows every row of it — *No transactions
+   * yet* there is exactly the false claim §8.1 separates these variants to
+   * prevent. `recent` settles it in the safe direction: it cannot be non-empty
+   * over an empty ledger, so a row in it is proof there is something, whatever
+   * the calendar's own predicate can see.
+   *
+   * **And nothing is claimed before the first refresh has finished.**
+   * `revision > 0` is the snapshot's own way of telling *the replica holds
+   * nothing* from *no read has run yet* (`create-phone-ledger.ts`), and a fresh
+   * install restoring from the server would otherwise be told to capture its
+   * first transaction while its ledger downloads.
    */
-  const ledgerDrawsNothing = nearest === null && !monthHasEntries && !dayHasEntries;
+  const drawsNothing = nearestToMonth === null && !monthHasEntries;
+  const loaded = snapshot.revision > 0;
+  const ledgerIsEmpty = drawsNothing && snapshot.recent.length === 0;
 
   const calendarEmpty = useMemo(() => {
+    if (!loaded) return null;
     if (dayMatches !== undefined && !monthHasMatches) {
       return (
         <EmptyState
@@ -988,17 +1020,21 @@ export default function Today() {
       );
     }
     if (monthHasEntries) return null;
-    if (ledgerDrawsNothing) {
+    if (drawsNothing) {
       return (
         <EmptyState
           variant="first-run"
           title={t("transactions.emptyFirstRunTitle")}
-          body={t("transactions.emptyFirstRunBody")}
+          body={
+            ledgerIsEmpty
+              ? t("transactions.emptyFirstRunBody")
+              : t("transactions.calendarDrawsNothing")
+          }
           primaryAction={addTransactionAction}
         />
       );
     }
-    if (nearest === null) return null;
+    if (nearestToMonth === null) return null;
     return (
       <EmptyState
         variant="range"
@@ -1006,14 +1042,14 @@ export default function Today() {
           month: monthLabel(month, locale).replace(/\s+\d{4}$/, ""),
         })}
         body={t("transactions.calendarRangeBody", {
-          nearest: monthLabel(yearMonth(nearest.month), locale),
-          count: nearest.count,
+          nearest: monthLabel(nearestToMonth.month, locale),
+          count: nearestToMonth.count,
         })}
         primaryAction={{
           label: t("transactions.calendarGoToMonth", {
-            month: monthLabel(yearMonth(nearest.month), locale),
+            month: monthLabel(nearestToMonth.month, locale),
           }),
-          onPress: goToNearest,
+          onPress: goToNearestMonth,
         }}
       />
     );
@@ -1021,9 +1057,11 @@ export default function Today() {
     dayMatches,
     monthHasMatches,
     monthHasEntries,
-    ledgerDrawsNothing,
-    nearest,
-    goToNearest,
+    drawsNothing,
+    ledgerIsEmpty,
+    loaded,
+    nearestToMonth,
+    goToNearestMonth,
     month,
     locale,
     pager.state.query,
@@ -1078,15 +1116,15 @@ export default function Today() {
           entries are: §8.1's *offer the nearest period that does*, at the
           granularity the reader is standing in.
         */}
-        {day === undefined && nearest !== null ? (
+        {day === undefined && nearestToDay !== null ? (
           <Pressable
             accessibilityRole="button"
-            onPress={goToNearest}
+            onPress={goToNearestDay}
             style={sectionStyles.nearestDay}
           >
             <RNText style={sectionStyles.nothing}>
               {t("transactions.calendarNearestDay", {
-                date: dayLabel(nearest.date, locale),
+                date: dayLabel(nearestToDay.date, locale),
               })}
             </RNText>
           </Pressable>
@@ -1097,10 +1135,9 @@ export default function Today() {
     dayEntries,
     pager.state.date,
     locale,
-    pivotCurrency?.code,
-    pivotCurrency?.decimals,
-    nearest,
-    goToNearest,
+    pivotCurrency,
+    nearestToDay,
+    goToNearestDay,
     t,
     sectionStyles,
   ]);
@@ -1263,8 +1300,13 @@ export default function Today() {
             ledger={ledger}
             anchor={pager.state.date}
             today={today}
-            pivotCurrency={pivotCurrency?.code ?? leadNetWorth.currency}
-            pivotDecimals={pivotCurrency?.decimals ?? leadNetWorth.decimals}
+            {...(pivotCurrency === undefined
+              ? // Unreachable once `currencies` has loaded: the server holds a
+                // partial unique index and a trigger over `is_pivot`, so a
+                // ledger has exactly one pivot. Rendering nothing beats
+                // rendering a figure under a currency this screen guessed.
+                { pivotCurrency: leadNetWorth.currency, pivotDecimals: leadNetWorth.decimals }
+              : { pivotCurrency: pivotCurrency.code, pivotDecimals: pivotCurrency.decimals })}
             onPickDay={handlePickDay}
             onOpenTransaction={handleOpenTransaction}
             onCategorize={handleCategorize}
@@ -1359,8 +1401,7 @@ export default function Today() {
       month,
       monthRows,
       pager.state.date,
-      pivotCurrency?.code,
-      pivotCurrency?.decimals,
+      pivotCurrency,
       sectionStyles.year,
       t,
       thisYear,

@@ -448,6 +448,13 @@ export const en = {
      * legitimate answer, not a problem.
      */
     calendarRangeTitle: "Nothing in {{month}}",
+    /**
+     * The ledger holds rows and this page can draw none of them — every one is
+     * a transfer, or on an account that is not yours. *No transactions yet*
+     * would be false, and the reader can see those rows on List one swipe away.
+     */
+    calendarDrawsNothing:
+      "The calendar draws income and expenses on your own accounts. This ledger has none yet.",
     calendarRangeBody_one: "{{nearest}} is the nearest month with anything — {{count}} entry.",
     calendarRangeBody_few: "{{nearest}} is the nearest month with anything — {{count}} entries.",
     calendarRangeBody_many: "{{nearest}} is the nearest month with anything — {{count}} entries.",

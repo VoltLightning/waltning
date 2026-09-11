@@ -1,13 +1,14 @@
 /**
- * The nearest month that holds anything, from a month that holds nothing —
+ * The nearest month that holds anything, from a period that holds nothing —
  * what `design-system/08` §8.1 requires a `range` empty state to offer:
  * *"the nearest period that does, with its count"*.
  *
- * **Two seeks, not a scan.** The closest earlier date is `max(date) < start`
- * and the closest later one is `min(date) >= end`; both are an ordered probe of
- * `transactions_date_idx` rather than a walk, which is what makes this
- * affordable on a screen that asks every time a reader lands on an empty month.
- * The count is then bounded by the month it names.
+ * **Three index probes.** The closest earlier date is `max(date) < start`, the
+ * closest later one is `min(date) >= end`, and the count is bounded by the two
+ * ends of the month those name. All three are ordered reads of
+ * `transactions_date_idx`; an earlier spelling counted with
+ * `substr(date, 1, 7) = ?`, which is not sargable and turned the third into a
+ * scan of the table (1.9 ms at 25k rows, and a false claim in this comment).
  *
  * **The same predicate the calendar draws.** Own accounts, income and expense —
  * `readDayFlows`' filter, restated here in SQL. Offering a month whose only row
@@ -20,8 +21,15 @@
  * you are more likely to be looking for.
  */
 
-import type { AccountingDate } from "@waltning/core/date";
-import { and, desc, eq, gte, inArray, isNull, lt, sql } from "drizzle-orm";
+import {
+  type AccountingDate,
+  accountingDate,
+  daysBetween,
+  monthRange,
+  type YearMonth,
+  yearMonth,
+} from "@waltning/core/date";
+import { and, count, desc, eq, gte, inArray, isNull, lt, lte } from "drizzle-orm";
 import type { ReplicaDb } from "../open.ts";
 import { ledgerSchema } from "../schema-map.ts";
 
@@ -30,8 +38,8 @@ const { accounts, currencies, transactions } = ledgerSchema;
 export type NearestActivity = {
   /** The nearest day holding something — `2026-09-09`. */
   date: AccountingDate;
-  /** Its month, `2026-09`, which is the period the empty state names. */
-  month: string;
+  /** Its month, which is the period the empty state names. */
+  month: YearMonth;
   /** How many entries that **month** holds, which is what §8.1 asks for. */
   count: number;
 };
@@ -45,24 +53,23 @@ function drawn() {
   );
 }
 
-function joined<TRun, TSchema extends typeof ledgerSchema>(db: ReplicaDb<TRun, TSchema>) {
-  return db
-    .select({ date: transactions.date })
-    .from(transactions)
-    .innerJoin(accounts, eq(transactions.accountId, accounts.id))
-    .innerJoin(currencies, eq(transactions.currency, currencies.code));
-}
-
 export function readNearestActivity<TRun, TSchema extends typeof ledgerSchema>(
   db: ReplicaDb<TRun, TSchema>,
   period: { start: AccountingDate; end: AccountingDate },
 ): NearestActivity | null {
-  const before = joined(db)
+  const probe = () =>
+    db
+      .select({ date: transactions.date })
+      .from(transactions)
+      .innerJoin(accounts, eq(transactions.accountId, accounts.id))
+      .innerJoin(currencies, eq(transactions.currency, currencies.code));
+
+  const before = probe()
     .where(and(drawn(), lt(transactions.date, period.start)))
     .orderBy(desc(transactions.date))
     .limit(1)
     .all()[0];
-  const after = joined(db)
+  const after = probe()
     .where(and(drawn(), gte(transactions.date, period.end)))
     .orderBy(transactions.date)
     .limit(1)
@@ -71,24 +78,30 @@ export function readNearestActivity<TRun, TSchema extends typeof ledgerSchema>(
   const nearest = closest(period, before?.date, after?.date);
   if (nearest === undefined) return null;
 
-  const month = nearest.slice(0, 7);
-  const rows = db
-    .select({ count: sql<number>`count(*)`.as("count") })
+  const month = yearMonth(nearest.slice(0, 7));
+  const bounds = monthRange(month);
+  const counted = db
+    .select({ rows: count() })
     .from(transactions)
     .innerJoin(accounts, eq(transactions.accountId, accounts.id))
     .innerJoin(currencies, eq(transactions.currency, currencies.code))
-    .where(and(drawn(), sql`substr(${transactions.date}, 1, 7) = ${month}`))
+    .where(and(drawn(), gte(transactions.date, bounds.from), lte(transactions.date, bounds.to)))
     .all();
 
-  return { date: nearest as AccountingDate, month, count: Number(rows[0]?.count ?? 0) };
+  const rows = counted[0]?.rows;
+  // An aggregate always returns its row, so no row is a broken read rather
+  // than a month holding nothing — and *0 entries* under a probe that just
+  // found one is the kind of nullish "didn't work" this project refuses.
+  if (rows === undefined) throw new Error("readNearestActivity: the count returned no row");
+
+  return { date: accountingDate(nearest), month, count: rows };
 }
 
 /**
- * Which of the two is nearer, measured in days off the period's own edges — a
- * string comparison cannot say, and the dates are bare `YYYY-MM-DD` strings
- * (`SPEC.md` §2) that no `Date` may be built from. The gap is counted in whole
- * days from the epoch, which is arithmetic on the calendar rather than on a
- * timestamp: no zone, no hour, no shift.
+ * Which of the two is nearer, measured off the period's own edges — a string
+ * comparison cannot say. `daysBetween` is `core/date`'s, rather than a fourth
+ * copy of the same subtraction: `period.end` is exclusive, so the gap ahead is
+ * measured from the last day the period actually covers.
  */
 function closest(
   period: { start: AccountingDate; end: AccountingDate },
@@ -97,12 +110,7 @@ function closest(
 ): string | undefined {
   if (before === undefined) return after;
   if (after === undefined) return before;
-  const behind = dayNumber(period.start) - dayNumber(before);
-  const ahead = dayNumber(after) - dayNumber(period.end) + 1;
+  const behind = daysBetween(accountingDate(before), period.start);
+  const ahead = daysBetween(period.end, accountingDate(after)) + 1;
   return ahead < behind ? after : before;
-}
-
-function dayNumber(date: string): number {
-  const [year, month, day] = date.split("-").map(Number) as [number, number, number];
-  return Math.floor(Date.UTC(year, month - 1, day) / 86_400_000);
 }

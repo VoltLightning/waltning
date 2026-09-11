@@ -282,8 +282,26 @@ silence, which reads as a screen that failed to load:
 |---|---|
 | A search excludes everything this month | `filtered` — names the query, and clears **it** |
 | The month holds nothing, the ledger holds something | `range` — the nearest month, how many entries it holds, and a jump to it |
-| The ledger draws nothing anywhere | `first-run` — the same words List uses, because it is the same fact |
+| The ledger holds nothing at all | `first-run` — the same words List uses, because it is the same fact |
+| The ledger holds rows this page cannot draw | It says what the calendar draws, never that the ledger is empty |
 | The month holds something, this day does not | The day's own *nothing*, and one quiet line pointing at the nearest day |
+
+**Nothing is claimed before the first read has finished.** `revision > 0` is
+what separates *the replica holds nothing* from *no read has run yet*, and a
+fresh install restoring from the server would otherwise be told to capture its
+first transaction while its ledger downloads.
+
+**The calendar drawing nothing is not the ledger being empty.** This page draws
+income and expenses on your own accounts, so a ledger held entirely in transfers
+or in another household's accounts draws nothing here while List shows every row
+of it. *No transactions yet* over that is the false claim these variants exist
+to separate, so the page says what it draws instead.
+
+**Each empty state is measured from the period it is about.** One read served
+both, so the month's own empty state was measured from whichever *square* the
+reader last touched: one empty July said *June — 1 entry* or *August — 50
+entries* depending on whether they arrived by the picker (which lands on a
+month's last day) or by the arrow (which keeps the day of the month).
 
 **The jump lands on a day, not on the first of a month.** `readNearestActivity`
 answers with the nearest *day* holding something — crossing a gap forwards that

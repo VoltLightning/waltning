@@ -8,6 +8,7 @@ import { accountingDate } from "@waltning/core/date";
 import { id } from "@waltning/core/id";
 import * as money from "@waltning/core/money";
 import { currencyCode } from "@waltning/core/money";
+import { eq, sql } from "drizzle-orm";
 import { beforeEach, expect, it } from "vitest";
 import { ledgerSchema } from "../schema-map.ts";
 import { type ScratchStores, scratchStores } from "../test/stores.ts";
@@ -148,4 +149,72 @@ it("counts only the month it names, not the ledger", () => {
     .run();
 
   expect(readNearestActivity(db, JULY)?.count).toBe(2);
+});
+
+/**
+ * **The shape, not the milliseconds.** The file's own header claims three index
+ * probes: two ordered seeks and a *bounded* count. The first spelling counted
+ * with `substr(date, 1, 7) = ?`, which is not sargable, so the third probe
+ * scanned the table — invisible on a laptop (2.1ms against 0.8ms at 25k rows),
+ * and a false claim in a comment, which is this project's commonest critical
+ * defect.
+ *
+ * A fixed millisecond threshold cannot tell those apart without flaking, so the
+ * assertion is a **ratio against a deliberate full scan measured in the same
+ * run**: counting a forty-row month must cost a fraction of counting the whole
+ * ledger. It does if the index bounds it and does not if it does not.
+ */
+it("costs the month it counts, not the ledger it counts in", () => {
+  const db = stores.ledger.replica.db;
+  const rows = [];
+  for (let n = 0; n < 25_000; n++) {
+    const day = String((n % 28) + 1).padStart(2, "0");
+    const month = String((n % 12) + 1).padStart(2, "0");
+    rows.push({
+      ...tx("00", { date: accountingDate(`2027-${month}-${day}`) }),
+      id: id<"transactions">(`00000000-0000-4000-8000-${String(n).padStart(12, "0")}`),
+    });
+  }
+  // One small month, far from the rest, so the count has a bound worth having.
+  for (let n = 0; n < 40; n++) {
+    rows.push({
+      ...tx("00", { date: accountingDate(`2029-03-${String((n % 28) + 1).padStart(2, "0")}`) }),
+      id: id<"transactions">(`11111111-0000-4000-8000-${String(n).padStart(12, "0")}`),
+    });
+  }
+  for (let at = 0; at < rows.length; at += 500) {
+    db.insert(transactions)
+      .values(rows.slice(at, at + 500))
+      .run();
+  }
+
+  const APRIL_2029 = {
+    start: accountingDate("2029-04-01"),
+    end: accountingDate("2029-05-01"),
+  };
+  const runs = 20;
+  const time = (work: () => void) => {
+    work();
+    const at = performance.now();
+    for (let n = 0; n < runs; n++) work();
+    return (performance.now() - at) / runs;
+  };
+
+  const call = time(() => readNearestActivity(db, APRIL_2029));
+  // The control is the spelling this replaced, over the same joins: a bare
+  // `count(*)` is answered off the b-tree and would prove nothing.
+  const unbounded = time(() => {
+    db.select({ rows: sql<number>`count(*)`.as("rows") })
+      .from(transactions)
+      .innerJoin(accounts, eq(transactions.accountId, accounts.id))
+      .innerJoin(currencies, eq(transactions.currency, currencies.code))
+      .where(sql`substr(${transactions.date}, 1, 7) = '2029-03'`)
+      .all();
+  });
+  console.info(
+    `25k rows — readNearestActivity ${call.toFixed(2)}ms · the same count unbounded ${unbounded.toFixed(2)}ms`,
+  );
+
+  expect(readNearestActivity(db, APRIL_2029)?.count, "the month it named").toBe(40);
+  expect(call, "a bounded count, not a walk of the table").toBeLessThan(unbounded / 2);
 });
