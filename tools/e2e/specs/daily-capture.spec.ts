@@ -9,7 +9,7 @@
  */
 
 import { expect, test } from "@playwright/test";
-import { createAccount, tapAmount, USD } from "./support.ts";
+import { createAccount, typeAmount, USD } from "./support.ts";
 
 test("a warm account chip needs no tap the second time", async ({ page }) => {
   await page.goto("/");
@@ -23,21 +23,21 @@ test("a warm account chip needs no tap the second time", async ({ page }) => {
   // `pickCashAccount()` shape `quick-add-screen.test.tsx`'s own cold test
   // uses.
   await page.getByRole("button", { name: "Add", exact: true }).click();
-  await tapAmount(page, ["1", "2", ".", "0", "0"]);
-  await page.getByRole("button", { name: "Account" }).click();
+  await typeAmount(page, "12.00");
+  await page.getByRole("button", { name: "From" }).click();
   await page.getByRole("radio", { name: "Cash · USD" }).click();
-  await page.getByRole("button", { name: "Save" }).click();
+  await page.getByRole("button", { name: "Save expense" }).click();
 
   await expect(page).toHaveURL("/");
   await expect(page.getByText("12.00 USD", { exact: true })).toBeVisible();
 
   // Second capture, straight after the first: warm. The account chip
   // already carries `Cash · USD` — S05 §9.2's own four-hour window — so
-  // Save is reachable from the keypad alone, zero taps on the chip.
+  // Save is reachable from the amount alone, zero taps on the row.
   await page.getByRole("button", { name: "Add", exact: true }).click();
   await expect(page.getByRole("button", { name: /Cash · USD/ })).toBeVisible();
-  await tapAmount(page, ["4", "8", ".", "9", "0"]);
-  await page.getByRole("button", { name: "Save" }).click();
+  await typeAmount(page, "48.90");
+  await page.getByRole("button", { name: "Save expense" }).click();
 
   // Both captures, each its own Recent row (`TransactionList`'s own signed
   // amount) — the period's aggregate spent/net stat tiles now read 60.90,

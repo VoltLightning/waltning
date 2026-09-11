@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyKey } from "./amount-keys.ts";
+import { applyKey, sanitizeAmount } from "./amount-keys.ts";
 
 describe("applyKey — one keypad tap folded onto the raw string", () => {
   it("appends a digit", () => {
@@ -51,5 +51,51 @@ describe("applyKey — one keypad tap folded onto the raw string", () => {
     let raw = "";
     for (const key of ["4", "8", ",", "9", "0"] as const) raw = applyKey(raw, key);
     expect(raw).toBe("48,90");
+  });
+});
+
+describe("sanitizeAmount — a typed string folded onto the same shape", () => {
+  it("keeps digits, one mark, and the account's fraction digits", () => {
+    expect(sanitizeAmount("1 240,509 zł", 2)).toBe("1240,50");
+    expect(sanitizeAmount("48,90", 2)).toBe("48,90");
+  });
+
+  it("accepts either mark and writes the draft's own", () => {
+    expect(sanitizeAmount("48.9", 2)).toBe("48,9");
+    expect(sanitizeAmount("48,9", 2)).toBe("48,9");
+  });
+
+  /**
+   * **A paste is a thousandfold error waiting to happen.** With both kinds of
+   * separator in the string the last one is the mark and the other is
+   * grouping; one kind repeated is grouping throughout. The first pass took
+   * the first separator met as the mark and read `1,240.50` as `1,24`.
+   */
+  it("reads a grouped paste as the number it is", () => {
+    expect(sanitizeAmount("1,240.50", 2)).toBe("1240,50");
+    expect(sanitizeAmount("1.240,50", 2)).toBe("1240,50");
+    expect(sanitizeAmount("1.240.500", 2)).toBe("1240500");
+    expect(sanitizeAmount("1,240,500.5", 2)).toBe("1240500,5");
+  });
+
+  it("cuts the fraction for a currency with no fraction digits, never concatenating it", () => {
+    expect(sanitizeAmount("1200.50", 0)).toBe("1200");
+    expect(sanitizeAmount(".5", 0)).toBe("");
+  });
+
+  it("puts a zero before a leading mark and drops a leading zero before a digit", () => {
+    expect(sanitizeAmount(",5", 2)).toBe("0,5");
+    expect(sanitizeAmount("05", 2)).toBe("5");
+    expect(sanitizeAmount("00,5", 2)).toBe("0,5");
+    expect(sanitizeAmount("0", 2)).toBe("0");
+  });
+
+  it("ignores a sign and letters — the sign is the kind's, never typed", () => {
+    expect(sanitizeAmount("-48,90", 2)).toBe("48,90");
+    expect(sanitizeAmount("abc", 2)).toBe("");
+  });
+
+  it("is empty for an emptied field, which is the resting state", () => {
+    expect(sanitizeAmount("", 2)).toBe("");
   });
 });

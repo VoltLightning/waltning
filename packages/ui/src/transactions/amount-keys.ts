@@ -51,3 +51,43 @@ export function applyKey(raw: string, key: KeypadKey, decimals: number = 2): str
   if (raw === "0") return key;
   return raw + key;
 }
+
+/**
+ * `sanitizeAmount` — a typed string folded onto the same raw shape `applyKey`
+ * keeps, for the composer whose amount is a `TextInput` rather than a keypad.
+ *
+ * **The same rules, applied to a whole string instead of one key.** The system
+ * keyboard hands back anything — a pasted `"1 240,50 zł"`, a grouped
+ * `"1,240.50"`, a dozen fraction digits — and the draft must hold only what
+ * `parseAmount` can read: digits, at most one comma, at most `decimals` digits
+ * after it. The draft's own mark is always `","` (`applyKey`'s rule).
+ *
+ * **Which separator is the decimal mark is decided from the whole string, not
+ * from the first one met.** A first pass that took the first `,` or `.` as the
+ * mark turned `"1,240.50"` into `1,24` — a thousandfold error from a paste —
+ * so: with both kinds present, the *last* one is the mark and the other kind
+ * is grouping; one kind present more than once is grouping throughout; one
+ * kind present once is the mark, which is the typing case. Digits past the
+ * account's fraction digits are cut, and a mark on a currency with no fraction
+ * digits cuts the fraction with it — a refusal truncates, it never
+ * concatenates (`"1200.50"` at 0 decimals is `1200`, not `120050`).
+ */
+export function sanitizeAmount(typed: string, decimals: number = 2): string {
+  const kept = [...typed].filter(
+    (char) => (char >= "0" && char <= "9") || char === "," || char === ".",
+  );
+  const commas = kept.filter((char) => char === ",").length;
+  const dots = kept.filter((char) => char === ".").length;
+  let markAt = -1;
+  if (commas > 0 && dots > 0) {
+    markAt = Math.max(kept.lastIndexOf(","), kept.lastIndexOf("."));
+  } else if (commas === 1 || dots === 1) {
+    markAt = kept.findIndex((char) => char === "," || char === ".");
+  }
+  const digitsOf = (chars: readonly string[]) =>
+    chars.filter((char) => char >= "0" && char <= "9").join("");
+  const whole = digitsOf(markAt === -1 ? kept : kept.slice(0, markAt)).replace(/^0+(?=\d)/, "");
+  if (markAt === -1 || decimals <= 0) return whole;
+  const fraction = digitsOf(kept.slice(markAt + 1)).slice(0, decimals);
+  return `${whole === "" ? "0" : whole},${fraction}`;
+}

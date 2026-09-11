@@ -108,12 +108,19 @@ function createTapScript() {
     fireEvent.click(screen.getByRole(role, { name }));
     taps += 1;
   };
-  return { tap, count: () => taps };
+  const pressed = (n: number) => {
+    taps += n;
+  };
+  return { tap, pressed, count: () => taps };
 }
 
-/** `Keypad`'s own glyphs — `.` is English's decimal mark, mapped to the canonical `,` key. */
-function tapAmount(tap: ReturnType<typeof createTapScript>["tap"]) {
-  for (const glyph of ["4", "8", ".", "9", "0"]) tap("button", glyph);
+/**
+ * The amount, typed on the system keyboard (S05 §3) — five key presses, and
+ * they count: J02 §1's budget is presses of any kind, not only ours.
+ */
+function tapAmount(script: ReturnType<typeof createTapScript>) {
+  fireEvent.change(screen.getByLabelText("How much?"), { target: { value: "48.90" } });
+  script.pressed(5);
 }
 
 function readTransactions(ledger: JourneyLedger) {
@@ -171,7 +178,7 @@ describe("J02 — daily capture, under ten seconds, offline", () => {
    * taps), the category chip opened and `Eating out` picked, Save. Nine taps,
    * inside the dozen `02-tokens` §2's own "a capture is a dozen taps" names.
    */
-  it("captures 48.90 PLN to Eating out in 9 taps from a warm account chip, intent committed before the replica row (architecture/14 §14.6)", async () => {
+  it("captures 48.90 PLN to Eating out in 8 taps from a warm account row, intent committed before the replica row (architecture/14 §14.6)", async () => {
     const { ledger, fixture, stub } = setupJourney();
     await lastCapture.set({ accountId: fixture.cashAccountId, at: Date.now() });
     const appliedSeqBefore = readAppliedSeq(ledger);
@@ -179,18 +186,18 @@ describe("J02 — daily capture, under ten seconds, offline", () => {
     render(<JourneyHarness controller={ledger.controller} stub={stub} />);
     await settleLayout();
 
-    const { tap, count } = createTapScript();
+    const script = createTapScript();
+    const { tap, count } = script;
     tap("button", "Add"); // S04's `+`
-    tapAmount(tap); // 4 8 . 9 0 — five taps
+    tapAmount(script); // 4 8 . 9 0 — five presses
     // account chip: already last-used, inside the window — zero taps
-    tap("button", /^Category/);
-    tap("radio", "Eating out");
-    tap("button", "Save");
+    tap("radio", "Eating out"); // the chip under the rows — no sheet to open
+    tap("button", "Save expense");
 
-    expect(count()).toBe(9);
+    expect(count()).toBe(8);
     expect(count()).toBeLessThanOrEqual(12);
 
-    await waitFor(() => expect(screen.queryByRole("button", { name: "Save" })).toBeNull());
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Save expense" })).toBeNull());
     expect(stub.getRoute()).toBe("today");
 
     const today = deviceRuntime().capture().date;
@@ -269,20 +276,20 @@ describe("J02 — daily capture, under ten seconds, offline", () => {
     render(<JourneyHarness controller={ledger.controller} stub={stub} />);
     await settleLayout();
 
-    const { tap, count } = createTapScript();
+    const script = createTapScript();
+    const { tap, count } = script;
     tap("button", "Add");
-    tapAmount(tap);
-    expect(screen.getByRole("button", { name: "Save" })).toHaveProperty("disabled", true);
+    tapAmount(script);
+    expect(screen.getByRole("button", { name: "Save expense" })).toHaveProperty("disabled", true);
 
-    tap("button", "Account");
+    tap("button", /^From/);
     tap("radio", "Cash · PLN");
-    tap("button", /^Category/);
-    tap("radio", "Eating out");
-    tap("button", "Save");
+    tap("radio", "Eating out"); // the chip under the rows — no sheet to open
+    tap("button", "Save expense");
 
-    expect(count()).toBe(11);
+    expect(count()).toBe(10);
     expect(count()).toBeLessThanOrEqual(12);
-    await waitFor(() => expect(screen.queryByRole("button", { name: "Save" })).toBeNull());
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Save expense" })).toBeNull());
   });
 
   /**
@@ -315,12 +322,9 @@ describe("J02 — daily capture, under ten seconds, offline", () => {
 
     const start = performance.now();
     fireEvent.click(screen.getByRole("button", { name: "Add" }));
-    for (const glyph of ["4", "8", ".", "9", "0"]) {
-      fireEvent.click(screen.getByRole("button", { name: glyph }));
-    }
-    fireEvent.click(screen.getByRole("button", { name: /^Category/ }));
-    fireEvent.click(screen.getByRole("radio", { name: "Eating out" }));
-    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    fireEvent.change(screen.getByLabelText("How much?"), { target: { value: "48.90" } });
+    fireEvent.click(screen.getByRole("radio", { name: "Eating out" })); // the chip
+    fireEvent.click(screen.getByRole("button", { name: "Save expense" }));
     // The harness never wraps `I18nProvider`, so `useLocale()` falls back to
     // `"en"` (`provider.tsx`'s own doc) — `decimalMark("en")` rather than a
     // hardcoded `"."` is what keeps this assertion honest if that ever changes.
@@ -358,18 +362,16 @@ describe("J02 — daily capture, under ten seconds, offline", () => {
     await settleLayout();
 
     fireEvent.click(screen.getByRole("button", { name: "Add" }));
-    for (const glyph of ["4", "8", ".", "9", "0"]) {
-      fireEvent.click(screen.getByRole("button", { name: glyph }));
-    }
+    fireEvent.change(screen.getByLabelText("How much?"), { target: { value: "48.90" } });
 
-    fireEvent.click(screen.getByRole("button", { name: "+ Payee" }));
+    fireEvent.click(screen.getByRole("button", { name: /^More details/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Payee" }));
     fireEvent.change(screen.getByRole("textbox", { name: "Payee" }), {
       target: { value: "Corner Café" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
 
     // The chip itself carries the proposal — no sheet needs to be open to see it.
-    expect(screen.getByText("Eating out")).toBeDefined();
     expect(
       screen.getByRole("button", { name: "Category: Eating out, filled automatically" }),
     ).toBeDefined();
@@ -378,8 +380,8 @@ describe("J02 — daily capture, under ten seconds, offline", () => {
     expect(screen.getByRole("button", { name: "Undo" })).toBeDefined();
 
     // No tap on the sheet, no tap on the proposal row — straight to Save.
-    fireEvent.click(screen.getByRole("button", { name: "Save" }));
-    await waitFor(() => expect(screen.queryByRole("button", { name: "Save" })).toBeNull());
+    fireEvent.click(screen.getByRole("button", { name: "Save expense" }));
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Save expense" })).toBeNull());
 
     const rows = readTransactions(ledger);
     const captured = rows.find(
@@ -404,10 +406,9 @@ describe("J02 — daily capture, under ten seconds, offline", () => {
     await settleLayout();
 
     fireEvent.click(screen.getByRole("button", { name: "Add" }));
-    for (const glyph of ["4", "8", ".", "9", "0"]) {
-      fireEvent.click(screen.getByRole("button", { name: glyph }));
-    }
-    fireEvent.click(screen.getByRole("button", { name: "+ Payee" }));
+    fireEvent.change(screen.getByLabelText("How much?"), { target: { value: "48.90" } });
+    fireEvent.click(screen.getByRole("button", { name: /^More details/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Payee" }));
     fireEvent.change(screen.getByRole("textbox", { name: "Payee" }), {
       target: { value: "Corner Café" },
     });
@@ -418,19 +419,16 @@ describe("J02 — daily capture, under ten seconds, offline", () => {
       screen.getByRole("button", { name: "Category: Eating out, filled automatically" }),
     ).toBeDefined();
 
-    // The kind menu — top-right in `ComposerHeader`'s fixed band, S05 §9.1's
-    // own escape hatch. `▾` opens the sheet listing both kinds, marked, so
-    // switching is two taps: the control, then the kind.
-    fireEvent.click(screen.getByRole("button", { name: "Kind: Expense" }));
-    fireEvent.click(screen.getByRole("radio", { name: "Income" }));
+    // The kind is the segment control under the header (S05 §3) — one tap.
+    fireEvent.click(screen.getByRole("tab", { name: "Income" }));
 
-    // The chip goes back to plain, unfilled — `Eating out` is an expense
+    // The row goes back to plain, unfilled — `Eating out` is an expense
     // category and no longer matches `type: "income"`.
     expect(screen.queryByRole("button", { name: /Category: Eating out/ })).toBeNull();
     expect(screen.getByRole("button", { name: "Category" })).toBeDefined();
 
-    fireEvent.click(screen.getByRole("button", { name: "Save" }));
-    await waitFor(() => expect(screen.queryByRole("button", { name: "Save" })).toBeNull());
+    fireEvent.click(screen.getByRole("button", { name: "Save income" }));
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Save income" })).toBeNull());
 
     const rows = readTransactions(ledger);
     const captured = rows.find((row) => row.payee === "Corner Café" && row.type === "income");
@@ -469,14 +467,11 @@ describe("J02 — daily capture, under ten seconds, offline", () => {
     const outboxBefore = readOutboxEntries(ledger).length;
 
     fireEvent.click(screen.getByRole("button", { name: "Add" }));
-    for (const glyph of ["4", "8", ".", "9", "0"]) {
-      fireEvent.click(screen.getByRole("button", { name: glyph }));
-    }
-    fireEvent.click(screen.getByRole("button", { name: "Account" }));
+    fireEvent.change(screen.getByLabelText("How much?"), { target: { value: "48.90" } });
+    fireEvent.click(screen.getByRole("button", { name: /^From/ }));
     fireEvent.click(screen.getByRole("radio", { name: "Bank A · EUR" }));
-    fireEvent.click(screen.getByRole("button", { name: /^Category/ }));
-    fireEvent.click(screen.getByRole("radio", { name: "Eating out" }));
-    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    fireEvent.click(screen.getByRole("radio", { name: "Eating out" })); // the chip
+    fireEvent.click(screen.getByRole("button", { name: "Save expense" }));
 
     expect(
       screen.getByText("EUR needs an exchange rate before a transaction can be recorded in it."),

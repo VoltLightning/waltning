@@ -35,6 +35,7 @@
     "./ledger/use-day-flows": "./src/ledger/use-day-flows/use-day-flows.ts",
     "./ledger/use-ledger-years": "./src/ledger/use-ledger-years/use-ledger-years.ts",
     "./ledger/use-nearest-activity": "./src/ledger/use-nearest-activity/use-nearest-activity.ts",
+    "./ledger/use-category-pace": "./src/ledger/use-category-pace/use-category-pace.ts",
     "./ledger/use-recent-days": "./src/ledger/use-recent-days/use-recent-days.ts",
     "./ledger/use-day-rows": "./src/ledger/use-day-rows/use-day-rows.ts",
     "./ledger/use-filter-exclusion-counts": "./src/ledger/use-filter-exclusion-counts/use-filter-exclusion-counts.ts",

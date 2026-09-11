@@ -6,6 +6,7 @@ import type {
 } from "@waltning/client/ledger/create-phone-ledger";
 import { deviceRuntime } from "@waltning/client/ledger/device-runtime";
 import { parseQuickAddRoute } from "@waltning/client/ledger/preview-routes";
+import { useCategoryPace } from "@waltning/client/ledger/use-category-pace";
 import { useLedgerController } from "@waltning/client/ledger/use-ledger-controller";
 import { usePhoneLedger } from "@waltning/client/ledger/use-phone-ledger";
 import { acceptProposedCategory } from "@waltning/client/transactions/accept-proposed-category";
@@ -13,22 +14,23 @@ import { useLastUsedAccount } from "@waltning/client/transactions/last-capture";
 import { mapFieldErrors } from "@waltning/client/transport/field-errors";
 import { fold } from "@waltning/core/capture/names";
 import { proposeCategory } from "@waltning/core/capture/payee-memory";
+import { accountingDate } from "@waltning/core/date";
 import * as money from "@waltning/core/money";
 import { AccountPicker, type AccountPickerAccount } from "@waltning/ui/accounts/account-picker";
 import { CategorySheet } from "@waltning/ui/categories/category-sheet";
 import { parseAmount } from "@waltning/ui/fx/amount-field";
 import { KNOWN_PATHS, resolveFieldErrorMessage } from "@waltning/ui/i18n/field-error-messages";
-import { useT } from "@waltning/ui/i18n/provider";
+import { weekdayLabel } from "@waltning/ui/i18n/locales";
+import { useLocale, useT } from "@waltning/ui/i18n/provider";
+import { Button } from "@waltning/ui/primitives/button";
 import { useSafeArea } from "@waltning/ui/primitives/safe-area";
+import { type Segment, SegmentControl } from "@waltning/ui/primitives/segment-control";
 import { useBreakpoint } from "@waltning/ui/primitives/use-breakpoint";
 import { GroundPanel } from "@waltning/ui/shell/card";
 import { text } from "@waltning/ui/theme/fonts";
 import { makeStyles } from "@waltning/ui/theme/styles";
 import { gutter, space } from "@waltning/ui/tokens";
-import { applyKey } from "@waltning/ui/transactions/amount-keys";
 import { ComposerHeader } from "@waltning/ui/transactions/composer-header";
-import { Dock, type DockModeOption } from "@waltning/ui/transactions/dock";
-import { Keypad, type KeypadKey } from "@waltning/ui/transactions/keypad";
 import {
   QuickAddComposer,
   type QuickAddComposerAccount,
@@ -59,12 +61,17 @@ function toChoice(account: PhoneCapturableAccount): QuickAddAccount {
   };
 }
 
-/** The replica's account onto `QuickAddComposer`'s own choice shape. */
-function toComposerChoice(account: PhoneCapturableAccount): QuickAddComposerAccount {
+/** The replica's account onto `QuickAddComposer`'s own choice shape, with its currency's mark. */
+function toComposerChoice(
+  account: PhoneCapturableAccount,
+  symbols: ReadonlyMap<string, string>,
+): QuickAddComposerAccount {
+  const symbol = symbols.get(account.currency);
   return {
     id: account.id,
     name: account.name,
     currency: account.currency,
+    ...(symbol === undefined ? {} : { symbol }),
     decimals: account.decimals,
     capturable: account.capturable,
     ownership: account.ownership,
@@ -97,8 +104,12 @@ function handleDeskCreateAccount(next: CreateAccountEscapeDraft) {
   });
 }
 
+/** The kinds the segment control offers — Transfer is a different composer, and picking it goes there (S05 §9.1). */
+type KindSegment = "expense" | "income" | "transfer";
+
 export default function QuickAdd() {
   const t = useT();
+  const locale = useLocale();
   const raw = useLocalSearchParams<{
     amount?: string | string[];
     accountId?: string | string[];
@@ -111,7 +122,14 @@ export default function QuickAdd() {
   // lands in this list the moment the router returns here.
   const snapshot = usePhoneLedger(ledger);
   const accounts = snapshot.accounts.map(toChoice);
-  const composerAccounts = snapshot.accounts.map(toComposerChoice);
+  const currencySymbols = useMemo(
+    () => new Map(snapshot.currencies.map((currency) => [currency.code, currency.symbol])),
+    [snapshot.currencies],
+  );
+  const composerAccounts = useMemo(
+    () => snapshot.accounts.map((account) => toComposerChoice(account, currencySymbols)),
+    [snapshot.accounts, currencySymbols],
+  );
   const pickerAccounts = snapshot.accounts.map(toPickerChoice);
   const pickerGroups = snapshot.groups.map((group) => ({ id: group.id, name: group.name }));
   const [fieldErrors, setFieldErrors] = useState<ReturnType<typeof mapFieldErrors>>();
@@ -213,8 +231,13 @@ export default function QuickAdd() {
   const [composerDate, setComposerDate] = useState<string>(today);
   const [composerNote, setComposerNote] = useState("");
   const [composerIsBusiness, setComposerIsBusiness] = useState(false);
+  // The same membership check the account gets: a route naming an archived
+  // or unknown counterparty would otherwise disable Save with no row to show
+  // why and nothing to tap.
   const [composerCounterpartyId, setComposerCounterpartyId] = useState<string | null>(
-    draft.counterpartyId ?? null,
+    snapshot.counterparties.some((counterparty) => counterparty.id === draft.counterpartyId)
+      ? (draft.counterpartyId ?? null)
+      : null,
   );
   const [composerCounterpartyRole, setComposerCounterpartyRole] = useState<CounterpartyRole | null>(
     null,
@@ -293,16 +316,51 @@ export default function QuickAdd() {
     composerCategoryId ?? (categoryAutoFilled ? (categoryProposal?.categoryId ?? null) : null);
   const handleUndoCategory = useCallback(() => setCategoryProposalDismissed(true), []);
 
-  const handleKey = useCallback(
-    (key: KeypadKey) =>
-      setComposerAmountRaw((current) =>
-        applyKey(current, key, selectedComposerAccount?.decimals ?? 2),
-      ),
-    [selectedComposerAccount?.decimals],
+  const handleRawChange = useCallback((next: string) => setComposerAmountRaw(next), []);
+  const handleLeaveForTransfer = useCallback(() => router.replace("/transfer"), []);
+  /**
+   * The segment control's three kinds. Expense and Income switch the draft in
+   * place — the amount, account and note survive the switch, only the
+   * category (which is per kind) is re-derived. **Transfer leaves.** A
+   * transfer is two accounts, two amounts and a live rate (S05 §9.1), and
+   * S31 is its composer; the segment is the deck's way of offering it from
+   * here, and `replace` rather than `push` so the way back from S31 is the
+   * tab the reader came from, not an abandoned expense draft.
+   */
+  const handleKindSegment = useCallback(
+    (next: KindSegment) => {
+      if (next === "transfer") {
+        // §7's own rule, the same one ✕ keeps: leaving is cheap when the
+        // draft is your own typing, and asked about when a machine filled
+        // something — the segment is a way out of this draft too.
+        if (!accountMachineFilled) {
+          router.replace("/transfer");
+          return;
+        }
+        Alert.alert(t("common.discardTitle"), t("common.discardBody"), [
+          { text: t("common.cancel"), style: "cancel" },
+          { text: t("common.discard"), style: "destructive", onPress: handleLeaveForTransfer },
+        ]);
+        return;
+      }
+      setComposerType(next);
+      // A category is per kind: a manual pick made under the other kind would
+      // otherwise survive here invisibly — the row filters it out of view
+      // while Save still carried its id into `categoryKindMismatch`.
+      setComposerCategoryId(null);
+    },
+    [accountMachineFilled, handleLeaveForTransfer, t],
   );
-  const handleComposerTypeChange = useCallback((next: "expense" | "income") => {
-    setComposerType(next);
-  }, []);
+  const kindSegments = useMemo<
+    readonly [Segment<KindSegment>, Segment<KindSegment>, Segment<KindSegment>]
+  >(
+    () => [
+      { value: "expense", label: t("transactions.expense") },
+      { value: "income", label: t("transactions.income") },
+      { value: "transfer", label: t("transactions.transfer") },
+    ],
+    [t],
+  );
   /**
    * **§6.7's guarantee, held across a mid-draft account switch.** Picking
    * *Business* happens on an own account (`ScopeSegments` refuses the tap on
@@ -416,6 +474,28 @@ export default function QuickAdd() {
     [],
   );
   const handleComposerNoteChange = useCallback((next: string) => setComposerNote(next), []);
+  /**
+   * The one line under the figure — *Groceries this month: 61% of usual*. A
+   * pace against the reader's own previous months, in the category the draft
+   * holds, for an own account (a shared account's spend is not one person's
+   * habit). Worded here, because the composer draws finished sentences and
+   * `packages/ui` names no ledger.
+   */
+  const pace = useCategoryPace(
+    ledger,
+    selectedComposerAccount?.ownership === "shared" ? null : effectiveCategoryId,
+    selectedComposerAccount?.currency ?? null,
+    today,
+    snapshot.revision,
+  );
+  const paceCategory = snapshot.categories.find((category) => category.id === effectiveCategoryId);
+  const paceLine =
+    pace === null || paceCategory === undefined
+      ? undefined
+      : t("transactions.categoryPace", {
+          category: paceCategory.name,
+          percent: String(pace.percent),
+        });
   const handleComposerCounterpartyChange = useCallback(
     (next: string) => setComposerCounterpartyId(next),
     [],
@@ -514,15 +594,16 @@ export default function QuickAdd() {
     t,
   ]);
 
-  const handleMode = useCallback(() => {}, []);
-  const modes = useMemo<readonly [DockModeOption, DockModeOption, ...DockModeOption[]]>(
-    () => [
-      { value: "keypad", label: t("transactions.modeKeypad") },
-      { value: "voice", label: t("transactions.modeVoice"), disabled: true },
-      { value: "receipt", label: t("transactions.modeReceipt"), disabled: true },
-      { value: "converse", label: t("transactions.modeConverse"), disabled: true },
-    ],
-    [t],
+  // The footer clears the home indicator itself, the way the band above
+  // clears the notch: `GroundPanel` between them clears neither edge.
+  const clearBottom = { paddingBottom: gutter + insets.bottom };
+  const composerCategories = useMemo(
+    () =>
+      snapshot.categories.map((category) => ({
+        ...category,
+        usage: snapshot.categoryUsage.get(category.id) ?? 0,
+      })),
+    [snapshot.categories, snapshot.categoryUsage],
   );
 
   /* ── The desk fallback's own draft — unchanged from before this PR ──── */
@@ -616,75 +697,94 @@ export default function QuickAdd() {
 
   return (
     <View style={styles.root}>
-      {/* The ✕ and the kind menu, in a fixed band above the page scroller:
+      {/* The name, the day and the ✕, in a fixed band above the page scroller:
           `app/_layout.tsx` hides the navigation header on this route, so
           this is the header, and a header inside `GroundPanel`'s own
           `ScrollView` scrolls under the notch the moment the column
           overflows. */}
       <ComposerHeader
         onCancel={handleComposerCancel}
-        kind={composerType}
-        onKindChange={handleComposerTypeChange}
+        title={t(
+          composerType === "expense"
+            ? "transactions.addExpenseTitle"
+            : "transactions.addIncomeTitle",
+        )}
+        subtitle={weekdayLabel(accountingDate(composerDate), locale)}
       />
       {/* `clearBottom={false}` — this panel is not the screen's own bottom
-          edge, `Dock` below it is, and `Dock` already clears the home
+          edge, the Save footer below it is, and that clears the home
           indicator itself. */}
       <GroundPanel clearBottom={false}>
-        <QuickAddComposer
-          raw={composerAmountRaw}
-          type={composerType}
-          accounts={composerAccounts}
-          accountId={effectiveAccountId}
-          accountMachineFilled={accountMachineFilled}
-          onOpenAccountPicker={handleOpenComposerAccountPicker}
-          onSetRate={handleSetRate}
-          categories={snapshot.categories}
-          categoryId={effectiveCategoryId}
-          /*
-           * M — withheld once dismissed, not only while `categoryAutoFilled`
-           * is false for some other reason: the composer's own "shown, not
-           * yet applied" state (S05 §8's amber, pre-`categoryAutoFilled`)
-           * cannot otherwise tell "never applied" apart from "Undo just
-           * dismissed it", and showed the proposal machine-filled again the
-           * instant Undo ran, at or above §14's threshold, defeating Undo
-           * outright. `CategorySheet` below still gets the proposal
-           * regardless — a deliberate open of the sheet is not the passive
-           * auto-fill Undo exists to reverse.
-           */
-          {...(categoryProposal === undefined || categoryProposalDismissed
-            ? {}
-            : { categoryProposal })}
-          categoryAutoFilled={categoryAutoFilled}
-          onUndoCategory={handleUndoCategory}
-          onOpenCategoryPicker={handleComposerOpenCategoryPicker}
-          payee={composerPayee}
-          onPayeeChange={handleComposerPayeeChange}
-          date={composerDate}
-          onDateChange={handleComposerDateChange}
-          today={today}
-          isBusiness={composerIsBusiness}
-          onBusinessChange={handleComposerBusinessChange}
-          note={composerNote}
-          onNoteChange={handleComposerNoteChange}
-          counterparties={snapshot.counterparties}
-          counterpartyId={composerCounterpartyId}
-          onCounterpartyChange={handleComposerCounterpartyChange}
-          counterpartyRole={composerCounterpartyRole}
-          onCounterpartyRoleChange={handleComposerCounterpartyRoleChange}
-          onCreateCounterparty={handleComposerCreateCounterparty}
-          {...(fieldErrors === undefined ? {} : { fieldErrors })}
-        />
+        <View style={styles.column}>
+          <SegmentControl
+            segments={kindSegments}
+            value={composerType}
+            onChange={handleKindSegment}
+          />
+          <QuickAddComposer
+            raw={composerAmountRaw}
+            onRawChange={handleRawChange}
+            type={composerType}
+            accounts={composerAccounts}
+            accountId={effectiveAccountId}
+            accountMachineFilled={accountMachineFilled}
+            onOpenAccountPicker={handleOpenComposerAccountPicker}
+            onSetRate={handleSetRate}
+            categories={composerCategories}
+            categoryId={effectiveCategoryId}
+            /*
+             * M — withheld once dismissed, not only while `categoryAutoFilled`
+             * is false for some other reason: the composer's own "shown, not
+             * yet applied" state (S05 §8's amber, pre-`categoryAutoFilled`)
+             * cannot otherwise tell "never applied" apart from "Undo just
+             * dismissed it", and showed the proposal machine-filled again the
+             * instant Undo ran, at or above §14's threshold, defeating Undo
+             * outright. `CategorySheet` below still gets the proposal
+             * regardless — a deliberate open of the sheet is not the passive
+             * auto-fill Undo exists to reverse.
+             */
+            {...(categoryProposal === undefined || categoryProposalDismissed
+              ? {}
+              : { categoryProposal })}
+            categoryAutoFilled={categoryAutoFilled}
+            onUndoCategory={handleUndoCategory}
+            onOpenCategoryPicker={handleComposerOpenCategoryPicker}
+            onPickCategory={handlePickComposerCategory}
+            pace={paceLine}
+            payee={composerPayee}
+            onPayeeChange={handleComposerPayeeChange}
+            date={composerDate}
+            onDateChange={handleComposerDateChange}
+            today={today}
+            isBusiness={composerIsBusiness}
+            onBusinessChange={handleComposerBusinessChange}
+            note={composerNote}
+            onNoteChange={handleComposerNoteChange}
+            counterparties={snapshot.counterparties}
+            counterpartyId={composerCounterpartyId}
+            onCounterpartyChange={handleComposerCounterpartyChange}
+            counterpartyRole={composerCounterpartyRole}
+            onCounterpartyRoleChange={handleComposerCounterpartyRoleChange}
+            onCreateCounterparty={handleComposerCreateCounterparty}
+            {...(fieldErrors === undefined ? {} : { fieldErrors })}
+          />
+        </View>
       </GroundPanel>
-      <Dock
-        mode="keypad"
-        modes={modes}
-        onMode={handleMode}
-        onSave={handleComposerSave}
-        saveLabel={t("common.save")}
-        saveDisabled={composerSaveDisabled}
-      >
-        <Keypad onKey={handleKey} />
-      </Dock>
+      {/* S05 §3 — Save is full-width at the bottom edge, because it is the
+          only affirmative action and it is pressed in motion; the line above
+          it says what Save means on a phone that may be offline (§6). */}
+      <View style={[styles.footer, clearBottom]}>
+        <Text style={styles.footerNote}>{t("transactions.savedOnPhone")}</Text>
+        <Button
+          variant="primary"
+          size="lg"
+          label={t(
+            composerType === "expense" ? "transactions.saveExpense" : "transactions.saveIncome",
+          )}
+          onPress={handleComposerSave}
+          disabled={composerSaveDisabled}
+        />
+      </View>
       <CategorySheet
         visible={composerCategorySheet.open}
         kind={composerCategorySheet.kind}
@@ -719,4 +819,13 @@ const useStyles = makeStyles((theme) => ({
   },
   /** Its heading — the navigation header's own face (`_layout.tsx`'s `headerTitleStyle`). */
   deskTitle: { color: theme.text, ...text.ui("displayThree") },
+  /** The deck's 20 between the kind control and the amount card. */
+  column: { gap: space.x4 },
+  footer: {
+    backgroundColor: theme.ground,
+    paddingHorizontal: gutter,
+    paddingTop: space.lg,
+    gap: space.lg,
+  },
+  footerNote: { color: theme.textMuted, ...text.ui("caption"), textAlign: "center" },
 }));

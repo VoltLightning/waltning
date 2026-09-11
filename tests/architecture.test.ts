@@ -2935,6 +2935,18 @@ describe("a control's edge is not the divider colour", () => {
       "the same area, cut into rows for a virtualised list — the edge belongs to the day, not to the row that happens to carry it",
     ],
     [
+      "packages/ui/src/transactions/molecules/amount-card/amount-card.tsx#card",
+      "S05's amount card — an area holding the one typed field; the card is bordered as a card, the input inside it is the control",
+    ],
+    [
+      "packages/ui/src/transactions/molecules/composer-rows/composer-rows.tsx#card",
+      "S05's card of choices — an area, with its own pressable rows inside it (`DayGroup#rows`'s own shape)",
+    ],
+    [
+      "packages/ui/src/transactions/organisms/quick-add-composer/quick-add-composer.tsx#noteCard",
+      "S05's note — the deck draws it as a card holding a field, the same way it draws the amount",
+    ],
+    [
       "packages/ui/src/transactions/molecules/quiet-days/quiet-days.tsx#run",
       "a card standing in for the days it collapsed — an area in the list, with its own pressable inside it",
     ],

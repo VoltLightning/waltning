@@ -73,13 +73,25 @@ export async function createCounterparty(page: Page, name: string): Promise<void
 }
 
 /**
- * `Keypad`'s own glyphs, tapped in order — the same helper shape
- * `quick-add-screen.test.tsx`'s own `tapKeys` and `transfer-screen.test.tsx`'s
- * own `tapKeys` give tier 1, restated for a real page instead of a rendered
- * tree.
+ * `Keypad`'s own glyphs, tapped in order — `transfer-screen.test.tsx`'s own
+ * `tapKeys` restated for a real page. The transfer and settle composers still
+ * carry a drawn keypad; Quick add does not (`typeAmount` below).
  */
 export async function tapAmount(page: Page, digits: readonly string[]): Promise<void> {
   for (const digit of digits) {
     await page.getByRole("button", { name: digit, exact: true }).click();
   }
+}
+
+/**
+ * S05 §3 — the amount is a `TextInput` in its own card, typed on the system
+ * keyboard; `quick-add-screen.test.tsx`'s own `typeAmount`, for a real page.
+ */
+export async function typeAmount(page: Page, amount: string): Promise<void> {
+  await page.getByRole("textbox", { name: "How much?" }).fill(amount);
+}
+
+/** S05 §3 — payee, date, scope and person wait behind one row. */
+export async function openMoreDetails(page: Page): Promise<void> {
+  await page.getByRole("button", { name: /^More details/ }).click();
 }

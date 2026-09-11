@@ -461,6 +461,23 @@ export const en = {
     payee: "Payee",
     /** D4b's chip row, empty — S05 §3: `[+ payee]`, typed, optional. */
     addPayee: "+ Payee",
+    /** S05 §3 — the composer's own words, on the deck's anatomy. */
+    addExpenseTitle: "Add an expense",
+    addIncomeTitle: "Add income",
+    howMuch: "How much?",
+    fromAccount: "From",
+    person: "Person",
+    moreDetails: "More details",
+    moreDetailsHint: "Payee, date, scope, person",
+    notePlaceholder: "A note, if you want one",
+    savedOnPhone: "Saved on your phone — syncs when you're back online",
+    saveExpense: "Save expense",
+    saveIncome: "Save income",
+    /** The one line under the figure — a pace against the previous months, never a bare amount (§1). */
+    categoryPace: "{{category}} this month: {{percent}}% of usual",
+    /** A row's label while a machine filled its value (P2) — the words, not tint alone. */
+    fieldLabelMachineFilled: "{{field}} · filled automatically",
+    fieldMachineFilled: "{{field}}: {{value}}, filled automatically",
     /** D4b's chip row, empty. */
     addNote: "+ Note",
     /** D4b's chip row, empty — offered only when the ledger holds a counterparty (S05 §5). */

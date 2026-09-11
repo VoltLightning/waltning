@@ -7,7 +7,14 @@
  */
 
 import { expect, test } from "@playwright/test";
-import { createAccount, createCounterparty, tapAmount, USD } from "./support.ts";
+import {
+  createAccount,
+  createCounterparty,
+  openMoreDetails,
+  tapAmount,
+  typeAmount,
+  USD,
+} from "./support.ts";
 
 test("lending to a counterparty, then settling in full, clears the debt", async ({ page }) => {
   await page.goto("/");
@@ -22,11 +29,12 @@ test("lending to a counterparty, then settling in full, clears the debt", async 
   // (`counterparties.add`) — a substring match on `Add` alone resolves to
   // both that button and the floating one.
   await page.getByRole("button", { name: "Add", exact: true }).click();
-  await tapAmount(page, ["5", "0"]);
-  await page.getByRole("button", { name: "Account" }).click();
+  await typeAmount(page, "50");
+  await page.getByRole("button", { name: "From" }).click();
   await page.getByRole("radio", { name: "Cash · USD" }).click();
 
-  await page.getByRole("button", { name: "+ Person" }).click();
+  await openMoreDetails(page);
+  await page.getByRole("button", { name: "Person", exact: true }).click();
   // `exact`: the sheet's own scrim carries a "Dismiss Counterparty" label.
   await page.getByRole("button", { name: "Counterparty", exact: true }).click();
   await page.getByRole("radio", { name: "Nina" }).click();
@@ -35,7 +43,7 @@ test("lending to a counterparty, then settling in full, clears the debt", async 
   // flow closes the same way (`journeys/j02-daily-capture.test.tsx`).
   await page.getByRole("button", { name: "Close" }).click();
 
-  await page.getByRole("button", { name: "Save" }).click();
+  await page.getByRole("button", { name: "Save expense" }).click();
   await expect(page).toHaveURL("/");
 
   // S12 · Debt: Nina owes 50.00 USD back.

@@ -215,26 +215,25 @@ describe("J10 — currency and rates", () => {
     const shownRateText = within(sundayRow).getByText(formatRate(FRIDAY_RATE));
     expect(shownRateText).toBeDefined();
 
-    // Capture 100.00 PLN dated Sunday — the date control quick-add
-    // exposes (`quick-add-screen.tsx`'s own Chip → `DateField`), typed
-    // directly since Sunday is further back than the field's own
-    // Today/Yesterday/two-days-ago shortcuts reach from this fixed "now".
+    // Capture 100.00 PLN dated Sunday — the date row quick-add exposes
+    // behind *More details* (`quick-add-composer.tsx`'s own row →
+    // `DateField`), typed directly since Sunday is further back than the
+    // field's own Today/Yesterday/two-days-ago shortcuts reach from this
+    // fixed "now".
     act(() => stub.pushWithParams("quick-add", {}));
     await settleLayout();
 
-    for (const glyph of ["1", "0", "0"]) {
-      fireEvent.click(screen.getByRole("button", { name: glyph }));
-    }
+    fireEvent.change(screen.getByLabelText("How much?"), { target: { value: "100" } });
+    fireEvent.click(screen.getByRole("button", { name: /^More details/ }));
     fireEvent.click(screen.getByRole("button", { name: /^Date/ }));
     fireEvent.change(screen.getByRole("textbox", { name: "Date" }), {
       target: { value: SUNDAY },
     });
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
-    fireEvent.click(screen.getByRole("button", { name: /^Category/ }));
-    fireEvent.click(screen.getByRole("radio", { name: "Eating out" }));
-    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    fireEvent.click(screen.getByRole("radio", { name: "Eating out" })); // the chip
+    fireEvent.click(screen.getByRole("button", { name: "Save expense" }));
 
-    await waitFor(() => expect(screen.queryByRole("button", { name: "Save" })).toBeNull());
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Save expense" })).toBeNull());
 
     // The rate the capture was actually priced with — read off the
     // replica directly (`transaction-detail-screen.tsx` shows none; see

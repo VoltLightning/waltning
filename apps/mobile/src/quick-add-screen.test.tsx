@@ -16,15 +16,18 @@ import {
   type PhoneCategory,
   type PhoneLedgerPort,
 } from "@waltning/client/ledger/create-phone-ledger";
+import { deviceRuntime } from "@waltning/client/ledger/device-runtime";
 import { LedgerProvider } from "@waltning/client/ledger/ledger-provider";
 import { basePort } from "@waltning/client/ledger/test-port";
 import type { PayeeHistoryRow } from "@waltning/core/capture/payee-memory";
 import { accountingDate } from "@waltning/core/date";
 import { id } from "@waltning/core/id";
 import { currencyCode, toMoney } from "@waltning/core/money";
+import { weekdayLabel } from "@waltning/ui/i18n/locales";
+import { Alert } from "react-native";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const router = { push: vi.fn(), back: vi.fn(), dismissTo: vi.fn() };
+const router = { push: vi.fn(), back: vi.fn(), dismissTo: vi.fn(), replace: vi.fn() };
 const useLocalSearchParams = vi.fn(() => ({}));
 
 vi.mock("expo-router", () => ({
@@ -129,8 +132,14 @@ function withLedger(overrides: Parameters<typeof fakeController>[0] = {}) {
 }
 
 /** Keypad's own glyphs — `.` is English's decimal mark, mapped to the canonical `,` key. */
-function tapKeys(...glyphs: readonly string[]) {
-  for (const glyph of glyphs) fireEvent.click(screen.getByRole("button", { name: glyph }));
+/** The amount is a `TextInput` on the deck's composer — typed, not tapped (S05 §3). */
+function typeAmount(value: string) {
+  fireEvent.change(screen.getByLabelText("How much?"), { target: { value } });
+}
+
+/** The rarer rows — payee, date, scope, person — wait behind one row (S05 §3). */
+function openMore() {
+  fireEvent.click(screen.getByRole("button", { name: /^More details/ }));
 }
 
 /**
@@ -140,12 +149,12 @@ function tapKeys(...glyphs: readonly string[]) {
  * own trigger button still carries before a pick.
  */
 function pickCashAccount() {
-  fireEvent.click(screen.getByRole("button", { name: "Account" }));
+  fireEvent.click(screen.getByRole("button", { name: /^From/ }));
   fireEvent.click(screen.getByRole("radio", { name: "Cash · PLN" }));
 }
 
 function pickSharedAccount() {
-  fireEvent.click(screen.getByRole("button", { name: /^Account/ }));
+  fireEvent.click(screen.getByRole("button", { name: /^From/ }));
   fireEvent.click(screen.getByRole("radio", { name: "Joint · PLN" }));
 }
 
@@ -159,13 +168,13 @@ beforeEach(() => {
 describe("QuickAdd — the phone path (Dock + QuickAddComposer)", () => {
   it("disables Save until an amount and an account are both present (S05 §9.2)", () => {
     withLedger();
-    expect(screen.getByRole("button", { name: "Save" })).toHaveProperty("disabled", true);
+    expect(screen.getByRole("button", { name: "Save expense" })).toHaveProperty("disabled", true);
 
-    tapKeys("4", "8", ".", "9", "0");
-    expect(screen.getByRole("button", { name: "Save" })).toHaveProperty("disabled", true);
+    typeAmount("48.90");
+    expect(screen.getByRole("button", { name: "Save expense" })).toHaveProperty("disabled", true);
 
     pickCashAccount();
-    expect(screen.getByRole("button", { name: "Save" })).toHaveProperty("disabled", false);
+    expect(screen.getByRole("button", { name: "Save expense" })).toHaveProperty("disabled", false);
   });
 
   /**
@@ -176,12 +185,12 @@ describe("QuickAdd — the phone path (Dock + QuickAddComposer)", () => {
   it("keeps Save disabled on a trailing separator with nothing typed after it (M1)", () => {
     withLedger();
 
-    tapKeys("4", "8", ".");
+    typeAmount("48.");
     pickCashAccount();
-    expect(screen.getByRole("button", { name: "Save" })).toHaveProperty("disabled", true);
+    expect(screen.getByRole("button", { name: "Save expense" })).toHaveProperty("disabled", true);
 
-    tapKeys("9", "0");
-    expect(screen.getByRole("button", { name: "Save" })).toHaveProperty("disabled", false);
+    typeAmount("48.90");
+    expect(screen.getByRole("button", { name: "Save expense" })).toHaveProperty("disabled", false);
   });
 
   /**
@@ -193,14 +202,14 @@ describe("QuickAdd — the phone path (Dock + QuickAddComposer)", () => {
   it("refuses an account switch to a smaller scale, keeping the amount and naming why (H2)", () => {
     withLedger({ accounts: [ACCOUNT, JPY_ACCOUNT] });
 
-    tapKeys("4", "8", ".", "9", "0");
+    typeAmount("48.90");
     pickCashAccount();
-    fireEvent.click(screen.getByRole("button", { name: /^Account/ }));
+    fireEvent.click(screen.getByRole("button", { name: /^From/ }));
     fireEvent.click(screen.getByRole("radio", { name: "Cash · JPY" }));
 
-    expect(screen.getByRole("button", { name: "Account: Cash · PLN" })).toBeDefined();
+    expect(screen.getByRole("button", { name: "From: Cash · PLN" })).toBeDefined();
     expect(screen.getByText("JPY holds 0 decimal places — this amount has more.")).toBeDefined();
-    expect(screen.getByText("48.90")).toBeDefined();
+    expect(screen.getByLabelText("How much?")).toHaveProperty("value", "48.90");
   });
 
   /**
@@ -212,14 +221,15 @@ describe("QuickAdd — the phone path (Dock + QuickAddComposer)", () => {
     const createTransaction = vi.fn();
     withLedger({ createTransaction, accounts: [ACCOUNT, SHARED_ACCOUNT] });
 
-    tapKeys("4", "8", ".", "9", "0");
+    typeAmount("48.90");
     pickCashAccount();
-    fireEvent.click(screen.getByText("Mine"));
+    openMore();
+    fireEvent.click(screen.getByRole("button", { name: "Scope: Mine" }));
     fireEvent.click(screen.getByRole("tab", { name: "Business" }));
-    expect(screen.getByText("Business")).toBeDefined();
+    expect(screen.getByRole("button", { name: "Scope: Business" })).toBeDefined();
 
     pickSharedAccount();
-    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save expense" }));
 
     expect(createTransaction).toHaveBeenCalledOnce();
     expect(createTransaction.mock.calls[0]?.[0]).toMatchObject({
@@ -238,15 +248,16 @@ describe("QuickAdd — the phone path (Dock + QuickAddComposer)", () => {
     const createTransaction = vi.fn();
     withLedger({ createTransaction, counterparties: () => [COUNTERPARTY] });
 
-    tapKeys("4", "8", ".", "9", "0");
+    typeAmount("48.90");
     pickCashAccount();
-    expect(screen.getByRole("button", { name: "Save" })).toHaveProperty("disabled", false);
+    expect(screen.getByRole("button", { name: "Save expense" })).toHaveProperty("disabled", false);
 
-    fireEvent.click(screen.getByRole("button", { name: "+ Person" }));
+    openMore();
+    fireEvent.click(screen.getByRole("button", { name: "Person" }));
     fireEvent.click(screen.getByRole("button", { name: "Counterparty" }));
     fireEvent.click(screen.getByRole("radio", { name: "Corner Café" }));
 
-    expect(screen.getByRole("button", { name: "Save" })).toHaveProperty("disabled", true);
+    expect(screen.getByRole("button", { name: "Save expense" })).toHaveProperty("disabled", true);
     expect(screen.getByText("Corner Café · role?")).toBeDefined();
     expect(createTransaction).not.toHaveBeenCalled();
   });
@@ -261,15 +272,15 @@ describe("QuickAdd — the phone path (Dock + QuickAddComposer)", () => {
     const createTransaction = vi.fn();
     withLedger({ createTransaction, capturable: false });
 
-    tapKeys("4", "8", ".", "9", "0");
+    typeAmount("48.90");
     pickCashAccount();
 
     expect(
       screen.getByText("PLN needs an exchange rate before a transaction can be recorded in it."),
     ).toBeDefined();
-    expect(screen.getByRole("button", { name: "Save" })).toHaveProperty("disabled", true);
+    expect(screen.getByRole("button", { name: "Save expense" })).toHaveProperty("disabled", true);
     // The typed amount stays put — nothing here empties the draft.
-    expect(screen.getByText("48.90")).toBeDefined();
+    expect(screen.getByLabelText("How much?")).toHaveProperty("value", "48.90");
     expect(createTransaction).not.toHaveBeenCalled();
   });
 
@@ -292,10 +303,11 @@ describe("QuickAdd — the phone path (Dock + QuickAddComposer)", () => {
     ];
     withLedger({ categories: [category], payeeHistory: history });
 
-    tapKeys("4", "8", ".", "9", "0");
+    typeAmount("48.90");
     pickCashAccount();
 
-    fireEvent.click(screen.getByRole("button", { name: "+ Payee" }));
+    openMore();
+    fireEvent.click(screen.getByRole("button", { name: "Payee" }));
     fireEvent.change(screen.getByRole("textbox", { name: "Payee" }), {
       target: { value: "Corner Café" },
     });
@@ -310,7 +322,7 @@ describe("QuickAdd — the phone path (Dock + QuickAddComposer)", () => {
     // Retype — different raw text, the same fold. The chip already carries
     // "Corner Café" as its value, so its accessible name is no longer the
     // bare "+ Payee" placeholder.
-    fireEvent.click(screen.getByRole("button", { name: /^\+ Payee/ }));
+    fireEvent.click(screen.getByRole("button", { name: /^Payee/ }));
     fireEvent.change(screen.getByRole("textbox", { name: "Payee" }), {
       target: { value: "CORNER CAFÉ" },
     });
@@ -334,9 +346,9 @@ describe("QuickAdd — the phone path (Dock + QuickAddComposer)", () => {
     const createTransaction = vi.fn();
     withLedger({ createTransaction });
 
-    tapKeys("4", "8", ".", "9", "0");
+    typeAmount("48.90");
     pickCashAccount();
-    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save expense" }));
 
     expect(createTransaction).toHaveBeenCalledOnce();
     expect(createTransaction.mock.calls[0]?.[0]).toMatchObject({
@@ -372,8 +384,8 @@ describe("QuickAdd — the phone path (Dock + QuickAddComposer)", () => {
     });
     withLedger({ createTransaction });
 
-    tapKeys("4", "8", ".", "9", "0");
-    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    typeAmount("48.90");
+    fireEvent.click(screen.getByRole("button", { name: "Save expense" }));
 
     expect(createTransaction).toHaveBeenCalledOnce();
     // Dismissed with a message, not left on screen with a field error.
@@ -385,5 +397,48 @@ describe("QuickAdd — the phone path (Dock + QuickAddComposer)", () => {
         }),
       }),
     );
+  });
+});
+
+describe("QuickAdd — the kind (S05 §3)", () => {
+  it("names the kind in the title and on Save, and switches both in place", () => {
+    withLedger();
+    expect(screen.getByText("Add an expense")).toBeDefined();
+    fireEvent.click(screen.getByRole("tab", { name: "Income" }));
+    expect(screen.getByText("Add income")).toBeDefined();
+    expect(screen.getByRole("button", { name: "Save income" })).toBeDefined();
+    expect(screen.queryByRole("button", { name: "Save expense" })).toBeNull();
+  });
+
+  it("keeps the amount across a kind switch, and re-derives only the category", () => {
+    withLedger();
+    typeAmount("48.90");
+    fireEvent.click(screen.getByRole("tab", { name: "Income" }));
+    expect(screen.getByLabelText("How much?")).toHaveProperty("value", "48.90");
+  });
+
+  /**
+   * A transfer is a different shape with its own composer (S05 §9.1); the
+   * segment is the deck's way of offering it from here. `replace`, not
+   * `push`: the way back from S31 is the tab, not an abandoned draft.
+   */
+  it("goes to the transfer composer when Transfer is picked, replacing this route", () => {
+    // §7: leaving asks only when a machine filled something. An earlier test
+    // in this file saved, so `lastCapture` may hold an account and the
+    // segment asks first — answering *Discard* is the same route either way.
+    const alert = vi.spyOn(Alert, "alert").mockImplementation((_title, _body, buttons) => {
+      buttons?.find((button) => button.style === "destructive")?.onPress?.();
+    });
+    withLedger();
+    fireEvent.click(screen.getByRole("tab", { name: "Transfer" }));
+    expect(router.replace).toHaveBeenCalledWith("/transfer");
+    alert.mockRestore();
+  });
+
+  it("stamps the draft's day under the name", () => {
+    withLedger();
+    // The screen stamps from the device's own calendar (§7.0a), not the
+    // controller's fixture — so the assertion reads the same clock.
+    expect(screen.getByText(weekdayLabel(deviceRuntime().capture().date, "en"))).toBeDefined();
   });
 });
