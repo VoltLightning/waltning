@@ -40,6 +40,16 @@ export type LedgerListOptions = {
   /** Where the list is centred. Changing it is a jump, and discards both halves. */
   anchor: AccountingDate;
   /**
+   * The device's own today — **read to decide whether the newer half is a
+   * horizon or the rest of the ledger**, never to bound a query.
+   *
+   * A cold open is anchored on today (S04 §6), and *newer than today* is the
+   * forward horizon: expected entries to the end of the month, a handful of
+   * rows. A jump is anchored in the past, and *newer than then* is everything
+   * that has happened since — which §6 says a jump must not load.
+   */
+  today: AccountingDate;
+  /**
    * **`from`/`to` are excluded, `text` is not.** The anchor walk owns the date
    * window — a filter that also bounded it would be two things deciding which
    * rows exist. Text is the screen's search (S04 §7: *"Search is the strip's
@@ -59,10 +69,19 @@ export type LedgerListOptions = {
  * that makes infinite lists jump under the reader.
  *
  * **The anchor's own page belongs to the older half**, because `readLedgerPage`
- * makes it inclusive going older and exclusive going newer. Both halves are
- * fetched on mount rather than only the one being scrolled: a reader who opens
- * on today and pulls down expects what is coming to already be there, and the
- * newer half of *today* is bounded by the horizon anyway (S04 §6).
+ * makes it inclusive going older and exclusive going newer.
+ *
+ * **Only the older half is fetched on mount, unless the anchor is today.** A
+ * reader who opens on today and pulls down expects what is coming to already
+ * be there, and *newer than today* is the forward horizon — a handful of
+ * expected rows (S04 §6). *Newer than a jump* is the whole ledger since, and
+ * fetching it put the newest thirty rows of the ledger at the top of a list
+ * whose header named the month jumped to: picking May drew September under a
+ * title reading *May*, because the rows above the anchor are the ones a
+ * reverse-chronological list draws first. §6 is explicit — a jump *"loads
+ * that date's neighbourhood and **nothing between**"* — and this is where
+ * "nothing between" is kept. The newer half still pages; it waits to be
+ * asked.
  *
  * **Rows are concatenated newest-first**, which is the order both halves
  * already arrive in — `readLedgerPage` reverses its ascending read so a caller
@@ -70,7 +89,7 @@ export type LedgerListOptions = {
  */
 export function useLedgerList(
   ledger: PhoneLedgerController,
-  { anchor, filter }: LedgerListOptions,
+  { anchor, today, filter }: LedgerListOptions,
 ): LedgerList {
   const [older, setOlder] = useState<Half>(EMPTY_HALF);
   const [newer, setNewer] = useState<Half>(EMPTY_HALF);
@@ -160,9 +179,17 @@ export function useLedgerList(
   useEffect(() => {
     if (!older.loaded) loadOlder();
   }, [older.loaded, loadOlder]);
+  /**
+   * **The newer half pre-fills only from today**, where it is the forward
+   * horizon rather than the rest of the ledger — see this hook's own header
+   * for the defect the unconditional version shipped. From a past anchor it
+   * waits for `loadNewer()`, which is the reader walking up out of the
+   * neighbourhood they jumped to.
+   */
+  const ahead = anchor >= today;
   useEffect(() => {
-    if (!newer.loaded) loadNewer();
-  }, [newer.loaded, loadNewer]);
+    if (ahead && !newer.loaded) loadNewer();
+  }, [ahead, newer.loaded, loadNewer]);
 
   const rows = useMemo(() => [...newer.rows, ...older.rows], [newer.rows, older.rows]);
 

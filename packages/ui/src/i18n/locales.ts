@@ -92,6 +92,57 @@ export function dayLabel(date: AccountingDate, locale: Locale): string {
 }
 
 /**
+ * A span of accounting dates as one range — "September 7 – 8, 2026",
+ * "28 sierpnia – 2 września 2026". **The two ends may arrive in either order.**
+ *
+ * **One range, not two dates.** S04 §6's quiet run drew
+ * `dayLabel(from) – dayLabel(to)`, which spells the month and the year twice
+ * over a row whose whole point is that nothing happened: *"September 7, 2026 –
+ * September 8, 2026"* above *"2 days · nothing recorded"*, wrapping onto a
+ * second line on a 390pt phone. §6's own example of the row is the much
+ * shorter *"3 – 4 August · 2 days · nothing"*.
+ *
+ * **`formatRange`, which is the only thing that knows where the shared parts
+ * go.** English collapses to `September 7 – 8, 2026` and Polish to
+ * `7–8 września 2026` — the day-only half leads in one and trails in the
+ * other — so a hand-rolled collapse would be a month-name table by another
+ * name, which `monthShort` above already refuses for the same reason. Where a
+ * runtime has no `formatRange` (Hermes's `Intl` is built per platform and
+ * ships a subset), both dates are named in full: longer, never wrong, and the
+ * behaviour this row already had.
+ *
+ * The same `timeZone: "UTC"` and rebuild through `Date.UTC` as `dayLabel`: a
+ * bare accounting date re-read in a negative offset names the day before.
+ */
+export function dayRangeLabel(a: AccountingDate, b: AccountingDate, locale: Locale): string {
+  // **Ordered here, not asked of the caller.** S04's quiet run holds its span
+  // newest-end-first, because the list it sits in runs that way; S10 and the
+  // calendar would hand over the other order. A range is read earliest-first in
+  // both languages this app ships, so the two ends are sorted rather than
+  // trusted — a parameter order nobody can see in the rendered output is a
+  // parameter order somebody will get backwards.
+  const earlier = a <= b ? a : b;
+  const later = a <= b ? b : a;
+  const format = new Intl.DateTimeFormat(locale, {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    timeZone: "UTC",
+  });
+  if (typeof format.formatRange !== "function") {
+    // The thin spaces `formatRange` itself sets around the dash, so the two
+    // branches punctuate a range the same way.
+    return `${dayLabel(earlier, locale)} – ${dayLabel(later, locale)}`;
+  }
+  return format.formatRange(utcOf(earlier), utcOf(later));
+}
+
+function utcOf(date: AccountingDate): Date {
+  const [year, mo, day] = date.split("-").map(Number) as [number, number, number];
+  return new Date(Date.UTC(year, mo - 1, day));
+}
+
+/**
  * Which weekday a calendar row starts on — `0` Sunday, `1` Monday.
  *
  * **A table, not `Intl.Locale.prototype.weekInfo`.** That API is still

@@ -194,6 +194,41 @@ describe("ribbonDays", () => {
     const items = toLedgerItems([...day("2026-08-14", "-10", "-20", "-30")], PLN);
     expect(ribbonDays(items)[0]?.entries).toBe(3);
   });
+
+  /**
+   * **The list runs newest-first and the strip does not.**
+   *
+   * Handed the list's order unchanged, the ribbon drew `11 10 9 8 7` left to
+   * right — a week running backwards under the tabs, beside a `MonthGrid` on
+   * the next page of the same screen running forwards. Reverse-chronological is
+   * a rule about reading a ledger down a page; it does not survive the turn
+   * onto a horizontal axis, and both languages this app ships read left to
+   * right.
+   */
+  it("runs earliest-first, whichever way the list it came from ran", () => {
+    const items = toLedgerItems(
+      [...day("2026-08-14", "-200"), ...day("2026-08-13", "-20"), ...day("2026-08-12", "-120")],
+      PLN,
+    );
+    expect(items[0]).toMatchObject({ date: "2026-08-14" });
+    expect(ribbonDays(items).map((d) => d.date)).toEqual([
+      "2026-08-12",
+      "2026-08-13",
+      "2026-08-14",
+    ]);
+  });
+
+  it("runs earliest-first under a search too, where it is not continuous", () => {
+    // A strip that changed direction when a query was typed would be two
+    // controls wearing one name.
+    const items = toLedgerItems([...day("2026-08-14", "-200"), ...day("2026-08-10", "-20")], PLN, {
+      filtered: true,
+    });
+    expect(ribbonDays(items, { filtered: true }).map((d) => d.date)).toEqual([
+      "2026-08-10",
+      "2026-08-14",
+    ]);
+  });
 });
 
 describe("the ribbon is continuous", () => {
@@ -203,8 +238,6 @@ describe("the ribbon is continuous", () => {
     // control rather than as a quiet month, and the gap between two marks said
     // nothing about whether they were a day or a fortnight apart.
     const items = toLedgerItems([row("2026-09-01", "-10"), row("2026-09-05", "-20")], PLN);
-    // Kept in the order the list had them, which on the phone is newest first
-    // and in this fixture is oldest — the fill does not reorder the ledger.
     const days = ribbonDays(items);
     expect(days.map((day) => day.date)).toEqual([
       "2026-09-01",

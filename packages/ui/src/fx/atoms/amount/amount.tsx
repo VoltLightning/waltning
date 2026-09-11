@@ -46,8 +46,19 @@ export type AmountEmphasis = "default" | "muted" | "shell" | "shellMuted";
  * income — it is what you have. A row that *knows* it is income says so, and
  * gets the brighter green; a transfer says so and gets muted, because money
  * moved between your own accounts is neither gained nor lost.
+ *
+ * **`net` is `auto`'s other half, for a figure that is a flow rather than a
+ * stock.** A day's total, a month's net: money that came in *is* income there,
+ * and a positive one drawn in plain ink while the negative beside it is red
+ * reads as "we have nothing to say about this day" — which is the one thing it
+ * is not. Zero with rows behind it is a day of transfers between your own
+ * accounts, and it takes `transfer`'s muted ink for the same reason
+ * `DayCell`'s mark calls that day `flat`. A balance keeps `auto`; the two are
+ * separate kinds because the question "is a positive number good news" has
+ * different answers for a stock and for a flow, and a single sign-based rule
+ * has to get one of them wrong.
  */
-export type AmountKind = "auto" | "income" | "spend" | "transfer";
+export type AmountKind = "auto" | "net" | "income" | "spend" | "transfer";
 
 export type AmountProps = {
   /** A decimal string. A JS number holding money is a bug (`SPEC.md` §7.0). */
@@ -141,15 +152,19 @@ export function Amount({
   // same discovery for plain text ink. A shell-safe spend tint would need a new,
   // separately-verified token — real design-system work, not a StatTile fix.
   const onShell = emphasis === "shell" || emphasis === "shellMuted";
+  // `net` is resolved to one of the other three by sign before anything else
+  // looks at it, so the table below stays the three colours money has.
+  const resolved: AmountKind =
+    kind !== "net" ? kind : negative ? "spend" : money.isZero(value) ? "transfer" : "income";
   const tone = onShell
     ? emphasis === "shellMuted"
       ? styles.shellMuted
       : styles.shell
-    : kind === "income"
+    : resolved === "income"
       ? styles.income
-      : kind === "transfer"
+      : resolved === "transfer"
         ? styles.transfer
-        : kind === "spend" || negative
+        : resolved === "spend" || negative
           ? styles.spend
           : null;
 
