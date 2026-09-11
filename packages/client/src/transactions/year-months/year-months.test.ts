@@ -1,7 +1,7 @@
 import { accountingDate, yearMonth } from "@waltning/core/date";
 import * as money from "@waltning/core/money";
 import { describe, expect, it } from "vitest";
-import { busiestMonth, yearMonths } from "./year-months.ts";
+import { busiestMonth, otherCurrenciesInYear, yearMonths } from "./year-months.ts";
 
 const PLN = "PLN" as money.CurrencyCode;
 const USD = "USD" as money.CurrencyCode;
@@ -99,5 +99,28 @@ describe("busiestMonth", () => {
 
   it("is zero for a year with nothing in it, rather than throwing", () => {
     expect(busiestMonth(yearMonths([], 2026, PLN, TODAY))).toEqual(money.ZERO);
+  });
+});
+
+/**
+ * The year's own total is the largest figure on Months and was the only one
+ * with no qualifier under it — a month row has carried *+N other currencies*
+ * since it was written, and the total quietly dropped the same money.
+ */
+describe("otherCurrenciesInYear", () => {
+  it("counts a currency once however many months it appears in", () => {
+    const flows = [
+      flow("2026-03-04", { currency: USD, spend: money.toMoney("40.00") }),
+      flow("2026-07-04", { currency: USD, spend: money.toMoney("40.00") }),
+      flow("2026-07-05", { currency: "GBP" as money.CurrencyCode, spend: money.toMoney("10") }),
+      flow("2026-07-06", { spend: money.toMoney("10.00") }),
+    ];
+    expect(otherCurrenciesInYear(flows, PLN)).toBe(2);
+  });
+
+  it("is zero for a year held entirely in the lead currency", () => {
+    expect(otherCurrenciesInYear([flow("2026-03-04", { spend: money.toMoney("40") })], PLN)).toBe(
+      0,
+    );
   });
 });

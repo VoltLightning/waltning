@@ -3,6 +3,7 @@ import { useCallback, useMemo, useState } from "react";
 import {
   enterDay,
   enterMonth,
+  enterYear,
   goToPage,
   type PagerPageKey,
   type PagerState,
@@ -20,6 +21,7 @@ export type PagerDate = {
   next: () => void;
   showPage: (page: PagerPageKey) => void;
   showMonth: (month: YearMonth) => void;
+  showYear: (year: number) => void;
   showDay: (date: AccountingDate) => void;
 };
 
@@ -49,6 +51,10 @@ export function usePagerDate(
     (month: YearMonth) => setState((s) => enterMonth(s, month, today)),
     [today],
   );
+  const showYear = useCallback(
+    (year: number) => setState((s) => enterYear(s, year, today)),
+    [today],
+  );
   const showDay = useCallback((date: AccountingDate) => setState((s) => enterDay(s, date)), []);
 
   const label = useMemo(() => periodLabel(state), [state]);
@@ -61,6 +67,7 @@ export function usePagerDate(
     next,
     showPage,
     showMonth,
+    showYear,
     showDay,
   };
 }

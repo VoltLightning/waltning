@@ -1,6 +1,7 @@
 import {
   enterDay,
   enterMonth,
+  enterYear,
   goToPage,
   type PagerPageKey,
   type PagerState,
@@ -24,6 +25,7 @@ export type PagerRoute = {
   next: () => void;
   showPage: (page: PagerPageKey) => void;
   showMonth: (month: YearMonth) => void;
+  showYear: (year: number) => void;
   showDay: (date: AccountingDate) => void;
   /** The screen's search (S04 §7). `null` clears it. */
   setQuery: (query: string | null) => void;
@@ -96,6 +98,10 @@ export function usePagerRoute(today: AccountingDate): PagerRoute {
     (month: YearMonth) => write(enterMonth(latest.current, month, today)),
     [today, write],
   );
+  const showYear = useCallback(
+    (year: number) => write(enterYear(latest.current, year, today)),
+    [today, write],
+  );
   const showDay = useCallback(
     (date: AccountingDate) => write(enterDay(latest.current, date)),
     [write],
@@ -115,6 +121,7 @@ export function usePagerRoute(today: AccountingDate): PagerRoute {
     next,
     showPage,
     showMonth,
+    showYear,
     showDay,
     setQuery,
   };

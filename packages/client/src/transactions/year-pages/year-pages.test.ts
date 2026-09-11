@@ -1,4 +1,4 @@
-import { expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { FIRST_YEAR, pageOf, stepYearPage, yearPage } from "./year-pages.ts";
 
 const THIS_YEAR = 2026;
@@ -58,4 +58,23 @@ it("counts pages from the floor", () => {
   expect(pageOf(THIS_YEAR, THIS_YEAR)).toBe(0);
   expect(pageOf(2018, THIS_YEAR)).toBe(0);
   expect(pageOf(2017, THIS_YEAR)).toBe(1);
+});
+
+/**
+ * `lastYear` comes off the device clock, so it is the one input here nothing
+ * validates. A phone set before 1900 drew a grid of no years with both arrows
+ * dead — a sheet you could only leave by the backdrop.
+ */
+describe("a clock that cannot be right", () => {
+  it.each([1850, Number.NaN, 2026.5])("still gives a page you can use: %s", (lastYear) => {
+    const page = yearPage(1900, lastYear as number);
+    expect(page.years.length).toBeGreaterThan(0);
+    expect(page.years).toContain(FIRST_YEAR);
+    expect(page.hasOlder, "nothing is older than the floor").toBe(false);
+  });
+
+  it("steps nowhere from a page that is the whole range", () => {
+    expect(stepYearPage(1900, -1, 1850)).toBe(FIRST_YEAR);
+    expect(stepYearPage(1900, 1, 1850)).toBe(FIRST_YEAR);
+  });
 });

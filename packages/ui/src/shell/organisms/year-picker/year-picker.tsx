@@ -191,10 +191,11 @@ const useStyles = makeStyles((theme) => ({
   range: { ...text.ui("label"), color: theme.text },
   grid: { flexDirection: "row", flexWrap: "wrap", gap: space.md },
   cell: {
-    // Three across, whatever the page holds: `flexBasis` rather than `flex: 1`,
-    // so the short page at 1900 draws three columns rather than stretching two.
+    // Three across, whatever the page holds. `flexBasis` sets the column;
+    // `flexGrow: 0` is what keeps it — the oldest page can hold a single year,
+    // and a cell allowed to grow makes that one year a full-width slab.
     flexBasis: "30%",
-    flexGrow: 1,
+    flexGrow: 0,
     minHeight: touchTarget.min + space.xl,
     alignItems: "center",
     justifyContent: "center",

@@ -5,6 +5,7 @@ import { isPagerPageKey } from "@waltning/client/ledger/pager-date";
 import { useDayFlows } from "@waltning/client/ledger/use-day-flows";
 import { useDayRows } from "@waltning/client/ledger/use-day-rows";
 import { useLedgerController } from "@waltning/client/ledger/use-ledger-controller";
+import { useLedgerYears } from "@waltning/client/ledger/use-ledger-years";
 import { useMatchDays } from "@waltning/client/ledger/use-match-days";
 import { usePhoneLedger } from "@waltning/client/ledger/use-phone-ledger";
 import { useSpendByCategory } from "@waltning/client/ledger/use-spend-by-category";
@@ -13,14 +14,24 @@ import { useWhereItWent } from "@waltning/client/ledger/use-where-it-went";
 import { toLedgerItems } from "@waltning/client/transactions/ledger-days";
 import { matchesByDay, matchesByMonth } from "@waltning/client/transactions/match-counts";
 import { monthGrid, weekdayHeadings } from "@waltning/client/transactions/month-grid";
-import { busiestMonth, yearMonths } from "@waltning/client/transactions/year-months";
+import {
+  busiestMonth,
+  otherCurrenciesInYear,
+  yearMonths,
+} from "@waltning/client/transactions/year-months";
 import { FIRST_YEAR, stepYearPage, yearPage } from "@waltning/client/transactions/year-pages";
 import { accountingDate, addDays, monthRange, shiftMonth, yearMonth } from "@waltning/core/date";
 import * as money from "@waltning/core/money";
 import { CategorySheet } from "@waltning/ui/categories/category-sheet";
 import { SpendRows } from "@waltning/ui/dashboard/spend-rows";
 import { Amount } from "@waltning/ui/fx/amount";
-import { dayLabel, monthLabel, weekdayInitial, weekStart } from "@waltning/ui/i18n/locales";
+import {
+  dayLabel,
+  monthLabel,
+  monthShort,
+  weekdayInitial,
+  weekStart,
+} from "@waltning/ui/i18n/locales";
 import { useLocale, useT } from "@waltning/ui/i18n/provider";
 import { Button } from "@waltning/ui/primitives/button";
 import { Card, GroundPanel } from "@waltning/ui/shell/card";
@@ -166,6 +177,13 @@ function toRow(transaction: PhoneRecentTransaction): TransactionListItem {
  * *where it went*; the strip does not, because a balance is as of now.
  */
 const GATEWAY_ICON = 16;
+
+/**
+ * The currency the year is folded in when there is no account to read one from.
+ * A ledger with no accounts is twelve empty months either way — the fold has
+ * nothing to leave out, and the constant only has to be *a* currency.
+ */
+const LEAD_FALLBACK = money.currencyCode("PLN");
 
 /** The grid's kicker. `DayHeader`'s step, on the ground rather than in a card. */
 function SectionLabel({ children }: { children: string }) {
@@ -953,7 +971,7 @@ export default function Today() {
         shownYear,
         // With no account there is no lead currency, and the year is twelve
         // empty rows either way — the fold has nothing to leave out.
-        leadNetWorth?.currency ?? money.currencyCode("PLN"),
+        leadNetWorth?.currency ?? LEAD_FALLBACK,
         yearMonth(today.slice(0, 7)),
       ),
     [yearFlows, shownYear, leadNetWorth, today],
@@ -992,10 +1010,18 @@ export default function Today() {
       money.isZero(busiest) ? 0 : Number(money.dec(value).div(money.dec(busiest)).toFixed(4));
     return yearRows.map((row) => ({
       month: row.month,
-      initial: monthLabel(row.month, locale).slice(0, 1),
+      // Three characters, not one: Polish has three months whose initial is
+      // `l`, and a chart whose axis repeats a name is not an axis.
+      label: monthShort(row.month, locale).slice(0, 3),
       inflowShare: share(row.inflow),
       spendShare: share(row.spend),
-      empty: money.isZero(row.inflow) && money.isZero(row.spend),
+      // **A month with only foreign rows is not an empty month.** `empty`
+      // draws a stub, which `YearChart` documents as *an absence rather than a
+      // quantity* — and the row four pixels below it would be saying *+1 other
+      // currency* about the same month. What the chart cannot do is draw the
+      // figure: arc-phone has no conversion (class S), so the month keeps its
+      // slot at zero height without claiming nothing happened.
+      empty: money.isZero(row.inflow) && money.isZero(row.spend) && row.otherCurrencies === 0,
     }));
   }, [yearRows, locale]);
 
@@ -1004,6 +1030,13 @@ export default function Today() {
     () => yearRows.reduce((total, row) => money.add(total, row.net), money.ZERO),
     [yearRows],
   );
+  /** …and what that figure leaves out, counted over the year rather than summed. */
+  const yearKeptNote = useMemo(() => {
+    // With no account there is no lead currency and no figures to qualify —
+    // the same fallback `yearRows` makes, for the same reason.
+    const others = otherCurrenciesInYear(yearFlows, leadNetWorth?.currency ?? LEAD_FALLBACK);
+    return others === 0 ? undefined : t("shell.plusOtherCurrencies", { count: others });
+  }, [yearFlows, leadNetWorth, t]);
 
   const thisYear = Number(today.slice(0, 4));
   const [pickerYearPage, setPickerYearPage] = useState<number | null>(null);
@@ -1021,32 +1054,29 @@ export default function Today() {
     () => setPickerYearPage(stepYearPage(yearPageShown.years[0] ?? thisYear, 1, thisYear)),
     [yearPageShown.years, thisYear],
   );
-  /**
-   * Which years the ledger holds something in — the dot in the grid.
-   *
-   * Read once per open rather than per cell: a grid that asked the ledger nine
-   * questions would ask ninety over ten pages of paging.
-   */
-  const yearsWithEntries = useMemo(() => {
-    void snapshot;
-    return pickerYearPage === null ? new Set<number>() : new Set(ledger.readLedgerYears());
-  }, [pickerYearPage, ledger, snapshot]);
+  /** Which years the ledger holds something in — the dot in the grid. */
+  const yearsWithEntries = useLedgerYears(ledger, pickerYearPage !== null, snapshot);
   const pickYear = useCallback(
     (year: number) => {
       setPickerYearPage(null);
-      // A year lands on its own newest month, the way picking a month lands on
-      // that month's newest day — a reverse-chronological screen is entered
-      // from its end.
-      pager.showMonth(yearMonth(`${year}-12`));
+      // `enterYear` owns the rule — the year's newest month the ledger has
+      // reached, entered the way a month is. Spelling it here would be a
+      // second implementation of the horizon, and the one this replaced put
+      // the shared date three months into the future.
+      pager.showYear(year);
     },
-    [pager.showMonth],
+    [pager.showYear],
   );
-  const stepYear = useCallback(
-    (direction: -1 | 1) => pager.showMonth(yearMonth(`${shownYear + direction}-12`)),
-    [pager.showMonth, shownYear],
-  );
-  const previousYear = useCallback(() => stepYear(-1), [stepYear]);
-  const nextYear = useCallback(() => stepYear(1), [stepYear]);
+  /**
+   * **The chart's arrows are the header's arrows.** The spec says both move the
+   * same date; the way to make that true rather than claimed is for there to be
+   * one of them. Written as its own year step it was one: `step` keeps the day
+   * of the month and the chart's version landed on the 31st of December, so
+   * whichever arrow you pressed decided which month the *other three* pages
+   * opened on.
+   */
+  const previousYear = pager.previous;
+  const nextYear = pager.next;
   const chartLabels = useMemo(
     () => ({
       older: t("shell.previousYearStep"),
@@ -1125,8 +1155,9 @@ export default function Today() {
                     signed
                   />
                 }
+                {...(yearKeptNote === undefined ? {} : { keptNote: yearKeptNote })}
                 {...(shownYear > FIRST_YEAR ? { onOlder: previousYear } : {})}
-                {...(shownYear < Number(today.slice(0, 4)) ? { onNewer: nextYear } : {})}
+                {...(shownYear < thisYear ? { onNewer: nextYear } : {})}
                 onPickYear={openYearPicker}
                 labels={chartLabels}
               />
@@ -1158,6 +1189,7 @@ export default function Today() {
       today,
       yearColumns,
       yearKept,
+      yearKeptNote,
       handleCategorize,
       handlePickDay,
       pager.state.query,
@@ -1171,26 +1203,23 @@ export default function Today() {
       pager.state.date,
       sectionStyles.year,
       t,
+      thisYear,
     ],
   );
 
   return (
     <>
       <PagerFrame
-        // **The same title on all four pages, Months included.** It named the
-        // year there at first, because the arrows step years on that page —
-        // and the header changing shape as you swipe was the thing that read
-        // as broken: the picker's affordance disappeared exactly where a
-        // reader is most likely to want it. The month is the date every page
-        // shares (§3), so it is what the header says; what the arrows step is
-        // said by the arrows' own names.
         /*
           **On Months the title is the year.** Every other page is about a
           month and says so; Months is about twelve of them, and a header
           reading *June* over a page of 2026 was the one label on this screen
           that named something the page was not showing. The arrows already
           step a year here (§4: they step the unit the page is in), so the
-          title and the control now agree.
+          title and the control now agree. What does not change with the page
+          is the title's *shape* — it is a large tappable title on all four,
+          because a picker's affordance disappearing exactly where a reader
+          wants it is the failure this label was first written to avoid.
         */
         periodLabel={
           pager.state.page === "months"
@@ -1210,10 +1239,24 @@ export default function Today() {
           side to come in from.
         */
         periodKey={pager.state.page === "months" ? String(pager.label.year) : month}
-        onPickPeriod={openPicker}
+        /*
+          **The title opens the picker for the unit it names** — the year on
+          Months, the month on the other three. It opened the month grid
+          everywhere, so tapping *2026* asked *choose a month*, which is a
+          control answering a question nobody asked.
+        */
+        onPickPeriod={pager.state.page === "months" ? openYearPicker : openPicker}
         scrollY={scrollY}
         onPrevious={pager.previous}
-        onNext={pager.next}
+        /*
+          **The step forward stops at this year on Months, and nowhere else.**
+          A month ahead is a month the ledger has expected entries in (§3 draws
+          them dashed, *not money yet*); a *year* ahead is twelve stubs and a
+          chart of nothing, and the chart's own arrow already refuses it. Two
+          controls over one date that disagree about where it can go is the
+          defect this pair was written to avoid.
+        */
+        {...(pager.state.page === "months" && shownYear >= thisYear ? {} : { onNext: pager.next })}
         onSearch={openSearch}
         searchOpen={searching}
         searchQuery={searchText}

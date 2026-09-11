@@ -303,10 +303,28 @@ is a year holding nothing rendered as a year holding everything, which is
 exactly what shipped once. The stub is 2pt of `border`: present, clearly
 nothing.
 
+**Empty means nothing happened, not nothing in the lead currency.** A month
+whose only rows are foreign keeps its slot in the money colours at zero height:
+the row four pixels below it says *+1 other currency* about the same month, and
+two elements contradicting each other about one month is worse than a column
+that cannot state a figure. The figure it would need is a conversion arc-phone
+does not do (class **S**). The year's own total carries the same note — it is
+the largest figure on the page and was the only one drawing money with nothing
+to say what it left out.
+
 **The year's own arrows live on the chart, not only in the chrome.** The chart
-*is* the year, so the control that changes it sits where the eye already is;
-the header's stepper still works, and both move the same date. Between them the
-year is a button that opens `YearPicker`.
+*is* the year, so the control that changes it sits where the eye already is.
+They are not a second implementation: the chart's arrows *are* the header's,
+because a year step written twice was two — one kept the day of the month and
+one landed on 31 December, so whichever arrow you pressed decided which month
+the other three pages opened on. Between them the year is a button that opens
+`YearPicker`, and on Months the title opens it too.
+
+**Neither arrow steps into a year that has not happened.** A month ahead is a
+month the ledger has expected entries in and §3 draws them; a *year* ahead is
+twelve stubs. Picking a year lands on its newest month the ledger has reached —
+picking the year you are in lands on today, not on its December, because the
+date is shared and every other page would then show a month three months out.
 
 **Back to 1900, nine years to a page.** A ledger can hold a date older than the
 app, so the picker cannot stop at the years the ledger happens to contain —
@@ -317,6 +335,12 @@ did. Nine at a time is a 3×3 grid that fits without scrolling, paged from
 ends on the year they are in. A year the ledger has entries in carries a dot;
 everything else is offered anyway, because a grid that hid the empty years
 would change shape as the ledger filled.
+
+**The dot is the page's own predicate, not a looser one.** Months folds
+`readDayFlows` — own accounts, income and expense — so a year whose only row is
+a transfer, or sits on another household's account, gets no dot. Asking only
+whether a row exists offered a dot that opened onto twelve zeroes, which is a
+third answer from a mark whose whole job is to separate two.
 
 **Both pages are folds of one read.** `readDayFlows` is §5's figure cut by day
 — the same query, the same filters and the same refusal to sum across
@@ -363,7 +387,7 @@ happened*.
 | `MonthGrid` | Calendar's own grid — a day per cell with `DayRibbon`'s activity mark, ≥44px |
 | `YearChart` | Months' hero — twelve paired columns scaled to the busiest month of the year, the current month ticked, empty months drawn as stubs. Carries the year, its net, its two arrows and the button that opens `YearPicker` |
 | `MonthRows` | Months' twelve rows: income, spend and **net** per month. No bars — `YearChart` above is the comparison, so a row states figures |
-| `YearPicker` | A sheet of nine years, paged back to 1900, a dot on the years holding entries. `PeriodPicker` at year granularity |
+| `YearPicker` | A sheet of up to nine years, paged back to 1900, a dot on the years holding entries. `PeriodPicker` at year granularity. Pages are counted back from this year, so the oldest one is the short one — at 1900 it is a single cell, and the cells hold their column rather than stretching to fill the row |
 | `DayGroup` | A day's rows under its date and total. The list's only grouping |
 | `QuietDay` | One empty day: a single muted line |
 | `QuietRun` | Two or more consecutive empty days: one row naming the span and its length, with *Show* |

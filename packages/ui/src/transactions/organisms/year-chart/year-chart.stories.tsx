@@ -9,7 +9,9 @@ import { Amount } from "../../../fx/atoms/amount/amount";
 import { YearChart, type YearColumn } from "./year-chart";
 
 const PLN = money.currencyCode("PLN");
-const INITIALS = "JFMAMJJASOND";
+// The English short names, three characters each — what `monthShort` gives the
+// screen. Polish collides on a single initial, which is why this is not one.
+const LABELS = "Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec".split(" ");
 const FIGURES: [number, number][] = [
   [7850, 5120],
   [7850, 4310],
@@ -28,7 +30,7 @@ const BUSIEST = 9120;
 
 const COLUMNS: YearColumn[] = FIGURES.map(([inflow, spend], at) => ({
   month: `2026-${String(at + 1).padStart(2, "0")}`,
-  initial: INITIALS[at] ?? "?",
+  label: LABELS[at] ?? "?",
   inflowShare: inflow / BUSIEST,
   spendShare: spend / BUSIEST,
   empty: inflow === 0 && spend === 0,
@@ -72,10 +74,36 @@ export const Nothing: Story = {
 };
 
 /**
- * At 1900 the back step is spent — drawn here by the year alone, since the
- * caller is what withholds the handler and a story cannot pass `undefined`
- * under `exactOptionalPropertyTypes`.
+ * **A month whose only rows are foreign is not an empty month.** It keeps its
+ * slot at zero height in the money colours rather than drawing the absence
+ * stub, because the row below it says *+1 other currency* about the same month
+ * — and the figure that would fill the column is a conversion this app does
+ * not do.
  */
-export const AtTheFloor: Story = { args: { year: 1900 } };
+export const OnlyForeign: Story = {
+  args: {
+    columns: COLUMNS.map((column, at) =>
+      at === 2 ? { ...column, inflowShare: 0, spendShare: 0, empty: false } : column,
+    ),
+    keptNote: "+ 1 other currency",
+  },
+};
 
-export const AtThisYear: Story = {};
+/**
+ * **Both steps spent.** The floor at 1900 and this year at once: a caret that
+ * cannot go anywhere goes quiet rather than disappearing, because a control
+ * that vanishes leaves a reader wondering what they did. Nothing but a story
+ * that withholds the handlers draws this state.
+ */
+export const NowhereToStep: Story = {
+  render: (args) => (
+    <YearChart
+      year={args.year}
+      columns={args.columns}
+      current={args.current}
+      kept={args.kept}
+      onPickYear={args.onPickYear}
+      labels={args.labels}
+    />
+  ),
+};

@@ -41,12 +41,22 @@ const STUB = 2;
 export type YearColumn = {
   /** `2026-01`, the identity of the column. */
   month: string;
-  /** One letter, localised by the caller — the column is too narrow for more. */
-  initial: string;
+  /**
+   * The month's short name, localised by the caller. **Not its first letter**:
+   * Polish gives `s l m k m c l s w p l g` — three months called *l*, two *s*,
+   * two *m* — so an initial is not a name, it is a collision. Three characters
+   * fit the column and separate all twelve in every locale we ship.
+   */
+  label: string;
   /** `0`–`1` each, already measured against the busiest month of this year. */
   inflowShare: number;
   spendShare: number;
-  /** True where the month holds nothing at all. */
+  /**
+   * True where the month holds nothing at all — **not** where it merely holds
+   * nothing in the lead currency. An empty column draws an absence; a month
+   * whose only rows are foreign keeps its slot at zero height, because the
+   * figure it would need is a conversion arc-phone does not do.
+   */
   empty: boolean;
 };
 
@@ -57,6 +67,12 @@ export type YearChartProps = {
   current: string;
   /** The year's own net, already rendered — an `<Amount>`, or nothing yet. */
   kept: React.ReactNode;
+  /**
+   * What the net leaves out — *+2 other currencies*, or nothing to say. The
+   * largest figure on the page was the only one drawing money without a
+   * qualifier while every month row under it carried one.
+   */
+  keptNote?: string | undefined;
   /** Absent where the ledger cannot go further in that direction. */
   onOlder?: (() => void) | undefined;
   onNewer?: (() => void) | undefined;
@@ -103,7 +119,9 @@ function Column({ column, current }: { column: YearColumn; current: boolean }) {
         <View style={[styles.bar, column.empty ? styles.barEmpty : styles.barIn, inflow]} />
         <View style={[styles.bar, column.empty ? styles.barEmpty : styles.barOut, spend]} />
       </View>
-      <Text style={[styles.initial, current ? styles.initialCurrent : null]}>{column.initial}</Text>
+      <Text style={[styles.monthLabel, current ? styles.monthLabelCurrent : null]}>
+        {column.label}
+      </Text>
       {/* The same 2px accent `PageTabs` marks its own selection with, so one
           mark means *you are here* everywhere on this screen. */}
       <View style={[styles.tick, current ? styles.tickCurrent : null]} />
@@ -118,6 +136,7 @@ function YearChartView({
   columns,
   current,
   kept,
+  keptNote,
   onOlder,
   onNewer,
   onPickYear,
@@ -146,6 +165,7 @@ function YearChartView({
             <CaretDownIcon size={12} color={theme.textMuted} />
           </View>
           {kept}
+          {keptNote === undefined ? null : <Text style={styles.keptNote}>{keptNote}</Text>}
         </Pressable>
 
         <Step onPress={onNewer} accessibilityLabel={labels.newer}>
@@ -195,6 +215,7 @@ const useStyles = makeStyles((theme) => ({
   },
   yearLine: { flexDirection: "row", alignItems: "center", gap: space.sm },
   year: { ...text.display("displayThree"), color: theme.text },
+  keptNote: { ...text.ui("caption"), color: theme.textMuted },
   columns: { flexDirection: "row", alignItems: "flex-end", gap: space.xxs },
   column: {
     flex: 1,
@@ -209,8 +230,8 @@ const useStyles = makeStyles((theme) => ({
   barOut: { backgroundColor: theme.spend },
   /** An absence, not a quantity — the same edge colour the card is drawn in. */
   barEmpty: { backgroundColor: theme.border },
-  initial: { ...text.ui("tag"), color: theme.textMuted },
-  initialCurrent: { color: theme.text },
+  monthLabel: { ...text.ui("tag"), color: theme.textMuted },
+  monthLabelCurrent: { color: theme.text },
   // The mark `PageTabs` draws under its own selection, at its own size.
   tick: { width: 16, height: 2, borderRadius: radius.xs },
   tickCurrent: { backgroundColor: theme.accent },

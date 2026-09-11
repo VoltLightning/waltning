@@ -41,7 +41,7 @@ const PER_PAGE = 9;
  * `lastYear` itself.
  */
 export function pageOf(year: number, lastYear: number): number {
-  const bounded = clamp(year, FIRST_YEAR, lastYear);
+  const bounded = clamp(year, FIRST_YEAR, horizon(lastYear));
   return Math.floor((lastYear - bounded) / PER_PAGE);
 }
 
@@ -51,8 +51,9 @@ export function pageOf(year: number, lastYear: number): number {
  * recorded.
  */
 export function yearPage(year: number, lastYear: number): YearPage {
-  const page = pageOf(year, lastYear);
-  const newest = lastYear - page * PER_PAGE;
+  const last = horizon(lastYear);
+  const page = pageOf(year, last);
+  const newest = last - page * PER_PAGE;
   const oldest = Math.max(FIRST_YEAR, newest - PER_PAGE + 1);
   const years: number[] = [];
   for (let at = oldest; at <= newest; at++) years.push(at);
@@ -62,18 +63,29 @@ export function yearPage(year: number, lastYear: number): YearPage {
     // anyone who has met a date range before.
     label: `${oldest} \u2013 ${newest}`,
     hasOlder: oldest > FIRST_YEAR,
-    hasNewer: newest < lastYear,
+    hasNewer: newest < last,
   };
 }
 
 /** A year on the page before or after this one, clamped at both ends. */
 export function stepYearPage(year: number, direction: -1 | 1, lastYear: number): number {
-  const page = pageOf(year, lastYear);
+  const last = horizon(lastYear);
+  const page = pageOf(year, last);
   // `direction` is the reader's: -1 is *older*, which is a HIGHER page number.
   const next = page - direction;
-  if (next < 0) return lastYear;
-  const newest = lastYear - next * PER_PAGE;
-  return clamp(newest, FIRST_YEAR, lastYear);
+  if (next < 0) return last;
+  const newest = last - next * PER_PAGE;
+  return clamp(newest, FIRST_YEAR, last);
+}
+
+/**
+ * **The horizon is never below the floor.** `lastYear` is read from the
+ * device's clock, and a phone set to 1850 produced a page of no years at all
+ * with both arrows dead — a sheet with nothing in it and no way out but the
+ * backdrop. A clock that absurd gets the floor year and a grid of one.
+ */
+function horizon(lastYear: number): number {
+  return Number.isInteger(lastYear) && lastYear > FIRST_YEAR ? lastYear : FIRST_YEAR;
 }
 
 function clamp(value: number, low: number, high: number): number {

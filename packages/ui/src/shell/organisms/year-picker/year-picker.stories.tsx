@@ -39,14 +39,16 @@ export const ThisPage: Story = {};
  * disappearing — a control that vanishes leaves a reader wondering what they
  * did. The oldest page is the short one.
  */
+/**
+ * **The floor, as the paging arithmetic actually produces it.** Counted back
+ * from 2026 in nines, 1900 lands alone on the oldest page — and a lone cell is
+ * exactly what a stretching grid draws as a full-width slab. The story said
+ * `1900 – 1908` before, which is a page `yearPage` cannot produce, so the one
+ * layout worth a baseline had none.
+ */
 export const AtTheFloor: Story = {
   args: {
-    page: {
-      years: [1900, 1901, 1902, 1903, 1904, 1905, 1906, 1907, 1908],
-      label: "1900 – 1908",
-      hasOlder: false,
-      hasNewer: true,
-    },
+    page: { years: [1900], label: "1900 \u2013 1900", hasOlder: false, hasNewer: true },
     current: 2026,
     withEntries: new Set<number>(),
   },
