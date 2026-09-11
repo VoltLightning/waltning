@@ -108,7 +108,7 @@ import { pageScrollProps } from "../../../primitives/nested-scroll.ts";
 import { useSafeArea } from "../../../primitives/safe-area";
 import { text } from "../../../theme/fonts.ts";
 import { makeStyles } from "../../../theme/styles.ts";
-import { radius, space } from "../../../tokens.ts";
+import { gutter, radius, space } from "../../../tokens.ts";
 import { useFloatingClearance } from "../../atoms/floating-clearance";
 
 /**
@@ -217,9 +217,9 @@ export function GroundPanel({
   // clears the home indicator at the end of the travel rather than at the fold.
   const deviceBottom = clearBottom ? insets.bottom : 0;
   const clearance = {
-    paddingLeft: space.x4 + insets.left,
-    paddingRight: space.x4 + insets.right,
-    paddingBottom: space.x4 + deviceBottom + (clearBottom ? floatClearance : 0),
+    paddingLeft: gutter + insets.left,
+    paddingRight: gutter + insets.right,
+    paddingBottom: gutter + deviceBottom + (clearBottom ? floatClearance : 0),
   };
 
   return (
@@ -310,8 +310,8 @@ const useStyles = makeStyles((theme) => ({
   // first — the same 14 the cards keep between themselves.
   scrollContent: {
     paddingTop: space.x2,
-    paddingHorizontal: space.x4,
-    paddingBottom: space.x4,
+    paddingHorizontal: gutter,
+    paddingBottom: gutter,
     gap: space.x2,
     flexGrow: 1,
   },

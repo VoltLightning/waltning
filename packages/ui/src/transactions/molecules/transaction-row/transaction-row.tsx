@@ -209,8 +209,10 @@ const useStyles = makeStyles((theme) => ({
     alignItems: "center",
     gap: space.xl,
     paddingVertical: space.lg,
-    // The deck's row: 54, an icon of 32 with 11 above and below. Above §10's
-    // 44 floor, and on the row's whole box rather than only its pressable
+    // The deck's row: 54 — a two-line identity of 32 with 11 above and below.
+    // Held by the floor, not by the sum: the padding is `space.lg` under a 24
+    // icon and two lines of text, and `minHeight` is what makes it 54. Above
+    // §10's 44, and on the row's whole box rather than only its pressable
     // variant, so the two never drift a pixel apart.
     minHeight: touchTarget.row,
   },

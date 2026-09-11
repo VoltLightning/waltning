@@ -33,7 +33,7 @@ import { useSafeArea } from "../../../primitives/safe-area";
 import { BottomSheet } from "../../../shell/organisms/bottom-sheet/bottom-sheet";
 import { text } from "../../../theme/fonts.ts";
 import { makeStyles } from "../../../theme/styles.ts";
-import { focus, radius, space, touchTarget } from "../../../tokens.ts";
+import { focus, gutter, radius, space, touchTarget } from "../../../tokens.ts";
 
 export type ComposerKind = "expense" | "income";
 
@@ -56,9 +56,9 @@ export function ComposerHeader({ onCancel, title, kind, onKindChange }: Composer
   // per theme, and these three vary per device — `shell.tsx`'s own reason,
   // and its own values.
   const clearance = {
-    paddingTop: space.x5 + insets.top,
-    paddingLeft: space.x5 + insets.left,
-    paddingRight: space.x5 + insets.right,
+    paddingTop: gutter + insets.top,
+    paddingLeft: gutter + insets.left,
+    paddingRight: gutter + insets.right,
   };
 
   return (

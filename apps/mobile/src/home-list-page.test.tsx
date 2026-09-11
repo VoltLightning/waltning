@@ -331,9 +331,33 @@ it("offers a first capture only once both halves have answered nothing", () => {
   expect(screen.queryByText(/Nothing recorded on or before/)).toBeNull();
 });
 
-it("still offers a first capture when the ledger itself is empty", () => {
+/**
+ * S04 §6: *today is on the page either way*. Over an empty ledger the rows'
+ * place is taken by the first-run state, so the one cell that names the day
+ * is the ribbon's — and the ribbon has to draw it from the anchor alone, with
+ * no item to derive it from. It did not: an empty ledger had no cell.
+ */
+it("still offers a first capture when the ledger itself is empty, under a strip naming today", () => {
   draw(ledgerWith([]));
   expect(screen.getByText("nothing yet")).toBeTruthy();
+  expect(screen.getByRole("button", { name: /August 14, 2026, nothing/ })).toBeTruthy();
+  expect(screen.queryByText("nothing"), "no quiet line over the empty state").toBeNull();
+});
+
+/**
+ * `YearPicker` pages back to 1900, and the year picked becomes this page's
+ * anchor. The strip fills every day between its ends, so a far anchor over a
+ * 2026 ledger asked for 27 613 cells in a `ScrollView` — each with two `Intl`
+ * formats — where the list drew three rows. `ledger-days` bounds it; this pins
+ * that the page hands the anchor to the strip, which is where the bound bites.
+ */
+it("draws a bounded strip after a jump far behind the ledger", () => {
+  draw(ledgerWith([], [row("2026-08-14", 2, "-10")]), vi.fn(), {
+    anchor: accountingDate("1950-06-01"),
+  });
+  const cells = screen.getByRole("list").querySelectorAll("[aria-label]");
+  expect(cells.length).toBe(46);
+  expect(cells[0]?.getAttribute("aria-label")).toMatch(/June 1, 1950/);
 });
 
 /**

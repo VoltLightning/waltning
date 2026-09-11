@@ -43,7 +43,7 @@ import { useInteraction } from "../../../primitives/interaction.ts";
 import { useSafeArea } from "../../../primitives/safe-area";
 import { text } from "../../../theme/fonts.ts";
 import { makeStyles } from "../../../theme/styles.ts";
-import { focus, radius, space, touchTarget } from "../../../tokens.ts";
+import { focus, gutter, radius, space, touchTarget } from "../../../tokens.ts";
 
 export type DeskBandProps = {
   /** The wordmark. Rendered exactly as given, like `Shell`'s `leading`. */
@@ -82,8 +82,8 @@ export function DeskBand({
   // into it would hand the second window the first one's.
   const clearance = {
     paddingTop: space.x3 + insets.top,
-    paddingLeft: space.x5 + insets.left,
-    paddingRight: space.x5 + insets.right,
+    paddingLeft: gutter + insets.left,
+    paddingRight: gutter + insets.right,
   };
 
   const identity = (

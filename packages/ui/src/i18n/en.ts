@@ -421,17 +421,6 @@ export const en = {
     /** Names the excluding filter and its hidden count (S10 §6) — `count` renders via `states.filteredHidden`. */
     emptyFilteredBody: "This filter is excluding every row.",
     /**
-     * S04 §6's ordinary empty, and only S04's. Today's Recent is a five-row
-     * window over a ledger that holds rows, so neither of the pair above is
-     * true of it: *No transactions yet* is a claim about the whole ledger, and
-     * *This filter is excluding every row* names a filter this screen does not
-     * have. The window came back empty and the full list is where the rows
-     * are — which is what *Show all* beside this does.
-     */
-    emptyRecentTitle: "Nothing recent",
-    emptyRecentBody:
-      "Your ledger has transactions, just none among the latest few. Show all opens the full list.",
-    /**
      * S04's calendar, on a month the ledger has nothing in. `design-system/08`
      * §8.1: a `range` empty must offer *the nearest period that does, with its
      * count*, and must never read as an error — a month with no spending is a
@@ -1063,7 +1052,6 @@ export const en = {
     /** `StatTile` labels — C2, S04 §3. Lower case, matching `mine`/`ours` above. */
     spent: "spent",
     net: "net",
-    showAll: "Show all →",
     /** The unsettled-clearing banner (§8) — C2. `Open` goes to the account, filtered. */
     unsettled: "{{amount}} {{currency}} unallocated · {{account}}",
     /**

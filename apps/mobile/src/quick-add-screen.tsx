@@ -24,7 +24,7 @@ import { useBreakpoint } from "@waltning/ui/primitives/use-breakpoint";
 import { GroundPanel } from "@waltning/ui/shell/card";
 import { text } from "@waltning/ui/theme/fonts";
 import { makeStyles } from "@waltning/ui/theme/styles";
-import { space } from "@waltning/ui/tokens";
+import { gutter, space } from "@waltning/ui/tokens";
 import { applyKey } from "@waltning/ui/transactions/amount-keys";
 import { ComposerHeader } from "@waltning/ui/transactions/composer-header";
 import { Dock, type DockModeOption } from "@waltning/ui/transactions/dock";
@@ -125,7 +125,7 @@ export default function QuickAdd() {
   const insets = useSafeArea();
   // Beside the JSX rather than in `useStyles`: that cache is keyed on the
   // theme and this is keyed on the device (`ComposerHeader`'s own split).
-  const clearTop = { paddingTop: space.x5 + insets.top };
+  const clearTop = { paddingTop: gutter + insets.top };
 
   /**
    * D4a: S06's sheet is composed here, not inside `QuickAddForm` or
@@ -714,7 +714,7 @@ const useStyles = makeStyles((theme) => ({
   /** The desk fallback's own header band — `ComposerHeader`'s shape, without a ✕ the form already carries as *Cancel*. */
   deskBand: {
     backgroundColor: theme.ground,
-    paddingHorizontal: space.x5,
+    paddingHorizontal: gutter,
     paddingBottom: space.x3,
   },
   /** Its heading — the navigation header's own face (`_layout.tsx`'s `headerTitleStyle`). */

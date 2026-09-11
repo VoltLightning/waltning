@@ -729,7 +729,17 @@ export const breakpoint = { desk: 1024 } as const;
  */
 /**
  * `min` is §10's floor for anything pressed. `row` is the deck's density for a
- * ledger row — 54, an icon of 32 with 11 above and below — which is what keeps
- * a row from being a control-height strip.
+ * ledger row — 54: a two-line identity of 32 (payee over category) with 11
+ * above and below — which is what keeps a row from being a control-height
+ * strip.
  */
 export const touchTarget = { min: 44, row: 54 } as const;
+
+/**
+ * Screen edge to content — `02-tokens` §2.3's **20**. One name, because it is
+ * cleared in seven places (`Shell`, `TabHeader`, `GroundPanel`, `DeskBand`,
+ * `ComposerHeader`, the quick-add screen and `useGroundInset`) that exist to
+ * agree: when the gutter moved from 22 to 20, two of the seven stayed at 22
+ * and the desk's band sat 2px wide of the panel under it.
+ */
+export const gutter = space.x4;

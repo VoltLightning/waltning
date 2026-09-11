@@ -269,7 +269,11 @@ destination were four boxes around four controls.
 transaction row on the same screen as the first, and a door into the page one
 swipe away. Summary reads the same page the List walks and folds it the same
 way (`useRecentDays` → `toLedgerItems`), so a day's kicker, figure and rows are
-one component on both pages and cannot disagree about a day.
+one component on both pages and cannot disagree about a day. When that page
+holds no day — every row the ledger has is dated ahead of today — Summary draws
+what the List draws for the same day: today, as its own quiet line. **Never the
+first-run wording**: which emptiness it is, is a count over the whole ledger,
+and a ledger of expected entries has been started.
 
 ***Go to* carries only what nothing else does.** Accounts and the agent are
 tabs, so a card for either would be a second door into the same room — and a
@@ -461,7 +465,7 @@ happened*.
 | `MonthSummary` | The hero, opening month only. *Kept so far* stacked over its figure, a `FlowBar`, then the labelled pair. Draws three zeroes for a period the ledger did not exist in — that is the true answer, not an empty state |
 | `FlowBar` | Track is *came in*, fill is *went out*, gap is *kept*. Fill clamps at 100%; a deficit is carried by the figures, not by an overrunning bar |
 | `SpendRows` | *Where it went* — §6 at leaf granularity, five rows plus a named remainder, bars proportional to the largest row, one colour. Opening month only |
-| `DayRibbon` | Under `PageTabs`, on the List page only. Continuous — a cell for **every** day between the first and the last the list has loaded, not only the days holding rows, because the distance between two marks is part of what the strip draws. **Earliest at the left**, and scrolled so the day the list is on is in the middle of it. Horizontally scrollable, clipped at both edges. 48×66 cells with the day number at 17px and room around the weekday letter. Activity mark per §3 |
+| `DayRibbon` | Under `PageTabs`, on the List page only. Continuous — a cell for **every** day between the first and the last the list has loaded, not only the days holding rows, because the distance between two marks is part of what the strip draws — and **no further than 45 days either side of the anchor** (`RIBBON_REACH`): the list collapses a five-year gap into one row, the strip cannot, so it draws its neighbourhood rather than the ledger. **Earliest at the left**, and scrolled so the day the list is on is in the middle of it. Horizontally scrollable, clipped at both edges. 48×66 cells with the day number at 17px and room around the weekday letter. Activity mark per §3 |
 | `MonthGrid` | Calendar's own grid — a day per cell with `DayRibbon`'s activity mark, ≥44px |
 | `EmptyState` | Calendar's three, under the grid — §8.1's `filtered`, `range` and `first-run`, never a blank |
 | `YearChart` | Months' hero — twelve paired columns scaled to the busiest month of the year, the current month ticked, empty months drawn as stubs. Carries the year, its net, its two arrows and the button that opens `YearPicker` |
@@ -553,7 +557,7 @@ everything between needs a rule.
 
 | Boundary | Rule |
 |---|---|
-| **Cold open** | Anchored on today, whether or not today holds anything — and today is on the page either way, as its own quiet line when nothing is on it. The ribbon's cells run from the oldest loaded day to the newest **or the anchor**, so the day the screen is named for always has a cell; a strip that ran only between loaded rows began two days ago on a quiet Friday |
+| **Cold open** | Anchored on today, whether or not today holds anything — and today is on the page either way: as its own quiet line when the ledger holds rows and none on it, and as the ribbon's one cell over a ledger holding nothing, where the first-run state stands in the rows' place. The ribbon's cells run from the oldest loaded day to the newest **or the anchor**, within the strip's reach, so the day the screen is named for always has a cell; a strip that ran only between loaded rows began two days ago on a quiet Friday, and one built only from the list had no cell at all until the first row was captured. Nothing is drawn until both halves have answered — one frame — so no line says *nothing that day* about a day nothing has read |
 | **Forward horizon** | Expected entries stop at the **end of the current month**, with a stated reason. Recurring rules repeat forever, so a horizon is not optional; this one answers *what is still coming before the month turns* and nothing wider. S21 Recurring and S34 Subscriptions are where a rule's whole future lives, and a list that projected a quarter would be answering their question badly on a screen that cannot show a rule |
 | **Expected that arrived** | The real transaction replaces the expected one in place and is marked as having been expected. Never both |
 | **Expected that did not arrive** | Stays in its own past day, still dashed, still uncoloured. It is a rule that did not fire, not a debt |

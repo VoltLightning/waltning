@@ -96,10 +96,6 @@ function monthMatch(t: ReturnType<typeof useT>, count: number): { label: string;
   };
 }
 
-function handleShowAll() {
-  router.push("/ledger");
-}
-
 /**
  * Summary's *Go to* — only what neither the tab bar nor the shared bar
  * carries (S04 §3). Debt is here rather than in the bar because it is a figure
@@ -204,10 +200,6 @@ export default function Today() {
     () => ({ label: t("shell.add"), onPress: handleAddTransaction }),
     [t],
   );
-  // The ledger holds rows this screen's five-row window did not return — S10
-  // is where they are, and *Show all* is already the Recent card's own way of
-  // saying so. Existing copy, existing destination.
-  const showAllAction = useMemo(() => ({ label: t("shell.showAll"), onPress: handleShowAll }), [t]);
   const snapshot = usePhoneLedger(ledger);
   const systemScheme = useColorScheme();
   const resolved = useAppearance(
@@ -249,22 +241,6 @@ export default function Today() {
   /** Its own counter, so a second refusal with the same wording still shows. */
   const [refusalToken, setRefusalToken] = useState(0);
   const hasAccounts = snapshot.accounts.length > 0;
-  /**
-   * **An empty Recent is not by itself a first run.** `snapshot.recent` is a
-   * five-row window (`create-phone-ledger.ts` calls `listRecent(5)`), and a
-   * window that came back empty is not the same claim as *this ledger has
-   * never held a transaction* — the second is a count over the whole ledger,
-   * and only the count may choose the `first-run` wording. S10 decides its own
-   * empty the same way, through the same unfiltered `searchTransactions({})`.
-   *
-   * Asked for only when the empty state needs it — `ledger-screen.tsx`'s own
-   * reason: an unfiltered count on every render is a second query nothing
-   * else on this screen wants.
-   */
-  const everCaptured =
-    hasAccounts && snapshot.recent.length === 0
-      ? ledger.searchTransactions({}).total.count > 0
-      : false;
   const handleReset = useCallback(() => ledger.reset(), [ledger]);
   // The error a failed refresh set stays on the snapshot until the next
   // success (`create-phone-ledger.ts`'s `refresh()`) — `ErrorState`'s action
@@ -599,6 +575,25 @@ export default function Today() {
             .slice(0, RECENT_DAYS),
     [recentRows, pivotCurrency],
   );
+  /**
+   * **No last days is not by itself a first run.** `recentDays` is a page read
+   * *older* from today, so a ledger whose every row is dated ahead — §6's
+   * forward horizon is a shipped case — folds to no days at all, and so does
+   * one whose pivot has not loaded. Neither is *this ledger has never held a
+   * transaction*: that is a count over the whole ledger, and only the count
+   * may choose the `first-run` wording. `snapshot.recent` has no date bound
+   * and answers first; the unfiltered `searchTransactions({})` — S10's own
+   * predicate — is asked only when it is empty too, because a count on every
+   * render is a second query nothing else here wants.
+   *
+   * Asked on the same predicate as the branch it feeds. It was asked on
+   * `snapshot.recent.length` while the branch tested `recentDays.length`, and
+   * a ledger holding one expected entry read *No transactions yet*.
+   */
+  const everCaptured =
+    hasAccounts && recentDays.length === 0
+      ? snapshot.recent.length > 0 || ledger.searchTransactions({}).total.count > 0
+      : true;
 
   const whereItWent = useMemo(
     () =>
@@ -702,26 +697,23 @@ export default function Today() {
         <>
           {unsettledBanner}
           {/*
-        S04 §3 — the card *is* the group of Recent rows, so with no rows there
-        is no group to draw, and *Show all* has nothing to show. What replaces
-        it depends on the count, never on the window: an account exists and the
-        ledger has never held a transaction is `first-run` for the ledger, not
-        for the account list; a ledger that holds rows the window did not
-        return is the ordinary empty. Both render on the ground
-        (`design-system/05` §5.1). The first-run pair is S10's own, unchanged —
-        the ledger is empty is the same fact on both screens. The ordinary one
-        is this screen's own (`transactions.emptyRecent*`, S04 §6): S10's says
-        a filter is excluding every row, and Recent has no filter to blame — it
-        has a five-row window, and *Show all* goes where the rows are.
+        S04 §3 — the last days are drawn as the List draws them, so with no day
+        on or before today there is no group to draw. What stands there depends
+        on the count, never on the window: an account exists and the ledger has
+        never held a transaction is `first-run` for the ledger, not for the
+        account list — S10's own pair, unchanged, because *the ledger is empty*
+        is the same fact on both screens. A ledger that holds rows and none on
+        or before today gets what the List gives the same day: today, as its
+        own quiet line. Both render on the ground (`design-system/05` §5.1).
       */}
           {whereItWent}
           {recentDays.length === 0 ? (
             everCaptured ? (
-              <EmptyState
-                variant="filtered"
-                title={t("transactions.emptyRecentTitle")}
-                body={t("transactions.emptyRecentBody")}
-                primaryAction={showAllAction}
+              <DayHeader
+                label={dayLabel(today, locale)}
+                total={
+                  <RNText style={sectionStyles.nothing}>{t("transactions.nothingThatDay")}</RNText>
+                }
               />
             ) : (
               <EmptyState
@@ -802,10 +794,10 @@ export default function Today() {
       hasAccounts,
       unsettledBanner,
       t,
-      showAllAction,
       addTransactionAction,
       createAccountAction,
       recentDays,
+      today,
       locale,
       pivotCurrency,
       whereItWent,

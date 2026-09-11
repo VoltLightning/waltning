@@ -141,18 +141,26 @@ export function HomeListPage({
     // A filtered set has no gaps to explain and no day totals to state —
     // `ledger-days`' own `filtered` option carries the whole argument. The
     // anchor is always an item: the day this page is on is on this page.
+    //
+    // **Nothing until both halves have answered.** Rows arrive in the same
+    // passive flush as the mount, so this is one frame — but a quiet line
+    // drawn from an empty `rows` before the read is the list asserting
+    // *nothing that day* about a day it has not looked at, and over an empty
+    // ledger the first-run state stands where the rows would, with no line
+    // above it saying today was quiet.
     () =>
-      // Both halves answered and nothing came: the ledger is empty, and the
-      // page's own empty state says so. Until then the anchor is the list.
-      settled && rows.length === 0
-        ? []
-        : toLedgerItems(rows, pivotCurrency, { filtered: query !== null, anchor }),
+      settled && rows.length > 0
+        ? toLedgerItems(rows, pivotCurrency, { filtered: query !== null, anchor })
+        : [],
     [rows, settled, pivotCurrency, query, anchor],
   );
 
   const days = useMemo<readonly RibbonDay[]>(
     () =>
-      ribbonDays(items, { filtered: query !== null }).map((day) => ({
+      // The strip gets the anchor in its own right, so the day this page is
+      // named for has a cell from the first frame and over an empty ledger —
+      // the one cell an empty List has.
+      ribbonDays(items, { filtered: query !== null, anchor }).map((day) => ({
         date: day.date,
         day: Number(day.date.slice(8, 10)),
         weekday: weekdayInitial(day.date, locale),
@@ -177,7 +185,7 @@ export function HomeListPage({
                   count: day.entries,
                 }),
       })),
-    [items, locale, query, t, today],
+    [items, locale, query, t, today, anchor],
   );
 
   const entries = useMemo<readonly Entry[]>(() => {
@@ -304,15 +312,6 @@ export function HomeListPage({
     scrolledFor.current = listKey;
     list.current?.scrollToIndex({ index: anchorIndex, animated: false, viewPosition: 0 });
   }, [anchorIndex, listKey]);
-  const settleScroll = useCallback((info: { index: number; averageItemLength: number }) => {
-    list.current?.scrollToOffset({
-      offset: info.averageItemLength * info.index,
-      animated: false,
-    });
-    requestAnimationFrame(() => {
-      list.current?.scrollToIndex({ index: info.index, animated: false, viewPosition: 0 });
-    });
-  }, []);
   const handleEndReached = useCallback(() => {
     if (hasOlder) loadOlder();
   }, [hasOlder, loadOlder]);
@@ -336,6 +335,19 @@ export function HomeListPage({
     lastKey.current = listKey;
     gate.current.reset();
   }
+  // The retry a frame later is for *this* list: a jump between the two would
+  // otherwise scroll the new anchor's list to the old anchor's index.
+  const settleScroll = useCallback((info: { index: number; averageItemLength: number }) => {
+    const key = lastKey.current;
+    list.current?.scrollToOffset({
+      offset: info.averageItemLength * info.index,
+      animated: false,
+    });
+    requestAnimationFrame(() => {
+      if (lastKey.current !== key) return;
+      list.current?.scrollToIndex({ index: info.index, animated: false, viewPosition: 0 });
+    });
+  }, []);
   // Ref-stable: `FlatList` refuses a changing `onViewableItemsChanged`, and
   // this one closes over nothing but a ref.
   const notedScroll = useRef((info: { viewableItems: ViewToken[] }) => {
@@ -369,24 +381,23 @@ export function HomeListPage({
   // render of an empty list and the empty state still drew, which is the kind
   // of breakage only the console reports.
   //
-  // **There are three emptinesses here and only one of them is the ledger's.**
-  // The screen's `empty` is S04 §6's *no transactions* — a claim about the
-  // whole ledger, with a first capture offered — and it is right for exactly
-  // one of the three:
+  // **Two emptinesses, and only one of them is the ledger's.** The screen's
+  // `empty` is S04 §6's *no transactions* — a claim about the whole ledger,
+  // with a first capture offered — and it is right for exactly one:
   //
   // - **Searching.** §6's *Empty · filtered*: the ledger holds rows, this query
   //   does not match them. The first-run wording here would tell a reader with
   //   a full ledger that they have never captured anything, because they typed
   //   a word.
-  // - **Jumped behind the ledger's own beginning.** The reader has rows; they
-  //   are all newer than where they are standing, one tap away on the pill
-  //   above.
-  // - **Anchored on today with nothing anywhere.** The ledger really is empty,
-  //   and a first capture is the thing to offer.
+  // - **Nothing anywhere.** Both halves were read from the anchor and neither
+  //   found a row, wherever the anchor is: the ledger really is empty, and a
+  //   first capture is the thing to offer. A jump *behind* the ledger is not
+  //   this — its newer half holds the rows, and the anchor is drawn above them
+  //   as its own quiet line.
   //
-  // Which one it is is a question about *this page's* two parameters, the query
-  // and the anchor, so this is the part of the empty state the page decides and
-  // the screen cannot.
+  // Which one it is is a question about *this page's* query, so this is the
+  // part of the empty state the page decides and the screen cannot. Nothing is
+  // drawn until the halves have answered — see `items`.
   const emptyElement = useMemo(
     () => (
       <View style={styles.empty}>
@@ -433,7 +444,7 @@ export function HomeListPage({
           data={entries}
           renderItem={renderItem}
           keyExtractor={keyExtractor}
-          ListEmptyComponent={emptyElement}
+          ListEmptyComponent={settled ? emptyElement : null}
           // So the empty state has the page to sit in rather than a strip at
           // the top of one: with no rows the content is shorter than the
           // scroller.
