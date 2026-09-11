@@ -27,8 +27,16 @@ import { decimalMark } from "../../../i18n/locales";
 import { useLocale, useT } from "../../../i18n/provider";
 import { text, textCap } from "../../../theme/fonts.ts";
 import { makeStyles } from "../../../theme/styles.ts";
-import { focus, radius, space, tabularNums, touchTarget } from "../../../tokens.ts";
-import { sanitizeAmount } from "../../amount-keys.ts";
+import {
+  DIGIT_EM,
+  focus,
+  radius,
+  space,
+  tabularNums,
+  touchTarget,
+  type as typeScale,
+} from "../../../tokens.ts";
+import { AMOUNT_INTEGER_DIGITS, sanitizeAmount } from "../../amount-keys.ts";
 
 export type AmountCardProps = {
   /** The card's own label — *How much?* */
@@ -67,12 +75,17 @@ export function AmountCard({
   const mark = decimalMark(locale);
   const display = raw.replace(",", mark);
   const handleChange = useCallback(
-    (typed: string) => onChangeRaw(sanitizeAmount(typed, decimals)),
-    [onChangeRaw, decimals],
+    (typed: string) => onChangeRaw(sanitizeAmount(typed, decimals, mark)),
+    [onChangeRaw, decimals, mark],
   );
   // The card is the field, so the card wears the ring (§2.6) — the input
   // inside it has its own suppressed, see `input` below.
   const [focused, setFocused] = useState(false);
+  // Sized to the figure, so the affix follows it: an `<input>` otherwise
+  // takes its own default width and the currency lands at the far edge.
+  const figureWidth = {
+    width: Math.max(1, display.length) * DIGIT_EM * typeScale.displayHero.fontSize,
+  };
   const handleFocus = useCallback(() => setFocused(true), []);
   const handleBlur = useCallback(() => setFocused(false), []);
 
@@ -96,11 +109,14 @@ export function AmountCard({
           placeholderTextColor={styles.placeholder.color}
           keyboardType="decimal-pad"
           inputMode="decimal"
+          // `parseAmount`'s twelve integer digits, the mark and the fraction —
+          // past that the schema would refuse the write anyway.
+          maxLength={AMOUNT_INTEGER_DIGITS + 1 + decimals}
           autoFocus={autoFocus}
           onFocus={handleFocus}
           onBlur={handleBlur}
           maxFontSizeMultiplier={textCap("displayHero")}
-          style={styles.input}
+          style={[styles.input, figureWidth]}
         />
         {currency === undefined ? null : <Text style={styles.affix}>{currency}</Text>}
       </View>
@@ -150,7 +166,6 @@ const useStyles = makeStyles((theme) => ({
   signIn: { color: theme.income },
   input: {
     flexShrink: 1,
-    minWidth: 40,
     padding: 0,
     color: theme.text,
     ...text.display("displayHero"),

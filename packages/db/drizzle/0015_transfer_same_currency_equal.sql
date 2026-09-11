@@ -1,0 +1,1 @@
+ALTER TABLE "transactions" ADD CONSTRAINT "transactions_transfer_same_currency_equal" CHECK ("transactions"."to_currency" is null or "transactions"."to_currency" <> "transactions"."currency" or "transactions"."to_amount" = "transactions"."amount_original");

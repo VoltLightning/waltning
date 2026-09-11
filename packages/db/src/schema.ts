@@ -490,6 +490,13 @@ export const transactions = pgTable("transactions", transactionsColumns(), (t) =
     "transactions_transfer_distinct",
     sql`${t.toAccountId} is null or ${t.toAccountId} <> ${t.accountId}`,
   ),
+  // §7.5 — a transfer inside one currency moves one figure: the two legs
+  // are the same amount, or one of them is a typo the screen could not show
+  // (the destination is not drawn for a same-currency pair).
+  check(
+    "transactions_transfer_same_currency_equal",
+    sql`${t.toCurrency} is null or ${t.toCurrency} <> ${t.currency} or ${t.toAmount} = ${t.amountOriginal}`,
+  ),
   // Both amounts, or neither — a half-specified transfer is a silent bug.
   check(
     "transactions_to_amount_shape",

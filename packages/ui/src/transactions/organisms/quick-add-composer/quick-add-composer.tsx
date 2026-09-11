@@ -365,6 +365,19 @@ export function QuickAddComposer({
 
   return (
     <View style={styles.root}>
+      {fieldErrors && fieldErrors.formLevel.length > 0 ? (
+        // A refusal a person cannot see is a refusal that never happened
+        // (`field-errors.ts`): whatever `mapFieldErrors` could not place on a
+        // field is stated here, over the cards, the way `QuickAddForm` does.
+        <View style={styles.formLevel} accessibilityRole="alert">
+          <Text style={styles.formLevelHeading}>{t("common.couldNotSave")}</Text>
+          {fieldErrors.formLevel.map((message) => (
+            <Text key={message} style={styles.fieldError}>
+              {message}
+            </Text>
+          ))}
+        </View>
+      ) : null}
       <AmountCard
         label={t("transactions.howMuch")}
         raw={raw}
@@ -675,6 +688,9 @@ function isCounterpartyRole(value: string): value is CounterpartyRole {
 const useStyles = makeStyles((theme) => ({
   // The deck's 20 between blocks — the same gap the page keeps between its cards.
   root: { gap: space.x4 },
+  formLevel: { gap: space.xs, paddingHorizontal: space.xs },
+  formLevelHeading: { color: theme.dangerText, ...text.ui("body", 600) },
+  fieldError: { color: theme.dangerText, ...text.ui("caption") },
   /** §14 — text, not tint alone (P5); `theme.textMuted`, the same colour `CategorySheet`'s own caption uses. */
   lowConfidence: { color: theme.textMuted, ...text.ui("caption"), paddingHorizontal: space.xs },
   /** H1, S05 §8's P2 trail row — the caption and Undo beside it. */

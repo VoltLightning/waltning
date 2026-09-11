@@ -7,7 +7,7 @@
  */
 
 import { expect, test } from "@playwright/test";
-import { createAccount, tapAmount, USD } from "./support.ts";
+import { createAccount, USD } from "./support.ts";
 
 test("a same-currency transfer moves money between two accounts", async ({ page }) => {
   await page.goto("/");
@@ -23,13 +23,12 @@ test("a same-currency transfer moves money between two accounts", async ({ page 
   await page.getByRole("button", { name: /^To/ }).click();
   await page.getByRole("radio", { name: "Savings · USD" }).click();
 
-  // Same currency both sides: one amount field, no `Destination amount`
-  // chip at all (the test this mirrors asserts exactly that absence).
-  await expect(page.getByRole("button", { name: /^Destination amount/ })).toBeHidden();
-  await page.getByRole("button", { name: "Amount: 0" }).click();
-  await tapAmount(page, ["5", "0"]);
+  // Same currency both sides: one card, no `Destination amount` field at
+  // all (the test this mirrors asserts exactly that absence).
+  await expect(page.getByRole("textbox", { name: "Destination amount" })).toBeHidden();
+  await page.getByRole("textbox", { name: "Amount" }).fill("50");
 
-  await page.getByRole("button", { name: "Save" }).click();
+  await page.getByRole("button", { name: "Move money" }).click();
   await expect(page).toHaveURL("/");
 
   // Both legs of the transfer, visible on the ledger (`(tabs)/ledger.tsx`).

@@ -106,6 +106,13 @@
       "when": 1788617400000,
       "tag": "0014_dashboard_layout_seed",
       "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1789139779221,
+      "tag": "0015_transfer_same_currency_equal",
+      "breakpoints": true
     }
   ]
 }

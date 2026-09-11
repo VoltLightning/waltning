@@ -2943,6 +2943,10 @@ describe("a control's edge is not the divider colour", () => {
       "S05's card of choices — an area, with its own pressable rows inside it (`DayGroup#rows`'s own shape)",
     ],
     [
+      "packages/ui/src/transactions/organisms/transfer-composer/transfer-composer.tsx#card",
+      "S31's two cards — *Leaves* and *Arrives* — areas holding a typed field and the leg rows, bordered as cards",
+    ],
+    [
       "packages/ui/src/transactions/organisms/quick-add-composer/quick-add-composer.tsx#noteCard",
       "S05's note — the deck draws it as a card holding a field, the same way it draws the amount",
     ],

@@ -37,9 +37,11 @@ export type ComposerRowProps = {
   /** What it holds; absent draws `placeholder` in the muted ink instead. */
   value?: string | undefined;
   placeholder?: string | undefined;
-  /** The 32 tile at the left — an icon or a letter, already tinted by the caller. */
-  tile: ReactNode;
-  tileFill: string;
+  /** The 32 tile at the left — an icon or a letter, already tinted by the caller. S31's leg rows carry none. */
+  tile?: ReactNode;
+  tileFill?: string;
+  /** What sits at the right instead of the caret — a balance on a transfer's leg row. */
+  trailing?: ReactNode;
   onPress: () => void;
   /** Filled by a machine, not a person — P2's marker, stated in the label (never tint alone). */
   machineFilled?: boolean;
@@ -55,6 +57,7 @@ export function ComposerRow({
   placeholder,
   tile,
   tileFill,
+  trailing,
   onPress,
   machineFilled = false,
   error,
@@ -64,7 +67,7 @@ export function ComposerRow({
   const theme = useTheme();
   const styles = useStyles();
   const { hovered, focused, handlers } = useInteraction();
-  const fill = { backgroundColor: tileFill };
+  const fill = { backgroundColor: tileFill ?? theme.subtleFill };
   const shown = value ?? placeholder ?? "";
   // An empty row announces its placeholder too — the below-threshold category
   // suggestion lives only there, and text nobody hears is tint alone (P5).
@@ -86,7 +89,7 @@ export function ComposerRow({
         {...handlers}
         style={[styles.row, hovered ? styles.hovered : null, focused ? styles.focused : null]}
       >
-        <View style={[styles.tile, fill]}>{tile}</View>
+        {tile === undefined ? null : <View style={[styles.tile, fill]}>{tile}</View>}
         <View style={styles.words}>
           <Text style={styles.label}>
             {machineFilled ? t("transactions.fieldLabelMachineFilled", { field: label }) : label}
@@ -95,7 +98,7 @@ export function ComposerRow({
             {shown}
           </Text>
         </View>
-        <CaretRightIcon size={15} color={theme.textFaint} />
+        {trailing === undefined ? <CaretRightIcon size={15} color={theme.textFaint} /> : trailing}
       </Pressable>
       {error === undefined ? null : <Text style={styles.error}>{error}</Text>}
     </View>

@@ -73,9 +73,8 @@ export async function createCounterparty(page: Page, name: string): Promise<void
 }
 
 /**
- * `Keypad`'s own glyphs, tapped in order — `transfer-screen.test.tsx`'s own
- * `tapKeys` restated for a real page. The transfer and settle composers still
- * carry a drawn keypad; Quick add does not (`typeAmount` below).
+ * `Keypad`'s own glyphs, tapped in order — the settle sheet still carries a
+ * drawn keypad; the two composers do not (`typeAmount` below).
  */
 export async function tapAmount(page: Page, digits: readonly string[]): Promise<void> {
   for (const digit of digits) {

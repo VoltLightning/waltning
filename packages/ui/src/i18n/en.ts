@@ -473,6 +473,20 @@ export const en = {
     savedOnPhone: "Saved on your phone — syncs when you're back online",
     saveExpense: "Save expense",
     saveIncome: "Save income",
+    /** S31 §3 — the transfer composer's own words, on the deck's anatomy. */
+    moveMoney: "Move money",
+    betweenOwnAccounts: "Between two of your own accounts",
+    leaves: "Leaves",
+    arrives: "Arrives",
+    rateUsed: "Rate used",
+    costsYou: "Costs you",
+    savesYou: "Saves you",
+    rateProvenance: "{{source}} · {{date}}",
+    rateProvenanceCarried: "{{source}} · carried {{count}} d from {{date}}",
+    transferSpreadNote:
+      "The spread against the reference rate, shown now rather than found in a report months later.",
+    transferLinkedNote: "One entry on each side, linked — neither is income",
+    moreDetailsTransferHint: "Fee, date, note",
     /** The one line under the figure — a pace against the previous months, never a bare amount (§1). */
     categoryPace: "{{category}} this month: {{percent}}% of usual",
     /** A row's label while a machine filled its value (P2) — the words, not tint alone. */
