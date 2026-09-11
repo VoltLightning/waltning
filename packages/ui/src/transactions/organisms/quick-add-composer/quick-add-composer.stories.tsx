@@ -57,6 +57,7 @@ const meta = {
   component: QuickAddComposer,
   args: {
     raw: "",
+    onRawChange: noop,
     type: "expense",
     accounts: ACCOUNTS,
     accountId: null,
@@ -65,6 +66,7 @@ const meta = {
     categories: CATEGORIES,
     categoryId: null,
     onOpenCategoryPicker: noop,
+    onPickCategory: noop,
     payee: "",
     onPayeeChange: noop,
     date: TODAY,
@@ -172,7 +174,8 @@ export const WithCounterparty: Story = {
   render: (args) => <WithCounterpartyDemo {...args} />,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await userEvent.click(await canvas.findByRole("button", { name: "+ Person" }));
+    await userEvent.click(await canvas.findByRole("button", { name: /^More details/ }));
+    await userEvent.click(await canvas.findByRole("button", { name: "Person" }));
     // `BottomSheet` (`shell/bottom-sheet.tsx`) portals its content to a
     // sibling of `canvasElement` on the web — `account-picker.stories.tsx:161`'s
     // own reason — so the Select trigger and everything past it is queried

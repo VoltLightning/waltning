@@ -73,6 +73,7 @@ function draw(
           ledger={ledger}
           anchor={over.anchor ?? TODAY}
           today={TODAY}
+          revision={0}
           pivotCurrency={PLN}
           pivotDecimals={2}
           onPickDay={onPickDay}

@@ -1320,6 +1320,7 @@ export default function Today() {
             ledger={ledger}
             anchor={pager.state.date}
             today={today}
+            revision={snapshot.revision}
             {...(pivotCurrency === undefined
               ? // Unreachable once `currencies` has loaded: the server holds a
                 // partial unique index and a trigger over `is_pivot`, so a
@@ -1413,6 +1414,7 @@ export default function Today() {
       handleCategorize,
       handlePickDay,
       pager.state.query,
+      snapshot.revision,
       returnToToday,
       handlePickMonth,
       handleScroll,

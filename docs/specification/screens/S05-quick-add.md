@@ -1,7 +1,7 @@
 # S05 · Quick add
 
 **Surface** mobile · **Journeys** J2, J3, J7, J8 · **Frequency** several times a day
-**Design** [S05-dark.html](design/S05-dark.html) · [S05.html](design/S05.html)
+**Design** [S05.html](design/S05.html) · [S05-dark.html](design/S05-dark.html) — the deck's frames
 **Status** specified · tier 1
 
 ---
@@ -29,68 +29,106 @@ S07a for photo · S08 when voice yields two intents.
 
 ### Mobile — 390pt
 
-One draft, three ways in, one Save. The modes fill the **same** draft; switching
-mid-draft never discards what is there.
+One draft, one Save, and the amount typed on the keyboard every other number on
+the phone is typed on.
 
 ```
 ┌─────────────────────────────────────────────────┐
-│  ✕                                    expense ▾ │
+│  Add an expense                              ✕  │  ← the name, and the day under it
+│  Wednesday, 3 September                         │
 │                                                 │
-│                    48,90 zł                     │  ← display-hero, tabular
+│  ┌ Expense ┐   Income      Transfer             │  ← segment control, the kind
 │                                                 │
-│  ┌ trail ─────────────────────────────────────┐ │  ← only when machine-filled
-│  │ ◉ Heard: "forty-eight ninety, cash,        │ │
-│  │   coffee"                            Undo  │ │
-│  └────────────────────────────────────────────┘ │
+│  ┌─────────────────────────────────────────────┐│
+│  │ How much?                                   ││
+│  │ −1 240,50  zł                               ││  ← display-hero, tabular; the sign is the kind's colour
+│  │ [Groceries this month: 61% of usual]        ││  ← one line, only when there is a habit to measure against
+│  └─────────────────────────────────────────────┘│
+│  ┌─────────────────────────────────────────────┐│
+│  │ ▣  From                                   › ││
+│  │    Bank A · PLN                             ││
+│  │ ─────────────────────────────────────────── ││
+│  │ G  Category                               › ││
+│  │    Groceries                                ││
+│  │ ─────────────────────────────────────────── ││
+│  │ …  More details                           › ││  ← payee · date · scope · person, folded
+│  └─────────────────────────────────────────────┘│
+│  [Groceries] [Transport] [Home] [Fun]           │  ← this kind's four most-used, tinted by name
+│  ┌─────────────────────────────────────────────┐│
+│  │ A note, if you want one                     ││
+│  └─────────────────────────────────────────────┘│
 │                                                 │
-│  [Cash · PLN]  [Eating out]  [+ payee]  [Today]  │  ← chips, ≥44px
-│  [Mine]  [+ note]                               │
-│                                                 │
-├─ dock · bottom-anchored ────────────────────────┤
-│   [123]      [◉]      [▣]                       │  ← mode row
-│   ┌───┬───┬───┐                                 │
-│   │ 1 │ 2 │ 3 │                                 │
-│   │ 4 │ 5 │ 6 │        keypad, thumb zone       │
-│   │ 7 │ 8 │ 9 │                                 │
-│   │ , │ 0 │ ⌫ │                                 │
-│   └───┴───┴───┘                                 │
-│   ┌───────────────────────────────────────────┐ │
-│   │                 Save                      │ │  ← full width, primary
-│   └───────────────────────────────────────────┘ │
+│        Saved on your phone — syncs when         │
+│              you're back online                 │
+│  ┌─────────────────────────────────────────────┐│
+│  │               Save expense                  ││  ← full width, primary, at the bottom edge
+│  └─────────────────────────────────────────────┘│
 └─────────────────────────────────────────────────┘
 ```
 
 **The amount is the largest thing on the screen** because it is the only field
-that is always required and always typed.
+that is always required and always typed. It is a `TextInput` in its own card
+(`AmountCard`), opened with the system's decimal keyboard, and what the keyboard
+hands back is folded onto the draft's one shape — digits, one comma, the
+account's own fraction digits (`sanitizeAmount`). A drawn keypad was the earlier
+answer and the deck does not draw one: the system's is the keyboard every other
+figure on the phone is typed on, and it leaves the screen to the draft. **The
+sign is drawn, never typed** — §7.2 stores every amount positive with `type`
+carrying direction, so the `−` before an expense and the `+` before income are
+the kind's colour on the figure (`spend`, `income`), not part of the value.
 
-**The top row is the screen's own header, and it is a fixed band.** This route
-carries no navigation header (`headerShown: false`) — the ✕ and the kind
-control are the whole of it — so the band clears the device's top inset itself
-rather than inheriting one from a bar that is not there. It sits *beside* the
-page body rather than inside it, the way the dock sits below: a header that
-scrolls is not one, and the ✕ is the only way out of a composer.
+**The top band is the screen's own header, and it is fixed.** This route
+carries no navigation header (`headerShown: false`) — the name, the day and the
+✕ are the whole of it — so the band clears the device's top inset itself rather
+than inheriting one from a bar that is not there. It sits *beside* the page body
+rather than inside it, the way the Save footer sits below: a header that scrolls
+is not one, and the ✕ is the only way out of a composer. The name says the kind
+(*Add an expense*, *Add income*); the line under it is the day the draft will be
+stamped with (§7.0a), so a capture made after midnight sees which day it is
+landing on before it lands.
 
-**`expense ▾` opens a menu, and the chevron is why.** Tapping it lists Expense
-and Income **with the draft's own kind marked**; any pick closes the sheet,
-including the one already marked — a menu's job is to answer and go, and the
-marked option is the one a thumb reaches for first.
-A control whose current value and whose action are the same word is only
-obvious to whoever wrote it, and someone tapping to read the options would find
-the draft's kind changed instead — which is also why the menu marks the current
-kind: being read is what it is for, and a menu that answers nothing the trigger
-already said is a tap spent on nothing. **Transfer is not among them** (§9.1) —
-it is a different shape with its own composer.
+**The kind is a segment control, and Transfer is one of its three.** Expense and
+Income switch the draft in place — the amount, the account and the note survive
+the switch; only the category, which is per kind, is re-derived. Transfer is a
+different shape (two accounts, two amounts, a live rate — §9.1) with its own
+composer, S31, and picking it *goes there*: the segment is the deck's way of
+offering the third kind from here, and the route is replaced rather than
+pushed, so the way back from S31 is the tab the reader came from and not an
+abandoned expense draft. An earlier band hung a two-item menu off the title,
+top-right, "out of the thumb zone" — and out of the design.
 
-**The chip row is the whole model.** Account, category, payee, date, scope,
-note, and counterparty when attached. Each chip is empty (placeholder),
-filled, or **machine-filled** — the third carries the trail marker (P2). The
-payee chip (`[+ payee]`, typed, optional) sits between category and date —
-without it the keypad path had no payee, so D2's memory could never fire on a
-row it produced and every keypad capture reached the ledger nameless.
+**Two rows at rest, and the rest behind one.** *From* and *Category* are the
+two choices a capture always needs, and they are drawn as rows in one card: a
+32 tile in the account's or the category's own tint, the field's name over its
+value, a caret saying it opens something. Payee, date, scope and person wait
+behind *More details*, a row in the same card that unfolds them — the chip row
+this replaces put seven placeholders in one wrapping line, every one the same
+weight, so the two that mattered were no more visible than the five that
+rarely do. The folded row summarises what it holds (*Corner Café · Business*)
+so nothing filled is ever invisible, and a refusal on a folded field is drawn
+on the folded row. Each row is empty (placeholder), filled, or
+**machine-filled** — the third states it in the label (*Category · filled
+automatically*, P2), never by tint alone.
 
-**The dock is fixed to the bottom** so the keypad, the mode switch and Save are
-all within thumb reach without a hand shift. Save is full-width because it is
-the only affirmative action and it is pressed in motion.
+**Four categories within reach.** Under the card, this kind's four most-used
+categories as chips, each in the tint `categoryTintFor` gives its name
+everywhere else it appears, the picked one drawn heavier. A chip's pick lands
+in the *Category* row exactly as the sheet's pick does; the picked category is
+always among the four, so a shortcut never hides the current answer.
+
+**The pace line is a ratio, never an amount.** *Groceries this month: 61% of
+usual* — this month's spend in the draft's category against the mean of the
+previous three months that held anything in it (`useCategoryPace`), for an own
+account. No previous month, no line: a percentage of nothing is not a fact.
+It is a ratio because the figure above it is being typed and is not yet a
+figure, and a second amount under it in prose would be the one place money is
+drawn outside `<Amount>`.
+
+**Save is fixed to the bottom, full width**, because it is the only affirmative
+action and it is pressed in motion. The line above it — *Saved on your phone —
+syncs when you're back online* — is what Save means on a phone that may be
+offline (§6): the write goes to the outbox, and Save reads as done because it
+is. The label names the kind (*Save expense*, *Save income*).
 
 ### The fourth mode — conversational capture
 
@@ -205,15 +243,17 @@ still, and a numeric keypad on screen would be slower than typing.
 
 | Component | Notes |
 |---|---|
-| `Dock` | Mode row (`123` · `◉` · `▣` · `💬`), keypad, full-width Save |
-| `ThinkingIndicator` | Conversational mode, between turns |
-| `Keypad` | 0–9, comma decimal, delete. Bottom-anchored (Fitts) |
-| `AmountField` | `display-hero`, tabular lining numerals, comma decimal, currency affix |
-| `Chip` | Account · category · date · scope · note · counterparty. **≥44px** (Q3). The account chip fills from last-used **only within a short window**, and is otherwise empty with Save disabled — a stale default reads as an answer rather than a question (§9) |
-| `Banner` | `neutral`, under the chip row, when the chosen account's currency has no rate — the refusal, and its one action, *Set a ‹CUR› rate* → S18 |
-| `TrailRow` | *"Heard: forty-eight ninety, cash, coffee"* + **Undo**. The P2 component |
-| `SegmentControl` | Scope — Mine · Shared · Business |
-| `ThinkingIndicator` | While a voice utterance or photo is being parsed |
+| `ComposerHeader` | The fixed band: the name, the day, the ✕. Clears the top inset itself |
+| `SegmentControl` | The kind — Expense · Income · Transfer. Transfer opens S31 |
+| `AmountCard` | *How much?* over a `TextInput` at `display-hero`, tabular lining numerals, the kind's sign in the kind's colour, the currency affix in the accent; the pace line under it |
+| `ComposerRows` · `ComposerRow` | The card of choices: a 32 tinted tile, label over value, caret. *From* · *Category* · *More details*, which unfolds *Payee* · *Date* · *Scope* · *Person*. **≥44px** (Q3). The account row fills from last-used **only within a short window**, and is otherwise empty with Save disabled — a stale default reads as an answer rather than a question (§9) |
+| `CategoryChips` | This kind's four most-used categories, tinted by name, the picked one always among them |
+| `Banner` | `neutral`, under the rows, when the chosen account's currency has no rate — the refusal, and its one action, *Set a ‹CUR› rate* → S18 |
+| `TrailRow` | *From your history: Corner Café* + **Undo**, under the rows, while a proposal fills the category on its own. The P2 component |
+| `SegmentControl` | Scope — Mine · Shared · Business, in the sheet the scope row opens |
+| The note | One line in its own card, no sheet |
+| The footer | The offline line and a full-width primary *Save expense* / *Save income*, clearing the home indicator |
+| `ThinkingIndicator` | While a voice utterance or photo is being parsed (the modes below, when they arrive) |
 | `DiffCard` | Only when voice yields multiple intents → S08 |
 
 ## 5. Data
@@ -251,7 +291,8 @@ voice entry and agent entry produce identical audit rows differing only in
 ## 7. Interaction
 
 ### Mobile
-Thumb-zone: mode row, keypad, Save. Every target ≥44px including chips. Haptic
+Thumb-zone: the category chips and Save; the keyboard is the system's, and it
+rises from the same edge. Every target ≥44px, rows and chips included. Haptic
 on Save. `✕` discards with a confirm **only if a machine filled something** —
 discarding your own typing is cheap to redo; discarding a transcription is not.
 
@@ -300,7 +341,10 @@ fact.
    different shape — two accounts, two amounts, a live rate, and a spread shown
    as it is typed (§14.1) — and folding that into a chip row would compromise
    both. So `+` **long-press** offers Expense · Transfer · Income, and Transfer
-   opens its own composer.
+   opens its own composer. **On the screen itself the kind is a segment
+   control of three** (§3), and its Transfer segment goes to that composer
+   rather than folding a transfer into this draft — the deck offers the third
+   kind from here; the composer that handles it is still S31's.
 
    Sign-as-input was rejected outright: §7.2 stores every amount positive with
    `type` carrying direction, and letting the keypad mean something the ledger

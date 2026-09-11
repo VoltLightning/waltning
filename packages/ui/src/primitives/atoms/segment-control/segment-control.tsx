@@ -176,7 +176,9 @@ const useStyles = makeStyles((theme) => ({
     flexDirection: "row",
     backgroundColor: theme.subtleFill,
     borderRadius: radius.md,
-    padding: space.xxs,
+    // The deck's 4 around the thumb, and concentric with it: a 14 track less 4
+    // is the thumb's own 10.
+    padding: space.xs,
   },
   trackShell: {
     backgroundColor: theme.shellInsetTrackFill,

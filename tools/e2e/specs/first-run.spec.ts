@@ -13,7 +13,7 @@
  */
 
 import { expect, test } from "@playwright/test";
-import { tapAmount, USD } from "./support.ts";
+import { typeAmount, USD } from "./support.ts";
 
 test("a first account, then a first capture, land on Today", async ({ page }) => {
   await page.goto("/");
@@ -41,18 +41,18 @@ test("a first account, then a first capture, land on Today", async ({ page }) =>
   await expect(page.getByText("No accounts yet")).toBeHidden();
 
   await page.getByRole("button", { name: "Add", exact: true }).click();
-  await tapAmount(page, ["4", "8", ".", "9", "0"]);
+  await typeAmount(page, "48.90");
 
   // No `lastCapture` yet on a brand-new session (S05 §9.2) — the account
   // chip opens cold, same as `quick-add-screen.test.tsx`'s own cold case.
-  await page.getByRole("button", { name: "Account" }).click();
+  await page.getByRole("button", { name: "From" }).click();
   await page.getByRole("radio", { name: "Cash · USD" }).click();
 
   // No category exists yet — arc-phone ships no seeded taxonomy
   // (`categories-screen.tsx`'s own doc) and offers no way to create one from
   // the composer, so this capture leaves it unset, exactly as a genuinely
   // first capture would on the real app today.
-  await page.getByRole("button", { name: "Save" }).click();
+  await page.getByRole("button", { name: "Save expense" }).click();
 
   await expect(page).toHaveURL("/");
   // Exact and currency-qualified: `-48.90 USD` (the period's own spend

@@ -1027,7 +1027,7 @@ describe("QuickAdd", () => {
   it("offers the ledger's accounts to capture against, via the account sheet", () => {
     withLedger(<QuickAdd />, fakeController({ accounts: [PLN_ACCOUNT] }));
 
-    fireEvent.click(screen.getByRole("button", { name: "Account" }));
+    fireEvent.click(screen.getByRole("button", { name: /^From/ }));
     expect(screen.getByText("Bank A · PLN")).toBeDefined();
   });
 

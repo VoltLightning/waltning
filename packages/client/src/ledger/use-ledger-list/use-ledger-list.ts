@@ -54,6 +54,21 @@ export type LedgerListOptions = {
    * beyond the desk owning search when this was written.
    */
   filter?: Omit<PhoneSearchFilter, "from" | "to"> | undefined;
+  /**
+   * The ledger's own revision (`snapshot.revision`). A write anywhere —
+   * a capture on S05, a delete on S09, a reset — advances it, and every page
+   * this list holds is **re-read in place**, so the row just saved is on the
+   * page the reader comes back to. Without it the List was the one page on
+   * Today that did not know a transaction had been added: every other page
+   * reads through the snapshot, and this one pages through its own cursors.
+   *
+   * In place, not from scratch: `revision` also advances on reads that write
+   * nothing (a failed refresh, an archived list opened elsewhere), and a
+   * reader three months back must not be thrown to the anchor for it. The
+   * same number of pages is walked again from the anchor, cursor by cursor,
+   * and the scroll is the renderer's to keep.
+   */
+  revision?: number | undefined;
 };
 
 /**
@@ -87,7 +102,7 @@ export type LedgerListOptions = {
  */
 export function useLedgerList(
   ledger: PhoneLedgerController,
-  { anchor, filter }: LedgerListOptions,
+  { anchor, filter, revision = 0 }: LedgerListOptions,
 ): LedgerList {
   const [older, setOlder] = useState<Half>(EMPTY_HALF);
   const [newer, setNewer] = useState<Half>(EMPTY_HALF);
@@ -125,6 +140,9 @@ export function useLedgerList(
     setOlder(EMPTY_HALF);
     setNewer(EMPTY_HALF);
   }
+  // How many pages each half holds — what a re-read walks again.
+  const pages = useRef({ older: 0, newer: 0 });
+  if (listKey !== lastKey) pages.current = { older: 0, newer: 0 };
 
   const read = useCallback(
     (direction: "older" | "newer", cursor: PhoneSearchCursor | undefined) =>
@@ -149,6 +167,7 @@ export function useLedgerList(
     if (issued.current.has(key)) return;
     issued.current.add(key);
     const page = read("older", older.cursor);
+    pages.current.older += 1;
     setOlder((half) => ({
       rows: [...half.rows, ...page.rows],
       cursor: page.nextCursor,
@@ -162,6 +181,7 @@ export function useLedgerList(
     if (issued.current.has(key)) return;
     issued.current.add(key);
     const page = read("newer", newer.cursor);
+    pages.current.newer += 1;
     // Prepended: the newer half grows upward, and its pages arrive
     // newest-first, so each new page sits above everything already held.
     setNewer((half) => ({
@@ -184,6 +204,36 @@ export function useLedgerList(
   useEffect(() => {
     if (!newer.loaded) loadNewer();
   }, [newer.loaded, loadNewer]);
+
+  /**
+   * A write happened: walk the pages already held again, from the anchor,
+   * so what is on the page is what the ledger now says — without discarding
+   * where the reader is. The first revision seen is the mount's, and reads
+   * nothing twice.
+   */
+  const seenRevision = useRef(revision);
+  useEffect(() => {
+    if (seenRevision.current === revision) return;
+    seenRevision.current = revision;
+    const rewalk = (direction: "older" | "newer") => {
+      const count = pages.current[direction];
+      if (count === 0) return null;
+      const rows: PhoneSearchTransaction[] = [];
+      let cursor: PhoneSearchCursor | undefined;
+      for (let n = 0; n < count; n++) {
+        const page = read(direction, cursor);
+        if (direction === "older") rows.push(...page.rows);
+        else rows.unshift(...page.rows);
+        cursor = page.nextCursor;
+        if (cursor === undefined) break;
+      }
+      return { rows, cursor, loaded: true } satisfies Half;
+    };
+    const olderAgain = rewalk("older");
+    const newerAgain = rewalk("newer");
+    if (olderAgain !== null) setOlder(olderAgain);
+    if (newerAgain !== null) setNewer(newerAgain);
+  }, [revision, read]);
 
   const rows = useMemo(() => [...newer.rows, ...older.rows], [newer.rows, older.rows]);
 

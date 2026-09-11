@@ -51,6 +51,13 @@ export type HomeListPageProps = {
   anchor: AccountingDate;
   /** The device's own today, which stays marked wherever the list has scrolled. */
   today: AccountingDate;
+  /**
+   * `snapshot.revision` — a write anywhere re-reads what the list holds, in
+   * place, so the transaction just saved on S05 is on the page the reader
+   * comes back to without the reader being moved (`use-ledger-list.ts`'s own
+   * option). Not part of the list's key: a key change is a jump.
+   */
+  revision: number;
   pivotCurrency: CurrencyCode;
   pivotDecimals: number;
   onPickDay: (date: string) => void;
@@ -113,6 +120,7 @@ export function HomeListPage({
   ledger,
   anchor,
   today,
+  revision,
   pivotCurrency,
   pivotDecimals,
   onPickDay,
@@ -136,6 +144,7 @@ export function HomeListPage({
   const { rows, settled, hasOlder, hasNewer, loadOlder, loadNewer } = useLedgerList(ledger, {
     anchor,
     filter,
+    revision,
   });
   const items = useMemo(
     // A filtered set has no gaps to explain and no day totals to state —
