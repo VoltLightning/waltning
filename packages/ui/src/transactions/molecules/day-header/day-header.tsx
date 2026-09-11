@@ -40,9 +40,11 @@ export function DayHeader({ label, total }: DayHeaderProps) {
 }
 
 const useStyles = makeStyles((theme) => ({
+  // Inset by the deck's 4, so the kicker lines up with the card's own text
+  // rather than its edge. No vertical padding of its own: the group and the
+  // list decide what sits above and below a header.
   header: {
-    paddingTop: space.x3,
-    paddingBottom: space.xs,
+    paddingHorizontal: space.xs,
     flexDirection: "row",
     alignItems: "baseline",
     // Baseline rather than centre: a kicker and a figure at different sizes

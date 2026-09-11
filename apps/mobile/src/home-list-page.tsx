@@ -17,6 +17,7 @@ import { useGroundInset } from "@waltning/ui/shell/ground-inset";
 import { TodayPill } from "@waltning/ui/shell/today-pill";
 import { text } from "@waltning/ui/theme/fonts";
 import { makeStyles } from "@waltning/ui/theme/styles";
+import { space } from "@waltning/ui/tokens";
 import { type DayRowPlace, DayRowSurface } from "@waltning/ui/transactions/day-group";
 import { DayHeader } from "@waltning/ui/transactions/day-header";
 import {
@@ -25,8 +26,8 @@ import {
 } from "@waltning/ui/transactions/molecules/day-ribbon/day-ribbon";
 import { LedgerRowItem } from "@waltning/ui/transactions/molecules/ledger-row-item/ledger-row-item";
 import { QuietDay, QuietRun } from "@waltning/ui/transactions/molecules/quiet-days/quiet-days";
-import { memo, useCallback, useMemo, useRef } from "react";
-import { Text, View, type ViewToken } from "react-native";
+import { memo, useCallback, useEffect, useMemo, useRef } from "react";
+import { type FlatList, Text, View, type ViewToken } from "react-native";
 import Animated from "react-native-reanimated";
 
 /**
@@ -103,9 +104,9 @@ type DayTotal =
   | { pivot: "filtered" };
 
 type Entry =
-  | { key: string; kind: "day"; label: string; total: DayTotal }
+  | { key: string; kind: "day"; date: string; label: string; total: DayTotal; first: boolean }
   | { key: string; kind: "row"; row: PhoneSearchTransaction; place: DayRowPlace }
-  | { key: string; kind: "quiet"; label: string }
+  | { key: string; kind: "quiet"; date: string; label: string }
   | { key: string; kind: "run"; label: string; days: number; from: string };
 
 export function HomeListPage({
@@ -124,20 +125,29 @@ export function HomeListPage({
 }: HomeListPageProps) {
   const t = useT();
   const locale = useLocale();
+  const styles = useStyles();
   // A new object per render would re-key the list and discard both halves on
   // every keystroke — `useLedgerList` treats a filter change as a jump, which
   // is right for a *different* filter and ruinous for an identical one.
   const filter = useMemo(() => (query === null ? undefined : { text: query }), [query]);
-  const { rows, hasOlder, hasNewer, loadOlder, loadNewer } = useLedgerList(ledger, {
+  // One list per anchor and query — what the gate, and the scroll to the
+  // anchor, both reset on.
+  const listKey = `${anchor}|${query ?? ""}`;
+  const { rows, settled, hasOlder, hasNewer, loadOlder, loadNewer } = useLedgerList(ledger, {
     anchor,
-    today,
     filter,
   });
   const items = useMemo(
     // A filtered set has no gaps to explain and no day totals to state —
-    // `ledger-days`' own `filtered` option carries the whole argument.
-    () => toLedgerItems(rows, pivotCurrency, { filtered: query !== null }),
-    [rows, pivotCurrency, query],
+    // `ledger-days`' own `filtered` option carries the whole argument. The
+    // anchor is always an item: the day this page is on is on this page.
+    () =>
+      // Both halves answered and nothing came: the ledger is empty, and the
+      // page's own empty state says so. Until then the anchor is the list.
+      settled && rows.length === 0
+        ? []
+        : toLedgerItems(rows, pivotCurrency, { filtered: query !== null, anchor }),
+    [rows, settled, pivotCurrency, query, anchor],
   );
 
   const days = useMemo<readonly RibbonDay[]>(
@@ -179,7 +189,12 @@ export function HomeListPage({
         // range nobody could find.
         out.push(
           item.days === 1
-            ? { key: `quiet-${item.from}`, kind: "quiet", label: dayLabel(item.from, locale) }
+            ? {
+                key: `quiet-${item.from}`,
+                kind: "quiet",
+                date: item.from,
+                label: dayLabel(item.from, locale),
+              }
             : {
                 key: `run-${item.from}`,
                 kind: "run",
@@ -198,6 +213,8 @@ export function HomeListPage({
       out.push({
         key: `day-${item.date}`,
         kind: "day",
+        date: item.date,
+        first: out.length === 0,
         label: dayLabel(item.date, locale),
         total:
           item.total.kind === "filtered"
@@ -238,23 +255,64 @@ export function HomeListPage({
           return <QuietRunItem entry={item} onPickDay={onPickDay} />;
         default:
           return (
-            <DayHeader
-              label={item.label}
-              total={
-                <DayTotalFigure
-                  total={item.total}
-                  currency={pivotCurrency}
-                  decimals={pivotDecimals}
-                />
-              }
-            />
+            // The deck's 14 between one day's card and the next day's kicker,
+            // and 6 between the kicker and its card — the same two gaps
+            // `DayGroup` keeps, kept here by the list because it renders rows
+            // not groups. The first header sits under the ribbon and takes no
+            // extra room above.
+            <View style={item.first ? styles.firstDayHeader : styles.dayHeader}>
+              <DayHeader
+                label={item.label}
+                total={
+                  <DayTotalFigure
+                    total={item.total}
+                    currency={pivotCurrency}
+                    decimals={pivotDecimals}
+                  />
+                }
+              />
+            </View>
           );
       }
     },
-    [onOpenTransaction, onCategorize, onPickDay, pivotCurrency, pivotDecimals, t],
+    [onOpenTransaction, onCategorize, onPickDay, pivotCurrency, pivotDecimals, t, styles],
   );
 
   const keyExtractor = useCallback((entry: Entry) => entry.key, []);
+
+  /**
+   * **The list opens on the anchor, wherever the anchor's neighbourhood put
+   * it.** The newer half renders above the anchor — it is newer — so a jump
+   * into a dense month would otherwise open on the rows that followed the day
+   * rather than on the day. Scrolled once per anchor, without animation, on
+   * the first render that has the anchor's cell to scroll to; a cold open has
+   * it at index 0 and scrolls nowhere. `onScrollToIndexFailed` is the
+   * platform's own way of saying the cell is not laid out yet: land near it
+   * by the average cell and ask again next frame.
+   */
+  const list = useRef<FlatList<Entry>>(null);
+  const anchorIndex = useMemo(
+    () =>
+      entries.findIndex(
+        (entry) => (entry.kind === "day" || entry.kind === "quiet") && entry.date === anchor,
+      ),
+    [entries, anchor],
+  );
+  const scrolledFor = useRef<string | null>(null);
+  useEffect(() => {
+    if (anchorIndex <= 0 || scrolledFor.current === listKey) return;
+    scrolledFor.current = listKey;
+    list.current?.scrollToIndex({ index: anchorIndex, animated: false, viewPosition: 0 });
+  }, [anchorIndex, listKey]);
+  const settleScroll = useCallback((info: { index: number; averageItemLength: number }) => {
+    list.current?.scrollToOffset({
+      offset: info.averageItemLength * info.index,
+      animated: false,
+    });
+    requestAnimationFrame(() => {
+      list.current?.scrollToIndex({ index: info.index, animated: false, viewPosition: 0 });
+    });
+  }, []);
   const handleEndReached = useCallback(() => {
     if (hasOlder) loadOlder();
   }, [hasOlder, loadOlder]);
@@ -273,7 +331,6 @@ export function HomeListPage({
   // A new list is a new answer to the question. Reset during render, the way
   // `use-pager-route.ts` writes its own ref: an effect runs after the commit,
   // and a start-reached between the two would read the previous list's answer.
-  const listKey = `${anchor}|${query ?? ""}`;
   const lastKey = useRef(listKey);
   if (lastKey.current !== listKey) {
     lastKey.current = listKey;
@@ -299,7 +356,6 @@ export function HomeListPage({
     if (hasNewer) loadNewer();
   }, [hasNewer, loadNewer]);
 
-  const styles = useStyles();
   const inset = useGroundInset();
   // The gutter and the home-indicator clearance, on the content rather than on
   // the scroller: a `View` around the list clips the scroll bar inside the page
@@ -336,16 +392,12 @@ export function HomeListPage({
       <View style={styles.empty}>
         {query !== null ? (
           <Text style={styles.nothingHere}>{t("transactions.noMatchesHere", { query })}</Text>
-        ) : anchor === today ? (
-          empty
         ) : (
-          <Text style={styles.nothingHere}>
-            {t("transactions.nothingOnOrBefore", { date: dayLabel(anchor, locale) })}
-          </Text>
+          empty
         )}
       </View>
     ),
-    [anchor, today, query, empty, locale, t, styles.empty, styles.nothingHere],
+    [query, empty, t, styles.empty, styles.nothingHere],
   );
 
   return (
@@ -376,6 +428,8 @@ export function HomeListPage({
       */}
       <View style={styles.floatBox}>
         <Animated.FlatList
+          ref={list}
+          onScrollToIndexFailed={settleScroll}
           data={entries}
           renderItem={renderItem}
           keyExtractor={keyExtractor}
@@ -600,6 +654,8 @@ const useStyles = makeStyles((theme) => ({
   content: { flexGrow: 1 },
   // Centred in the page it was given, not stacked at the top of it.
   empty: { flex: 1, justifyContent: "center" },
+  dayHeader: { paddingTop: space.x2, paddingBottom: space.sm },
+  firstDayHeader: { paddingBottom: space.sm },
   // A stated fact, not an empty state: one muted line, the weight `QuietDay`
   // gives a day the ledger has nothing for.
   nothingHere: { color: theme.textMuted, textAlign: "center", ...text.ui("body") },

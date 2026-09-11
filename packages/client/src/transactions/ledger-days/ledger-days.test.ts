@@ -265,3 +265,64 @@ describe("the ribbon is continuous", () => {
     expect(ribbonDays([])).toEqual([]);
   });
 });
+
+/**
+ * **The anchor is always an item.** Both halves are read outward from it, so
+ * the days between it and the nearest row on either side are known quiet —
+ * and a screen named for a day must have that day on it. A cold open on a
+ * quiet day used to draw a list and a ribbon that started two days earlier.
+ */
+describe("the anchor", () => {
+  const anchor = accountingDate("2026-09-11");
+
+  it("is drawn as a quiet day when nothing is on it, past the newest row", () => {
+    const items = toLedgerItems([row("2026-09-09", "-10")], PLN, { anchor });
+    expect(kinds(items)).toEqual(["quiet", "quiet", "day"]);
+    expect(items[0]).toEqual({ kind: "quiet", from: anchor, to: anchor, days: 1 });
+    // The day between is known quiet: the older half was read from the anchor.
+    expect(items[1]).toEqual({ kind: "quiet", from: "2026-09-10", to: "2026-09-10", days: 1 });
+  });
+
+  it("is drawn as a quiet day past the oldest row, after a jump behind everything", () => {
+    const items = toLedgerItems([row("2026-09-09", "-10")], PLN, {
+      anchor: accountingDate("2026-09-06"),
+    });
+    expect(kinds(items)).toEqual(["day", "quiet", "quiet"]);
+    expect(items[1]).toMatchObject({
+      kind: "quiet",
+      from: "2026-09-08",
+      to: "2026-09-07",
+      days: 2,
+    });
+    expect(items[2]).toEqual({ kind: "quiet", from: "2026-09-06", to: "2026-09-06", days: 1 });
+  });
+
+  it("splits a quiet run so the anchor is its own line inside it", () => {
+    const items = toLedgerItems([row("2026-09-14", "-10"), row("2026-09-02", "-10")], PLN, {
+      anchor: accountingDate("2026-09-08"),
+    });
+    expect(kinds(items)).toEqual(["day", "quiet", "quiet", "quiet", "day"]);
+    expect(items[2]).toEqual({ kind: "quiet", from: "2026-09-08", to: "2026-09-08", days: 1 });
+  });
+
+  it("is nothing extra when a row already sits on it", () => {
+    const items = toLedgerItems([row("2026-09-11", "-10")], PLN, { anchor });
+    expect(kinds(items)).toEqual(["day"]);
+  });
+
+  it("is not drawn under a filter, which says nothing about days it did not match", () => {
+    const items = toLedgerItems([row("2026-09-09", "-10")], PLN, { anchor, filtered: true });
+    expect(kinds(items)).toEqual(["day"]);
+  });
+
+  it("gives the ribbon a cell, so the day the screen is named for is on it", () => {
+    const strip = ribbonDays(toLedgerItems([row("2026-09-09", "-10")], PLN, { anchor }));
+    expect(strip.map((day) => day.date)).toEqual(["2026-09-09", "2026-09-10", "2026-09-11"]);
+    expect(strip[2]).toMatchObject({ activity: "none", entries: 0 });
+  });
+
+  it("is the whole ribbon when nothing at all is loaded yet", () => {
+    const strip = ribbonDays(toLedgerItems([], PLN, { anchor }));
+    expect(strip.map((day) => day.date)).toEqual([anchor]);
+  });
+});

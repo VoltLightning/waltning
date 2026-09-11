@@ -91,11 +91,11 @@ export function useGroundInset({ clearBottom = true }: GroundInsetOptions = {}):
   const floatClearance = useFloatingClearance();
 
   const gutter = {
-    paddingLeft: space.x5 + insets.left,
-    paddingRight: space.x5 + insets.right,
+    paddingLeft: space.x4 + insets.left,
+    paddingRight: space.x4 + insets.right,
   };
   const bottom = clearBottom ? insets.bottom + floatClearance : 0;
-  const withBottom = { ...gutter, paddingBottom: space.x5 + bottom };
+  const withBottom = { ...gutter, paddingBottom: space.x4 + bottom };
 
   return { gutter, content: withBottom, block: withBottom };
 }

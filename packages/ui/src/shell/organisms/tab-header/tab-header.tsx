@@ -46,9 +46,9 @@ export function TabHeader({ title, action }: TabHeaderProps) {
   // Per-device, so not in `useStyles` — the same arithmetic and the same
   // reason `Shell` states beside its own copy.
   const clearance = {
-    paddingTop: space.x5 + insets.top,
-    paddingLeft: space.x5 + insets.left,
-    paddingRight: space.x5 + insets.right,
+    paddingTop: space.x4 + insets.top,
+    paddingLeft: space.x4 + insets.left,
+    paddingRight: space.x4 + insets.right,
   };
 
   return (
@@ -64,7 +64,7 @@ export function TabHeader({ title, action }: TabHeaderProps) {
 const useStyles = makeStyles((theme) => ({
   header: {
     backgroundColor: theme.shell,
-    padding: space.x5,
+    padding: space.x4,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",

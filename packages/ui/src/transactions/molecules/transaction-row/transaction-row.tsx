@@ -209,9 +209,10 @@ const useStyles = makeStyles((theme) => ({
     alignItems: "center",
     gap: space.xl,
     paddingVertical: space.lg,
-    // The floor (§10) — a pressable row's whole target, not only its
-    // pressable variant, so the two never drift a pixel apart.
-    minHeight: touchTarget.min,
+    // The deck's row: 54, an icon of 32 with 11 above and below. Above §10's
+    // 44 floor, and on the row's whole box rather than only its pressable
+    // variant, so the two never drift a pixel apart.
+    minHeight: touchTarget.row,
   },
   /** Only ever applied when `onPress` is set — a plain `View` row gets neither. */
   hovered: { backgroundColor: theme.hoverFill },

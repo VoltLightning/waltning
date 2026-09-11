@@ -50,9 +50,9 @@ export function Shell({ leading, trailing, hero, children }: ShellProps) {
   // and these vary per device — a cache keyed on the theme alone would hand
   // the second device the first one's notch.
   const clearance = {
-    paddingTop: space.x5 + insets.top,
-    paddingLeft: space.x5 + insets.left,
-    paddingRight: space.x5 + insets.right,
+    paddingTop: space.x4 + insets.top,
+    paddingLeft: space.x4 + insets.left,
+    paddingRight: space.x4 + insets.right,
   };
 
   return (
@@ -68,6 +68,6 @@ export function Shell({ leading, trailing, hero, children }: ShellProps) {
 }
 
 const useStyles = makeStyles((theme) => ({
-  shell: { backgroundColor: theme.shell, padding: space.x5, gap: space.x4 },
+  shell: { backgroundColor: theme.shell, padding: space.x4, gap: space.x4 },
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
 }));

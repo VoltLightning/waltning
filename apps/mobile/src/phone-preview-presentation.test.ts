@@ -30,7 +30,10 @@ describe("phone-alone preview presentation", () => {
     // decision this test has no business pinning.
     expect(today).toContain("<NetWorthStrip");
     expect(today).toContain("leadNetWorth.mine");
-    expect(today).toContain('title={t("shell.recent")}');
+    // The last days are the List's own read and fold, drawn as day groups —
+    // not a *Recent* card with a *Show all* door into the page one swipe away.
+    expect(today).toContain("useRecentDays(");
+    expect(today).not.toContain('title={t("shell.recent")}');
     // The `+` is not wired here — `(tabs)/_layout.tsx` mounts one
     // `FloatingAdd` above the whole tab slot, so it survives a tab switch
     // rather than remounting with this screen.

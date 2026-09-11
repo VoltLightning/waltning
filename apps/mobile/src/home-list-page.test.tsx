@@ -306,27 +306,29 @@ it("states no day total while the rows are a filtered subset", () => {
  * Asserted through the port, the way its sibling above is: what the list asks
  * the ledger for is the behaviour.
  */
-it("asks for nothing newer on a jump, so the list opens where the header says", () => {
-  const ledger = ledgerWith([row("2021-03-02", 1, "-96")], [row("2026-08-14", 2, "-10")]);
+it("asks both ways on a jump, and draws the day jumped to as its own line", () => {
+  // S04 §6: a jump loads the day's neighbourhood. The older-only rule this
+  // replaced landed a jump to a quiet day on *nothing on or before*, over a
+  // ledger holding rows three days newer — a dead end with nothing to walk.
+  const ledger = ledgerWith([], [row("2026-08-14", 2, "-10")]);
   draw(ledger, vi.fn(), { anchor: accountingDate("2021-03-02") });
 
   const asked = vi.mocked(ledger.readLedgerPage).mock.calls.map(([options]) => options.direction);
-  expect(asked, "a jump loads the neighbourhood and nothing between").toEqual(["older"]);
-  expect(screen.queryByRole("button", { name: /Payee 2/ })).toBeNull();
+  expect(asked.sort(), "the neighbourhood, both ways").toEqual(["newer", "older"]);
+  expect(screen.getByRole("button", { name: /Payee 2/ }), "the newer row is here").toBeTruthy();
+  expect(screen.getByText("March 2, 2021"), "and so is the day itself").toBeTruthy();
+  expect(screen.getByText("nothing"), "as a quiet line").toBeTruthy();
 });
 
 /**
- * **A jump behind the ledger's own beginning is not an empty ledger.** The
- * screen's empty state offers a first capture and claims the whole ledger is
- * empty; here the reader has rows, all of them newer than where they are
- * standing, and the pill above is one tap from them.
+ * **A jump behind the ledger's own beginning is not an empty ledger** — but a
+ * ledger that answers nothing in either direction is one, wherever the reader
+ * is standing, and the screen's first-run state is the honest answer.
  */
-it("says nothing is here rather than offering a first capture", () => {
+it("offers a first capture only once both halves have answered nothing", () => {
   draw(ledgerWith([]), vi.fn(), { anchor: accountingDate("2021-03-02") });
-  expect(screen.getByText(/Nothing recorded on or before March 2, 2021/)).toBeTruthy();
-  expect(screen.queryByText("nothing yet"), "that is the ledger's emptiness, not this one").toBe(
-    null,
-  );
+  expect(screen.getByText("nothing yet")).toBeTruthy();
+  expect(screen.queryByText(/Nothing recorded on or before/)).toBeNull();
 });
 
 it("still offers a first capture when the ledger itself is empty", () => {

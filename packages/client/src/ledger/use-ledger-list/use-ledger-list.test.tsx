@@ -57,8 +57,8 @@ function fakeLedger(pages: Record<string, { rows: PhoneSearchTransaction[]; next
 }
 
 /** `today` defaults to the anchor, which is the cold open S04 §6 describes. */
-function draw(ledger: PhoneLedgerController, anchor = ANCHOR, today = ANCHOR) {
-  return renderHook(({ a }) => useLedgerList(ledger, { anchor: a, today }), {
+function draw(ledger: PhoneLedgerController, anchor = ANCHOR) {
+  return renderHook(({ a }) => useLedgerList(ledger, { anchor: a }), {
     initialProps: { a: anchor },
   });
 }
@@ -76,24 +76,22 @@ it("loads both halves on a cold open, so what is coming is already there", () =>
 });
 
 /**
- * S04 §6: a jump *"loads that date's neighbourhood and **nothing between**"*.
+ * S04 §6: a jump *"loads that date's neighbourhood"* — in both directions.
  *
- * Pre-filling the newer half from a past anchor loads exactly what is between,
- * and a reverse-chronological list draws it *first*: jumping to May put
- * September's rows at the top of a list whose header read *May*. The header
- * and the rows named different months on the same screen.
+ * Fetching the older half alone was tried, to keep a jump's page from opening
+ * on rows from months later; what it produced was a jump to a quiet day
+ * reading *nothing on or before* over a ledger with rows three days newer. The
+ * first newer page is the rows nearest the anchor, ascending from it, and the
+ * page opens on the anchor rather than at the top.
  */
-it("loads nothing newer on a jump, so the list opens where the header says", () => {
+it("loads the neighbourhood both ways on a jump", () => {
   const { calls, controller } = fakeLedger({
-    older: [{ rows: [row("2026-05-25", 1)] }],
-    newer: [{ rows: [row("2026-09-11", 2)] }],
+    older: [{ rows: [] }],
+    newer: [{ rows: [row("2026-05-28", 2)] }],
   });
-  const { result } = draw(controller, accountingDate("2026-05-25"), ANCHOR);
-  expect(calls.map((c) => c.direction)).toEqual(["older"]);
-  expect(result.current.rows.map((r) => r.date)).toEqual(["2026-05-25"]);
-  // Still pageable — the walk out of the neighbourhood waits to be asked, it
-  // is not refused.
-  expect(result.current.hasNewer).toBe(true);
+  const { result } = draw(controller, accountingDate("2026-05-25"));
+  expect(calls.map((c) => c.direction).sort()).toEqual(["newer", "older"]);
+  expect(result.current.rows.map((r) => r.date)).toEqual(["2026-05-28"]);
 });
 
 it("walks newer out of a jump when the reader asks", () => {
@@ -101,7 +99,7 @@ it("walks newer out of a jump when the reader asks", () => {
     older: [{ rows: [row("2026-05-25", 1)] }],
     newer: [{ rows: [row("2026-05-27", 2)] }],
   });
-  const { result } = draw(controller, accountingDate("2026-05-25"), ANCHOR);
+  const { result } = draw(controller, accountingDate("2026-05-25"));
   act(() => result.current.loadNewer());
   expect(result.current.rows.map((r) => r.date)).toEqual(["2026-05-27", "2026-05-25"]);
 });

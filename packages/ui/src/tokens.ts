@@ -515,6 +515,13 @@ export const space = {
   xl: 12,
   x2: 14,
   x3: 16,
+  /**
+   * A card's own padding — 18, between the ladder's 16 and 20. Added the way
+   * the 2 was: sixteen of the deck's cards are drawn at 18 and none at 22, the
+   * step every card in the app had been wearing instead, which is what made
+   * every card read a size heavier than its drawing.
+   */
+  x3b: 18,
   x4: 20,
   x5: 22,
   x6: 26,
@@ -720,4 +727,9 @@ export const breakpoint = { desk: 1024 } as const;
  * The 44px floor, fixed once here rather than thirty times across screens.
  * `03-primitives.md` records that chips currently measure ~34 against it.
  */
-export const touchTarget = { min: 44 } as const;
+/**
+ * `min` is §10's floor for anything pressed. `row` is the deck's density for a
+ * ledger row — 54, an icon of 32 with 11 above and below — which is what keeps
+ * a row from being a control-height strip.
+ */
+export const touchTarget = { min: 44, row: 54 } as const;

@@ -29,6 +29,13 @@ export type LedgerList = {
    * the other needs only a date.
    */
   rows: readonly PhoneSearchTransaction[];
+  /**
+   * Both halves have answered at least once. Before this, `rows` being empty
+   * means nothing has been read yet; after it, an empty list is the ledger's
+   * own emptiness — the page uses the difference to draw a first-run state
+   * only when it is true.
+   */
+  settled: boolean;
   /** Another page exists in that direction; absent means the ledger's own end. */
   hasOlder: boolean;
   hasNewer: boolean;
@@ -39,16 +46,6 @@ export type LedgerList = {
 export type LedgerListOptions = {
   /** Where the list is centred. Changing it is a jump, and discards both halves. */
   anchor: AccountingDate;
-  /**
-   * The device's own today — **read to decide whether the newer half is a
-   * horizon or the rest of the ledger**, never to bound a query.
-   *
-   * A cold open is anchored on today (S04 §6), and *newer than today* is the
-   * forward horizon: expected entries to the end of the month, a handful of
-   * rows. A jump is anchored in the past, and *newer than then* is everything
-   * that has happened since — which §6 says a jump must not load.
-   */
-  today: AccountingDate;
   /**
    * **`from`/`to` are excluded, `text` is not.** The anchor walk owns the date
    * window — a filter that also bounded it would be two things deciding which
@@ -63,25 +60,26 @@ export type LedgerListOptions = {
  * S04's List page: the ledger walked in both directions from an anchor.
  *
  * **The two halves never interact, and that is what makes a jump cheap**
- * (S04 §6). Picking a far date discards both and starts a fresh pair, so
- * nothing between there and today is ever loaded — the list is never asked to
- * hold a scroll position for content it does not have, which is the defect
- * that makes infinite lists jump under the reader.
+ * (S04 §6). Picking a far date discards both and starts a fresh pair around
+ * it — the list is never asked to hold a scroll position for content it does
+ * not have, which is the defect that makes infinite lists jump under the
+ * reader.
  *
  * **The anchor's own page belongs to the older half**, because `readLedgerPage`
  * makes it inclusive going older and exclusive going newer.
  *
- * **Only the older half is fetched on mount, unless the anchor is today.** A
- * reader who opens on today and pulls down expects what is coming to already
- * be there, and *newer than today* is the forward horizon — a handful of
- * expected rows (S04 §6). *Newer than a jump* is the whole ledger since, and
- * fetching it put the newest thirty rows of the ledger at the top of a list
- * whose header named the month jumped to: picking May drew September under a
- * title reading *May*, because the rows above the anchor are the ones a
- * reverse-chronological list draws first. §6 is explicit — a jump *"loads
- * that date's neighbourhood and **nothing between**"* — and this is where
- * "nothing between" is kept. The newer half still pages; it waits to be
- * asked.
+ * **Both halves are fetched on mount — the anchor's neighbourhood in both
+ * directions.** This once fetched the older half only on a jump, on the
+ * reasoning that *newer than a jump* is the whole ledger since and drawing it
+ * put September's rows at the top of a list whose header read *May*. That
+ * reading was wrong twice. The first newer page is not "the ledger since" — it
+ * is the thirty rows *nearest* the anchor, ascending from it, which is the
+ * neighbourhood §6 asks for; and the page that draws it opens on the anchor,
+ * not at the top (`home-list-page` scrolls to it), so what stands above the
+ * fold is what happened just after the day you picked. What the older-only
+ * rule actually produced was a dead end: a jump to a quiet day in a sparse
+ * ledger read *nothing on or before* over a ledger holding rows three days
+ * newer, with no scroll to make and nothing to walk forward on.
  *
  * **Rows are concatenated newest-first**, which is the order both halves
  * already arrive in — `readLedgerPage` reverses its ascending read so a caller
@@ -89,7 +87,7 @@ export type LedgerListOptions = {
  */
 export function useLedgerList(
   ledger: PhoneLedgerController,
-  { anchor, today, filter }: LedgerListOptions,
+  { anchor, filter }: LedgerListOptions,
 ): LedgerList {
   const [older, setOlder] = useState<Half>(EMPTY_HALF);
   const [newer, setNewer] = useState<Half>(EMPTY_HALF);
@@ -180,21 +178,20 @@ export function useLedgerList(
     if (!older.loaded) loadOlder();
   }, [older.loaded, loadOlder]);
   /**
-   * **The newer half pre-fills only from today**, where it is the forward
    * horizon rather than the rest of the ledger — see this hook's own header
    * for the defect the unconditional version shipped. From a past anchor it
    * waits for `loadNewer()`, which is the reader walking up out of the
    * neighbourhood they jumped to.
    */
-  const ahead = anchor >= today;
   useEffect(() => {
-    if (ahead && !newer.loaded) loadNewer();
-  }, [ahead, newer.loaded, loadNewer]);
+    if (!newer.loaded) loadNewer();
+  }, [newer.loaded, loadNewer]);
 
   const rows = useMemo(() => [...newer.rows, ...older.rows], [newer.rows, older.rows]);
 
   return {
     rows,
+    settled: older.loaded && newer.loaded,
     hasOlder: !older.loaded || older.cursor !== undefined,
     hasNewer: !newer.loaded || newer.cursor !== undefined,
     loadOlder,

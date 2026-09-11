@@ -79,7 +79,7 @@
  * is not actually the screen's own bottom edge — a `Dock` sits below it
  * (`transfer-screen.tsx`, `quick-add-screen.tsx`) and reaches the home
  * indicator itself, so the panel above it was never the thing clearing that
- * inset and `clearBottom={false}` says so; the design padding (`space.x5`)
+ * inset and `clearBottom={false}` says so; the design padding (`space.x4`)
  * stays regardless, since that is breathing room, not a device read.
  *
  * **A page under the floating button leaves room for it, and the shell is
@@ -108,7 +108,7 @@ import { pageScrollProps } from "../../../primitives/nested-scroll.ts";
 import { useSafeArea } from "../../../primitives/safe-area";
 import { text } from "../../../theme/fonts.ts";
 import { makeStyles } from "../../../theme/styles.ts";
-import { hairline, radius, space } from "../../../tokens.ts";
+import { radius, space } from "../../../tokens.ts";
 import { useFloatingClearance } from "../../atoms/floating-clearance";
 
 /**
@@ -173,7 +173,7 @@ export type GroundPanelProps = {
    * clears the home-indicator inset and whatever clearance the shell says a
    * floating button needs over it (`useFloatingClearance()`, zero outside the
    * tab shell). `false` — for a panel that is not that edge (`Dock` sits
-   * below it and clears the inset itself): the design padding (`space.x5`) is
+   * below it and clears the inset itself): the design padding (`space.x4`) is
    * all it adds.
    *
    * **Read in `scroll="page"` only.** In `scroll="own"` this panel carries no
@@ -217,9 +217,9 @@ export function GroundPanel({
   // clears the home indicator at the end of the travel rather than at the fold.
   const deviceBottom = clearBottom ? insets.bottom : 0;
   const clearance = {
-    paddingLeft: space.x5 + insets.left,
-    paddingRight: space.x5 + insets.right,
-    paddingBottom: space.x5 + deviceBottom + (clearBottom ? floatClearance : 0),
+    paddingLeft: space.x4 + insets.left,
+    paddingRight: space.x4 + insets.right,
+    paddingBottom: space.x4 + deviceBottom + (clearBottom ? floatClearance : 0),
   };
 
   return (
@@ -248,8 +248,8 @@ const useStyles = makeStyles((theme) => ({
   card: {
     backgroundColor: theme.surface,
     borderRadius: radius.md,
-    padding: space.x5,
-    gap: space.x3,
+    padding: space.x3b,
+    gap: space.xl,
     shadowColor: theme.elevation.card.shadowColor,
     shadowOpacity: theme.elevation.card.shadowOpacity,
     shadowRadius: theme.elevation.card.shadowRadius,
@@ -263,14 +263,16 @@ const useStyles = makeStyles((theme) => ({
    * kind of surface rather than as this one, marked.
    */
   accentEdge: { borderLeftWidth: 2, borderLeftColor: theme.accent },
+  /**
+   * No rule under it. The deck draws a card's label as its first line and
+   * nothing else — a hairline here was one more edge on a surface that
+   * already has one, and it is what made every card read as a form section.
+   */
   header: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     gap: space.x3,
-    borderBottomWidth: hairline.width,
-    borderBottomColor: theme.hairline,
-    paddingBottom: space.xl,
   },
   heading: { flexDirection: "row", alignItems: "center", gap: space.x3, flexShrink: 1 },
   /**
@@ -296,7 +298,7 @@ const useStyles = makeStyles((theme) => ({
    * wrapper can apply without clipping the scroller inside it. The sides and
    * the bottom travel down through `useGroundInset()` instead.
    */
-  panelTop: { paddingTop: space.x5, gap: space.x4 },
+  panelTop: { paddingTop: space.x2, gap: space.x2 },
   scroll: { flex: 1 },
   /**
    * `flexGrow: 1` — a screen shorter than the device still fills it, while a
@@ -304,5 +306,13 @@ const useStyles = makeStyles((theme) => ({
    * one `panelTop` also carries; the padding is this mode's alone, since in
    * `"own"` it belongs to the screen's own scroller.
    */
-  scrollContent: { padding: space.x5, gap: space.x4, flexGrow: 1 },
+  // The deck's gutter is 20 on the sides, and 14 between cards and above the
+  // first — the same 14 the cards keep between themselves.
+  scrollContent: {
+    paddingTop: space.x2,
+    paddingHorizontal: space.x4,
+    paddingBottom: space.x4,
+    gap: space.x2,
+    flexGrow: 1,
+  },
 }));

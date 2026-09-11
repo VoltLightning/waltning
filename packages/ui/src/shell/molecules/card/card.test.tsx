@@ -27,9 +27,9 @@ it('scroll="page" (the default) renders a ScrollView whose content carries the c
   // The design padding alone: no shell above this panel means no floating
   // button over it, which is true of every route the stack pushes over the
   // tabs and of `StartupFailed`.
-  expect(style.paddingBottom).toBe("22px");
-  expect(style.paddingLeft).toBe("22px");
-  expect(style.paddingRight).toBe("22px");
+  expect(style.paddingBottom).toBe("20px");
+  expect(style.paddingLeft).toBe("20px");
+  expect(style.paddingRight).toBe("20px");
   expect(style.flexGrow).toBe("1");
 });
 
@@ -48,8 +48,8 @@ it("adds the shell's floating clearance to the page's own padding, under the she
     </FloatingClearanceProvider>,
   );
   const content = screen.getByTestId("ground-panel-scroll").firstElementChild as HTMLElement;
-  // space.x5 (22) + floating.clearance (72 — the circle and the inset it rests on).
-  expect(getComputedStyle(content).paddingBottom).toBe("94px");
+  // space.x4 (20) + floating.clearance (72 — the circle and the inset it rests on).
+  expect(getComputedStyle(content).paddingBottom).toBe("92px");
 });
 
 /** A panel that is not the screen's bottom edge takes neither the inset nor the button. */
@@ -64,7 +64,7 @@ it("takes no floating clearance when it is not the screen's bottom edge", () => 
     </FloatingClearanceProvider>,
   );
   const content = screen.getByTestId("ground-panel-scroll").firstElementChild as HTMLElement;
-  expect(getComputedStyle(content).paddingBottom).toBe("22px");
+  expect(getComputedStyle(content).paddingBottom).toBe("20px");
 });
 
 /**
@@ -90,8 +90,9 @@ it('scroll="own" leaves the gutter and the bottom to the screen\'s own scroller'
   expect(style.paddingBottom).toBe("0px");
   expect(style.paddingLeft).toBe("0px");
   expect(style.paddingRight).toBe("0px");
-  // The one value a wrapper can carry without clipping anything inside it.
-  expect(style.paddingTop).toBe("22px");
+  // The one value a wrapper can carry without clipping anything inside it —
+  // the deck's 14 above the first card.
+  expect(style.paddingTop).toBe("14px");
 });
 
 it('scroll="own" renders no ScrollView', () => {
@@ -153,8 +154,8 @@ it("clearBottom (the default) adds the device's own bottom inset to the clearanc
   );
   const scroll = screen.getByTestId("ground-panel-scroll");
   const content = scroll.firstElementChild as HTMLElement;
-  // space.x5 (22) + NOTCHED.bottom (34), and no button over this page.
-  expect(getComputedStyle(content).paddingBottom).toBe("56px");
+  // space.x4 (20) + NOTCHED.bottom (34), and no button over this page.
+  expect(getComputedStyle(content).paddingBottom).toBe("54px");
 });
 
 it("clearBottom={false} — a panel that is not the screen's own bottom edge (a Dock is) carries no device inset", () => {
@@ -167,6 +168,6 @@ it("clearBottom={false} — a panel that is not the screen's own bottom edge (a 
   );
   const scroll = screen.getByTestId("ground-panel-scroll");
   const content = scroll.firstElementChild as HTMLElement;
-  // Only space.x5 (22) — the design padding, never the device's own inset.
-  expect(getComputedStyle(content).paddingBottom).toBe("22px");
+  // Only space.x4 (20) — the design padding, never the device's own inset.
+  expect(getComputedStyle(content).paddingBottom).toBe("20px");
 });

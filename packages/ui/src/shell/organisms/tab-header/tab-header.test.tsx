@@ -30,6 +30,6 @@ it("clears the device's top inset, added to the design's own padding", () => {
     </SafeAreaProvider>,
   );
   const header = container.firstElementChild as HTMLElement;
-  // space.x5 (22) + NOTCHED.top (59).
-  expect(getComputedStyle(header).paddingTop).toBe("81px");
+  // space.x4 (20) + NOTCHED.top (59).
+  expect(getComputedStyle(header).paddingTop).toBe("79px");
 });

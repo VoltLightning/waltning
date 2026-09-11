@@ -26,6 +26,7 @@
 import { memo } from "react";
 import { Pressable, Text, View } from "react-native";
 import { useInteraction } from "../../../primitives/interaction.ts";
+import { Card } from "../../../shell/molecules/card/card";
 import { CaretDownIcon, CaretLeftIcon, CaretRightIcon } from "../../../shell/phosphor";
 import { text } from "../../../theme/fonts.ts";
 import { useTheme } from "../../../theme/provider";
@@ -147,7 +148,7 @@ function YearChartView({
   const { focused, handlers } = useInteraction();
 
   return (
-    <View style={styles.card}>
+    <Card>
       <View style={styles.yearRow}>
         <Step onPress={onOlder} accessibilityLabel={labels.older}>
           <CaretLeftIcon size={ICON} color={onOlder ? theme.text : theme.textFaint} />
@@ -178,22 +179,13 @@ function YearChartView({
           <MemoColumn key={column.month} column={column} current={column.month === current} />
         ))}
       </View>
-    </View>
+    </Card>
   );
 }
 
 export const YearChart = memo(YearChartView);
 
 const useStyles = makeStyles((theme) => ({
-  card: {
-    backgroundColor: theme.surface,
-    borderWidth: 1,
-    borderColor: theme.border,
-    borderRadius: radius.md,
-    paddingHorizontal: space.xl,
-    paddingBottom: space.xl,
-    gap: space.lg,
-  },
   yearRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   step: {
     minWidth: touchTarget.min,

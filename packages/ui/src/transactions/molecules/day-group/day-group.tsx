@@ -21,10 +21,10 @@
  * about their row shape.
  */
 
-import { memo } from "react";
+import { Children, memo } from "react";
 import { View } from "react-native";
 import { makeStyles } from "../../../theme/styles.ts";
-import { radius, space } from "../../../tokens.ts";
+import { hairline, radius, space } from "../../../tokens.ts";
 import { DayHeader } from "../day-header/day-header";
 
 export type DayGroupProps = {
@@ -49,7 +49,11 @@ function DayGroupView({ label, total, children }: DayGroupProps) {
         it sits in: a pressed first row squaring off the card's top corners is
         the detail that says the two were built separately.
       */}
-      <View style={styles.rows}>{children}</View>
+      <View style={styles.rows}>
+        {Children.map(children, (child, index) =>
+          index === 0 ? child : <View style={styles.separated}>{child}</View>,
+        )}
+      </View>
     </View>
   );
 }
@@ -80,6 +84,7 @@ function DayRowSurfaceView({ place, children }: DayRowSurfaceProps) {
         styles.rowSurface,
         place === "only" || place === "first" ? styles.rowTop : null,
         place === "only" || place === "last" ? styles.rowBottom : null,
+        place === "middle" || place === "last" ? styles.rowSeparated : null,
       ]}
     >
       {children}
@@ -90,14 +95,17 @@ function DayRowSurfaceView({ place, children }: DayRowSurfaceProps) {
 export const DayRowSurface = memo(DayRowSurfaceView);
 
 const useStyles = makeStyles((theme) => ({
-  group: { gap: space.xxs },
+  group: { gap: space.sm },
   rows: {
     backgroundColor: theme.surface,
     borderRadius: radius.md,
     borderWidth: 1,
     borderColor: theme.border,
+    paddingHorizontal: space.x2,
     overflow: "hidden",
   },
+  // A hairline between rows, never above the first: the deck's row divider.
+  separated: { borderTopWidth: hairline.width, borderTopColor: theme.hairline },
   /**
    * The same surface, cut into rows. The side borders are on every row and the
    * end borders only on the ends, so a day's rows join into one edge rather
@@ -108,8 +116,10 @@ const useStyles = makeStyles((theme) => ({
     borderLeftWidth: 1,
     borderRightWidth: 1,
     borderColor: theme.border,
+    paddingHorizontal: space.x2,
     overflow: "hidden",
   },
+  rowSeparated: { borderTopWidth: hairline.width, borderTopColor: theme.hairline },
   rowTop: {
     borderTopWidth: 1,
     borderTopLeftRadius: radius.md,

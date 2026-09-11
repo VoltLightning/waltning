@@ -584,7 +584,7 @@ describe("Today", () => {
     withLedger(<Today />, fakeController({ accounts: [PLN_ACCOUNT], recent: [RECENT_ROW] }));
 
     expect(screen.queryByText("No accounts yet")).toBeNull();
-    expect(screen.getByText("Recent")).toBeDefined();
+    expect(screen.getByText("Kept so far")).toBeDefined();
   });
 
   /**
@@ -926,13 +926,6 @@ describe("Today", () => {
     );
 
     expect(screen.queryByRole("alert")).toBeNull();
-  });
-
-  it("shows all transactions from the Recent card", () => {
-    withLedger(<Today />, fakeController({ accounts: [PLN_ACCOUNT], recent: [RECENT_ROW] }));
-
-    fireEvent.click(screen.getByText("Show all →"));
-    expect(router.push).toHaveBeenCalledWith("/ledger");
   });
 
   /**
@@ -1536,6 +1529,25 @@ describe("Today — the pager, with a month in it", () => {
     );
     expect(quiet.length).toBeGreaterThan(0);
     expect(quiet.length).toBeLessThan(cells.length);
+  });
+
+  /**
+   * Summary's last days are the List's read, folded the List's way, so a row
+   * there is the same row and opens the same screen. There is no *Show all*:
+   * the List is one swipe away.
+   */
+  it("draws the last days on Summary as day groups whose rows open the transaction", () => {
+    const summary = open("summary");
+    // The two latest days of the page read from today, newest first — and no
+    // further: the 2nd is the List's to show.
+    expect(summary.getByText("September 9, 2026")).toBeTruthy();
+    expect(summary.getByText("September 5, 2026")).toBeTruthy();
+    expect(summary.queryByText("September 2, 2026")).toBeNull();
+    expect(summary.queryByText("Show all →")).toBeNull();
+    fireEvent.click(summary.getByRole("button", { name: /Clinic G/ }));
+    expect(router.push).toHaveBeenCalledWith(
+      expect.objectContaining({ pathname: "/transaction/[id]" }),
+    );
   });
 
   it("opens the tapped day's entries under the Calendar's grid", () => {

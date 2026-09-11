@@ -355,7 +355,7 @@ were not monospaced.
 
 ### 2.3 Spacing
 
-4px base. Permitted steps: **2 · 4 · 6 · 8 · 10 · 12 · 14 · 16 · 20 · 22 · 26 · 34 · 44 · 52**.
+4px base. Permitted steps: **2 · 4 · 6 · 8 · 10 · 12 · 14 · 16 · 18 · 20 · 22 · 26 · 34 · 44 · 52**.
 
 The 2 is the tight pair — a label and the hint directly under it — and it was
 added the honest way: `gap: 2` had been hand-written in five components before
@@ -365,6 +365,13 @@ missing token, not five mistakes.
 The ladder is deliberately coarse above 16 — the existing mockups use 22, 26,
 34, 44 and 52 for board and card padding, and rounding those to a strict 8-grid
 would visibly change the designs.
+
+The 18 (`space.x3b`) is a card's own padding, and it was added the way the 2
+was: sixteen of the deck's cards are drawn at 18 and none at 22, the step every
+card in the app had been wearing instead. The deck's density, stated on its
+own foundations board: a **20** gutter from screen edge to content, cards
+**14** apart, a ledger row **54** tall (`touchTarget.row`) with 11 above and
+below its 32 icon, and 44 as the floor for anything pressed.
 
 ### 2.4 Radius
 

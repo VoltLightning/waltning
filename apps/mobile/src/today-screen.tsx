@@ -1,5 +1,4 @@
 import { useAppearance } from "@waltning/client/appearance/use-appearance";
-import type { PhoneRecentTransaction } from "@waltning/client/ledger/create-phone-ledger";
 import { deviceRuntime } from "@waltning/client/ledger/device-runtime";
 import { isPagerPageKey } from "@waltning/client/ledger/pager-date";
 import { useDayFlows } from "@waltning/client/ledger/use-day-flows";
@@ -9,6 +8,7 @@ import { useLedgerYears } from "@waltning/client/ledger/use-ledger-years";
 import { useMatchDays } from "@waltning/client/ledger/use-match-days";
 import { useNearestActivity } from "@waltning/client/ledger/use-nearest-activity";
 import { usePhoneLedger } from "@waltning/client/ledger/use-phone-ledger";
+import { useRecentDays } from "@waltning/client/ledger/use-recent-days";
 import { useSpendByCategory } from "@waltning/client/ledger/use-spend-by-category";
 import { useUnsettledBanner } from "@waltning/client/ledger/use-unsettled-banner";
 import { useWhereItWent } from "@waltning/client/ledger/use-where-it-went";
@@ -34,7 +34,6 @@ import {
   weekStart,
 } from "@waltning/ui/i18n/locales";
 import { useLocale, useT } from "@waltning/ui/i18n/provider";
-import { Button } from "@waltning/ui/primitives/button";
 import { Card, GroundPanel } from "@waltning/ui/shell/card";
 import { GatewayGrid } from "@waltning/ui/shell/molecules/gateway-grid/gateway-grid";
 import { MonthSummary } from "@waltning/ui/shell/month-summary";
@@ -56,15 +55,12 @@ import { text } from "@waltning/ui/theme/fonts";
 import { useTheme } from "@waltning/ui/theme/provider";
 import { makeStyles } from "@waltning/ui/theme/styles";
 import { space } from "@waltning/ui/tokens";
+import { DayGroup } from "@waltning/ui/transactions/day-group";
 import { DayHeader } from "@waltning/ui/transactions/day-header";
 import { LedgerRowItem } from "@waltning/ui/transactions/molecules/ledger-row-item/ledger-row-item";
 import { MonthGrid } from "@waltning/ui/transactions/organisms/month-grid/month-grid";
 import type { MonthRow } from "@waltning/ui/transactions/organisms/month-list/month-list";
 import { MonthList } from "@waltning/ui/transactions/organisms/month-list/month-list";
-import {
-  TransactionList,
-  type TransactionListItem,
-} from "@waltning/ui/transactions/transaction-list";
 import { YearChart, type YearColumn } from "@waltning/ui/transactions/year-chart";
 import { router, useLocalSearchParams } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
@@ -139,20 +135,6 @@ function handleOpenTransaction(id: string) {
  * `architecture/11` bans a function expression inside JSX — and because this is
  * the one place the ledger's field names and the component's meet.
  */
-function toRow(transaction: PhoneRecentTransaction): TransactionListItem {
-  return {
-    id: transaction.id,
-    date: transaction.date,
-    payee: transaction.payee,
-    category: transaction.categoryName,
-    account: transaction.accountName,
-    amount: transaction.amount,
-    currency: transaction.currency,
-    decimals: transaction.decimals,
-    isBusiness: transaction.isBusiness,
-    brandKey: transaction.brandKey,
-  };
-}
 
 /**
  * One screen for both surfaces. The ledger arrives through context — provided
@@ -178,6 +160,8 @@ function toRow(transaction: PhoneRecentTransaction): TransactionListItem {
  * *where it went*; the strip does not, because a balance is as of now.
  */
 const GATEWAY_ICON = 16;
+/** How many of the latest days Summary draws before the List takes over. */
+const RECENT_DAYS = 2;
 
 /**
  * The currency the year is folded in when there is no account to read one from.
@@ -600,6 +584,22 @@ export default function Today() {
   // built from it, `body` from that and `pages` from that, so a fresh element
   // here re-renders all four of the pager's pages. Opening the month picker
   // did exactly that — a sheet appearing redrew the calendar behind it.
+  /**
+   * The latest page of the ledger, folded into days — the same read and the
+   * same fold as the List page, so the two never disagree about a day. The
+   * deck draws two days; more is the List's job.
+   */
+  const recentRows = useRecentDays(ledger, today, snapshot);
+  const recentDays = useMemo(
+    () =>
+      pivotCurrency === undefined
+        ? []
+        : toLedgerItems(recentRows, pivotCurrency.code)
+            .filter((item) => item.kind === "day")
+            .slice(0, RECENT_DAYS),
+    [recentRows, pivotCurrency],
+  );
+
   const whereItWent = useMemo(
     () =>
       whereItWentRows.length === 0 || leadNetWorth === undefined ? null : (
@@ -714,7 +714,8 @@ export default function Today() {
         a filter is excluding every row, and Recent has no filter to blame — it
         has a five-row window, and *Show all* goes where the rows are.
       */}
-          {snapshot.recent.length === 0 ? (
+          {whereItWent}
+          {recentDays.length === 0 ? (
             everCaptured ? (
               <EmptyState
                 variant="filtered"
@@ -731,24 +732,39 @@ export default function Today() {
               />
             )
           ) : (
-            <Card
-              title={t("shell.recent")}
-              action={
-                <Button
-                  label={t("shell.showAll")}
-                  onPress={handleShowAll}
-                  variant="ghost"
-                  size="sm"
-                />
-              }
-            >
-              <TransactionList
-                transactions={snapshot.recent.map(toRow)}
-                onPress={handleOpenTransaction}
-              />
-            </Card>
+            // The last days, drawn as the List draws them: a kicker with the
+            // day's own figure over a bordered surface of rows. The deck has no
+            // *Recent* card and no *Show all* — the List is one swipe away, and
+            // a door into the room you are standing next to is a door too many.
+            recentDays.map((day) => (
+              <DayGroup
+                key={day.date}
+                label={dayLabel(day.date, locale)}
+                {...(day.total.kind !== "total"
+                  ? {}
+                  : {
+                      total: (
+                        <Amount
+                          value={day.total.pivot}
+                          currency={pivotCurrency?.code ?? ""}
+                          decimals={pivotCurrency?.decimals ?? 2}
+                          size="compact"
+                          kind="net"
+                        />
+                      ),
+                    })}
+              >
+                {day.rows.map((row) => (
+                  <LedgerRowItem
+                    key={row.id}
+                    row={row}
+                    withDate={false}
+                    onPress={handleOpenTransaction}
+                  />
+                ))}
+              </DayGroup>
+            ))
           )}
-          {whereItWent}
           {/*
         The appearance control, which the band used to carry in its action
         slot. `PagerFrame` has no such slot — the bar carries the period,
@@ -789,6 +805,9 @@ export default function Today() {
       showAllAction,
       addTransactionAction,
       createAccountAction,
+      recentDays,
+      locale,
+      pivotCurrency,
       whereItWent,
       gateways,
       resolved.preference,
@@ -1080,34 +1099,43 @@ export default function Today() {
           is what a component composed out of two things that each name the day
           looks like. An empty day says *nothing* where its figure would be.
         */}
-        <DayHeader
-          label={dayLabel(pager.state.date, locale)}
-          total={
-            day === undefined ? (
+        {day === undefined ? (
+          <DayHeader
+            label={dayLabel(pager.state.date, locale)}
+            total={
               <RNText style={sectionStyles.nothing}>{t("transactions.nothingThatDay")}</RNText>
-            ) : day.total.kind !== "total" ? null : (
-              <Amount
-                value={day.total.pivot}
-                currency={pivotCurrency?.code ?? ""}
-                decimals={pivotCurrency?.decimals ?? 2}
-                size="compact"
-                /*
-                  **The same figure the List page states, so the same kind.**
-                  This is one day's net, not a balance — `net` reds a day that
-                  cost money, greens one that brought money in and mutes one
-                  that netted to zero on transfers between your own accounts
-                  (S04 §5). Left on `auto` it would be the one place in this
-                  screen where a day that paid you is drawn as a day with
-                  nothing to say, one swipe from the list where it is green.
-                */
-                kind="net"
+            }
+          />
+        ) : (
+          // The same group the List draws — kicker over a bordered surface —
+          // so a day looks like a day on both pages. `net`, as the List states
+          // it: one day's net, not a balance (S04 §5).
+          <DayGroup
+            label={dayLabel(pager.state.date, locale)}
+            {...(day.total.kind !== "total"
+              ? {}
+              : {
+                  total: (
+                    <Amount
+                      value={day.total.pivot}
+                      currency={pivotCurrency?.code ?? ""}
+                      decimals={pivotCurrency?.decimals ?? 2}
+                      size="compact"
+                      kind="net"
+                    />
+                  ),
+                })}
+          >
+            {day.rows.map((row) => (
+              <LedgerRowItem
+                key={row.id}
+                row={row}
+                withDate={false}
+                onPress={handleOpenTransaction}
               />
-            )
-          }
-        />
-        {day?.rows.map((row) => (
-          <LedgerRowItem key={row.id} row={row} onPress={handleOpenTransaction} />
-        ))}
+            ))}
+          </DayGroup>
+        )}
         {/*
           **A day with nothing, in a month with something, is not an empty
           state** — the page above is full of marks, so a title and a button

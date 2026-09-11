@@ -231,6 +231,7 @@ same action as swiping to it; neither is the primary.
 #### Summary
 
 ```
+│  MINE  +48 620,84 zł                          › │  ← NetWorthStrip, on the ground
 │  ┌ Kept so far ────────────────────────────────┐│  ← MonthSummary
 │  │ +3 529,82 zł                                ││
 │  │ ████████████████░░░░░░░░░░░░░░░░░░░░░░░░░░░ ││  ← FlowBar: out against in
@@ -238,14 +239,37 @@ same action as swiping to it; neither is the primary.
 │  └─────────────────────────────────────────────┘│
 │  ┌ Where it went ──────────────────────────────┐│  ← SpendRows, §6
 │  └─────────────────────────────────────────────┘│
+│  SEPTEMBER 11, 2026                    −184,50  │  ← DayGroup — the last two days,
+│  ┌─────────────────────────────────────────────┐│     drawn exactly as List draws them
+│  │ Market B · Groceries · Bank A       −96,00  ││
+│  │ Café A · Eating out · Cash          −48,90  ││
+│  └─────────────────────────────────────────────┘│
 │  GO TO                                          │
-│    Between us          Import                   │
-│    Recurring           Subscriptions            │
-│    Categories          Tax timeline             │
+│    Between us          Categories               │  ← rows on the ground, two across
+│    Currencies          Rates                    │
 ```
 
 **The landing page, and the one the app opens on.** §1's question is answered
 here; the other three are where you go once it has been.
+
+**One card anatomy, from the deck, and nothing wearing it that is not a card.**
+A card is `surface` on `ground`, a one-pixel `border`, `radius-md`, **18 of
+padding** (`space.x3b`) and its label as a plain first line — no rule under
+it. Cards sit **14 apart** (`space.x2`) inside a **20 gutter** (`space.x4`), and
+a row inside one is **54 tall** with 14 at each side. The app had every card at
+22 of padding with a hairline under its title, 20 between cards in a 22
+gutter, and rows at 44 — each a size heavier than its drawing, which is what
+"the app is not as nice as the design" turned out to mean when measured. The
+net-worth line and *Go to* are on the ground because they are a figure and a
+menu, not groups of rows (`design-system/05` §5.1): four cards each holding one
+destination were four boxes around four controls.
+
+**The last days are drawn as the List draws them.** A *Recent* card with a
+*Show all* door was two things the deck does not have: a second anatomy for a
+transaction row on the same screen as the first, and a door into the page one
+swipe away. Summary reads the same page the List walks and folds it the same
+way (`useRecentDays` → `toLedgerItems`), so a day's kicker, figure and rows are
+one component on both pages and cannot disagree about a day.
 
 ***Go to* carries only what nothing else does.** Accounts and the agent are
 tabs, so a card for either would be a second door into the same room — and a
@@ -320,6 +344,11 @@ header labelled that figure with the *lead* currency — the currency of your
 first account. A ledger with a USD pivot and a PLN account drew a day of one 500
 PLN expense as *-138.89 PLN* above a row reading *-500.00 PLN*. The two agree in
 a one-currency ledger, which is why it stood.
+
+**The tapped day opens in a `DayGroup`**, the same kicker-over-surface the List
+and Summary draw, so a day looks like a day on every page it appears on. It was
+a header over bare rows on the ground here — a third anatomy for the same
+thing, on the one page that sits between the other two.
 
 **The day's entries are read for that day, never filtered out of a page.**
 `readLedgerPage` stops at thirty rows because a ledger does not end; a day does,
@@ -427,7 +456,7 @@ happened*.
 | `PageTabs` | Summary · List · Calendar · Months, a marker on a hairline. What makes the swipe discoverable |
 | `SearchField` | The search itself, pinned under `PageTabs` while one is on, with the live match count and an `✕` that clears it. **Under the tabs, not in the header**: the header's shape is a function of the scroll — the title travels, scales and hands its room to a stepper — so a field placed there would either inherit the collapse or fight it, and the period would leave the screen exactly when §7 wants the reader stepping through periods. It stays open for as long as the search is on, which is what says the screen is narrowed |
 | `Pager` | The four pages, swiped or tapped between, over one shared date |
-| `GatewayGrid` | Summary's *Go to* — six cards, each with a figure. Only destinations neither the tab bar **nor the shared bar** carries, which is why Accounts, Debt and the agent are absent from it |
+| `GatewayGrid` | Summary's *Go to* — rows on the ground, two across, each with a figure. Not cards: a card groups rows or holds a hero, and a single destination is neither. Only destinations neither the tab bar **nor the shared bar** carries, which is why Accounts, Debt and the agent are absent from it |
 | `NetWorthStrip` | *Mine* on the ground in one line, *ours* and any second currency muted beneath it. Pressable → S16. Renders above the error branch, so a failed refresh keeps it (§6) |
 | `MonthSummary` | The hero, opening month only. *Kept so far* stacked over its figure, a `FlowBar`, then the labelled pair. Draws three zeroes for a period the ledger did not exist in — that is the true answer, not an empty state |
 | `FlowBar` | Track is *came in*, fill is *went out*, gap is *kept*. Fill clamps at 100%; a deficit is carried by the figures, not by an overrunning bar |
@@ -438,7 +467,7 @@ happened*.
 | `YearChart` | Months' hero — twelve paired columns scaled to the busiest month of the year, the current month ticked, empty months drawn as stubs. Carries the year, its net, its two arrows and the button that opens `YearPicker` |
 | `MonthRows` | Months' twelve rows: income, spend and **net** per month. No bars — `YearChart` above is the comparison, so a row states figures |
 | `YearPicker` | A sheet of up to nine years, paged back to 1900, a dot on the years holding entries. `PeriodPicker` at year granularity. Pages are counted back from this year, so the oldest one is the short one — at 1900 it is a single cell, and the cells hold their column rather than stretching to fill the row |
-| `DayGroup` | A day's rows under its date and total. The list's only grouping |
+| `DayGroup` | A day's rows under its date and total — a kicker inset 4, a 6 gap, then a bordered surface of 54-tall rows inset 14 with a hairline between them. **The one anatomy a day has on this screen**: List renders it a row at a time (`DayRowSurface`), Summary draws the last two days with it, and Calendar opens the tapped day in it |
 | `QuietDay` | One empty day: a single muted line |
 | `QuietRun` | Two or more consecutive empty days: one row naming the span and its length, with *Show*. The span is **one date range**, not two dates — the language collapses whatever its ends share (`September 7 – 8, 2026`, `7–8 września 2026`), because a row whose whole content is that nothing happened must not spend two lines spelling the month and the year twice |
 | `ExpectedGroup` | A future day. Dashed border, muted type, figures in neither the income nor the expense colour — it is not money yet |
@@ -524,7 +553,7 @@ everything between needs a rule.
 
 | Boundary | Rule |
 |---|---|
-| **Cold open** | Anchored on today, whether or not today holds anything |
+| **Cold open** | Anchored on today, whether or not today holds anything — and today is on the page either way, as its own quiet line when nothing is on it. The ribbon's cells run from the oldest loaded day to the newest **or the anchor**, so the day the screen is named for always has a cell; a strip that ran only between loaded rows began two days ago on a quiet Friday |
 | **Forward horizon** | Expected entries stop at the **end of the current month**, with a stated reason. Recurring rules repeat forever, so a horizon is not optional; this one answers *what is still coming before the month turns* and nothing wider. S21 Recurring and S34 Subscriptions are where a rule's whole future lives, and a list that projected a quarter would be answering their question badly on a screen that cannot show a rule |
 | **Expected that arrived** | The real transaction replaces the expected one in place and is marked as having been expected. Never both |
 | **Expected that did not arrive** | Stays in its own past day, still dashed, still uncoloured. It is a rule that did not fire, not a debt |
@@ -532,7 +561,7 @@ everything between needs a rule.
 | **The far end is reachable offline** | There is no window to hit. The replica is a complete copy of the whole ledger (`architecture/14` §14.0 — *no 400-row window*, no TTL, not evicted), so scrolling to 2021 on a plane reads local rows like every other day. Offline changes what this screen can *compute*, never what it can reach: §6's cached banner and the class **S** figure are the whole story |
 | **Quiet day** | One line |
 | **Quiet run** | Two or more consecutive: one row naming the span and its length, with *Show*. Twenty-five days is not twenty-five rows |
-| **A jump** | Picking a far date loads that date's neighbourhood and **nothing between** — the older half only, so the list opens on the day the header names. Scrolling from there walks outward day by day: backwards always, and forwards once the reader has scrolled away from the top and come back, which is what tells a pull-down apart from a list that has only just mounted. Where a jump lands somewhere too sparse to fill a screen there is no scrolling to do and no forward walk: the stepper and `TodayPill` are the way out, and a list that cannot be scrolled cannot report having been. A cold open is the exception and loads forward at once, because *newer than today* is the forward horizon two rows up rather than the rest of the ledger. The list is never asked to guess a scroll position for content it has not loaded, which is the defect that makes infinite lists jump under the reader |
+| **A jump** | Picking a far date loads that date's neighbourhood — one page older, one page newer — and **nothing between** it and where the reader was. **The day jumped to is always on the page**, as its own quiet line if nothing is on it, and the list opens *on it*: the newer page renders above and the page scrolls to the anchor once, without animation. Older-only loading was tried, so that the list would open at its top on the day named; what it produced was a jump to a quiet day in a sparse ledger reading *nothing on or before* over rows three days newer, with nothing to scroll and nothing to walk forward on. Further pages in either direction wait to be asked: backwards always, forwards once the reader has scrolled away from the top and come back — a pull-down, as opposed to a list that has only just mounted |
 | **In flight** | An outbox row appears in its day with a `pending` marker until it syncs — the one thing a separate list could never do, and exactly when confirmation matters most. On a phone-alone ledger, local materialisation is the final save and no marker is drawn |
 | **A conflict** | S35 arriving for an older entry surfaces as one banner in the list at the current position, naming the month it concerns. It does not scroll the reader to it |
 
