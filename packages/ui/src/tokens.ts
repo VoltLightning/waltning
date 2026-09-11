@@ -53,29 +53,24 @@ export const color = {
    * The unfilled part of a bar — `<MonthList>`'s two tracks, `<FlowBar>`'s
    * empty one, `<IncomeVsExpenseWidget>`'s.
    *
-   * **`subtle` is a fill for a box on a card; a track is a shape on a page.**
-   * The bars took `subtle`, which sits at 1.10:1 on `ground` and 1.03 on
-   * `accent-fill` — on a phone the Months page drew twelve rows of nothing, and
-   * a month with a short bar was indistinguishable from a month with none. The
-   * track is what states the scale the fill is measured against, so it has to
-   * be a shape you can see.
+   * **Quiet, and that is the design's choice rather than an oversight.** This
+   * was lifted to 1.91:1 on `ground` on the reasoning that a track states the
+   * scale and an invisible one cannot. The reasoning was right about a bar with
+   * *something* in it and wrong about a ledger with nothing: on a year of empty
+   * months it drew twelve full-width tan bars, and a month that holds nothing
+   * looked like a month that holds everything. The boards draw this track at
+   * 1.10 for that reason — **the fill is the signal and the track is only its
+   * room.**
    *
-   * **Held from both sides.** Above: the shell pair's 1.5:1 (§2.1, "a surface
-   * pair needs a floor only where no border draws the edge") — against **all
-   * seven fills**, `hover` and `pressed` included, because `border-interactive`
-   * learned that lesson here twice and this file records it twice. 1.53 at the
-   * tightest, which is `pressed` in light. Below: `income` and `spend` keep
-   * WCAG 1.4.11's 3:1 *on the track*, 3.02 at the tightest.
+   * The value is `subtle`'s, which is what the drawing uses. It is kept as its
+   * own role rather than pointed at `subtleFill` because the two answer
+   * different questions — `subtle` is a fill for a box on a card, this is the
+   * room a bar is drawn in — and the next time one moves, the other should not.
    *
-   * **There is no headroom, and the arithmetic says why rather than the
-   * choosing being sloppy.** In light `income` clears `ground` by 5.80; the two
-   * floors want 1.5 × 3.0 = 4.5 of that, so the whole slack to divide is
-   * **1.29** — and every step the track darkens is a step the bar loses. Dark
-   * has 2.18 to divide and is comfortable. So the light theme is what moves
-   * first if either floor is ever missed, and the figure to change is `income`,
-   * not this one.
+   * **`income` and `spend` still clear 3:1 on it**, 5.25 at the tightest, which
+   * is the floor that matters: the fill carries the figure.
    */
-  track: "#c5b299",
+  track: "#f1ebe0",
   /**
    * `<FlowBar>`'s track when the month has flow: income as a **field**, where
    * `income` is income as **ink**.
@@ -285,8 +280,8 @@ export const darkColor = {
   /** `inset`'s dark half — a panel inside a card, a step up from the card. */
   inset: "#2b2620",
   subtle: "#2b2620",
-  /** `track`'s dark half. The same two-sided squeeze, and the loose end of it: 1.64 and 3.26. */
-  track: "#585044",
+  /** `track`'s dark half — `subtle`'s value, for the reason above. */
+  track: "#2b2620",
   /** `incomeFill`'s dark half — `spend` reads on it at 3.76. */
   incomeFill: "#3b4d33",
   hover: "#302a23",

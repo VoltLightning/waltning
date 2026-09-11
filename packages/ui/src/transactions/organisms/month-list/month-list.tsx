@@ -197,13 +197,29 @@ export const MonthList = memo(MonthListView);
 const useStyles = makeStyles((theme) => ({
   list: { gap: space.xs },
   row: {
+    // The selected row draws an edge; every other row reserves its width in a
+    // transparent one, or selecting a month would nudge the whole list by 2px.
+    borderWidth: 1,
+    borderColor: "transparent",
     minHeight: touchTarget.min,
     paddingVertical: space.md,
     paddingHorizontal: space.xl,
     borderRadius: radius.sm,
     gap: space.xs,
   },
-  rowCurrent: { backgroundColor: theme.accentFill },
+  /**
+   * **A selected row has to be visible, and this one measured 1.07:1.**
+   * `accentFill` on `ground` is a tint you cannot find: the month the pager is
+   * on looked exactly like the eleven it is not. The fill stays — it is the
+   * right colour — and the edge is what makes it a shape, the same pairing
+   * `ActiveFilterChip` already uses for the same reason. 1.66 in light and 2.15
+   * in dark, against a fill that carries 1.07 and 1.32 alone.
+   */
+  rowCurrent: {
+    backgroundColor: theme.accentFill,
+    borderWidth: 1,
+    borderColor: theme.accentFillBorder,
+  },
   labelAhead: { color: theme.textMuted },
   label: { ...text.ui("bodySm", 600), color: theme.text },
   bars: { gap: space.xxs },
