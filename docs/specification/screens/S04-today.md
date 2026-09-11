@@ -272,6 +272,37 @@ The month's shape as a grid of days, each carrying the same activity mark
 `DayRibbon` uses, with the tapped day's entries open beneath it. **This is
 S11's phone layout, restored.**
 
+**The blank half of the page is three states, and says which** (`design-system/08`
+§8.1). Under the grid sits the tapped day's entries, and where there were none
+there was nothing — so a month the ledger has never reached, a day you simply
+did not tap a mark on, and a search with no answer here all rendered as the same
+silence, which reads as a screen that failed to load:
+
+| What is true | What the page draws |
+|---|---|
+| A search excludes everything this month | `filtered` — names the query, and clears **it** |
+| The month holds nothing, the ledger holds something | `range` — the nearest month, how many entries it holds, and a jump to it |
+| The ledger draws nothing anywhere | `first-run` — the same words List uses, because it is the same fact |
+| The month holds something, this day does not | The day's own *nothing*, and one quiet line pointing at the nearest day |
+
+**The jump lands on a day, not on the first of a month.** `readNearestActivity`
+answers with the nearest *day* holding something — crossing a gap forwards that
+is the target month's earliest row — so the panel under the grid opens on
+entries. A jump to the 1st would land the reader on another empty day, one
+screen further on.
+
+**A day with nothing in a month with plenty is not an empty state.** The grid
+above it is full of marks, so a title and a button would be shouting about a day
+the reader chose; it gets one line, which is still the only thing in that region
+able to say where the entries are.
+
+**The day's total is in the pivot currency, and says so.** Every row is taken to
+the pivot at its own rate to be summed at all (`computations.md` §1), and the
+header labelled that figure with the *lead* currency — the currency of your
+first account. A ledger with a USD pivot and a PLN account drew a day of one 500
+PLN expense as *-138.89 PLN* above a row reading *-500.00 PLN*. The two agree in
+a one-currency ledger, which is why it stood.
+
 **The day's entries are read for that day, never filtered out of a page.**
 `readLedgerPage` stops at thirty rows because a ledger does not end; a day does,
 and a calendar showing the first thirty rows of one would be a shorter truth
@@ -385,6 +416,7 @@ happened*.
 | `SpendRows` | *Where it went* — §6 at leaf granularity, five rows plus a named remainder, bars proportional to the largest row, one colour. Opening month only |
 | `DayRibbon` | Under `PageTabs`, on the List page only. Continuous — a cell for **every** day between the first and the last the list has loaded, not only the days holding rows, because the distance between two marks is part of what the strip draws. **Earliest at the left**, and scrolled so the day the list is on is in the middle of it. Horizontally scrollable, clipped at both edges. 48×66 cells with the day number at 17px and room around the weekday letter. Activity mark per §3 |
 | `MonthGrid` | Calendar's own grid — a day per cell with `DayRibbon`'s activity mark, ≥44px |
+| `EmptyState` | Calendar's three, under the grid — §8.1's `filtered`, `range` and `first-run`, never a blank |
 | `YearChart` | Months' hero — twelve paired columns scaled to the busiest month of the year, the current month ticked, empty months drawn as stubs. Carries the year, its net, its two arrows and the button that opens `YearPicker` |
 | `MonthRows` | Months' twelve rows: income, spend and **net** per month. No bars — `YearChart` above is the comparison, so a row states figures |
 | `YearPicker` | A sheet of up to nine years, paged back to 1900, a dot on the years holding entries. `PeriodPicker` at year granularity. Pages are counted back from this year, so the oldest one is the short one — at 1900 it is a single cell, and the cells hold their column rather than stretching to fill the row |

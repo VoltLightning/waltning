@@ -721,6 +721,8 @@ export type PhoneLedgerPort = {
   readDayFlows: (period: money.Period) => readonly money.DayFlowRow[];
   /** Every year the ledger holds something in — the dot in S04's year picker. */
   readLedgerYears: () => readonly number[];
+  /** The nearest month holding something, for a `range` empty state (§8.1). */
+  readNearestActivity: (period: money.Period) => PhoneNearestActivity | null;
   /** §7's match counts by day, for Calendar and Months while the screen searches. */
   readMatchDays: (period: money.Period, text: string) => readonly PhoneMatchDay[];
   /** Every row on one day — the entries S04's calendar opens. Bounded by the date. */
@@ -979,6 +981,19 @@ export type PhoneClearingAccount = money.ClearingAccountRow & {
 
 /** S12's two direction totals, per currency. See `money.directionTotals`. */
 export type PhoneDirectionTotal = money.DirectionTotalRow;
+
+/**
+ * The nearest month holding entries, and how many it holds — S04's calendar
+ * when the month on screen holds none. Structural rather than imported, like
+ * every other type at this seam: `@waltning/client` never names
+ * `@waltning/ledger`.
+ */
+export type PhoneNearestActivity = {
+  date: AccountingDate;
+  /** `2026-09` — the period the empty state names. */
+  month: string;
+  count: number;
+};
 
 /** D2's history, read on demand for D4b's proposal — see `proposeCategory`. */
 export type PhonePayeeHistoryRow = PayeeHistoryRow;
@@ -1429,6 +1444,14 @@ export type PhoneLedgerController = {
   readMatchDays: (period: money.Period, text: string) => readonly PhoneMatchDay[];
   /** Every year the ledger holds something in — the dot in S04's year picker. */
   readLedgerYears: () => readonly number[];
+  /**
+   * The nearest month holding something, asked only from a month holding
+   * nothing — `design-system/08` §8.1 requires a `range` empty state to offer
+   * *the nearest period that does, with its count*, and a blank region that
+   * cannot say where the entries are is the blank this variant exists to stop
+   * being.
+   */
+  readNearestActivity: (period: money.Period) => PhoneNearestActivity | null;
   /**
    * Every row on one day — the entries S04's calendar opens under its grid
    * (§3). Bounded by the date rather than by a row count: a day ends, and a
@@ -2204,6 +2227,7 @@ export function createPhoneLedger(
     readDayFlows: (period) => port.readDayFlows(period),
     readMatchDays: (period, text) => port.readMatchDays(period, text),
     readLedgerYears: () => port.readLedgerYears(),
+    readNearestActivity: (period) => port.readNearestActivity(period),
     readDayRows: (date) => port.readDayRows(date),
     readSpendByCategory: (period, scope) => port.readSpendByCategory(period, scope),
     readIncomeVsExpense: (buckets, scope) => port.readIncomeVsExpense(buckets, scope),

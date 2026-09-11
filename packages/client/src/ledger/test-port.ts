@@ -45,6 +45,7 @@ export function basePort(overrides: Partial<PhoneLedgerPort> = {}): PhoneLedgerP
     readDayFlows: () => [],
     readMatchDays: () => [],
     readLedgerYears: () => [],
+    readNearestActivity: () => null,
     readDayRows: () => [],
     readSpendByCategory: () => [],
     readIncomeVsExpense: () => [],

@@ -441,6 +441,32 @@ export const en = {
     emptyRecentTitle: "Nothing recent",
     emptyRecentBody:
       "Your ledger has transactions, just none among the latest few. Show all opens the full list.",
+    /**
+     * S04's calendar, on a month the ledger has nothing in. `design-system/08`
+     * §8.1: a `range` empty must offer *the nearest period that does, with its
+     * count*, and must never read as an error — a month with no spending is a
+     * legitimate answer, not a problem.
+     */
+    calendarRangeTitle: "Nothing in {{month}}",
+    calendarRangeBody_one: "{{nearest}} is the nearest month with anything — {{count}} entry.",
+    calendarRangeBody_few: "{{nearest}} is the nearest month with anything — {{count}} entries.",
+    calendarRangeBody_many: "{{nearest}} is the nearest month with anything — {{count}} entries.",
+    calendarRangeBody_other: "{{nearest}} is the nearest month with anything — {{count}} entries.",
+    /** The jump the `range` state offers, naming where it goes. */
+    calendarGoToMonth: "Go to {{month}}",
+    /**
+     * The month holds entries and the day you tapped does not. Not an empty
+     * *state* — the page is full of marks — so it is one quiet line under the
+     * day's own header rather than a title, a body and a button.
+     */
+    calendarNearestDay: "Nearest entries: {{date}}",
+    /**
+     * A search that this month has no answer for. `filtered` and not `range`:
+     * the ledger may well hold rows here, and what excludes them is the query.
+     */
+    calendarFilteredTitle: "No matches in {{month}}",
+    calendarFilteredBody: "Nothing this month matches “{{query}}”.",
+    calendarClearSearch: "Clear the search",
     loadFailedTitle: "Couldn't load your transactions",
     loadFailedWhy: "Something went wrong reading the ledger.",
     /** The visible chip a filter arrives with from another screen (S10 §7 shared). */

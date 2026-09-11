@@ -42,7 +42,7 @@ import { I18nProvider } from "@waltning/ui/i18n/provider";
 import type { ReactElement } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const router = { push: vi.fn(), back: vi.fn(), dismissTo: vi.fn() };
+const router = { push: vi.fn(), back: vi.fn(), dismissTo: vi.fn(), setParams: vi.fn() };
 const useLocalSearchParams = vi.fn(() => ({}));
 
 vi.mock("expo-router", () => ({
@@ -271,6 +271,40 @@ function dayFlowsOf(
     }));
 }
 
+/**
+ * The nearest day outside the period, off the **same rows** the grid draws —
+ * the fourth read over the one list, for the reason the third is: a fixture
+ * that let them disagree could not catch a screen offering *go to September*
+ * over a September the calendar draws nothing in.
+ */
+function nearestActivityOf(
+  rows: readonly PhoneSearchTransaction[],
+  period: money.Period,
+): { date: ReturnType<typeof accountingDate>; month: string; count: number } | null {
+  const dates = rows.map((row) => row.date).sort();
+  const before = dates.filter((date) => date < period.start).at(-1);
+  const after = dates.find((date) => date >= period.end);
+  const days = (date: string) => {
+    const [y, m, d] = date.split("-").map(Number) as [number, number, number];
+    return Math.floor(Date.UTC(y, m - 1, d) / 86_400_000);
+  };
+  const nearest =
+    before === undefined
+      ? after
+      : after === undefined
+        ? before
+        : days(after) - days(period.end) + 1 < days(period.start) - days(before)
+          ? after
+          : before;
+  if (nearest === undefined) return null;
+  const month = nearest.slice(0, 7);
+  return {
+    date: accountingDate(nearest),
+    month,
+    count: dates.filter((date) => date.startsWith(month)).length,
+  };
+}
+
 function fakeController(options: FakeControllerOptions = {}) {
   const {
     accounts: initialAccounts = [],
@@ -330,6 +364,7 @@ function fakeController(options: FakeControllerOptions = {}) {
     }),
     readDayRows: (date) => ledgerRows.filter((row) => row.date === date),
     readDayFlows: (period) => dayFlowsOf(ledgerRows, period),
+    readNearestActivity: (period) => nearestActivityOf(ledgerRows, period),
     readSpendByCategory: (_period, scope) => spendByCategory(scope),
     listUnsettledClearing: () => unsettledOverride ?? unsettledOf(accounts),
     // No screen under test here drives S10 yet (`ledger-screen.test.tsx`
@@ -504,6 +539,7 @@ beforeEach(() => {
   router.push.mockClear();
   router.back.mockClear();
   router.dismissTo.mockClear();
+  router.setParams.mockClear();
   useLocalSearchParams.mockReturnValue({});
 });
 
@@ -1386,12 +1422,19 @@ describe("Today — the pager, with a month in it", () => {
     row("09", "Clinic G", "-180.00"),
   ];
 
-  function open(view: "summary" | "list" | "calendar" | "months") {
-    useLocalSearchParams.mockReturnValue({ view, date: `${MONTH}-09` });
+  function open(
+    view: "summary" | "list" | "calendar" | "months",
+    date = `${MONTH}-09`,
+    extra: { q?: string; currencies?: readonly PhoneCurrency[] } = {},
+  ) {
+    useLocalSearchParams.mockReturnValue(
+      extra.q === undefined ? { view, date } : { view, date, q: extra.q },
+    );
     withLedger(
       <Today />,
       fakeController({
         accounts: [PLN_ACCOUNT],
+        ...(extra.currencies === undefined ? {} : { currencies: extra.currencies }),
         ledger: LEDGER,
         recent: [],
         transactionCount: LEDGER.length,
@@ -1471,6 +1514,111 @@ describe("Today — the pager, with a month in it", () => {
     const calendar = open("calendar");
     expect(calendar.getByRole("button", { name: /Clinic G/ })).toBeTruthy();
     expect(calendar.queryByRole("button", { name: /Market B/ })).toBeNull();
+  });
+
+  /**
+   * **The blank half of the calendar meant three things and said none of them**
+   * (`design-system/08` §8.1). Each of the three below rendered as the same
+   * silence under the grid: a month the ledger never reached, a day the reader
+   * happened to tap, and a search with no answer here.
+   */
+  it("names the nearest month, and how much is in it, from a month with nothing", () => {
+    // Nine months before the ledger's own rows — a `range` empty, never an
+    // error: a month with no spending is a legitimate answer (§8.6).
+    const calendar = open("calendar", `${Number(MONTH.slice(0, 4)) - 1}-12-05`);
+
+    expect(calendar.getByText(/^Nothing in December$/)).toBeTruthy();
+    expect(calendar.getByText(/nearest month with anything — 4 entries/)).toBeTruthy();
+    expect(calendar.queryByText("No transactions yet"), "the ledger is not empty").toBeNull();
+  });
+
+  it("jumps to the day it named, and stays on the Calendar", () => {
+    const calendar = open("calendar", `${Number(MONTH.slice(0, 4)) - 1}-12-05`);
+
+    fireEvent.click(calendar.getByRole("button", { name: /Go to/ }));
+    // The date is held by the route (`usePagerRoute`), so the jump is a param
+    // write — and it writes the nearest *day*, which for a gap being crossed
+    // forwards is that month's earliest row (the 2nd here, not the 9th). The
+    // panel underneath therefore opens on entries rather than on nothing,
+    // which a jump to the month's first day would not guarantee.
+    expect(router.setParams).toHaveBeenCalledWith(
+      expect.objectContaining({ view: "calendar", date: `${MONTH}-02` }),
+    );
+  });
+
+  /**
+   * A day with nothing in a month with plenty is **not** an empty state — the
+   * grid above it is full of marks. One quiet line, and it is the only thing
+   * in that region that can say where the entries are.
+   */
+  it("points a quiet day at the nearest one that has something", () => {
+    const calendar = open("calendar", `${MONTH}-07`);
+
+    expect(calendar.getByText("nothing"), "the day's own figure").toBeTruthy();
+    expect(calendar.getByText(/Nearest entries:/)).toBeTruthy();
+    expect(calendar.queryByText(/^Nothing in /), "the month is not empty").toBeNull();
+  });
+
+  /**
+   * `filtered`, not `range`: the month may be full of rows, and what excludes
+   * them is the query. §8.1 calls this the one that gets built wrong, because
+   * a message that does not name the excluding filter sends the reader hunting.
+   */
+  it("blames the search, not the month, when a search has no answer here", () => {
+    const calendar = open("calendar", `${MONTH}-09`, { q: "zzz" });
+
+    expect(calendar.getByText(/^No matches in /)).toBeTruthy();
+    expect(calendar.getByText(/zzz/)).toBeTruthy();
+    expect(calendar.queryByText(/nearest month/), "the rows are here, unmatched").toBeNull();
+  });
+
+  /**
+   * **H — the day total was converted and the label was not.**
+   *
+   * `toLedgerItems` takes every row to the *pivot* at its own rate; the header
+   * was labelling that figure with `netWorth[0]` — the currency of your first
+   * account. With a USD pivot and a PLN account, a day holding one 180 PLN
+   * expense drew *-50.00 PLN* over a row reading *-180.00 PLN*: two figures in
+   * the same currency, four pixels apart, disagreeing. They agree in a
+   * one-currency ledger, which is why it survived.
+   */
+  it("labels the day total with the currency it is actually in", () => {
+    const calendar = open("calendar", `${MONTH}-09`, {
+      currencies: [
+        {
+          code: currencyCode("USD"),
+          name: "US dollar",
+          symbol: "$",
+          decimals: 2,
+          capturable: true,
+          isPivot: true,
+        },
+        {
+          code: currencyCode("PLN"),
+          name: "Polish Złoty",
+          symbol: "zł",
+          decimals: 2,
+          capturable: true,
+          isPivot: false,
+        },
+      ],
+    });
+
+    // One row at rate 1, so both figures read -180.00 and the *labels* are the
+    // whole assertion: the row keeps its own currency, the total names the
+    // pivot it was converted to, and the two are allowed to differ only
+    // because they genuinely are two different things.
+    const labels = calendar
+      .getAllByText(/^-180\.00$|^−180,00$/)
+      .map((node) => node.parentElement?.textContent ?? "");
+    expect(
+      labels.some((line) => line.includes("USD")),
+      labels.join(" | "),
+    ).toBe(true);
+    expect(
+      labels.some((line) => line.includes("PLN")),
+      labels.join(" | "),
+    ).toBe(true);
   });
 
   /**

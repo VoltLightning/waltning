@@ -7,6 +7,7 @@ import { useDayRows } from "@waltning/client/ledger/use-day-rows";
 import { useLedgerController } from "@waltning/client/ledger/use-ledger-controller";
 import { useLedgerYears } from "@waltning/client/ledger/use-ledger-years";
 import { useMatchDays } from "@waltning/client/ledger/use-match-days";
+import { useNearestActivity } from "@waltning/client/ledger/use-nearest-activity";
 import { usePhoneLedger } from "@waltning/client/ledger/use-phone-ledger";
 import { useSpendByCategory } from "@waltning/client/ledger/use-spend-by-category";
 import { useUnsettledBanner } from "@waltning/client/ledger/use-unsettled-banner";
@@ -67,7 +68,7 @@ import {
 import { YearChart, type YearColumn } from "@waltning/ui/transactions/year-chart";
 import { router, useLocalSearchParams } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
-import { Text as RNText, useColorScheme, View } from "react-native";
+import { Pressable, Text as RNText, useColorScheme, View } from "react-native";
 import { useAnimatedScrollHandler, useSharedValue } from "react-native-reanimated";
 import { HomeListPage } from "./home-list-page";
 import { openUnsettled } from "./open-unsettled.ts";
@@ -196,6 +197,8 @@ const useSectionStyles = makeStyles((theme) => ({
   goToRow: { flexDirection: "row", alignItems: "center" },
   // The day's entries, set off from the grid above them by the ground.
   dayPanel: { gap: space.xs },
+  // Its own row so the tap target is the line, not the panel.
+  nearestDay: { paddingVertical: space.sm },
   /** The chart and the figures it gives a shape to, as one block. */
   year: { gap: space.x3 },
   nothing: { color: theme.textMuted, ...text.ui("caption") },
@@ -486,6 +489,22 @@ export default function Today() {
   const periodSpendRows = useMemo(() => ledger.readPeriodSpend(period), [ledger, period, snapshot]);
 
   const leadNetWorth = snapshot.netWorth[0];
+  /**
+   * **The currency a day total is actually in.**
+   *
+   * `toLedgerItems` takes every row to the *pivot* at its own row's rate
+   * (`ledger-days.ts`), and both pages that draw the result were labelling it
+   * with `netWorth[0]` — the **lead** currency, which is the currency of your
+   * first account and has nothing to do with the pivot. A ledger whose pivot is
+   * USD and whose first account is in PLN drew a day of one 500 PLN expense as
+   * *-138.89 PLN* under a row reading *-500.00 PLN*: the figure converted, the
+   * label not, and the two disagreeing four pixels apart. They agree in a
+   * one-currency ledger, which is why it stood.
+   */
+  const pivotCurrency = useMemo(
+    () => snapshot.currencies.find((currency) => currency.isPivot),
+    [snapshot.currencies],
+  );
   const leadPeriodSpend = leadNetWorth
     ? periodSpendRows.find((row) => row.currency === leadNetWorth.currency)
     : undefined;
@@ -915,6 +934,104 @@ export default function Today() {
     () => (leadNetWorth ? toLedgerItems(dayRows, leadNetWorth.currency) : []),
     [dayRows, leadNetWorth],
   );
+  /**
+   * **The blank half of the calendar page, which meant three different things
+   * and said none of them** (`design-system/08` §8.1 — the conflation it calls
+   * the commonest failure in this system). Under a grid of thirty cells sat the
+   * day's entries, and where there were none, nothing: a month the ledger has
+   * never reached and a month you have simply not tapped a busy day in looked
+   * identical, and both looked like a bug.
+   *
+   * The month's own rows answer which: `monthFlows` is already read for the
+   * grid, so *does this month hold anything* costs nothing to ask.
+   */
+  const monthHasEntries = monthFlows.length > 0;
+  const monthHasMatches = dayMatches === undefined || [...dayMatches.values()].some((n) => n > 0);
+  const dayHasEntries = dayRows.length > 0;
+  /**
+   * Where the entries actually are — asked only from a day that has none, and
+   * `readNearestActivity` is two index seeks rather than a scan. §8.1 requires
+   * `range` to offer *the nearest period that does, with its count*; an empty
+   * state that cannot say where anything is is the blank it replaced.
+   */
+  const dayPeriod = useMemo<money.Period>(
+    () => ({ start: pager.state.date, end: addDays(pager.state.date, 1) }),
+    [pager.state.date],
+  );
+  const nearest = useNearestActivity(ledger, dayPeriod, !dayHasEntries, snapshot);
+  const goToNearest = useCallback(() => {
+    if (nearest !== null) pager.showDay(nearest.date);
+  }, [nearest, pager.showDay]);
+
+  /**
+   * **First-run is the same read, saying there is nowhere to go.**
+   * `readNearestActivity` looks both ways out of the day and finds nothing; the
+   * month holds nothing either, so the ledger draws nothing anywhere. Deriving
+   * it that way rather than from `recent` keeps one source: `recent` is a
+   * five-row window that a screen may legitimately be given empty while the
+   * ledger is full, and *no transactions yet* over a ledger that holds plenty
+   * is exactly the false claim §8.1 separates these variants to prevent.
+   */
+  const ledgerDrawsNothing = nearest === null && !monthHasEntries && !dayHasEntries;
+
+  const calendarEmpty = useMemo(() => {
+    if (dayMatches !== undefined && !monthHasMatches) {
+      return (
+        <EmptyState
+          variant="filtered"
+          title={t("transactions.calendarFilteredTitle", {
+            month: monthLabel(month, locale).replace(/\s+\d{4}$/, ""),
+          })}
+          body={t("transactions.calendarFilteredBody", { query: pager.state.query ?? "" })}
+          primaryAction={{ label: t("transactions.calendarClearSearch"), onPress: closeSearch }}
+        />
+      );
+    }
+    if (monthHasEntries) return null;
+    if (ledgerDrawsNothing) {
+      return (
+        <EmptyState
+          variant="first-run"
+          title={t("transactions.emptyFirstRunTitle")}
+          body={t("transactions.emptyFirstRunBody")}
+          primaryAction={addTransactionAction}
+        />
+      );
+    }
+    if (nearest === null) return null;
+    return (
+      <EmptyState
+        variant="range"
+        title={t("transactions.calendarRangeTitle", {
+          month: monthLabel(month, locale).replace(/\s+\d{4}$/, ""),
+        })}
+        body={t("transactions.calendarRangeBody", {
+          nearest: monthLabel(yearMonth(nearest.month), locale),
+          count: nearest.count,
+        })}
+        primaryAction={{
+          label: t("transactions.calendarGoToMonth", {
+            month: monthLabel(yearMonth(nearest.month), locale),
+          }),
+          onPress: goToNearest,
+        }}
+      />
+    );
+  }, [
+    dayMatches,
+    monthHasMatches,
+    monthHasEntries,
+    ledgerDrawsNothing,
+    nearest,
+    goToNearest,
+    month,
+    locale,
+    pager.state.query,
+    closeSearch,
+    addTransactionAction,
+    t,
+  ]);
+
   const dayPanel = useMemo(() => {
     const day = dayEntries.find((item) => item.kind === "day");
     return (
@@ -933,8 +1050,8 @@ export default function Today() {
             ) : day.total.kind !== "total" ? null : (
               <Amount
                 value={day.total.pivot}
-                currency={leadNetWorth?.currency ?? ""}
-                decimals={leadNetWorth?.decimals ?? 2}
+                currency={pivotCurrency?.code ?? ""}
+                decimals={pivotCurrency?.decimals ?? 2}
                 size="compact"
                 /*
                   **The same figure the List page states, so the same kind.**
@@ -953,9 +1070,40 @@ export default function Today() {
         {day?.rows.map((row) => (
           <LedgerRowItem key={row.id} row={row} onPress={handleOpenTransaction} />
         ))}
+        {/*
+          **A day with nothing, in a month with something, is not an empty
+          state** — the page above is full of marks, so a title and a button
+          would be shouting about a day the reader picked themselves. One quiet
+          line, and it is the only thing in the region that can say *where* the
+          entries are: §8.1's *offer the nearest period that does*, at the
+          granularity the reader is standing in.
+        */}
+        {day === undefined && nearest !== null ? (
+          <Pressable
+            accessibilityRole="button"
+            onPress={goToNearest}
+            style={sectionStyles.nearestDay}
+          >
+            <RNText style={sectionStyles.nothing}>
+              {t("transactions.calendarNearestDay", {
+                date: dayLabel(nearest.date, locale),
+              })}
+            </RNText>
+          </Pressable>
+        ) : null}
       </View>
     );
-  }, [dayEntries, pager.state.date, locale, leadNetWorth, t, sectionStyles]);
+  }, [
+    dayEntries,
+    pager.state.date,
+    locale,
+    pivotCurrency?.code,
+    pivotCurrency?.decimals,
+    nearest,
+    goToNearest,
+    t,
+    sectionStyles,
+  ]);
 
   /* ── Months ───────────────────────────────────────────────────────────── */
 
@@ -1115,8 +1263,8 @@ export default function Today() {
             ledger={ledger}
             anchor={pager.state.date}
             today={today}
-            pivotCurrency={leadNetWorth.currency}
-            pivotDecimals={leadNetWorth.decimals}
+            pivotCurrency={pivotCurrency?.code ?? leadNetWorth.currency}
+            pivotDecimals={pivotCurrency?.decimals ?? leadNetWorth.decimals}
             onPickDay={handlePickDay}
             onOpenTransaction={handleOpenTransaction}
             onCategorize={handleCategorize}
@@ -1141,7 +1289,7 @@ export default function Today() {
               onPickDay={handlePickDay}
               {...(dayMatches === undefined ? {} : { matches: dayMatches })}
             />
-            {dayPanel}
+            {calendarEmpty ?? dayPanel}
           </GroundPanel>
         ),
       },
@@ -1183,6 +1331,7 @@ export default function Today() {
     ],
     [
       body,
+      calendarEmpty,
       weeks,
       dayHeadings,
       dayName,
@@ -1210,6 +1359,8 @@ export default function Today() {
       month,
       monthRows,
       pager.state.date,
+      pivotCurrency?.code,
+      pivotCurrency?.decimals,
       sectionStyles.year,
       t,
       thisYear,
