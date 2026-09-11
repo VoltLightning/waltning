@@ -8,7 +8,7 @@
  */
 
 import type { Meta, StoryObj } from "@storybook/react-native-web-vite";
-import { crossRate } from "@waltning/core/money";
+import { crossRate, toMoney } from "@waltning/core/money";
 import { View } from "react-native";
 import { GroundPanel } from "../../../shell/molecules/card/card";
 import { TransferComposer } from "./transfer-composer";
@@ -19,14 +19,18 @@ const USD_ACCOUNT = {
   id: "acc-usd",
   name: "Household · USD",
   currency: "USD",
+  symbol: "$",
   decimals: 2,
+  balance: toMoney("12480.20"),
   capturable: true,
 };
 const PLN_ACCOUNT = {
   id: "acc-pln",
   name: "Cash · PLN",
   currency: "PLN",
+  symbol: "zł",
   decimals: 2,
+  balance: toMoney("1240"),
   capturable: true,
 };
 const SAVINGS_ACCOUNT = {
@@ -48,9 +52,9 @@ const meta = {
     onOpenToAccountPicker: noop,
     onSwap: noop,
     amountRaw: "150",
+    onAmountChange: noop,
     toAmountRaw: "565,20",
-    activeField: "amount",
-    onActiveFieldChange: noop,
+    onToAmountChange: noop,
     referenceRate: {
       rate: crossRate("3.8100"),
       source: "nbp",
@@ -67,7 +71,7 @@ const meta = {
     onNoteChange: noop,
   },
   // `transfer-screen.tsx` never renders `TransferComposer` flush to the
-  // device edge — it wraps it in its own `space.x5` horizontal clearance,
+  // device edge — it wraps it in `GroundPanel`'s own horizontal clearance,
   // the same clearance `GroundPanel` gives every other screen body
   // (`today-frame.tsx`). Flush here would be a baseline nobody actually sees.
   decorators: [

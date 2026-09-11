@@ -187,8 +187,26 @@ function withLedger(overrides: Parameters<typeof fakeController>[0] = {}) {
 }
 
 /** Keypad's own glyphs — `.` is English's decimal mark, mapped to the canonical `,` key. */
-function tapKeys(...glyphs: readonly string[]) {
-  for (const glyph of glyphs) fireEvent.click(screen.getByRole("button", { name: glyph }));
+/** The amount is a `TextInput` on the deck's composer — typed, not tapped (S31 §3). */
+function typeAmount(value: string) {
+  fireEvent.change(screen.getByLabelText("Amount"), { target: { value } });
+}
+function typeDestination(value: string) {
+  fireEvent.change(screen.getByLabelText("Destination amount"), { target: { value } });
+}
+/** Fee, date and note wait behind one row (S31 §3); opening it is idempotent. */
+function ensureMore() {
+  if (screen.queryByRole("button", { name: /^Fee/ }) === null) {
+    fireEvent.click(screen.getByRole("button", { name: /^More details/ }));
+  }
+}
+function openFee() {
+  ensureMore();
+  fireEvent.click(screen.getByRole("button", { name: /^Fee/ }));
+}
+function openDate() {
+  ensureMore();
+  fireEvent.click(screen.getByRole("button", { name: /^Date/ }));
 }
 
 /**
@@ -221,7 +239,7 @@ describe("Transfer — the phone path", () => {
     pickTo("Household · USD");
 
     expect(screen.getByText("A transfer needs two different accounts.")).toBeDefined();
-    expect(screen.getByRole("button", { name: "Save" })).toHaveProperty("disabled", true);
+    expect(screen.getByRole("button", { name: "Move money" })).toHaveProperty("disabled", true);
   });
 
   /**
@@ -238,24 +256,19 @@ describe("Transfer — the phone path", () => {
     pickFrom("Household · USD");
     pickTo("Cash · PLN");
 
-    fireEvent.click(screen.getByRole("button", { name: "Amount: 0" }));
-    tapKeys("1", "5", "0");
+    typeAmount("150");
 
     // Pre-filled from the reference: 150 × 3.8100 = 571.50.
-    expect(screen.getByText("571.50")).toBeDefined();
+    expect(screen.getByLabelText("Destination amount")).toHaveProperty("value", "571.50");
 
-    fireEvent.click(screen.getByRole("button", { name: "Destination amount: 571.50" }));
-    tapKeys("Delete", "Delete", "Delete", "Delete", "Delete", "Delete");
-    tapKeys("5", "6", "5", ".", "2", "0");
-    expect(screen.getByText("565.20")).toBeDefined();
+    typeDestination("565.20");
+    expect(screen.getByLabelText("Destination amount")).toHaveProperty("value", "565.20");
 
-    // §4a: margin_pivot = 150 − 565.20 ÷ 3.8100 ≈ 1.6535 USD ≈ 6.30 PLN.
-    // With no fee typed, the footer's Total repeats the same figure.
-    expect(screen.getAllByText((_, element) => element?.textContent === "6.30 PLN")).toHaveLength(
-      2,
-    );
+    // §4a: margin_pivot = 150 − 565.20 ÷ 3.8100 ≈ 1.6535 USD — the source
+    // currency, a cost, drawn as money that left.
+    expect(screen.getByText((_, element) => element?.textContent === "-1.65 USD")).toBeDefined();
 
-    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    fireEvent.click(screen.getByRole("button", { name: "Move money" }));
 
     expect(createTransaction).toHaveBeenCalledOnce();
     const draft = createTransaction.mock.calls[0]?.[0];
@@ -306,14 +319,13 @@ describe("Transfer — the phone path", () => {
     pickFrom("Household · USD");
     pickTo("Cash · PLN");
 
-    fireEvent.click(screen.getByRole("button", { name: "Amount: 0" }));
-    tapKeys("1", "5", "0");
+    typeAmount("150");
 
     // Pre-filled from Today's own reference: 150 × 3.8100 = 571.50.
-    expect(screen.getByText("571.50")).toBeDefined();
-    expect(screen.getByRole("button", { name: "Save" })).toHaveProperty("disabled", false);
+    expect(screen.getByLabelText("Destination amount")).toHaveProperty("value", "571.50");
+    expect(screen.getByRole("button", { name: "Move money" })).toHaveProperty("disabled", false);
 
-    fireEvent.click(screen.getByRole("button", { name: "Date: Today" }));
+    openDate();
     fireEvent.click(screen.getByRole("button", { name: "Yesterday" }));
 
     expect(readCrossRate).toHaveBeenCalledWith(
@@ -322,8 +334,8 @@ describe("Transfer — the phone path", () => {
     // Yesterday has no rate for this pair — the stale prefill must not
     // survive the date change, and Save must refuse a cross-currency write
     // with nothing behind its destination figure.
-    expect(screen.queryByText("571.50")).toBeNull();
-    expect(screen.getByRole("button", { name: "Save" })).toHaveProperty("disabled", true);
+    expect(screen.getByLabelText("Destination amount")).not.toHaveProperty("value", "571.50");
+    expect(screen.getByRole("button", { name: "Move money" })).toHaveProperty("disabled", true);
   });
 
   /**
@@ -336,15 +348,15 @@ describe("Transfer — the phone path", () => {
     withLedger();
     pickFrom("Household · USD");
     pickTo("Cash · PLN");
-    fireEvent.click(screen.getByRole("button", { name: "Amount: 0" }));
-    tapKeys("1", "5", "0");
+    typeAmount("150");
 
+    openFee();
     expect(() =>
-      fireEvent.change(screen.getByLabelText("Fee"), { target: { value: "5 z" } }),
+      fireEvent.change(screen.getByRole("textbox", { name: "Fee" }), { target: { value: "5 z" } }),
     ).not.toThrow();
 
     expect(screen.getByText("Enter a number, or leave it blank.")).toBeDefined();
-    expect(screen.getByRole("button", { name: "Save" })).toHaveProperty("disabled", true);
+    expect(screen.getByRole("button", { name: "Move money" })).toHaveProperty("disabled", true);
   });
 
   /**
@@ -357,13 +369,13 @@ describe("Transfer — the phone path", () => {
     withLedger();
     pickFrom("Household · USD");
     pickTo("Cash · PLN");
-    fireEvent.click(screen.getByRole("button", { name: "Amount: 0" }));
-    tapKeys("1", "5", "0");
+    typeAmount("150");
 
-    fireEvent.change(screen.getByLabelText("Fee"), { target: { value: "5," } });
+    openFee();
+    fireEvent.change(screen.getByRole("textbox", { name: "Fee" }), { target: { value: "5," } });
 
     expect(screen.getByText("Enter a number, or leave it blank.")).toBeDefined();
-    expect(screen.getByRole("button", { name: "Save" })).toHaveProperty("disabled", true);
+    expect(screen.getByRole("button", { name: "Move money" })).toHaveProperty("disabled", true);
   });
 
   /**
@@ -384,19 +396,16 @@ describe("Transfer — the phone path", () => {
 
       pickFrom("Household · USD");
       pickTo("Cash · PLN");
-      fireEvent.click(screen.getByRole("button", { name: "Amount: 0" }));
-      tapKeys("1", "5", "0");
-      fireEvent.click(screen.getByRole("button", { name: "Destination amount: 571.50" }));
-      tapKeys("Delete", "Delete", "Delete", "Delete", "Delete", "Delete");
-      tapKeys("5", "6", "5", ".", "2", "0");
-      expect(screen.getByText("565.20")).toBeDefined();
+      typeAmount("150");
+      typeDestination("565.20");
+      expect(screen.getByLabelText("Destination amount")).toHaveProperty("value", "565.20");
 
       // Both legs land on PLN — the destination field disappears (§3), and
       // the stale 565.20 must not survive into the write as a PLN figure.
       pickFrom("Savings · PLN");
-      expect(screen.queryByRole("button", { name: /^Destination amount/ })).toBeNull();
+      expect(screen.queryByLabelText("Destination amount")).toBeNull();
 
-      fireEvent.click(screen.getByRole("button", { name: "Save" }));
+      fireEvent.click(screen.getByRole("button", { name: "Move money" }));
       const draft = createTransaction.mock.calls[0]?.[0];
       expect(draft?.toAmount).toBe("150.00000000");
     });
@@ -413,16 +422,13 @@ describe("Transfer — the phone path", () => {
 
       pickFrom("Household · USD");
       pickTo("Cash · PLN");
-      fireEvent.click(screen.getByRole("button", { name: "Amount: 0" }));
-      tapKeys("1", "5", "0");
-      fireEvent.click(screen.getByRole("button", { name: "Destination amount: 571.50" }));
-      tapKeys("Delete", "Delete", "Delete", "Delete", "Delete", "Delete");
-      tapKeys("5", "6", "5", ".", "2", "0");
-      expect(screen.getByText("565.20")).toBeDefined();
+      typeAmount("150");
+      typeDestination("565.20");
+      expect(screen.getByLabelText("Destination amount")).toHaveProperty("value", "565.20");
 
       pickFrom("Vacation · USD");
-      expect(screen.getByText("565.20")).toBeDefined();
-      expect(screen.queryByText("571.50")).toBeNull();
+      expect(screen.getByLabelText("Destination amount")).toHaveProperty("value", "565.20");
+      expect(screen.getByLabelText("Destination amount")).not.toHaveProperty("value", "571.50");
     });
 
     it("re-prefills from the new pair's own reference rate", () => {
@@ -430,18 +436,15 @@ describe("Transfer — the phone path", () => {
 
       pickFrom("Household · USD");
       pickTo("Cash · PLN");
-      fireEvent.click(screen.getByRole("button", { name: "Amount: 0" }));
-      tapKeys("1", "5", "0");
-      fireEvent.click(screen.getByRole("button", { name: "Destination amount: 571.50" }));
-      tapKeys("Delete", "Delete", "Delete", "Delete", "Delete", "Delete");
-      tapKeys("5", "6", "5", ".", "2", "0");
-      expect(screen.getByText("565.20")).toBeDefined();
+      typeAmount("150");
+      typeDestination("565.20");
+      expect(screen.getByLabelText("Destination amount")).toHaveProperty("value", "565.20");
 
       // USD→EUR's own reference is 0.9200 — 150 × 0.9200 = 138.00, not the
       // PLN figure just typed and not PLN's own reference either.
       pickTo("Trip · EUR");
-      expect(screen.getByText("138.00")).toBeDefined();
-      expect(screen.queryByText("565.20")).toBeNull();
+      expect(screen.getByLabelText("Destination amount")).toHaveProperty("value", "138.00");
+      expect(screen.getByLabelText("Destination amount")).not.toHaveProperty("value", "565.20");
     });
 
     it("clears the destination when the new pair has no reference held offline", () => {
@@ -449,15 +452,12 @@ describe("Transfer — the phone path", () => {
 
       pickFrom("Household · USD");
       pickTo("Cash · PLN");
-      fireEvent.click(screen.getByRole("button", { name: "Amount: 0" }));
-      tapKeys("1", "5", "0");
-      fireEvent.click(screen.getByRole("button", { name: "Destination amount: 571.50" }));
-      tapKeys("Delete", "Delete", "Delete", "Delete", "Delete", "Delete");
-      tapKeys("5", "6", "5", ".", "2", "0");
-      expect(screen.getByText("565.20")).toBeDefined();
+      typeAmount("150");
+      typeDestination("565.20");
+      expect(screen.getByLabelText("Destination amount")).toHaveProperty("value", "565.20");
 
       pickTo("Other · GBP");
-      expect(screen.getByRole("button", { name: "Destination amount: 0" })).toBeDefined();
+      expect(screen.getByLabelText("Destination amount")).toHaveProperty("value", "");
     });
   });
 
@@ -471,10 +471,8 @@ describe("Transfer — the phone path", () => {
 
     pickFrom("Household · USD");
     pickTo("Other · GBP");
-    fireEvent.click(screen.getByRole("button", { name: "Amount: 0" }));
-    tapKeys("1", "0", "0");
-    fireEvent.click(screen.getByRole("button", { name: "Destination amount: 0" }));
-    tapKeys("8", "0");
+    typeAmount("100");
+    typeDestination("80");
 
     expect(screen.getByText("0.8000")).toBeDefined();
     expect(screen.queryByText("0.0000")).toBeNull();
@@ -490,7 +488,7 @@ describe("Transfer — the phone path", () => {
     pickFrom("Household · USD");
     pickTo("Cash · PLN");
 
-    expect(screen.getByRole("button", { name: "Save" })).toHaveProperty("disabled", true);
+    expect(screen.getByRole("button", { name: "Move money" })).toHaveProperty("disabled", true);
   });
 
   /**
@@ -502,11 +500,11 @@ describe("Transfer — the phone path", () => {
     withLedger({ createTransaction });
     pickFrom("Household · USD");
     pickTo("Cash · PLN");
-    fireEvent.click(screen.getByRole("button", { name: "Amount: 0" }));
-    tapKeys("1", "5", "0");
-    fireEvent.change(screen.getByLabelText("Fee"), { target: { value: "0" } });
+    typeAmount("150");
+    openFee();
+    fireEvent.change(screen.getByRole("textbox", { name: "Fee" }), { target: { value: "0" } });
 
-    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    fireEvent.click(screen.getByRole("button", { name: "Move money" }));
 
     expect(createTransaction).toHaveBeenCalledOnce();
     const draft = createTransaction.mock.calls[0]?.[0];
@@ -526,7 +524,7 @@ describe("Transfer — the phone path", () => {
     expect(
       screen.getByText("USD needs an exchange rate before a transaction can be recorded in it."),
     ).toBeDefined();
-    expect(screen.getByRole("button", { name: "Save" })).toHaveProperty("disabled", true);
+    expect(screen.getByRole("button", { name: "Move money" })).toHaveProperty("disabled", true);
   });
 
   it("collapses to one amount for a same-currency transfer", () => {
@@ -539,7 +537,7 @@ describe("Transfer — the phone path", () => {
     pickFrom("Cash · PLN");
     pickTo("Savings · PLN");
 
-    expect(screen.queryByRole("button", { name: /^Destination amount/ })).toBeNull();
+    expect(screen.queryByLabelText("Destination amount")).toBeNull();
   });
 
   /**
@@ -557,11 +555,11 @@ describe("Transfer — the phone path", () => {
 
     pickFrom("Household · USD");
     pickTo("Cash · PLN");
-    fireEvent.click(screen.getByRole("button", { name: "Amount: 0" }));
-    tapKeys("1", "5", "0");
-    fireEvent.change(screen.getByLabelText("Fee"), { target: { value: "0,125" } });
+    typeAmount("150");
+    openFee();
+    fireEvent.change(screen.getByRole("textbox", { name: "Fee" }), { target: { value: "0,125" } });
 
-    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    fireEvent.click(screen.getByRole("button", { name: "Move money" }));
 
     expect(createTransaction).not.toHaveBeenCalled();
     expect(screen.getByText("USD holds 2 decimal places — this amount has more.")).toBeDefined();
@@ -582,11 +580,11 @@ describe("Transfer — the phone path", () => {
 
       pickFrom("Household · USD");
       pickTo("Cash · PLN");
-      fireEvent.click(screen.getByRole("button", { name: "Amount: 0" }));
-      tapKeys("1", "5", "0");
-      fireEvent.change(screen.getByLabelText("Fee"), { target: { value: feeRaw } });
+      typeAmount("150");
+      openFee();
+      fireEvent.change(screen.getByRole("textbox", { name: "Fee" }), { target: { value: feeRaw } });
 
-      expect(screen.getByRole("button", { name: "Save" })).toHaveProperty("disabled", true);
+      expect(screen.getByRole("button", { name: "Move money" })).toHaveProperty("disabled", true);
     },
   );
 
@@ -596,10 +594,9 @@ describe("Transfer — the phone path", () => {
 
     pickFrom("Household · USD");
     pickTo("Cash · PLN");
-    fireEvent.click(screen.getByRole("button", { name: "Amount: 0" }));
-    tapKeys("1", "5", "0");
+    typeAmount("150");
 
-    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    fireEvent.click(screen.getByRole("button", { name: "Move money" }));
 
     expect(createTransaction).toHaveBeenCalledOnce();
     expect(createTransaction.mock.calls[0]?.[0]).not.toHaveProperty("fee");
@@ -618,15 +615,14 @@ describe("Transfer — the phone path", () => {
 
     pickFrom("Household · USD");
     pickTo("Cash · PLN");
-    fireEvent.click(screen.getByRole("button", { name: "Amount: 0" }));
-    tapKeys("1", "0", "0");
-    expect(screen.getByText("381.00")).toBeDefined();
+    typeAmount("100");
+    expect(screen.getByLabelText("Destination amount")).toHaveProperty("value", "381.00");
 
     pickTo("Savings · EUR");
-    expect(screen.getByText("92.00")).toBeDefined();
-    expect(screen.queryByText("381.00")).toBeNull();
+    expect(screen.getByLabelText("Destination amount")).toHaveProperty("value", "92.00");
+    expect(screen.getByLabelText("Destination amount")).not.toHaveProperty("value", "381.00");
 
-    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    fireEvent.click(screen.getByRole("button", { name: "Move money" }));
 
     expect(createTransaction).toHaveBeenCalledOnce();
     expect(createTransaction.mock.calls[0]?.[0]).toMatchObject({
@@ -644,15 +640,14 @@ describe("Transfer — the phone path", () => {
     pickTo("Savings · EUR");
     // PLN → EUR has no rate in this fixture (only USD → PLN, USD → EUR do),
     // so the destination starts empty rather than a wrong estimate.
-    fireEvent.click(screen.getByRole("button", { name: "Amount: 0" }));
-    tapKeys("1", "0", "0");
-    expect(screen.queryByRole("button", { name: /^Destination amount: [1-9]/ })).toBeNull();
+    typeAmount("100");
+    expect(screen.getByLabelText("Destination amount")).toHaveProperty("value", "");
 
     pickFrom("Household · USD");
     // Now USD → EUR has a rate: 100 × 0.9200 = 92.00, the new pair's own
     // figure — never whatever the PLN → EUR leg would have held (nothing,
     // here, but never a stale carry-over either).
-    expect(screen.getByText("92.00")).toBeDefined();
+    expect(screen.getByLabelText("Destination amount")).toHaveProperty("value", "92.00");
   });
 
   /**
@@ -671,8 +666,7 @@ describe("Transfer — the phone path", () => {
     withLedger({ accounts: [HOUSEHOLD, secondPln] });
 
     pickFrom("Household · USD");
-    fireEvent.click(screen.getByRole("button", { name: "Amount: 0" }));
-    tapKeys("1", "0", ".", "5", "0");
+    typeAmount("10.50");
 
     pickFrom("Zero-dp · PLN");
 
@@ -698,7 +692,8 @@ describe("Transfer — the phone path", () => {
     withLedger({ accounts: [HOUSEHOLD, secondPln] });
 
     pickFrom("Household · USD");
-    fireEvent.change(screen.getByLabelText("Fee"), { target: { value: "1.50" } });
+    openFee();
+    fireEvent.change(screen.getByRole("textbox", { name: "Fee" }), { target: { value: "1.50" } });
 
     pickFrom("Zero-dp · PLN");
 
@@ -718,13 +713,10 @@ describe("Transfer — the phone path", () => {
 
     pickFrom("Household · USD");
     pickTo("Cash · PLN");
-    fireEvent.click(screen.getByRole("button", { name: "Amount: 0" }));
-    tapKeys("1", "0", "0");
+    typeAmount("100");
     // Type over the reference prefill — only an edited destination figure
     // is checked; the auto-filled path is re-derived, never compared.
-    fireEvent.click(screen.getByRole("button", { name: "Destination amount: 381.00" }));
-    tapKeys("Delete", "Delete", "Delete", "Delete", "Delete", "Delete");
-    tapKeys("5", "0", ".", "5", "0");
+    typeDestination("50.50");
 
     pickTo("Zero-dp · EUR");
 
@@ -757,13 +749,52 @@ describe("Transfer — the phone path", () => {
 
     pickFrom("Household · USD");
     pickTo("Cash · PLN");
-    fireEvent.click(screen.getByRole("button", { name: "Amount: 0" }));
-    tapKeys("1", "0", "0");
+    typeAmount("100");
 
-    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    fireEvent.click(screen.getByRole("button", { name: "Move money" }));
 
     expect(
       screen.getByText("to_amount 381.125 holds more decimal places than PLN allows (2) (H2)"),
     ).toBeDefined();
+  });
+});
+
+/**
+ * **A same-currency pair swapped, then retyped, wrote two different amounts
+ * of one currency.** The swap marks the destination as edited, the source
+ * handler then stopped syncing it, and the *Arrives* card is not drawn for
+ * one currency — so the second figure was unreachable and unseen. One
+ * currency, one figure: the destination follows the source whatever was
+ * edited, and the write restates it. `transactions_transfer_same_currency_
+ * equal` is the same guarantee in Postgres.
+ */
+describe("Transfer — one currency, one figure", () => {
+  it("keeps both legs equal across a swap and a retype, and writes them so", () => {
+    const createTransaction = vi.fn();
+    withLedger({ accounts: [HOUSEHOLD, CASH, VACATION], createTransaction });
+    pickFrom("Household · USD");
+    pickTo("Vacation · USD");
+    typeAmount("100");
+    fireEvent.click(screen.getByRole("button", { name: "Swap direction" }));
+    typeAmount("200");
+    fireEvent.click(screen.getByRole("button", { name: "Move money" }));
+    expect(createTransaction.mock.calls[0]?.[0]).toMatchObject({
+      amountOriginal: "200.00000000",
+      toAmount: "200.00000000",
+    });
+  });
+
+  it("refuses a swap that would carry the fee into a currency with fewer decimal places (L6)", () => {
+    withLedger();
+    pickFrom("Household · USD");
+    pickTo("Cash · PLN");
+    typeAmount("100");
+    openFee();
+    fireEvent.change(screen.getByRole("textbox", { name: "Fee" }), { target: { value: "0,125" } });
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    fireEvent.click(screen.getByRole("button", { name: "Swap direction" }));
+    // Refused as a whole: the legs stay as they were.
+    expect(screen.getByRole("button", { name: "From: Household · USD" })).toBeDefined();
+    expect(screen.getByText(/holds 2 decimal places/)).toBeDefined();
   });
 });

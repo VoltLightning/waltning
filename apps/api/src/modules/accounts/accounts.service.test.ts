@@ -27,7 +27,7 @@ const DEST = id<"accounts">("aaaaaaaa-0000-0000-0000-000000000002");
 
 beforeAll(async () => {
   s = await scratchDatabase("balance");
-  await s.sql`INSERT INTO currencies (code, name, is_pivot) VALUES ('USD', 'US Dollar', true)`;
+  await s.sql`INSERT INTO currencies (code, name, is_pivot) VALUES ('USD', 'US Dollar', true), ('PLN', 'Polish Zloty', false)`;
 }, 60_000);
 
 afterAll(async () => {
@@ -40,10 +40,13 @@ async function reset(opening: money.Money = money.toMoney("0.00")): Promise<void
   await s.sql`DELETE FROM accounts`;
   await s.db.insert(accounts).values([
     { id: ACC, name: "Bank A", currency: currencyCode("USD"), openingBalance: opening },
+    // Another currency, so a transfer's two legs may legitimately differ:
+    // inside one currency they are equal by constraint
+    // (`transactions_transfer_same_currency_equal`, SPEC §7.5).
     {
       id: DEST,
-      name: "Bank B",
-      currency: currencyCode("USD"),
+      name: "Bank B · PLN",
+      currency: currencyCode("PLN"),
       openingBalance: money.toMoney("0.00"),
     },
   ]);
@@ -69,8 +72,8 @@ async function add(rows: Row[]): Promise<void> {
         ? {
             toAccountId: r.to.account,
             toAmount: r.to.amount,
-            toCurrency: currencyCode("USD"),
-            toFxRate: money.pivotPerUnit("1.000000000000"),
+            toCurrency: currencyCode("PLN"),
+            toFxRate: money.pivotPerUnit("0.250000000000"),
           }
         : {}),
       ...(r.deleted ? { deletedAt: new Date() } : {}),
@@ -121,8 +124,8 @@ describe("the two legs", () => {
     ]);
 
     expect(await balanceOf(ACC)).toBe("380.00000000");
-    // 118, not 120 — the two differ by the fee, which is the whole point of
-    // storing both sides (§7.2) and where the FX margin comes from.
+    // 118, not 120 — the two differ by the spread, which is the whole point
+    // of storing both sides (§7.2) and where the FX margin comes from.
     expect(await balanceOf(DEST)).toBe("118.00000000");
   });
 });

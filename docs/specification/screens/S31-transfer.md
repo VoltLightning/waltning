@@ -1,7 +1,7 @@
 # S31 · Transfer
 
 **Surface** both · **Journeys** J2, J10, J14 · **Frequency** weekly
-**Design** [S31.html](design/S31.html)
+**Design** [S31.html](design/S31.html) — the deck's frame
 **Status** specified · tier 2
 
 > Added after the S05 type-selector decision. `SPEC.md` §14.1 lists Transfer as
@@ -34,28 +34,47 @@ exists rather than in the middle of one.
 ### Mobile — 390pt
 
 ```
-  ✕                              Transfer
-
-  From   [ Household · USD ]
-                  ↓
-  To     [ Cash · PLN ]
-
-           150,00 $                    ← you type this
-              ↓
-           565,20 zł                   ← prefilled, EDITABLE
-
-  realized   3,7680
-  reference  3,8100 · NBP · 12 Aug
-  margin     6,30 zł                   ← updates as you type
-  fee      [ 5,00 ] zł                 ← optional, stated by the bank
-  total     11,30 zł
-
-  [ Today ]  [ + note ]
-
-  ┌──────────── keypad ─────────────┐
-  │              Save               │
-  └─────────────────────────────────┘
+┌─────────────────────────────────────────────────┐
+│  Move money                                  ✕  │  ← the name, and what it does under it
+│  Between two of your own accounts               │
+│                                                 │
+│  ┌─────────────────────────────────────────────┐│
+│  │ LEAVES                                   ⇅  ││  ← swap, one control
+│  │ 500,00  zł                                  ││  ← you type this
+│  │ ┌─────────────────────────────────────────┐ ││
+│  │ │ From                          12 480,20 │ ││  ← the leg, and what it holds
+│  │ │ Bank A · PLN                            │ ││
+│  │ │ To                             1 240,00 │ ││
+│  │ │ Bank B · EUR                            │ ││
+│  │ │ More details                          › │ ││  ← fee · date · note, folded
+│  │ └─────────────────────────────────────────┘ ││
+│  └─────────────────────────────────────────────┘│
+│  ┌─────────────────────────────────────────────┐│
+│  │ ARRIVES                   NBP · 3 September ││  ← the reference's provenance
+│  │ 115,96  €                                   ││  ← prefilled, EDITABLE
+│  │ ┌ Rate used ┐  ┌ Costs you ┐                ││
+│  │ │ 4,3120    │  │ −8,40 zł  │                ││  ← updates as you type
+│  │ └───────────┘  └───────────┘                ││
+│  │ reference 4,3120 · NBP · 3 September        ││  ← once the realized rate exists
+│  │ The spread against the reference rate…      ││
+│  └─────────────────────────────────────────────┘│
+│                                                 │
+│  ┌─────────────────────────────────────────────┐│
+│  │                 Move money                  ││  ← full width, primary, at the bottom edge
+│  └─────────────────────────────────────────────┘│
+│   One entry on each side, linked — neither is   │
+│                    income                       │
+└─────────────────────────────────────────────────┘
 ```
+
+**Two cards, one per leg.** *Leaves* holds the amount you type and the two
+accounts as rows — each with what it holds, because which account has the
+money is half of why you are here. *Arrives* holds the destination amount, the
+rate used and what it costs, and is drawn only across currencies.
+
+**Both amounts are typed on the system keyboard**, folded onto the draft's one
+shape the way S05's amount is (`sanitizeAmount`). A drawn keypad was the earlier
+answer and the deck does not draw one.
 
 **The destination amount is pre-filled from the reference rate and left
 editable.** Typing over it sets the realized rate, and the spread against the
@@ -66,21 +85,36 @@ looking at it (§14.1).
 statement shows and a rate is not (§7.6). The realized rate is derived and
 displayed, never typed.
 
-**Which is why the realized figure is absent until both amounts are.** A rate
+**Which is why *Rate used* shows the reference until both amounts are.** A rate
 derived from a figure nobody has typed is not a reading — `realized 0,0000` on
-an untouched screen is the absence of one wearing a figure's clothes, on the
-screen whose whole purpose is making the real rate visible. The realized rate
-and the margin appear together, once both sides hold a non-zero amount.
+an untouched screen is the absence of one wearing a figure's clothes. Until
+both sides hold a non-zero amount the tile states the reference, which is a
+fact the ledger already holds; once the realized rate exists the tile shows
+it, *Costs you* appears beside it, and the reference moves to the line under
+them so the comparison is still on the page (§6 — with its source, its date
+and its staleness in the card's own kicker row, and a *Manual* tag when either
+leg is a person's own correction).
 
-**The reference rate is the opposite case and stays.** It is not derived from
-anything typed — it is a fact the ledger already holds — so it shows from the
-moment a pair is chosen, on its own line, with its source, its date and its
-staleness (§6). Withholding it while the destination amount is being retyped
-would hide the figure at exactly the moment §7 calls primary: backspacing
-`565,20` to type what the bank actually gave is the whole interaction, and the
-reference is what it is compared against.
+**Costs you is the margin and the stated fee, summed, in the source
+currency** — the currency the money left in, which is the fee's (§9.1) and
+the margin's own pivot leg, so the two add without a conversion. Drawn as
+money that left, in words and in ink; a transfer that beat the reference reads
+`+` under *Saves you* (§7.5: never clamped). `FX Cost` (§12.2) still reports
+the two apart.
 
-Same-currency transfers collapse: one amount, no rate panel, no spread.
+**Rate used states its unit** — *PLN per USD*, destination per source, the
+direction `RateTable` uses — because a bare figure says nothing about which
+way it reads, and the artboard's own figure is drawn the other way round.
+
+Same-currency transfers collapse: one card, no rate, no spread — and one
+figure. The destination is not drawn, so it follows the source whatever was
+typed or swapped, the write restates it, and
+`transactions_transfer_same_currency_equal` refuses a row whose two legs in one
+currency disagree.
+
+**The fee, the date and the note wait behind one row** in the *Leaves* card,
+which summarises what they hold when folded (*Fee 5 · 1 September*) and carries
+a folded field's refusal, so nothing filled is ever invisible.
 
 ### Web — ≥1024px
 
@@ -92,11 +126,13 @@ form, and a wider version of it is not a better one.
 
 | Component | Notes |
 |---|---|
-| `TransferAmount` | Two accounts, two amounts, derived rate, spread (§4.3) |
-| `AmountField` | Both sides. Tabular, comma decimal |
-| `RateField` | Read-only here — it is derived. Shown with its reference for comparison |
-| `Chip` | Date, note |
-| `Keypad` | Mobile |
+| `ComposerHeader` | *Move money* over *Between two of your own accounts*, the ✕. Clears the top inset itself |
+| `TransferComposer` | The two cards — *Leaves* and *Arrives* — and everything in them (§4.3) |
+| `ComposerRow` | The legs, with the account's balance at the right in place of the caret; *More details*, which unfolds *Fee* · *Date* · *Note* |
+| `Amount` | Every balance and the cost. Tabular, comma decimal |
+| The tiles | *Rate used* and *Costs you*, on the inset fill — the one figure each that the screen exists to make visible |
+| `Banner` | `neutral`, under the rows, when the source currency has no rate (§6) |
+| The footer | A full-width primary *Move money* over *One entry on each side, linked — neither is income* |
 
 ## 5. Data
 
@@ -128,9 +164,10 @@ direction — read-only, because it is derived.
 ## 7. Interaction
 
 ### Mobile
-Source and destination are chips opening an account picker. Tapping the
-destination amount replaces the pre-filled figure. Swap direction with one
-control rather than re-picking both accounts.
+Source and destination are rows opening an account picker. The destination
+amount is a field; typing into it replaces the pre-filled figure. Swap
+direction with the one control in the *Leaves* card's kicker row rather than
+re-picking both accounts.
 
 ### Web
 Tab through: from · to · amount · destination amount · date. `Enter` saves.

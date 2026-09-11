@@ -38,10 +38,12 @@ let s: Scratch;
 beforeAll(async () => {
   s = await scratchDatabase("check_validated");
   await s.sql`insert into currencies (code, name, decimals, is_pivot)
-    values (${CURRENCY.code}, ${CURRENCY.name}, ${CURRENCY.decimals}, true)`;
+    values (${CURRENCY.code}, ${CURRENCY.name}, ${CURRENCY.decimals}, true),
+           (${OTHER_CURRENCY.code}, ${OTHER_CURRENCY.name}, ${OTHER_CURRENCY.decimals}, false)`;
   await s.sql`insert into accounts (id, name, currency, ownership, is_business, opening_balance, kind)
     values (${ACCOUNT.id}, ${ACCOUNT.name}, ${CURRENCY.code}, 'own', false, '0', 'other'),
-           (${TO_ACCOUNT.id}, ${TO_ACCOUNT.name}, ${CURRENCY.code}, 'own', false, '0', 'other')`;
+           (${TO_ACCOUNT.id}, ${TO_ACCOUNT.name}, ${CURRENCY.code}, 'own', false, '0', 'other'),
+           (${EUR_ACCOUNT.id}, ${EUR_ACCOUNT.name}, ${OTHER_CURRENCY.code}, 'own', false, '0', 'other')`;
   await s.sql`insert into categories (id, name, kind) values (${CATEGORY.id}, ${CATEGORY.name}, 'expense')`;
   await s.sql`insert into counterparties (id, name) values (${COUNTERPARTY.id}, ${COUNTERPARTY.name})`;
 }, 60_000);
@@ -51,6 +53,10 @@ afterAll(async () => {
 });
 
 /** A minimal, otherwise-valid `expense` row — every check below overrides only what it needs to break. */
+// A second currency and an account holding it, so a case can cross currencies.
+const OTHER_CURRENCY = { code: "EUR", name: "Euro", decimals: 2 };
+const EUR_ACCOUNT = { id: "00000000-0000-4000-8000-000000000005", name: "Trip · EUR" };
+
 type Row = Record<string, string | boolean | null>;
 const BASE: Row = {
   date: "2026-08-12",
@@ -90,6 +96,15 @@ const CHECKS: Record<string, () => Promise<unknown>> = {
       to_currency: CURRENCY.code,
       to_fx_rate: "1",
     }),
+  // A transfer inside one currency whose two legs disagree.
+  transactions_transfer_same_currency_equal: () =>
+    insertRow({
+      type: "transfer",
+      to_account_id: TO_ACCOUNT.id,
+      to_amount: "20.00",
+      to_currency: CURRENCY.code,
+      to_fx_rate: "1",
+    }),
   // A transfer with no destination amount.
   transactions_to_amount_shape: () =>
     insertRow({
@@ -98,13 +113,15 @@ const CHECKS: Record<string, () => Promise<unknown>> = {
       to_currency: CURRENCY.code,
       to_fx_rate: "1",
     }),
-  // A transfer that moves zero into the other leg.
+  // A transfer that moves zero into the other leg — across currencies, so
+  // `transactions_transfer_same_currency_equal` has nothing to say about it
+  // and the zero is the only thing wrong with the row.
   transactions_to_amount_positive: () =>
     insertRow({
       type: "transfer",
-      to_account_id: TO_ACCOUNT.id,
+      to_account_id: EUR_ACCOUNT.id,
       to_amount: "0.00",
-      to_currency: CURRENCY.code,
+      to_currency: OTHER_CURRENCY.code,
       to_fx_rate: "1",
     }),
   // A transfer with no destination currency.

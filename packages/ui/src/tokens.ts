@@ -743,3 +743,12 @@ export const touchTarget = { min: 44, row: 54 } as const;
  * and the desk's band sat 2px wide of the panel under it.
  */
 export const gutter = space.x4;
+
+/**
+ * A tabular digit's advance in IBM Plex Sans, as a fraction of the font size —
+ * what a typed figure's `TextInput` is sized by, so the currency affix sits
+ * beside the figure rather than at the far edge of a field that grew to fill
+ * the row. Plex's tabular figures are 0.6em; the comma is narrower and the
+ * over-estimate on it is the room the caret needs.
+ */
+export const DIGIT_EM = 0.6;

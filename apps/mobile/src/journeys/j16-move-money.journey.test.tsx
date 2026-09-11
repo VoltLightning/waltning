@@ -148,8 +148,27 @@ afterEach(() => {
   for (const ledger of openLedgers.splice(0)) ledger.close();
 });
 
-function tapDigits(digits: readonly string[]) {
-  for (const digit of digits) fireEvent.click(screen.getByRole("button", { name: digit }));
+/** The amount is a `TextInput` on the deck's composer (S31 §3) — typed, not tapped. */
+function typeAmount(value: string) {
+  fireEvent.change(screen.getByLabelText("Amount"), { target: { value } });
+}
+/** Fee, date and note wait behind one row (S31 §3); opening it is idempotent. */
+function ensureMore() {
+  if (screen.queryByRole("button", { name: /^Fee/ }) === null) {
+    fireEvent.click(screen.getByRole("button", { name: /^More details/ }));
+  }
+}
+function openFee() {
+  ensureMore();
+  fireEvent.click(screen.getByRole("button", { name: /^Fee/ }));
+}
+function openDate() {
+  ensureMore();
+  fireEvent.click(screen.getByRole("button", { name: /^Date/ }));
+}
+function typeFee(value: string) {
+  openFee();
+  fireEvent.change(screen.getByRole("textbox", { name: "Fee" }), { target: { value } });
 }
 
 describe("J16 — move money", () => {
@@ -160,15 +179,15 @@ describe("J16 — move money", () => {
     render(<JourneyHarness controller={ledger.controller} stub={stub} />);
     await settleLayout();
 
-    fireEvent.click(screen.getByRole("button", { name: "From" }));
+    fireEvent.click(screen.getByRole("button", { name: /^From/ }));
     fireEvent.click(screen.getByRole("radio", { name: "Cash · PLN" }));
-    fireEvent.click(screen.getByRole("button", { name: "To" }));
+    fireEvent.click(screen.getByRole("button", { name: /^To/ }));
     fireEvent.click(screen.getByRole("radio", { name: "Bank B · USD" }));
 
-    tapDigits(["1", "0", "0"]);
+    typeAmount("100");
     // §3 — pre-filled from the reference rate: 100 PLN at `4.00` PLN/USD is
     // 25.00 USD.
-    expect(screen.getByRole("button", { name: "Destination amount: 25.00" })).toBeDefined();
+    expect(screen.getByLabelText("Destination amount")).toHaveProperty("value", "25.00");
 
     // §4 — a currency change re-prices the destination (R5 H1, R4 H2-r4,
     // both fixed): the stale USD-rate figure is gone, not left behind at
@@ -176,51 +195,47 @@ describe("J16 — move money", () => {
     // 0.9200 EUR/USD is 100 × (0.92 / 4.00) = 23.00 EUR.
     fireEvent.click(screen.getByRole("button", { name: "To: Bank B · USD" }));
     fireEvent.click(screen.getByRole("radio", { name: "Bank C · EUR" }));
-    expect(screen.getByRole("button", { name: "Destination amount: 23.00" })).toBeDefined();
+    expect(screen.getByLabelText("Destination amount")).toHaveProperty("value", "23.00");
     // R4 H2-r4 — the previous currency's stale figure must not survive.
-    expect(screen.queryByRole("button", { name: "Destination amount: 25.00" })).toBeNull();
+    expect(screen.getByLabelText("Destination amount")).not.toHaveProperty("value", "25.00");
 
     // Back to USD, so the rest of the script prices at the fixture's own
     // reference rate — the date-change re-pricing (R4 H-r4) is its own
     // scenario below, since it does not hold on this branch.
     fireEvent.click(screen.getByRole("button", { name: "To: Bank C · EUR" }));
     fireEvent.click(screen.getByRole("radio", { name: "Bank B · USD" }));
-    expect(screen.getByRole("button", { name: "Destination amount: 25.00" })).toBeDefined();
+    expect(screen.getByLabelText("Destination amount")).toHaveProperty("value", "25.00");
 
     // §9.1 — a fee with more separators than one is unparsable outright;
     // Save is correctly disabled and the field states so (not R4 H1-r4 —
     // see the file header).
-    fireEvent.change(screen.getByRole("textbox", { name: "Fee" }), {
-      target: { value: "1,234.56" },
-    });
-    expect(screen.getByRole("button", { name: "Save" })).toHaveProperty("disabled", true);
+    typeFee("1,234.56");
+    expect(screen.getByRole("button", { name: "Move money" })).toHaveProperty("disabled", true);
     expect(screen.getByText("Enter a number, or leave it blank.")).toBeDefined();
 
     // R4 H1-r4 — a fee that parses cleanly but carries more decimal places
     // than the source account's own currency (PLN, 2dp) is not refused.
-    fireEvent.change(screen.getByRole("textbox", { name: "Fee" }), {
-      target: { value: "12.345" },
-    });
-    expect(screen.getByRole("button", { name: "Save" })).toHaveProperty("disabled", false);
+    typeFee("12.345");
+    expect(screen.getByRole("button", { name: "Move money" })).toHaveProperty("disabled", false);
 
     // R4 M-r4 — the same scale gap at one decimal place: `",5"` parses to
     // `"0.5"`, one place, so this is not the malformed-fee gap either;
     // written here as the brief's own literal script, and reported as
     // passing rather than failing (see the file header for R4 H1-r4/M-r4).
-    fireEvent.change(screen.getByRole("textbox", { name: "Fee" }), { target: { value: "" } });
-    fireEvent.change(screen.getByRole("textbox", { name: "Fee" }), { target: { value: ",5" } });
-    expect(screen.getByRole("button", { name: "Save" })).toHaveProperty("disabled", false);
+    typeFee("");
+    typeFee(",5");
+    expect(screen.getByRole("button", { name: "Move money" })).toHaveProperty("disabled", false);
 
     // R5 C2 — fixed on main: a stray letter does not crash the screen, it is
     // simply unparsable, same as any other malformed fee.
-    fireEvent.change(screen.getByRole("textbox", { name: "Fee" }), { target: { value: "" } });
-    fireEvent.change(screen.getByRole("textbox", { name: "Fee" }), { target: { value: "a" } });
-    expect(screen.getByRole("button", { name: "Save" })).toHaveProperty("disabled", true);
+    typeFee("");
+    typeFee("a");
+    expect(screen.getByRole("button", { name: "Move money" })).toHaveProperty("disabled", true);
     expect(screen.getByText("Enter a number, or leave it blank.")).toBeDefined();
 
     // A clean, valid transfer.
-    fireEvent.change(screen.getByRole("textbox", { name: "Fee" }), { target: { value: "" } });
-    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    typeFee("");
+    fireEvent.click(screen.getByRole("button", { name: "Move money" }));
 
     await waitFor(() => expect(stub.getRoute()).toBe("today"));
     const rows = ledger.scratch.ledger.replica.db.select().from(ledgerSchema.transactions).all();
@@ -246,15 +261,13 @@ describe("J16 — move money", () => {
     render(<JourneyHarness controller={ledger.controller} stub={stub} />);
     await settleLayout();
 
-    fireEvent.click(screen.getByRole("button", { name: "From" }));
+    fireEvent.click(screen.getByRole("button", { name: /^From/ }));
     fireEvent.click(screen.getByRole("radio", { name: "Cash · PLN" }));
-    fireEvent.click(screen.getByRole("button", { name: "To" }));
+    fireEvent.click(screen.getByRole("button", { name: /^To/ }));
     fireEvent.click(screen.getByRole("radio", { name: "Bank B · USD" }));
-    tapDigits(["1", "0", "0"]);
-    fireEvent.change(screen.getByRole("textbox", { name: "Fee" }), {
-      target: { value: "12.345" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    typeAmount("100");
+    typeFee("12.345");
+    fireEvent.click(screen.getByRole("button", { name: "Move money" }));
 
     // A fee at the wrong scale for its own currency should be refused —
     // the same guard `transactions_fee_positive` and its siblings enforce
@@ -284,20 +297,20 @@ describe("J16 — move money", () => {
     render(<JourneyHarness controller={ledger.controller} stub={stub} />);
     await settleLayout();
 
-    fireEvent.click(screen.getByRole("button", { name: "From" }));
+    fireEvent.click(screen.getByRole("button", { name: /^From/ }));
     fireEvent.click(screen.getByRole("radio", { name: "Cash · PLN" }));
-    fireEvent.click(screen.getByRole("button", { name: "To" }));
+    fireEvent.click(screen.getByRole("button", { name: /^To/ }));
     fireEvent.click(screen.getByRole("radio", { name: "Bank B · USD" }));
-    tapDigits(["1", "0", "0"]);
-    expect(screen.getByRole("button", { name: "Destination amount: 25.00" })).toBeDefined();
+    typeAmount("100");
+    expect(screen.getByLabelText("Destination amount")).toHaveProperty("value", "25.00");
 
     // Yesterday's own rate, 4.40 PLN/USD (`setupJourney`, above): 100 PLN
     // is 22.73 USD there, not 25.00.
-    fireEvent.click(screen.getByRole("button", { name: "Date: Today" }));
+    openDate();
     fireEvent.click(screen.getByRole("button", { name: "Yesterday" }));
 
     await waitFor(() =>
-      expect(screen.getByRole("button", { name: "Destination amount: 22.73" })).toBeDefined(),
+      expect(screen.getByLabelText("Destination amount")).toHaveProperty("value", "22.73"),
     );
   });
 });

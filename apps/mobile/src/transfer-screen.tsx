@@ -27,20 +27,20 @@ import { AccountPicker, type AccountPickerAccount } from "@waltning/ui/accounts/
 import { parseAmount } from "@waltning/ui/fx/amount-field";
 import { resolveFieldErrorMessage } from "@waltning/ui/i18n/field-error-messages";
 import { useT } from "@waltning/ui/i18n/provider";
+import { Button } from "@waltning/ui/primitives/button";
+import { useSafeArea } from "@waltning/ui/primitives/safe-area";
 import { GroundPanel } from "@waltning/ui/shell/card";
+import { text } from "@waltning/ui/theme/fonts";
 import { makeStyles } from "@waltning/ui/theme/styles";
-import { applyKey } from "@waltning/ui/transactions/amount-keys";
+import { gutter, space } from "@waltning/ui/tokens";
 import { ComposerHeader } from "@waltning/ui/transactions/composer-header";
-import { Dock, type DockModeOption } from "@waltning/ui/transactions/dock";
-import { Keypad, type KeypadKey } from "@waltning/ui/transactions/keypad";
 import {
   TransferComposer,
   type TransferComposerAccount,
-  type TransferComposerField,
 } from "@waltning/ui/transactions/transfer-composer";
 import { router, useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { View } from "react-native";
+import { Text, View } from "react-native";
 
 /** `create_transaction`'s own field paths for a transfer row — everything else lands at form level. */
 const KNOWN_PATHS = ["amountOriginal", "accountId", "toAccountId", "toAmount", "fee", "date"];
@@ -49,18 +49,19 @@ function handleCancel() {
   router.back();
 }
 
-function toComposerAccount(account: {
-  id: string;
-  name: string;
-  currency: string;
-  decimals: number;
-  capturable: boolean;
-}): TransferComposerAccount {
+/** The replica's account onto the composer's own shape, with its balance and its currency's mark. */
+function toComposerAccount(
+  account: PhoneCapturableAccount,
+  symbols: ReadonlyMap<string, string>,
+): TransferComposerAccount {
+  const symbol = symbols.get(account.currency);
   return {
     id: account.id,
     name: account.name,
     currency: account.currency,
+    ...(symbol === undefined ? {} : { symbol }),
     decimals: account.decimals,
+    balance: account.balance,
     capturable: account.capturable,
   };
 }
@@ -106,8 +107,19 @@ export default function Transfer() {
   const snapshot = usePhoneLedger(ledger);
   const capture = deviceRuntime().capture();
   const today = capture.date;
+  const insets = useSafeArea();
+  // The footer clears the home indicator itself, the way the band above
+  // clears the notch: `GroundPanel` between them clears neither edge.
+  const clearBottom = { paddingBottom: gutter + insets.bottom };
 
-  const accounts = useMemo(() => snapshot.accounts.map(toComposerAccount), [snapshot.accounts]);
+  const currencySymbols = useMemo(
+    () => new Map(snapshot.currencies.map((currency) => [currency.code, currency.symbol])),
+    [snapshot.currencies],
+  );
+  const accounts = useMemo(
+    () => snapshot.accounts.map((account) => toComposerAccount(account, currencySymbols)),
+    [snapshot.accounts, currencySymbols],
+  );
   const pickerAccounts = useMemo(() => snapshot.accounts.map(toPickerChoice), [snapshot.accounts]);
   const pickerGroups = useMemo(
     () => snapshot.groups.map((group) => ({ id: group.id, name: group.name })),
@@ -121,7 +133,6 @@ export default function Transfer() {
   const [amountRaw, setAmountRaw] = useState("");
   const [toAmountRaw, setToAmountRaw] = useState("");
   const [toAmountEdited, setToAmountEdited] = useState(false);
-  const [activeField, setActiveField] = useState<TransferComposerField>("amount");
   const [feeRaw, setFeeRaw] = useState("");
   const [date, setDate] = useState<string>(today);
   const [note, setNote] = useState("");
@@ -193,43 +204,38 @@ export default function Transfer() {
     setToAmountRaw(convertAmountRaw(parsed, referenceRate.rate, toAccount?.decimals ?? 2));
   }, [referenceRate, crossCurrency, amountRaw, toAccount, toAmountEdited]);
 
-  const handleKey = useCallback(
-    (key: KeypadKey) => {
-      if (activeField === "amount") {
-        const next = applyKey(amountRaw, key, fromAccount?.decimals ?? 2);
-        setAmountRaw(next);
-        // §3 — pre-filled from the reference rate and left editable; an edit
-        // to the destination (`toAmountEdited`) freezes this sync, the same
-        // rule S31 §7 states for the interaction.
-        if (!toAmountEdited) {
-          if (!crossCurrency) {
-            setToAmountRaw(next);
-          } else if (referenceRate !== undefined) {
-            const parsed = parseAmount(next);
-            if (parsed !== null) {
-              setToAmountRaw(
-                convertAmountRaw(parsed, referenceRate.rate, toAccount?.decimals ?? 2),
-              );
-            }
-          }
-        }
+  /**
+   * The source amount, typed — already folded onto the draft's shape by the
+   * composer. §3 — the destination is pre-filled from the reference rate and
+   * left editable; an edit to it (`toAmountEdited`) freezes this sync, the
+   * same rule S31 §7 states for the interaction.
+   */
+  const handleAmountChange = useCallback(
+    (next: string) => {
+      setAmountRaw(next);
+      // One currency, one figure: the destination is not on screen for a
+      // same-currency pair, so it follows the source whether or not it was
+      // ever edited — a swap marks it edited, and a pair swapped then retyped
+      // once wrote two different amounts of the same currency.
+      if (!crossCurrency) {
+        setToAmountRaw(next);
         return;
       }
-      const next = applyKey(toAmountRaw, key, toAccount?.decimals ?? 2);
-      setToAmountRaw(next);
-      setToAmountEdited(true);
+      if (toAmountEdited) return;
+      if (referenceRate !== undefined) {
+        const parsed = parseAmount(next);
+        if (parsed !== null) {
+          setToAmountRaw(convertAmountRaw(parsed, referenceRate.rate, toAccount?.decimals ?? 2));
+        }
+      }
     },
-    [
-      activeField,
-      amountRaw,
-      toAmountRaw,
-      fromAccount,
-      toAccount,
-      crossCurrency,
-      referenceRate,
-      toAmountEdited,
-    ],
+    [toAccount, crossCurrency, referenceRate, toAmountEdited],
   );
+  /** The destination, typed over — from here on it is the person's own figure (§7). */
+  const handleToAmountChange = useCallback((next: string) => {
+    setToAmountRaw(next);
+    setToAmountEdited(true);
+  }, []);
 
   /**
    * H2 — the destination figure for the *new* pair, never the previous
@@ -366,6 +372,18 @@ export default function Transfer() {
   );
 
   const handleSwap = useCallback(() => {
+    // L6, on the swap too: the fee stays in the *source* currency (§9.1), and
+    // the source is about to be the other account — a fee typed at two
+    // places must not be carried into a currency that holds none.
+    if (toAccount !== undefined && decimalsExceed(feeRaw, toAccount.decimals)) {
+      const message = t("transactions.tooManyDecimals", {
+        currency: toAccount.currency,
+        decimals: String(toAccount.decimals),
+      });
+      setFieldErrors(mapFieldErrors([{ path: "fee", message }], KNOWN_PATHS));
+      return;
+    }
+    setFieldErrors(undefined);
     setFromAccountId(toAccountId);
     setToAccountId(fromAccountId);
     setAmountRaw(toAmountRaw);
@@ -373,7 +391,7 @@ export default function Transfer() {
     // Both sides already hold a person's own figure once swapped — neither
     // is a rate-derived estimate any more.
     setToAmountEdited(true);
-  }, [fromAccountId, toAccountId, amountRaw, toAmountRaw]);
+  }, [fromAccountId, toAccountId, toAccount, amountRaw, toAmountRaw, feeRaw, t]);
 
   const sameAccount = fromAccountId !== null && fromAccountId === toAccountId;
   const parsedAmount = parseAmount(amountRaw);
@@ -447,7 +465,9 @@ export default function Transfer() {
       counterpartyId: null,
       counterpartyRole: null,
       toAccountId,
-      toAmount: parsedToAmount,
+      // One currency, one figure (§7.5's *to_amount equals amount_original*)
+      // — restated at the write, so no path through the draft can send two.
+      toAmount: crossCurrency ? parsedToAmount : parsedAmount,
       toCurrency: toAccount.currency,
       ...(parsedFee === null || feeIsZero ? {} : { fee: parsedFee }),
     });
@@ -464,6 +484,7 @@ export default function Transfer() {
   }, [
     parsedAmount,
     parsedToAmount,
+    crossCurrency,
     amountIsZero,
     toAmountIsZero,
     parsedFee,
@@ -493,27 +514,21 @@ export default function Transfer() {
     });
   }, [needsRateCurrency, today]);
 
-  const handleMode = useCallback(() => {}, []);
-  const modes = useMemo<readonly [DockModeOption, DockModeOption, ...DockModeOption[]]>(
-    () => [
-      { value: "keypad", label: t("transactions.modeKeypad") },
-      { value: "voice", label: t("transactions.modeVoice"), disabled: true },
-      { value: "receipt", label: t("transactions.modeReceipt"), disabled: true },
-      { value: "converse", label: t("transactions.modeConverse"), disabled: true },
-    ],
-    [t],
-  );
-
   return (
     <View style={styles.root}>
-      {/* The ✕ and the title, in a fixed band above the page scroller — this
-          route carries no navigation header (`app/_layout.tsx`), and a
-          header inside `GroundPanel`'s own `ScrollView` scrolls under the
-          notch the moment the column overflows. */}
-      <ComposerHeader onCancel={handleCancel} title={t("transactions.transfer")} />
+      {/* The name, what it does and the ✕, in a fixed band above the page
+          scroller — this route carries no navigation header
+          (`app/_layout.tsx`), and a header inside `GroundPanel`'s own
+          `ScrollView` scrolls under the notch the moment the column
+          overflows. */}
+      <ComposerHeader
+        onCancel={handleCancel}
+        title={t("transactions.moveMoney")}
+        subtitle={t("transactions.betweenOwnAccounts")}
+      />
       {/* `clearBottom={false}` — this panel is not the screen's own bottom
-          edge, `Dock` below it is, and `Dock` already clears the home
-          indicator itself. */}
+          edge, the footer below it is, and that clears the home indicator
+          itself. */}
       <GroundPanel clearBottom={false}>
         <TransferComposer
           accounts={accounts}
@@ -523,9 +538,9 @@ export default function Transfer() {
           onOpenToAccountPicker={handleOpenToAccountPicker}
           onSwap={handleSwap}
           amountRaw={amountRaw}
+          onAmountChange={handleAmountChange}
           toAmountRaw={toAmountRaw}
-          activeField={activeField}
-          onActiveFieldChange={setActiveField}
+          onToAmountChange={handleToAmountChange}
           {...(referenceRate ? { referenceRate } : {})}
           fee={feeRaw}
           onFeeChange={setFeeRaw}
@@ -538,16 +553,18 @@ export default function Transfer() {
           onSetRate={handleSetRate}
         />
       </GroundPanel>
-      <Dock
-        mode="keypad"
-        modes={modes}
-        onMode={handleMode}
-        onSave={handleSave}
-        saveLabel={t("common.save")}
-        saveDisabled={saveDisabled}
-      >
-        <Keypad onKey={handleKey} />
-      </Dock>
+      {/* S31 §3 — one full-width primary at the bottom edge, and under it
+          what the write is: one row, two legs, neither of them income. */}
+      <View style={[styles.footer, clearBottom]}>
+        <Button
+          variant="primary"
+          size="lg"
+          label={t("transactions.moveMoney")}
+          onPress={handleSave}
+          disabled={saveDisabled}
+        />
+        <Text style={styles.footerNote}>{t("transactions.transferLinkedNote")}</Text>
+      </View>
       <AccountPicker
         visible={accountPicker.open}
         accounts={pickerAccounts}
@@ -563,4 +580,11 @@ export default function Transfer() {
 
 const useStyles = makeStyles((theme) => ({
   root: { flex: 1, backgroundColor: theme.ground },
+  footer: {
+    backgroundColor: theme.ground,
+    paddingHorizontal: gutter,
+    paddingTop: space.lg,
+    gap: space.lg,
+  },
+  footerNote: { color: theme.textMuted, ...text.ui("caption"), textAlign: "center" },
 }));

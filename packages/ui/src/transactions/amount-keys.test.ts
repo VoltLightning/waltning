@@ -60,27 +60,33 @@ describe("sanitizeAmount — a typed string folded onto the same shape", () => {
     expect(sanitizeAmount("48,90", 2)).toBe("48,90");
   });
 
-  it("accepts either mark and writes the draft's own", () => {
-    expect(sanitizeAmount("48.9", 2)).toBe("48,9");
-    expect(sanitizeAmount("48,9", 2)).toBe("48,9");
+  it("reads the locale's mark as the mark, and the other separator as grouping", () => {
+    expect(sanitizeAmount("1.240,50", 2, ",")).toBe("1240,50");
+    expect(sanitizeAmount("1,240.50", 2, ".")).toBe("1240,50");
+    expect(sanitizeAmount("1,240,500.5", 2, ".")).toBe("1240500,5");
   });
 
   /**
-   * **A paste is a thousandfold error waiting to happen.** With both kinds of
-   * separator in the string the last one is the mark and the other is
-   * grouping; one kind repeated is grouping throughout. The first pass took
-   * the first separator met as the mark and read `1,240.50` as `1,24`.
+   * **One keystroke, a hundredfold.** The field shows `500,00` in Polish; a
+   * numeric keypad offers only `.`; a pass that took the last separator as
+   * the mark turned `500,00.` into `50000,`. The locale's mark, present, is
+   * the mark, and the stray one is dropped where it stands.
    */
-  it("reads a grouped paste as the number it is", () => {
-    expect(sanitizeAmount("1,240.50", 2)).toBe("1240,50");
-    expect(sanitizeAmount("1.240,50", 2)).toBe("1240,50");
-    expect(sanitizeAmount("1.240.500", 2)).toBe("1240500");
-    expect(sanitizeAmount("1,240,500.5", 2)).toBe("1240500,5");
+  it("drops a stray separator of the other kind after a complete figure", () => {
+    expect(sanitizeAmount("500,00.", 2, ",")).toBe("500,00");
+    expect(sanitizeAmount("565.20,", 2, ".")).toBe("565.20".replace(".", ","));
+    expect(sanitizeAmount("1234,56.", 2, ",")).toBe("1234,56");
+  });
+
+  it("takes the other separator as the mark when it is the only one, once", () => {
+    expect(sanitizeAmount("48.9", 2, ",")).toBe("48,9");
+    expect(sanitizeAmount("48,9", 2, ".")).toBe("48,9");
+    expect(sanitizeAmount("1.240.500", 2, ",")).toBe("1240500");
   });
 
   it("cuts the fraction for a currency with no fraction digits, never concatenating it", () => {
-    expect(sanitizeAmount("1200.50", 0)).toBe("1200");
-    expect(sanitizeAmount(".5", 0)).toBe("");
+    expect(sanitizeAmount("1200.50", 0, ".")).toBe("1200");
+    expect(sanitizeAmount(".5", 0, ".")).toBe("");
   });
 
   it("puts a zero before a leading mark and drops a leading zero before a digit", () => {

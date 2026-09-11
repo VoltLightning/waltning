@@ -16,6 +16,9 @@
 
 import type { KeypadKey } from "./organisms/keypad/keypad";
 
+/** `parseAmount`'s own cap on integer digits — `numeric(20,8)` holds twelve before the point. */
+export const AMOUNT_INTEGER_DIGITS = 12;
+
 /**
  * `raw` after one keypress, capped at `decimals` fraction digits.
  *
@@ -62,28 +65,30 @@ export function applyKey(raw: string, key: KeypadKey, decimals: number = 2): str
  * `parseAmount` can read: digits, at most one comma, at most `decimals` digits
  * after it. The draft's own mark is always `","` (`applyKey`'s rule).
  *
- * **Which separator is the decimal mark is decided from the whole string, not
- * from the first one met.** A first pass that took the first `,` or `.` as the
- * mark turned `"1,240.50"` into `1,24` — a thousandfold error from a paste —
- * so: with both kinds present, the *last* one is the mark and the other kind
- * is grouping; one kind present more than once is grouping throughout; one
- * kind present once is the mark, which is the typing case. Digits past the
- * account's fraction digits are cut, and a mark on a currency with no fraction
- * digits cuts the fraction with it — a refusal truncates, it never
- * concatenates (`"1200.50"` at 0 decimals is `1200`, not `120050`).
+ * **The locale's mark decides which separator is the decimal.** The field
+ * shows the figure with the locale's mark, so a person typing sees `565.20`
+ * in English and `565,20` in Polish, and what they type back is read the
+ * same way: the locale's mark, present once, *is* the mark and the other
+ * separator is grouping; absent, the other separator once is the mark (a
+ * numeric keypad offers only one) and more than once is grouping. A first
+ * pass that took the first separator met as the mark read `"1,240.50"` as
+ * `1,24`; a second that took the last read a Polish `500,00` with a stray
+ * numpad `.` after it as `50000,` — one keystroke, a hundredfold.
+ *
+ * Digits past the account's fraction digits are cut, and a mark on a currency
+ * with no fraction digits cuts the fraction with it — a refusal truncates, it
+ * never concatenates (`"1200.50"` at 0 decimals is `1200`, not `120050`).
  */
-export function sanitizeAmount(typed: string, decimals: number = 2): string {
+export function sanitizeAmount(typed: string, decimals: number = 2, mark: "," | "." = ","): string {
+  const other = mark === "," ? "." : ",";
   const kept = [...typed].filter(
     (char) => (char >= "0" && char <= "9") || char === "," || char === ".",
   );
-  const commas = kept.filter((char) => char === ",").length;
-  const dots = kept.filter((char) => char === ".").length;
+  const marks = kept.filter((char) => char === mark).length;
+  const others = kept.filter((char) => char === other).length;
   let markAt = -1;
-  if (commas > 0 && dots > 0) {
-    markAt = Math.max(kept.lastIndexOf(","), kept.lastIndexOf("."));
-  } else if (commas === 1 || dots === 1) {
-    markAt = kept.findIndex((char) => char === "," || char === ".");
-  }
+  if (marks === 1) markAt = kept.indexOf(mark);
+  else if (others === 1) markAt = kept.indexOf(other);
   const digitsOf = (chars: readonly string[]) =>
     chars.filter((char) => char >= "0" && char <= "9").join("");
   const whole = digitsOf(markAt === -1 ? kept : kept.slice(0, markAt)).replace(/^0+(?=\d)/, "");
