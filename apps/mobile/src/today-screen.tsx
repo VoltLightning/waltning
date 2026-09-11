@@ -936,7 +936,16 @@ export default function Today() {
                 currency={leadNetWorth?.currency ?? ""}
                 decimals={leadNetWorth?.decimals ?? 2}
                 size="compact"
-                kind="auto"
+                /*
+                  **The same figure the List page states, so the same kind.**
+                  This is one day's net, not a balance — `net` reds a day that
+                  cost money, greens one that brought money in and mutes one
+                  that netted to zero on transfers between your own accounts
+                  (S04 §5). Left on `auto` it would be the one place in this
+                  screen where a day that paid you is drawn as a day with
+                  nothing to say, one swipe from the list where it is green.
+                */
+                kind="net"
               />
             )
           }

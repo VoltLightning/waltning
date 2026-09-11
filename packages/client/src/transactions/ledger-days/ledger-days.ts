@@ -189,7 +189,18 @@ export type RibbonDayModel = {
 };
 
 /**
- * The days of a loaded list, classed for the ribbon.
+ * The days of a loaded list, classed for the ribbon, **earliest first**.
+ *
+ * **The strip runs the way time does, whatever order the list is in.** The
+ * list is reverse-chronological because a ledger is read from the top, and
+ * that is a fact about a *vertical* axis — handed to a horizontal strip
+ * unchanged it drew `11 10 9 8 7` left to right, which is a week running
+ * backwards beside a `MonthGrid` on the next page of the same screen running
+ * forwards. S04 §4 says the ribbon is continuous and clipped at both edges and
+ * does not say which way it runs; every calendar this product draws, and the
+ * reading direction of both languages it ships, say earliest at the left.
+ * `DayRibbon` scrolls the current day into view, which is what makes the newer
+ * end reachable without it being the end you start at.
  *
  * **`heavy` is relative to what is on screen, not to an absolute figure.**
  * A ledger where the largest day is 200 zł and one where it is 20 000 would
@@ -267,7 +278,11 @@ export function ribbonDays<Row extends LedgerDayRow>(
     between two loaded days really is a gap in the ledger. `toLedgerItems` stops
     emitting quiet items under the same option and for the same reason.
   */
-  return options.filtered === true ? marked : fillQuietDays(marked);
+  // Earliest first, in both branches: a filtered ribbon is not continuous but
+  // it is still a strip, and a strip that changed direction when a search was
+  // typed would be two controls wearing one name.
+  const strip = [...marked].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+  return options.filtered === true ? strip : fillQuietDays(strip);
 }
 
 /**
@@ -286,13 +301,18 @@ export function ribbonDays<Row extends LedgerDayRow>(
  * the same shape a month grid's empty cell has.
  */
 function fillQuietDays(marked: readonly RibbonDayModel[]): readonly RibbonDayModel[] {
-  const first = marked[0];
-  const last = marked[marked.length - 1];
-  if (first === undefined || last === undefined) return marked;
+  // The span's ends, read from the dates rather than from the array's ends: the
+  // caller sorts, and a fill that *relied* on that would be a rule one line
+  // above holding a loop below it together. This one is right for any order it
+  // is handed, and always fills forward.
+  let from = marked[0]?.date;
+  let to = from;
+  if (from === undefined || to === undefined) return marked;
+  for (const day of marked) {
+    if (day.date < from) from = day.date;
+    if (day.date > to) to = day.date;
+  }
 
-  // The list runs newest first, so the span is from the last to the first.
-  const from = first.date <= last.date ? first.date : last.date;
-  const to = first.date <= last.date ? last.date : first.date;
   const held = new Map(marked.map((day) => [day.date as string, day]));
 
   const run: RibbonDayModel[] = [];
@@ -307,6 +327,5 @@ function fillQuietDays(marked: readonly RibbonDayModel[]): readonly RibbonDayMod
       },
     );
   }
-  // Back into the order the caller had them in.
-  return first.date <= last.date ? run : run.reverse();
+  return run;
 }

@@ -383,20 +383,20 @@ happened*.
 | `MonthSummary` | The hero, opening month only. *Kept so far* stacked over its figure, a `FlowBar`, then the labelled pair. Draws three zeroes for a period the ledger did not exist in — that is the true answer, not an empty state |
 | `FlowBar` | Track is *came in*, fill is *went out*, gap is *kept*. Fill clamps at 100%; a deficit is carried by the figures, not by an overrunning bar |
 | `SpendRows` | *Where it went* — §6 at leaf granularity, five rows plus a named remainder, bars proportional to the largest row, one colour. Opening month only |
-| `DayRibbon` | Under `PageTabs`, on the List page only. Continuous — a cell for **every** day between the first and the last the list has loaded, not only the days holding rows, because the distance between two marks is part of what the strip draws. Horizontally scrollable, clipped at both edges. 48×66 cells with the day number at 17px and room around the weekday letter. Activity mark per §3 |
+| `DayRibbon` | Under `PageTabs`, on the List page only. Continuous — a cell for **every** day between the first and the last the list has loaded, not only the days holding rows, because the distance between two marks is part of what the strip draws. **Earliest at the left**, and scrolled so the day the list is on is in the middle of it. Horizontally scrollable, clipped at both edges. 48×66 cells with the day number at 17px and room around the weekday letter. Activity mark per §3 |
 | `MonthGrid` | Calendar's own grid — a day per cell with `DayRibbon`'s activity mark, ≥44px |
 | `YearChart` | Months' hero — twelve paired columns scaled to the busiest month of the year, the current month ticked, empty months drawn as stubs. Carries the year, its net, its two arrows and the button that opens `YearPicker` |
 | `MonthRows` | Months' twelve rows: income, spend and **net** per month. No bars — `YearChart` above is the comparison, so a row states figures |
 | `YearPicker` | A sheet of up to nine years, paged back to 1900, a dot on the years holding entries. `PeriodPicker` at year granularity. Pages are counted back from this year, so the oldest one is the short one — at 1900 it is a single cell, and the cells hold their column rather than stretching to fill the row |
 | `DayGroup` | A day's rows under its date and total. The list's only grouping |
 | `QuietDay` | One empty day: a single muted line |
-| `QuietRun` | Two or more consecutive empty days: one row naming the span and its length, with *Show* |
+| `QuietRun` | Two or more consecutive empty days: one row naming the span and its length, with *Show*. The span is **one date range**, not two dates — the language collapses whatever its ends share (`September 7 – 8, 2026`, `7–8 września 2026`), because a row whose whole content is that nothing happened must not spend two lines spelling the month and the year twice |
 | `ExpectedGroup` | A future day. Dashed border, muted type, figures in neither the income nor the expense colour — it is not money yet |
 | `TransactionRow` | `TransferRow` for transfers; `BIZ` tag where business |
 | `BrandIcon` | `TransactionRow`'s leading mark for a recognised merchant (§14.4b). Offline, never blank: an unmatched payee falls back to its monogram |
 | `FxAmount` | Any foreign row — `local · rate · display`, the rate for that row's own date (P1) |
 | `Banner(warn)` | Unsettled clearing — rendered **only when non-zero**, with one action |
-| `TodayPill` | Floats over the list when the list's **anchor** is not today — which is what a jump moves, and a jump is what §6 says this exists for. Deliberately not *scrolled away from today*: paging backwards walks day by day and can be walked back, where a jump loaded a neighbourhood with nothing between it and here. The only way back from a jump (§6). Top-centre, because the add button owns the bottom corners and settles against either side edge at any height (`02-tokens` §2.9). Its edge says *above the page*, not `shadow-float`, which §2.5 keeps for the add button and the toast — the things above the whole screen rather than above one list |
+| `TodayPill` | Floats over the list when the list's **anchor** is not today — which is what a jump moves, and a jump is what §6 says this exists for. Deliberately not *scrolled away from today*: paging backwards walks day by day and can be walked back, where a jump loaded a neighbourhood with nothing between it and here. The only way back from a jump (§6). Top-centre **of the list**, not of the page: the add button owns the bottom corners and settles against either side edge at any height (`02-tokens` §2.9), and `DayRibbon` owns the band above the list — a pill resolved against the whole page lands on the strip's first cells, which are both data and 44pt targets. A floating control over an infinite list covers something; it covers a sliver of content the reader can scroll, never chrome they cannot. Its edge says *above the page*, not `shadow-float`, which §2.5 keeps for the add button and the toast — the things above the whole screen rather than above one list |
 | `FilterChip` | The carried filter, pinned under `PageTabs`: what it is, and an `✕` that clears it. One chip — this screen receives a filter, it does not compose them. Composing is `FilterBar`, and it is S10's, on the desk |
 | `TabBar` | 4 tabs, all ≥44px — Home · Accounts · **Agent** · Settings. **No Ledger tab**: this screen is the ledger, so one would lead where you already are. **No Debt tab**: it is a figure you check, not a place you live, and it reads better in *Go to* where it can carry one. `+` is not a tab, though it may come to rest between Accounts and Agent (`02-tokens` §2.9) |
 | `FloatingAdd` | The `+`, above everything, wherever it was last put (`02-tokens` §2.9) |
@@ -442,6 +442,16 @@ shows **no total at all** and says why — never a total that silently omits the
 rows it could not convert. Transfers between own accounts appear in the day's
 rows and in neither its spend nor its inflow.
 
+**A day's total is a flow, and it is drawn in the direction it went.** A day
+that cost money is spend red, a day that brought money in is the income green
+every other inflow figure on this screen draws, and a day that nets to zero with
+rows behind it is muted — that is a day of transfers between your own accounts,
+and the muted figure is the other half of the `flat` mark `DayRibbon` already
+gives it. A sign-based rule that leaves a positive in plain ink belongs to a
+*balance*, where a positive figure is what you have rather than what came in;
+two rows apart it read as *this day cost you something* and *we have nothing to
+say about this day*.
+
 ## 6. States
 
 | State | Treatment |
@@ -450,6 +460,7 @@ rows and in neither its spend nor its inflow.
 | Populated | As drawn |
 | Empty · no accounts | `EmptyState(first-run)`, offering create. **No summary, no strip, no empty chart** — nothing has happened, so the screen says so and offers the two ways to make it happen |
 | Empty · no transactions | Strip and month card stay: three zeroes is the true answer for that period. *No transactions yet*, S10's wording, in place of the list. *Where it went* draws nothing |
+| Empty · before the ledger | A jump landed behind everything the ledger holds. One muted line naming the anchor — *nothing recorded on or before 25 May 2026* — with `TodayPill` above it, which is already the way back. **Never the first-run wording**: the reader has rows, all of them newer than where they are standing, and offering a first capture would tell them their ledger is empty while it is not |
 | Empty · filtered | `EmptyState(filtered)` — names the account or group and the count it excluded, with a *Clear* that drops the chip. Never the first-run wording: the ledger holds rows, this filter does not |
 | Empty · today only | The month card stays; today gets a named card saying nothing is recorded and what is next, with one action. The list continues into yesterday beneath it |
 | Error | Balance query failed → `ErrorState(recoverable)` in the ground panel; **the strip and the month card keep their last known figures** rather than blanking. They render above the error branch, which a test pins |
@@ -471,7 +482,7 @@ everything between needs a rule.
 | **The far end is reachable offline** | There is no window to hit. The replica is a complete copy of the whole ledger (`architecture/14` §14.0 — *no 400-row window*, no TTL, not evicted), so scrolling to 2021 on a plane reads local rows like every other day. Offline changes what this screen can *compute*, never what it can reach: §6's cached banner and the class **S** figure are the whole story |
 | **Quiet day** | One line |
 | **Quiet run** | Two or more consecutive: one row naming the span and its length, with *Show*. Twenty-five days is not twenty-five rows |
-| **A jump** | Picking a far date loads that date's neighbourhood and **nothing between**. Scrolling from there walks outward day by day; `TodayPill` is the only way back. The list is never asked to guess a scroll position for content it has not loaded, which is the defect that makes infinite lists jump under the reader |
+| **A jump** | Picking a far date loads that date's neighbourhood and **nothing between** — the older half only, so the list opens on the day the header names. Scrolling from there walks outward day by day: backwards always, and forwards once the reader has scrolled away from the top and come back, which is what tells a pull-down apart from a list that has only just mounted. Where a jump lands somewhere too sparse to fill a screen there is no scrolling to do and no forward walk: the stepper and `TodayPill` are the way out, and a list that cannot be scrolled cannot report having been. A cold open is the exception and loads forward at once, because *newer than today* is the forward horizon two rows up rather than the rest of the ledger. The list is never asked to guess a scroll position for content it has not loaded, which is the defect that makes infinite lists jump under the reader |
 | **In flight** | An outbox row appears in its day with a `pending` marker until it syncs — the one thing a separate list could never do, and exactly when confirmation matters most. On a phone-alone ledger, local materialisation is the final save and no marker is drawn |
 | **A conflict** | S35 arriving for an older entry surfaces as one banner in the list at the current position, naming the month it concerns. It does not scroll the reader to it |
 

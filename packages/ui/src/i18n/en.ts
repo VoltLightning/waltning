@@ -240,6 +240,23 @@ export const en = {
     /** A collapsed run of quiet days. Two flat forms, as `resultsOne` explains. */
     quietRunOne: "{{count}} day · nothing recorded",
     quietRunMany: "{{count}} days · nothing recorded",
+    /**
+     * S04 §6's third emptiness — a jump landed before anything the ledger
+     * holds.
+     *
+     * Not *no transactions yet*, which offers a first capture and is a claim
+     * about the **whole** ledger: the reader has rows, they are simply all
+     * newer than where they jumped to. `TodayPill` is on screen above this,
+     * which is what makes stating the fact enough of an answer.
+     */
+    nothingOnOrBefore: "Nothing recorded on or before {{date}}.",
+    /**
+     * **Searching, and nothing the list has read matches.** Not *nothing
+     * matches*: the list holds the rows around its anchor, and the field above
+     * it counts the whole ledger (§7) — a page that claimed the ledger for its
+     * own window would contradict the number over its head.
+     */
+    noMatchesHere: "Nothing here matches \u201C{{query}}\u201D.",
     amount: "Amount",
     account: "Account",
     /**

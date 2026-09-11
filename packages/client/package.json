@@ -25,6 +25,7 @@
     "./ledger/device-runtime": "./src/ledger/device-runtime.ts",
     "./ledger/ledger-gate": "./src/ledger/ledger-gate/ledger-gate.ts",
     "./ledger/ledger-provider": "./src/ledger/ledger-provider.tsx",
+    "./ledger/list-start-gate": "./src/ledger/use-ledger-list/list-start-gate.ts",
     "./ledger/pager-date": "./src/ledger/use-pager-date/pager-date.ts",
     "./ledger/preview-routes": "./src/ledger/preview-routes/preview-routes.ts",
     "./ledger/test-port": "./src/ledger/test-port.ts",
