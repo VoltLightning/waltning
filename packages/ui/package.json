@@ -119,6 +119,7 @@
     "./shell/tab-icons": "./src/shell/tab-icons.tsx",
     "./shell/today-pill": "./src/shell/atoms/today-pill/today-pill.tsx",
     "./shell/unsettled-banner": "./src/shell/molecules/unsettled-banner/unsettled-banner.tsx",
+    "./shell/year-picker": "./src/shell/organisms/year-picker/year-picker.tsx",
     "./states/banner": "./src/states/molecules/banner/banner.tsx",
     "./states/empty-state": "./src/states/organisms/empty-state/empty-state.tsx",
     "./states/error-state": "./src/states/organisms/error-state/error-state.tsx",
@@ -166,7 +167,8 @@
     "./transactions/transaction-list": "./src/transactions/organisms/transaction-list/transaction-list.tsx",
     "./transactions/transaction-row": "./src/transactions/molecules/transaction-row/transaction-row.tsx",
     "./transactions/transfer-composer": "./src/transactions/organisms/transfer-composer/transfer-composer.tsx",
-    "./transactions/transfer-row": "./src/transactions/molecules/transfer-row/transfer-row.tsx"
+    "./transactions/transfer-row": "./src/transactions/molecules/transfer-row/transfer-row.tsx",
+    "./transactions/year-chart": "./src/transactions/organisms/year-chart/year-chart.tsx"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

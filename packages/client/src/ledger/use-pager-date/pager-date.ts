@@ -70,6 +70,22 @@ export function enterMonth(state: PagerState, month: YearMonth, today: Accountin
   return { ...state, date };
 }
 
+/**
+ * **A year is entered from its newest month the ledger has reached.**
+ *
+ * `enterMonth`'s argument one level up: a reverse-chronological screen is
+ * entered from its end, so a past year opens in December. The clamp is the
+ * other half — S04 §6 does not go past the end of this month, and picking
+ * *2026* while it is September would otherwise put the shared date three months
+ * into the future, which every other page then shows. Picking the year you are
+ * already in lands on today.
+ */
+export function enterYear(state: PagerState, year: number, today: AccountingDate): PagerState {
+  const december = yearMonth(`${year}-12`);
+  const thisMonth = yearMonth(today.slice(0, 7));
+  return enterMonth(state, december <= thisMonth ? december : thisMonth, today);
+}
+
 /** A day picked on the Calendar page, or tapped in the ribbon. */
 export function enterDay(state: PagerState, date: AccountingDate): PagerState {
   return { ...state, date };

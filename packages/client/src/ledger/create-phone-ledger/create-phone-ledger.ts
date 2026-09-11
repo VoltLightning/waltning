@@ -1,7 +1,12 @@
 import { fold } from "@waltning/core/capture/names";
 import type { PayeeHistoryRow } from "@waltning/core/capture/payee-memory";
 import { jaccard, trigrams } from "@waltning/core/capture/trigrams";
-import { type AccountingDate, accountingDate, isAccountingDate } from "@waltning/core/date";
+import {
+  type AccountingDate,
+  accountingDate,
+  isAccountingDate,
+  type YearMonth,
+} from "@waltning/core/date";
 import type { DiagnosticError } from "@waltning/core/diagnostics";
 import { errorFromThrown } from "@waltning/core/diagnostics";
 import { id as brandId, type Id, type IdTable, id } from "@waltning/core/id";
@@ -719,6 +724,10 @@ export type PhoneLedgerPort = {
   readPeriodSpend: (period: money.Period) => readonly PhonePeriodSpend[];
   /** The same figure cut by day — S04's calendar. Bounded by the period, never paged. */
   readDayFlows: (period: money.Period) => readonly money.DayFlowRow[];
+  /** Every year the ledger holds something in — the dot in S04's year picker. */
+  readLedgerYears: () => readonly number[];
+  /** The nearest month holding something, for a `range` empty state (§8.1). */
+  readNearestActivity: (period: money.Period) => PhoneNearestActivity | null;
   /** §7's match counts by day, for Calendar and Months while the screen searches. */
   readMatchDays: (period: money.Period, text: string) => readonly PhoneMatchDay[];
   /** Every row on one day — the entries S04's calendar opens. Bounded by the date. */
@@ -977,6 +986,20 @@ export type PhoneClearingAccount = money.ClearingAccountRow & {
 
 /** S12's two direction totals, per currency. See `money.directionTotals`. */
 export type PhoneDirectionTotal = money.DirectionTotalRow;
+
+/**
+ * The nearest month holding entries, and how many it holds — S04's calendar
+ * when the month on screen holds none. Structural rather than imported, like
+ * every other type at this seam: `@waltning/client` never names
+ * `@waltning/ledger`.
+ */
+export type PhoneNearestActivity = {
+  date: AccountingDate;
+  /** The period the empty state names — branded here rather than re-parsed in a
+   * render, where a bad value would throw mid-paint instead of at the seam. */
+  month: YearMonth;
+  count: number;
+};
 
 /** D2's history, read on demand for D4b's proposal — see `proposeCategory`. */
 export type PhonePayeeHistoryRow = PayeeHistoryRow;
@@ -1425,6 +1448,16 @@ export type PhoneLedgerController = {
    * what a search means is exactly how a count and a list come to disagree.
    */
   readMatchDays: (period: money.Period, text: string) => readonly PhoneMatchDay[];
+  /** Every year the ledger holds something in — the dot in S04's year picker. */
+  readLedgerYears: () => readonly number[];
+  /**
+   * The nearest month holding something, asked only from a month holding
+   * nothing — `design-system/08` §8.1 requires a `range` empty state to offer
+   * *the nearest period that does, with its count*, and a blank region that
+   * cannot say where the entries are is the blank this variant exists to stop
+   * being.
+   */
+  readNearestActivity: (period: money.Period) => PhoneNearestActivity | null;
   /**
    * Every row on one day — the entries S04's calendar opens under its grid
    * (§3). Bounded by the date rather than by a row count: a day ends, and a
@@ -2199,6 +2232,8 @@ export function createPhoneLedger(
     readPeriodSpend: (period) => port.readPeriodSpend(period),
     readDayFlows: (period) => port.readDayFlows(period),
     readMatchDays: (period, text) => port.readMatchDays(period, text),
+    readLedgerYears: () => port.readLedgerYears(),
+    readNearestActivity: (period) => port.readNearestActivity(period),
     readDayRows: (date) => port.readDayRows(date),
     readSpendByCategory: (period, scope) => port.readSpendByCategory(period, scope),
     readIncomeVsExpense: (buckets, scope) => port.readIncomeVsExpense(buckets, scope),

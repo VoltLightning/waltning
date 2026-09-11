@@ -5,7 +5,9 @@ import { isPagerPageKey } from "@waltning/client/ledger/pager-date";
 import { useDayFlows } from "@waltning/client/ledger/use-day-flows";
 import { useDayRows } from "@waltning/client/ledger/use-day-rows";
 import { useLedgerController } from "@waltning/client/ledger/use-ledger-controller";
+import { useLedgerYears } from "@waltning/client/ledger/use-ledger-years";
 import { useMatchDays } from "@waltning/client/ledger/use-match-days";
+import { useNearestActivity } from "@waltning/client/ledger/use-nearest-activity";
 import { usePhoneLedger } from "@waltning/client/ledger/use-phone-ledger";
 import { useSpendByCategory } from "@waltning/client/ledger/use-spend-by-category";
 import { useUnsettledBanner } from "@waltning/client/ledger/use-unsettled-banner";
@@ -13,13 +15,24 @@ import { useWhereItWent } from "@waltning/client/ledger/use-where-it-went";
 import { toLedgerItems } from "@waltning/client/transactions/ledger-days";
 import { matchesByDay, matchesByMonth } from "@waltning/client/transactions/match-counts";
 import { monthGrid, weekdayHeadings } from "@waltning/client/transactions/month-grid";
-import { busiestMonth, yearMonths } from "@waltning/client/transactions/year-months";
+import {
+  busiestMonth,
+  otherCurrenciesInYear,
+  yearMonths,
+} from "@waltning/client/transactions/year-months";
+import { FIRST_YEAR, stepYearPage, yearPage } from "@waltning/client/transactions/year-pages";
 import { accountingDate, addDays, monthRange, shiftMonth, yearMonth } from "@waltning/core/date";
 import * as money from "@waltning/core/money";
 import { CategorySheet } from "@waltning/ui/categories/category-sheet";
 import { SpendRows } from "@waltning/ui/dashboard/spend-rows";
 import { Amount } from "@waltning/ui/fx/amount";
-import { dayLabel, monthLabel, weekdayInitial, weekStart } from "@waltning/ui/i18n/locales";
+import {
+  dayLabel,
+  monthLabel,
+  monthShort,
+  weekdayInitial,
+  weekStart,
+} from "@waltning/ui/i18n/locales";
 import { useLocale, useT } from "@waltning/ui/i18n/provider";
 import { Button } from "@waltning/ui/primitives/button";
 import { Card, GroundPanel } from "@waltning/ui/shell/card";
@@ -35,6 +48,7 @@ import {
   SlidersHorizontalIcon,
 } from "@waltning/ui/shell/phosphor";
 import { UnsettledBanner } from "@waltning/ui/shell/unsettled-banner";
+import { YearPicker } from "@waltning/ui/shell/year-picker";
 import { EmptyState } from "@waltning/ui/states/empty-state";
 import { ErrorState } from "@waltning/ui/states/error-state";
 import { Toast } from "@waltning/ui/states/toast";
@@ -51,9 +65,10 @@ import {
   TransactionList,
   type TransactionListItem,
 } from "@waltning/ui/transactions/transaction-list";
+import { YearChart, type YearColumn } from "@waltning/ui/transactions/year-chart";
 import { router, useLocalSearchParams } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
-import { Text as RNText, useColorScheme, View } from "react-native";
+import { Pressable, Text as RNText, useColorScheme, View } from "react-native";
 import { useAnimatedScrollHandler, useSharedValue } from "react-native-reanimated";
 import { HomeListPage } from "./home-list-page";
 import { openUnsettled } from "./open-unsettled.ts";
@@ -164,6 +179,13 @@ function toRow(transaction: PhoneRecentTransaction): TransactionListItem {
  */
 const GATEWAY_ICON = 16;
 
+/**
+ * The currency the year is folded in when there is no account to read one from.
+ * A ledger with no accounts is twelve empty months either way — the fold has
+ * nothing to leave out, and the constant only has to be *a* currency.
+ */
+const LEAD_FALLBACK = money.currencyCode("PLN");
+
 /** The grid's kicker. `DayHeader`'s step, on the ground rather than in a card. */
 function SectionLabel({ children }: { children: string }) {
   const styles = useSectionStyles();
@@ -175,6 +197,10 @@ const useSectionStyles = makeStyles((theme) => ({
   goToRow: { flexDirection: "row", alignItems: "center" },
   // The day's entries, set off from the grid above them by the ground.
   dayPanel: { gap: space.xs },
+  // Its own row so the tap target is the line, not the panel.
+  nearestDay: { paddingVertical: space.sm },
+  /** The chart and the figures it gives a shape to, as one block. */
+  year: { gap: space.x3 },
   nothing: { color: theme.textMuted, ...text.ui("caption") },
   spacer: { flex: 1 },
 }));
@@ -463,6 +489,22 @@ export default function Today() {
   const periodSpendRows = useMemo(() => ledger.readPeriodSpend(period), [ledger, period, snapshot]);
 
   const leadNetWorth = snapshot.netWorth[0];
+  /**
+   * **The currency a day total is actually in.**
+   *
+   * `toLedgerItems` takes every row to the *pivot* at its own row's rate
+   * (`ledger-days.ts`), and both pages that draw the result were labelling it
+   * with `netWorth[0]` — the **lead** currency, which is the currency of your
+   * first account and has nothing to do with the pivot. A ledger whose pivot is
+   * USD and whose first account is in PLN drew a day of one 500 PLN expense as
+   * *-138.89 PLN* under a row reading *-500.00 PLN*: the figure converted, the
+   * label not, and the two disagreeing four pixels apart. They agree in a
+   * one-currency ledger, which is why it stood.
+   */
+  const pivotCurrency = useMemo(
+    () => snapshot.currencies.find((currency) => currency.isPivot),
+    [snapshot.currencies],
+  );
   const leadPeriodSpend = leadNetWorth
     ? periodSpendRows.find((row) => row.currency === leadNetWorth.currency)
     : undefined;
@@ -888,10 +930,146 @@ export default function Today() {
    * than the mark above it, which counted all of them.
    */
   const dayRows = useDayRows(ledger, pager.state.date, snapshot);
+  /**
+   * The fold takes its **pivot**, which is the currency it sums in — the same
+   * mistake as the label three lines below used to be: handed the lead
+   * currency, `totalOf` compares every row against it to decide whether the
+   * total is an approximation, so a converted figure was being flagged exact
+   * and a figure genuinely in the pivot flagged approximate.
+   */
   const dayEntries = useMemo(
-    () => (leadNetWorth ? toLedgerItems(dayRows, leadNetWorth.currency) : []),
-    [dayRows, leadNetWorth],
+    () => (pivotCurrency ? toLedgerItems(dayRows, pivotCurrency.code) : []),
+    [dayRows, pivotCurrency],
   );
+  /**
+   * **The blank half of the calendar page, which meant three different things
+   * and said none of them** (`design-system/08` §8.1 — the conflation it calls
+   * the commonest failure in this system). Under a grid of thirty cells sat the
+   * day's entries, and where there were none, nothing: a month the ledger has
+   * never reached and a month you have simply not tapped a busy day in looked
+   * identical, and both looked like a bug.
+   *
+   * The month's own rows answer which: `monthFlows` is already read for the
+   * grid, so *does this month hold anything* costs nothing to ask.
+   */
+  const monthHasEntries = monthFlows.length > 0;
+  const monthHasMatches = dayMatches === undefined || [...dayMatches.values()].some((n) => n > 0);
+  const dayHasEntries = dayRows.length > 0;
+
+  /**
+   * **Two questions, each asked from the period it is about.**
+   *
+   * `readNearestActivity` answers relative to whatever period it is handed, and
+   * one read served both states: the month-level empty then measured from
+   * whichever *square* the reader last touched, so one empty July said *June —
+   * 1 entry* or *August — 50 entries* depending on how you arrived. The month's
+   * empty state asks about the month; the quiet line under a day asks about the
+   * day. The two gates are exclusive, so only ever one of them runs.
+   */
+  const dayPeriod = useMemo<money.Period>(
+    () => ({ start: pager.state.date, end: addDays(pager.state.date, 1) }),
+    [pager.state.date],
+  );
+  const nearestToMonth = useNearestActivity(ledger, monthPeriod, !monthHasEntries, snapshot);
+  const nearestToDay = useNearestActivity(
+    ledger,
+    dayPeriod,
+    monthHasEntries && !dayHasEntries && dayMatches === undefined,
+    snapshot,
+  );
+  const goToNearestMonth = useCallback(() => {
+    if (nearestToMonth !== null) pager.showDay(nearestToMonth.date);
+  }, [nearestToMonth, pager.showDay]);
+  const goToNearestDay = useCallback(() => {
+    if (nearestToDay !== null) pager.showDay(nearestToDay.date);
+  }, [nearestToDay, pager.showDay]);
+
+  /**
+   * **The calendar drawing nothing anywhere is not the same claim as the ledger
+   * being empty**, and the page may only make the second when it is true.
+   *
+   * A ledger held entirely in shared accounts, or entirely in transfers, draws
+   * nothing on this page while List shows every row of it — *No transactions
+   * yet* there is exactly the false claim §8.1 separates these variants to
+   * prevent. `recent` settles it in the safe direction: it cannot be non-empty
+   * over an empty ledger, so a row in it is proof there is something, whatever
+   * the calendar's own predicate can see.
+   *
+   * **And nothing is claimed before the first refresh has finished.**
+   * `revision > 0` is the snapshot's own way of telling *the replica holds
+   * nothing* from *no read has run yet* (`create-phone-ledger.ts`), and a fresh
+   * install restoring from the server would otherwise be told to capture its
+   * first transaction while its ledger downloads.
+   */
+  const drawsNothing = nearestToMonth === null && !monthHasEntries;
+  const loaded = snapshot.revision > 0;
+  const ledgerIsEmpty = drawsNothing && snapshot.recent.length === 0;
+
+  const calendarEmpty = useMemo(() => {
+    if (!loaded) return null;
+    if (dayMatches !== undefined && !monthHasMatches) {
+      return (
+        <EmptyState
+          variant="filtered"
+          title={t("transactions.calendarFilteredTitle", {
+            month: monthLabel(month, locale).replace(/\s+\d{4}$/, ""),
+          })}
+          body={t("transactions.calendarFilteredBody", { query: pager.state.query ?? "" })}
+          primaryAction={{ label: t("transactions.calendarClearSearch"), onPress: closeSearch }}
+        />
+      );
+    }
+    if (monthHasEntries) return null;
+    if (drawsNothing) {
+      return (
+        <EmptyState
+          variant="first-run"
+          title={t("transactions.emptyFirstRunTitle")}
+          body={
+            ledgerIsEmpty
+              ? t("transactions.emptyFirstRunBody")
+              : t("transactions.calendarDrawsNothing")
+          }
+          primaryAction={addTransactionAction}
+        />
+      );
+    }
+    if (nearestToMonth === null) return null;
+    return (
+      <EmptyState
+        variant="range"
+        title={t("transactions.calendarRangeTitle", {
+          month: monthLabel(month, locale).replace(/\s+\d{4}$/, ""),
+        })}
+        body={t("transactions.calendarRangeBody", {
+          nearest: monthLabel(nearestToMonth.month, locale),
+          count: nearestToMonth.count,
+        })}
+        primaryAction={{
+          label: t("transactions.calendarGoToMonth", {
+            month: monthLabel(nearestToMonth.month, locale),
+          }),
+          onPress: goToNearestMonth,
+        }}
+      />
+    );
+  }, [
+    dayMatches,
+    monthHasMatches,
+    monthHasEntries,
+    drawsNothing,
+    ledgerIsEmpty,
+    loaded,
+    nearestToMonth,
+    goToNearestMonth,
+    month,
+    locale,
+    pager.state.query,
+    closeSearch,
+    addTransactionAction,
+    t,
+  ]);
+
   const dayPanel = useMemo(() => {
     const day = dayEntries.find((item) => item.kind === "day");
     return (
@@ -910,8 +1088,8 @@ export default function Today() {
             ) : day.total.kind !== "total" ? null : (
               <Amount
                 value={day.total.pivot}
-                currency={leadNetWorth?.currency ?? ""}
-                decimals={leadNetWorth?.decimals ?? 2}
+                currency={pivotCurrency?.code ?? ""}
+                decimals={pivotCurrency?.decimals ?? 2}
                 size="compact"
                 /*
                   **The same figure the List page states, so the same kind.**
@@ -930,9 +1108,39 @@ export default function Today() {
         {day?.rows.map((row) => (
           <LedgerRowItem key={row.id} row={row} onPress={handleOpenTransaction} />
         ))}
+        {/*
+          **A day with nothing, in a month with something, is not an empty
+          state** — the page above is full of marks, so a title and a button
+          would be shouting about a day the reader picked themselves. One quiet
+          line, and it is the only thing in the region that can say *where* the
+          entries are: §8.1's *offer the nearest period that does*, at the
+          granularity the reader is standing in.
+        */}
+        {day === undefined && nearestToDay !== null ? (
+          <Pressable
+            accessibilityRole="button"
+            onPress={goToNearestDay}
+            style={sectionStyles.nearestDay}
+          >
+            <RNText style={sectionStyles.nothing}>
+              {t("transactions.calendarNearestDay", {
+                date: dayLabel(nearestToDay.date, locale),
+              })}
+            </RNText>
+          </Pressable>
+        ) : null}
       </View>
     );
-  }, [dayEntries, pager.state.date, locale, leadNetWorth, t, sectionStyles]);
+  }, [
+    dayEntries,
+    pager.state.date,
+    locale,
+    pivotCurrency,
+    nearestToDay,
+    goToNearestDay,
+    t,
+    sectionStyles,
+  ]);
 
   /* ── Months ───────────────────────────────────────────────────────────── */
 
@@ -957,27 +1165,20 @@ export default function Today() {
         shownYear,
         // With no account there is no lead currency, and the year is twelve
         // empty rows either way — the fold has nothing to leave out.
-        leadNetWorth?.currency ?? money.currencyCode("PLN"),
+        leadNetWorth?.currency ?? LEAD_FALLBACK,
         yearMonth(today.slice(0, 7)),
       ),
     [yearFlows, shownYear, leadNetWorth, today],
   );
   const monthRows = useMemo<readonly MonthRow[]>(() => {
-    // Relative to the busiest month of this year, never to an absolute figure:
-    // the question the page answers is which months were heavy, and that is a
-    // question about this year.
-    const busiest = busiestMonth(yearRows);
-    const share = (value: money.Money) =>
-      money.isZero(busiest) ? 0 : Number(money.dec(value).div(money.dec(busiest)).toFixed(4));
     return yearRows.map((row) => ({
       month: row.month,
       label: monthLabel(row.month, locale).replace(/\s+\d{4}$/, ""),
       inflow: row.inflow,
       spend: row.spend,
+      net: row.net,
       currency: leadNetWorth?.currency ?? "",
       decimals: leadNetWorth?.decimals ?? 2,
-      inflowShare: share(row.inflow),
-      spendShare: share(row.spend),
       note:
         row.otherCurrencies === 0
           ? null
@@ -988,6 +1189,97 @@ export default function Today() {
       matches: monthMatches === null ? null : monthMatch(t, monthMatches.get(row.month) ?? 0),
     }));
   }, [yearRows, locale, leadNetWorth, monthMatches, t]);
+
+  /**
+   * The chart's columns — the same rows, measured rather than stated.
+   *
+   * **Against the busiest month of this year, never an absolute figure.**
+   * `DayRibbon` gives the reason: a ledger whose largest month is 200 and one
+   * whose largest is 20 000 would draw every column the same, and the mark
+   * exists to say *this was unusual for you*.
+   */
+  const yearColumns = useMemo<readonly YearColumn[]>(() => {
+    const busiest = busiestMonth(yearRows);
+    const share = (value: money.Money) =>
+      money.isZero(busiest) ? 0 : Number(money.dec(value).div(money.dec(busiest)).toFixed(4));
+    return yearRows.map((row) => ({
+      month: row.month,
+      // Three characters, not one: Polish has three months whose initial is
+      // `l`, and a chart whose axis repeats a name is not an axis.
+      label: monthShort(row.month, locale).slice(0, 3),
+      inflowShare: share(row.inflow),
+      spendShare: share(row.spend),
+      // **A month with only foreign rows is not an empty month.** `empty`
+      // draws a stub, which `YearChart` documents as *an absence rather than a
+      // quantity* — and the row four pixels below it would be saying *+1 other
+      // currency* about the same month. What the chart cannot do is draw the
+      // figure: arc-phone has no conversion (class S), so the month keeps its
+      // slot at zero height without claiming nothing happened.
+      empty: money.isZero(row.inflow) && money.isZero(row.spend) && row.otherCurrencies === 0,
+    }));
+  }, [yearRows, locale]);
+
+  /** What the year kept — the twelve nets, added up. */
+  const yearKept = useMemo(
+    () => yearRows.reduce((total, row) => money.add(total, row.net), money.ZERO),
+    [yearRows],
+  );
+  /** …and what that figure leaves out, counted over the year rather than summed. */
+  const yearKeptNote = useMemo(() => {
+    // With no account there is no lead currency and no figures to qualify —
+    // the same fallback `yearRows` makes, for the same reason.
+    const others = otherCurrenciesInYear(yearFlows, leadNetWorth?.currency ?? LEAD_FALLBACK);
+    return others === 0 ? undefined : t("shell.plusOtherCurrencies", { count: others });
+  }, [yearFlows, leadNetWorth, t]);
+
+  const thisYear = Number(today.slice(0, 4));
+  const [pickerYearPage, setPickerYearPage] = useState<number | null>(null);
+  const openYearPicker = useCallback(() => setPickerYearPage(shownYear), [shownYear]);
+  const closeYearPicker = useCallback(() => setPickerYearPage(null), []);
+  const yearPageShown = useMemo(
+    () => yearPage(pickerYearPage ?? shownYear, thisYear),
+    [pickerYearPage, shownYear, thisYear],
+  );
+  const olderYears = useCallback(
+    () => setPickerYearPage(stepYearPage(yearPageShown.years[0] ?? thisYear, -1, thisYear)),
+    [yearPageShown.years, thisYear],
+  );
+  const newerYears = useCallback(
+    () => setPickerYearPage(stepYearPage(yearPageShown.years[0] ?? thisYear, 1, thisYear)),
+    [yearPageShown.years, thisYear],
+  );
+  /** Which years the ledger holds something in — the dot in the grid. */
+  const yearsWithEntries = useLedgerYears(ledger, pickerYearPage !== null, snapshot);
+  const pickYear = useCallback(
+    (year: number) => {
+      setPickerYearPage(null);
+      // `enterYear` owns the rule — the year's newest month the ledger has
+      // reached, entered the way a month is. Spelling it here would be a
+      // second implementation of the horizon, and the one this replaced put
+      // the shared date three months into the future.
+      pager.showYear(year);
+    },
+    [pager.showYear],
+  );
+  /**
+   * **The chart's arrows are the header's arrows.** The spec says both move the
+   * same date; the way to make that true rather than claimed is for there to be
+   * one of them. Written as its own year step it was one: `step` keeps the day
+   * of the month and the chart's version landed on the 31st of December, so
+   * whichever arrow you pressed decided which month the *other three* pages
+   * opened on.
+   */
+  const previousYear = pager.previous;
+  const nextYear = pager.next;
+  const chartLabels = useMemo(
+    () => ({
+      older: t("shell.previousYearStep"),
+      newer: t("shell.nextYearStep"),
+      pickYear: t("shell.pickYear"),
+    }),
+    [t],
+  );
+
   const flowLabels = useMemo(() => ({ inflow: t("shell.cameIn"), spend: t("shell.wentOut") }), [t]);
 
   const pages = useMemo(
@@ -1008,8 +1300,13 @@ export default function Today() {
             ledger={ledger}
             anchor={pager.state.date}
             today={today}
-            pivotCurrency={leadNetWorth.currency}
-            pivotDecimals={leadNetWorth.decimals}
+            {...(pivotCurrency === undefined
+              ? // Unreachable once `currencies` has loaded: the server holds a
+                // partial unique index and a trigger over `is_pivot`, so a
+                // ledger has exactly one pivot. Rendering nothing beats
+                // rendering a figure under a currency this screen guessed.
+                { pivotCurrency: leadNetWorth.currency, pivotDecimals: leadNetWorth.decimals }
+              : { pivotCurrency: pivotCurrency.code, pivotDecimals: pivotCurrency.decimals })}
             onPickDay={handlePickDay}
             onOpenTransaction={handleOpenTransaction}
             onCategorize={handleCategorize}
@@ -1034,7 +1331,7 @@ export default function Today() {
               onPickDay={handlePickDay}
               {...(dayMatches === undefined ? {} : { matches: dayMatches })}
             />
-            {dayPanel}
+            {calendarEmpty ?? dayPanel}
           </GroundPanel>
         ),
       },
@@ -1043,24 +1340,56 @@ export default function Today() {
         label: t("shell.months"),
         node: (
           <GroundPanel onScroll={handleScroll}>
-            <MonthList
-              rows={monthRows}
-              current={month}
-              labels={flowLabels}
-              onPickMonth={handlePickMonth}
-            />
+            <View style={sectionStyles.year}>
+              <YearChart
+                year={shownYear}
+                columns={yearColumns}
+                current={month}
+                kept={
+                  <Amount
+                    value={yearKept}
+                    currency={leadNetWorth?.currency ?? ""}
+                    decimals={leadNetWorth?.decimals ?? 2}
+                    size="caption"
+                    signed
+                  />
+                }
+                {...(yearKeptNote === undefined ? {} : { keptNote: yearKeptNote })}
+                {...(shownYear > FIRST_YEAR ? { onOlder: previousYear } : {})}
+                {...(shownYear < thisYear ? { onNewer: nextYear } : {})}
+                onPickYear={openYearPicker}
+                labels={chartLabels}
+              />
+              <MonthList
+                rows={monthRows}
+                current={month}
+                labels={flowLabels}
+                onPickMonth={handlePickMonth}
+              />
+            </View>
           </GroundPanel>
         ),
       },
     ],
     [
       body,
+      calendarEmpty,
       weeks,
       dayHeadings,
       dayName,
       dayPanel,
+      chartLabels,
       dayMatches,
       flowLabels,
+      leadNetWorth,
+      nextYear,
+      openYearPicker,
+      previousYear,
+      shownYear,
+      today,
+      yearColumns,
+      yearKept,
+      yearKeptNote,
       handleCategorize,
       handlePickDay,
       pager.state.query,
@@ -1068,28 +1397,37 @@ export default function Today() {
       handlePickMonth,
       handleScroll,
       ledger,
-      leadNetWorth,
       listEmpty,
       month,
       monthRows,
       pager.state.date,
+      pivotCurrency,
+      sectionStyles.year,
       t,
-      today,
+      thisYear,
     ],
   );
 
   return (
     <>
       <PagerFrame
-        // **The same title on all four pages, Months included.** It named the
-        // year there at first, because the arrows step years on that page —
-        // and the header changing shape as you swipe was the thing that read
-        // as broken: the picker's affordance disappeared exactly where a
-        // reader is most likely to want it. The month is the date every page
-        // shares (§3), so it is what the header says; what the arrows step is
-        // said by the arrows' own names.
-        periodLabel={monthLabel(month, locale).replace(/\s+\d{4}$/, "")}
-        periodDetail={String(pager.label.year)}
+        /*
+          **On Months the title is the year.** Every other page is about a
+          month and says so; Months is about twelve of them, and a header
+          reading *June* over a page of 2026 was the one label on this screen
+          that named something the page was not showing. The arrows already
+          step a year here (§4: they step the unit the page is in), so the
+          title and the control now agree. What does not change with the page
+          is the title's *shape* — it is a large tappable title on all four,
+          because a picker's affordance disappearing exactly where a reader
+          wants it is the failure this label was first written to avoid.
+        */
+        periodLabel={
+          pager.state.page === "months"
+            ? String(shownYear)
+            : monthLabel(month, locale).replace(/\s+\d{4}$/, "")
+        }
+        periodDetail={pager.state.page === "months" ? null : String(pager.label.year)}
         /*
           **The period the page on screen is actually showing**, which is the
           month for three of them and the year for Months.
@@ -1102,10 +1440,24 @@ export default function Today() {
           side to come in from.
         */
         periodKey={pager.state.page === "months" ? String(pager.label.year) : month}
-        onPickPeriod={openPicker}
+        /*
+          **The title opens the picker for the unit it names** — the year on
+          Months, the month on the other three. It opened the month grid
+          everywhere, so tapping *2026* asked *choose a month*, which is a
+          control answering a question nobody asked.
+        */
+        onPickPeriod={pager.state.page === "months" ? openYearPicker : openPicker}
         scrollY={scrollY}
         onPrevious={pager.previous}
-        onNext={pager.next}
+        /*
+          **The step forward stops at this year on Months, and nowhere else.**
+          A month ahead is a month the ledger has expected entries in (§3 draws
+          them dashed, *not money yet*); a *year* ahead is twelve stubs and a
+          chart of nothing, and the chart's own arrow already refuses it. Two
+          controls over one date that disagree about where it can go is the
+          defect this pair was written to avoid.
+        */
+        {...(pager.state.page === "months" && shownYear >= thisYear ? {} : { onNext: pager.next })}
         onSearch={openSearch}
         searchOpen={searching}
         searchQuery={searchText}
@@ -1130,6 +1482,16 @@ export default function Today() {
         onYearChange={setPickerYear}
         onPick={handlePickMonth}
         onDismiss={closePicker}
+      />
+      <YearPicker
+        visible={pickerYearPage !== null}
+        page={yearPageShown}
+        current={shownYear}
+        withEntries={yearsWithEntries}
+        onOlder={olderYears}
+        onNewer={newerYears}
+        onPick={pickYear}
+        onDismiss={closeYearPicker}
       />
       {/*
         The short swipe's destination (§7). Rendered beside the picker rather

@@ -75,6 +75,25 @@ export function yearMonths(
 }
 
 /**
+ * How many currencies the year held that the figures leave out.
+ *
+ * **Counted over the year, not summed over the months.** A ledger holding one
+ * USD row in March and another in July is *one* other currency; adding the
+ * monthly counts says two. The figure sits beside the year's own total, which
+ * is the largest number on the page and was the only one on it carrying no
+ * qualifier — the month rows below it have said *+1 other currency* since they
+ * were written.
+ */
+export function otherCurrenciesInYear(
+  flows: readonly money.DayFlowRow[],
+  lead: money.CurrencyCode,
+): number {
+  const seen = new Set<string>();
+  for (const flow of flows) if (flow.currency !== lead) seen.add(flow.currency);
+  return seen.size;
+}
+
+/**
  * The largest month in the year, for a bar that is relative to what is on
  * screen rather than to an absolute figure — the same argument `ribbonDays`
  * and `monthGrid` make for their marks.

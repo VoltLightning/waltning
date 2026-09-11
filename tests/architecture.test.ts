@@ -2927,6 +2927,10 @@ describe("a control's edge is not the divider colour", () => {
    */
   const AREA_EDGES = new Map([
     [
+      "packages/ui/src/transactions/organisms/year-chart/year-chart.tsx#card",
+      "the year's own card — an area the chart is drawn in, with its steps and its picker inside it",
+    ],
+    [
       "packages/ui/src/transactions/molecules/day-group/day-group.tsx#rows",
       "a day's rows as one surface — an area in the list, with its own pressable rows inside it",
     ],

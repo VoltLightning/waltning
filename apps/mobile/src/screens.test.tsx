@@ -11,7 +11,7 @@
  * ledger, and where they *ask* to go — not expo-router's own behaviour.
  */
 
-import { act, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import {
   createPhoneLedger,
   type PhoneClearingAccount,
@@ -24,7 +24,7 @@ import {
 import { deviceRuntime } from "@waltning/client/ledger/device-runtime";
 import { LedgerProvider } from "@waltning/client/ledger/ledger-provider";
 import { basePort } from "@waltning/client/ledger/test-port";
-import { accountingDate } from "@waltning/core/date";
+import { accountingDate, type YearMonth, yearMonth } from "@waltning/core/date";
 import { type Id, id } from "@waltning/core/id";
 import * as money from "@waltning/core/money";
 import {
@@ -42,7 +42,7 @@ import { I18nProvider } from "@waltning/ui/i18n/provider";
 import type { ReactElement } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const router = { push: vi.fn(), back: vi.fn(), dismissTo: vi.fn() };
+const router = { push: vi.fn(), back: vi.fn(), dismissTo: vi.fn(), setParams: vi.fn() };
 const useLocalSearchParams = vi.fn(() => ({}));
 
 vi.mock("expo-router", () => ({
@@ -271,6 +271,47 @@ function dayFlowsOf(
     }));
 }
 
+/**
+ * The nearest day outside the period, off the **same rows** the grid draws —
+ * the fourth read over the one list, for the reason the third is: a fixture
+ * that let them disagree could not catch a screen offering *go to September*
+ * over a September the calendar draws nothing in.
+ */
+function nearestActivityOf(
+  rows: readonly PhoneSearchTransaction[],
+  period: money.Period,
+): { date: ReturnType<typeof accountingDate>; month: YearMonth; count: number } | null {
+  // **Folded, not listed.** Taking the raw rows let the fixture offer a month
+  // the grid draws nothing in — the exact disagreement `dayFlowsOf` exists to
+  // make impossible — so the dates come from the same fold, over the whole
+  // ledger rather than one period.
+  const everything = { start: accountingDate("0001-01-01"), end: accountingDate("9999-12-31") };
+  const dates = dayFlowsOf(rows, everything).map((flow) => flow.date);
+  const before = dates.filter((date) => date < period.start).at(-1);
+  const after = dates.find((date) => date >= period.end);
+  const days = (date: string) => {
+    const [y, m, d] = date.split("-").map(Number) as [number, number, number];
+    return Math.floor(Date.UTC(y, m - 1, d) / 86_400_000);
+  };
+  const nearest =
+    before === undefined
+      ? after
+      : after === undefined
+        ? before
+        : days(after) - days(period.end) + 1 < days(period.start) - days(before)
+          ? after
+          : before;
+  if (nearest === undefined) return null;
+  const month = yearMonth(nearest.slice(0, 7));
+  return {
+    date: accountingDate(nearest),
+    month,
+    // Days, not rows — `dayFlowsOf` folds a day into one figure, which is what
+    // the grid draws; a fixture counting rows would drift from the real read.
+    count: rows.filter((row) => row.date.startsWith(month)).length,
+  };
+}
+
 function fakeController(options: FakeControllerOptions = {}) {
   const {
     accounts: initialAccounts = [],
@@ -330,6 +371,25 @@ function fakeController(options: FakeControllerOptions = {}) {
     }),
     readDayRows: (date) => ledgerRows.filter((row) => row.date === date),
     readDayFlows: (period) => dayFlowsOf(ledgerRows, period),
+    readNearestActivity: (period) => nearestActivityOf(ledgerRows, period),
+    /**
+     * §7's counts, folded from the same rows — the fifth read over the one
+     * list. Answering `[]` to every query made the calendar's *no matches*
+     * state true of every search, so a test could not tell a query with no
+     * answer from one the fixture simply could not run.
+     */
+    readMatchDays: (period, text) => {
+      const needle = text.trim().toLowerCase();
+      const byDay = new Map<string, number>();
+      for (const row of ledgerRows) {
+        if (row.date < period.start || row.date >= period.end) continue;
+        if (!row.payee.toLowerCase().includes(needle)) continue;
+        byDay.set(row.date, (byDay.get(row.date) ?? 0) + 1);
+      }
+      return [...byDay.entries()]
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([date, count]) => ({ date: accountingDate(date), count }));
+    },
     readSpendByCategory: (_period, scope) => spendByCategory(scope),
     listUnsettledClearing: () => unsettledOverride ?? unsettledOf(accounts),
     // No screen under test here drives S10 yet (`ledger-screen.test.tsx`
@@ -504,6 +564,7 @@ beforeEach(() => {
   router.push.mockClear();
   router.back.mockClear();
   router.dismissTo.mockClear();
+  router.setParams.mockClear();
   useLocalSearchParams.mockReturnValue({});
 });
 
@@ -1351,10 +1412,10 @@ describe("Today — the pager, with a month in it", () => {
   const TODAY = deviceRuntime().capture().date;
   const MONTH = TODAY.slice(0, 7);
 
-  function row(day: string, payee: string, amount: string): PhoneSearchTransaction {
+  function row(day: string, payee: string, amount: string, month = MONTH): PhoneSearchTransaction {
     return {
-      id: id<"transactions">(`33333333-3333-4333-8333-3333333333${day.slice(-2)}`),
-      date: accountingDate(`${MONTH}-${day}`),
+      id: id<"transactions">(`33333333-3333-4333-8333-33${month.replace("-", "")}${day.slice(-2)}`),
+      date: accountingDate(`${month}-${day}`),
       type: amount.startsWith("-") ? "expense" : "income",
       payee,
       note: "",
@@ -1386,14 +1447,26 @@ describe("Today — the pager, with a month in it", () => {
     row("09", "Clinic G", "-180.00"),
   ];
 
-  function open(view: "summary" | "list" | "calendar" | "months") {
-    useLocalSearchParams.mockReturnValue({ view, date: `${MONTH}-09` });
+  function open(
+    view: "summary" | "list" | "calendar" | "months",
+    date = `${MONTH}-09`,
+    extra: {
+      q?: string;
+      currencies?: readonly PhoneCurrency[];
+      ledger?: readonly PhoneSearchTransaction[];
+      recent?: readonly PhoneRecentTransaction[];
+    } = {},
+  ) {
+    useLocalSearchParams.mockReturnValue(
+      extra.q === undefined ? { view, date } : { view, date, q: extra.q },
+    );
     withLedger(
       <Today />,
       fakeController({
         accounts: [PLN_ACCOUNT],
-        ledger: LEDGER,
-        recent: [],
+        ...(extra.currencies === undefined ? {} : { currencies: extra.currencies }),
+        ledger: extra.ledger ?? LEDGER,
+        recent: extra.recent ?? [],
         transactionCount: LEDGER.length,
         periodSpend: [
           {
@@ -1471,6 +1544,169 @@ describe("Today — the pager, with a month in it", () => {
     const calendar = open("calendar");
     expect(calendar.getByRole("button", { name: /Clinic G/ })).toBeTruthy();
     expect(calendar.queryByRole("button", { name: /Market B/ })).toBeNull();
+  });
+
+  /**
+   * **The blank half of the calendar meant three things and said none of them**
+   * (`design-system/08` §8.1). Each of the three below rendered as the same
+   * silence under the grid: a month the ledger never reached, a day the reader
+   * happened to tap, and a search with no answer here.
+   */
+  it("names the nearest month, and how much is in it, from a month with nothing", () => {
+    // Nine months before the ledger's own rows — a `range` empty, never an
+    // error: a month with no spending is a legitimate answer (§8.6).
+    const calendar = open("calendar", `${Number(MONTH.slice(0, 4)) - 1}-12-05`);
+
+    expect(calendar.getByText(/^Nothing in December$/)).toBeTruthy();
+    expect(calendar.getByText(/nearest month with anything — 4 entries/)).toBeTruthy();
+    expect(calendar.queryByText("No transactions yet"), "the ledger is not empty").toBeNull();
+  });
+
+  it("jumps to the day it named, and stays on the Calendar", () => {
+    const calendar = open("calendar", `${Number(MONTH.slice(0, 4)) - 1}-12-05`);
+
+    fireEvent.click(calendar.getByRole("button", { name: /Go to/ }));
+    // The date is held by the route (`usePagerRoute`), so the jump is a param
+    // write — and it writes the nearest *day*, which for a gap being crossed
+    // forwards is that month's earliest row (the 2nd here, not the 9th). The
+    // panel underneath therefore opens on entries rather than on nothing,
+    // which a jump to the month's first day would not guarantee.
+    expect(router.setParams).toHaveBeenCalledWith(
+      expect.objectContaining({ view: "calendar", date: `${MONTH}-02` }),
+    );
+  });
+
+  /**
+   * A day with nothing in a month with plenty is **not** an empty state — the
+   * grid above it is full of marks. One quiet line, and it is the only thing
+   * in that region that can say where the entries are.
+   */
+  it("points a quiet day at the nearest one that has something", () => {
+    const calendar = open("calendar", `${MONTH}-07`);
+
+    expect(calendar.getByText("nothing"), "the day's own figure").toBeTruthy();
+    expect(calendar.getByText(/Nearest entries:/)).toBeTruthy();
+    expect(calendar.queryByText(/^Nothing in /), "the month is not empty").toBeNull();
+  });
+
+  /**
+   * `filtered`, not `range`: the month may be full of rows, and what excludes
+   * them is the query. §8.1 calls this the one that gets built wrong, because
+   * a message that does not name the excluding filter sends the reader hunting.
+   */
+  it("blames the search, not the month, when a search has no answer here", () => {
+    const calendar = open("calendar", `${MONTH}-09`, { q: "zzz" });
+
+    expect(calendar.getByText(/^No matches in /)).toBeTruthy();
+    expect(calendar.getByText(/zzz/)).toBeTruthy();
+    expect(calendar.queryByText(/nearest month/), "the rows are here, unmatched").toBeNull();
+  });
+
+  /**
+   * **H — the day total was converted and the label was not.**
+   *
+   * `toLedgerItems` takes every row to the *pivot* at its own rate; the header
+   * was labelling that figure with `netWorth[0]` — the currency of your first
+   * account. With a USD pivot and a PLN account, a day holding one 180 PLN
+   * expense drew *-50.00 PLN* over a row reading *-180.00 PLN*: two figures in
+   * the same currency, four pixels apart, disagreeing. They agree in a
+   * one-currency ledger, which is why it survived.
+   */
+  it("labels the day total with the currency it is actually in", () => {
+    const calendar = open("calendar", `${MONTH}-09`, {
+      currencies: [
+        {
+          code: currencyCode("USD"),
+          name: "US dollar",
+          symbol: "$",
+          decimals: 2,
+          capturable: true,
+          isPivot: true,
+        },
+        {
+          code: currencyCode("PLN"),
+          name: "Polish Złoty",
+          symbol: "zł",
+          decimals: 2,
+          capturable: true,
+          isPivot: false,
+        },
+      ],
+    });
+
+    // One row at rate 1, so both figures read -180.00 and the *labels* are the
+    // whole assertion: the row keeps its own currency, the total names the
+    // pivot it was converted to, and the two are allowed to differ only
+    // because they genuinely are two different things.
+    const labels = calendar
+      .getAllByText(/^-180\.00$|^−180,00$/)
+      .map((node) => node.parentElement?.textContent ?? "");
+    expect(
+      labels.some((line) => line.includes("USD")),
+      labels.join(" | "),
+    ).toBe(true);
+    expect(
+      labels.some((line) => line.includes("PLN")),
+      labels.join(" | "),
+    ).toBe(true);
+  });
+
+  /**
+   * **H — the nearest month must be measured from the month, not from the
+   * square the reader last touched.**
+   *
+   * One read served both the month's empty state and the quiet line under a
+   * day, so the same empty July said *June — 1 entry* or *August — 50 entries*
+   * depending on how you arrived: the picker lands on a month's last day, the
+   * ← arrow keeps the day-of-month. Arriving on the 1st from August then sent
+   * the reader backwards, past the month they had just left.
+   */
+  it("names the same nearest month wherever in the month you landed", () => {
+    const across = [
+      row("25", "Market B", "-96.00", "2026-06"),
+      row("01", "Salary", "7850.00", "2026-08"),
+      row("14", "Café A", "-48.90", "2026-08"),
+    ];
+    const said = (date: string) => {
+      const calendar = open("calendar", date, { ledger: across });
+      const line = calendar.getByText(/nearest month with anything/).textContent ?? "";
+      cleanup();
+      return line;
+    };
+
+    expect(said("2026-07-01")).toContain("August");
+    expect(said("2026-07-31")).toBe(said("2026-07-01"));
+  });
+
+  /**
+   * **H — "No transactions yet" is a claim about the ledger, and the calendar
+   * cannot see all of it.** A ledger held entirely in shared accounts or in
+   * transfers draws nothing here while List shows every row. The copy must say
+   * what this page draws instead of denying the rows exist.
+   */
+  it("does not call a ledger empty just because this page draws none of it", () => {
+    const calendar = open("calendar", `${MONTH}-09`, { ledger: [], recent: [RECENT_ROW] });
+
+    expect(calendar.getByText(/income and expenses on your own accounts/)).toBeTruthy();
+    expect(calendar.queryByText(/Capture your first/), "the rows are on List").toBeNull();
+  });
+
+  it("still says first-run when the ledger really is empty", () => {
+    const calendar = open("calendar", `${MONTH}-09`, { ledger: [], recent: [] });
+
+    expect(calendar.getByText("No transactions yet")).toBeTruthy();
+    expect(calendar.getByText(/Capture your first/)).toBeTruthy();
+  });
+
+  /**
+   * The quiet line points at the nearest *unfiltered* day, which under a search
+   * may match nothing — so under a search it is not drawn at all. The grid's
+   * own counts are what answer *how often, and when* while one is on (§7).
+   */
+  it("does not offer an unfiltered day while a search is on", () => {
+    const calendar = open("calendar", `${MONTH}-07`, { q: "Market" });
+
+    expect(calendar.queryByText(/Nearest entries:/)).toBeNull();
   });
 
   /**

@@ -76,12 +76,15 @@ labels half-toned. A marker driven by the active page can only jump when the
 gesture ends, which makes the bar look like it is reacting to the swipe rather
 than being part of it.
 
-**The title is the month on all four pages, Months included.** It named the
-year there at first, because the arrows step years on that page — and the
-header changing shape as you swipe was the thing that read as broken: the
-picker's affordance disappeared exactly where a reader is most likely to want
-it. The month is the date every page shares, so it is what the header says;
-what the arrows step is said by the arrows' own names.
+**The title is the month on three pages and the year on Months.** It names the
+period the page in front of you is actually showing — three of them show a
+month, and Months shows twelve. *June* over a page of 2026 was the one label on
+this screen naming something the page was not drawing; the arrows already step
+a year there (§4), so the title and the control now agree. What does not change
+with the page is the title's *shape*: it is a large tappable title on all four,
+because a picker's affordance disappearing exactly where a reader wants it is
+the failure this label was first written to avoid. On Months it opens the year
+picker instead of the month one.
 
 **The chrome is shared and never scrolls away, but it changes shape.** The
 header has two layouts and the scroll chooses between them, continuously —
@@ -206,7 +209,7 @@ the current year, because five things shared 326pt and the year was the one of
 them usually already known. It now sets under the month rather than beside it,
 so it costs a line nobody was using instead of a share of the row — and a rule
 that exists to save width has nothing left to save. Months is the exception:
-there the year is the period, and `2026` under `2026` is the year twice.
+there the year *is* the title, and `2026` under `2026` is the year twice.
 
 **The agent is a tab, because `⌘K` is a desk gesture and the top-right corner
 is the hardest point on a 390pt phone to reach.** S03 has been reachable from
@@ -269,6 +272,55 @@ The month's shape as a grid of days, each carrying the same activity mark
 `DayRibbon` uses, with the tapped day's entries open beneath it. **This is
 S11's phone layout, restored.**
 
+**The blank half of the page is three states, and says which** (`design-system/08`
+§8.1). Under the grid sits the tapped day's entries, and where there were none
+there was nothing — so a month the ledger has never reached, a day you simply
+did not tap a mark on, and a search with no answer here all rendered as the same
+silence, which reads as a screen that failed to load:
+
+| What is true | What the page draws |
+|---|---|
+| A search excludes everything this month | `filtered` — names the query, and clears **it** |
+| The month holds nothing, the ledger holds something | `range` — the nearest month, how many entries it holds, and a jump to it |
+| The ledger holds nothing at all | `first-run` — the same words List uses, because it is the same fact |
+| The ledger holds rows this page cannot draw | It says what the calendar draws, never that the ledger is empty |
+| The month holds something, this day does not | The day's own *nothing*, and one quiet line pointing at the nearest day |
+
+**Nothing is claimed before the first read has finished.** `revision > 0` is
+what separates *the replica holds nothing* from *no read has run yet*, and a
+fresh install restoring from the server would otherwise be told to capture its
+first transaction while its ledger downloads.
+
+**The calendar drawing nothing is not the ledger being empty.** This page draws
+income and expenses on your own accounts, so a ledger held entirely in transfers
+or in another household's accounts draws nothing here while List shows every row
+of it. *No transactions yet* over that is the false claim these variants exist
+to separate, so the page says what it draws instead.
+
+**Each empty state is measured from the period it is about.** One read served
+both, so the month's own empty state was measured from whichever *square* the
+reader last touched: one empty July said *June — 1 entry* or *August — 50
+entries* depending on whether they arrived by the picker (which lands on a
+month's last day) or by the arrow (which keeps the day of the month).
+
+**The jump lands on a day, not on the first of a month.** `readNearestActivity`
+answers with the nearest *day* holding something — crossing a gap forwards that
+is the target month's earliest row — so the panel under the grid opens on
+entries. A jump to the 1st would land the reader on another empty day, one
+screen further on.
+
+**A day with nothing in a month with plenty is not an empty state.** The grid
+above it is full of marks, so a title and a button would be shouting about a day
+the reader chose; it gets one line, which is still the only thing in that region
+able to say where the entries are.
+
+**The day's total is in the pivot currency, and says so.** Every row is taken to
+the pivot at its own rate to be summed at all (`computations.md` §1), and the
+header labelled that figure with the *lead* currency — the currency of your
+first account. A ledger with a USD pivot and a PLN account drew a day of one 500
+PLN expense as *-138.89 PLN* above a row reading *-500.00 PLN*. The two agree in
+a one-currency ledger, which is why it stood.
+
 **The day's entries are read for that day, never filtered out of a page.**
 `readLedgerPage` stops at thirty rows because a ledger does not end; a day does,
 and a calendar showing the first thirty rows of one would be a shorter truth
@@ -281,9 +333,63 @@ better than a panel dropped over something else.
 
 #### Months
 
-Every month of the year with its income and spend, the current one marked.
-Tapping one moves the shared date and stays on the page, so a year can be read
+**A chart of the year over a list of its months.** The chart is twelve paired
+columns — income and spend side by side, one pair per month — and under it the
+same twelve months as rows carrying the figures and what each kept. Tapping
+either moves the shared date and stays on the page, so a year can be read
 without leaving it.
+
+**The comparison is drawn once, at the top.** Every row used to draw its own
+two bars: twenty-four tracks down the page, each scaled to a year the reader
+had to reconstruct by looking at all of them. A chart answers *which months
+were heavy* in one glance, which frees the rows to answer *by how much* in
+figures — so the rows lost their bars and gained a **net**, the figure a row of
+two bars could never state.
+
+**A month with no entries draws a stub, not a track.** An empty month at zero
+share still has to occupy its slot — twelve of them drawn as full-width tracks
+is a year holding nothing rendered as a year holding everything, which is
+exactly what shipped once. The stub is 2pt of `border`: present, clearly
+nothing.
+
+**Empty means nothing happened, not nothing in the lead currency.** A month
+whose only rows are foreign keeps its slot in the money colours at zero height:
+the row four pixels below it says *+1 other currency* about the same month, and
+two elements contradicting each other about one month is worse than a column
+that cannot state a figure. The figure it would need is a conversion arc-phone
+does not do (class **S**). The year's own total carries the same note — it is
+the largest figure on the page and was the only one drawing money with nothing
+to say what it left out.
+
+**The year's own arrows live on the chart, not only in the chrome.** The chart
+*is* the year, so the control that changes it sits where the eye already is.
+They are not a second implementation: the chart's arrows *are* the header's,
+because a year step written twice was two — one kept the day of the month and
+one landed on 31 December, so whichever arrow you pressed decided which month
+the other three pages opened on. Between them the year is a button that opens
+`YearPicker`, and on Months the title opens it too.
+
+**Neither arrow steps into a year that has not happened.** A month ahead is a
+month the ledger has expected entries in and §3 draws them; a *year* ahead is
+twelve stubs. Picking a year lands on its newest month the ledger has reached —
+picking the year you are in lands on today, not on its December, because the
+date is shared and every other page would then show a month three months out.
+
+**Back to 1900, nine years to a page.** A ledger can hold a date older than the
+app, so the picker cannot stop at the years the ledger happens to contain —
+`1900` is the floor, and below it the back arrow goes quiet rather than
+vanishing, because a control that disappears leaves a reader wondering what they
+did. Nine at a time is a 3×3 grid that fits without scrolling, paged from
+*this* year backwards so the page a reader opens on is always full and always
+ends on the year they are in. A year the ledger has entries in carries a dot;
+everything else is offered anyway, because a grid that hid the empty years
+would change shape as the ledger filled.
+
+**The dot is the page's own predicate, not a looser one.** Months folds
+`readDayFlows` — own accounts, income and expense — so a year whose only row is
+a transfer, or sits on another household's account, gets no dot. Asking only
+whether a row exists offered a dot that opened onto twelve zeroes, which is a
+third answer from a mark whose whole job is to separate two.
 
 **Both pages are folds of one read.** `readDayFlows` is §5's figure cut by day
 — the same query, the same filters and the same refusal to sum across
@@ -293,8 +399,8 @@ screen comes to say two different things about the same month; there is one,
 and a test adds the days up and compares them to the card.
 
 **Both scale to what is on screen, never to an absolute figure.** A day is
-*heavy* against the busiest day of its month and a month's bars are drawn
-against the busiest month of its year, for the reason `DayRibbon` gives: a
+*heavy* against the busiest day of its month and a column on the year chart is
+drawn against the busiest month of its year, for the reason `DayRibbon` gives: a
 ledger whose largest day is 200 zł and one whose largest is 20 000 would
 otherwise draw every mark the same, and the mark exists to say *this was
 unusual for you*.
@@ -328,7 +434,10 @@ happened*.
 | `SpendRows` | *Where it went* — §6 at leaf granularity, five rows plus a named remainder, bars proportional to the largest row, one colour. Opening month only |
 | `DayRibbon` | Under `PageTabs`, on the List page only. Continuous — a cell for **every** day between the first and the last the list has loaded, not only the days holding rows, because the distance between two marks is part of what the strip draws. **Earliest at the left**, and scrolled so the day the list is on is in the middle of it. Horizontally scrollable, clipped at both edges. 48×66 cells with the day number at 17px and room around the weekday letter. Activity mark per §3 |
 | `MonthGrid` | Calendar's own grid — a day per cell with `DayRibbon`'s activity mark, ≥44px |
-| `MonthRows` | Months' twelve rows, income and spend per month |
+| `EmptyState` | Calendar's three, under the grid — §8.1's `filtered`, `range` and `first-run`, never a blank |
+| `YearChart` | Months' hero — twelve paired columns scaled to the busiest month of the year, the current month ticked, empty months drawn as stubs. Carries the year, its net, its two arrows and the button that opens `YearPicker` |
+| `MonthRows` | Months' twelve rows: income, spend and **net** per month. No bars — `YearChart` above is the comparison, so a row states figures |
+| `YearPicker` | A sheet of up to nine years, paged back to 1900, a dot on the years holding entries. `PeriodPicker` at year granularity. Pages are counted back from this year, so the oldest one is the short one — at 1900 it is a single cell, and the cells hold their column rather than stretching to fill the row |
 | `DayGroup` | A day's rows under its date and total. The list's only grouping |
 | `QuietDay` | One empty day: a single muted line |
 | `QuietRun` | Two or more consecutive empty days: one row naming the span and its length, with *Show*. The span is **one date range**, not two dates — the language collapses whatever its ends share (`September 7 – 8, 2026`, `7–8 września 2026`), because a row whose whole content is that nothing happened must not spend two lines spelling the month and the year twice |

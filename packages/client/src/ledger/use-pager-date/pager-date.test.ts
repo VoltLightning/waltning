@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   enterDay,
   enterMonth,
+  enterYear,
   goToPage,
   type PagerState,
   pagerStateParams,
@@ -61,6 +62,28 @@ describe("step", () => {
 
   it("never changes the page", () => {
     expect(step(on("2026-09-08", "calendar"), 1).page).toBe("calendar");
+  });
+});
+
+describe("enterYear", () => {
+  it("enters a past year from its newest month", () => {
+    // `enterMonth`'s argument one level up: a reverse-chronological screen is
+    // entered from its end, so a year you are not in opens in December.
+    expect(enterYear(on("2026-09-08"), 2024, TODAY).date).toBe("2024-12-31");
+  });
+
+  /**
+   * **The year you are already in lands on today, not on 31 December.** Picking
+   * *2026* in September put the shared date three months into the future — and
+   * every other page then showed that month, because the date is shared. S04
+   * §6 does not go past the end of this month.
+   */
+  it("does not step past the end of this month", () => {
+    expect(enterYear(on("2026-03-04"), 2026, TODAY).date).toBe("2026-09-08");
+  });
+
+  it("clamps a year that has not happened", () => {
+    expect(enterYear(on("2026-09-08"), 2030, TODAY).date).toBe("2026-09-08");
   });
 });
 
