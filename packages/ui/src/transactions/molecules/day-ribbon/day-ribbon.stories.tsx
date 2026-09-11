@@ -47,6 +47,16 @@ const WEEK: readonly RibbonDay[] = [
   day("2026-09-11", "none", "flat", { ahead: true }),
 ];
 
+/**
+ * September, continuous — more days than a band can hold, which is the only
+ * shape in which *where the strip is scrolled to* is a visible fact.
+ */
+const LONG_RUN: readonly RibbonDay[] = Array.from({ length: 30 }, (_, at) => {
+  const date = `2026-09-${String(at + 1).padStart(2, "0")}`;
+  const activity = at % 7 === 3 ? "heavy" : at % 3 === 0 ? "none" : "some";
+  return day(date, activity, activity === "none" ? "flat" : at % 5 === 0 ? "in" : "out");
+});
+
 const meta = {
   title: "Transactions/DayRibbon",
   component: DayRibbon,
@@ -70,6 +80,26 @@ export const AroundToday: Story = {};
  * scrolled.
  */
 export const BetweenDays: Story = { args: { current: null } };
+
+/**
+ * **A month, scrolled to the day the list is on.**
+ *
+ * The strip runs earliest-first, so the day a reader opens on is at its right
+ * — off screen the moment there is more than a bandful of days. `current` is
+ * what the ribbon reports, and a report the reader has to go looking for is not
+ * one, so the strip scrolls to it. This is the case jsdom cannot see:
+ * `onLayout` never fires there, so the offset arithmetic has a unit test and
+ * the scroll itself has this.
+ */
+export const ScrolledToTheDay: Story = {
+  args: {
+    days: LONG_RUN,
+    // Mid-month on purpose: a day near either end clamps against the scroller's
+    // own limit, and a clamped strip looks the same whether the offset was
+    // computed correctly or not.
+    current: "2026-09-15",
+  },
+};
 
 /**
  * A week the ledger has nothing for. Every day is drawn and none is marked:

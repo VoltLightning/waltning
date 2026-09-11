@@ -112,9 +112,17 @@ it("draws one quiet day as a line and a run as a single row", () => {
     ]),
   );
   expect(screen.getByText("August 13, 2026")).toBeTruthy();
+  // **One range, not two dates.** `July 21, 2026 – August 11, 2026` spells the
+  // year twice over a row whose whole content is that nothing happened; §6's
+  // own example of it is the much shorter "3 – 4 August · 2 days · nothing".
   expect(
-    screen.getByRole("button", { name: /Show: July 21, 2026 – August 11, 2026/ }),
+    screen.getByRole("button", { name: /Show: July 21\u2009–\u2009August 11, 2026/ }),
   ).toBeTruthy();
+});
+
+it("writes a run inside one month without saying the month twice", () => {
+  draw(ledgerWith([row("2026-08-14", 1, "-96"), row("2026-08-11", 2, "-10")]));
+  expect(screen.getByRole("button", { name: /Show: August 12\u2009–\u200913, 2026/ })).toBeTruthy();
 });
 
 it("shows no figure at all on a day it cannot price", () => {
@@ -283,4 +291,106 @@ it("states no day total while the rows are a filtered subset", () => {
     "not the dash either — that one means a rate has not arrived",
   ).toBeNull();
   expect(screen.queryByText("−96,00"), "and not the matched row's own amount").toBeNull();
+});
+
+/**
+ * **The header and the rows named different months, on the same screen.**
+ *
+ * S04 §6: a jump *"loads that date's neighbourhood and **nothing between**"*.
+ * The list loaded its newer half unconditionally, and a reverse-chronological
+ * list draws the newer half *first* — so picking May put September's rows at
+ * the top of a page whose title read *May*, with `TodayPill` floating over them
+ * saying the list had moved. It had not: the reader was looking at today's
+ * rows the whole time.
+ *
+ * Asserted through the port, the way its sibling above is: what the list asks
+ * the ledger for is the behaviour.
+ */
+it("asks for nothing newer on a jump, so the list opens where the header says", () => {
+  const ledger = ledgerWith([row("2021-03-02", 1, "-96")], [row("2026-08-14", 2, "-10")]);
+  draw(ledger, vi.fn(), { anchor: accountingDate("2021-03-02") });
+
+  const asked = vi.mocked(ledger.readLedgerPage).mock.calls.map(([options]) => options.direction);
+  expect(asked, "a jump loads the neighbourhood and nothing between").toEqual(["older"]);
+  expect(screen.queryByRole("button", { name: /Payee 2/ })).toBeNull();
+});
+
+/**
+ * **A jump behind the ledger's own beginning is not an empty ledger.** The
+ * screen's empty state offers a first capture and claims the whole ledger is
+ * empty; here the reader has rows, all of them newer than where they are
+ * standing, and the pill above is one tap from them.
+ */
+it("says nothing is here rather than offering a first capture", () => {
+  draw(ledgerWith([]), vi.fn(), { anchor: accountingDate("2021-03-02") });
+  expect(screen.getByText(/Nothing recorded on or before March 2, 2021/)).toBeTruthy();
+  expect(screen.queryByText("nothing yet"), "that is the ledger's emptiness, not this one").toBe(
+    null,
+  );
+});
+
+it("still offers a first capture when the ledger itself is empty", () => {
+  draw(ledgerWith([]));
+  expect(screen.getByText("nothing yet")).toBeTruthy();
+});
+
+/**
+ * **The ribbon runs the way time does.** The list is newest-first because a
+ * ledger is read down a page; carried onto the strip unchanged it drew the
+ * days backwards, beside a `MonthGrid` one swipe away drawing them forwards.
+ */
+it("draws the ribbon earliest-first, under a list that runs newest-first", () => {
+  draw(ledgerWith([row("2026-08-14", 1, "-96"), row("2026-08-12", 2, "-10")]));
+  const strip = screen.getByRole("list");
+  const dates = Array.from(
+    strip.querySelectorAll("[aria-label]"),
+    (cell) => cell.getAttribute("aria-label") ?? "",
+  );
+  expect(dates[0]).toMatch(/August 12/);
+  expect(dates[dates.length - 1]).toMatch(/August 14/);
+});
+
+/**
+ * **The pill floats over the *list*, and the ribbon is not the list** (S04 §4,
+ * which names the two separately). Positioned against the whole panel it sat on
+ * the ribbon's first cells — covering a weekday letter outright and two 44pt
+ * targets. What an absolutely-positioned box can cover is decided by the box it
+ * resolves against, so the claim is about which box that is: the pill and the
+ * rows it floats over share one, and the strip is outside it.
+ */
+it("floats over the rows, not over the strip above them", () => {
+  draw(ledgerWith([row("2021-03-02", 1, "-96")]), vi.fn(), {
+    anchor: accountingDate("2021-03-02"),
+  });
+  const pill = screen.getByRole("button", { name: /Back to today/ });
+  const aRow = screen.getByRole("button", { name: /Payee 1/ });
+
+  let box: HTMLElement | null = pill;
+  while (box !== null && !box.contains(aRow)) box = box.parentElement;
+  expect(box, "the pill and the rows must share a box at all").not.toBeNull();
+  expect(
+    box?.contains(screen.getByRole("list")),
+    "the strip is chrome above the list, and a floating control must not land on it",
+  ).toBe(false);
+});
+
+/**
+ * **A search that matched nothing is not a ledger with nothing in it** (S04 §6,
+ * *Empty · filtered*: "Never the first-run wording: the ledger holds rows, this
+ * filter does not"). Nor is it a statement about the anchor: the anchor is
+ * fine, the query excluded what is there.
+ *
+ * The wording says *here*, not *nothing matches*, because the list holds the
+ * rows around its anchor while the field above it counts the whole ledger (§7)
+ * — a page claiming the ledger for its own window would contradict the number
+ * over its head.
+ */
+it("blames the query, not the ledger and not the anchor, when a search finds nothing", () => {
+  draw(ledgerWith([]), vi.fn(), { anchor: accountingDate("2021-03-02"), query: "zzzz" });
+  expect(screen.getByText(/Nothing here matches/)).toBeTruthy();
+  expect(screen.queryByText("nothing yet"), "the ledger's emptiness, not this one").toBeNull();
+  expect(
+    screen.queryByText(/Nothing recorded on or before/),
+    "the anchor's emptiness, not this one",
+  ).toBeNull();
 });

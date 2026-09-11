@@ -127,6 +127,8 @@ export const pl: Messages = {
     backToToday: "Wróć do dziś — lista pokazuje {{date}}",
     quietRunOne: "{{count}} dzień · nic nie zapisano",
     quietRunMany: "{{count}} dni · nic nie zapisano",
+    nothingOnOrBefore: "Nic nie zapisano {{date}} ani wcześniej.",
+    noMatchesHere: "Nic tutaj nie pasuje do \u201E{{query}}\u201D.",
     amount: "Kwota",
     account: "Konto",
     needsRate: "Waluta {{currency}} wymaga kursu wymiany, zanim zapiszesz w niej transakcję.",

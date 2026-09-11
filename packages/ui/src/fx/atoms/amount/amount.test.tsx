@@ -76,6 +76,36 @@ describe("Amount", () => {
     expect(container.innerHTML).toContain("r-fontVariant");
   });
 
+  /**
+   * **A flow and a stock disagree about what a positive number means.**
+   *
+   * S04's list drew its day totals `kind="auto"`, so a day that cost 500
+   * was red and a day that brought 666 in was plain ink — the reader is told
+   * which days took from them and nothing at all about the days that paid.
+   * `auto` is right for a balance, where a positive figure is what you *have*;
+   * a day's total is what *came in*, and it is the same green every other
+   * inflow figure in the app already draws.
+   *
+   * Asserted by class identity rather than by colour: `react-native-web`
+   * compiles a style into an atomic class, so the value is not observable —
+   * but "`net` on a positive resolves to exactly what `income` resolves to" is,
+   * and it is the whole claim.
+   */
+  it("paints a positive net the colour income is painted, not plain ink", () => {
+    const tone = (kind: "auto" | "net" | "income" | "spend" | "transfer", value: string) => {
+      const { container } = render(
+        <Amount value={money.toMoney(value)} currency="USD" kind={kind} />,
+      );
+      return container.querySelector("[class]")?.getAttribute("class") ?? "";
+    };
+    expect(tone("net", "666.00000000")).toBe(tone("income", "666.00000000"));
+    expect(tone("net", "666.00000000")).not.toBe(tone("auto", "666.00000000"));
+    // The other two ends of the rule: a day that cost money is spend, and a day
+    // of transfers between your own accounts netted to nothing and is muted.
+    expect(tone("net", "-500.00000000")).toBe(tone("spend", "-500.00000000"));
+    expect(tone("net", "0.00000000")).toBe(tone("transfer", "0.00000000"));
+  });
+
   it("never converts — that is FxAmount's job", () => {
     // The split is the whole of P1. A component that could convert would
     // eventually be handed an amount and a rate from different dates, and
