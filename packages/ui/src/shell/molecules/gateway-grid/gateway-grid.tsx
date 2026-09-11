@@ -92,11 +92,12 @@ const useStyles = makeStyles((theme) => ({
     flexGrow: 1,
     minHeight: touchTarget.min,
     gap: space.sm,
-    padding: space.x3,
-    borderRadius: radius.lg,
-    backgroundColor: theme.surface,
-    borderWidth: 1,
-    borderColor: theme.borderInteractive,
+    // On the ground. S04 §3 draws *Go to* as rows under a kicker, and a card
+    // is for a group of related rows or one hero figure — four cards each
+    // holding a single destination were four boxes around four controls.
+    paddingVertical: space.md,
+    paddingHorizontal: space.xs,
+    borderRadius: radius.sm,
   },
   focused: {
     outlineWidth: focus.width,

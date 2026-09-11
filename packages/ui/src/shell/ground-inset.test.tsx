@@ -29,9 +29,9 @@ function read() {
 it("is the design gutter alone where no provider sits above", () => {
   render(<Probe />);
   const inset = read();
-  expect(inset.gutter).toEqual({ paddingLeft: 22, paddingRight: 22 });
+  expect(inset.gutter).toEqual({ paddingLeft: 20, paddingRight: 20 });
   // No button, no device inset: the content pays the design padding only.
-  expect(inset.content.paddingBottom).toBe(22);
+  expect(inset.content.paddingBottom).toBe(20);
 });
 
 it("adds the device's own bottom inset and the button's clearance to the content", () => {
@@ -42,7 +42,7 @@ it("adds the device's own bottom inset and the button's clearance to the content
       </SafeAreaProvider>
     </FloatingClearanceProvider>,
   );
-  expect(read().content.paddingBottom).toBe(22 + NOTCHED.bottom + floating.clearance);
+  expect(read().content.paddingBottom).toBe(20 + NOTCHED.bottom + floating.clearance);
 });
 
 /**
@@ -57,9 +57,9 @@ it("carries the device's side insets into both the gutter and the content", () =
     </SafeAreaProvider>,
   );
   const inset = read();
-  expect(inset.gutter).toEqual({ paddingLeft: 66, paddingRight: 66 });
-  expect(inset.content.paddingLeft).toBe(66);
-  expect(inset.content.paddingRight).toBe(66);
+  expect(inset.gutter).toEqual({ paddingLeft: 64, paddingRight: 64 });
+  expect(inset.content.paddingLeft).toBe(64);
+  expect(inset.content.paddingRight).toBe(64);
 });
 
 /**
@@ -78,8 +78,8 @@ it("adds no device bottom when the panel is not the screen's bottom edge", () =>
     </FloatingClearanceProvider>,
   );
   // The design padding, and nothing the device or the shell asked for.
-  expect(read().content.paddingBottom).toBe(22);
-  expect(read().block.paddingBottom).toBe(22);
+  expect(read().content.paddingBottom).toBe(20);
+  expect(read().block.paddingBottom).toBe(20);
 });
 
 /**

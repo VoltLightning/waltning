@@ -55,7 +55,7 @@ describe("the 44px floor, fixed at the source (§10)", () => {
   it("every interactive atom carries it", () => {
     const interactive = all.filter((c) => INTERACTIVE.test(code(c.text)));
     const missing = interactive
-      .filter((c) => !/touchTarget\.min|minHeight: 44/.test(c.text))
+      .filter((c) => !/touchTarget\.(?:min|row)|minHeight: 44/.test(c.text))
       .map((c) => c.name);
 
     expect(missing, "interactive components with no touch-target floor").toEqual([]);

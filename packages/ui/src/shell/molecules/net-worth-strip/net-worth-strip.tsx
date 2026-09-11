@@ -126,10 +126,12 @@ const useStyles = makeStyles((theme) => ({
     alignItems: "center",
     justifyContent: "space-between",
     gap: space.x3,
-    paddingHorizontal: space.x3,
-    paddingVertical: space.lg,
+    // On the ground, as S04 §3 says and the deck draws — a figure in a line,
+    // not a box. It wore `subtleFill` for a while and was the one thing on the
+    // Summary page that was neither a card nor the ground.
+    paddingHorizontal: space.xs,
+    paddingVertical: space.sm,
     borderRadius: radius.sm,
-    backgroundColor: theme.subtleFill,
   },
   /**
    * `accentFill`, not `hoverFill`. This strip puts two muted lines on its

@@ -180,7 +180,7 @@ describe("the frame clears the device's chrome", () => {
     const flat = renderFrame(NO_INSETS);
     const notched = renderFrame(NOTCHED);
 
-    // 22 is `space.x5`, the shell's design padding. Stated as a difference so
+    // 20 is `space.x4`, the shell's design padding. Stated as a difference so
     // this does not have to be edited when that number is.
     expect(paddingOf(notched.shell, "top") - paddingOf(flat.shell, "top")).toBe(NOTCHED.top);
   });

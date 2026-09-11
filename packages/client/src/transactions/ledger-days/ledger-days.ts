@@ -132,6 +132,20 @@ export type LedgerItemOptions = {
    * are the days that matched.
    */
   filtered?: boolean;
+  /**
+   * The day the list is anchored on — S04 §6's cold open (today) or a jump.
+   *
+   * **The anchor is always an item, quiet if it has to be.** Both halves of the
+   * list are read outward from it, so every day between it and the nearest row
+   * on either side is *known* quiet, not unloaded — the one place a quiet day
+   * may be drawn past a loaded row. Without it, a cold open on a day with no
+   * entries drew a list and a ribbon that began two days ago, with today
+   * nowhere on the screen that is named for it; and a jump to a quiet day
+   * landed on a page reading *nothing on or before*, over a ledger holding rows
+   * three days newer. Under a filter it is not drawn: the anchor is a date the
+   * query did not match, and the filtered list says nothing about those.
+   */
+  anchor?: AccountingDate;
 };
 
 export function toLedgerItems<Row extends LedgerDayRow>(
@@ -146,17 +160,30 @@ export function toLedgerItems<Row extends LedgerDayRow>(
     else days.push({ date: row.date, rows: [row] });
   }
 
+  // The anchor takes its place among the days, newest first, as a day with
+  // no rows — so the gap rule below draws the quiet run on each side of it
+  // exactly as it would between two loaded days.
+  const anchor = options.filtered === true ? undefined : options.anchor;
+  if (anchor !== undefined && !days.some((day) => day.date === anchor)) {
+    const at = days.findIndex((day) => day.date < anchor);
+    days.splice(at === -1 ? days.length : at, 0, { date: anchor, rows: [] });
+  }
+
   const items: LedgerItem<Row>[] = [];
   days.forEach((day, index) => {
-    items.push({
-      kind: "day",
-      date: day.date,
-      rows: day.rows,
-      // `unpriced` is the shape that already means *no honest figure here*,
-      // and a filtered day has none: the rows on screen are a subset chosen by
-      // a query, so their sum is not the day's own.
-      total: options.filtered === true ? { kind: "filtered" } : totalOf(day.rows, pivotCurrency),
-    });
+    if (day.rows.length === 0) {
+      items.push({ kind: "quiet", from: day.date, to: day.date, days: 1 });
+    } else {
+      items.push({
+        kind: "day",
+        date: day.date,
+        rows: day.rows,
+        // `unpriced` is the shape that already means *no honest figure here*,
+        // and a filtered day has none: the rows on screen are a subset chosen by
+        // a query, so their sum is not the day's own.
+        total: options.filtered === true ? { kind: "filtered" } : totalOf(day.rows, pivotCurrency),
+      });
+    }
 
     const next = days[index + 1];
     if (next === undefined || options.filtered === true) return;
@@ -282,7 +309,18 @@ export function ribbonDays<Row extends LedgerDayRow>(
   // it is still a strip, and a strip that changed direction when a search was
   // typed would be two controls wearing one name.
   const strip = [...marked].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
-  return options.filtered === true ? strip : fillQuietDays(strip);
+  if (options.filtered === true) return strip;
+  // The span is every item's, not only the busy days': the anchor is a quiet
+  // item and may sit past the last row on either side, and a strip that ran
+  // only between rows left the day the screen is named for with no cell.
+  let from: AccountingDate | undefined;
+  let to: AccountingDate | undefined;
+  for (const item of items) {
+    const [low, high] = item.kind === "day" ? [item.date, item.date] : [item.to, item.from];
+    if (from === undefined || low < from) from = low;
+    if (to === undefined || high > to) to = high;
+  }
+  return fillQuietDays(strip, from, to);
 }
 
 /**
@@ -300,18 +338,12 @@ export function ribbonDays<Row extends LedgerDayRow>(
  * A day with nothing on it is `none` and `flat`, which is the mark's absence —
  * the same shape a month grid's empty cell has.
  */
-function fillQuietDays(marked: readonly RibbonDayModel[]): readonly RibbonDayModel[] {
-  // The span's ends, read from the dates rather than from the array's ends: the
-  // caller sorts, and a fill that *relied* on that would be a rule one line
-  // above holding a loop below it together. This one is right for any order it
-  // is handed, and always fills forward.
-  let from = marked[0]?.date;
-  let to = from;
+function fillQuietDays(
+  marked: readonly RibbonDayModel[],
+  from: AccountingDate | undefined,
+  to: AccountingDate | undefined,
+): readonly RibbonDayModel[] {
   if (from === undefined || to === undefined) return marked;
-  for (const day of marked) {
-    if (day.date < from) from = day.date;
-    if (day.date > to) to = day.date;
-  }
 
   const held = new Map(marked.map((day) => [day.date as string, day]));
 
