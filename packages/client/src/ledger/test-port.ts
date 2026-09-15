@@ -26,6 +26,9 @@ const EMPTY_SEARCH_PAGE: PhoneSearchPage = {
 export function basePort(overrides: Partial<PhoneLedgerPort> = {}): PhoneLedgerPort {
   return {
     listAccounts: () => [],
+    exportLedger: () => {
+      throw new Error("this port takes no backups");
+    },
     listCurrencies: () => [],
     listCurrencySettings: () => [],
     listGroups: () => [],

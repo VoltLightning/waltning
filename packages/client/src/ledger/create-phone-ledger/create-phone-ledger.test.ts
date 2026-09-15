@@ -309,6 +309,9 @@ function harness(
     groups = [];
   });
   const port: PhoneLedgerPort = {
+    exportLedger: () => {
+      throw new Error("this port takes no backups");
+    },
     listAccounts: (options) =>
       options?.includeArchived ? accounts : accounts.filter((a) => !a.archived),
     listCurrencies: () => CURRENCIES,

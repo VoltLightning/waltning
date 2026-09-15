@@ -59,6 +59,11 @@ import {
 } from "./accounts/read-unsettled-clearing.ts";
 import { reconcileAccountExecutor } from "./accounts/reconcile-account.executor.ts";
 import { updateAccountExecutor } from "./accounts/update-account.executor.ts";
+import {
+  type ExportOptions,
+  exportLedger as exportLedgerFile,
+  type LedgerExport,
+} from "./backup/export.ts";
 import { archiveCategoryExecutor } from "./categories/archive-category.executor.ts";
 import { convertLeafGroupExecutor } from "./categories/convert-leaf-group.executor.ts";
 import {
@@ -202,6 +207,9 @@ import { type Capture, writeLocally } from "./write.ts";
  * here means a caller can hand this function a currency the reference list does
  * not contain — a person's own — without the type saying it came from a seed.
  */
+/** What a caller supplies for an export. `ExportOptions` minus nothing — restated so the session's own surface names it. */
+export type SessionExportOptions = ExportOptions;
+
 export type BootstrapCurrency = {
   code: CurrencyCode;
   name: string;
@@ -293,6 +301,16 @@ export type LocalLedgerSession = {
   listUnsettledClearing: () => readonly LocalUnsettledClearing[];
   /** §2 as of a chosen date — `ReconcileSheet`'s live "Computed" figure, S16 §5. */
   balanceAsOf: (accountId: Id<"accounts">, asOf: AccountingDate) => Money;
+  /**
+   * The whole ledger, encrypted — `architecture/14` §14.3's app-owned backup.
+   *
+   * It is a session method rather than something a screen assembles because
+   * the export must read **both** stores, and the session is the only thing
+   * that holds them. A caller reaching for `replica.db` to build its own
+   * would get a backup missing the outbox, which on a phone with no backend
+   * is the half nothing else holds.
+   */
+  exportLedger: (options: SessionExportOptions) => LedgerExport;
   /** C4 — S10's list. A query, not a snapshot field: a filtered page is asked for, not held. */
   searchTransactions: (
     filter: TransactionSearchFilter,
@@ -681,6 +699,10 @@ export function createLocalLedgerSession<TRun>(
     readActiveDashboardLayout: () => readActiveLayout(requireOpen().replica.db),
     listUnsettledClearing: () => readUnsettledClearing(requireOpen().replica.db),
     balanceAsOf: (accountId, asOf) => readBalanceAsOf(requireOpen().replica.db, accountId, asOf),
+    exportLedger: (exportOptions) => {
+      const open = requireOpen();
+      return exportLedgerFile({ replica: open.replica.db, outbox: open.outbox.db }, exportOptions);
+    },
     searchTransactions: (filter, cursor, options) =>
       searchTransactions(requireOpen().replica.db, filter, cursor, options),
     readLedgerPage: (options) => readLedgerPage(requireOpen().replica.db, options),

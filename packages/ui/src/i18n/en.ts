@@ -1143,7 +1143,43 @@ export const en = {
     resetPrompt: "Delete every account and transaction from this phone?",
     resetAction: "Reset preview data",
   },
+  /**
+   * `architecture/14` §14.3's app-owned backup. The wording carries the one
+   * thing the screen exists to make unmissable: the key is shown once, and the
+   * app does not keep a copy.
+   */
+  backup: {
+    title: "Back up",
+    lede: "An encrypted copy of your whole ledger, for you to keep somewhere that is not this phone.",
+    action: "Back up",
+    again: "Try again",
+    handing: "Saving…",
+    failed: "The backup did not finish",
+    failedCost: "Nothing was written, and no key was made — nothing has changed.",
+    keptTitle: "Backed up",
+    done: "Done",
+    yourKey: "Your key",
+    shownOnce:
+      "Shown once. Store it somewhere that is not this phone — without it the backup cannot be opened, and there is no second copy.",
+    copyKey: "Copy key",
+    copied: "Copied",
+    copyRefused: "Could not copy — select the key and copy it by hand",
+    whereUnconfirmed: "Check",
+    file: "File",
+    entries: "Holds",
+    entriesValue_one: "{{count}} entry · {{size}}",
+    entriesValue_few: "{{count}} entries · {{size}}",
+    entriesValue_many: "{{count}} entries · {{size}}",
+    entriesValue_other: "{{count}} entries · {{size}}",
+    unsent: "Not yet sent",
+    unsentValue_one: "{{count}} capture",
+    unsentValue_few: "{{count}} captures",
+    unsentValue_many: "{{count}} captures",
+    unsentValue_other: "{{count}} captures",
+    where: "Kept in",
+  },
   routes: {
+    backup: "Back up",
     expense: "Expense",
     createAccount: "Create account",
     accounts: "Accounts",

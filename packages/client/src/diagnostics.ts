@@ -41,7 +41,9 @@ export type ClientAction =
   | "clear_manual_rate"
   | "update_currency"
   /** §5.7's launch gate — the device's own prompt, raised and answered. */
-  | "unlock";
+  | "unlock"
+  /** `architecture/14` §14.3's app-owned encrypted export. */
+  | "export_ledger";
 
 export type ClientStateUpdate =
   | "phone_ledger_refresh"

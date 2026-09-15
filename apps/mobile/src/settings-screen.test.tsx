@@ -21,6 +21,7 @@ it("opens Accounts, and lists it first", () => {
     "Categories",
     "Currencies",
     "Exchange rates",
+    "Back up",
   ]);
   fireEvent.click(screen.getByText("Accounts"));
   expect(router.push).toHaveBeenCalledWith("/accounts");
@@ -36,6 +37,13 @@ it("opens Exchange rates", () => {
   render(<Settings />);
   fireEvent.click(screen.getByText("Exchange rates"));
   expect(router.push).toHaveBeenCalledWith("/settings/rates");
+});
+
+/** `architecture/14` §14.3's export — the phone's only durability before a backend. */
+it("opens Back up", () => {
+  render(<Settings />);
+  fireEvent.click(screen.getByText("Back up"));
+  expect(router.push).toHaveBeenCalledWith("/settings/backup");
 });
 
 /** The tab shell draws the screen's name — a heading here would be it twice. */

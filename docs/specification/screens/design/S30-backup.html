@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>S30 · Back up — Waltning</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap');
+body{margin:0;background:#efe9dd;font-family:'IBM Plex Sans',system-ui,sans-serif;
+     display:flex;flex-direction:column;align-items:center;gap:12px;padding:28px 16px 40px}
+h1{font-size:15px;font-weight:600;color:#4a4438;margin:0;letter-spacing:-.1px}
+p.note{max-width:560px;margin:0;font-size:12px;line-height:1.5;color:#6f6759;text-align:center}
+p.note code{font-size:11.5px;background:#e4dccd;border-radius:4px;padding:1px 4px}
+.pair{display:flex;gap:20px;flex-wrap:wrap;justify-content:center}
+.col{display:flex;flex-direction:column;align-items:center;gap:8px}
+.cap{font-size:11px;font-weight:600;letter-spacing:.5px;color:#8a8478;text-transform:uppercase}
+.frame{width:390px;height:844px;overflow:hidden;border-radius:22px;
+       box-shadow:0 10px 34px -14px rgba(51,48,42,.42);flex-shrink:0}
+.n{font-variant-numeric:tabular-nums}
+</style></head><body>
+<h1>S30 · Back up</h1>
+<p class="note">A drawing of the intent, not a source to copy. The screen ships as React Native
+against <code>packages/ui</code>; this file exists so <code>S30-settings-system.md</code> has something to point at.
+The key is the hero of the second frame on purpose — it is the one string in the app that will not be shown twice.</p>
+
+<div class="pair">
+
+<div class="col"><div class="cap">Before</div>
+<div class="frame"><div style="width:390px;height:844px;background:#faf6ef;color:#33302a;display:flex;flex-direction:column;padding:64px 20px 32px;box-sizing:border-box;gap:18px;font-family:'IBM Plex Sans',system-ui,sans-serif;">
+  <div style="flex-shrink:0;padding:0 4px;display:flex;flex-direction:column;gap:2px;">
+    <div style="font-size:22px;font-weight:600;letter-spacing:-.3px;">Back up</div>
+    <div style="font-size:13px;color:#8a8478;">Settings</div>
+  </div>
+
+  <div style="padding:0 4px;font-size:15px;line-height:1.5;color:#6f6759;">
+    An encrypted copy of your whole ledger, for you to keep somewhere that is not this phone.
+  </div>
+
+  <div style="flex:1"></div>
+
+  <div style="flex-shrink:0;height:48px;border-radius:10px;background:#5c7357;color:#faf6ef;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:600;">Back up</div>
+</div></div>
+</div>
+
+<div class="col"><div class="cap">After</div>
+<div class="frame"><div style="width:390px;height:844px;background:#faf6ef;color:#33302a;display:flex;flex-direction:column;padding:64px 20px 32px;box-sizing:border-box;gap:18px;font-family:'IBM Plex Sans',system-ui,sans-serif;">
+  <div style="flex-shrink:0;padding:0 4px;display:flex;flex-direction:column;gap:2px;">
+    <div style="font-size:22px;font-weight:600;letter-spacing:-.3px;">Back up</div>
+    <div style="font-size:13px;color:#8a8478;">Settings</div>
+  </div>
+
+  <div style="flex-shrink:0;background:#fff;border:1px solid #eae3d5;border-radius:14px;padding:18px;display:flex;flex-direction:column;gap:10px;">
+
+    <div style="display:flex;align-items:center;justify-content:space-between;">
+      <div style="font-size:11px;font-weight:700;letter-spacing:.88px;color:#8a8478;text-transform:uppercase;">Your key</div>
+      <div class="n" style="font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:11px;font-weight:500;letter-spacing:.5px;color:#8a8478;background:#f3efe6;border-radius:4px;padding:2px 6px;">t6wng2</div>
+    </div>
+
+    <!-- Whole, monospace, selectable. A key with an ellipsis cannot be typed back in. -->
+    <div style="font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:12.5px;line-height:1.55;word-break:break-all;color:#33302a;background:#f7f3ea;border:1px solid #f1ebe0;border-radius:10px;padding:12px;">AGE-SECRET-KEY-1T6WNG2… (58 characters, drawn whole)</div>
+
+    <div style="font-size:12px;line-height:1.5;color:#8a8478;">Shown once. Store it somewhere that is not this phone — without it the backup cannot be opened, and there is no second copy.</div>
+
+    <div style="align-self:flex-start;display:flex;align-items:center;gap:10px;">
+      <div style="height:32px;padding:0 12px;border-radius:10px;border:1px solid #d9d1c0;display:flex;align-items:center;font-size:13px;font-weight:600;color:#4a4438;">Copy key</div>
+      <div style="font-size:12px;color:#8a8478;">Copied</div>
+    </div>
+
+    <div style="margin-top:4px;display:flex;flex-direction:column;">
+      <div style="height:54px;display:flex;align-items:center;justify-content:space-between;gap:16px;border-bottom:1px solid #f1ebe0;">
+        <div style="font-size:13px;color:#8a8478;">File</div>
+        <div class="n" style="font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">waltning-2026-09-15-t6wng2.age</div>
+      </div>
+      <div style="height:54px;display:flex;align-items:center;justify-content:space-between;gap:16px;border-bottom:1px solid #f1ebe0;">
+        <div style="font-size:13px;color:#8a8478;">Holds</div>
+        <div class="n" style="font-size:13px;font-weight:600;">1 180 entries · 2 356 kB</div>
+      </div>
+      <div style="height:54px;display:flex;align-items:center;justify-content:space-between;gap:16px;border-bottom:1px solid #f1ebe0;">
+        <div style="font-size:13px;color:#8a8478;">Not yet sent</div>
+        <div class="n" style="font-size:13px;font-weight:600;">3 captures</div>
+      </div>
+      <div style="height:54px;display:flex;align-items:center;justify-content:space-between;gap:16px;">
+        <div style="font-size:13px;color:#8a8478;">Kept in</div>
+        <div style="font-size:13px;font-weight:600;">Files · this app</div>
+      </div>
+    </div>
+  </div>
+
+  <div style="flex:1"></div>
+
+  <div style="flex-shrink:0;height:48px;border-radius:10px;background:#5c7357;color:#faf6ef;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:600;">Done</div>
+</div></div>
+</div>
+
+</div>
+
+<p class="note">Both buttons and the opening sentence sit on the ground; the card holds only the key
+and what the file contains (<code>design-system/05</code> §5.1). <em>Not yet sent</em> appears only when the
+outbox holds something — on a phone with no backend those captures exist nowhere else.
+The fingerprint <code>t6wng2</code> is derived from the key shown beside it; <em>Kept in</em> reads
+<em>Check</em> on a platform that cannot confirm the file landed, which a browser never can.</p>
+</body></html>
