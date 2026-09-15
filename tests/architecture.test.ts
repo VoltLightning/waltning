@@ -2051,6 +2051,7 @@ describe("every src/ is organised by domain, not by layer", () => {
       "device",
       "ledger",
       "query",
+      "security",
       "transactions",
       "transport",
     ],

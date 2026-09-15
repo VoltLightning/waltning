@@ -28,7 +28,13 @@
           "style": "light"
         }
       ],
-      "expo-localization"
+      "expo-localization",
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Waltning unlocks your ledger with Face ID."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

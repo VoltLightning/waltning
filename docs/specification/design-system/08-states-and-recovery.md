@@ -212,6 +212,7 @@ Registered here so no screen invents them (working rule 1).
 
 | Component | Where |
 |---|---|
+| `LockedScreen` | `SPEC.md` §5.7's launch gate — what stands where the ledger would be until the device has said who is holding it. Two modes: `locked`, with the one button that raises the device's own prompt and the reason the last attempt did not unlock; `cover`, the same surface with nothing to press, drawn the moment the app goes to the background so the switcher's snapshot is not a balance. Opaque by construction. `_layout.tsx` draws it *instead of* the app before the first unlock and *over* it after |
 | `UndoToast` | `Toast` variant — §8.4 |
 | `MatchWarning` | S15, and the J15 counterparty proposal review |
 | `ThinkingIndicator` | S03, S08 |

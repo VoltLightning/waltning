@@ -6,6 +6,11 @@ import { previewResetEnabled } from "@waltning/client/appearance/preview-reset";
 import { createDisplayCurrencyPreference } from "@waltning/client/currencies/display-currency";
 import { createDevicePreference } from "@waltning/client/device/create-device-preference";
 import { createDeskScopePreference } from "@waltning/client/ledger/desk-scope";
+import {
+  type AppLockAttempt,
+  type AppLockEnrolment,
+  createAppLock,
+} from "@waltning/client/security/app-lock";
 import { createLastCapturePreference } from "@waltning/client/transactions/last-capture";
 import { pivotCurrency } from "@waltning/core/currencies";
 import type { CurrencyCode } from "@waltning/core/money";
@@ -15,7 +20,9 @@ import {
   serializeFloatPosition,
 } from "@waltning/ui/shell/float-geometry";
 import * as Haptics from "expo-haptics";
+import * as LocalAuthentication from "expo-local-authentication";
 import { getLocales } from "expo-localization";
+import { AppState } from "react-native";
 import { mobileDiagnostics } from "./diagnostics.ts";
 
 const APPEARANCE_KEY = "waltning.appearance";
@@ -121,6 +128,85 @@ export const displayCurrency = createDisplayCurrencyPreference(
     subscribeToLedger: (listener) => livePivotSubscribe(listener),
     diagnostics: mobileDiagnostics,
   },
+);
+
+/**
+ * §5.7's launch gate, over the device's own authentication.
+ *
+ * **`getEnrolledLevelAsync`, never `isEnrolledAsync`** — the spec's own
+ * row: the boolean reports a PIN-protected Android as unenrolled and would
+ * lock out a device that is behaving correctly. `disableDeviceFallback`
+ * stays off so the passcode is the fallback, not an app PIN; and
+ * `biometricsSecurityLevel: "strong"` is Android's own line in the same row.
+ * The reasons the platform gives are folded onto the four the screen can
+ * say something about.
+ */
+function enrolmentOf(level: LocalAuthentication.SecurityLevel): AppLockEnrolment {
+  if (level === LocalAuthentication.SecurityLevel.NONE) return "none";
+  if (level === LocalAuthentication.SecurityLevel.SECRET) return "secret";
+  return "biometric";
+}
+
+function attemptOf(result: LocalAuthentication.LocalAuthenticationResult): AppLockAttempt {
+  if (result.success) return { ok: true };
+  switch (result.error) {
+    case "user_cancel":
+    case "app_cancel":
+    case "system_cancel":
+    // The prompt went away without a match, by the person's hand or the
+    // clock's: "try again" is right, "not recognised" is not.
+    case "user_fallback":
+    case "timeout":
+      return { ok: false, reason: "cancelled" };
+    case "lockout":
+      return { ok: false, reason: "lockout" };
+    case "not_available":
+    case "not_enrolled":
+    case "passcode_not_set":
+    case "no_space":
+    case "invalid_context":
+      return { ok: false, reason: "unavailable" };
+    default:
+      return { ok: false, reason: "failed" };
+  }
+}
+
+export const appLock = createAppLock(
+  {
+    authenticator: {
+      enrolment: async () => enrolmentOf(await LocalAuthentication.getEnrolledLevelAsync()),
+      // `strong` where the device has strong biometrics, `weak` where it
+      // has only class-2 ones: asking for `strong` on a device that cannot
+      // give it is `not_available` every time, and a gate nobody can pass
+      // is a lockout. The device credential is the fallback either way.
+      authenticate: async (prompt) => {
+        const level = await LocalAuthentication.getEnrolledLevelAsync();
+        return attemptOf(
+          await LocalAuthentication.authenticateAsync({
+            promptMessage: prompt.message,
+            // Honoured on iOS; Android draws its own negative button while
+            // the device credential is the fallback.
+            cancelLabel: prompt.cancel,
+            disableDeviceFallback: false,
+            biometricsSecurityLevel:
+              level === LocalAuthentication.SecurityLevel.BIOMETRIC_STRONG ? "strong" : "weak",
+          }),
+        );
+      },
+    },
+    currentAppState: () => {
+      const state = AppState.currentState;
+      return state === "inactive" || state === "background" ? state : "active";
+    },
+    subscribeAppState: (listener) => {
+      const subscription = AppState.addEventListener("change", (state) => {
+        if (state === "active" || state === "inactive" || state === "background") listener(state);
+      });
+      return () => subscription.remove();
+    },
+    now: () => Date.now(),
+  },
+  mobileDiagnostics,
 );
 
 /** S05 §7: haptic on Save. `platform.ts`'s web half no-ops this same name. */

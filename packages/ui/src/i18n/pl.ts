@@ -761,6 +761,16 @@ export const pl: Messages = {
     "rule.overdue": "Zaległa",
     "rule.neverPosted": "Nigdy nie zaksięgowana",
   },
+  lock: {
+    title: "Zablokowane",
+    body: "Odblokuj, aby otworzyć księgę.",
+    unlock: "Odblokuj",
+    prompt: "Odblokuj Waltning",
+    cancelled: "Odblokowanie anulowano.",
+    failed: "Nie rozpoznano. Spróbuj ponownie.",
+    lockout: "Zbyt wiele prób. Użyj kodu urządzenia.",
+    unavailable: "To urządzenie nie może teraz odblokować.",
+  },
   startup: {
     ledgerFailedTitle: "Nie udało się otworzyć księgi",
     ledgerFailedBody: "{{message}}",

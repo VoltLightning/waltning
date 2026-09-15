@@ -17,6 +17,8 @@
     "./currencies/use-currencies": "./src/currencies/use-currencies.ts",
     "./device/create-device-preference": "./src/device/create-device-preference/create-device-preference.ts",
     "./device/use-device-preference": "./src/device/use-device-preference.ts",
+    "./security/app-lock": "./src/security/app-lock/app-lock.ts",
+    "./security/use-app-lock": "./src/security/use-app-lock/use-app-lock.ts",
     "./diagnostics": "./src/diagnostics.ts",
     "./ledger/convert-amount": "./src/ledger/convert-amount/convert-amount.ts",
     "./ledger/create-phone-ledger": "./src/ledger/create-phone-ledger/create-phone-ledger.ts",

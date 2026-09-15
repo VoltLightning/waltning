@@ -21,6 +21,7 @@ import { previewResetEnabled } from "@waltning/client/appearance/preview-reset";
 import { createDisplayCurrencyPreference } from "@waltning/client/currencies/display-currency";
 import { createDevicePreference } from "@waltning/client/device/create-device-preference";
 import { createDeskScopePreference } from "@waltning/client/ledger/desk-scope";
+import { createAppLock } from "@waltning/client/security/app-lock";
 import { createLastCapturePreference } from "@waltning/client/transactions/last-capture";
 import { pivotCurrency } from "@waltning/core/currencies";
 import type { CurrencyCode } from "@waltning/core/money";
@@ -148,6 +149,17 @@ export const displayCurrency = createDisplayCurrencyPreference(
  * one name on every platform and never asks which build it is in.
  */
 export function saveHaptic(): void {}
+
+/**
+ * §5.7's launch gate — **no authenticator here, so no gate.** The browser
+ * holds a preview ledger and appears in neither of §5.7's tables; the
+ * controller settles on `open` and the layout draws the app.
+ */
+export const appLock = createAppLock({
+  authenticator: null,
+  subscribeAppState: () => () => {},
+  now: () => Date.now(),
+});
 
 /**
  * The browser's ordered language preferences.

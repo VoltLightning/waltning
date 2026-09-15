@@ -39,13 +39,17 @@ export type ClientAction =
   | "change_pivot"
   | "set_manual_rate"
   | "clear_manual_rate"
-  | "update_currency";
+  | "update_currency"
+  /** §5.7's launch gate — the device's own prompt, raised and answered. */
+  | "unlock";
 
 export type ClientStateUpdate =
   | "phone_ledger_refresh"
   | "appearance_hydrate"
   | "device_preference_hydrate"
   | "device_preference_write"
+  /** What the device can gate with, read once at launch (`security/app-lock`). */
+  | "app_lock_enrolment"
   | "counterparty_direction_totals"
   /** `S01` found no active `dashboard_layouts` row — `SPEC.md` §14.5's seed is absent. */
   | "dashboard_active_layout"

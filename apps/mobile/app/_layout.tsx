@@ -30,8 +30,15 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { DeviceInsets } from "../src/device-insets";
 import { mobileDiagnostics } from "../src/diagnostics.ts";
 import { FONT_ASSETS } from "../src/fonts.ts";
+import { LockGate } from "../src/lock-gate";
 import { retryPhoneLedger, startPhoneLedger, usePhoneLedgerReady } from "../src/phone-ledger";
-import { appearance, DEVICE_LOCALES, displayCurrency, floatPosition } from "../src/platform";
+import {
+  appearance,
+  appLock,
+  DEVICE_LOCALES,
+  displayCurrency,
+  floatPosition,
+} from "../src/platform";
 
 export default function RootLayout() {
   const [loaded, error] = useFonts(FONT_ASSETS);
@@ -183,8 +190,15 @@ export default function RootLayout() {
               than what actually broke. */}
             {ready && startup ? (
               startup.status === "ready" ? (
+                // §5.7's launch gate sits between the ledger and the screen:
+                // the session is open (its file is the platform's to protect),
+                // and whether the person holding the phone may see it is the
+                // gate's to say. A failure screen needs no gate — it shows
+                // nothing the ledger holds.
                 <LedgerProvider controller={startup.controller}>
-                  <AppShell />
+                  <LockGate lock={appLock}>
+                    <AppShell />
+                  </LockGate>
                 </LedgerProvider>
               ) : (
                 <StartupFailed

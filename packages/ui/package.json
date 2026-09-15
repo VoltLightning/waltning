@@ -123,6 +123,7 @@
     "./states/banner": "./src/states/molecules/banner/banner.tsx",
     "./states/empty-state": "./src/states/organisms/empty-state/empty-state.tsx",
     "./states/error-state": "./src/states/organisms/error-state/error-state.tsx",
+    "./states/locked-screen": "./src/states/organisms/locked-screen/locked-screen.tsx",
     "./states/match-warning": "./src/states/molecules/match-warning/match-warning.tsx",
     "./states/rule-health-tag": "./src/states/atoms/rule-health-tag/rule-health-tag.tsx",
     "./states/skeleton": "./src/states/atoms/skeleton/skeleton.tsx",

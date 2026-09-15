@@ -1416,6 +1416,18 @@ export const en = {
     "rule.overdue": "Overdue",
     "rule.neverPosted": "Never posted",
   },
+  /** `SPEC.md` §5.7's launch gate — `LockedScreen`, and the platform's own prompt. */
+  lock: {
+    title: "Locked",
+    body: "Unlock to open your ledger.",
+    unlock: "Unlock",
+    /** The system prompt's own line — what the device asks in its own sheet. */
+    prompt: "Unlock Waltning",
+    cancelled: "Unlock was cancelled.",
+    failed: "That wasn't recognised. Try again.",
+    lockout: "Too many attempts. Use your device passcode.",
+    unavailable: "This device can't unlock right now.",
+  },
   startup: {
     /**
      * `apps/mobile/app/_layout.tsx` — the ledger session could not open at
