@@ -18,11 +18,19 @@
  * button is held.
  *
  * **Both wirings are covered on purpose.** `usePressScale` puts the transform
- * on a wrapping `Animated.View` in the sixteen components that wired it by
- * hand; `PressableScaled` puts it on the control itself. Those are different
- * DOM nodes, which is why this walks the element and its ancestors rather than
- * reading one — a first version of this probe read only the element and
- * reported `none` for a control that was scaling perfectly.
+ * on a wrapping `Animated.View` in the seventeen files that wired it by hand;
+ * `PressableScaled` puts it on the control itself. Those are different DOM
+ * nodes, which is why this walks upward rather than reading one — a first
+ * version of the probe read only the element and reported `none` for a control
+ * that was scaling perfectly.
+ *
+ * **But it must not walk far, and a first version walked too far.** Taking the
+ * smallest scale over four nodes measures the *subtree*, not the control: a
+ * review moved the scale onto the calendar's **week row** and deleted it from
+ * `DayCell` entirely — so pressing one day shrank all seven, and the day
+ * itself never moved — and this file passed. The depth is asserted now.
+ * `PressableScaled` lands at 0 and `usePressScale` at 1, measured; anything
+ * further away is a scale that belongs to something else.
  */
 
 import { expect, type Locator, test } from "@playwright/test";
@@ -41,18 +49,26 @@ const CONTROLS = [
   { story: "shell-todaypill--away", label: null, how: "PressableScaled" },
 ] as const;
 
-/** The smallest scale on the element or any of its four nearest ancestors. */
-async function smallestScale(locator: Locator): Promise<number> {
-  return locator.evaluate((node: HTMLElement) => {
-    let smallest = 1;
+/**
+ * The smallest scale found on the control or its immediate wrapper, and which
+ * of the two carried it. `depth` is what stops this measuring the subtree.
+ */
+const CARRIER_DEPTH = 1;
+
+type Scaled = { readonly scale: number; readonly depth: number };
+
+async function scaledBy(locator: Locator): Promise<Scaled> {
+  return locator.evaluate((node: HTMLElement, maxDepth: number) => {
+    let found: { scale: number; depth: number } = { scale: 1, depth: 0 };
     let cursor: HTMLElement | null = node;
-    for (let depth = 0; depth < 4 && cursor; depth += 1) {
+    for (let depth = 0; depth <= maxDepth && cursor; depth += 1) {
       const matrix = getComputedStyle(cursor).transform.match(/matrix\(([0-9.]+)/);
-      if (matrix?.[1]) smallest = Math.min(smallest, Number.parseFloat(matrix[1]));
+      const scale = matrix?.[1] === undefined ? 1 : Number.parseFloat(matrix[1]);
+      if (scale < found.scale) found = { scale, depth };
       cursor = cursor.parentElement;
     }
-    return smallest;
-  });
+    return found;
+  }, CARRIER_DEPTH);
 }
 
 for (const { story, label, how } of CONTROLS) {
@@ -65,7 +81,7 @@ for (const { story, label, how } of CONTROLS) {
         : page.getByRole("button", { name: label }).first();
     await expect(control).toBeVisible();
 
-    expect(await smallestScale(control), "at rest").toBe(1);
+    expect((await scaledBy(control)).scale, "at rest").toBe(1);
 
     const box = await control.boundingBox();
     if (box === null) throw new Error(`${story}: the control has no box to press`);
@@ -74,17 +90,24 @@ for (const { story, label, how } of CONTROLS) {
 
     // `motion.base` in, so the scale is still travelling for ~200ms. Sample
     // until it settles rather than guessing one instant.
-    let held = 1;
+    let held: Scaled = { scale: 1, depth: 0 };
     for (let sample = 0; sample < 10; sample += 1) {
       await page.waitForTimeout(40);
-      held = Math.min(held, await smallestScale(control));
+      const now = await scaledBy(control);
+      if (now.scale < held.scale) held = now;
     }
-    expect(held, "held — §2.7's scale(.97)").toBeCloseTo(PRESSED, 2);
+    expect(held.scale, "held — §2.7's scale(.97)").toBeCloseTo(PRESSED, 2);
+    // The control moved, not something around it. Without this, a scale on a
+    // shared ancestor — a calendar week row — satisfies the assertion above
+    // while the pressed control sits perfectly still.
+    expect(held.depth, "the scale is on the control or its own wrapper").toBeLessThanOrEqual(
+      CARRIER_DEPTH,
+    );
 
     await page.mouse.up();
     // `motion.fast` out: "the release is the system saying got it, and a slow
     // got it reads as lag." Generous here so the assertion is about arriving,
     // not about the exact duration.
-    await expect.poll(async () => smallestScale(control), { timeout: 2000 }).toBe(1);
+    await expect.poll(async () => (await scaledBy(control)).scale, { timeout: 2000 }).toBe(1);
   });
 }

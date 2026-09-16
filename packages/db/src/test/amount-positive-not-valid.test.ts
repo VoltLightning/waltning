@@ -169,10 +169,29 @@ describe("L2 — 0012 on a fresh install", () => {
     const scratch = await scratchDatabase("amt_fresh");
     try {
       const convalidated = await isConvalidated(scratch.sql);
-      // **`undefined` means the constraint is not there at all**, which is a
-      // different fault from "there and not validated" and used to report as
-      // `expected undefined to be true`. A clone that lost rows to a race
-      // reads exactly that way — see `CLONE_LOCK` in `scratch.ts`.
+      /**
+       * **`undefined` means the constraint is not there at all**, which is a
+       * different fault from "there and not validated" and reported as the
+       * uninformative `expected undefined to be true`.
+       *
+       * **Why that message is worth improving: the cause is not known.** This
+       * failed twice in about twenty-two full-suite runs and never once in
+       * twelve runs of this file alone, so it is an interaction under
+       * `fileParallelism` — but which one is still open. A first attempt
+       * blamed two workers racing over the template clone and was wrong on
+       * every count, measured against the running server: the backend running
+       * `CREATE DATABASE … TEMPLATE t` is connected to `postgres` and not to
+       * `t`, so `disconnectAll`'s `datname` filter cannot select it; killing a
+       * copy mid-flight aborts cleanly and leaves no database behind; and two
+       * concurrent clones of one template both complete. `isConvalidated`
+       * would also *throw* rather than return `undefined` if `transactions`
+       * were missing, and drizzle runs every migration in one transaction, so
+       * a torn migration rolls back to no tables at all.
+       *
+       * So this assertion is the instrument, not the fix: when it recurs it
+       * will say which of the two faults it is, which is more than the last
+       * occurrence told anyone.
+       */
       expect(convalidated, `${scratch.name}: the constraint is missing, not invalid`).toBeDefined();
       expect(convalidated).toBe(true);
     } finally {
