@@ -1192,6 +1192,7 @@ export const en = {
    * screen is for before a row of it has been read.
    */
   pages: {
+    restore: "Put a backup back",
     accounts: "Everything money sits in",
     createAccount: "Where money will sit",
     editAccount: "Its name, its kind, what it holds",
@@ -1218,7 +1219,30 @@ export const en = {
     onThisPhoneBody:
       "Nothing has left it. When you add a machine, this is where you will pair them.",
   },
+  /** `S30`'s restore — the other half of a backup. */
+  restore: {
+    title: "Restore",
+    lede: "Put a backup back. This fills an empty ledger — it does not merge with one you already have.",
+    keyLabel: "Your key",
+    keyHint: "The AGE-SECRET-KEY the backup was taken with",
+    choose: "Choose a file",
+    readySubtitle: "Check this before you replace anything",
+    found: "In this file",
+    taken: "Taken",
+    entriesValue_one: "{{count}} entry",
+    entriesValue_few: "{{count}} entries",
+    entriesValue_many: "{{count}} entries",
+    entriesValue_other: "{{count}} entries",
+    apply: "Restore this",
+    cancel: "Not this one",
+    working: "Restoring…",
+    doneTitle: "Restored",
+    doneBody: "Your ledger is back. Check a balance you remember before trusting it.",
+    failed: "That did not restore",
+    failedCost: "Nothing was written — your ledger is as it was.",
+  },
   routes: {
+    restore: "Restore",
     backup: "Back up",
     expense: "Expense",
     createAccount: "Create account",

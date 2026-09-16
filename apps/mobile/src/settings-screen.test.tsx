@@ -96,6 +96,7 @@ it("opens Accounts, and lists it first", () => {
     "Currencies1 currency",
     "Exchange rates",
     "Back up",
+    "Restore",
   ]);
   fireEvent.click(screen.getByText("Accounts"));
   expect(router.push).toHaveBeenCalledWith("/accounts");
@@ -111,6 +112,13 @@ it("opens Exchange rates", () => {
   withLedger();
   fireEvent.click(screen.getByText("Exchange rates"));
   expect(router.push).toHaveBeenCalledWith("/settings/rates");
+});
+
+/** §14.3's other half — the screen that makes the export a backup. */
+it("opens Restore", () => {
+  withLedger();
+  fireEvent.click(screen.getByText("Restore"));
+  expect(router.push).toHaveBeenCalledWith("/settings/restore");
 });
 
 /** `architecture/14` §14.3's export — the phone's only durability before a backend. */

@@ -306,6 +306,44 @@ export const backupPort: BackupPort = {
     return { confirmed: false, where: "your downloads" };
   },
   /**
+   * A file input, created and clicked — the browser has no other way to ask.
+   *
+   * It resolves `null` on cancel, and a cancelled file dialog fires no event
+   * at all in most browsers: the `cancel` event is recent and not universal,
+   * so the promise also settles when the window regains focus with nothing
+   * chosen. Without that, dismissing the dialog left the screen waiting
+   * forever on a promise nothing would ever settle.
+   */
+  pick: () =>
+    new Promise((resolve) => {
+      const input = globalThis.document.createElement("input");
+      input.type = "file";
+      input.accept = ".age,application/octet-stream";
+      let settled = false;
+      const finish = (value: { name: string; bytes: Uint8Array } | null) => {
+        if (settled) return;
+        settled = true;
+        globalThis.removeEventListener("focus", onFocus);
+        resolve(value);
+      };
+      const onFocus = () => {
+        // A turn, so a `change` that is about to fire wins the race.
+        setTimeout(() => finish(null), 300);
+      };
+      input.addEventListener("change", () => {
+        const file = input.files?.[0];
+        if (file === undefined) {
+          finish(null);
+          return;
+        }
+        void file.arrayBuffer().then((buffer) => {
+          finish({ name: file.name, bytes: new Uint8Array(buffer) });
+        });
+      });
+      globalThis.addEventListener("focus", onFocus, { once: true });
+      input.click();
+    }),
+  /**
    * Absent unless the page has one. `navigator.clipboard` is undefined on a
    * plain-HTTP origin, and a copy button that throws into a `void` is a button
    * that does nothing while looking like it worked.

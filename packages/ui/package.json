@@ -13,6 +13,7 @@
     "./accounts/shared-group": "./src/accounts/molecules/shared-group/shared-group.tsx",
     "./accounts/subtotals": "./src/accounts/subtotals.ts",
     "./backup/backup-card": "./src/backup/organisms/backup-card/backup-card.tsx",
+    "./backup/restore-card": "./src/backup/organisms/restore-card/restore-card.tsx",
     "./categories/category-actions-sheet": "./src/categories/organisms/category-actions-sheet/category-actions-sheet.tsx",
     "./categories/category-sheet": "./src/categories/organisms/category-sheet/category-sheet.tsx",
     "./categories/category-tree": "./src/categories/molecules/category-tree/category-tree.tsx",

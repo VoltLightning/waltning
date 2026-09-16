@@ -31,6 +31,18 @@ export type BackupPort = {
    */
   readonly hand: (name: string, bytes: Uint8Array) => Promise<BackupHandoff>;
   /**
+   * Ask the owner for a backup file, and read it.
+   *
+   * `null` when they chose nothing — a dismissed picker is not a failure, and
+   * a screen that reported one would be wrong about the commonest thing a
+   * person does with a file dialog.
+   *
+   * It hands back the **bytes**, not a path: the restore decrypts before it
+   * knows whether the file is even a backup, and a path would make that the
+   * screen's problem on one platform and not the other.
+   */
+  readonly pick: () => Promise<PickedBackup | null>;
+  /**
    * The system clipboard, or `null` where this platform has none.
    *
    * `null` rather than a function that quietly does nothing: the card hides
@@ -45,23 +57,10 @@ export type BackupPort = {
   readonly clipboard: ((value: string) => Promise<boolean>) | null;
 };
 
-/**
- * What an export's shape is, once it has been made.
- *
- * **Structural rather than imported from `@waltning/ledger`**, which is this
- * package's standing rule — `create-phone-ledger.ts` declares `PhoneCurrency`
- * and its neighbours the same way and for the same reason: a client that
- * imports the SQLite engine to name a type has taken a dependency on the
- * engine, and a browser bundle would carry it. It mirrors `ExportManifest`
- * field for field.
- */
-export type BackupManifest = {
-  readonly createdAt: string;
-  readonly recipient: string;
-  readonly bytes: number;
-  readonly counts: Readonly<Record<string, number>>;
-  readonly transactions: number;
-  readonly outboxEntries: number;
+export type PickedBackup = {
+  /** What the owner called it — shown back to them before anything is written. */
+  readonly name: string;
+  readonly bytes: Uint8Array;
 };
 
 export type BackupHandoff = {

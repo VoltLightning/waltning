@@ -62,6 +62,7 @@
  * worth having is the one that cannot be reconstructed from anywhere.
  */
 
+import type { BackupDocument, BackupRow } from "@waltning/core/backup/contract";
 import { type SQL, sql } from "drizzle-orm";
 import {
   type LedgerFs,
@@ -72,13 +73,7 @@ import {
   REPLICA_MIGRATIONS,
 } from "../migrate.ts";
 import type { LedgerSchema, OutboxStore, ReplicaStore } from "../open.ts";
-import {
-  type AnyStore,
-  BACKUP_TABLES,
-  type BackupDocument,
-  type BackupRow,
-  liveCounts,
-} from "./document.ts";
+import { type AnyStore, BACKUP_TABLES, liveCounts } from "./document.ts";
 
 /**
  * The tables this build's own migrations seed, which a restore replaces rather

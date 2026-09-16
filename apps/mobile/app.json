@@ -38,6 +38,12 @@
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "owner": "voltlightnings-team",
+    "extra": {
+      "eas": {
+        "projectId": "14d63e62-922d-4825-b240-4d0ce1f425b1"
+      }
     }
   }
 }

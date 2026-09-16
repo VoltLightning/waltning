@@ -9,9 +9,10 @@
 
 import { act, renderHook } from "@testing-library/react";
 import { decodeIdentity } from "@waltning/core/age/keys";
+import type { BackupManifest } from "@waltning/core/backup/contract";
 import { accountingDate } from "@waltning/core/date";
 import { expect, it, vi } from "vitest";
-import type { BackupManifest, BackupPort } from "./backup-port.ts";
+import type { BackupPort } from "./backup-port.ts";
 import { backupFilename, useLedgerBackup } from "./use-ledger-backup.ts";
 
 /** 00:10 on the 16th in Warsaw — 22:10 UTC on the 15th. The day the owner had is the 16th. */
@@ -52,7 +53,13 @@ function harness(over: Partial<BackupPort> = {}) {
     manifest: { ...MANIFEST, recipient: options.recipient },
   }));
   const hand = vi.fn(async () => ({ confirmed: true, where: "Files" }));
-  const port: BackupPort = { random: countingRandom(), hand, clipboard: null, ...over };
+  const port: BackupPort = {
+    random: countingRandom(),
+    hand,
+    pick: async () => null,
+    clipboard: null,
+    ...over,
+  };
   const hook = renderHook(() => useLedgerBackup({ exportLedger }, port, () => WARSAW));
   // `port.hand`, not the default above: returning the one this closure happens
   // to hold meant a test that overrode it asserted on a mock nothing called.
@@ -169,6 +176,7 @@ it("reports a file that could not be read back", async () => {
   const port: BackupPort = {
     random: countingRandom(),
     hand: vi.fn(async () => ({ confirmed: true, where: "Files" })),
+    pick: async () => null,
     clipboard: null,
   };
   const { result } = renderHook(() => useLedgerBackup({ exportLedger }, port, () => WARSAW));

@@ -5,6 +5,7 @@
   "type": "module",
   "exports": {
     "./age/*": "./src/age/*.ts",
+    "./backup/*": "./src/backup/*.ts",
     "./brands/*": "./src/brands/*.ts",
     "./capture/*": "./src/capture/*.ts",
     "./currencies": "./src/currencies.ts",

@@ -43,7 +43,9 @@ export type ClientAction =
   /** §5.7's launch gate — the device's own prompt, raised and answered. */
   | "unlock"
   /** `architecture/14` §14.3's app-owned encrypted export. */
-  | "export_ledger";
+  | "export_ledger"
+  /** And putting one back — the half that makes the first one a backup. */
+  | "restore_ledger";
 
 export type ClientStateUpdate =
   | "phone_ledger_refresh"

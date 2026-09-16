@@ -39,6 +39,7 @@ import { Card } from "../../../shell/molecules/card/card";
 import type { PhosphorIconProps } from "../../../shell/phosphor";
 import {
   ArrowsLeftRightIcon,
+  ClockCounterClockwiseIcon,
   CreditCardIcon,
   CurrencyCircleDollarIcon,
   ShieldCheckIcon,
@@ -50,7 +51,13 @@ import { makeStyles } from "../../../theme/styles.ts";
 import { focus, hairline, radius, space, touchTarget } from "../../../tokens.ts";
 
 /** The glyphs a row can wear. Named by what the row *is*, never by the shape. */
-export type SettingsMenuGlyph = "accounts" | "categories" | "currencies" | "rates" | "backup";
+export type SettingsMenuGlyph =
+  | "accounts"
+  | "categories"
+  | "currencies"
+  | "rates"
+  | "backup"
+  | "restore";
 
 const GLYPHS = {
   accounts: CreditCardIcon,
@@ -58,6 +65,7 @@ const GLYPHS = {
   currencies: CurrencyCircleDollarIcon,
   rates: ArrowsLeftRightIcon,
   backup: ShieldCheckIcon,
+  restore: ClockCounterClockwiseIcon,
 } as const satisfies Record<SettingsMenuGlyph, (props: PhosphorIconProps) => ReactElement>;
 
 /** The box a tile's glyph is drawn in — the deck's 32pt square, and the glyph inside it. */

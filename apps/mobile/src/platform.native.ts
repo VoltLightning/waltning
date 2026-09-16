@@ -22,6 +22,7 @@ import {
 } from "@waltning/ui/shell/float-geometry";
 import { setStringAsync } from "expo-clipboard";
 import { getRandomBytes } from "expo-crypto";
+import { getDocumentAsync } from "expo-document-picker";
 import { Directory, File, Paths } from "expo-file-system";
 import * as Haptics from "expo-haptics";
 import * as LocalAuthentication from "expo-local-authentication";
@@ -296,6 +297,21 @@ export const backupPort: BackupPort = {
       UTI: "public.data",
     });
     return { confirmed: true, where };
+  },
+  /**
+   * The system picker, reading the file into memory.
+   *
+   * `base64` then decoded rather than a byte read: `expo-file-system` reads a
+   * *path*, and a picked document's URI on Android is a content:// grant that
+   * a `File` cannot open. The ciphertext is single-digit megabytes, so one
+   * copy in memory is the cheaper problem.
+   */
+  pick: async () => {
+    const result = await getDocumentAsync({ type: "*/*", copyToCacheDirectory: true });
+    const asset = result.canceled ? undefined : result.assets[0];
+    if (asset === undefined) return null;
+    const file = new File(asset.uri);
+    return { name: asset.name, bytes: await file.bytes() };
   },
   /** `setStringAsync` answers whether it took it, and the card renders the answer. */
   clipboard: (value) => setStringAsync(value),

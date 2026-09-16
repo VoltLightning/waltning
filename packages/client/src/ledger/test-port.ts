@@ -29,6 +29,15 @@ export function basePort(overrides: Partial<PhoneLedgerPort> = {}): PhoneLedgerP
     exportLedger: () => {
       throw new Error("this port takes no backups");
     },
+    restoreLedger: () => {
+      throw new Error("this port restores nothing");
+    },
+    readBackup: () => {
+      throw new Error("this port reads no backup");
+    },
+    describeBackup: () => {
+      throw new Error("this port describes no backup");
+    },
     listCurrencies: () => [],
     listCurrencySettings: () => [],
     listGroups: () => [],

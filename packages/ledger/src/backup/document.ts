@@ -32,6 +32,7 @@
  * restore that looks like a success.
  */
 
+import type { BackupDocument, BackupRow } from "@waltning/core/backup/contract";
 import { getTableName, is, sql } from "drizzle-orm";
 import { SQLiteTable } from "drizzle-orm/sqlite-core";
 import { MIGRATION_JOURNAL } from "../migrate.ts";
@@ -77,24 +78,9 @@ function tableNames(): { replica: string[]; outbox: string[] } {
 
 export const BACKUP_TABLES = tableNames();
 
-/** A row as it travels: column name to value, exactly as SQLite returned it. */
-export type BackupRow = Record<string, string | number | null>;
-
-export type BackupDocument = {
-  /** The literal `"waltning-ledger"`, so a wrong file is named as one before anything is parsed. */
-  readonly kind: "waltning-ledger";
-  readonly format: number;
-  /** When the export ran, in UTC. Not an accounting date — this one is a timestamp. */
-  readonly createdAt: string;
-  /** `PRAGMA user_version` of each store, so a restore can refuse a backup from a newer build. */
-  readonly schema: { readonly replica: number; readonly outbox: number };
-  /** Which key opens this file, restated in the plaintext so a restore can say *this is not yours*. */
-  readonly recipient: string;
-  /** Row counts per table, written before the rows and checked against them on restore. */
-  readonly counts: Readonly<Record<string, number>>;
-  readonly replica: Readonly<Record<string, readonly BackupRow[]>>;
-  readonly outbox: Readonly<Record<string, readonly BackupRow[]>>;
-};
+// The document's shape is `packages/core`'s — three packages read it and none
+// may import the others, so it lives in the floor, and every consumer takes it
+// from there rather than through this file. `core/backup/contract.ts` says why.
 
 export type ReadStores<TRun, TSchema extends LedgerSchema> = {
   readonly replica: ReplicaDb<TRun, TSchema>;

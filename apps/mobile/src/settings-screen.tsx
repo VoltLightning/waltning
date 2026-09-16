@@ -41,6 +41,7 @@ const ROUTES = {
   currencies: "/settings/currencies",
   rates: "/settings/rates",
   backup: "/settings/backup",
+  restore: "/settings/restore",
 } as const;
 
 type Destination = keyof typeof ROUTES;
@@ -63,7 +64,10 @@ const GROUPS = [
     { id: "currencies", glyph: "currencies" },
     { id: "rates", glyph: "rates" },
   ],
-  [{ id: "backup", glyph: "backup" }],
+  [
+    { id: "backup", glyph: "backup" },
+    { id: "restore", glyph: "restore" },
+  ],
 ] as const satisfies readonly (readonly { id: Destination; glyph: SettingsMenuGlyph }[])[];
 
 export default function Settings() {

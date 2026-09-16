@@ -969,7 +969,13 @@ describe("a card groups rows or holds a figure — never a whole screen", () => 
    * is, because the rule then stops seeing every screen made of it — which
    * is the failure C1 was.
    */
-  const UI_CARD_COMPONENTS = ["BackupCard", "MonthSummary", "SettingsMenu", "SharedGroup"];
+  const UI_CARD_COMPONENTS = [
+    "BackupCard",
+    "MonthSummary",
+    "RestoreCard",
+    "SettingsMenu",
+    "SharedGroup",
+  ];
 
   /** The text inside the bracket that opens at `at`, brackets counted. */
   function balanced(src: string, at: number): string | undefined {
@@ -1925,7 +1931,7 @@ describe("every src/ is organised by domain, not by layer", () => {
     // business; it is a folder rather than a file because the format, its
     // keys and their two encodings are four concerns that each want saying
     // once (`architecture/14` §14.3).
-    "packages/core/src": ["age", "brands", "capture", "registry"],
+    "packages/core/src": ["age", "backup", "brands", "capture", "registry"],
     // Foundation (`transport`, `query`) plus one folder per domain.
     "packages/client/src": [
       "accounts",
