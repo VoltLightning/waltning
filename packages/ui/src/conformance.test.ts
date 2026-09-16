@@ -45,7 +45,19 @@ const all = components();
  * element to put them on. The same reason `tests/architecture.test.ts` strips
  * comments before every one of its scans.
  */
-const INTERACTIVE = /\b(?:Pressable|TextInput)\b/;
+const INTERACTIVE = /\b(?:Pressable(?:Scaled)?|TextInput)\b/;
+
+/**
+ * **The count both rules walk, pinned.** `\bPressable\b` does not match
+ * `PressableScaled` — there is no word boundary between the two halves — so
+ * the moment the press sweep renamed 27 components they left the 44px census
+ * and the focus-ring census together, silently, while both kept passing at
+ * half strength. `toBeGreaterThan(3)` could not see 56 become 29.
+ *
+ * An exact count is the only guard that catches a census halving. Raise it
+ * when a component is added; a *drop* is the bug this exists for.
+ */
+const INTERACTIVE_COUNT = 56;
 
 /**
  * **Components that forward interactivity rather than owning it.** Both rules
@@ -75,9 +87,9 @@ describe("the 44px floor, fixed at the source (§10)", () => {
       .map((c) => c.name);
 
     expect(missing, "interactive components with no touch-target floor").toEqual([]);
-    // Non-vacuous: if the walk ever stops finding components, this says so
-    // rather than passing on an empty list.
-    expect(interactive.length, "interactive components found").toBeGreaterThan(3);
+    expect(interactive.length, "the census changed size — see INTERACTIVE_COUNT").toBe(
+      INTERACTIVE_COUNT,
+    );
   });
 });
 
@@ -139,7 +151,9 @@ describe("the focus ring, on every interactive element (§2.6)", () => {
     const missing = interactive.filter((c) => !/focus\./.test(c.text)).map((c) => c.name);
 
     expect(missing, "interactive components with no focus ring").toEqual([]);
-    expect(interactive.length, "interactive components found").toBeGreaterThan(3);
+    expect(interactive.length, "the census changed size — see INTERACTIVE_COUNT").toBe(
+      INTERACTIVE_COUNT,
+    );
   });
 });
 

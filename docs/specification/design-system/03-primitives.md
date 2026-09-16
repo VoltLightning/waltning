@@ -9,7 +9,8 @@ Variants and states for each. `—` means the variant does not exist by design.
 | `primary` | `green-600` | white | The one affirmative action — Accept, Approve, Save, Commit |
 | `secondary` | transparent, `green-200` border | `green-700` | Skip, Decline |
 | `ghost` | transparent, no edge | `muted` | Tertiary, in-row, and **every Cancel** |
-| `danger` | `danger-solid` | `text-on-danger` | Destructive; confirmation required |
+| `danger` | `danger-solid` | `text-on-danger` | **Irreversible only** — Delete, a merge that archives, a reset that drops data. Confirmation required |
+| `dangerQuiet` | transparent, `danger-border` | `danger` | Destructive but **reversible** — Archive. Consequential enough to be red, undoable enough not to be the loudest control on the screen |
 
 Sizes `sm 32` / `md 40` / `lg 48`. States: default · hover · active · focus ·
 disabled · **loading** (spinner replaces label, width held). The two filled
@@ -19,6 +20,12 @@ new role; their liveliness is §2.7's press scale.
 **Rule:** never two `primary` buttons in one decision. Import review's
 Accept/Skip and the diff card's Approve/Decline are both primary + secondary —
 that asymmetry is the affordance.
+
+**Rule:** *cannot be undone* is the whole licence for the fill. Three of the
+first six `danger` call sites were **Archive**, which is reversible and which
+sits *below* the primary Save on the account editor — so filling it put the
+loudest control on the screen on the action you can take back, under the one
+you cannot. Reversible takes `dangerQuiet`.
 
 **Rule:** `danger` is **filled** and *Cancel* is **`ghost`**, always — §2.6c.
 The destroying control and the way out of it must differ in weight and not in

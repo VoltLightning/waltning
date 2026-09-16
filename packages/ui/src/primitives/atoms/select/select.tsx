@@ -59,7 +59,15 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { ViewStyle } from "react-native";
-import { Modal, ScrollView, Text, TextInput, useWindowDimensions, View } from "react-native";
+import {
+  Modal,
+  Pressable,
+  ScrollView,
+  Text,
+  TextInput,
+  useWindowDimensions,
+  View,
+} from "react-native";
 import Animated, { type AnimatedStyle } from "react-native-reanimated";
 import { useT } from "../../../i18n/provider";
 import { PressableScaled } from "../../../primitives/atoms/pressable-scaled/pressable-scaled";
@@ -401,7 +409,15 @@ function PanelOverlay({
       navigationBarTranslucent
     >
       <View style={[styles.overlay, anchor === null ? styles.overlayUnmeasured : null]}>
-        <PressableScaled
+        {/*
+          **A backdrop, so a bare `Pressable`** — the same exception
+          `BottomSheet` and `ConfirmDialog` take, and this one was swept into
+          `PressableScaled` with them unlisted. `styles.backdrop` is inset 0 on
+          all four sides: scaling it to .97 shrinks the dismiss area away from
+          the window edge mid-gesture, and would scale a scrim over the page
+          the moment this one stops being transparent.
+        */}
+        <Pressable
           accessibilityRole="button"
           accessibilityLabel={t("common.dismissOptions")}
           onPress={onDismiss}

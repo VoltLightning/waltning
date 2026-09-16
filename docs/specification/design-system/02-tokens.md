@@ -468,23 +468,44 @@ that went looking by directory.
 
 ### 2.6c What red means, and who may be loud
 
-Red has three claimants in this product and they are not the same thing. The
-separation is **what carries the colour**, not the hue — three hues this close
-together would never be told apart on their own.
+Red has several claimants in this product and they are not the same thing. The
+separation is **what carries the colour**, not the hue — light `spend` and light
+`danger-solid` sit **1.04:1** apart, which is the same near-identity §2.1 already
+logs as a defect elsewhere, so the carrier is doing all of the work.
 
 | Claimant | Carrier | Token |
 |---|---|---|
-| Money leaving | A **figure** — never a control | `spend` |
-| A control that destroys | A **control's fill** | `danger-solid` + `text-on-danger` |
-| A refusal | A **field's edge, and a sentence under it** — never a button | `danger` · `danger-border` |
+| Money leaving | A **figure**, or a **data mark** standing for one — a chart bar, a day's activity dot | `spend` |
+| A control that destroys | A **control's fill** (irreversible) or its **edge** (reversible) | `danger-solid` + `text-on-danger` · `danger-border` |
+| A refusal | A **surface that carries a sentence** — a field's edge, a banner, a tag | `danger` · `danger-border` · `danger-bg` |
 
-A figure, a control and a field: three carriers, so the three never compete
-even where they sit on one screen. An errored amount field and a *Delete*
-button can share a screen without ambiguity, because one is an edge around an
-input with a sentence beneath it and the other is a solid block with a verb on
-it. Nothing else earns red. `spend` is deliberately the quietest of the three —
-*unmistakable, not alarming* (§2.1) — because money leaves an account all day
-and a ledger that alarms every time is a ledger nobody opens.
+**A data mark is a figure, and that had to be said.** A first draft of this
+section wrote *"a figure — never a control"* and was false the day it shipped:
+`DayCell`'s activity dot and `YearChart`'s bars are `spend`, and both are drawn
+*inside* a pressable. They are not the control's own surface — they are money,
+rendered small. The rule is about what the colour paints, not what encloses it.
+What `spend` may never be is a control's **own** fill or edge, or chrome.
+
+**A refusal may be a surface, not only an edge.** `Banner` takes `danger-bg`,
+`danger-border` and `danger`; a `Tag` takes the first two. Both carry a
+sentence, which is what keeps them apart from a destructive control.
+
+**The ink and the edge are shared; the fill is not.** `danger-text` on
+`danger-border` dresses an errored field *and* `dangerQuiet`, the reversible
+destructive button — the same pair, honestly, because both mean *careful* and
+neither is irreversible. So those two tokens are not policed and cannot be.
+What is: **`danger-solid` belongs to a destroying control and nothing else**,
+and **`spend` is never a control's own colour**. `tests/architecture.test.ts`
+holds both.
+
+**A judgement about money is `spend`, not the refusal ink.** `ComparisonTable`
+drew *an increase in spend* in `danger-text`, which is red meaning *this was
+refused* on a figure that means *this went out*. Two reds a reader cannot tell
+apart, separated only by carrier, and the carrier was wrong. It is `spend`.
+
+`spend` is deliberately the quietest of them — *unmistakable, not alarming*
+(§2.1) — because money leaves an account all day and a ledger that alarms every
+time is a ledger nobody opens.
 
 **The escape is never the loudest thing on the screen.** *Cancel*, *Not now*,
 the ✕ — these back out of something; they destroy nothing. Painting an escape
@@ -508,10 +529,13 @@ that cannot be undone.
 
 **`danger-solid` is two values, and the second is the interesting one.**
 `#a33d26` carries white at 6.46:1 and stands 6.46:1 off a light card, but only
-**2.43:1** off a dark one — under the 3:1 a control identified by its own fill
+**2.4511:1** off a dark one — under the 3:1 a control identified by its own fill
 needs. The dark half is lifted to `#c04a2e`: 3.21:1 off `surface`, still 4.93:1
-under white. The band between those two floors is about thirty points of
-luminance wide, which is the same band `accent` is tuned inside.
+under white. The band between those two floors is **4.4 points of L\***, not the thirty an
+earlier draft of this paragraph claimed: the dark value must sit between L\*
+45.5 and 49.9, and `#c04a2e` sits at 47.37 — 1.9 above the floor, 2.5 below the
+ceiling. A retune has almost no headroom and should re-measure rather than
+nudge.
 
 ### 2.7 Motion
 
@@ -533,9 +557,16 @@ than on `font-size`.
 **Press feedback is `scale(.97)`, and it is asymmetric.** In at `base`, out at
 `fast`: slow where the person is deciding, quick where the system responds.
 Every `Pressable` in the system gets it — through `<PressableScaled>`, or
-through `usePressScale` wired by hand, and `tests/architecture.test.ts` refuses
-a bare `Pressable` outside a listed handful that are not controls (a sheet's
-backdrop, a switch whose thumb already moves).
+through `usePressScale` wired by hand. `tests/architecture.test.ts` refuses a
+bare `Pressable` **per opening tag**, outside three listed exceptions, and all
+three are the same thing: a **backdrop**, the full-window dismiss area behind a
+sheet, a dialog or a select panel. Scaling one pulls the dismiss target off the
+window edge mid-gesture and would shrink a scrim over the page.
+
+A per-*file* check was tried first and was worse than nothing: one
+`usePressScale` anywhere excused every tag in the file, and two live controls —
+a category row and the dock's reopen chevron — sat unfeedback'd inside files
+that had wired three other controls correctly.
 
 **That sentence used to be a claim, and it was false.** Thirty-three of the
 fifty files rendering a `Pressable` had no press feedback at all — every

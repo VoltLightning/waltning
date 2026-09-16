@@ -207,7 +207,7 @@ export type Theme = {
    * who cannot tell the two hues apart. Solid is that weight.
    *
    * Two values rather than one because the ground moves: `#a33d26` carries
-   * white at 6.46:1 and stands 6.46:1 off a light card, but only 2.43:1 off a
+   * white at 6.46:1 and stands 6.46:1 off a light card, but only 2.4511:1 off a
    * dark one — under the 3:1 a control identified by its own edge needs. The
    * dark half is lifted to clear it (3.21:1) while still carrying white
    * (4.93:1), the same narrow band `accent` is tuned inside.

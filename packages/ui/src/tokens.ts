@@ -311,7 +311,7 @@ export const darkColor = {
   dangerBg: "#3d241c",
   dangerBorder: "#b36a51",
   /**
-   * Lifted off the light half's `#a33d26`, which stands only 2.43:1 from
+   * Lifted off the light half's `#a33d26`, which stands only 2.4511:1 from
    * `surface` here — under the 3:1 floor a filled control needs. This clears
    * it at 3.21 and still carries white at 4.93.
    */

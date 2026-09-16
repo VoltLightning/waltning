@@ -20,8 +20,11 @@
  * unchanged by construction, which is what makes this safe to apply to
  * thirty-odd components at once.
  *
- * The transform composes with whatever `style` the caller passes — it is
- * appended, so a caller's own `transform` would win, and none has one.
+ * The transform composes with whatever `style` the caller passes. It is
+ * appended, and **the later entry wins in React Native**, so the scale
+ * *replaces* a caller's own `transform` rather than yielding to it. No caller
+ * has one; a caller that grows one must compose it here rather than on its own
+ * style, and an earlier version of this comment said the opposite.
  *
  * **`Pressable`'s style may be a function, and the animated component does not
  * call it.** Several callers pass one by reference (`style={pressableStyle}`)
@@ -38,7 +41,7 @@
  * function-style caller — exactly what such a caller was already paying.
  */
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useState } from "react";
 import { Pressable, type PressableProps } from "react-native";
 import Animated from "react-native-reanimated";
 import { usePressScale } from "../../press-scale.ts";
@@ -64,10 +67,16 @@ export function PressableScaled({
   ...rest
 }: PressableScaledProps) {
   const press = usePressScale();
-  // Only a function style reads these, and only such a caller pays the render.
+  /**
+   * **Tracked unconditionally.** These were gated on `typeof style ===
+   * "function"`, which is re-read every render: a caller whose `style` changed
+   * from a function to an object between press-in and press-out would skip
+   * `setPressed(false)` and render permanently pressed for the rest of its
+   * life. The gate guarded two booleans and bought a state machine with a
+   * stuck state; nothing forbids the flip, so the gate is gone.
+   */
   const [pressed, setPressed] = useState(false);
   const [hovered, setHovered] = useState(false);
-  const tracks = typeof style === "function";
 
   // The caller's handlers are kept, not replaced: a control that already does
   // something on press-in still does it, and gets the scale as well. Memoised
@@ -76,36 +85,40 @@ export function PressableScaled({
   const handlePressIn = useCallback<NonNullable<PressableProps["onPressIn"]>>(
     (event) => {
       press.onPressIn();
-      if (tracks) setPressed(true);
+      setPressed(true);
       onPressIn?.(event);
     },
-    [press.onPressIn, onPressIn, tracks],
+    [press.onPressIn, onPressIn],
   );
   const handlePressOut = useCallback<NonNullable<PressableProps["onPressOut"]>>(
     (event) => {
       press.onPressOut();
-      if (tracks) setPressed(false);
+      setPressed(false);
       onPressOut?.(event);
     },
-    [press.onPressOut, onPressOut, tracks],
+    [press.onPressOut, onPressOut],
   );
 
   const handleHoverIn = useCallback<NonNullable<PressableProps["onHoverIn"]>>(
     (event) => {
-      if (tracks) setHovered(true);
+      setHovered(true);
       onHoverIn?.(event);
     },
-    [onHoverIn, tracks],
+    [onHoverIn],
   );
   const handleHoverOut = useCallback<NonNullable<PressableProps["onHoverOut"]>>(
     (event) => {
-      if (tracks) setHovered(false);
+      setHovered(false);
       onHoverOut?.(event);
     },
-    [onHoverOut, tracks],
+    [onHoverOut],
   );
 
-  const composed = useMemo(() => {
+  // Not memoised: every call site passes a fresh array literal, or a
+  // `useCallback` whose deps include `hovered`/`focused`, so `style` has a new
+  // identity on exactly the renders that matter. The memo never hit and cost
+  // an extra allocation under every virtualised row.
+  const composed = (() => {
     if (typeof style !== "function") return [style, press.style];
     // **Both fields, and both true.** The two `Pressable` types this monorepo
     // resolves disagree — the app's generated one declares `{ pressed }` and
@@ -116,7 +129,7 @@ export function PressableScaled({
     // though the one function-style caller today reads only `pressed`.
     const state = { pressed, hovered };
     return [style(state), press.style];
-  }, [style, press.style, pressed, hovered]);
+  })();
 
   return (
     <AnimatedPressable

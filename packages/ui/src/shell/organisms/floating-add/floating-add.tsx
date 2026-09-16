@@ -49,6 +49,7 @@ import Animated, {
 import { scheduleOnRN } from "react-native-worklets";
 import { useT } from "../../../i18n/provider";
 import { Button } from "../../../primitives/atoms/button/button";
+import { PressableScaled } from "../../../primitives/atoms/pressable-scaled/pressable-scaled";
 import { easing } from "../../../primitives/easing.ts";
 import { useInteraction } from "../../../primitives/interaction.ts";
 import { usePressScale } from "../../../primitives/press-scale.ts";
@@ -431,7 +432,7 @@ function DockTab({ frame, onPress, label }: DockTabProps) {
   // theme-scale constant — the same `dock.tsx`/`tag.tsx` shape.
   const position = { left: frame.x, top: frame.y };
   return (
-    <Pressable
+    <PressableScaled
       accessibilityRole="button"
       accessibilityLabel={label}
       onPress={onPress}
@@ -440,7 +441,7 @@ function DockTab({ frame, onPress, label }: DockTabProps) {
       style={[styles.tab, position, focused ? styles.focused : null]}
     >
       <View style={styles.chevronUp} />
-    </Pressable>
+    </PressableScaled>
   );
 }
 
