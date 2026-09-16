@@ -3469,3 +3469,45 @@ describe("every scroller declares which kind it is", () => {
     ).toEqual([]);
   });
 });
+
+/**
+ * **The escape is never the loudest thing on the screen** — `design-system/02`
+ * §2.6c.
+ *
+ * A destructive control carries the weight (`variant="danger"`, filled); the
+ * way out of it stays quiet. Cancel was neither one thing nor the other:
+ * `ghost` in six places and `secondary` in three, so the same word was two
+ * different controls depending on which screen you reached it from, and in
+ * `ConfirmDialog` the edged one stood at exactly the weight of the destructive
+ * button beside it.
+ *
+ * The census is on the source rather than on a render because the rule is
+ * about every Cancel that exists, including the ones no story draws.
+ */
+describe("the escape is drawn quietly, everywhere", () => {
+  const CANCEL = /<Button\b[^>]*\blabel=\{t\("common\.cancel"\)\}[^>]*\/>/gs;
+
+  it("gives every Cancel button the ghost variant and no other", () => {
+    const offenders: string[] = [];
+    for (const file of sourceFiles(join(repoRoot, "packages/ui/src"))) {
+      if (isTest(file) || file.endsWith(".stories.tsx")) continue;
+      const body = readFileSync(file, "utf8");
+      for (const [tag] of [...body.matchAll(CANCEL)].map((m) => [m[0]] as const)) {
+        if (!/\bvariant="ghost"/.test(tag)) {
+          offenders.push(`${relative(repoRoot, file)} — ${tag.replace(/\s+/g, " ").slice(0, 110)}`);
+        }
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  /** The regex has to actually find them, or the rule above passes by matching nothing. */
+  it("finds the Cancel buttons it is policing", () => {
+    let seen = 0;
+    for (const file of sourceFiles(join(repoRoot, "packages/ui/src"))) {
+      if (isTest(file) || file.endsWith(".stories.tsx")) continue;
+      seen += [...readFileSync(file, "utf8").matchAll(CANCEL)].length;
+    }
+    expect(seen).toBeGreaterThanOrEqual(8);
+  });
+});

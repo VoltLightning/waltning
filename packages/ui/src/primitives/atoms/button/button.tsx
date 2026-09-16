@@ -16,6 +16,19 @@
  * **Loading holds the width.** A spinner that shrinks the button moves whatever
  * is beside it, and the most common thing beside an affirmative button is the
  * destructive one.
+ *
+ * **`danger` is filled, and that is the point** (§2.6c). It was an outlined
+ * red button, which put it at exactly the weight of the outlined grey one it
+ * stands next to: in `ConfirmDialog` the destroying action and the way out of
+ * it were the same object in two hues, four pixels apart, and hue alone is not
+ * separation — `02` §2.4 says so about every other pair in the system. Solid
+ * against outlined survives a greyscale screenshot and a reader who cannot
+ * tell the two reds from the two greys.
+ *
+ * This does not make two primaries: §3.1's rule is about two buttons competing
+ * to be the *affirmative* one, and a filled red is not competing for that. It
+ * is the loudest thing in its pair because it is the thing that cannot be
+ * undone, and the escape beside it stays quiet on purpose.
  */
 
 import { useCallback } from "react";
@@ -73,10 +86,10 @@ export function Button({
       styles.base,
       { height: HEIGHT[size] },
       styles[VARIANT_STYLE[variant]],
-      // The outlined variants take `hoverFill` under a pointer; `primary` is a
-      // solid fill and gets its liveliness from the press scale alone — a
-      // second green for its hover would be a new role for one state.
-      hovered && !inactive && variant !== "primary" ? styles.hovered : null,
+      // The outlined variants take `hoverFill` under a pointer; the two filled
+      // ones get their liveliness from the press scale alone — a second green
+      // or red for one state would be a new role.
+      hovered && !inactive && variant !== "primary" && variant !== "danger" ? styles.hovered : null,
       // §2.6: on **every** interactive element, never removed and never
       // replaced by a colour change alone — a colour-only focus state is
       // invisible to exactly the people it exists for.
@@ -146,7 +159,7 @@ const useStyles = makeStyles((theme) => ({
   // the top of the ramp also has nowhere left to go.
   variantSecondary: { borderWidth: 1, borderColor: theme.borderInteractive },
   variantGhost: {},
-  variantDanger: { borderWidth: 1, borderColor: theme.dangerBorder },
+  variantDanger: { backgroundColor: theme.dangerSolid },
 
   // `textOnAccent`, not `surface`. They are the same value in light and are not
   // the same thing: one is a card's background, the other is a label sitting on
@@ -163,7 +176,7 @@ const useStyles = makeStyles((theme) => ({
    * surface in the system, not a new role invented for this one state.
    */
   inkGhostHovered: { color: theme.text },
-  inkDanger: { color: theme.dangerText },
+  inkDanger: { color: theme.textOnDanger },
 
   hovered: { backgroundColor: theme.hoverFill },
   focused: {

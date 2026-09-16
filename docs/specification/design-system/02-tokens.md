@@ -45,6 +45,8 @@ whatever the chrome around them does.
 | `amber-border` | `#d9bd75` | Edge of an amber tag or chip |
 | `danger` | `#a33d26` | A destructive action, a refused write. **Never chrome** |
 | `danger-bg` | `#f8e8e2` | Fill behind a danger tag |
+| `danger-solid` | `#a33d26` | **Fill** of a control that destroys (§2.6c). White on it reads 6.46:1 |
+| `text-on-danger` | `#ffffff` | The label on that fill |
 | `danger-border` | `#c05e37` | Edge of a danger control — an outlined button, an errored input. A control with no fill is identified by its edge, so this carries the same **3:1** floor as `border-interactive`, in the danger hue (3.17 at the tightest of the two themes) |
 | `shell` | `#3c4f38` | The header shell. **One flat colour.** A deep sage at L\* 31 — see below |
 | `shell-text` / `shell-focus-ring` | `#f2f0e7` | Text on the shell; the focus ring there — see §2.6 |
@@ -126,6 +128,8 @@ with dark text.
 | `dangerFill` | `#3d241c` |
 | `dangerText` | `#f0a28c` |
 | `dangerBorder` | `#b36a51` |
+| `dangerSolid` | `#c04a2e` |
+| `textOnDanger` | `#ffffff` |
 | `shell` | `#3d4f39` |
 | `shellText` | `#f0f4ec` |
 | `shellTextMuted` | `#b3c2a9` |
@@ -461,6 +465,53 @@ band's `SegmentControl`, `CurrencyChip`, `Toast`'s action and `CommandBar`'s
 walked chip. **The set is decided by the mount site, not by the folder**: five
 of the seven live outside `shell/`, and three of those were missed by passes
 that went looking by directory.
+
+### 2.6c What red means, and who may be loud
+
+Red has three claimants in this product and they are not the same thing. The
+separation is **what carries the colour**, not the hue — three hues this close
+together would never be told apart on their own.
+
+| Claimant | Carrier | Token |
+|---|---|---|
+| Money leaving | A **figure** — never a control | `spend` |
+| A control that destroys | A **control's fill** | `danger-solid` + `text-on-danger` |
+| A refusal | A **field's edge, and a sentence under it** — never a button | `danger` · `danger-border` |
+
+A figure, a control and a field: three carriers, so the three never compete
+even where they sit on one screen. An errored amount field and a *Delete*
+button can share a screen without ambiguity, because one is an edge around an
+input with a sentence beneath it and the other is a solid block with a verb on
+it. Nothing else earns red. `spend` is deliberately the quietest of the three —
+*unmistakable, not alarming* (§2.1) — because money leaves an account all day
+and a ledger that alarms every time is a ledger nobody opens.
+
+**The escape is never the loudest thing on the screen.** *Cancel*, *Not now*,
+the ✕ — these back out of something; they destroy nothing. Painting an escape
+in the destroying colour teaches a reader that red is the ordinary way out,
+which is exactly the habit that makes them tap through the confirmation that
+matters. Cancel is `ghost` — no fill, no edge — in every dialog, sheet and form
+footer, and `tests/architecture.test.ts` refuses any other variant on it.
+
+**A destructive control differs from the escape in weight, not only in hue.**
+`danger` was an outlined red button and *Cancel* an outlined grey one, four
+pixels apart in `ConfirmDialog`: one object in two colours, which §2.4's own
+rule — *hue alone is not separation* — already refuses everywhere else. The
+destroying button is **filled**; the escape has no fill at all. That survives a
+greyscale screenshot, a colourblind reader, and a hue either token might be
+retuned to later.
+
+This does not break §3.1's *never two primaries in one decision*. That rule is
+about two buttons competing to be the affirmative one; a filled red is not
+competing for that. It is the loudest thing in its pair because it is the thing
+that cannot be undone.
+
+**`danger-solid` is two values, and the second is the interesting one.**
+`#a33d26` carries white at 6.46:1 and stands 6.46:1 off a light card, but only
+**2.43:1** off a dark one — under the 3:1 a control identified by its own fill
+needs. The dark half is lifted to `#c04a2e`: 3.21:1 off `surface`, still 4.93:1
+under white. The band between those two floors is about thirty points of
+luminance wide, which is the same band `accent` is tuned inside.
 
 ### 2.7 Motion
 

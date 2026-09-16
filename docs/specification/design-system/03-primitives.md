@@ -7,16 +7,25 @@ Variants and states for each. `—` means the variant does not exist by design.
 | Variant | Fill | Ink | Use |
 |---|---|---|---|
 | `primary` | `green-600` | white | The one affirmative action — Accept, Approve, Save, Commit |
-| `secondary` | transparent, `green-200` border | `green-700` | Skip, Decline, Cancel |
-| `ghost` | transparent | `muted` | Tertiary, in-row |
-| `danger` | transparent, `negative` border | `negative` | Destructive; confirmation required |
+| `secondary` | transparent, `green-200` border | `green-700` | Skip, Decline |
+| `ghost` | transparent, no edge | `muted` | Tertiary, in-row, and **every Cancel** |
+| `danger` | `danger-solid` | `text-on-danger` | Destructive; confirmation required |
 
 Sizes `sm 32` / `md 40` / `lg 48`. States: default · hover · active · focus ·
-disabled · **loading** (spinner replaces label, width held).
+disabled · **loading** (spinner replaces label, width held). The two filled
+variants take no hover fill — a second green or red for one state would be a
+new role; their liveliness is §2.7's press scale.
 
 **Rule:** never two `primary` buttons in one decision. Import review's
 Accept/Skip and the diff card's Approve/Decline are both primary + secondary —
 that asymmetry is the affordance.
+
+**Rule:** `danger` is **filled** and *Cancel* is **`ghost`**, always — §2.6c.
+The destroying control and the way out of it must differ in weight and not in
+hue alone, and the escape is never the loudest thing on the screen. A filled
+red does not count as a second `primary`: that rule is about two buttons
+competing to be the affirmative one. `tests/architecture.test.ts` refuses a
+Cancel drawn as anything but `ghost`.
 
 **Rule:** the `primary` sits on the **right** of a button row, the secondary
 to its left — `[ Decline ] [ Approve ]` (`05-composites` §5.3),

@@ -182,9 +182,11 @@ describe("the token spec and the tokens agree", () => {
     // key in `color`, so the light half skips it and only the dark half of
     // that pair is enforced. Splitting the alias into its own light row would
     // not help: it would name a value `tokens.ts` does not hold either.
+    // 44/37 since §2.6c added `danger-solid` and `text-on-danger` to both
+    // halves — a destructive control's fill and the ink on it.
     expect(compared, "a drop here means rows stopped being compared").toEqual({
-      light: 42,
-      dark: 35,
+      light: 44,
+      dark: 37,
     });
   });
 
