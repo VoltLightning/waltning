@@ -29,15 +29,29 @@
  * what it is, and a boxed input on the ground read as a second surface floating
  * over the one the page already had.
  *
- * **The ring is for a keyboard, and `autoFocus` is not one.** §10 wants a
- * visible focus indicator, and this field takes focus the instant it opens —
- * so the ring painted a heavy box around the very field the border was just
- * removed from, on every open, for a reader who reached it by tapping a
- * magnifier and never asked for it. The automatic focus is skipped and every
- * later one rings: tab away and back and the indicator is there. This is
- * `:focus-visible`'s own distinction, drawn for the one case this field has
- * rather than added to `useInteraction`, where it would change every control
- * in the system.
+ * **The automatic focus does not ring, and that is a deliberate divergence
+ * from §2.6.** This field takes focus the instant it opens, so with the border
+ * gone the ring became the heaviest thing on the screen on every open, for a
+ * reader who got there by tapping a magnifier. The automatic focus is skipped;
+ * every later one rings, so tabbing away and back shows the indicator.
+ *
+ * **This is not `:focus-visible`, and an earlier version of this comment
+ * claimed it was — backwards.** Selectors-4's heuristic is that an element
+ * which supports keyboard text entry *always* matches `:focus-visible` when
+ * focused, precisely because an unmarked text field cannot be told from an
+ * unfocused one; Chrome and Firefox both ring a programmatically focused
+ * input. This is the single exception `:focus-visible` refuses to make.
+ *
+ * So it is a **decision with a cost, recorded rather than dressed up**: a
+ * sighted keyboard user who opens the search and pauses has only a 1px caret
+ * to go on, and WCAG 2.4.7 attaches to focus, never to how focus arrived. The
+ * alternative on the table was a resting `borderInteractive` edge — the ring
+ * then reads as an increment rather than a box out of nowhere — and it was
+ * declined because it hands the border back on six other screens that are
+ * better without one. `design-system/02` §2.6 carries the divergence and
+ * `conformance.test.ts` names this file, so the exception is visible where the
+ * rule is enforced rather than hiding behind a `focus.` that is still in the
+ * source.
  *
  * **The result count is a visible line, not only an announcement.** It is
  * `accessibilityLiveRegion="polite"` *and* on the page — a live region with no
@@ -45,7 +59,7 @@
  * behind them.
  */
 
-import { useCallback, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { Text, TextInput, View } from "react-native";
 import { useT } from "../../../i18n/provider";
 import { PressableScaled } from "../../../primitives/atoms/pressable-scaled/pressable-scaled";
@@ -98,8 +112,23 @@ export function SearchField({
   const styles = useStyles();
   const { focused, handlers } = useInteraction();
 
-  // True until `autoFocus` has spent its one free focus; see the header.
+  /**
+   * True until `autoFocus` has spent its one free focus; see the header.
+   *
+   * **Cleared on commit, not by the first focus event.** Nothing distinguishes
+   * the autofocus's own event from a person's, so consuming "the first focus"
+   * is only correct when the autofocus actually lands — and RN applies
+   * `autoFocus` once at mount, which is routinely lost across a navigation or
+   * a modal transition. When it did not land, the flag was still set when the
+   * reader's own tap arrived, that focus was swallowed, and the field stayed
+   * ringless for the rest of its mounted life. React applies `autoFocus`
+   * during commit, before effects, so by the time this runs the automatic
+   * focus has either fired or never will.
+   */
   const pendingAutoFocus = useRef(autoFocus);
+  useEffect(() => {
+    pendingAutoFocus.current = false;
+  }, []);
   const handleFocus = useCallback(() => {
     if (pendingAutoFocus.current) {
       pendingAutoFocus.current = false;

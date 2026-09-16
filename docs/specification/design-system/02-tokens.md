@@ -455,6 +455,26 @@ the web bundle composes all three.
 `2px solid focus-ring`, `2px` offset, on **every** interactive element. Never
 removed, never replaced by a colour change alone.
 
+**One field diverges, deliberately, and it is the only one.** `SearchField`
+does not ring the focus that its own `autoFocus` causes. S04 §7 opens this
+field focused under the tabs, and it is drawn inline with no border — so the
+ring was the heaviest thing on the screen on every open, for a reader who got
+there by tapping a magnifier. Every *later* focus rings: tab away and back and
+the indicator is there.
+
+**The cost is stated, not argued away.** A sighted keyboard user who opens the
+search and pauses has a 1px caret and nothing else, and WCAG 2.4.7 attaches to
+focus rather than to how focus arrived. This is also *not* `:focus-visible`,
+whose UA heuristic rings a keyboard-enterable field **however** it was focused
+— exactly the exception being taken here. The alternative considered was giving
+the field a resting `border-interactive` edge, which makes the ring an
+increment rather than a box out of nowhere; it was declined because it hands a
+border back to six other searches that read better without one.
+
+`packages/ui/src/conformance.test.ts` names the file, so the exception is
+visible where the rule is enforced — the census greps for `focus.`, which that
+file still contains, and would otherwise have passed it silently.
+
 **On the shell the ring is `shell-focus-ring`, and it is not green.**
 `focus-ring` is `accent-icon`, which is 2.04:1 on `shell` in light — under the
 3:1 WCAG 1.4.11 asks of a boundary, and the band is not one of the fills §2.1's

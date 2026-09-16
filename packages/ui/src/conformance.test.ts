@@ -146,6 +146,21 @@ describe("accessibility that crosses to the web build", () => {
 });
 
 describe("the focus ring, on every interactive element (§2.6)", () => {
+  /**
+   * **The one declared divergence, named here so it is not invisible.**
+   * `SearchField` suppresses the ring for the focus `autoFocus` itself causes
+   * — a decision taken with its cost stated (§2.6, and the component's own
+   * header): the field opens focused, and with its border removed the ring was
+   * the heaviest thing on the screen every time. Every *later* focus rings.
+   *
+   * It is listed rather than left to pass, because this rule greps for the
+   * string `focus.` and `search-field.tsx` still contains `focus.width` — so
+   * it was passing while its ring was conditional, which is the rule telling a
+   * comfortable lie. A listed exception is a decision; a grep that cannot see
+   * the thing it checks is an accident waiting to be repeated.
+   */
+  const RING_IS_CONDITIONAL = new Set(["search-field.tsx"]);
+
   it("is never omitted", () => {
     // "Never removed, never replaced by a colour change alone." A colour-only
     // focus state is invisible to exactly the people it exists for.
@@ -153,12 +168,22 @@ describe("the focus ring, on every interactive element (§2.6)", () => {
       (c) => INTERACTIVE.test(code(c.text)) && !FORWARDS_ONLY.has(c.name),
     );
     // Comments stripped, for the reason the 44px rule states.
-    const missing = interactive.filter((c) => !/focus\./.test(code(c.text))).map((c) => c.name);
+    const missing = interactive
+      .filter((c) => !RING_IS_CONDITIONAL.has(c.name))
+      .filter((c) => !/focus\./.test(code(c.text)))
+      .map((c) => c.name);
 
     expect(missing, "interactive components with no focus ring").toEqual([]);
     expect(interactive.length, "the census changed size — see INTERACTIVE_COUNT").toBe(
       INTERACTIVE_COUNT,
     );
+    // The divergence has to still exist, or the exemption is stale.
+    for (const name of RING_IS_CONDITIONAL) {
+      expect(
+        interactive.some((c) => c.name === name),
+        `${name} is excused from the ring rule but is no longer interactive`,
+      ).toBe(true);
+    }
   });
 });
 
