@@ -392,7 +392,7 @@ export function AccountEditor({
 
       <View style={styles.secondaryActions}>
         <Button label={t("accounts.reconcile")} onPress={onReconcile} variant="secondary" />
-        <Button label={t("accounts.archive")} onPress={onArchive} variant="dangerQuiet" />
+        <Button label={t("accounts.archive")} onPress={onArchive} variant="secondary" />
       </View>
     </View>
   );

@@ -30,14 +30,18 @@
  * is the loudest thing in its pair because it is the thing that cannot be
  * undone, and the escape beside it stays quiet on purpose.
  *
- * **`dangerQuiet` is the outlined red, and filling everything was the error
- * it corrects.** *Cannot be undone* is the whole licence for the loudest
- * control on a screen, and three of the six `danger` call sites were
- * **Archive** — which is reversible, and which sits *below* the primary Save
- * on the account editor. Filling it put the loudest thing on that screen on
- * the action you can take back, under the one you cannot un-take, which is
- * the habituation §2.6c exists to prevent, arrived at from the other side.
- * Consequential-but-reversible keeps the edge; irreversible takes the fill.
+ * **There is no quiet red, and an attempt at one was withdrawn.** *Cannot be
+ * undone* is the whole licence for the fill, so a first correction gave
+ * reversible-destructive (Archive) an outlined `dangerQuiet` instead — which
+ * was byte-identical to the variant filling `danger` had just replaced, and
+ * landed it beside `secondary` in `AccountEditor` at **1.0079:1**: the same
+ * object in two colours, four pixels apart, which is the precise defect this
+ * whole section exists to remove. Re-adding it under a new name did not make
+ * it a different control.
+ *
+ * Archiving destroys nothing — an archived account comes back from a toggle —
+ * so it is an ordinary `secondary` action. Red that shows up on things you
+ * can undo is red nobody believes.
  */
 
 import { useCallback } from "react";
@@ -49,7 +53,7 @@ import { focus, radius, space, touchTarget } from "../../../tokens.ts";
 import { useInteraction } from "../../interaction.ts";
 import { usePressScale } from "../../press-scale.ts";
 
-export type ButtonVariant = "primary" | "secondary" | "ghost" | "danger" | "dangerQuiet";
+export type ButtonVariant = "primary" | "secondary" | "ghost" | "danger";
 export type ButtonSize = "sm" | "md" | "lg";
 
 export type ButtonProps = {
@@ -169,7 +173,6 @@ const useStyles = makeStyles((theme) => ({
   variantSecondary: { borderWidth: 1, borderColor: theme.borderInteractive },
   variantGhost: {},
   variantDanger: { backgroundColor: theme.dangerSolid },
-  variantDangerQuiet: { borderWidth: 1, borderColor: theme.dangerBorder },
 
   // `textOnAccent`, not `surface`. They are the same value in light and are not
   // the same thing: one is a card's background, the other is a label sitting on
@@ -187,7 +190,6 @@ const useStyles = makeStyles((theme) => ({
    */
   inkGhostHovered: { color: theme.text },
   inkDanger: { color: theme.textOnDanger },
-  inkDangerQuiet: { color: theme.dangerText },
 
   hovered: { backgroundColor: theme.hoverFill },
   focused: {
@@ -221,7 +223,6 @@ const VARIANT_STYLE = {
   secondary: "variantSecondary",
   ghost: "variantGhost",
   danger: "variantDanger",
-  dangerQuiet: "variantDangerQuiet",
 } as const satisfies Record<ButtonVariant, string>;
 
 const INK_STYLE = {
@@ -229,5 +230,4 @@ const INK_STYLE = {
   secondary: "inkSecondary",
   ghost: "inkGhost",
   danger: "inkDanger",
-  dangerQuiet: "inkDangerQuiet",
 } as const satisfies Record<ButtonVariant, string>;

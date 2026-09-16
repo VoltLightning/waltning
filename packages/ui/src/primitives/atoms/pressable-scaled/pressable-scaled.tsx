@@ -114,10 +114,15 @@ export function PressableScaled({
     [onHoverOut],
   );
 
-  // Not memoised: every call site passes a fresh array literal, or a
+  // Not memoised. Of the 46 call sites, 37 pass a fresh array literal or a
   // `useCallback` whose deps include `hovered`/`focused`, so `style` has a new
-  // identity on exactly the renders that matter. The memo never hit and cost
-  // an extra allocation under every virtualised row.
+  // identity on exactly the renders that matter and the memo could not hit.
+  // Nine pass a stable `makeStyles` identity and it did — including two
+  // virtualised rows in `ledger-table.tsx`. What it saved there is one array
+  // allocation per row render, against a `useMemo` cell and a deps comparison
+  // on every one of the other 37. Dropping it is a wash measured in
+  // allocations and a simplification measured in reading; an earlier version
+  // of this comment claimed it "never hit", which was wrong.
   const composed = (() => {
     if (typeof style !== "function") return [style, press.style];
     // **Both fields, and both true.** The two `Pressable` types this monorepo

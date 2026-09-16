@@ -15,6 +15,14 @@ import { ThemeProvider } from "../../../theme/provider";
 import { light } from "../../../theme/roles";
 import { Button, type ButtonVariant } from "./button";
 
+/** Every variant the type admits — widened by hand is how one slipped through. */
+const VARIANTS = [
+  "primary",
+  "secondary",
+  "ghost",
+  "danger",
+] as const satisfies readonly ButtonVariant[];
+
 function box(variant: ButtonVariant) {
   const { unmount } = render(
     <ThemeProvider theme={light}>
@@ -42,7 +50,25 @@ it("leaves the escape without one — a ghost has no fill and no edge to match i
   expect(ghost.borderWidth === "" || ghost.borderWidth === "0px").toBe(true);
 });
 
-/** The two never collapse to the same weight, whatever either hue becomes. */
-it("never draws the destructive control and the escape as the same object", () => {
-  expect(box("danger").background).not.toBe(box("ghost").background);
+/**
+ * **Every pair, not the two I happened to name.** The first version of this
+ * compared `danger` against `ghost` only, and a fifth variant — `dangerQuiet`,
+ * an outlined red — was added to `ButtonVariant` in the same PR and sailed
+ * past it: byte-identical to the outlined variant filling `danger` had just
+ * replaced, and mounted directly beside `secondary` at **1.0079:1**. The
+ * compiler caught the two `satisfies Record<ButtonVariant, …>` maps and
+ * nothing caught the test, because the test named its subjects.
+ *
+ * Weight is *(fill, edge)* — the pair that survives greyscale. Two variants
+ * may share a hue; they may not share a shape.
+ */
+it("gives every variant a weight no other variant has", () => {
+  const seen = new Map<string, ButtonVariant>();
+  for (const variant of VARIANTS) {
+    const { background, borderWidth } = box(variant);
+    const weight = `${background} / ${borderWidth}`;
+    const clash = seen.get(weight);
+    expect(clash, `${variant} and ${clash} are the same object in two colours`).toBeUndefined();
+    seen.set(weight, variant);
+  }
 });

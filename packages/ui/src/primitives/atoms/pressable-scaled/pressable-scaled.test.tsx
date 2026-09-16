@@ -9,8 +9,16 @@ const scaleIn = vi.fn();
 const scaleOut = vi.fn();
 vi.mock("../../press-scale.ts", () => ({ usePressScale: vi.fn() }));
 
+/**
+ * **A sentinel, not `{}`.** With an empty style the mock made the scale
+ * invisible to every assertion here: `press.style` could be dropped from the
+ * composition entirely — the shared value still animating, nothing rendering
+ * it, no control scaling anywhere in the app — and all three tests stayed
+ * green. `opacity` is not a property any caller sets, so finding it on the
+ * rendered node proves the composed style reached the element.
+ */
 vi.mocked(usePressScale).mockReturnValue({
-  style: {},
+  style: { opacity: 0.5 },
   onPressIn: scaleIn,
   onPressOut: scaleOut,
 });
@@ -38,6 +46,8 @@ it("applies a function style, which the animated component alone would drop", ()
   const style = getComputedStyle(screen.getByRole("button", { name: "stepper" }));
   expect(style.width).toBe("28px");
   expect(style.height).toBe("28px");
+  // …and the scale is composed *onto* it, not dropped by the composition.
+  expect(style.opacity).toBe("0.5");
 });
 
 /** An object style is the common case and must survive the composition too. */
@@ -50,7 +60,9 @@ it("applies an object style", () => {
       style={{ width: 44 }}
     />,
   );
-  expect(getComputedStyle(screen.getByRole("button", { name: "row" })).width).toBe("44px");
+  const style = getComputedStyle(screen.getByRole("button", { name: "row" }));
+  expect(style.width).toBe("44px");
+  expect(style.opacity).toBe("0.5");
 });
 
 /**

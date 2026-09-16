@@ -3486,14 +3486,25 @@ describe("every scroller declares which kind it is", () => {
  */
 describe("the escape is drawn quietly, everywhere", () => {
   /**
-   * **`[^>]` cannot be the span, and the roots cannot be one package.** The
-   * first draft matched `<Button …/>` with `[^>]*`, which stops at the first
-   * `>` a prop contains — an arrow function or a comparison in `onPress` hides
-   * the variant behind it — and walked `packages/ui/src` alone while
-   * `apps/mobile/src` holds a real Cancel, so the spec's "refuses any other
-   * variant on it" was true of five sixths of the repository.
+   * **The span runs to the tag's own `/>`, not to the first `>`.** Two drafts
+   * got this wrong: `[^>]*` stops at any `>` a prop contains, and
+   * `(?:[^>]|=>)*?` only rescued the arrow-function case — `disabled={count >
+   * 0}`, the comparison this very comment named, still hid the variant behind
+   * it. The span now crosses anything that is not another `<Button` or the
+   * closing `/>`.
+   *
+   * And the roots cannot be one package: `apps/mobile/src` holds a real Cancel
+   * beside a `variant="danger"`, so "refuses any other variant on it" was true
+   * of five sixths of the repository.
+   *
+   * Two forms remain unmatched by construction — a non-self-closing
+   * `<Button>…</Button>` and a label reaching the tag through a prop. The
+   * count below is what notices them: a Cancel that leaves the walk drops it.
+   * A *new* Cancel in either form is still invisible, which is the honest
+   * limit of a regex census and the reason `CANCEL_COUNT` is exact.
    */
-  const CANCEL = /<Button\b(?:[^>]|=>)*?\blabel=\{t\("common\.cancel"\)\}(?:[^>]|=>)*?\/>/gs;
+  const CANCEL =
+    /<Button\b(?:(?!<Button\b|\/>)[\s\S])*?\blabel=\{t\("common\.cancel"\)\}(?:(?!<Button\b|\/>)[\s\S])*?\/>/gs;
   const CANCEL_ROOTS = ["packages/ui/src", "apps/mobile/src"];
   /** Every Cancel that exists today. An exact count, so one cannot vanish silently. */
   const CANCEL_COUNT = 10;
@@ -3562,19 +3573,23 @@ describe("every pressable answers the finger", () => {
   const NOT_A_CONTROL = new Map([
     [
       "packages/ui/src/shell/organisms/bottom-sheet/bottom-sheet.tsx",
-      "the backdrop — a dismiss area covering the screen, not a control; scaling it would scale the dimming layer over the page",
+      { allowed: 1, why: "the backdrop — a dismiss area covering the screen, not a control" },
     ],
     [
       "packages/ui/src/shell/organisms/confirm-dialog/confirm-dialog.tsx",
-      "the same backdrop, for the same reason — the dialog's own buttons are `Button`, which scales",
+      { allowed: 1, why: "the same backdrop; the dialog's own buttons are `Button`, which scales" },
     ],
     [
       "packages/ui/src/primitives/atoms/select/select.tsx",
-      "the options backdrop — inset 0 on all four sides; scaling it pulls the dismiss area off the window edge mid-gesture. The trigger and every option in the same file do scale, which is why this census counts tags rather than files",
+      {
+        allowed: 1,
+        why: "the options backdrop, inset 0 on all four sides. The trigger, the multi-select toggle, the token remove and every option in this same file are controls and do scale — which is why the exemption is a *count*, not a pass for the file",
+      },
     ],
   ]);
 
-  const BARE = /<Pressable(?![A-Za-z])/;
+  /** Every bare `<Pressable` tag the scan sees today: 18 hand-wired, 3 backdrops. */
+  const BARE_TAG_COUNT = 21;
   /** The docblocks here name `Pressable` constantly; only rendered tags count. */
   const withoutComments = (text: string) =>
     text.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
@@ -3585,7 +3600,11 @@ describe("every pressable answers the finger", () => {
       for (const file of sourceFiles(join(repoRoot, root))) {
         if (isTest(file) || file.endsWith(".stories.tsx")) continue;
         const rel = relative(repoRoot, file);
-        if (NOT_A_CONTROL.has(rel)) continue;
+        // **The exemption is a budget, not a pass.** Skipping the whole file
+        // put C3 back the moment it was fixed: `select.tsx` holds five real
+        // controls beside its backdrop, and any of them could have lost its
+        // feedback under a blanket keyed on the filename.
+        let budget = NOT_A_CONTROL.get(rel)?.allowed ?? 0;
         const body = withoutComments(readFileSync(file, "utf8"));
         // **Per tag, not per file.** Excusing a whole file for one
         // `usePressScale` anywhere in it let two live controls through —
@@ -3595,25 +3614,51 @@ describe("every pressable answers the finger", () => {
         // `Pressable` carries `onPressIn=` in its own opening tag; that is the
         // thing to look for.
         for (const tag of body.match(/<Pressable(?![A-Za-z])[^>]*>/gs) ?? []) {
-          if (!/\bonPressIn=/.test(tag))
-            offenders.push(`${rel} — ${tag.replace(/\s+/g, " ").slice(0, 90)}`);
+          // `onPressIn={press.onPressIn}` specifically: a name-census is what
+          // the last one was, and `onPressIn={anything}` would pass a control
+          // that wires a handler and never the scale.
+          if (/\bonPressIn=\{press\.onPressIn\}/.test(tag)) continue;
+          if (budget > 0) {
+            budget -= 1;
+            continue;
+          }
+          offenders.push(`${rel} — ${tag.replace(/\s+/g, " ").slice(0, 90)}`);
         }
       }
     }
     expect(offenders, "a Pressable with no press feedback (§2.7)").toEqual([]);
   });
 
-  /** Every listed exception still exists and still renders the thing it was excused for. */
-  it("keeps no stale exception", () => {
-    for (const [rel] of NOT_A_CONTROL) {
+  /** Every listed exception still exists and still spends exactly its budget. */
+  it("keeps no stale exception, and no unspent budget", () => {
+    for (const [rel, { allowed }] of NOT_A_CONTROL) {
       const full = join(repoRoot, rel);
       expect(existsSync(full), `${rel} is listed but gone`).toBe(true);
       const body = withoutComments(readFileSync(full, "utf8"));
-      expect(
-        BARE.test(body) && !/usePressScale/.test(body),
-        `${rel} no longer needs its exception`,
-      ).toBe(true);
+      const unwired = (body.match(/<Pressable(?![A-Za-z])[^>]*>/gs) ?? []).filter(
+        (tag) => !/\bonPressIn=\{press\.onPressIn\}/.test(tag),
+      ).length;
+      expect(unwired, `${rel} no longer needs a budget of ${allowed}`).toBe(allowed);
     }
+  });
+
+  /**
+   * **The walk itself, pinned.** `sourceFiles` returns `[]` for a directory
+   * that is not there, so a renamed root makes the census above pass on an
+   * empty list — it has no `CANCEL_COUNT` of its own to notice. This is that
+   * count: every bare `<Pressable` tag the scan sees, wired or not.
+   */
+  it("scans the tags it thinks it scans", () => {
+    let tags = 0;
+    for (const root of ["packages/ui/src", "apps/mobile/src"]) {
+      for (const file of sourceFiles(join(repoRoot, root))) {
+        if (isTest(file) || file.endsWith(".stories.tsx")) continue;
+        tags += (
+          withoutComments(readFileSync(file, "utf8")).match(/<Pressable(?![A-Za-z])[^>]*>/gs) ?? []
+        ).length;
+      }
+    }
+    expect(tags, "the walk changed size — a root may have moved").toBe(BARE_TAG_COUNT);
   });
 });
 

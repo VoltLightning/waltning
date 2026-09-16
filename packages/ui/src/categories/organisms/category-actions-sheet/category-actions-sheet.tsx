@@ -74,7 +74,7 @@ export function CategoryActionsSheet({
         {category.isLeaf ? (
           <Button label={t("categories.merge")} onPress={onMerge} variant="secondary" />
         ) : null}
-        <Button label={t("categories.archive")} onPress={onArchive} variant="dangerQuiet" />
+        <Button label={t("categories.archive")} onPress={onArchive} variant="secondary" />
       </View>
     </BottomSheet>
   );

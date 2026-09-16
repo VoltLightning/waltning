@@ -187,7 +187,7 @@ export function CounterpartyForm({
 
       {onArchive ? (
         <View style={styles.secondaryActions}>
-          <Button label={t("counterparties.archive")} onPress={onArchive} variant="dangerQuiet" />
+          <Button label={t("counterparties.archive")} onPress={onArchive} variant="secondary" />
         </View>
       ) : null}
     </View>

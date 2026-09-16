@@ -83,7 +83,11 @@ describe("the 44px floor, fixed at the source (§10)", () => {
       (c) => INTERACTIVE.test(code(c.text)) && !FORWARDS_ONLY.has(c.name),
     );
     const missing = interactive
-      .filter((c) => !/touchTarget\.(?:min|row)|minHeight: 44/.test(c.text))
+      // **`code(c.text)`, not `c.text`.** The selector stripped comments and
+      // the predicate did not, so a docblock *naming* `touchTarget.min` was
+      // enough: a tab bar mutated to an 8px target with the token only in its
+      // prose passed this rule and the pinned count together.
+      .filter((c) => !/touchTarget\.(?:min|row)|minHeight: 44/.test(code(c.text)))
       .map((c) => c.name);
 
     expect(missing, "interactive components with no touch-target floor").toEqual([]);
@@ -148,7 +152,8 @@ describe("the focus ring, on every interactive element (§2.6)", () => {
     const interactive = all.filter(
       (c) => INTERACTIVE.test(code(c.text)) && !FORWARDS_ONLY.has(c.name),
     );
-    const missing = interactive.filter((c) => !/focus\./.test(c.text)).map((c) => c.name);
+    // Comments stripped, for the reason the 44px rule states.
+    const missing = interactive.filter((c) => !/focus\./.test(code(c.text))).map((c) => c.name);
 
     expect(missing, "interactive components with no focus ring").toEqual([]);
     expect(interactive.length, "the census changed size — see INTERACTIVE_COUNT").toBe(

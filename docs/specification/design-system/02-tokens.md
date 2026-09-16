@@ -477,7 +477,7 @@ logs as a defect elsewhere, so the carrier is doing all of the work.
 |---|---|---|
 | Money leaving | A **figure**, or a **data mark** standing for one — a chart bar, a day's activity dot | `spend` |
 | A control that destroys | A **control's fill** (irreversible) or its **edge** (reversible) | `danger-solid` + `text-on-danger` · `danger-border` |
-| A refusal | A **surface that carries a sentence** — a field's edge, a banner, a tag | `danger` · `danger-border` · `danger-bg` |
+| A refusal | A **field's edge**, a **banner**, a **tag**, or a **mark on the row being refused** — never a button's fill | `danger` · `danger-border` · `danger-bg` |
 
 **A data mark is a figure, and that had to be said.** A first draft of this
 section wrote *"a figure — never a control"* and was false the day it shipped:
@@ -486,9 +486,16 @@ section wrote *"a figure — never a control"* and was false the day it shipped:
 rendered small. The rule is about what the colour paints, not what encloses it.
 What `spend` may never be is a control's **own** fill or edge, or chrome.
 
-**A refusal may be a surface, not only an edge.** `Banner` takes `danger-bg`,
-`danger-border` and `danger`; a `Tag` takes the first two. Both carry a
-sentence, which is what keeps them apart from a destructive control.
+**A refusal is not always a sentence, and an earlier draft said it was.**
+`Banner` takes `danger-bg`, `danger-border` and `danger`. A `Tag` takes the
+fill and the **ink** — it has no border at all, which the same draft got wrong.
+And `LinesCard` draws a bare **`≠`** beside a total whose lines do not balance:
+one glyph, no sentence, and still unambiguously a refusal. The carrier that
+matters is *what the mark is attached to* — the thing being refused — not how
+many words come with it.
+
+The one carrier a refusal may never take is a **button's fill**. That is
+`danger-solid`'s alone, and `tests/architecture.test.ts` holds it.
 
 **The ink and the edge are shared; the fill is not.** `danger-text` on
 `danger-border` dresses an errored field *and* `dangerQuiet`, the reversible
