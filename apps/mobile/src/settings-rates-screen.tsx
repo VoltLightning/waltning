@@ -79,7 +79,7 @@ import { DateField } from "@waltning/ui/primitives/date-field";
 import { Select, type SelectOption } from "@waltning/ui/primitives/select";
 import { useBreakpoint } from "@waltning/ui/primitives/use-breakpoint";
 import { BottomSheet } from "@waltning/ui/shell/bottom-sheet";
-import { Card, GroundPanel } from "@waltning/ui/shell/card";
+import { Card } from "@waltning/ui/shell/card";
 import { ConfirmDialog } from "@waltning/ui/shell/confirm-dialog";
 import { useGroundInset } from "@waltning/ui/shell/ground-inset";
 import { Toast } from "@waltning/ui/states/toast";
@@ -88,6 +88,7 @@ import { makeStyles } from "@waltning/ui/theme/styles";
 import { space } from "@waltning/ui/tokens";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { Text, View } from "react-native";
+import { PushedPage } from "./pushed-page";
 
 type RangePreset = "30d" | "90d" | "year" | "custom";
 
@@ -530,7 +531,7 @@ export default function SettingsRatesScreen({
   );
 
   return (
-    <GroundPanel scroll="own">
+    <PushedPage title={t("routes.rates")} subtitle={t("pages.rates")} scroll="own">
       <RateTable pair={tablePair} header={header} footer={footer} contentInset={inset.content} />
 
       {/*
@@ -597,7 +598,7 @@ export default function SettingsRatesScreen({
       {toast === null ? null : (
         <Toast message={toast} onDismiss={handleDismissToast} token={toastTokenRef.current} />
       )}
-    </GroundPanel>
+    </PushedPage>
   );
 }
 

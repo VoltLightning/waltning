@@ -140,18 +140,26 @@ it("renders a row per non-pivot currency, and the pivot read-only", () => {
  */
 it("renders no currency card when the pivot is the only currency, only the Add button", () => {
   withLedger({ listCurrencySettings: () => [USD_ROW] });
-  expect(screen.queryByText("Currencies")).toBeNull();
+  // The screen's own header carries the word once; what must not exist is a
+  // second one on a card holding nothing.
+  expect(screen.getAllByText("Currencies")).toHaveLength(1);
   expect(screen.getByText("Add currency")).toBeDefined();
 });
 
 /**
- * The card carried the screen's own name, 40 px under a navigation header
- * saying the same word. Broken once by putting `title` back on the `Card` —
- * "Currencies" then renders twice on a screen that has one list.
+ * The card carried the screen's own name, 40 px under a header saying the same
+ * word. Broken once by putting `title` back on the `Card` — "Currencies" then
+ * renders twice on a screen that has one list.
+ *
+ * **The header is the screen's own now**, drawn on the ground by `PushedPage`
+ * rather than by a navigation band (the deck has none), so the assertion is
+ * *once*, not *never* — and the subtitle beside it is the other half of what
+ * the band could not carry.
  */
-it("the list card carries no title of its own — the navigation header has that word", () => {
+it("the list card carries no title of its own — the page header has that word", () => {
   withLedger();
-  expect(screen.queryByText("Currencies")).toBeNull();
+  expect(screen.getAllByText("Currencies")).toHaveLength(1);
+  expect(screen.getByText("Which exist, and where rates come from")).toBeDefined();
 });
 
 /**

@@ -2354,6 +2354,56 @@ describe("platform-neutral packages use only globals the phone has", () => {
   });
 });
 
+describe("the deck has no navigation band", () => {
+  /**
+   * **Twelve screens wore one that nobody chose.**
+   *
+   * `Stack.Screen` draws a navigation bar unless told otherwise, so every
+   * pushed route came up with a sage band and a small white title — while
+   * every artboard that is not a tab root (S09, S13, S16, S17, S18, S30's
+   * Back up) opens with a display title and a muted line on the same cream
+   * the cards sit on, and puts the way back in the corner. The result was
+   * that Today looked like the design and everything you navigated *to*
+   * looked like a different app.
+   *
+   * The fix is one `headerShown: false` in `screenOptions`. The rule is here
+   * because the failure mode is a *new* route quietly re-enabling it — one
+   * screen at a time, each looking like a small exception.
+   */
+  it("no route asks for the platform's header", () => {
+    const layouts = appRoots().flatMap((app) =>
+      sourceFiles(join(app, "app")).filter((file) => file.endsWith("_layout.tsx")),
+    );
+    expect(layouts.length, "route layouts found").toBeGreaterThan(0);
+
+    const offenders: string[] = [];
+    for (const file of layouts) {
+      // Comments stripped: this file's own docstring quotes every spelling
+      // below, and a rule that fires on prose explaining it is not a rule.
+      const source = readFileSync(file, "utf8")
+        .replace(/\/\*[\s\S]*?\*\//g, "")
+        .replace(/^\s*\/\/.*$/gm, "")
+        .replace(/\{\/\*[\s\S]*?\*\/\}/g, "");
+      // `headerShown: true` explicitly, or any header styling — which only
+      // has an effect on a header that is drawn.
+      for (const spelling of [
+        /headerShown:\s*true/,
+        /headerStyle\s*:/,
+        /headerTintColor\s*:/,
+        /headerTitleStyle\s*:/,
+        /headerBackground\s*:/,
+      ]) {
+        if (spelling.test(source)) offenders.push(`${rel(file)} → ${String(spelling)}`);
+      }
+      // And the positive requirement: the navigator turns it off for everyone.
+      if (/<Stack\b/.test(source) && !/headerShown:\s*false/.test(source)) {
+        offenders.push(`${rel(file)} → a Stack that never says headerShown: false`);
+      }
+    }
+    expect(offenders, "a screen drawing the platform's navigation band").toEqual([]);
+  });
+});
+
 /* ── §5 · nothing escapes the typechecker ────────────────────────────────── */
 
 describe("every TypeScript file is typechecked by something", () => {

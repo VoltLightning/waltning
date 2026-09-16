@@ -960,6 +960,10 @@ export const en = {
     flowRange: "{{count}} months + this month to date",
   },
   shell: {
+    /** The line under each tab root's name — what the screen is for. */
+    ledgerSubtitle: "Every entry, in order",
+    debtSubtitle: "Who owes whom, and since when",
+    settingsSubtitle: "Everything about how this behaves",
     /** Summary's gateway grid — a kicker over the cards. */
     goTo: "Go to",
     /** `PagerHeader`'s magnifier. */
@@ -1177,6 +1181,24 @@ export const en = {
     unsentValue_many: "{{count}} captures",
     unsentValue_other: "{{count}} captures",
     where: "Kept in",
+  },
+  /**
+   * The line under a screen's name, from the deck. Every artboard with a
+   * header has one, and they are not decoration: a reader knows what the
+   * screen is for before a row of it has been read.
+   */
+  pages: {
+    accounts: "Everything money sits in",
+    createAccount: "Where money will sit",
+    editAccount: "Its name, its kind, what it holds",
+    categories: "What spending is filed under",
+    currencies: "Which exist, and where rates come from",
+    rates: "What is held, and what has stopped",
+    backup: "An encrypted copy, for you to keep",
+    counterparty: "What is owed, and since when",
+    newCounterparty: "Someone money moves between",
+    editCounterparty: "Their name, and how they are counted",
+    transaction: "One entry, and everything behind it",
   },
   routes: {
     backup: "Back up",

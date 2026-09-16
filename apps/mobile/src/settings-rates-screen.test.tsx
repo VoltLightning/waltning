@@ -18,6 +18,12 @@ import { id } from "@waltning/core/id";
 import { currencyCode, unitsPerPivot } from "@waltning/core/money";
 import { expect, it, vi } from "vitest";
 
+/**
+ * The screen draws its own header now (`PushedPage`), and a header has a way
+ * back — which is the router's. The rest of this file never navigates.
+ */
+vi.mock("expo-router", () => ({ router: { push: vi.fn(), back: vi.fn(), dismissTo: vi.fn() } }));
+
 import SettingsRatesScreen, { type SettingsRatesScreenProps } from "./settings-rates-screen";
 
 const PLN = currencyCode("PLN");

@@ -483,6 +483,9 @@ export const pl: Messages = {
     flowRange: "{{count}} miesięcy + bieżący do dziś",
   },
   shell: {
+    ledgerSubtitle: "Każdy wpis, po kolei",
+    debtSubtitle: "Kto komu jest winien i od kiedy",
+    settingsSubtitle: "Wszystko o tym, jak to działa",
     /** Summary's gateway grid — a kicker over the cards. */
     goTo: "Przejdź do",
     /** `PagerHeader`'s magnifier. */
@@ -607,6 +610,19 @@ export const pl: Messages = {
     unsentValue_many: "{{count}} zapisów",
     unsentValue_other: "{{count}} zapisu",
     where: "Zapisano w",
+  },
+  pages: {
+    accounts: "Wszystko, w czym leżą pieniądze",
+    createAccount: "Gdzie będą leżeć pieniądze",
+    editAccount: "Nazwa, rodzaj, zawartość",
+    categories: "Do czego przypisywane są wydatki",
+    currencies: "Które istnieją i skąd biorą się kursy",
+    rates: "Co jest zapisane, a co się zatrzymało",
+    backup: "Zaszyfrowana kopia do przechowania",
+    counterparty: "Ile jest winne i od kiedy",
+    newCounterparty: "Ktoś, z kim przepływają pieniądze",
+    editCounterparty: "Imię i sposób liczenia",
+    transaction: "Jeden wpis i wszystko, co za nim stoi",
   },
   routes: {
     backup: "Kopia zapasowa",

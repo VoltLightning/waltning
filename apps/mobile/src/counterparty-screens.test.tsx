@@ -573,7 +573,13 @@ describe("CounterpartyDetail (S13)", () => {
       </LedgerProvider>,
     );
     expect(screen.getByText("Couldn't read your currencies")).toBeDefined();
-    expect(screen.queryByText("Nina")).toBeNull();
+    // The *card* is gone — that is what "never a blank screen" meant: no
+    // identity strip and no balances over a broken bootstrap. The page header
+    // still names them, deliberately: a screen that failed is exactly when a
+    // reader needs to know which screen it is and how to leave it.
+    expect(screen.queryByText("person · settles in EUR")).toBeNull();
+    expect(screen.getAllByText("Nina")).toHaveLength(1);
+    expect(screen.getByRole("button", { name: "Back" })).toBeDefined();
   });
 
   /**

@@ -19,7 +19,6 @@ import { describeDiagnosticError } from "@waltning/core/diagnostics";
 import { resolveLocale } from "@waltning/ui/i18n/locales";
 import { I18nProvider, useT } from "@waltning/ui/i18n/provider";
 import { StartupFailed } from "@waltning/ui/states/startup-failed";
-import { text } from "@waltning/ui/theme/fonts";
 import { ThemeProvider, useTheme } from "@waltning/ui/theme/provider";
 import { makeStyles } from "@waltning/ui/theme/styles";
 import { useFonts } from "expo-font";
@@ -157,29 +156,32 @@ export default function RootLayout() {
           by whatever the app renders at y=0.
         */}
           {/*
-          **The root is the shell's green, and that is what paints the status
-          bar.**
+          **The root is the ground, and that is what paints the status bar.**
 
-          The strip was black. Under Android's edge-to-edge — enforced from
-          Expo SDK 54 — the window draws behind the status bar and the system
-          paints nothing there; whatever React renders at y=0 is the strip. On
-          the ledger that is `TodayFrame`'s shell, which is why that screen
-          looked right. On a pushed route it is the navigation header, and the
-          native header does not extend its own background under the inset
-          here — so the strip fell through to the window, which is black.
+          Under Android's edge-to-edge — enforced from Expo SDK 54 — the window
+          draws behind the status bar and the system paints nothing there;
+          whatever React renders at y=0 is the strip. This fill is what is
+          behind everything, for the moments between screens when nothing else
+          has painted it.
 
-          A root in `shell` makes the fall-through the header's own colour
-          rather than the window's. It is not a workaround for the header: the
-          header still paints itself, and this is simply what is behind
-          everything. The ledger is unaffected — `TodayFrame`'s root is
-          `ground` and covers it.
+          **It was `shell`, the green, because a navigation header used to own
+          that strip on every pushed route.** No route has one now: the deck
+          has no navigation band, so every screen opens with `PageHeader` on
+          the ground and paints the inset itself in `ground` — the same thing
+          `TodayFrame` has done since the ledger got its hero. A green
+          fall-through would now show only as a flash between two cream
+          screens.
 
-          `shell` rather than `ground` because green is the colour of the top
-          strip on every route that has a navigation header, and that strip
-          is the only place this shows. The two composers are the exception —
-          `quick-add` and `transfer` hide the header and draw their own band
-          in `ground`, so on those two the strip behind the status bar is
-          `ground` and this fill never shows at all.
+          **The one thing this does not fix is the glyph colour.** `app.json`
+          configures `expo-status-bar` with `style: "light"`, which writes
+          `android:windowLightStatusBar=false` at *build* time — right for a
+          green strip, and now wrong in the light appearance where the strip is
+          cream. It has been wrong on Today since that screen got its hero, and
+          it is not fixable from here: the correct value is per appearance,
+          which is a runtime property, and the runtime API that sets it without
+          turning edge-to-edge off is `react-native-edge-to-edge`'s — a native
+          module, so it arrives with the build that is ours (E0 · Leave Expo
+          Go).
         */}
           <I18nProvider locale={resolveLocale(DEVICE_LOCALES)}>
             {/* The one place the platform-resolved ledger meets the tree: every
@@ -243,31 +245,33 @@ function AppStack() {
     <Stack
       screenOptions={{
         contentStyle: { backgroundColor: theme.ground },
-        headerStyle: { backgroundColor: theme.shell },
-        // Colours the title *and* the back chevron; a `color` inside
-        // `headerTitleStyle` would set one of the two and look right.
-        headerTintColor: theme.shellText,
-        headerTitleStyle: text.ui("displayThree"),
-        headerShadowVisible: false,
+        // **Once, for every route.** Set per screen it comes back the first
+        // time somebody adds one; the `title`s below stay because the OS
+        // reads them — the back gesture's label, the web document title —
+        // even with nothing drawn.
+        headerShown: false,
       }}
     >
-      {/* The tab shell draws its own chrome — Today's header is the shell
-          itself (a 54pt total does not fit in a navigation bar, §5.1), and
-          every other tab root wears `TabHeader`, drawn by `tabs-shell.tsx`.
-          `quick-add`, `account/new`, `transaction/[id]` and
-          `settings/categories` stay stack routes pushed *over* the tabs.
+      {/* **No navigation band, on any screen.**
 
-          **The composers keep this navigator's header**, even though they
-          draw a title and a × of their own. Hiding it is right and it is not
-          this file's to do alone: `QuickAddComposer` and `TransferComposer`
-          read no safe-area inset, and `GroundPanel` deliberately never clears
-          the top, so a screen with no navigation bar puts its × under the
-          notch. The two lines come out when the composers clear the status
-          bar themselves, in the same change. */}
-      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-      {/* Both composers draw their own header (`ComposerHeader`, S05 §3). */}
-      <Stack.Screen name="quick-add" options={{ title: t("routes.expense"), headerShown: false }} />
-      <Stack.Screen name="transfer" options={{ title: t("routes.transfer"), headerShown: false }} />
+          The deck has none. Every artboard that is not a tab root — S09, S13,
+          S17, S18, S30's Back up — opens with a display title and a muted line
+          on the same cream the cards sit on, and the way back is a quiet mark
+          in the corner. Twelve screens wore a sage band with a small white
+          title instead, purely because that is what `Stack.Screen` draws when
+          nobody says otherwise, and the result was that Today looked like the
+          design and everything you navigated *to* looked like a different app.
+
+          So the header is the screen's, drawn by `PageHeader` beside its
+          `GroundPanel` — which is also what makes the top inset that screen's
+          own to clear, the reason the two composers were already the only
+          routes here with `headerShown: false`.
+
+          `tests/architecture.test.ts` refuses a `Stack.Screen` that leaves the
+          band on, so this cannot come back one route at a time. */}
+      <Stack.Screen name="(tabs)" />
+      <Stack.Screen name="quick-add" options={{ title: t("routes.expense") }} />
+      <Stack.Screen name="transfer" options={{ title: t("routes.transfer") }} />
       <Stack.Screen name="account/new" options={{ title: t("routes.createAccount") }} />
       <Stack.Screen name="transaction/[id]" options={{ title: t("routes.transaction") }} />
       <Stack.Screen name="accounts/index" options={{ title: t("routes.accounts") }} />
@@ -346,5 +350,5 @@ const useStyles = makeStyles((theme) => ({
    * `statusBarStyle`, and because a comment claiming otherwise is worse than
    * the contrast.
    */
-  root: { flex: 1, backgroundColor: theme.shell },
+  root: { flex: 1, backgroundColor: theme.ground },
 }));

@@ -47,7 +47,7 @@ import { Button } from "@waltning/ui/primitives/button";
 import { Select, type SelectOption } from "@waltning/ui/primitives/select";
 import { TextField } from "@waltning/ui/primitives/text-field";
 import { BottomSheet } from "@waltning/ui/shell/bottom-sheet";
-import { Card, GroundPanel } from "@waltning/ui/shell/card";
+import { Card } from "@waltning/ui/shell/card";
 import { ConfirmDialog } from "@waltning/ui/shell/confirm-dialog";
 import { Toast } from "@waltning/ui/states/toast";
 import { text } from "@waltning/ui/theme/fonts";
@@ -56,6 +56,7 @@ import { space } from "@waltning/ui/tokens";
 import { router } from "expo-router";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { Text, View } from "react-native";
+import { PushedPage } from "./pushed-page";
 
 type Draft = { code: string; name: string; symbol: string };
 
@@ -287,7 +288,7 @@ export default function SettingsCurrenciesScreen() {
   }, [ledger, selectedPivotTarget, t]);
 
   return (
-    <GroundPanel>
+    <PushedPage title={t("routes.currencies")} subtitle={t("pages.currencies")}>
       {/*
         The card is the group of currency rows, so with no rows there is no
         group — and a card holding nothing is chrome claiming a list exists.
@@ -401,7 +402,7 @@ export default function SettingsCurrenciesScreen() {
       {toast === null ? null : (
         <Toast message={toast} onDismiss={handleDismissToast} token={toastTokenRef.current} />
       )}
-    </GroundPanel>
+    </PushedPage>
   );
 }
 

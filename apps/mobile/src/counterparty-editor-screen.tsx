@@ -42,7 +42,6 @@ import {
 } from "@waltning/ui/counterparties/counterparty-form";
 import { resolveFieldErrorMessage } from "@waltning/ui/i18n/field-error-messages";
 import { useT } from "@waltning/ui/i18n/provider";
-import { GroundPanel } from "@waltning/ui/shell/card";
 import { ErrorState } from "@waltning/ui/states/error-state";
 import { Skeleton } from "@waltning/ui/states/skeleton";
 import { Toast } from "@waltning/ui/states/toast";
@@ -51,6 +50,7 @@ import { space } from "@waltning/ui/tokens";
 import { router, useLocalSearchParams } from "expo-router";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { View } from "react-native";
+import { PushedPage } from "./pushed-page";
 
 /**
  * `update_counterparty` and `create_counterparty`'s own field paths —
@@ -319,7 +319,7 @@ export default function CounterpartyEditor() {
   // `debt-screen.tsx` and `counterparty-detail-screen.tsx` carry (H1).
   if (snapshot.revision === 0) {
     return (
-      <GroundPanel>
+      <PushedPage title={t("routes.editCounterparty")} subtitle={t("pages.editCounterparty")}>
         <View
           accessibilityRole="progressbar"
           accessibilityLabel={t("counterparties.loadingEditor")}
@@ -328,7 +328,7 @@ export default function CounterpartyEditor() {
           <Skeleton shape="row" label="" />
           <Skeleton shape="row" label="" />
         </View>
-      </GroundPanel>
+      </PushedPage>
     );
   }
 
@@ -340,18 +340,18 @@ export default function CounterpartyEditor() {
   // near-matches.
   if (pivot === undefined) {
     return (
-      <GroundPanel>
+      <PushedPage title={t("routes.editCounterparty")} subtitle={t("pages.editCounterparty")}>
         <ErrorState
           variant="recoverable"
           what={t("counterparties.noPivotTitle")}
           why={t("counterparties.noPivotWhy")}
         />
-      </GroundPanel>
+      </PushedPage>
     );
   }
 
   return (
-    <GroundPanel>
+    <PushedPage title={t("routes.editCounterparty")} subtitle={t("pages.editCounterparty")}>
       <CounterpartyForm
         initial={initial}
         currencies={currencies}
@@ -367,7 +367,7 @@ export default function CounterpartyEditor() {
       {toast === null ? null : (
         <Toast message={toast} onDismiss={handleDismissToast} token={toastTokenRef.current} />
       )}
-    </GroundPanel>
+    </PushedPage>
   );
 }
 

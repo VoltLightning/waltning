@@ -4,9 +4,12 @@ import { describe, expect, it } from "vitest";
 import { CounterpartyCard } from "./counterparty-card";
 
 describe("CounterpartyCard", () => {
-  it("shows the name, kind and settlement currency", () => {
+  it("shows the monogram, the kind and the settlement currency — never the name again", () => {
     render(<CounterpartyCard name="Nina" kind="person" settlementCurrency="EUR" />);
-    expect(screen.getByText("Nina")).toBeDefined();
+    // The monogram, not the name: S13's header names them once, and this card
+    // printed it again at the same type step directly underneath.
+    expect(screen.getByText("N")).toBeDefined();
+    expect(screen.queryByText("Nina")).toBeNull();
     expect(screen.getByText("person · settles in EUR")).toBeDefined();
   });
 

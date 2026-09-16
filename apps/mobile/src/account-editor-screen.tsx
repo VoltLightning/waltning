@@ -22,9 +22,9 @@ import {
 import { type ReconcileDraft, ReconcileSheet } from "@waltning/ui/accounts/reconcile-sheet";
 import { resolveFieldErrorMessage } from "@waltning/ui/i18n/field-error-messages";
 import { useT } from "@waltning/ui/i18n/provider";
-import { GroundPanel } from "@waltning/ui/shell/card";
 import { router, useLocalSearchParams } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
+import { PushedPage } from "./pushed-page";
 
 function handleCancel() {
   router.back();
@@ -168,7 +168,7 @@ export default function AccountEditorScreen() {
   if (!editorAccount || !account) return null;
 
   return (
-    <GroundPanel>
+    <PushedPage title={t("routes.editAccount")} subtitle={t("pages.editAccount")}>
       <AccountEditor
         account={editorAccount}
         today={today}
@@ -195,6 +195,6 @@ export default function AccountEditorScreen() {
         onDismiss={handleDismissReconcile}
         onSave={handleSaveReconcile}
       />
-    </GroundPanel>
+    </PushedPage>
   );
 }

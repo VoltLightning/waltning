@@ -1,0 +1,69 @@
+/**
+ * A pushed screen's header — the title, the line under it, and the way back.
+ *
+ * `PageHeader` is the band; this is the one line of platform that band needs,
+ * and it lives here because `router.back()` is expo-router's
+ * (`architecture/11`: an app is where a platform is named). Eleven screens
+ * would otherwise each hand-roll the same `IconButton` around the same mark.
+ *
+ * **Beside the panel, never inside it.** `GroundPanel` scrolls and clears its
+ * own sides and bottom, deliberately never the top; the header clears the
+ * device inset once, on a `View` that does not move. A screen composes the two
+ * as siblings.
+ */
+
+import { useT } from "@waltning/ui/i18n/provider";
+import { IconButton } from "@waltning/ui/primitives/icon-button";
+import { BackMark } from "@waltning/ui/shell/back-mark";
+import { GroundPanel, type GroundPanelProps } from "@waltning/ui/shell/card";
+import { PageHeader } from "@waltning/ui/shell/page-header";
+import { router } from "expo-router";
+
+function goBack() {
+  router.back();
+}
+
+export type PushedHeaderProps = {
+  title: string;
+  /** The deck gives every screen one; it says what the screen is for before a row is read. */
+  subtitle?: string;
+};
+
+export function PushedHeader({ title, subtitle }: PushedHeaderProps) {
+  const t = useT();
+
+  return (
+    <PageHeader
+      title={title}
+      {...(subtitle === undefined ? {} : { subtitle })}
+      action={
+        <IconButton label={t("common.back")} onPress={goBack}>
+          <BackMark />
+        </IconButton>
+      }
+    />
+  );
+}
+
+export type PushedPageProps = PushedHeaderProps & {
+  children: GroundPanelProps["children"];
+  /** Passed straight through — a screen with its own virtualized list still needs `"own"`. */
+  scroll?: GroundPanelProps["scroll"];
+};
+
+/**
+ * The whole shape of a pushed screen: the band, then the scroller.
+ *
+ * Screens have several `GroundPanel`s — one per state — and each is a page
+ * that needs the header. Composing them here means a state cannot be added
+ * without one, which is how eleven screens ended up with a navigation band
+ * nobody chose.
+ */
+export function PushedPage({ title, subtitle, children, scroll }: PushedPageProps) {
+  return (
+    <>
+      <PushedHeader title={title} {...(subtitle === undefined ? {} : { subtitle })} />
+      <GroundPanel {...(scroll === undefined ? {} : { scroll })}>{children}</GroundPanel>
+    </>
+  );
+}

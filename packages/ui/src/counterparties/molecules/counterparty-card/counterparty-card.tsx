@@ -12,13 +12,24 @@ import type { AgeBucket } from "@waltning/core/money";
 import { Text, View } from "react-native";
 import { useT } from "../../../i18n/provider";
 import { monogramFor } from "../../../primitives/monogram.ts";
-import { text, textCap } from "../../../theme/fonts.ts";
+import { text } from "../../../theme/fonts.ts";
 import { useTheme } from "../../../theme/provider";
 import { makeStyles } from "../../../theme/styles.ts";
 import { radius, space } from "../../../tokens.ts";
 import { AgeingBar } from "../ageing-bar/ageing-bar";
 
 export type CounterpartyCardProps = {
+  /**
+   * The person or company — **the monogram's source, not a line of text.**
+   *
+   * S13's own header names them, at the same `displayTwo` step this card used
+   * to print again fourteen points below it. The deck draws the name once
+   * (`design/S13.html` has exactly one 22px heading) and gives this card the
+   * identity strip under it: the monogram, the kind, what they settle in.
+   * Printing it here was invisible while a navigation band carried the name in
+   * white on sage, and became a duplicate the moment the header moved onto the
+   * ground where the deck has it.
+   */
   name: string;
   kind: "person" | "company";
   settlementCurrency: string | null;
@@ -48,9 +59,6 @@ export function CounterpartyCard({
         <Text style={[styles.monogramText, monogramInk]}>{monogram.letter}</Text>
       </View>
       <View style={styles.identity}>
-        <Text maxFontSizeMultiplier={textCap("displayTwo")} style={styles.name}>
-          {name}
-        </Text>
         <Text style={styles.meta}>
           {t(kind === "company" ? "counterparties.kindCompany" : "counterparties.kindPerson")}
           {settlementCurrency
@@ -76,6 +84,5 @@ const useStyles = makeStyles((theme) => ({
   },
   monogramText: { ...text.display("displayThree") },
   identity: { gap: space.xs },
-  name: { color: theme.text, ...text.display("displayTwo") },
   meta: { color: theme.textMuted, ...text.ui("body") },
 }));
