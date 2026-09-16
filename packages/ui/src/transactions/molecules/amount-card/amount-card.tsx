@@ -19,16 +19,30 @@
  * into — a half-typed `"48,"` is not a figure yet — which is why the affix and
  * the sign are drawn here, and why `context` arrives as a finished sentence
  * rather than a number this component would have to format.
+ *
+ * **Nothing in this row may move while a digit is typed.** Two things did, and
+ * both read as the figure lurching under the thumb:
+ *
+ * 1. The sign was mounted on the first keystroke, so every character after the
+ *    first sat one glyph and one gap to the right of where the first one
+ *    landed. It is always mounted now and merely *invisible* while the field
+ *    is empty, so it holds its place from the start.
+ * 2. The width reserved for the field counted the decimal mark as a full
+ *    tabular digit. Plex's comma is roughly a third of one, so typing it grew
+ *    the box by 0.6em while the glyph grew by ~0.2em — and the currency affix,
+ *    which follows the box, jumped the difference. The mark gets its own
+ *    measure, and the caret's room is added once at the end rather than
+ *    smuggled in as an over-estimate on one character.
  */
 
 import { useCallback, useState } from "react";
 import { Text, TextInput, View } from "react-native";
+import { figureEm } from "../../../fx/figure-width.ts";
 import { decimalMark } from "../../../i18n/locales";
 import { useLocale, useT } from "../../../i18n/provider";
 import { text, textCap } from "../../../theme/fonts.ts";
 import { makeStyles } from "../../../theme/styles.ts";
 import {
-  DIGIT_EM,
   focus,
   radius,
   space,
@@ -84,7 +98,7 @@ export function AmountCard({
   // Sized to the figure, so the affix follows it: an `<input>` otherwise
   // takes its own default width and the currency lands at the far edge.
   const figureWidth = {
-    width: Math.max(1, display.length) * DIGIT_EM * typeScale.displayHero.fontSize,
+    width: figureEm(display) * typeScale.displayHero.fontSize,
   };
   const handleFocus = useCallback(() => setFocused(true), []);
   const handleBlur = useCallback(() => setFocused(false), []);
@@ -93,14 +107,27 @@ export function AmountCard({
     <View style={[styles.card, focused ? styles.focused : null]}>
       <Text style={styles.label}>{label}</Text>
       <View style={styles.figure}>
-        {raw === "" ? null : (
-          <Text
-            maxFontSizeMultiplier={textCap("displayHero")}
-            style={[styles.sign, kind === "expense" ? styles.signOut : styles.signIn]}
-          >
-            {kind === "expense" ? "−" : "+"}
-          </Text>
-        )}
+        {/*
+          Always mounted, invisible until there is a figure to sign: a sign
+          that appears on the first keystroke pushes every later digit sideways.
+          `opacity` rather than a conditional, so the row's geometry is the same
+          empty and full.
+        */}
+        <Text
+          // All three: the native pair and the web one. `react-native-web`
+          // maps neither native prop (`conformance.test.ts`).
+          accessibilityElementsHidden={raw === ""}
+          importantForAccessibility={raw === "" ? "no-hide-descendants" : "auto"}
+          aria-hidden={raw === "" ? true : undefined}
+          maxFontSizeMultiplier={textCap("displayHero")}
+          style={[
+            styles.sign,
+            kind === "expense" ? styles.signOut : styles.signIn,
+            raw === "" ? styles.signEmpty : null,
+          ]}
+        >
+          {kind === "expense" ? "−" : "+"}
+        </Text>
         <TextInput
           accessibilityLabel={label}
           value={display}
@@ -162,6 +189,8 @@ const useStyles = makeStyles((theme) => ({
     outlineOffset: focus.offset,
   },
   sign: { ...text.display("displayHero") },
+  /** Holds its width, shows nothing — see the header. */
+  signEmpty: { opacity: 0 },
   signOut: { color: theme.spend },
   signIn: { color: theme.income },
   input: {

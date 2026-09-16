@@ -758,7 +758,22 @@ export const gutter = space.x4;
  * A tabular digit's advance in IBM Plex Sans, as a fraction of the font size —
  * what a typed figure's `TextInput` is sized by, so the currency affix sits
  * beside the figure rather than at the far edge of a field that grew to fill
- * the row. Plex's tabular figures are 0.6em; the comma is narrower and the
- * over-estimate on it is the room the caret needs.
+ * the row. Plex's tabular figures are 0.6em.
  */
 export const DIGIT_EM = 0.6;
+
+/**
+ * The decimal mark's advance, in the same units.
+ *
+ * **It is not a digit, and counting it as one was visible.** `DIGIT_EM` used
+ * to cover every character on the argument that the over-estimate on a comma
+ * was "the room the caret needs" — but the affix sits immediately after this
+ * box, so typing the mark grew the reserved width by a full 0.6em while the
+ * glyph grew by about a third of that, and the currency marker jumped the
+ * difference. Caret room is a single allowance at the end, not a per-character
+ * fudge that only lands on one character.
+ */
+export const MARK_EM = 0.21;
+
+/** One allowance for the caret, added once — never folded into a glyph. */
+export const CARET_EM = 0.08;

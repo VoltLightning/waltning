@@ -30,6 +30,7 @@ import { useT } from "@waltning/ui/i18n/provider";
 import { Button } from "@waltning/ui/primitives/button";
 import { useSafeArea } from "@waltning/ui/primitives/safe-area";
 import { GroundPanel } from "@waltning/ui/shell/card";
+import { useKeyboardHeight } from "@waltning/ui/shell/keyboard";
 import { text } from "@waltning/ui/theme/fonts";
 import { makeStyles } from "@waltning/ui/theme/styles";
 import { gutter, space } from "@waltning/ui/tokens";
@@ -110,7 +111,12 @@ export default function Transfer() {
   const insets = useSafeArea();
   // The footer clears the home indicator itself, the way the band above
   // clears the notch: `GroundPanel` between them clears neither edge.
-  const clearBottom = { paddingBottom: gutter + insets.bottom };
+  /** `quick-add-screen.tsx`'s own reason: Move money is the bottom edge, and
+   *  with the keyboard up that edge was behind the keyboard. */
+  const keyboardHeight = useKeyboardHeight();
+  const clearBottom = {
+    paddingBottom: keyboardHeight > 0 ? gutter + keyboardHeight : gutter + insets.bottom,
+  };
 
   const currencySymbols = useMemo(
     () => new Map(snapshot.currencies.map((currency) => [currency.code, currency.symbol])),
