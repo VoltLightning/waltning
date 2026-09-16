@@ -130,7 +130,8 @@ export function CircleHalfIcon({ size, color }: PhosphorIconProps) {
 }
 
 /**
- * Four regular-weight glyphs for `PagerHeader`, not duotone.
+ * Regular-weight glyphs — for `PagerHeader`'s controls and for the tiles a
+ * settings row carries, not duotone.
  *
  * §2.8 gives duotone to *navigation* — the tab bar is the navigation, and a
  * chevron that steps a month is a control. A duotone caret at 18px is a
@@ -165,6 +166,70 @@ export function CaretRightIcon({ size, color }: PhosphorIconProps) {
       <Path
         d="M181.66 133.66l-80 80a8 8 0 0 1-11.32-11.32L164.69 128 90.34 53.66a8 8 0 0 1 11.32-11.32l80 80a8 8 0 0 1 0 11.32"
         fill={color}
+      />
+    </Svg>
+  );
+}
+
+/**
+ * The five a settings row can wear (`S30`).
+ *
+ * **Regular, not duotone.** §2.8 gives duotone to *navigation*, and the tab
+ * bar is the navigation; a row's tile is an adornment on a label that already
+ * says where it goes — the same reading that put the carets above in regular.
+ * Duotone's tone layer would also muddy the tint the tile sits on, which is
+ * `accentFill`, the same family.
+ */
+export function ClockCounterClockwiseIcon({ size, color }: PhosphorIconProps) {
+  return (
+    <Svg width={size} height={size} viewBox={VIEW_BOX}>
+      <Path
+        fill={color}
+        d="M136,80v43.47l36.12,21.67a8,8,0,0,1-8.24,13.72l-40-24A8,8,0,0,1,120,128V80a8,8,0,0,1,16,0Zm-8-48A95.44,95.44,0,0,0,60.08,60.15C52.81,67.51,46.35,74.59,40,82V64a8,8,0,0,0-16,0v40a8,8,0,0,0,8,8H72a8,8,0,0,0,0-16H49c7.15-8.42,14.27-16.35,22.39-24.57a80,80,0,1,1,1.66,114.75,8,8,0,1,0-11,11.64A96,96,0,1,0,128,32Z"
+      />
+    </Svg>
+  );
+}
+
+export function CreditCardIcon({ size, color }: PhosphorIconProps) {
+  return (
+    <Svg width={size} height={size} viewBox={VIEW_BOX}>
+      <Path
+        fill={color}
+        d="M224,48H32A16,16,0,0,0,16,64V192a16,16,0,0,0,16,16H224a16,16,0,0,0,16-16V64A16,16,0,0,0,224,48Zm0,16V88H32V64Zm0,128H32V104H224v88Zm-16-24a8,8,0,0,1-8,8H168a8,8,0,0,1,0-16h32A8,8,0,0,1,208,168Zm-64,0a8,8,0,0,1-8,8H120a8,8,0,0,1,0-16h16A8,8,0,0,1,144,168Z"
+      />
+    </Svg>
+  );
+}
+
+export function TagIcon({ size, color }: PhosphorIconProps) {
+  return (
+    <Svg width={size} height={size} viewBox={VIEW_BOX}>
+      <Path
+        fill={color}
+        d="M243.31,136,144,36.69A15.86,15.86,0,0,0,132.69,32H40a8,8,0,0,0-8,8v92.69A15.86,15.86,0,0,0,36.69,144L136,243.31a16,16,0,0,0,22.63,0l84.68-84.68a16,16,0,0,0,0-22.63Zm-96,96L48,132.69V48h84.69L232,147.31ZM96,84A12,12,0,1,1,84,72,12,12,0,0,1,96,84Z"
+      />
+    </Svg>
+  );
+}
+
+export function CurrencyCircleDollarIcon({ size, color }: PhosphorIconProps) {
+  return (
+    <Svg width={size} height={size} viewBox={VIEW_BOX}>
+      <Path
+        fill={color}
+        d="M128,24A104,104,0,1,0,232,128,104.11,104.11,0,0,0,128,24Zm0,192a88,88,0,1,1,88-88A88.1,88.1,0,0,1,128,216Zm40-68a28,28,0,0,1-28,28h-4v8a8,8,0,0,1-16,0v-8H104a8,8,0,0,1,0-16h36a12,12,0,0,0,0-24H116a28,28,0,0,1,0-56h4V72a8,8,0,0,1,16,0v8h16a8,8,0,0,1,0,16H116a12,12,0,0,0,0,24h24A28,28,0,0,1,168,148Z"
+      />
+    </Svg>
+  );
+}
+
+export function ShieldCheckIcon({ size, color }: PhosphorIconProps) {
+  return (
+    <Svg width={size} height={size} viewBox={VIEW_BOX}>
+      <Path
+        fill={color}
+        d="M208,40H48A16,16,0,0,0,32,56v56c0,52.72,25.52,84.67,46.93,102.19,23.06,18.86,46,25.26,47,25.53a8,8,0,0,0,4.2,0c1-.27,23.91-6.67,47-25.53C198.48,196.67,224,164.72,224,112V56A16,16,0,0,0,208,40Zm0,72c0,37.07-13.66,67.16-40.6,89.42A129.3,129.3,0,0,1,128,223.62a128.25,128.25,0,0,1-38.92-21.81C61.82,179.51,48,149.3,48,112l0-56,160,0ZM82.34,141.66a8,8,0,0,1,11.32-11.32L112,148.69l50.34-50.35a8,8,0,0,1,11.32,11.32l-56,56a8,8,0,0,1-11.32,0Z"
       />
     </Svg>
   );

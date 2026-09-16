@@ -250,7 +250,7 @@ it("leaves a transfer tap-only, because it has no category to choose", () => {
   // By text, not by role: `TransferRow` is not pressable at all — it states
   // two accounts rather than offering one target — so there is no button here
   // to find.
-  const row1 = screen.getByText(/Bank B/);
+  const row1 = screen.getByText(/^Transfer · /);
   expect(
     row1.closest("[style*='translateX']"),
     "a swipe onto a sheet with nothing in it is worse than no swipe",

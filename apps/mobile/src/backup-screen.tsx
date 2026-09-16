@@ -21,7 +21,6 @@ import { useLedgerController } from "@waltning/client/ledger/use-ledger-controll
 import { BackupCard } from "@waltning/ui/backup/backup-card";
 import { useT } from "@waltning/ui/i18n/provider";
 import { Button } from "@waltning/ui/primitives/button";
-import { GroundPanel } from "@waltning/ui/shell/card";
 import { ErrorState } from "@waltning/ui/states/error-state";
 import { text } from "@waltning/ui/theme/fonts";
 import { makeStyles } from "@waltning/ui/theme/styles";
@@ -29,6 +28,7 @@ import { useCallback, useState } from "react";
 import { Text } from "react-native";
 import { mobileDiagnostics } from "./diagnostics.ts";
 import { backupPort } from "./platform";
+import { PushedPage } from "./pushed-page";
 
 /**
  * The device's clock and its offset, as a stable reference.
@@ -66,7 +66,7 @@ export default function Backup() {
 
   if (state.kind === "done") {
     return (
-      <GroundPanel>
+      <PushedPage title={t("routes.backup")} subtitle={t("pages.backup")}>
         <BackupCard
           identity={state.identity}
           fingerprint={state.fingerprint}
@@ -84,13 +84,13 @@ export default function Backup() {
           {...(copied === undefined ? {} : { copied })}
         />
         <Button label={t("backup.done")} onPress={handleDone} variant="primary" size="lg" />
-      </GroundPanel>
+      </PushedPage>
     );
   }
 
   if (state.kind === "failed") {
     return (
-      <GroundPanel>
+      <PushedPage title={t("routes.backup")} subtitle={t("pages.backup")}>
         <ErrorState
           variant="recoverable"
           what={t("backup.failed")}
@@ -98,12 +98,12 @@ export default function Backup() {
           cost={t("backup.failedCost")}
           action={{ label: t("backup.again"), onPress: backup.run }}
         />
-      </GroundPanel>
+      </PushedPage>
     );
   }
 
   return (
-    <GroundPanel>
+    <PushedPage title={t("routes.backup")} subtitle={t("pages.backup")}>
       <Text style={styles.lede}>{t("backup.lede")}</Text>
       <Button
         label={t("backup.action")}
@@ -112,7 +112,7 @@ export default function Backup() {
         size="lg"
         loading={state.kind === "working"}
       />
-    </GroundPanel>
+    </PushedPage>
   );
 }
 

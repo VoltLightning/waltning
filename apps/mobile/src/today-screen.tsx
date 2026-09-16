@@ -508,6 +508,20 @@ export default function Today() {
     [leadNetWorth, snapshot.netWorth.length, handleOpenAccounts],
   );
 
+  /**
+   * What the period's three figures leave out — the count of currencies with
+   * rows in this period that are not the lead one. `readPeriodSpend` returns
+   * one row per currency, so this is the rest of that list; the card states it
+   * rather than a converted figure, which is class **S** (S04).
+   */
+  const periodOtherCurrencies = useMemo(
+    () =>
+      leadNetWorth === undefined
+        ? 0
+        : periodSpendRows.filter((row) => row.currency !== leadNetWorth.currency).length,
+    [periodSpendRows, leadNetWorth],
+  );
+
   /** The hero, and §5's three figures in the shape `net = inflow − spend`. */
   const monthCard = useMemo(
     () =>
@@ -518,9 +532,10 @@ export default function Today() {
           net={leadPeriodSpend?.net ?? money.ZERO}
           currency={leadNetWorth.currency}
           decimals={leadNetWorth.decimals}
+          otherCurrencies={periodOtherCurrencies}
         />
       ) : null,
-    [leadNetWorth, leadPeriodSpend],
+    [leadNetWorth, leadPeriodSpend, periodOtherCurrencies],
   );
 
   // One object per language rather than per render, so a re-render for an

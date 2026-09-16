@@ -296,6 +296,10 @@ it("names a currency with no rate, and offers S18 with it", () => {
     />,
   );
 
+  // **BYN has to be chosen first now.** The form opens on the first currency a
+  // capture can be valued in rather than the first one by code, so the warning
+  // is about a currency the owner picked rather than one they were handed.
+  fireEvent.click(screen.getByRole("radio", { name: /^BYN/ }));
   expect(screen.getByText(/BYN has no exchange rate yet/)).toBeDefined();
   fireEvent.click(screen.getByRole("button", { name: "Set a BYN rate" }));
   expect(onSetRate).toHaveBeenCalledWith("BYN");
@@ -318,4 +322,48 @@ it("says nothing about rates when no currency declares capturable", () => {
     />,
   );
   expect(screen.queryByText(/has no exchange rate yet/)).toBeNull();
+});
+
+/**
+ * **The form used to open on `currencies[0]`** — first by code, which on a
+ * fresh ledger is BYN: a currency with no rate, warned about on sight, and an
+ * account that cannot take a transaction until one is set. The pivot always
+ * satisfies `capturable` by definition (§14.6), so the default lands there
+ * when nothing else has a rate.
+ */
+it("opens on a currency a capture can be valued in, not the first one by code", () => {
+  render(
+    <CreateAccountForm
+      currencies={[
+        { code: currencyCode("BYN"), name: "Belarusian Ruble", symbol: "Br", capturable: false },
+        { code: currencyCode("EUR"), name: "Euro", symbol: "€", capturable: false },
+        { code: currencyCode("PLN"), name: "Polish Złoty", symbol: "zł", capturable: true },
+      ]}
+      today={TODAY}
+      groups={[]}
+      onCancel={vi.fn()}
+      onSave={vi.fn()}
+    />,
+  );
+
+  // Nothing is warned about, because nothing unusable is selected.
+  expect(screen.queryByText(/has no exchange rate yet/)).toBeNull();
+  expect(screen.getByRole("radio", { name: /^PLN/ }).getAttribute("aria-checked")).toBe("true");
+  expect(screen.getByRole("radio", { name: /^BYN/ }).getAttribute("aria-checked")).toBe("false");
+});
+
+/** Every currency unusable is a ledger with no pivot — someone else's error to report. */
+it("still selects something when no currency is capturable", () => {
+  render(
+    <CreateAccountForm
+      currencies={[
+        { code: currencyCode("BYN"), name: "Belarusian Ruble", symbol: "Br", capturable: false },
+      ]}
+      today={TODAY}
+      groups={[]}
+      onCancel={vi.fn()}
+      onSave={vi.fn()}
+    />,
+  );
+  expect(screen.getByText(/BYN has no exchange rate yet/)).toBeDefined();
 });

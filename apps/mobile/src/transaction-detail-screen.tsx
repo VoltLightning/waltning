@@ -50,9 +50,10 @@ import {
   type CategorySheetCreateDraft,
 } from "@waltning/ui/categories/category-sheet";
 import { resolveFieldErrorMessage } from "@waltning/ui/i18n/field-error-messages";
-import { useT } from "@waltning/ui/i18n/provider";
+import { dayLabel } from "@waltning/ui/i18n/locales";
+import { useLocale, useT } from "@waltning/ui/i18n/provider";
 import { Button } from "@waltning/ui/primitives/button";
-import { Card, GroundPanel } from "@waltning/ui/shell/card";
+import { Card } from "@waltning/ui/shell/card";
 import { ErrorState } from "@waltning/ui/states/error-state";
 import {
   FieldsCard,
@@ -63,6 +64,7 @@ import { LinesCard, type LinesCardDraftLine } from "@waltning/ui/transactions/li
 import { TransactionHero } from "@waltning/ui/transactions/transaction-hero";
 import { router, useLocalSearchParams } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
+import { PushedPage } from "./pushed-page";
 
 /**
  * Every refusal this screen sees is form-level — `refusalFromThrow` in
@@ -122,12 +124,9 @@ function handleCreateAccountFromDetail() {
   router.push({ pathname: "/account/new", params: { returnTo: "accounts" } });
 }
 
-function handleBack() {
-  router.back();
-}
-
 export default function TransactionDetail() {
   const t = useT();
+  const locale = useLocale();
   const ledger = useLedgerController();
   // Subscribed — an account renamed or a category created elsewhere while
   // this screen is open still shows up the moment either picker opens.
@@ -264,21 +263,28 @@ export default function TransactionDetail() {
 
   if (!detail) {
     return (
-      <GroundPanel>
+      <PushedPage title={t("routes.transaction")} subtitle={t("pages.transaction")}>
+        {/*
+          No action. The page header above this carries the way back now, and
+          two controls labelled *Back* on one screen is one of them being
+          read aloud twice and neither being the obvious one.
+        */}
         <ErrorState
           variant="terminal"
           what={t("routes.transaction")}
           why={t("transactions.notFound")}
-          action={{ label: t("common.back"), onPress: handleBack }}
         />
-      </GroundPanel>
+      </PushedPage>
     );
   }
 
   const effectiveAccountId = pickedAccountId ?? detail.accountId;
 
   return (
-    <GroundPanel>
+    <PushedPage
+      title={detail.payee === "" ? t("routes.transaction") : detail.payee}
+      subtitle={dayLabel(detail.date, locale)}
+    >
       <TransactionHero
         amount={detail.amount}
         currency={detail.currency}
@@ -330,6 +336,6 @@ export default function TransactionDetail() {
         onCreateAccount={handleCreateAccountFromDetail}
         onDismiss={handleDismissAccountPicker}
       />
-    </GroundPanel>
+    </PushedPage>
   );
 }

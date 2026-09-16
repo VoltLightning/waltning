@@ -268,10 +268,11 @@ function KindGroup({ label, rows, onSelectAccount, onTransferFrom }: KindGroupPr
 
   return (
     <Card title={label} action={action}>
-      {rows.map((row) => (
+      {rows.map((row, index) => (
         <AccountRegisterRow
           key={row.id}
           account={row}
+          last={index === rows.length - 1}
           onSelect={onSelectAccount}
           {...(onTransferFrom ? { onTransferFrom } : {})}
         />
@@ -282,11 +283,13 @@ function KindGroup({ label, rows, onSelectAccount, onTransferFrom }: KindGroupPr
 
 type AccountRegisterRowProps = {
   account: AccountRegisterAccount;
+  /** The last row in this card draws no rule — the card's edge already ends the list. */
+  last: boolean;
   onSelect: (id: string) => void;
   onTransferFrom?: (id: string) => void;
 };
 
-function AccountRegisterRow({ account, onSelect, onTransferFrom }: AccountRegisterRowProps) {
+function AccountRegisterRow({ account, last, onSelect, onTransferFrom }: AccountRegisterRowProps) {
   const t = useT();
   const styles = useStyles();
   const handlePress = useCallback(() => onSelect(account.id), [account.id, onSelect]);
@@ -306,6 +309,7 @@ function AccountRegisterRow({ account, onSelect, onTransferFrom }: AccountRegist
       unsettled={account.kind === "clearing" && !money.isZero(account.balance)}
       expectedBalance={account.expectedBalance}
       onPress={handlePress}
+      last={last}
     />
   );
 
@@ -414,9 +418,10 @@ function ArchivedToggle({ open, accounts, total, onToggle }: ArchivedToggleProps
         </Text>
       ) : null}
       {open
-        ? accounts.map((account) => (
+        ? accounts.map((account, index) => (
             <BalanceRow
               key={account.id}
+              last={index === accounts.length - 1}
               account={account.name}
               kind={t(`accounts.${KIND_LABEL_KEY[account.kind]}`)}
               balance={account.balance}

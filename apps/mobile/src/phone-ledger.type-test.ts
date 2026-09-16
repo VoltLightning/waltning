@@ -28,15 +28,13 @@
  * because both sides would have moved together.
  */
 
-import type { BackupManifest } from "@waltning/client/backup/backup-port";
 import type {
   PhoneAuditEntry,
   PhoneCounterparty,
-  PhoneExport,
   PhoneExportOptions,
   TransactionType,
 } from "@waltning/client/ledger/create-phone-ledger";
-import type { ExportManifest, ExportOptions, LedgerExport } from "@waltning/ledger/backup/export";
+import type { ExportOptions } from "@waltning/ledger/backup/export";
 import type { LocalAuditEntry } from "@waltning/ledger/transactions/read-audit-log";
 import type { Actor, CounterpartyKind, TxnType } from "@waltning/schema/enums";
 
@@ -74,20 +72,18 @@ export type PhoneCounterpartyKindIsSchemaKind = Expect<
 >;
 
 /**
- * The backup seam, pinned in all three places it is restated.
+ * The backup seam — one pin left, and that is the point.
  *
- * `architecture/14` §14.3 makes this export the phone's only durable copy, and
- * it crosses the same boundary `actor` drifted across: `packages/client` may
- * not import `@waltning/ledger`, so the port and the hook each write out the
- * export's shape by hand. Two hand-written copies of the thing that decides
- * whether a backup is complete is exactly the arrangement that produced this
- * file's opening paragraph.
+ * It used to be three: the client mirrored the document, its manifest and the
+ * export's options by hand, each with an assertion holding the copy to the
+ * original. Two of those are gone because the shapes moved to
+ * `packages/core/src/backup/contract.ts` — three packages read a backup and
+ * none may import the others, so a type belonging to no one of them belongs in
+ * the floor. A pin that can no longer fail is not a test; deleting it is the
+ * honest half of the move.
  *
- * Invariant equality again, and the narrowing direction is the dangerous one
- * here: a manifest that quietly lost `outboxEntries` would compile, render a
- * card with one fewer row, and stop mentioning the half of the backup that
- * exists nowhere else.
+ * `ExportOptions` stays mirrored and stays pinned: it names `RandomBytes` and
+ * a recipient, which are the *engine's* contract for taking a backup rather
+ * than the backup's own shape.
  */
 export type PhoneExportOptionsMatchLedger = Expect<Equals<PhoneExportOptions, ExportOptions>>;
-export type PhoneExportMatchesLedger = Expect<Equals<PhoneExport, LedgerExport>>;
-export type BackupManifestMatchesLedger = Expect<Equals<BackupManifest, ExportManifest>>;

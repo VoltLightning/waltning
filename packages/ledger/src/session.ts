@@ -1,3 +1,4 @@
+import type { BackupDocument } from "@waltning/core/backup/contract";
 import type { PayeeHistoryRow } from "@waltning/core/capture/payee-memory";
 import type { AccountingDate } from "@waltning/core/date";
 import type { Id } from "@waltning/core/id";
@@ -59,11 +60,15 @@ import {
 } from "./accounts/read-unsettled-clearing.ts";
 import { reconcileAccountExecutor } from "./accounts/reconcile-account.executor.ts";
 import { updateAccountExecutor } from "./accounts/update-account.executor.ts";
+import { BACKUP_FORMAT, parseBackup as parseBackupDocument } from "./backup/document.ts";
 import {
+  describeBackup as describeBackupDocument,
+  type ExportManifest,
   type ExportOptions,
   exportLedger as exportLedgerFile,
   type LedgerExport,
 } from "./backup/export.ts";
+import { type RestoreResult, restoreBackup as restoreBackupInto } from "./backup/restore.ts";
 import { archiveCategoryExecutor } from "./categories/archive-category.executor.ts";
 import { convertLeafGroupExecutor } from "./categories/convert-leaf-group.executor.ts";
 import {
@@ -311,6 +316,20 @@ export type LocalLedgerSession = {
    * is the half nothing else holds.
    */
   exportLedger: (options: SessionExportOptions) => LedgerExport;
+  /**
+   * Put a backup back — §14.3's other half, and the one that makes the first
+   * half a backup rather than a hypothesis.
+   *
+   * On the session for the same reason the export is: it writes **both**
+   * stores, and the session is the only thing holding them. It refuses a
+   * ledger that is not empty; replacing a live one is a deletion first, with
+   * a confirmation attached (`S30`).
+   */
+  restoreLedger: (backup: BackupDocument) => RestoreResult;
+  /** Decrypted bytes to a document — every claim it makes about itself checked first. */
+  readBackup: (bytes: Uint8Array) => BackupDocument;
+  /** What a document says about itself, so a person sees it before anything is written. */
+  describeBackup: (backup: BackupDocument) => ExportManifest;
   /** C4 — S10's list. A query, not a snapshot field: a filtered page is asked for, not held. */
   searchTransactions: (
     filter: TransactionSearchFilter,
@@ -699,6 +718,14 @@ export function createLocalLedgerSession<TRun>(
     readActiveDashboardLayout: () => readActiveLayout(requireOpen().replica.db),
     listUnsettledClearing: () => readUnsettledClearing(requireOpen().replica.db),
     balanceAsOf: (accountId, asOf) => readBalanceAsOf(requireOpen().replica.db, accountId, asOf),
+    readBackup: (bytes) => parseBackupDocument(bytes, { format: BACKUP_FORMAT }),
+    describeBackup: (backup) => describeBackupDocument(backup),
+    restoreLedger: (backup) => {
+      const open = requireOpen();
+      return restoreBackupInto({ replica: open.replica, outbox: open.outbox }, backup, {
+        fs: options.fs,
+      });
+    },
     exportLedger: (exportOptions) => {
       const open = requireOpen();
       return exportLedgerFile({ replica: open.replica.db, outbox: open.outbox.db }, exportOptions);

@@ -425,7 +425,7 @@ describe("J02 — daily capture, under ten seconds, offline", () => {
     // The row goes back to plain, unfilled — `Eating out` is an expense
     // category and no longer matches `type: "income"`.
     expect(screen.queryByRole("button", { name: /Category: Eating out/ })).toBeNull();
-    expect(screen.getByRole("button", { name: "Category" })).toBeDefined();
+    expect(screen.getByRole("button", { name: "Category: What was it for?" })).toBeDefined();
 
     fireEvent.click(screen.getByRole("button", { name: "Save income" }));
     await waitFor(() => expect(screen.queryByRole("button", { name: "Save income" })).toBeNull());

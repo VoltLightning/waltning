@@ -272,6 +272,21 @@ purpose, or a merge produces a plausible wrong number that neither device held.
   silently lost a row. A backup nobody has opened is a hypothesis, and here the
   check costs one pass.
 
+  **And it has been restored.** `restoreBackup` fills two empty stores from a
+  decrypted document and the drill runs on every `pnpm verify`: a ledger is
+  exported, its files deleted, the backup put back, and the balance compared —
+  to eight decimal places, not by eye. A restore is not a merge: two ledgers
+  that both believe they are the ledger cannot be reconciled without a writer
+  of record and there is none here (§14.0), so a store holding rows is refused
+  rather than merged into. The document's own schema version travels, because
+  rows written at version 12 are in version 12's shape: the stores are migrated
+  to *that* version, the rows go in, and the rest of the chain runs over them —
+  which is what a launch does to a database an update has moved past. Each
+  store fills inside one transaction with `PRAGMA defer_foreign_keys = ON`, so
+  every constraint is still checked, once, at commit: a restore whose
+  references do not resolve writes nothing, and half a ledger is worse than
+  none because it looks like one.
+
   **The key reaches the screen before the file reaches the share sheet.** The
   other order let the ciphertext go to iCloud Drive while its only key was
   still a local variable, so a dismissed sheet or a back-swipe left a file

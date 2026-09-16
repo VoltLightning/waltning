@@ -312,6 +312,15 @@ function harness(
     exportLedger: () => {
       throw new Error("this port takes no backups");
     },
+    restoreLedger: () => {
+      throw new Error("this port restores nothing");
+    },
+    readBackup: () => {
+      throw new Error("this port reads no backup");
+    },
+    describeBackup: () => {
+      throw new Error("this port describes no backup");
+    },
     listAccounts: (options) =>
       options?.includeArchived ? accounts : accounts.filter((a) => !a.archived),
     listCurrencies: () => CURRENCIES,

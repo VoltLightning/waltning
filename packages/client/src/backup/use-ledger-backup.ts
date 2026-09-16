@@ -35,11 +35,12 @@
  */
 
 import { fingerprintOf, generateKeyPair } from "@waltning/core/age/keys";
+import type { BackupManifest } from "@waltning/core/backup/contract";
 import { type AccountingDate, todayAtOffset } from "@waltning/core/date";
 import { errorFromThrown } from "@waltning/core/diagnostics";
 import { useCallback, useRef, useState } from "react";
 import { type ClientDiagnostics, clientFailure, emitClientDiagnostic } from "../diagnostics.ts";
-import type { BackupHandoff, BackupManifest, BackupPort } from "./backup-port.ts";
+import type { BackupHandoff, BackupPort } from "./backup-port.ts";
 
 const ACTION = { scope: "client_action", action: "export_ledger" } as const;
 

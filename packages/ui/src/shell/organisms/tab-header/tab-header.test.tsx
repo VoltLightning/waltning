@@ -13,6 +13,11 @@ it("states the tab's name", () => {
   expect(screen.getByText("Ledger")).toBeDefined();
 });
 
+it("states the line under the name, when given one", () => {
+  render(<TabHeader title="Settings" subtitle="Everything about how this behaves" />);
+  expect(screen.getByText("Everything about how this behaves")).toBeDefined();
+});
+
 it("renders the one action it is given, beside the title", () => {
   render(<TabHeader title="Ledger" action={<Text>Filter</Text>} />);
   expect(screen.getByText("Filter")).toBeDefined();
@@ -30,6 +35,7 @@ it("clears the device's top inset, added to the design's own padding", () => {
     </SafeAreaProvider>,
   );
   const header = container.firstElementChild as HTMLElement;
-  // space.x4 (20) + NOTCHED.top (59).
+  // gutter (20) + NOTCHED.top (59) — `PageHeader`'s arithmetic, which this
+  // band now shares rather than restates.
   expect(getComputedStyle(header).paddingTop).toBe("79px");
 });

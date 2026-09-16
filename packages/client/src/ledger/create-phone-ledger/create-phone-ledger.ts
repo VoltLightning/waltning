@@ -1,3 +1,7 @@
+import type {
+  BackupDocument as BackupContents,
+  BackupManifest,
+} from "@waltning/core/backup/contract";
 import { fold } from "@waltning/core/capture/names";
 import type { PayeeHistoryRow } from "@waltning/core/capture/payee-memory";
 import { jaccard, trigrams } from "@waltning/core/capture/trigrams";
@@ -792,6 +796,12 @@ export type PhoneLedgerPort = {
    * stores, and the session is the only thing that holds them.
    */
   exportLedger: (options: PhoneExportOptions) => PhoneExport;
+  /** §14.3's other half. Structural, like the rest of this port. */
+  restoreLedger: (backup: BackupContents) => { counts: Record<string, number> };
+  /** Decrypted bytes to a document, throwing on anything that is not one. */
+  readBackup: (bytes: Uint8Array) => BackupContents;
+  /** What a document says about itself, for the confirm step before a write. */
+  describeBackup: (backup: BackupContents) => PhoneExport["manifest"];
   updateTransaction: (input: UpdateTransactionInput, capture: PhoneCapture) => void;
   deleteTransaction: (input: DeleteTransactionInput, capture: PhoneCapture) => void;
   setTransactionLines: (input: SetTransactionLinesInput, capture: PhoneCapture) => void;
@@ -1405,14 +1415,8 @@ export type PhoneExportOptions = {
 /** What it hands back. Mirrors `LedgerExport` — and carries no key, by construction. */
 export type PhoneExport = {
   readonly file: Uint8Array;
-  readonly manifest: {
-    readonly createdAt: string;
-    readonly recipient: string;
-    readonly bytes: number;
-    readonly counts: Readonly<Record<string, number>>;
-    readonly transactions: number;
-    readonly outboxEntries: number;
-  };
+  /** `packages/core`'s shape: three packages read it and none may import the others. */
+  readonly manifest: BackupManifest;
 };
 
 export type PhoneLedgerController = {
@@ -1425,6 +1429,12 @@ export type PhoneLedgerController = {
   getAuditLog: (entity: string, entityId: string) => PhoneAuditLogResult;
   /** §14.3's backup. Reads both stores; the caller supplies the key and never gets one back. */
   exportLedger: (options: PhoneExportOptions) => PhoneExport;
+  /** §14.3's other half. Structural, like the rest of this port. */
+  restoreLedger: (backup: BackupContents) => { counts: Record<string, number> };
+  /** Decrypted bytes to a document, throwing on anything that is not one. */
+  readBackup: (bytes: Uint8Array) => BackupContents;
+  /** What a document says about itself, for the confirm step before a write. */
+  describeBackup: (backup: BackupContents) => PhoneExport["manifest"];
   createAccount: (
     draft: CreateAccountDraft,
   ) => { id: Id<"accounts"> } | { fieldErrors: readonly FieldError[] };
@@ -2374,6 +2384,9 @@ export function createPhoneLedger(
     getTransaction: (id) => port.getTransaction(id),
     getAuditLog: (entity, entityId) => port.getAuditLog(entity, entityId),
     exportLedger: (exportOptions) => port.exportLedger(exportOptions),
+    restoreLedger: (backup) => port.restoreLedger(backup),
+    readBackup: (bytes) => port.readBackup(bytes),
+    describeBackup: (backup) => port.describeBackup(backup),
     readCategoryReferenceCounts: (categoryId) =>
       port.readCategoryReferenceCounts(brandId<"categories">(categoryId)),
     createAccount: (draft) => {

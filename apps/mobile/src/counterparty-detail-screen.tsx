@@ -52,7 +52,7 @@ import { parseAmount } from "@waltning/ui/fx/amount-field";
 import { decimalMark } from "@waltning/ui/i18n/locales";
 import { useLocale, useT } from "@waltning/ui/i18n/provider";
 import { Button } from "@waltning/ui/primitives/button";
-import { Card, GroundPanel } from "@waltning/ui/shell/card";
+import { Card } from "@waltning/ui/shell/card";
 import { EmptyState } from "@waltning/ui/states/empty-state";
 import { ErrorState } from "@waltning/ui/states/error-state";
 import { Skeleton } from "@waltning/ui/states/skeleton";
@@ -66,6 +66,7 @@ import { Keypad, type KeypadKey } from "@waltning/ui/transactions/keypad";
 import { router, useLocalSearchParams } from "expo-router";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { Text, View } from "react-native";
+import { PushedPage } from "./pushed-page";
 
 /** `settle_debt`'s own field paths (`registry/inputs.ts`) — everything else lands at form level. */
 const SETTLE_KNOWN_PATHS = [
@@ -457,6 +458,15 @@ export default function CounterpartyDetail() {
     if (!rawId) return;
     router.push({ pathname: "/quick-add", params: { counterpartyId: rawId } });
   }, [rawId]);
+  /**
+   * The header, in all three states. A screen that is still loading, or that
+   * failed, still needs a name and a way back — the deck has no state without
+   * a header, and a header appearing only on success is how a back gesture
+   * goes missing exactly when a reader needs it.
+   */
+  const headerTitle = counterparty?.name ?? t("routes.counterparty");
+  const headerSubtitle = t("pages.counterparty");
+
   const handleEdit = useCallback(() => {
     if (!rawId) return;
     router.push(`/counterparty/${rawId}/edit`);
@@ -464,14 +474,14 @@ export default function CounterpartyDetail() {
 
   if (snapshot.error) {
     return (
-      <GroundPanel>
+      <PushedPage title={headerTitle} subtitle={headerSubtitle}>
         <ErrorState
           variant="recoverable"
           what={t("counterparties.loadFailedTitle")}
           why={t("counterparties.loadFailedWhy")}
           action={{ label: t("common.retry"), onPress: ledger.refresh }}
         />
-      </GroundPanel>
+      </PushedPage>
     );
   }
 
@@ -484,7 +494,7 @@ export default function CounterpartyDetail() {
   // replica genuinely holds no currencies" (H1).
   if (snapshot.revision === 0) {
     return (
-      <GroundPanel>
+      <PushedPage title={headerTitle} subtitle={headerSubtitle}>
         <Card>
           <View
             accessibilityRole="progressbar"
@@ -496,7 +506,7 @@ export default function CounterpartyDetail() {
             <Skeleton shape="row" label="" />
           </View>
         </Card>
-      </GroundPanel>
+      </PushedPage>
     );
   }
 
@@ -511,20 +521,38 @@ export default function CounterpartyDetail() {
   // state.
   if (pivot === undefined) {
     return (
-      <GroundPanel>
+      <PushedPage title={headerTitle} subtitle={headerSubtitle}>
         <ErrorState
           variant="recoverable"
           what={t("counterparties.noPivotTitle")}
           why={t("counterparties.noPivotWhy")}
         />
-      </GroundPanel>
+      </PushedPage>
     );
   }
 
-  if (!counterparty || !figures) return null;
+  /*
+   * **Not `return null`.** A blank cream screen with no name and no way out is
+   * the state a reader is least able to leave, and it was reachable here: a
+   * row that has gone, or a load that has not landed. The header is the
+   * screen's own now, so there is no navigation band to fall back on — the
+   * screen draws one or nothing does.
+   */
+  if (!counterparty || !figures) {
+    return (
+      <PushedPage title={headerTitle} subtitle={headerSubtitle}>
+        <ErrorState
+          variant="recoverable"
+          what={t("counterparties.loadFailedTitle")}
+          why={t("counterparties.loadFailedWhy")}
+          action={{ label: t("common.retry"), onPress: ledger.refresh }}
+        />
+      </PushedPage>
+    );
+  }
 
   return (
-    <GroundPanel>
+    <PushedPage title={headerTitle} subtitle={headerSubtitle}>
       <Card>
         <CounterpartyCard
           name={counterparty.name}
@@ -651,7 +679,7 @@ export default function CounterpartyDetail() {
           token={unmergeToastTokenRef.current}
         />
       ) : null}
-    </GroundPanel>
+    </PushedPage>
   );
 }
 

@@ -37,13 +37,13 @@ import { Button } from "@waltning/ui/primitives/button";
 import { SearchField } from "@waltning/ui/primitives/search-field";
 import { Tag } from "@waltning/ui/primitives/tag";
 import { Toggle } from "@waltning/ui/primitives/toggle";
-import { GroundPanel } from "@waltning/ui/shell/card";
 import { EmptyState } from "@waltning/ui/states/empty-state";
 import { Toast, UndoToast } from "@waltning/ui/states/toast";
 import { text } from "@waltning/ui/theme/fonts";
 import { makeStyles } from "@waltning/ui/theme/styles";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { Text, View } from "react-native";
+import { PushedPage } from "./pushed-page";
 
 type ActionsState = {
   type: "actions";
@@ -408,7 +408,7 @@ export default function CategoriesScreen() {
   const empty = nodes.length === 0;
 
   return (
-    <GroundPanel>
+    <PushedPage title={t("routes.categories")} subtitle={t("pages.categories")}>
       {empty ? (
         <EmptyState
           variant="first-run"
@@ -516,7 +516,7 @@ export default function CategoriesScreen() {
       ) : (
         <Toast message={toast.message} onDismiss={handleDismissToast} token={toast.token} />
       )}
-    </GroundPanel>
+    </PushedPage>
   );
 }
 

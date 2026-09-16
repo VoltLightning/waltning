@@ -1,74 +1,39 @@
 /**
- * `<TabHeader>` — the band a tab root wears when it has no hero to lead with.
+ * `<TabHeader>` — the band every tab root but Today wears (`05-composites`
+ * §5.1): the tab's own name, the line under it, and room for one action.
  *
- * **Every tab is titled, and the title is the shell's, not the screen's.**
- * Today drew its own band through `TodayFrame`; Ledger and Debt drew nothing
- * at all, so their content began 22px from the top of the device with no name
- * on it; Settings put its name inside a card, where a card's title is a
- * card's, not the page's. Three treatments for one thing means the app reads
- * as three apps, and the fix belongs above the screens rather than in each of
- * them — a screen that draws its own header is a screen that can disagree
- * with the next one.
+ * **It is `PageHeader` with no way back.** A tab root is somewhere to be, not
+ * somewhere to leave, so the corner holds an action or nothing. Everything
+ * else — the clearance, the two type steps, the ground it sits on — is the
+ * same band every pushed screen wears, and this file used to hold a third
+ * copy of it painted in `shell`.
  *
- * So `tabs-shell.tsx` draws this from the active tab's own label, and no tab
- * screen carries a title of its own. The one exception is the one with
- * something better: Today keeps `TodayFrame`'s hero band, because §5.1's
- * *"a 54pt total does not fit in a navigation bar"* is still true and a hero
- * is a better header than a word.
- *
- * **`shell`, `displayTwo`, and the same top clearance `Shell` uses** — the
- * inset plus the design's own breathing room, added rather than maxed, so the
- * phones that reserve the most room are not the ones whose title sits hard
- * against the status bar. Sharing the vocabulary is what makes the band read
- * as one surface with Today's rather than as a second, similar one.
- *
- * `action` is one node, on the right — an appearance control, a filter, a
- * period picker. One, for `Card`'s own reason: a header with three
- * affordances is a header that has stopped being a title.
+ * **On the ground, not the sage.** The deck's S16 and S30 open with the name
+ * in ink on cream, the same cream the cards sit on; the green band was this
+ * app's invention, and it made Today — the one tab that had no band — the one
+ * tab that looked like the design. Drawn by the tab shell from the active
+ * tab's label, never by the screen, so no tab screen carries a title of its
+ * own: a screen that draws its own header is a screen that can disagree with
+ * the next one.
  */
 
-import { Text, View } from "react-native";
-import { useSafeArea } from "../../../primitives/safe-area";
-import { text, textCap } from "../../../theme/fonts.ts";
-import { makeStyles } from "../../../theme/styles.ts";
-import { gutter, space } from "../../../tokens.ts";
+import type { ReactNode } from "react";
+import { PageHeader } from "../../molecules/page-header/page-header";
 
 export type TabHeaderProps = {
   title: string;
-  /** **One** action or figure, on the right. Rendered exactly as given. */
-  action?: React.ReactNode;
+  /** The deck gives every tab root one — *Everything about how this behaves*. */
+  subtitle?: string;
+  /** **One** action, on the right — a period label, a filter. Never three. */
+  action?: ReactNode;
 };
 
-export function TabHeader({ title, action }: TabHeaderProps) {
-  const styles = useStyles();
-  const insets = useSafeArea();
-
-  // Per-device, so not in `useStyles` — the same arithmetic and the same
-  // reason `Shell` states beside its own copy.
-  const clearance = {
-    paddingTop: gutter + insets.top,
-    paddingLeft: gutter + insets.left,
-    paddingRight: gutter + insets.right,
-  };
-
+export function TabHeader({ title, subtitle, action }: TabHeaderProps) {
   return (
-    <View style={[styles.header, clearance]}>
-      <Text maxFontSizeMultiplier={textCap("displayTwo")} style={styles.title} numberOfLines={1}>
-        {title}
-      </Text>
-      {action}
-    </View>
+    <PageHeader
+      title={title}
+      {...(subtitle === undefined ? {} : { subtitle })}
+      {...(action === undefined ? {} : { action })}
+    />
   );
 }
-
-const useStyles = makeStyles((theme) => ({
-  header: {
-    backgroundColor: theme.shell,
-    padding: gutter,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: space.x3,
-  },
-  title: { flexShrink: 1, color: theme.shellText, ...text.ui("displayTwo") },
-}));

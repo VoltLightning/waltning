@@ -28,7 +28,12 @@ import { currencyCode, pivotPerUnit } from "@waltning/core/money";
 import type { ReactElement } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const router = { push: vi.fn(), back: vi.fn(), dismissTo: vi.fn() };
+const router = {
+  push: vi.fn(),
+  back: vi.fn(),
+  canGoBack: () => true,
+  dismissTo: vi.fn(),
+};
 const useLocalSearchParams = vi.fn(() => ({}) as { account?: string });
 
 vi.mock("expo-router", () => ({
@@ -179,7 +184,7 @@ describe("Ledger", () => {
     expect(screen.getByText("Today")).toBeDefined();
     expect(screen.getByText("2026-01-05")).toBeDefined();
     expect(screen.getByText("Corner Bakery")).toBeDefined();
-    expect(screen.getByText("Cash → Bank A")).toBeDefined();
+    expect(screen.getByText("Transfer · Cash → Bank A")).toBeDefined();
     expect(screen.getByText("2 transactions")).toBeDefined();
   });
 

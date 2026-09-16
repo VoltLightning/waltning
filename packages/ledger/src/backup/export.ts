@@ -23,11 +23,11 @@
 
 import { decrypt as ageDecrypt, encrypt as ageEncrypt } from "@waltning/core/age/format";
 import type { RandomBytes } from "@waltning/core/age/keys";
+import type { BackupDocument, BackupManifest } from "@waltning/core/backup/contract";
 import type { LedgerSchema } from "../open.ts";
 import {
   BACKUP_FORMAT,
   BACKUP_TABLES,
-  type BackupDocument,
   liveCounts,
   liveTables,
   parseBackup,
@@ -61,16 +61,8 @@ export type LedgerExport = {
   readonly manifest: ExportManifest;
 };
 
-export type ExportManifest = {
-  readonly createdAt: string;
-  readonly recipient: string;
-  readonly bytes: number;
-  /** Rows per table, summing to `entries` for the ones a person would call entries. */
-  readonly counts: Readonly<Record<string, number>>;
-  readonly transactions: number;
-  /** Unsent intent — the half of the export that exists nowhere else. */
-  readonly outboxEntries: number;
-};
+/** What a document says about itself — `packages/core`'s shape; see its contract. */
+export type ExportManifest = BackupManifest;
 
 export function exportLedger<TRun, TSchema extends LedgerSchema>(
   stores: ReadStores<TRun, TSchema>,
@@ -84,7 +76,7 @@ export function exportLedger<TRun, TSchema extends LedgerSchema>(
 
   againstTheDatabase(readBackDocument.counts, liveCounts(stores));
 
-  return { file, manifest: manifestOf(readBackDocument, file.length) };
+  return { file, manifest: describeBackup(readBackDocument, file.length) };
 }
 
 /**
@@ -142,8 +134,15 @@ function againstTheDatabase(
   }
 }
 
-/** Built from the document that came **out of the file**, so it describes what was written. */
-function manifestOf(backup: BackupDocument, bytes: number): ExportManifest {
+/**
+ * What a document says about itself.
+ *
+ * Exported because a **restore** needs it too, and needs it before writing
+ * anything: `S30` shows the manifest and asks, rather than handing over a
+ * receipt for a decision already made. `bytes` is the file's size, which a
+ * restore knows and an export computes.
+ */
+export function describeBackup(backup: BackupDocument, bytes = 0): ExportManifest {
   return {
     createdAt: backup.createdAt,
     recipient: backup.recipient,

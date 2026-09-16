@@ -122,3 +122,30 @@ describe("BalanceRow", () => {
     expect(screen.queryByText("Last observed:")).toBeNull();
   });
 });
+
+/**
+ * **A rule between rows, never under the last one.** A card's own edge ends a
+ * list; a hairline two pixels inside it reads as a row that failed to render.
+ * Every account card in the app closed with one, because this row drew its
+ * rule unconditionally while `SettingsMenu` and `BackupCard` both take `last`.
+ */
+it("draws a rule between rows and none under the last", () => {
+  const { container, unmount } = render(
+    <BalanceRow account="Bank A · PLN" kind="Bank" balance={money.toMoney("0")} currency="PLN" />,
+  );
+  const between = container.firstElementChild as HTMLElement;
+  expect(getComputedStyle(between).borderBottomWidth).toBe("1px");
+  unmount();
+
+  const { container: end } = render(
+    <BalanceRow
+      account="Bank A · PLN"
+      kind="Bank"
+      balance={money.toMoney("0")}
+      currency="PLN"
+      last
+    />,
+  );
+  const lastRow = end.firstElementChild as HTMLElement;
+  expect(getComputedStyle(lastRow).borderBottomWidth).toBe("0px");
+});

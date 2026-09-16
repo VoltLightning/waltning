@@ -105,7 +105,7 @@ function openMore() {
 it("draws two rows at rest — the account and the category — and the rest behind one", () => {
   draw();
   expect(screen.getByRole("button", { name: /^From/ })).toBeDefined();
-  expect(screen.getByRole("button", { name: "Category" })).toBeDefined();
+  expect(screen.getByRole("button", { name: "Category: What was it for?" })).toBeDefined();
   expect(
     screen.getByRole("button", { name: "More details: Payee, date, scope, person" }),
   ).toBeDefined();
@@ -146,7 +146,7 @@ it("keeps the picked category among the chips even when it is not among the most
 
 it("opens the category and account pickers through callbacks rather than rendering them", () => {
   const props = draw();
-  fireEvent.click(screen.getByRole("button", { name: "Category" }));
+  fireEvent.click(screen.getByRole("button", { name: "Category: What was it for?" }));
   fireEvent.click(screen.getByRole("button", { name: /^From/ }));
   expect(props.onOpenCategoryPicker).toHaveBeenCalledOnce();
   expect(props.onOpenAccountPicker).toHaveBeenCalledOnce();
@@ -320,4 +320,22 @@ it("takes the note in its own field, without a sheet", () => {
 it("draws the pace line under the figure as given, and nothing when there is none", () => {
   draw({ pace: "Groceries this month: 61% of usual" });
   expect(screen.getByText("Groceries this month: 61% of usual")).toBeDefined();
+});
+
+/**
+ * **The account row is named for the direction the money moves** (`S05` §
+ * `ComposerRows`). Income credits the account it names, so labelling that row
+ * *From* — as one hardcoded string did for both kinds — told the reader the
+ * money was leaving the account it was about to land in.
+ */
+it("names the account row From on an expense", () => {
+  draw({ type: "expense" });
+  expect(screen.getByText("From")).toBeDefined();
+  expect(screen.queryByText("Into")).toBeNull();
+});
+
+it("names the account row Into on an income, which credits it", () => {
+  draw({ type: "income" });
+  expect(screen.getByText("Into")).toBeDefined();
+  expect(screen.queryByText("From")).toBeNull();
 });

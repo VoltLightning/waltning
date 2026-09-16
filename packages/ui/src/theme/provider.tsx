@@ -40,12 +40,31 @@ export type ThemeProviderProps = {
   children: React.ReactNode;
 };
 
+/**
+ * Which theme is showing, by name.
+ *
+ * Separate from the theme object because a caller sometimes needs the
+ * *choice* rather than the colours: the status bar's glyphs are `light` or
+ * `dark` and there is no token for them — they are the OS's, drawn over
+ * whatever the app paints at y=0.
+ */
+const ThemeNameContext = createContext<ThemeName>("light");
+
 export function ThemeProvider({ name = "light", theme, children }: ThemeProviderProps) {
   // Memoised so a parent re-render does not hand every consumer a new context
   // value and re-run every `makeStyles` cache lookup below it.
   const value = useMemo(() => theme ?? themes[name], [theme, name]);
 
-  return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
+  return (
+    <ThemeNameContext.Provider value={name}>
+      <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>
+    </ThemeNameContext.Provider>
+  );
+}
+
+/** The active theme's name — `"light"` or `"dark"`. See `ThemeNameContext`. */
+export function useThemeName(): ThemeName {
+  return useContext(ThemeNameContext);
 }
 
 /**

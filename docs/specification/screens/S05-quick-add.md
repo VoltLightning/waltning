@@ -246,7 +246,7 @@ still, and a numeric keypad on screen would be slower than typing.
 | `ComposerHeader` | The fixed band: the name, the day, the ✕. Clears the top inset itself |
 | `SegmentControl` | The kind — Expense · Income · Transfer. Transfer opens S31 |
 | `AmountCard` | *How much?* over a `TextInput` at `display-hero`, tabular lining numerals, the kind's sign in the kind's colour, the currency affix in the accent; the pace line under it |
-| `ComposerRows` · `ComposerRow` | The card of choices: a 32 tinted tile, label over value, caret. *From* · *Category* · *More details*, which unfolds *Payee* · *Date* · *Scope* · *Person*. **≥44px** (Q3). The account row fills from last-used **only within a short window**, and is otherwise empty with Save disabled — a stale default reads as an answer rather than a question (§9) |
+| `ComposerRows` · `ComposerRow` | The card of choices: a 32 tinted tile, label over value, caret. *From* on an expense and *Into* on an income — the account the money leaves or lands in, named for the direction it moves — then *Category* · *More details*, which unfolds *Payee* · *Date* · *Scope* · *Person*. **≥44px** (Q3). The account row fills from last-used **only within a short window**, and is otherwise empty with Save disabled — a stale default reads as an answer rather than a question (§9) |
 | `CategoryChips` | This kind's four most-used categories, tinted by name, the picked one always among them |
 | `Banner` | `neutral`, under the rows, when the chosen account's currency has no rate — the refusal, and its one action, *Set a ‹CUR› rate* → S18 |
 | `TrailRow` | *From your history: Corner Café* + **Undo**, under the rows, while a proposal fills the category on its own. The P2 component |

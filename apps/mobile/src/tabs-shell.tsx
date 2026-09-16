@@ -115,10 +115,29 @@ function handleDeskScope(next: string) {
  * second hardcoded string would be the thing that drifts.
  */
 function PhoneHeader() {
+  const t = useT();
   const { items } = useTabBarItems();
   const active = items.find((item) => item.active);
   if (active === undefined || active.name === "today") return null;
-  return <TabHeader title={active.label} />;
+  return <TabHeader title={active.label} subtitle={tabSubtitle(active.name, t)} />;
+}
+
+/**
+ * The line under a tab's name — the deck gives each root one, and it says
+ * what the screen is for. Keyed by the tab's name rather than carried on the
+ * bar item, because the bar has no line to show it in.
+ */
+function tabSubtitle(name: string, t: ReturnType<typeof useT>): string {
+  switch (name) {
+    case "ledger":
+      return t("shell.ledgerSubtitle");
+    case "debt":
+      return t("shell.debtSubtitle");
+    case "settings":
+      return t("shell.settingsSubtitle");
+    default:
+      return "";
+  }
 }
 
 /**

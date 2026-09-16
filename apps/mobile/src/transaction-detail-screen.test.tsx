@@ -19,7 +19,12 @@ import { currencyCode, toMoney } from "@waltning/core/money";
 import type { ReactElement } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const router = { push: vi.fn(), back: vi.fn(), dismissTo: vi.fn() };
+const router = {
+  push: vi.fn(),
+  back: vi.fn(),
+  canGoBack: () => true,
+  dismissTo: vi.fn(),
+};
 const useLocalSearchParams = vi.fn(() => ({ id: TXN }));
 
 vi.mock("expo-router", () => ({
@@ -245,6 +250,9 @@ describe("TransactionDetail", () => {
     withLedger(<TransactionDetail />, fakeController(null));
 
     expect(screen.getByText("This transaction no longer exists.")).toBeDefined();
+    // **One** way back, not two. The state used to carry a `Back` action of
+    // its own under a navigation band that already had one; the header is the
+    // screen's now and carries the only one.
     fireEvent.click(screen.getByRole("button", { name: "Back" }));
     expect(router.back).toHaveBeenCalledTimes(1);
   });

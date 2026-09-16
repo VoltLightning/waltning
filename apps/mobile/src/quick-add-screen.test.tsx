@@ -27,7 +27,13 @@ import { weekdayLabel } from "@waltning/ui/i18n/locales";
 import { Alert } from "react-native";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const router = { push: vi.fn(), back: vi.fn(), dismissTo: vi.fn(), replace: vi.fn() };
+const router = {
+  push: vi.fn(),
+  back: vi.fn(),
+  canGoBack: () => true,
+  dismissTo: vi.fn(),
+  replace: vi.fn(),
+};
 const useLocalSearchParams = vi.fn(() => ({}));
 
 vi.mock("expo-router", () => ({
@@ -329,7 +335,7 @@ describe("QuickAdd — the phone path (Dock + QuickAddComposer)", () => {
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
 
     expect(screen.queryByRole("button", { name: /Category: Eating out/ })).toBeNull();
-    expect(screen.getByRole("button", { name: "Category" })).toBeDefined();
+    expect(screen.getByRole("button", { name: "Category: What was it for?" })).toBeDefined();
   });
 
   /**

@@ -10,9 +10,10 @@ import {
 } from "@waltning/ui/accounts/create-account-form";
 import { resolveFieldErrorMessage } from "@waltning/ui/i18n/field-error-messages";
 import { useT } from "@waltning/ui/i18n/provider";
-import { GroundPanel } from "@waltning/ui/shell/card";
+import { ErrorState } from "@waltning/ui/states/error-state";
 import { router, useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
+import { PushedPage } from "./pushed-page";
 
 function handleCancel() {
   router.back();
@@ -94,10 +95,27 @@ export default function NewAccount() {
     [ledger, t, target],
   );
 
-  if (!target.valid) return null;
+  /*
+   * **Not `return null`.** A blank cream screen with no name and no way out is
+   * the state a reader is least able to leave, and it was reachable here: a
+   * row that has gone, or a load that has not landed. The header is the
+   * screen's own now, so there is no navigation band to fall back on — the
+   * screen draws one or nothing does.
+   */
+  if (!target.valid) {
+    return (
+      <PushedPage title={t("routes.createAccount")} subtitle={t("pages.createAccount")}>
+        <ErrorState
+          variant="terminal"
+          what={t("routes.createAccount")}
+          why={t("accounts.badReturnTarget")}
+        />
+      </PushedPage>
+    );
+  }
 
   return (
-    <GroundPanel>
+    <PushedPage title={t("routes.createAccount")} subtitle={t("pages.createAccount")}>
       {/* No title: the navigation header carries it, and the same
           string twice on one screen reads as two sections. */}
       <CreateAccountForm
@@ -109,6 +127,6 @@ export default function NewAccount() {
         onSave={handleSave}
         onSetRate={handleSetRate}
       />
-    </GroundPanel>
+    </PushedPage>
   );
 }

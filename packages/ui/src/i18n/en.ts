@@ -89,6 +89,16 @@ export const en = {
     decline: "Decline",
   },
   accounts: {
+    /**
+     * The picker over a ledger with **no accounts at all** — `08` §8.1's
+     * `first-run`, which is a different sentence from "nothing matched your
+     * search" and was rendering as the latter with empty quotes.
+     */
+    noneTitle: "No accounts yet",
+    noneBody: "Create one, and captures have somewhere to come from.",
+    /** A row, an account or a return target that is no longer there. */
+    notFound: "This account is no longer here. It may have been archived on another device.",
+    badReturnTarget: "That link did not say where to come back to.",
     currency: "Currency",
     create: "Create account…",
     /**
@@ -249,6 +259,14 @@ export const en = {
     noMatchesHere: "Nothing here matches \u201C{{query}}\u201D.",
     amount: "Amount",
     account: "Account",
+    /**
+     * The **prompt** under an unfilled composer row, not the noun again.
+     * `From`/`Account` and `Category`/`Category` were the label repeated as
+     * its own value — the second reading as a field that had somehow filled
+     * itself in with its own name.
+     */
+    chooseAccount: "Which one?",
+    chooseCategory: "What was it for?",
     /**
      * §14.6: holding a currency and capturing in it are separate capabilities.
      * The message names the currency because the person chose the account, not
@@ -411,6 +429,8 @@ export const en = {
     totalExcludingCapitalMany: "{{amount}} excluding {{count}} one-offs",
     /** Drawn between the two accounts, and the two amounts, of a `TransferRow`. */
     transferArrow: "→",
+    transferTo: "To {{account}}",
+    transferKind: "Transfer",
     /** Short swipe's action (S10 §4, §7) — announced, not only shown. */
     categorise: "Categorise",
     /** `Skeleton`'s accessible label while a page loads. */
@@ -466,6 +486,7 @@ export const en = {
     addIncomeTitle: "Add income",
     howMuch: "How much?",
     fromAccount: "From",
+    intoAccount: "Into",
     person: "Person",
     moreDetails: "More details",
     moreDetailsHint: "Payee, date, scope, person",
@@ -663,6 +684,7 @@ export const en = {
   },
   /* ── E5 · counterparties — S14's settle sheet ─────────────────────────── */
   counterparties: {
+    notFound: "This person is no longer here. They may have been merged or removed.",
     /** `SettleSheet`'s title (S14 §3). */
     settlingWith: "Settling with {{name}}",
     /** The balance picker (S14 §9.1). */
@@ -960,6 +982,10 @@ export const en = {
     flowRange: "{{count}} months + this month to date",
   },
   shell: {
+    /** The line under each tab root's name — what the screen is for. */
+    ledgerSubtitle: "Every entry, in order",
+    debtSubtitle: "Who owes whom, and since when",
+    settingsSubtitle: "Everything about how this behaves",
     /** Summary's gateway grid — a kicker over the cards. */
     goTo: "Go to",
     /** `PagerHeader`'s magnifier. */
@@ -1178,7 +1204,63 @@ export const en = {
     unsentValue_other: "{{count}} captures",
     where: "Kept in",
   },
+  /**
+   * The line under a screen's name, from the deck. Every artboard with a
+   * header has one, and they are not decoration: a reader knows what the
+   * screen is for before a row of it has been read.
+   */
+  pages: {
+    restore: "Put a backup back",
+    accounts: "Everything money sits in",
+    createAccount: "Where money will sit",
+    editAccount: "Its name, its kind, what it holds",
+    categories: "What spending is filed under",
+    currencies: "Which exist, and where rates come from",
+    rates: "What is held, and what has stopped",
+    backup: "The only copy that leaves this phone",
+    counterparty: "What is owed, and since when",
+    newCounterparty: "Someone money moves between",
+    editCounterparty: "Their name, and how they are counted",
+    transaction: "One entry, and everything behind it",
+  },
+  /** `S30`'s value lines — the one fact behind each destination. */
+  settings: {
+    accountsValue_one: "{{count}} account",
+    accountsValue_few: "{{count}} accounts",
+    accountsValue_many: "{{count}} accounts",
+    accountsValue_other: "{{count}} accounts",
+    currenciesValue_one: "{{count}} currency",
+    currenciesValue_few: "{{count}} currencies",
+    currenciesValue_many: "{{count}} currencies",
+    currenciesValue_other: "{{count}} currencies",
+    onThisPhoneTitle: "Everything is on this phone",
+    onThisPhoneBody:
+      "Nothing has left it. When you add a machine, this is where you will pair them.",
+  },
+  /** `S30`'s restore — the other half of a backup. */
+  restore: {
+    title: "Restore",
+    lede: "Put a backup back. This fills an empty ledger — it does not merge with one you already have.",
+    keyLabel: "Your key",
+    keyHint: "The AGE-SECRET-KEY the backup was taken with",
+    choose: "Choose a file",
+    readySubtitle: "Check this before you replace anything",
+    found: "In this file",
+    taken: "Taken",
+    entriesValue_one: "{{count}} entry",
+    entriesValue_few: "{{count}} entries",
+    entriesValue_many: "{{count}} entries",
+    entriesValue_other: "{{count}} entries",
+    apply: "Restore this",
+    cancel: "Not this one",
+    working: "Restoring…",
+    doneTitle: "Restored",
+    doneBody: "Your ledger is back. Check a balance you remember before trusting it.",
+    failed: "That did not restore",
+    failedCost: "Nothing was written — your ledger is as it was.",
+  },
   routes: {
+    restore: "Restore",
     backup: "Back up",
     expense: "Expense",
     createAccount: "Create account",

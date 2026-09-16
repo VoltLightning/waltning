@@ -35,7 +35,7 @@ Two rules follow, both in `shell.test.tsx`:
   against the status bar on exactly the phones with the biggest one.
 - **`GroundPanel` clears the bottom and the sides, never the top.** The top
   belongs to the header above it, and the app guarantees there is one: the shell
-  on the ledger, a navigation header on every other route. Sides always, because
+  on the ledger, `PageHeader` on every other route. Sides always, because
   in landscape the notch is on one of them. The clearance lives on the scroll
   content, not on the panel itself, so the last row clears the home indicator
   at the end of the scroll — not at the fold, where a short screen's content
@@ -45,15 +45,40 @@ Two rules follow, both in `shell.test.tsx`:
   inset itself, so the panel passes `clearBottom={false}` rather than clearing
   the same inset a second time.
 
-**Every route's top strip is painted by the app, in `shell`.** The ledger has
-`TodayFrame`'s shell; every other route takes a navigation header styled from
-the same token. One structural decision, three symptoms:
+**No route wears a navigation band.** The deck has none: every artboard that
+is not a tab root — S09, S13, S16, S17, S18, S30's *Back up* — opens with a
+`displayTwo` title and a muted line on the same cream the cards sit on, and
+puts the way back in the corner as a drawn mark. Twelve shipped screens wore a
+sage band with a small white title instead, purely because that is what
+`Stack.Screen` draws when nobody says otherwise, and the result was that Today
+looked like the design and everything you navigated *to* looked like a
+different app.
 
-- **The status bar never flips.** `shell` is a deep green in *both* appearances,
-  so the surface under the clock and battery is dark whatever the theme and the
-  glyphs are `light` everywhere — one app-wide `<StatusBar>`, no per-route
-  override to forget. They had never been set at all: the OS drew them in its
-  own choice, which on a light-appearance phone is dark, over a dark green fill.
+So the header is the screen's own — `PageHeader`, composed *beside*
+`GroundPanel` rather than inside it, which is what makes the top inset that
+screen's to clear. `tests/architecture.test.ts` refuses a route layout that
+leaves the platform's header on, because the failure mode is one new route
+quietly re-enabling it.
+
+**Every route's top strip is therefore painted by the app, in `ground`.** The
+ledger has `TodayFrame`; everything else has `PageHeader`. One structural
+decision, three symptoms:
+
+- **The status bar's glyphs follow the appearance**, through the navigator's
+  own `statusBarStyle` — `dark` on cream, `light` on the near-black. Nothing
+  paints that strip: under edge-to-edge the window draws behind it and whatever
+  React renders at y=0 *is* the strip, which is `ground` on every route now.
+  `app.json` still configures `expo-status-bar` with `style: "light"`, and that
+  is not a contradiction: the plugin writes the Android theme's default, which
+  shows for the instant before JS runs.
+
+  **This was claimed to be unfixable without leaving Expo Go, and that was
+  wrong.** The option is one line in the `screenOptions` the same change was
+  already editing, declared by `expo-router`'s own native-stack types and
+  backed by `react-native-screens`; `react-native-edge-to-edge` is not even
+  installed. The claim survived review of the code and was caught only by
+  someone checking it against the types — which is what this specification's
+  own rule about unenforced claims is for.
 - **The Android band.** Expo enforces edge-to-edge from SDK 54, so the system
   leaves the status-bar area to the app and backs it itself when nothing claims
   it. `headerStatusBarHeight` defaults to the safe-area inset, so a header grows

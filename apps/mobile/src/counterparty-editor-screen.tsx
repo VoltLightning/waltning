@@ -42,7 +42,6 @@ import {
 } from "@waltning/ui/counterparties/counterparty-form";
 import { resolveFieldErrorMessage } from "@waltning/ui/i18n/field-error-messages";
 import { useT } from "@waltning/ui/i18n/provider";
-import { GroundPanel } from "@waltning/ui/shell/card";
 import { ErrorState } from "@waltning/ui/states/error-state";
 import { Skeleton } from "@waltning/ui/states/skeleton";
 import { Toast } from "@waltning/ui/states/toast";
@@ -51,6 +50,7 @@ import { space } from "@waltning/ui/tokens";
 import { router, useLocalSearchParams } from "expo-router";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { View } from "react-native";
+import { PushedPage } from "./pushed-page";
 
 /**
  * `update_counterparty` and `create_counterparty`'s own field paths —
@@ -310,7 +310,27 @@ export default function CounterpartyEditor() {
   const handleCancel = useCallback(() => router.back(), []);
   const handleDismissToast = useCallback(() => setToast(null), []);
 
-  if (editMode && !counterparty) return null;
+  /*
+   * **Not `return null`.** A blank cream screen with no name and no way out is
+   * the state a reader is least able to leave, and it was reachable here: a
+   * row that has gone, or a load that has not landed. The header is the
+   * screen's own now, so there is no navigation band to fall back on — the
+   * screen draws one or nothing does.
+   */
+  if (editMode && !counterparty) {
+    return (
+      <PushedPage
+        title={t(editMode ? "routes.editCounterparty" : "routes.newCounterparty")}
+        subtitle={t(editMode ? "pages.editCounterparty" : "pages.newCounterparty")}
+      >
+        <ErrorState
+          variant="terminal"
+          what={t("routes.editCounterparty")}
+          why={t("counterparties.notFound")}
+        />
+      </PushedPage>
+    );
+  }
 
   // M1 — the loading state, never the form with matching silently off: while
   // the first `refresh()` is still in flight (`snapshot.revision === 0`),
@@ -319,7 +339,10 @@ export default function CounterpartyEditor() {
   // `debt-screen.tsx` and `counterparty-detail-screen.tsx` carry (H1).
   if (snapshot.revision === 0) {
     return (
-      <GroundPanel>
+      <PushedPage
+        title={t(editMode ? "routes.editCounterparty" : "routes.newCounterparty")}
+        subtitle={t(editMode ? "pages.editCounterparty" : "pages.newCounterparty")}
+      >
         <View
           accessibilityRole="progressbar"
           accessibilityLabel={t("counterparties.loadingEditor")}
@@ -328,7 +351,7 @@ export default function CounterpartyEditor() {
           <Skeleton shape="row" label="" />
           <Skeleton shape="row" label="" />
         </View>
-      </GroundPanel>
+      </PushedPage>
     );
   }
 
@@ -340,18 +363,24 @@ export default function CounterpartyEditor() {
   // near-matches.
   if (pivot === undefined) {
     return (
-      <GroundPanel>
+      <PushedPage
+        title={t(editMode ? "routes.editCounterparty" : "routes.newCounterparty")}
+        subtitle={t(editMode ? "pages.editCounterparty" : "pages.newCounterparty")}
+      >
         <ErrorState
           variant="recoverable"
           what={t("counterparties.noPivotTitle")}
           why={t("counterparties.noPivotWhy")}
         />
-      </GroundPanel>
+      </PushedPage>
     );
   }
 
   return (
-    <GroundPanel>
+    <PushedPage
+      title={t(editMode ? "routes.editCounterparty" : "routes.newCounterparty")}
+      subtitle={t(editMode ? "pages.editCounterparty" : "pages.newCounterparty")}
+    >
       <CounterpartyForm
         initial={initial}
         currencies={currencies}
@@ -367,7 +396,7 @@ export default function CounterpartyEditor() {
       {toast === null ? null : (
         <Toast message={toast} onDismiss={handleDismissToast} token={toastTokenRef.current} />
       )}
-    </GroundPanel>
+    </PushedPage>
   );
 }
 

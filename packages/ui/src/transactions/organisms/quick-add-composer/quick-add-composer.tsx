@@ -262,7 +262,7 @@ export function QuickAddComposer({
   const categoryPlaceholder =
     proposedBelowThreshold && proposedCategory !== undefined
       ? t("transactions.categorySuggested", { name: proposedCategory.name })
-      : t("transactions.category");
+      : t("transactions.chooseCategory");
   /**
    * H1, S05 §8's P2 trail — the caption and Undo for an applied proposal,
    * named from the proposal's own neighbour (the closest one that voted for
@@ -397,9 +397,9 @@ export function QuickAddComposer({
       <ComposerRows>
         <ComposerRow
           first
-          label={t("transactions.fromAccount")}
+          label={t(type === "income" ? "transactions.intoAccount" : "transactions.fromAccount")}
           value={selectedAccount?.name}
-          placeholder={t("transactions.account")}
+          placeholder={t("transactions.chooseAccount")}
           tile={<HouseIcon size={15} color={theme.accentText} />}
           tileFill={theme.accentFill}
           onPress={onOpenAccountPicker}
