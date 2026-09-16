@@ -84,6 +84,27 @@ function admin() {
  */
 const quiet = () => {};
 
+/**
+ * **One clone of the template at a time, across every worker.**
+ *
+ * `CREATE DATABASE … TEMPLATE t` needs nobody connected to `t`, so each clone
+ * kicks every session off the template first. With `fileParallelism: true`
+ * that is a race between workers, and it is not a benign one: worker B's
+ * `pg_terminate_backend` can land on the backend **worker A is copying the
+ * template with**, halfway through. An interrupted copy is not always a clean
+ * failure — it can leave a database whose catalog is missing rows the copy had
+ * not reached, and a test then reads a constraint that is not there yet.
+ *
+ * That is the shape of an observed flake: `amount-positive-not-valid.test.ts`
+ * failed twice in ~22 full-suite runs, never once in 12 runs of the file
+ * alone, asserting on a `pg_constraint` row that `isConvalidated` returns
+ * `undefined` for when the row is absent.
+ *
+ * A session-level advisory lock on a fixed key makes the terminate-and-clone
+ * pair atomic between workers. The key is arbitrary and only has to be shared.
+ */
+const CLONE_LOCK = 0x7a1_7e57;
+
 /** Postgres refuses `CREATE DATABASE … TEMPLATE` while anyone is connected. */
 async function disconnectAll(sql: postgres.Sql, database: string): Promise<void> {
   await sql`
@@ -155,8 +176,15 @@ export async function scratchDatabase(label = "t"): Promise<Scratch> {
 
   const sqlAdmin = admin();
   try {
-    await disconnectAll(sqlAdmin, TEMPLATE_DB);
-    await sqlAdmin.unsafe(`CREATE DATABASE "${name}" TEMPLATE "${TEMPLATE_DB}"`);
+    // Held across both statements: see `CLONE_LOCK`. Released explicitly
+    // rather than left to `end()`, so a pooled session cannot carry it.
+    await sqlAdmin`SELECT pg_advisory_lock(${CLONE_LOCK})`;
+    try {
+      await disconnectAll(sqlAdmin, TEMPLATE_DB);
+      await sqlAdmin.unsafe(`CREATE DATABASE "${name}" TEMPLATE "${TEMPLATE_DB}"`);
+    } finally {
+      await sqlAdmin`SELECT pg_advisory_unlock(${CLONE_LOCK})`;
+    }
   } finally {
     await sqlAdmin.end();
   }

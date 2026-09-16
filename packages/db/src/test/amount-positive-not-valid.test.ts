@@ -168,7 +168,13 @@ describe("L2 — 0012 on a fresh install", () => {
   it("validates transactions_amount_positive immediately — no violating row exists", async () => {
     const scratch = await scratchDatabase("amt_fresh");
     try {
-      expect(await isConvalidated(scratch.sql)).toBe(true);
+      const convalidated = await isConvalidated(scratch.sql);
+      // **`undefined` means the constraint is not there at all**, which is a
+      // different fault from "there and not validated" and used to report as
+      // `expected undefined to be true`. A clone that lost rows to a race
+      // reads exactly that way — see `CLONE_LOCK` in `scratch.ts`.
+      expect(convalidated, `${scratch.name}: the constraint is missing, not invalid`).toBeDefined();
+      expect(convalidated).toBe(true);
     } finally {
       await scratch.drop();
     }
