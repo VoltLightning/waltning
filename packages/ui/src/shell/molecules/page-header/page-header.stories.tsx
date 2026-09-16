@@ -5,6 +5,7 @@
 
 import type { Meta, StoryObj } from "@storybook/react-native-web-vite";
 import { IconButton } from "../../../primitives/atoms/icon-button/icon-button";
+import { SafeAreaProvider } from "../../../primitives/safe-area";
 import { BackMark } from "./back-mark";
 import { PageHeader } from "./page-header";
 
@@ -20,6 +21,9 @@ const meta = {
   title: "Shell/PageHeader",
   component: PageHeader,
   args: { title: "Currencies" },
+  // Full-bleed, like both consumers: the band paints to the screen's edges and
+  // clears the inset itself, which a padded canvas hides.
+  parameters: { layout: "fullscreen" },
 } satisfies Meta<typeof PageHeader>;
 
 export default meta;
@@ -50,4 +54,19 @@ export const LongTitle: Story = {
     subtitle: "What is owed, and since when",
     action: back,
   },
+};
+
+/**
+ * A notched device — the clearance is the part a laptop cannot show, and it is
+ * the reason this band exists outside the scroller.
+ */
+export const Notched: Story = {
+  args: { subtitle: SUBTITLE, action: back },
+  decorators: [
+    (Story) => (
+      <SafeAreaProvider insets={{ top: 59, right: 0, bottom: 34, left: 0 }}>
+        <Story />
+      </SafeAreaProvider>
+    ),
+  ],
 };

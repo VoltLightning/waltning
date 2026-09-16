@@ -282,7 +282,7 @@ export default function TransactionDetail() {
 
   return (
     <PushedPage
-      title={detail.payee ?? t("routes.transaction")}
+      title={detail.payee === "" ? t("routes.transaction") : detail.payee}
       subtitle={dayLabel(detail.date, locale)}
     >
       <TransactionHero

@@ -310,7 +310,27 @@ export default function CounterpartyEditor() {
   const handleCancel = useCallback(() => router.back(), []);
   const handleDismissToast = useCallback(() => setToast(null), []);
 
-  if (editMode && !counterparty) return null;
+  /*
+   * **Not `return null`.** A blank cream screen with no name and no way out is
+   * the state a reader is least able to leave, and it was reachable here: a
+   * row that has gone, or a load that has not landed. The header is the
+   * screen's own now, so there is no navigation band to fall back on — the
+   * screen draws one or nothing does.
+   */
+  if (editMode && !counterparty) {
+    return (
+      <PushedPage
+        title={t(editMode ? "routes.editCounterparty" : "routes.newCounterparty")}
+        subtitle={t(editMode ? "pages.editCounterparty" : "pages.newCounterparty")}
+      >
+        <ErrorState
+          variant="terminal"
+          what={t("routes.editCounterparty")}
+          why={t("counterparties.notFound")}
+        />
+      </PushedPage>
+    );
+  }
 
   // M1 — the loading state, never the form with matching silently off: while
   // the first `refresh()` is still in flight (`snapshot.revision === 0`),
@@ -319,7 +339,10 @@ export default function CounterpartyEditor() {
   // `debt-screen.tsx` and `counterparty-detail-screen.tsx` carry (H1).
   if (snapshot.revision === 0) {
     return (
-      <PushedPage title={t("routes.editCounterparty")} subtitle={t("pages.editCounterparty")}>
+      <PushedPage
+        title={t(editMode ? "routes.editCounterparty" : "routes.newCounterparty")}
+        subtitle={t(editMode ? "pages.editCounterparty" : "pages.newCounterparty")}
+      >
         <View
           accessibilityRole="progressbar"
           accessibilityLabel={t("counterparties.loadingEditor")}
@@ -340,7 +363,10 @@ export default function CounterpartyEditor() {
   // near-matches.
   if (pivot === undefined) {
     return (
-      <PushedPage title={t("routes.editCounterparty")} subtitle={t("pages.editCounterparty")}>
+      <PushedPage
+        title={t(editMode ? "routes.editCounterparty" : "routes.newCounterparty")}
+        subtitle={t(editMode ? "pages.editCounterparty" : "pages.newCounterparty")}
+      >
         <ErrorState
           variant="recoverable"
           what={t("counterparties.noPivotTitle")}
@@ -351,7 +377,10 @@ export default function CounterpartyEditor() {
   }
 
   return (
-    <PushedPage title={t("routes.editCounterparty")} subtitle={t("pages.editCounterparty")}>
+    <PushedPage
+      title={t(editMode ? "routes.editCounterparty" : "routes.newCounterparty")}
+      subtitle={t(editMode ? "pages.editCounterparty" : "pages.newCounterparty")}
+    >
       <CounterpartyForm
         initial={initial}
         currencies={currencies}

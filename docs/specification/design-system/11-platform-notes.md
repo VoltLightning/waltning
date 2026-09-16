@@ -64,17 +64,21 @@ quietly re-enabling it.
 ledger has `TodayFrame`; everything else has `PageHeader`. One structural
 decision, three symptoms:
 
-- **The status bar's glyphs are still set for a green strip, and are now
-  wrong.** `app.json` configures `expo-status-bar` with `style: "light"`, which
-  writes `android:windowLightStatusBar=false` at *build* time. That was right
-  while `shell` — a deep green in both appearances — painted the strip on every
-  route. It has been wrong on the ledger since that screen got its hero and the
-  strip there became `ground`, and it is wrong everywhere now. **It is not
-  fixable from here:** the correct value is per appearance, which is a runtime
-  property, and the API that sets it without turning edge-to-edge off is
-  `react-native-edge-to-edge`'s — a native module. It arrives with the build
-  that is ours (E0 · *Leave Expo Go*); until then the light appearance's clock
-  reads faintly on cream.
+- **The status bar's glyphs follow the appearance**, through the navigator's
+  own `statusBarStyle` — `dark` on cream, `light` on the near-black. Nothing
+  paints that strip: under edge-to-edge the window draws behind it and whatever
+  React renders at y=0 *is* the strip, which is `ground` on every route now.
+  `app.json` still configures `expo-status-bar` with `style: "light"`, and that
+  is not a contradiction: the plugin writes the Android theme's default, which
+  shows for the instant before JS runs.
+
+  **This was claimed to be unfixable without leaving Expo Go, and that was
+  wrong.** The option is one line in the `screenOptions` the same change was
+  already editing, declared by `expo-router`'s own native-stack types and
+  backed by `react-native-screens`; `react-native-edge-to-edge` is not even
+  installed. The claim survived review of the code and was caught only by
+  someone checking it against the types — which is what this specification's
+  own rule about unenforced claims is for.
 - **The Android band.** Expo enforces edge-to-edge from SDK 54, so the system
   leaves the status-bar area to the app and backs it itself when nothing claims
   it. `headerStatusBarHeight` defaults to the safe-area inset, so a header grows

@@ -197,8 +197,8 @@ export function readBackup<TRun, TSchema extends LedgerSchema>(
   };
 }
 
-/** Either store, for the two readers below — both only ever call `all`. */
-type AnyStore<TRun, TSchema extends LedgerSchema> =
+/** Either store — the two readers here only call `all`; `restore.ts` also writes. */
+export type AnyStore<TRun, TSchema extends LedgerSchema> =
   | ReplicaDb<TRun, TSchema>
   | OutboxDb<TRun, TSchema>;
 

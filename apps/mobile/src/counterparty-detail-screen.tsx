@@ -531,7 +531,25 @@ export default function CounterpartyDetail() {
     );
   }
 
-  if (!counterparty || !figures) return null;
+  /*
+   * **Not `return null`.** A blank cream screen with no name and no way out is
+   * the state a reader is least able to leave, and it was reachable here: a
+   * row that has gone, or a load that has not landed. The header is the
+   * screen's own now, so there is no navigation band to fall back on — the
+   * screen draws one or nothing does.
+   */
+  if (!counterparty || !figures) {
+    return (
+      <PushedPage title={headerTitle} subtitle={headerSubtitle}>
+        <ErrorState
+          variant="recoverable"
+          what={t("counterparties.loadFailedTitle")}
+          why={t("counterparties.loadFailedWhy")}
+          action={{ label: t("common.retry"), onPress: ledger.refresh }}
+        />
+      </PushedPage>
+    );
+  }
 
   return (
     <PushedPage title={headerTitle} subtitle={headerSubtitle}>

@@ -20,7 +20,12 @@ import { id } from "@waltning/core/id";
 import { currencyCode, toMoney } from "@waltning/core/money";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const router = { push: vi.fn(), back: vi.fn(), dismissTo: vi.fn() };
+const router = {
+  push: vi.fn(),
+  back: vi.fn(),
+  canGoBack: () => true,
+  dismissTo: vi.fn(),
+};
 const useLocalSearchParams = vi.fn(() => ({ id: "11111111-1111-4111-8111-111111111111" }));
 
 vi.mock("expo-router", () => ({
@@ -107,10 +112,17 @@ describe("AccountEditorScreen", () => {
     expect(screen.getByText("PLN zł")).toBeDefined();
   });
 
-  it("renders nothing for an id the active list does not hold", () => {
+  /**
+   * It used to render *nothing* — a blank cream screen with no name and no way
+   * out, which is the state a reader is least able to leave. There is no
+   * navigation band to fall back on now, so the screen says what happened and
+   * keeps its header.
+   */
+  it("says the account is gone, and keeps a way back", () => {
     useLocalSearchParams.mockReturnValue({ id: "does-not-exist" });
-    const { container } = withLedger();
-    expect(container.textContent).toBe("");
+    withLedger();
+    expect(screen.getByText(/no longer here/)).toBeDefined();
+    expect(screen.getByRole("button", { name: "Back" })).toBeDefined();
   });
 
   it("saves a patch through updateAccount and goes back", async () => {

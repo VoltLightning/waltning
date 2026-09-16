@@ -19,7 +19,7 @@ import { describeDiagnosticError } from "@waltning/core/diagnostics";
 import { resolveLocale } from "@waltning/ui/i18n/locales";
 import { I18nProvider, useT } from "@waltning/ui/i18n/provider";
 import { StartupFailed } from "@waltning/ui/states/startup-failed";
-import { ThemeProvider, useTheme } from "@waltning/ui/theme/provider";
+import { ThemeProvider, useTheme, useThemeName } from "@waltning/ui/theme/provider";
 import { makeStyles } from "@waltning/ui/theme/styles";
 import { useFonts } from "expo-font";
 import { Stack } from "expo-router";
@@ -240,6 +240,7 @@ const rootViewStyle = { flex: 1 } as const;
 function AppStack() {
   const t = useT();
   const theme = useTheme();
+  const themeName = useThemeName();
 
   return (
     <Stack
@@ -250,6 +251,25 @@ function AppStack() {
         // reads them — the back gesture's label, the web document title —
         // even with nothing drawn.
         headerShown: false,
+        /**
+         * **The clock and the battery, inked for the strip underneath them.**
+         *
+         * Nothing paints the status bar: under edge-to-edge the window draws
+         * behind it and whatever React renders at y=0 *is* the strip — which
+         * is `ground` on every route now. So the glyphs have to follow the
+         * appearance, dark on cream and light on the near-black.
+         *
+         * `app.json` still configures `expo-status-bar` with `style: "light"`,
+         * and that is not a contradiction: the plugin writes the Android
+         * theme's default, which is what shows for the instant before JS
+         * runs. This is the runtime value, and it wins. A first attempt at
+         * this change asserted the glyph colour was "not fixable" without
+         * leaving Expo Go — the option was one line away, in this object,
+         * declared by `expo-router`'s own native-stack types and backed by
+         * `react-native-screens`. Nothing native is needed and
+         * `react-native-edge-to-edge` is not installed.
+         */
+        statusBarStyle: themeName === "dark" ? "light" : "dark",
       }}
     >
       {/* **No navigation band, on any screen.**
@@ -326,29 +346,23 @@ function AppShell() {
 const useStyles = makeStyles((theme) => ({
   blank: { flex: 1, backgroundColor: theme.ground },
   /**
-   * **The root is the shell's green, and that is what paints the status bar.**
+   * **The root is the ground, and that is what paints the status bar.**
    *
-   * Under Android's edge-to-edge — enforced from Expo SDK 54 — the window draws
-   * behind the status bar and the system paints nothing there; whatever React
-   * renders at y=0 is the strip. On the ledger that is `TodayFrame`'s own
-   * shell, which is why that screen always looked right. On a pushed route it
-   * is the navigation header, and the native header does not extend its
-   * background under the inset — so the strip fell through to the window, which
-   * is black.
+   * Under Android's edge-to-edge — enforced from Expo SDK 54 — the window
+   * draws behind the status bar and the system paints nothing there; whatever
+   * React renders at y=0 is the strip. This fill is what is behind
+   * everything, for the moments between screens when nothing else has painted
+   * it.
    *
-   * `shell` rather than `ground` because green is the colour of the top strip
-   * on every route that has a navigation header, and that strip is the only
-   * place this shows. The ledger is unaffected: `TodayFrame`'s root is
-   * `ground` and covers it.
+   * **It was `shell`, the green, because a navigation header used to own that
+   * strip on every pushed route.** No route has one now: the deck has no
+   * navigation band, so every screen opens with `PageHeader` on the ground and
+   * paints the inset itself — the same thing `TodayFrame` has done since the
+   * ledger got its hero. A green fall-through would show only as a flash
+   * between two cream screens.
    *
-   * **Two routes now have no header of their own to paint that strip.**
-   * `quick-add` and `transfer` draw `ComposerHeader`'s band in `ground`, so
-   * what sits under the status bar there is light in the light theme, while
-   * `app.json` pins the status-bar icons to `light`. The four tab roots that
-   * render a bare `GroundPanel` are already in that state; naming it here
-   * because this is the file that would fix it, with a per-route
-   * `statusBarStyle`, and because a comment claiming otherwise is worse than
-   * the contrast.
+   * The glyphs over it are `AppStack`'s `statusBarStyle`, which follows the
+   * appearance.
    */
   root: { flex: 1, backgroundColor: theme.ground },
 }));

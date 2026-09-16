@@ -22,7 +22,9 @@ import { expect, it, vi } from "vitest";
  * The screen draws its own header now (`PushedPage`), and a header has a way
  * back — which is the router's. The rest of this file never navigates.
  */
-vi.mock("expo-router", () => ({ router: { push: vi.fn(), back: vi.fn(), dismissTo: vi.fn() } }));
+vi.mock("expo-router", () => ({
+  router: { push: vi.fn(), back: vi.fn(), canGoBack: () => true, dismissTo: vi.fn() },
+}));
 
 import SettingsRatesScreen, { type SettingsRatesScreenProps } from "./settings-rates-screen";
 

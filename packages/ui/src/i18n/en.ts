@@ -89,6 +89,9 @@ export const en = {
     decline: "Decline",
   },
   accounts: {
+    /** A row, an account or a return target that is no longer there. */
+    notFound: "This account is no longer here. It may have been archived on another device.",
+    badReturnTarget: "That link did not say where to come back to.",
     currency: "Currency",
     create: "Create account…",
     /**
@@ -663,6 +666,7 @@ export const en = {
   },
   /* ── E5 · counterparties — S14's settle sheet ─────────────────────────── */
   counterparties: {
+    notFound: "This person is no longer here. They may have been merged or removed.",
     /** `SettleSheet`'s title (S14 §3). */
     settlingWith: "Settling with {{name}}",
     /** The balance picker (S14 §9.1). */
@@ -1194,11 +1198,25 @@ export const en = {
     categories: "What spending is filed under",
     currencies: "Which exist, and where rates come from",
     rates: "What is held, and what has stopped",
-    backup: "An encrypted copy, for you to keep",
+    backup: "The only copy that leaves this phone",
     counterparty: "What is owed, and since when",
     newCounterparty: "Someone money moves between",
     editCounterparty: "Their name, and how they are counted",
     transaction: "One entry, and everything behind it",
+  },
+  /** `S30`'s value lines — the one fact behind each destination. */
+  settings: {
+    accountsValue_one: "{{count}} account",
+    accountsValue_few: "{{count}} accounts",
+    accountsValue_many: "{{count}} accounts",
+    accountsValue_other: "{{count}} accounts",
+    currenciesValue_one: "{{count}} currency",
+    currenciesValue_few: "{{count}} currencies",
+    currenciesValue_many: "{{count}} currencies",
+    currenciesValue_other: "{{count}} currencies",
+    onThisPhoneTitle: "Everything is on this phone",
+    onThisPhoneBody:
+      "Nothing has left it. When you add a machine, this is where you will pair them.",
   },
   routes: {
     backup: "Back up",

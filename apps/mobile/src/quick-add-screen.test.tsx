@@ -27,7 +27,13 @@ import { weekdayLabel } from "@waltning/ui/i18n/locales";
 import { Alert } from "react-native";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const router = { push: vi.fn(), back: vi.fn(), dismissTo: vi.fn(), replace: vi.fn() };
+const router = {
+  push: vi.fn(),
+  back: vi.fn(),
+  canGoBack: () => true,
+  dismissTo: vi.fn(),
+  replace: vi.fn(),
+};
 const useLocalSearchParams = vi.fn(() => ({}));
 
 vi.mock("expo-router", () => ({

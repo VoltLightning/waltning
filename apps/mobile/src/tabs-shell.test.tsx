@@ -54,7 +54,7 @@ vi.mock("expo-router/ui", () => ({
 }));
 
 vi.mock("expo-router", () => ({
-  router: { push: vi.fn(), back: vi.fn(), dismissTo: vi.fn() },
+  router: { push: vi.fn(), back: vi.fn(), canGoBack: () => true, dismissTo: vi.fn() },
 }));
 
 const { TabsShell, handleSelectType } = await import("./tabs-shell");

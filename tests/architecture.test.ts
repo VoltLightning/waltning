@@ -1243,70 +1243,6 @@ describe("a card groups rows or holds a figure — never a whole screen", () => 
     return end === undefined ? undefined : src.slice(m.index, end.end);
   }
 
-  /**
-   * How many rows a card holds as a **menu list**, or `undefined` where it is
-   * not one.
-   *
-   * Two shapes are a menu: sibling rows written out, and one collection
-   * mapped to a row apiece. The second is the one a named component uses, and
-   * the collection is the *screen's* — the component maps a prop — so the
-   * count is resolved in the screen's own source, where the destinations are
-   * declared. Anything else in the card, or a title on it, is not a menu.
-   */
-  function menuRowCount(screenSource: string, card: Child): number | undefined {
-    const open = openTagEnd(card.raw, 0);
-    // Brace-aware, so an element inside a prop (`action={<Controls/>}`) does
-    // not end the tag early and hide a `title` written after it.
-    if (/\b(?:title|tag|action)\s*=/.test(card.raw.slice(0, open?.end ?? 0))) return undefined;
-
-    const children = topLevelChildren(unwrap(innerOf(card))).filter(isRealContent);
-    // Written out: every child is a control, and every one of them goes
-    // somewhere. Both halves — a row that has a handler and a row that
-    // navigates are not the same claim, and §5.1 grants the exemption to the
-    // second.
-    if (
-      children.length > 1 &&
-      children.every(
-        (child) =>
-          isControl(screenSource, child) && navigatesTo(screenSource, pressHandlerOf(child)),
-      )
-    )
-      return children.length;
-
-    const only = children.length === 1 ? children[0] : undefined;
-    if (only === undefined || only.name !== EXPRESSION) return undefined;
-    const mapped = /\b([A-Za-z_$][\w$]*)\s*\.map\s*\(/.exec(stripComments(only.raw));
-    if (!mapped) return undefined;
-
-    const component = [...uiCards()].find(([, c]) => c.card.raw === card.raw)?.[0];
-    const owner = component === undefined ? screenSource : (uiCards().get(component)?.source ?? "");
-    // **What the collection is mapped *to*.** Seven `Text`s in a card are
-    // seven rows and no destinations, and §5.1 grants the exemption to a
-    // list of destinations — so the row itself has to be a control,
-    // resolved in the file that writes it.
-    const row = topLevelChildren(only.raw.slice(1, -1)).find((child) => child.name !== EXPRESSION);
-    if (row === undefined || !isControl(owner, row)) return undefined;
-
-    if (component === undefined) {
-      // The card is the screen's own, so the row's handler is too.
-      if (!navigatesTo(screenSource, pressHandlerOf(row))) return undefined;
-      return listLength(screenSource, mapped[1] ?? "");
-    }
-
-    /**
-     * **A named menu's destinations are the screen's, not the menu's.** The
-     * component maps a prop to a row and calls another prop on press; both
-     * values are written at the call site, so that is where both questions
-     * are asked — does anything this screen hands the menu actually
-     * navigate, and how many entries did it hand over.
-     */
-    const tag = tagOf(screenSource, component) ?? "";
-    if (!propsOf(tag).some((prop) => navigatesTo(screenSource, propValue(tag, prop))))
-      return undefined;
-    const value = propValue(tag, mapped[1] ?? "");
-    return value === undefined ? undefined : listLength(screenSource, value.trim());
-  }
-
   /** Every prop a tag names — `onSelect={…}` and friends, not string props. */
   function propsOf(tag: string): string[] {
     return [...tag.matchAll(/\b([a-zA-Z_$][\w$]*)\s*=\s*\{/g)].flatMap((m) => m[1] ?? []);
@@ -1370,26 +1306,41 @@ describe("a card groups rows or holds a figure — never a whole screen", () => 
   }
 
   /**
-   * **§5.1's one exemption, re-keyed to what actually earns it.** A card
-   * groups rows, and a tab root's menu is rows: four destinations, a label
-   * and a chevron each, is the thing a card is for. Two or more of them,
-   * because one row in a card is a single control, which is the shape the
-   * rule refuses everywhere else.
+   * **The menu exemption's machinery, kept and exercised.**
    *
-   * It used to be keyed to the tab group having no navigation header, on the
-   * grounds that the card's title was then the only place the screen's name
-   * could render. The shell draws that name, so the premise was gone and the
-   * key with it — and a card that holds a title is now the shape that spends
-   * the exemption rather than the one that earns it.
+   * `listLength`, `topLevelCommas`, `propsOf`, `tagOf`, `pressHandlerOf`,
+   * `isControl`, `navigatesTo` and `unwrap` were the parser behind the
+   * exemption that admitted a tab root whose sole card held two or more menu
+   * rows. `S30` draws Settings as three grouped cards, so the exemption is
+   * gone — but the parser is the only JSX reader in this file that resolves a
+   * *named collection* to its length, follows a `.map()` projection, and tells
+   * a control from a row. The next rule about a card's contents needs exactly
+   * that, and deleting it would mean writing it again.
+   *
+   * Referenced here rather than exported: an unused declaration is a
+   * typecheck error, and a comment saying "kept on purpose" is not something
+   * `tsc` can read.
    */
-  function isMenuList(screenSource: string, card: Child): boolean {
-    return (menuRowCount(screenSource, card) ?? 0) >= 2;
-  }
+  it("keeps the JSX reader the retired exemption was built on", () => {
+    const rows = 'const ROWS = [{ id: "a" }, { id: "b" }];';
+    expect(listLength(rows, "ROWS")).toBe(2);
+    expect(topLevelCommas("{ a: 1 }, { b: 2 }")).toBe(1);
+    expect(propsOf('<Row onSelect={go} label="x" />')).toEqual(["onSelect"]);
+    expect(tagOf('<Card tag="BIZ"><Row /></Card>', "Card")).toBe('<Card tag="BIZ">');
+
+    const row: Child = { name: "Row", raw: "<Row onPress={handlePress} />" };
+    expect(pressHandlerOf(row)).toBe("handlePress");
+    expect(
+      isControl("", { name: "Button", raw: "<Button onPress={go} />" }),
+      "a Button with a handler is a control",
+    ).toBe(true);
+    expect(navigatesTo("const go = () => router.push('/x');", "go")).toBe(true);
+    expect(unwrap("<View><Card><Row /></Card></View>")).toContain("<Card>");
+  });
 
   it("no screen's GroundPanel wraps the whole screen in one Card", () => {
     const files = screenFiles();
     expect(files.length, "screen files found").toBeGreaterThan(5);
-    const tabRoots = tabRootScreens();
     // **Not asserted to be non-empty any more.** It was, while `TodayFrame`
     // took a screen's body as a prop and drew the panel for it — the one
     // component that could hide a screen's whole `Card` behind an indirection.
@@ -1402,11 +1353,14 @@ describe("a card groups rows or holds a figure — never a whole screen", () => 
     for (const file of files) {
       const text = readFileSync(file, "utf8");
       for (const body of [...groundPanelBodies(text), ...framedPanelBodies(text, frames)]) {
+        // **No menu exemption any more.** It existed for one screen —
+        // Settings, whose panel was a single card of destinations — and §5.1
+        // was right about that shape all along: `S30` draws them as *three*
+        // grouped cards with a note under them, so the panel is no longer a
+        // sole card and needs no exception to survive this rule. An exemption
+        // kept past the shape it guarded is a hole nobody is watching.
         const only = soleContents(body, text).find(
-          (child) =>
-            child.name === "Card" &&
-            !isSkeletonCard(child) &&
-            !(tabRoots.has(file) && isMenuList(text, child)),
+          (child) => child.name === "Card" && !isSkeletonCard(child),
         );
         if (only) {
           offenders.push(rel(file));
@@ -1536,17 +1490,16 @@ describe("a card groups rows or holds a figure — never a whole screen", () => 
   });
 
   /**
-   * **The exemption, exercised against the screen that has it.** The old
-   * version of this test read a layout file's `headerShown` option and three
-   * synthetic strings, and by the end it protected a shape that existed
-   * nowhere: the premise was "a tab root has no header to carry its name",
-   * the shell grew one, and the rows stopped being `Button`s. So this reads
-   * the real `settings-screen.tsx`, resolves its panel to the card that is
-   * actually rendered — through `SettingsMenu`, which is where the card now
-   * lives — and breaks it once in each of the three ways the exemption can
-   * be lost.
+   * **The exemption is gone, and this is the screen it was for.**
+   *
+   * Settings' panel was a single card of destinations, which is the shape
+   * §5.1 refuses everywhere else — so the rule carried a clause admitting a
+   * tab root whose sole card held two or more menu rows. `S30` draws them as
+   * **three grouped cards** with a note beneath, separated by a gap rather
+   * than a heading, so the panel is no longer a sole card at all. The
+   * exception outlived its shape; this test is what replaces it.
    */
-  it("grants the menu exemption to the real Settings screen, and to nothing else it renders", () => {
+  it("Settings is grouped cards on the ground, needing no exception", () => {
     const screen = appRoots()
       .map((app) => join(app, "src", "settings-screen.tsx"))
       .find((file) => existsSync(file));
@@ -1555,138 +1508,23 @@ describe("a card groups rows or holds a figure — never a whole screen", () => 
     const text = readFileSync(screen, "utf8");
     expect(tabRootScreens().has(screen), "the Settings screen is a tab root").toBe(true);
 
-    // The hop C1 is about: the panel's sole content is `<SettingsMenu/>`,
-    // and what it renders is a `Card`. Before `resolve` followed a named
-    // component into `packages/ui`, this was zero — the rule looking
-    // straight at its own subject and seeing nothing.
-    const cards = groundPanelBodies(text)
+    // The panel's sole content is no longer a `Card` — which is the whole
+    // point. `SettingsMenu` returns a `View` of them, and the screen draws a
+    // note beside it, so there are two children before any card is reached.
+    const soleCard = groundPanelBodies(text)
       .flatMap((body) => soleContents(body, text))
       .filter((child) => child.name === "Card");
-    expect(cards, "the Settings tab's panel resolves to exactly one Card").toHaveLength(1);
-    const card = cards[0];
-    if (card === undefined) return;
+    expect(soleCard, "the panel no longer resolves to one Card").toHaveLength(0);
 
-    // Four destinations, counted where they are declared — in the screen,
-    // not in the component that renders them.
-    expect(menuRowCount(text, card)).toBeGreaterThanOrEqual(2);
+    // And the rule agrees: nothing in this screen is flagged.
+    const flagged = groundPanelBodies(text)
+      .flatMap((body) => soleContents(body, text))
+      .filter((child) => child.name === "Card" && !isSkeletonCard(child));
+    expect(flagged, "Settings is not a whole screen in one card").toEqual([]);
 
-    /**
-     * The rule's own expression, not a paraphrase of it — the same three
-     * clauses the offender loop above composes. Every break below is checked
-     * through this, so what is proven is that the *rule* fires, not that a
-     * predicate flipped.
-     */
-    const flagged = (source: string, candidate: Child) =>
-      candidate.name === "Card" && !isSkeletonCard(candidate) && !isMenuList(source, candidate);
-    expect(flagged(text, card), "the real screen keeps its exemption").toBe(false);
-
-    // 1 — one destination left. A card holding a single control is the shape
-    // the rule refuses everywhere else, and a menu of one is that.
-    const oneRow = text.replace(/(ORDER[^=]*=\s*\[)[\s\S]*?\]/, '$1"accounts"]');
-    expect(oneRow, "the cut rewrote the list").not.toBe(text);
-    expect(menuRowCount(oneRow, card)).toBe(1);
-    expect(flagged(oneRow, card), "a menu of one is an ordinary sole card").toBe(true);
-
-    // 2 — the card grows a title. The tab shell draws the screen's name, so
-    // a title here is that name twice, and the exemption is spent.
-    const menu = join(
-      repoRoot,
-      "packages/ui/src/settings/organisms/settings-menu/settings-menu.tsx",
-    );
-    const menuText = sourceOf(menu);
-    expect(menuText, "the menu component exists").not.toBe("");
-    const titled = rootCard(menuText.replace("<Card>", "<Card title={title}>"), "SettingsMenu");
-    expect(titled, "the mutation still renders a card").toBeDefined();
-    if (titled !== undefined) expect(flagged(text, titled)).toBe(true);
-
-    // 3 — the rows stop being a list. One written-out control in the card is
-    // not a menu, whatever the screen still passes it.
-    const single = rootCard(
-      menuText.replace(/<View style={styles.list}>[\s\S]*?<\/View>/, "<Button label={label} />"),
-      "SettingsMenu",
-    );
-    expect(single, "the mutation still renders a card").toBeDefined();
-    if (single !== undefined) expect(flagged(text, single)).toBe(true);
-
-    /**
-     * 4 — **rows that go nowhere.** §5.1 grants the exemption to *a list of
-     * destinations*, and a mapped collection is not one by being mapped: a
-     * tab root whose whole content is a card of seven `Text`s is the shape
-     * the rule was written to refuse, and an earlier version of this
-     * exemption let exactly that through — any of the five tab roots could
-     * have become a card of arbitrary mapped content with the suite green.
-     */
-    const textRows = `const DAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
-      export default function CalendarStub() {
-        const t = useT();
-        return (
-          <GroundPanel>
-            <Card>
-              {DAYS.map((day) => (
-                <Text key={day}>{t("routes.calendar")}</Text>
-              ))}
-            </Card>
-          </GroundPanel>
-        );
-      }`;
-    const textCard = groundPanelBodies(textRows)
-      .flatMap((body) => soleContents(body, textRows))
-      .filter((child) => child.name === "Card")[0];
-    expect(textCard, "the probe renders one card").toBeDefined();
-    if (textCard !== undefined) {
-      expect(menuRowCount(textRows, textCard)).toBeUndefined();
-      expect(flagged(textRows, textCard), "seven words are not seven destinations").toBe(true);
-    }
-
-    /**
-     * 5 — **rows that press without going anywhere.** The exemption asked
-     * whether a row had an `onPress`, which is punctuation, not navigation:
-     * a tab root whose whole screen is one untitled card of two buttons
-     * calling local no-ops took it and passed. That is *"never a whole
-     * screen, never a single control"* with two controls in it, and no
-     * destinations at all.
-     */
-    const noop = `export default function ProbeScreen() {
-        const handleRefresh = () => {};
-        const handleSync = () => {};
-        return (
-          <GroundPanel>
-            <Card>
-              <Button label="Refresh" onPress={handleRefresh} />
-              <Button label="Sync now" onPress={handleSync} />
-            </Card>
-          </GroundPanel>
-        );
-      }`;
-    const noopCard = groundPanelBodies(noop)
-      .flatMap((body) => soleContents(body, noop))
-      .filter((child) => child.name === "Card")[0];
-    expect(noopCard, "the probe renders one card").toBeDefined();
-    if (noopCard !== undefined) {
-      expect(menuRowCount(noop, noopCard)).toBeUndefined();
-      expect(flagged(noop, noopCard), "two buttons that do nothing are not a menu").toBe(true);
-    }
-
-    // And the shape that *is* a list of destinations written out, rather
-    // than mapped, keeps it — the exemption's original wording, with the
-    // handlers that make it true.
-    const buttons = `export default function Menu() {
-        const handleAccounts = () => router.push("/accounts");
-        const handleCategories = () => router.push("/settings/categories");
-        return (
-          <GroundPanel>
-            <Card>
-              <Button label="Accounts" onPress={handleAccounts} />
-              <Button label="Categories" onPress={handleCategories} />
-            </Card>
-          </GroundPanel>
-        );
-      }`;
-    const buttonCard = groundPanelBodies(buttons)
-      .flatMap((body) => soleContents(body, buttons))
-      .filter((child) => child.name === "Card")[0];
-    expect(buttonCard).toBeDefined();
-    if (buttonCard !== undefined) expect(flagged(buttons, buttonCard)).toBe(false);
+    // The groups are declared in the screen, so the shape is the screen's own
+    // decision rather than something the component invented.
+    expect(text, "the screen declares its groups").toMatch(/GROUPS\s*=\s*\[/);
   });
 
   /**
@@ -2360,17 +2198,97 @@ describe("the deck has no navigation band", () => {
    *
    * `Stack.Screen` draws a navigation bar unless told otherwise, so every
    * pushed route came up with a sage band and a small white title — while
-   * every artboard that is not a tab root (S09, S13, S16, S17, S18, S30's
-   * Back up) opens with a display title and a muted line on the same cream
-   * the cards sit on, and puts the way back in the corner. The result was
-   * that Today looked like the design and everything you navigated *to*
-   * looked like a different app.
+   * every artboard that is not a tab root opens with a display title and a
+   * muted line on the same cream the cards sit on. The result was that Today
+   * looked like the design and everything you navigated *to* looked like a
+   * different app.
    *
-   * The fix is one `headerShown: false` in `screenOptions`. The rule is here
-   * because the failure mode is a *new* route quietly re-enabling it — one
-   * screen at a time, each looking like a small exception.
+   * **The first spelling of this rule had six bypasses, and a review found
+   * every one.** It read only `_layout.tsx`, so `<Stack.Screen options>` in a
+   * *route* file — expo-router's own documented pattern — and
+   * `navigation.setOptions` were invisible. It matched `headerShown: true`
+   * literally, so a variable, an imported spread or `Boolean(1)` walked past.
+   * Its positive requirement was per *file*, so a nested layout with one child
+   * opting out satisfied it while defaulting the band **on** for that layout's
+   * siblings. And it stripped `/* … *\/` before matching, which a `*\/` inside
+   * a string literal turned into erasing the rest of the navigator.
+   *
+   * So: **every app file is scanned**, not only layouts; the only accepted
+   * spelling is the literal `false`; and nothing is stripped but whole comment
+   * lines, which cannot swallow code.
    */
-  it("no route asks for the platform's header", () => {
+  const HEADER_STYLING = [
+    "headerStyle",
+    "headerTintColor",
+    "headerTitleStyle",
+    "headerBackground",
+    "headerTransparent",
+  ];
+
+  /**
+   * Whole-line comments only.
+   *
+   * A block-comment stripper is what let `const END = "*\/"` erase a
+   * navigator. Every docstring in this repository is a run of lines opening
+   * with `/**` or `*`, and dropping those by line cannot reach into a string.
+   */
+  function withoutCommentLines(source: string): string {
+    let inBlock = false;
+    return source
+      .split("\n")
+      .filter((line) => {
+        const text = line.trim();
+        // A JSX comment's *continuation* lines start with neither `*` nor
+        // `//` — this file's own `{/* … */}` block quotes `headerShown: false`
+        // in prose four lines in, which is what a line-shape filter alone
+        // reported as a route asking for the band.
+        if (inBlock) {
+          if (text.endsWith("*/") || text.endsWith("*/}")) inBlock = false;
+          return false;
+        }
+        if ((text.startsWith("{/*") || text.startsWith("/*")) && !text.includes("*/")) {
+          inBlock = true;
+          return false;
+        }
+        return !(text.startsWith("*") || text.startsWith("/*") || text.startsWith("//"));
+      })
+      .join("\n");
+  }
+
+  it("no app file asks for the platform's header", () => {
+    const files = appRoots().flatMap((app) => sourceFiles(app));
+    expect(files.length, "app files found").toBeGreaterThan(0);
+
+    const offenders: string[] = [];
+    for (const file of files) {
+      if (isTest(file) || isAmbient(file)) continue;
+      const code = withoutCommentLines(readFileSync(file, "utf8"));
+
+      // `headerShown` may only ever be the literal `false`. A variable, a
+      // spread or an expression is refused on sight rather than evaluated.
+      for (const match of code.matchAll(/headerShown\s*:\s*([^,}\n]+)/g)) {
+        const value = (match[1] ?? "").trim();
+        if (value !== "false") offenders.push(`${rel(file)} → headerShown: ${value}`);
+      }
+      for (const prop of HEADER_STYLING) {
+        if (new RegExp(`\\b${prop}\\s*:`).test(code)) offenders.push(`${rel(file)} → ${prop}`);
+      }
+      // The other door: options set imperatively, which no `screenOptions`
+      // can override and no reader of a layout would think to look for.
+      if (/navigation\.setOptions|useNavigation\(\)\.setOptions/.test(code)) {
+        offenders.push(`${rel(file)} → navigation.setOptions`);
+      }
+    }
+    expect(offenders, "a screen drawing the platform's navigation band").toEqual([]);
+  });
+
+  /**
+   * And the positive half: **every navigator turns it off for all of its own
+   * screens.** Per navigator, not per file — a nested layout is a second
+   * navigator with its own default, and satisfying the rule in the parent
+   * says nothing about it.
+   */
+  it("every navigator turns the header off in its own screenOptions", () => {
     const layouts = appRoots().flatMap((app) =>
       sourceFiles(join(app, "app")).filter((file) => file.endsWith("_layout.tsx")),
     );
@@ -2378,29 +2296,22 @@ describe("the deck has no navigation band", () => {
 
     const offenders: string[] = [];
     for (const file of layouts) {
-      // Comments stripped: this file's own docstring quotes every spelling
-      // below, and a rule that fires on prose explaining it is not a rule.
-      const source = readFileSync(file, "utf8")
-        .replace(/\/\*[\s\S]*?\*\//g, "")
-        .replace(/^\s*\/\/.*$/gm, "")
-        .replace(/\{\/\*[\s\S]*?\*\/\}/g, "");
-      // `headerShown: true` explicitly, or any header styling — which only
-      // has an effect on a header that is drawn.
-      for (const spelling of [
-        /headerShown:\s*true/,
-        /headerStyle\s*:/,
-        /headerTintColor\s*:/,
-        /headerTitleStyle\s*:/,
-        /headerBackground\s*:/,
-      ]) {
-        if (spelling.test(source)) offenders.push(`${rel(file)} → ${String(spelling)}`);
-      }
-      // And the positive requirement: the navigator turns it off for everyone.
-      if (/<Stack\b/.test(source) && !/headerShown:\s*false/.test(source)) {
-        offenders.push(`${rel(file)} → a Stack that never says headerShown: false`);
+      const code = withoutCommentLines(readFileSync(file, "utf8"));
+      // `Stack` and `Drawer` draw a header unless told otherwise. `Tabs` from
+      // `expo-router/ui` is headless — `TabList`/`TabSlot`/`TabTrigger`, with
+      // no header to hide — so requiring the option there would be requiring
+      // a line that does nothing.
+      for (const match of code.matchAll(/<(Stack|Drawer)\b(?![\w.])/g)) {
+        const navigator = match[1] ?? "";
+        // The navigator's own props, up to the first child or its close.
+        const from = match.index ?? 0;
+        const props = code.slice(from, from + 900);
+        if (!/screenOptions=\{\{[\s\S]*?headerShown:\s*false/.test(props)) {
+          offenders.push(`${rel(file)} → <${navigator}> without headerShown: false`);
+        }
       }
     }
-    expect(offenders, "a screen drawing the platform's navigation band").toEqual([]);
+    expect(offenders, "a navigator that never turns the header off").toEqual([]);
   });
 });
 

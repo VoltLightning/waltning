@@ -19,8 +19,23 @@ import { GroundPanel, type GroundPanelProps } from "@waltning/ui/shell/card";
 import { PageHeader } from "@waltning/ui/shell/page-header";
 import { router } from "expo-router";
 
+/**
+ * The way back, and where it goes when there is no back.
+ *
+ * A deep link (`waltning://settings/currencies`) and a typed URL in the web
+ * build both open a screen with an empty history, and `router.back()` on an
+ * empty stack does nothing at all — a labelled control that is the only
+ * rendered exit and silently refuses. The platform's own header used to *hide*
+ * its chevron in that case; a drawn mark has to decide instead, and the
+ * decision is the ledger: every pushed screen in this app is reachable from
+ * it, so it is never a worse answer than staying.
+ */
 function goBack() {
-  router.back();
+  if (router.canGoBack()) {
+    router.back();
+    return;
+  }
+  router.replace("/");
 }
 
 export type PushedHeaderProps = {

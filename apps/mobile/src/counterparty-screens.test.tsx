@@ -24,7 +24,12 @@ import { currencyCode, toMoney } from "@waltning/core/money";
 import { I18nProvider } from "@waltning/ui/i18n/provider";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const router = { push: vi.fn(), back: vi.fn(), dismissTo: vi.fn() };
+const router = {
+  push: vi.fn(),
+  back: vi.fn(),
+  canGoBack: () => true,
+  dismissTo: vi.fn(),
+};
 const useLocalSearchParams = vi.fn(() => ({}));
 
 vi.mock("expo-router", () => ({

@@ -22,6 +22,7 @@ import {
 import { type ReconcileDraft, ReconcileSheet } from "@waltning/ui/accounts/reconcile-sheet";
 import { resolveFieldErrorMessage } from "@waltning/ui/i18n/field-error-messages";
 import { useT } from "@waltning/ui/i18n/provider";
+import { ErrorState } from "@waltning/ui/states/error-state";
 import { router, useLocalSearchParams } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
 import { PushedPage } from "./pushed-page";
@@ -165,7 +166,24 @@ export default function AccountEditorScreen() {
     [ledger],
   );
 
-  if (!editorAccount || !account) return null;
+  /*
+   * **Not `return null`.** A blank cream screen with no name and no way out is
+   * the state a reader is least able to leave, and it was reachable here: a
+   * row that has gone, or a load that has not landed. The header is the
+   * screen's own now, so there is no navigation band to fall back on — the
+   * screen draws one or nothing does.
+   */
+  if (!editorAccount || !account) {
+    return (
+      <PushedPage title={t("routes.editAccount")} subtitle={t("pages.editAccount")}>
+        <ErrorState
+          variant="terminal"
+          what={t("routes.editAccount")}
+          why={t("accounts.notFound")}
+        />
+      </PushedPage>
+    );
+  }
 
   return (
     <PushedPage title={t("routes.editAccount")} subtitle={t("pages.editAccount")}>
