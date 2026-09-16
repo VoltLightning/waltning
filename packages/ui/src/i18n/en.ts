@@ -63,6 +63,7 @@ export const en = {
     memo: "Memo",
     /** `SearchField`'s clear control — shown only once there is a value to clear. */
     clear: "Clear",
+    closeSearch: "Close search",
     /** `Keypad`'s delete key. */
     delete: "Delete",
     /** `DateField`'s second shortcut chip. The first reuses `shell.today`. */
