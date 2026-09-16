@@ -25,10 +25,11 @@
  */
 
 import type * as money from "@waltning/core/money";
-import { Pressable, Text, View } from "react-native";
+import { Text, View } from "react-native";
 import { Amount } from "../../../fx/atoms/amount/amount";
 import { FxAmount, type FxProvenance } from "../../../fx/atoms/fx-amount/fx-amount";
 import { useT } from "../../../i18n/provider";
+import { PressableScaled } from "../../../primitives/atoms/pressable-scaled/pressable-scaled";
 import { Tag } from "../../../primitives/atoms/tag";
 import { useInteraction } from "../../../primitives/interaction.ts";
 import { text } from "../../../theme/fonts.ts";
@@ -124,7 +125,7 @@ export function BalanceRow({
   if (!onPress) return content;
 
   return (
-    <Pressable
+    <PressableScaled
       accessibilityRole="button"
       accessibilityLabel={account}
       onPress={onPress}
@@ -132,7 +133,7 @@ export function BalanceRow({
       style={[styles.pressable, focused ? styles.focused : null]}
     >
       {content}
-    </Pressable>
+    </PressableScaled>
   );
 }
 

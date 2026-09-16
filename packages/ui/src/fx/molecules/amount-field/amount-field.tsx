@@ -24,9 +24,10 @@
  */
 
 import { useCallback, useState } from "react";
-import { Pressable, Text, TextInput, View } from "react-native";
+import { Text, TextInput, View } from "react-native";
 import { decimalMark } from "../../../i18n/locales.ts";
 import { useLocale, useT } from "../../../i18n/provider";
+import { PressableScaled } from "../../../primitives/atoms/pressable-scaled/pressable-scaled";
 import { text, textCap } from "../../../theme/fonts.ts";
 import { makeStyles } from "../../../theme/styles.ts";
 import { focus, radius, space, tabularNums } from "../../../tokens.ts";
@@ -179,7 +180,7 @@ function HeroAmountField({
   };
 
   return (
-    <Pressable
+    <PressableScaled
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
       accessibilityState={{ selected: active }}
@@ -192,7 +193,7 @@ function HeroAmountField({
         </Text>
         {currency === undefined ? null : <Text style={styles.heroAffix}>{currency}</Text>}
       </View>
-    </Pressable>
+    </PressableScaled>
   );
 }
 

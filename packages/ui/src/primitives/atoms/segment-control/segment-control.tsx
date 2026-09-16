@@ -32,8 +32,9 @@
  */
 
 import { useCallback } from "react";
-import { Pressable, Text, View } from "react-native";
+import { Text, View } from "react-native";
 import { useT } from "../../../i18n/provider";
+import { PressableScaled } from "../../../primitives/atoms/pressable-scaled/pressable-scaled";
 import { text } from "../../../theme/fonts.ts";
 import { makeStyles } from "../../../theme/styles.ts";
 import { focus, radius, space, touchTarget } from "../../../tokens.ts";
@@ -136,7 +137,7 @@ function SegmentOption<Value extends string>({
   };
 
   return (
-    <Pressable
+    <PressableScaled
       accessibilityRole="tab"
       accessibilityState={{ selected: active, disabled }}
       {...ariaSelectedProps}
@@ -167,7 +168,7 @@ function SegmentOption<Value extends string>({
           {segment.count}
         </Text>
       )}
-    </Pressable>
+    </PressableScaled>
   );
 }
 

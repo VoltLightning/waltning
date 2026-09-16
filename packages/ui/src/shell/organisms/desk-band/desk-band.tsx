@@ -37,8 +37,9 @@
  * whatever width is left between the figure and the command bar.
  */
 
-import { Pressable, Text, View } from "react-native";
+import { Text, View } from "react-native";
 import { useT } from "../../../i18n/provider";
+import { PressableScaled } from "../../../primitives/atoms/pressable-scaled/pressable-scaled";
 import { useInteraction } from "../../../primitives/interaction.ts";
 import { useSafeArea } from "../../../primitives/safe-area";
 import { text } from "../../../theme/fonts.ts";
@@ -151,7 +152,7 @@ export function DeskNavItem({ label, active, onPress }: DeskNavItemProps) {
   };
 
   return (
-    <Pressable
+    <PressableScaled
       accessibilityRole="tab"
       accessibilityLabel={label}
       accessibilityState={{ selected: active }}
@@ -165,7 +166,7 @@ export function DeskNavItem({ label, active, onPress }: DeskNavItemProps) {
       ]}
     >
       <Text style={[styles.navLabel, active ? styles.navLabelActive : null]}>{label}</Text>
-    </Pressable>
+    </PressableScaled>
   );
 }
 

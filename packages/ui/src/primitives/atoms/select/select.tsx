@@ -59,17 +59,10 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { ViewStyle } from "react-native";
-import {
-  Modal,
-  Pressable,
-  ScrollView,
-  Text,
-  TextInput,
-  useWindowDimensions,
-  View,
-} from "react-native";
+import { Modal, ScrollView, Text, TextInput, useWindowDimensions, View } from "react-native";
 import Animated, { type AnimatedStyle } from "react-native-reanimated";
 import { useT } from "../../../i18n/provider";
+import { PressableScaled } from "../../../primitives/atoms/pressable-scaled/pressable-scaled";
 import { text } from "../../../theme/fonts.ts";
 import { useTheme } from "../../../theme/provider";
 import { makeStyles } from "../../../theme/styles.ts";
@@ -268,7 +261,7 @@ function Disclosure({
   return (
     <View style={styles.root}>
       <Text style={styles.label}>{label}</Text>
-      <Pressable
+      <PressableScaled
         ref={ref}
         accessibilityRole="button"
         accessibilityLabel={
@@ -293,7 +286,7 @@ function Disclosure({
         <Animated.View style={[styles.chevron, chevron]}>
           <View style={styles.chevronMark} />
         </Animated.View>
-      </Pressable>
+      </PressableScaled>
       <PanelOverlay
         open={open}
         onDismiss={close}
@@ -408,7 +401,7 @@ function PanelOverlay({
       navigationBarTranslucent
     >
       <View style={[styles.overlay, anchor === null ? styles.overlayUnmeasured : null]}>
-        <Pressable
+        <PressableScaled
           accessibilityRole="button"
           accessibilityLabel={t("common.dismissOptions")}
           onPress={onDismiss}
@@ -488,7 +481,7 @@ function MultiSelectField({
         {chosen.map((option) => (
           <Token key={option.value} option={option} disabled={disabled} onRemove={onRemove} />
         ))}
-        <Pressable
+        <PressableScaled
           accessibilityRole="button"
           accessibilityLabel={label}
           accessibilityState={{ expanded: open, disabled }}
@@ -510,7 +503,7 @@ function MultiSelectField({
           <Animated.View style={[styles.chevron, chevron]}>
             <View style={styles.chevronMark} />
           </Animated.View>
-        </Pressable>
+        </PressableScaled>
       </View>
       <PanelOverlay
         open={open}
@@ -545,7 +538,7 @@ function Token({ option, disabled, onRemove }: TokenProps) {
   const handleRemove = useCallback(() => onRemove(option.value), [onRemove, option.value]);
 
   return (
-    <Pressable
+    <PressableScaled
       accessibilityRole="button"
       accessibilityLabel={t("common.remove", { value: option.label })}
       accessibilityState={{ disabled }}
@@ -566,7 +559,7 @@ function Token({ option, disabled, onRemove }: TokenProps) {
         <View style={[styles.tokenCrossBar, styles.tokenCrossBarA]} />
         <View style={[styles.tokenCrossBar, styles.tokenCrossBarB]} />
       </View>
-    </Pressable>
+    </PressableScaled>
   );
 }
 
@@ -680,7 +673,7 @@ function OptionRow({ option, selected, role, onSelect }: OptionRowProps) {
   const handlePress = useCallback(() => onSelect(option.value), [onSelect, option.value]);
 
   return (
-    <Pressable
+    <PressableScaled
       accessibilityRole={role}
       accessibilityLabel={option.label}
       // `checked` for both: a radio's ARIA state is `aria-checked` too. The
@@ -704,7 +697,7 @@ function OptionRow({ option, selected, role, onSelect }: OptionRowProps) {
       </Text>
       {/* The mark stays while selected — in a multi panel several stay lit. */}
       {selected ? <View style={styles.check} /> : null}
-    </Pressable>
+    </PressableScaled>
   );
 }
 

@@ -50,9 +50,10 @@
  */
 
 import type { TextInput } from "react-native";
-import { Pressable, ScrollView, Text } from "react-native";
+import { ScrollView, Text } from "react-native";
 import { useT } from "../../../i18n/provider";
 import { DateField } from "../../../primitives/atoms/date-field/date-field";
+import { PressableScaled } from "../../../primitives/atoms/pressable-scaled/pressable-scaled";
 import { SearchField } from "../../../primitives/atoms/search-field/search-field";
 import {
   type Segment,
@@ -265,7 +266,7 @@ function ClearAllFilters({ onPress }: { onPress: () => void }) {
   const styles = useStyles();
   const { focused, handlers } = useInteraction();
   return (
-    <Pressable
+    <PressableScaled
       accessibilityRole="button"
       accessibilityLabel={t("transactions.clearAllFilters")}
       onPress={onPress}
@@ -273,7 +274,7 @@ function ClearAllFilters({ onPress }: { onPress: () => void }) {
       style={[styles.clearAll, focused ? styles.clearAllFocused : null]}
     >
       <Text style={styles.clearAllText}>{t("transactions.clearAllFilters")}</Text>
-    </Pressable>
+    </PressableScaled>
   );
 }
 

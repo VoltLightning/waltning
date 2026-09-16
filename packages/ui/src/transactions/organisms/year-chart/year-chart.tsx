@@ -24,7 +24,8 @@
  */
 
 import { memo } from "react";
-import { Pressable, Text, View } from "react-native";
+import { Text, View } from "react-native";
+import { PressableScaled } from "../../../primitives/atoms/pressable-scaled/pressable-scaled";
 import { useInteraction } from "../../../primitives/interaction.ts";
 import { Card } from "../../../shell/molecules/card/card";
 import { CaretDownIcon, CaretLeftIcon, CaretRightIcon } from "../../../shell/phosphor";
@@ -95,7 +96,7 @@ function Step({
   const { focused, handlers } = useInteraction();
   const spent = onPress === undefined;
   return (
-    <Pressable
+    <PressableScaled
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
       accessibilityState={{ disabled: spent }}
@@ -105,7 +106,7 @@ function Step({
       style={[styles.step, focused ? styles.focused : null]}
     >
       {children}
-    </Pressable>
+    </PressableScaled>
   );
 }
 
@@ -154,7 +155,7 @@ function YearChartView({
           <CaretLeftIcon size={ICON} color={onOlder ? theme.text : theme.textFaint} />
         </Step>
 
-        <Pressable
+        <PressableScaled
           accessibilityRole="button"
           accessibilityLabel={labels.pickYear}
           onPress={onPickYear}
@@ -167,7 +168,7 @@ function YearChartView({
           </View>
           {kept}
           {keptNote === undefined ? null : <Text style={styles.keptNote}>{keptNote}</Text>}
-        </Pressable>
+        </PressableScaled>
 
         <Step onPress={onNewer} accessibilityLabel={labels.newer}>
           <CaretRightIcon size={ICON} color={onNewer ? theme.text : theme.textFaint} />

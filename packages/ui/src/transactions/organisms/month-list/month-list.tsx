@@ -23,8 +23,9 @@
 
 import type * as money from "@waltning/core/money";
 import { memo, useCallback } from "react";
-import { Pressable, Text, View } from "react-native";
+import { Text, View } from "react-native";
 import { Amount } from "../../../fx/atoms/amount/amount";
+import { PressableScaled } from "../../../primitives/atoms/pressable-scaled/pressable-scaled";
 import { useInteraction } from "../../../primitives/interaction.ts";
 import { text } from "../../../theme/fonts.ts";
 import { makeStyles } from "../../../theme/styles.ts";
@@ -83,7 +84,7 @@ function MonthRowView({
   const press = useCallback(() => onPickMonth(month), [onPickMonth, month]);
 
   return (
-    <Pressable
+    <PressableScaled
       accessibilityRole="button"
       // The month, then both figures: a row that announced only its name would
       // make a reader open every month to find out which were heavy.
@@ -148,7 +149,7 @@ function MonthRowView({
       {row.note === null || row.matches !== null ? null : (
         <Text style={styles.note}>{row.note}</Text>
       )}
-    </Pressable>
+    </PressableScaled>
   );
 }
 

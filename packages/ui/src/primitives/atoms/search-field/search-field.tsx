@@ -46,8 +46,9 @@
  */
 
 import { useCallback, useRef } from "react";
-import { Pressable, Text, TextInput, View } from "react-native";
+import { Text, TextInput, View } from "react-native";
 import { useT } from "../../../i18n/provider";
+import { PressableScaled } from "../../../primitives/atoms/pressable-scaled/pressable-scaled";
 import { text } from "../../../theme/fonts.ts";
 import { useTheme } from "../../../theme/provider";
 import { makeStyles } from "../../../theme/styles.ts";
@@ -142,7 +143,7 @@ export function SearchField({
           style={styles.input}
         />
         {showClear ? (
-          <Pressable
+          <PressableScaled
             accessibilityRole="button"
             accessibilityLabel={
               onDismiss === undefined ? t("common.clear") : t("common.closeSearch")
@@ -155,7 +156,7 @@ export function SearchField({
               <View style={[styles.clearCrossBar, styles.clearCrossBarA]} />
               <View style={[styles.clearCrossBar, styles.clearCrossBarB]} />
             </View>
-          </Pressable>
+          </PressableScaled>
         ) : null}
       </View>
       {resultsMessage === undefined ? null : (

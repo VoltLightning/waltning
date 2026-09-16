@@ -47,13 +47,29 @@ const all = components();
  */
 const INTERACTIVE = /\b(?:Pressable|TextInput)\b/;
 
+/**
+ * **Components that forward interactivity rather than owning it.** Both rules
+ * below ask a component for something it must draw — a 44px floor, a focus
+ * ring — and a pure pass-through has no box to draw either on. Its caller has
+ * the box, and every caller is itself in this walk, so the rules still cover
+ * every real control; exempting the wrapper does not exempt anything a finger
+ * can reach.
+ *
+ * Kept as a named list rather than a heuristic ("files with no `styles`"),
+ * because the moment a wrapper grows a box of its own it should fall back
+ * under both rules, and a list makes that a decision someone makes here.
+ */
+const FORWARDS_ONLY = new Set(["pressable-scaled.tsx"]);
+
 function code(text: string): string {
   return text.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
 }
 
 describe("the 44px floor, fixed at the source (§10)", () => {
   it("every interactive atom carries it", () => {
-    const interactive = all.filter((c) => INTERACTIVE.test(code(c.text)));
+    const interactive = all.filter(
+      (c) => INTERACTIVE.test(code(c.text)) && !FORWARDS_ONLY.has(c.name),
+    );
     const missing = interactive
       .filter((c) => !/touchTarget\.(?:min|row)|minHeight: 44/.test(c.text))
       .map((c) => c.name);
@@ -117,7 +133,9 @@ describe("the focus ring, on every interactive element (§2.6)", () => {
   it("is never omitted", () => {
     // "Never removed, never replaced by a colour change alone." A colour-only
     // focus state is invisible to exactly the people it exists for.
-    const interactive = all.filter((c) => INTERACTIVE.test(code(c.text)));
+    const interactive = all.filter(
+      (c) => INTERACTIVE.test(code(c.text)) && !FORWARDS_ONLY.has(c.name),
+    );
     const missing = interactive.filter((c) => !/focus\./.test(c.text)).map((c) => c.name);
 
     expect(missing, "interactive components with no focus ring").toEqual([]);

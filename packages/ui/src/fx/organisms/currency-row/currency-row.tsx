@@ -12,9 +12,10 @@
  */
 
 import { useCallback, useMemo } from "react";
-import { Pressable, Text, View } from "react-native";
+import { Text, View } from "react-native";
 import { useT } from "../../../i18n/provider";
 import { Button } from "../../../primitives/atoms/button/button";
+import { PressableScaled } from "../../../primitives/atoms/pressable-scaled/pressable-scaled";
 import { Select, type SelectOption } from "../../../primitives/atoms/select/select";
 import { Tag } from "../../../primitives/atoms/tag";
 import { Toggle } from "../../../primitives/atoms/toggle/toggle";
@@ -130,7 +131,7 @@ export function CurrencyRow({
         10 px button on a 44 px row, the same reasoning `Toggle` states for
         making its label part of the switch.
       */}
-      <Pressable
+      <PressableScaled
         accessibilityRole="button"
         accessibilityLabel={accessibilityLabel}
         accessibilityState={{ expanded }}
@@ -167,7 +168,7 @@ export function CurrencyRow({
           */}
           {row.pinned && !expanded ? <Tag>{t("fx.pinned")}</Tag> : null}
         </View>
-      </Pressable>
+      </PressableScaled>
       {expanded ? (
         <View style={styles.rowDetail}>
           <Toggle label={t("fx.pinned")} value={row.pinned} onChange={handleTogglePinned} />

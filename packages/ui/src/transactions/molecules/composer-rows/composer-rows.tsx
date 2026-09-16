@@ -15,8 +15,9 @@
  */
 
 import type { ReactNode } from "react";
-import { Pressable, Text, View } from "react-native";
+import { Text, View } from "react-native";
 import { useT } from "../../../i18n/provider";
+import { PressableScaled } from "../../../primitives/atoms/pressable-scaled/pressable-scaled";
 import { useInteraction } from "../../../primitives/interaction.ts";
 import { CaretRightIcon } from "../../../shell/phosphor";
 import { text } from "../../../theme/fonts.ts";
@@ -82,7 +83,7 @@ export function ComposerRow({
 
   return (
     <View style={first ? null : styles.separated}>
-      <Pressable
+      <PressableScaled
         accessibilityRole="button"
         accessibilityLabel={accessibilityLabel}
         onPress={onPress}
@@ -99,7 +100,7 @@ export function ComposerRow({
           </Text>
         </View>
         {trailing === undefined ? <CaretRightIcon size={15} color={theme.textFaint} /> : trailing}
-      </Pressable>
+      </PressableScaled>
       {error === undefined ? null : <Text style={styles.error}>{error}</Text>}
     </View>
   );

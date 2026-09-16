@@ -532,7 +532,18 @@ than on `font-size`.
 
 **Press feedback is `scale(.97)`, and it is asymmetric.** In at `base`, out at
 `fast`: slow where the person is deciding, quick where the system responds.
-Every `Pressable` in the system gets it through one hook.
+Every `Pressable` in the system gets it — through `<PressableScaled>`, or
+through `usePressScale` wired by hand, and `tests/architecture.test.ts` refuses
+a bare `Pressable` outside a listed handful that are not controls (a sheet's
+backdrop, a switch whose thumb already moves).
+
+**That sentence used to be a claim, and it was false.** Thirty-three of the
+fifty files rendering a `Pressable` had no press feedback at all — every
+calendar day, every tab, every row of the ledger — because the hook needs three
+coordinated edits (an `Animated.View`, two handlers, and a wrapper style kept
+in step with the child's) and three edits is enough to skip. The component
+makes it one, and the test makes the exceptions a list rather than an accident.
+A rule nobody can see being broken is a rule that is already broken.
 
 **How often an interaction happens decides whether it animates at all.** A
 hundred times a day: no animation. Tens of times: press feedback only.

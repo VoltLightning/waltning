@@ -22,8 +22,9 @@
  */
 
 import { useCallback, useEffect } from "react";
-import { Pressable, Text, View } from "react-native";
+import { Text, View } from "react-native";
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
+import { PressableScaled } from "../../../primitives/atoms/pressable-scaled/pressable-scaled";
 import { text } from "../../../theme/fonts.ts";
 import { makeStyles } from "../../../theme/styles.ts";
 import { focus, motion, radius, space, touchTarget } from "../../../tokens.ts";
@@ -110,7 +111,7 @@ function RadioRow({ option, selected, groupDisabled, onChange }: RadioRowProps) 
   }, [onChange, option.value, selected]);
 
   return (
-    <Pressable
+    <PressableScaled
       accessibilityRole="radio"
       accessibilityLabel={option.label}
       // `checked`, not `selected`: ARIA gives a radio `aria-checked`, and
@@ -137,7 +138,7 @@ function RadioRow({ option, selected, groupDisabled, onChange }: RadioRowProps) 
         <Text style={styles.label}>{option.label}</Text>
         {option.hint === undefined ? null : <Text style={styles.hint}>{option.hint}</Text>}
       </View>
-    </Pressable>
+    </PressableScaled>
   );
 }
 

@@ -14,7 +14,8 @@
  */
 
 import { useCallback } from "react";
-import { Pressable, View } from "react-native";
+import { View } from "react-native";
+import { PressableScaled } from "../../../primitives/atoms/pressable-scaled/pressable-scaled";
 import { makeStyles } from "../../../theme/styles.ts";
 import { focus, radius, touchTarget } from "../../../tokens.ts";
 import { useInteraction } from "../../interaction.ts";
@@ -74,7 +75,7 @@ export function IconButton({
   );
 
   return (
-    <Pressable
+    <PressableScaled
       accessibilityRole="button"
       accessibilityLabel={label}
       accessibilityState={{ disabled }}
@@ -85,7 +86,7 @@ export function IconButton({
       style={pressableStyle}
     >
       <View style={styles.content}>{children}</View>
-    </Pressable>
+    </PressableScaled>
   );
 }
 

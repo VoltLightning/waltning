@@ -3511,3 +3511,73 @@ describe("the escape is drawn quietly, everywhere", () => {
     expect(seen).toBeGreaterThanOrEqual(8);
   });
 });
+
+/**
+ * **Every `Pressable` answers the finger** — `design-system/02` §2.7: *"press
+ * feedback is `scale(.97)` … every `Pressable` in the system gets it through
+ * one hook."*
+ *
+ * That sentence was false for two years and nothing could see it: **33 of the
+ * 50** files rendering a `Pressable` had no press feedback at all, including
+ * every calendar day, every tab, every row of the ledger. The cause was
+ * friction, not disagreement — the hook needs an `Animated.View`, two handlers
+ * and a wrapper style kept in step with the child's, and three coordinated
+ * edits is enough to skip. `PressableScaled` makes it one edit; this makes the
+ * rule visible.
+ *
+ * A bare `Pressable` is still the right element for something that is not a
+ * control — a backdrop, a scrim — so the exceptions are a list with reasons
+ * rather than a hole.
+ */
+describe("every pressable answers the finger", () => {
+  /** Bare `Pressable`s that are deliberately not controls, and why. */
+  const NOT_A_CONTROL = new Map([
+    [
+      "packages/ui/src/shell/organisms/bottom-sheet/bottom-sheet.tsx",
+      "the backdrop — a dismiss area covering the screen, not a control; scaling it would scale the dimming layer over the page",
+    ],
+    [
+      "packages/ui/src/shell/organisms/confirm-dialog/confirm-dialog.tsx",
+      "the same backdrop, for the same reason — the dialog's own buttons are `Button`, which scales",
+    ],
+    [
+      "packages/ui/src/primitives/atoms/toggle/toggle.tsx",
+      "a switch is a state, not an action (`03` §3.7): its thumb already slides at `motion-base` while the track swaps instantly beneath, and a third clock on the same control is exactly the 'thumb outrunning its own background' that rule exists to prevent",
+    ],
+  ]);
+
+  const BARE = /<Pressable(?![A-Za-z])/;
+  /** The docblocks here name `Pressable` constantly; only rendered tags count. */
+  const withoutComments = (text: string) =>
+    text.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+
+  it("renders no bare Pressable outside the listed exceptions", () => {
+    const offenders: string[] = [];
+    for (const root of ["packages/ui/src", "apps/mobile/src"]) {
+      for (const file of sourceFiles(join(repoRoot, root))) {
+        if (isTest(file) || file.endsWith(".stories.tsx")) continue;
+        const rel = relative(repoRoot, file);
+        if (NOT_A_CONTROL.has(rel)) continue;
+        const body = withoutComments(readFileSync(file, "utf8"));
+        // Either route to the feedback counts: the hook wired by hand — which
+        // sixteen components did before `PressableScaled` existed — or the
+        // component that wires it for you.
+        if (BARE.test(body) && !/usePressScale/.test(body)) offenders.push(rel);
+      }
+    }
+    expect(offenders, "a Pressable with no press feedback (§2.7)").toEqual([]);
+  });
+
+  /** Every listed exception still exists and still renders the thing it was excused for. */
+  it("keeps no stale exception", () => {
+    for (const [rel] of NOT_A_CONTROL) {
+      const full = join(repoRoot, rel);
+      expect(existsSync(full), `${rel} is listed but gone`).toBe(true);
+      const body = withoutComments(readFileSync(full, "utf8"));
+      expect(
+        BARE.test(body) && !/usePressScale/.test(body),
+        `${rel} no longer needs its exception`,
+      ).toBe(true);
+    }
+  });
+});

@@ -69,8 +69,9 @@
 
 import { accountingDate, addDays, daysBetween } from "@waltning/core/date";
 import { useCallback, useMemo } from "react";
-import { FlatList, Pressable, Text, View } from "react-native";
+import { FlatList, Text, View } from "react-native";
 import { useLocale, useT } from "../../../i18n/provider";
+import { PressableScaled } from "../../../primitives/atoms/pressable-scaled/pressable-scaled";
 import { Tag } from "../../../primitives/atoms/tag";
 import { useInteraction } from "../../../primitives/interaction.ts";
 import { pageScrollProps } from "../../../primitives/nested-scroll.ts";
@@ -266,7 +267,7 @@ function RateTableRowView({
     : t(sourceKey ?? "fx.sourceUnknown");
 
   return (
-    <Pressable
+    <PressableScaled
       accessibilityRole="button"
       accessibilityLabel={
         row.rate === null ? t("fx.rateTableGapLabel", { date: row.date }) : row.date
@@ -284,7 +285,7 @@ function RateTableRowView({
           <Tag variant={isManual ? "warn" : "neutral"}>{sourceLabel}</Tag>
         </>
       )}
-    </Pressable>
+    </PressableScaled>
   );
 }
 
