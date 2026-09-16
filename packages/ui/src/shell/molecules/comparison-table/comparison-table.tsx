@@ -67,7 +67,7 @@ export function ComparisonTable({ rows }: ComparisonTableProps) {
 
 const useStyles = makeStyles((theme) => ({
   root: { gap: 0 },
-  ink_negative: { color: theme.dangerText },
+  ink_negative: { color: theme.spend },
   ink_positive: { color: theme.income },
   ink_neutral: { color: theme.text },
   row: {

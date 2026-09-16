@@ -55,6 +55,7 @@ import { Pressable, ScrollView, Text, View } from "react-native";
 import Animated from "react-native-reanimated";
 import { useT } from "../../../i18n/provider";
 import { Button } from "../../../primitives/atoms/button/button";
+import { PressableScaled } from "../../../primitives/atoms/pressable-scaled/pressable-scaled";
 import { Tag } from "../../../primitives/atoms/tag";
 import { TextField } from "../../../primitives/atoms/text-field/text-field";
 import { useInteraction } from "../../../primitives/interaction.ts";
@@ -655,7 +656,7 @@ function UncategorizedRow({ leaf, count, selected, onPress }: UncategorizedRowPr
   const handlePress = useCallback(() => onPress(leaf.id), [leaf.id, onPress]);
   return (
     <View style={styles.uncategorizedDivider}>
-      <Pressable
+      <PressableScaled
         accessibilityRole="radio"
         accessibilityLabel={leaf.name}
         accessibilityState={{ checked: selected }}
@@ -670,7 +671,7 @@ function UncategorizedRow({ leaf, count, selected, onPress }: UncategorizedRowPr
       >
         <Text style={styles.uncategorizedText}>{leaf.name}</Text>
         {count === undefined ? null : <Text style={styles.uncategorizedCount}>{count}</Text>}
-      </Pressable>
+      </PressableScaled>
     </View>
   );
 }

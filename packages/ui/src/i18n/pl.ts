@@ -41,6 +41,7 @@ export const pl: Messages = {
     note: "Notatka",
     memo: "Notatka",
     clear: "Wyczyść",
+    closeSearch: "Zamknij wyszukiwanie",
     delete: "Usuń",
     yesterday: "Wczoraj",
     resultsOne: "{{count}} wynik",

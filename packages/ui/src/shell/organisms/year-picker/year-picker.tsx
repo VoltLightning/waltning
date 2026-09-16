@@ -21,8 +21,9 @@
  */
 
 import { memo, useCallback } from "react";
-import { Pressable, Text, View } from "react-native";
+import { Text, View } from "react-native";
 import { useT } from "../../../i18n/provider";
+import { PressableScaled } from "../../../primitives/atoms/pressable-scaled/pressable-scaled";
 import { useInteraction } from "../../../primitives/interaction.ts";
 import { text } from "../../../theme/fonts.ts";
 import { useTheme } from "../../../theme/provider";
@@ -76,7 +77,7 @@ function YearCell({
   const { focused, handlers } = useInteraction();
   const press = useCallback(() => onPick(year), [onPick, year]);
   return (
-    <Pressable
+    <PressableScaled
       accessibilityRole="button"
       accessibilityLabel={String(year)}
       // Flat as well as in the state object: `react-native-web` maps neither
@@ -100,7 +101,7 @@ function YearCell({
           hasEntries ? (selected ? styles.markOnSelected : styles.markHeld) : null,
         ]}
       />
-    </Pressable>
+    </PressableScaled>
   );
 }
 
@@ -124,7 +125,7 @@ function YearPickerView({
   return (
     <BottomSheet visible={visible} title={t("shell.pickYear")} onDismiss={onDismiss}>
       <View style={styles.pageRow}>
-        <Pressable
+        <PressableScaled
           accessibilityRole="button"
           accessibilityLabel={t("shell.earlierYears")}
           accessibilityState={{ disabled: !page.hasOlder }}
@@ -133,7 +134,7 @@ function YearPickerView({
           style={styles.step}
         >
           <CaretLeftIcon size={ICON} color={page.hasOlder ? ink : dim} />
-        </Pressable>
+        </PressableScaled>
         {/*
           A heading, not a label: it names what the grid below holds, and a
           reader arriving in the sheet should hear which nine years they are
@@ -142,7 +143,7 @@ function YearPickerView({
         <Text accessibilityRole="header" style={styles.range}>
           {page.label}
         </Text>
-        <Pressable
+        <PressableScaled
           accessibilityRole="button"
           accessibilityLabel={t("shell.laterYears")}
           accessibilityState={{ disabled: !page.hasNewer }}
@@ -151,7 +152,7 @@ function YearPickerView({
           style={styles.step}
         >
           <CaretRightIcon size={ICON} color={page.hasNewer ? ink : dim} />
-        </Pressable>
+        </PressableScaled>
       </View>
 
       <View style={styles.grid}>

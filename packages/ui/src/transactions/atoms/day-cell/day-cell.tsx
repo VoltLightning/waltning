@@ -19,7 +19,9 @@
 
 import { memo } from "react";
 import { Pressable, Text, View } from "react-native";
+import Animated from "react-native-reanimated";
 import { useInteraction } from "../../../primitives/interaction.ts";
+import { usePressScale } from "../../../primitives/press-scale.ts";
 import { text } from "../../../theme/fonts.ts";
 import { makeStyles } from "../../../theme/styles.ts";
 import { focus, radius, space, tabularNums, touchTarget } from "../../../tokens.ts";
@@ -103,6 +105,15 @@ function DayCellView({
 }: DayCellProps) {
   const styles = useStyles();
   const { focused, handlers } = useInteraction();
+  /**
+   * §2.7's feedback, which this cell was the last grid control without. A day
+   * is tapped tens of times in a session — the band the tokens put at "press
+   * feedback only" — and with none it read as a delay: the row under it
+   * reloads on the JS thread, so nothing on the cell itself acknowledged the
+   * finger until that work landed. The scale runs on the UI thread and answers
+   * immediately, whatever the list is doing.
+   */
+  const press = usePressScale();
   const fill = today ? styles.today : current ? styles.current : styles.plain;
   // A day still ahead is quieter in ink, not in opacity. `opacity: 0.48` over
   // the whole cell put the number at 2.7:1 on the ground where 4.5 is
@@ -120,38 +131,42 @@ function DayCellView({
   };
 
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={accessibilityLabel}
-      accessibilityState={{ selected: current || today }}
-      {...ariaSelectedProps}
-      onPress={onPress}
-      {...handlers}
-      style={[
-        styles.cell,
-        weekday === undefined ? styles.cellBare : null,
-        fill,
-        focused ? styles.focused : null,
-      ]}
-    >
-      {weekday === undefined ? null : <Text style={sub}>{weekday}</Text>}
-      <Text style={ink}>{day}</Text>
-      {matches === undefined ? (
-        <View style={[styles.mark, ...markStyle(styles, activity, direction, today)]} />
-      ) : matches === 0 ? (
-        // **A quiet mark's own box, drawn in nothing.** `styles.mark` alone is
-        // a border radius — the size comes from `markNone`/`markSome`, so an
-        // empty `View` was 0×0 and the day number shifted between a searched
-        // cell with no match, one with a count, and an unsearched cell. The
-        // cell's fixed height stopped the *grid* reflowing and hid that the
-        // numbers inside it did not line up.
-        <View style={[styles.mark, styles.markNone, styles.markEmpty]} />
-      ) : (
-        <Text style={[styles.count, today ? styles.countOnFill : null]} numberOfLines={1}>
-          {matches}
-        </Text>
-      )}
-    </Pressable>
+    <Animated.View style={press.style}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={accessibilityLabel}
+        accessibilityState={{ selected: current || today }}
+        {...ariaSelectedProps}
+        onPress={onPress}
+        onPressIn={press.onPressIn}
+        onPressOut={press.onPressOut}
+        {...handlers}
+        style={[
+          styles.cell,
+          weekday === undefined ? styles.cellBare : null,
+          fill,
+          focused ? styles.focused : null,
+        ]}
+      >
+        {weekday === undefined ? null : <Text style={sub}>{weekday}</Text>}
+        <Text style={ink}>{day}</Text>
+        {matches === undefined ? (
+          <View style={[styles.mark, ...markStyle(styles, activity, direction, today)]} />
+        ) : matches === 0 ? (
+          // **A quiet mark's own box, drawn in nothing.** `styles.mark` alone is
+          // a border radius — the size comes from `markNone`/`markSome`, so an
+          // empty `View` was 0×0 and the day number shifted between a searched
+          // cell with no match, one with a count, and an unsearched cell. The
+          // cell's fixed height stopped the *grid* reflowing and hid that the
+          // numbers inside it did not line up.
+          <View style={[styles.mark, styles.markNone, styles.markEmpty]} />
+        ) : (
+          <Text style={[styles.count, today ? styles.countOnFill : null]} numberOfLines={1}>
+            {matches}
+          </Text>
+        )}
+      </Pressable>
+    </Animated.View>
   );
 }
 

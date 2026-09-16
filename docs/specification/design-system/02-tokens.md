@@ -45,6 +45,8 @@ whatever the chrome around them does.
 | `amber-border` | `#d9bd75` | Edge of an amber tag or chip |
 | `danger` | `#a33d26` | A destructive action, a refused write. **Never chrome** |
 | `danger-bg` | `#f8e8e2` | Fill behind a danger tag |
+| `danger-solid` | `#a33d26` | **Fill** of a control that destroys (§2.6c). White on it reads 6.46:1 |
+| `text-on-danger` | `#ffffff` | The label on that fill |
 | `danger-border` | `#c05e37` | Edge of a danger control — an outlined button, an errored input. A control with no fill is identified by its edge, so this carries the same **3:1** floor as `border-interactive`, in the danger hue (3.17 at the tightest of the two themes) |
 | `shell` | `#3c4f38` | The header shell. **One flat colour.** A deep sage at L\* 31 — see below |
 | `shell-text` / `shell-focus-ring` | `#f2f0e7` | Text on the shell; the focus ring there — see §2.6 |
@@ -126,6 +128,8 @@ with dark text.
 | `dangerFill` | `#3d241c` |
 | `dangerText` | `#f0a28c` |
 | `dangerBorder` | `#b36a51` |
+| `dangerSolid` | `#c04a2e` |
+| `textOnDanger` | `#ffffff` |
 | `shell` | `#3d4f39` |
 | `shellText` | `#f0f4ec` |
 | `shellTextMuted` | `#b3c2a9` |
@@ -451,6 +455,26 @@ the web bundle composes all three.
 `2px solid focus-ring`, `2px` offset, on **every** interactive element. Never
 removed, never replaced by a colour change alone.
 
+**One field diverges, deliberately, and it is the only one.** `SearchField`
+does not ring the focus that its own `autoFocus` causes. S04 §7 opens this
+field focused under the tabs, and it is drawn inline with no border — so the
+ring was the heaviest thing on the screen on every open, for a reader who got
+there by tapping a magnifier. Every *later* focus rings: tab away and back and
+the indicator is there.
+
+**The cost is stated, not argued away.** A sighted keyboard user who opens the
+search and pauses has a 1px caret and nothing else, and WCAG 2.4.7 attaches to
+focus rather than to how focus arrived. This is also *not* `:focus-visible`,
+whose UA heuristic rings a keyboard-enterable field **however** it was focused
+— exactly the exception being taken here. The alternative considered was giving
+the field a resting `border-interactive` edge, which makes the ring an
+increment rather than a box out of nowhere; it was declined because it hands a
+border back to six other searches that read better without one.
+
+`packages/ui/src/conformance.test.ts` names the file, so the exception is
+visible where the rule is enforced — the census greps for `focus.`, which that
+file still contains, and would otherwise have passed it silently.
+
 **On the shell the ring is `shell-focus-ring`, and it is not green.**
 `focus-ring` is `accent-icon`, which is 2.04:1 on `shell` in light — under the
 3:1 WCAG 1.4.11 asks of a boundary, and the band is not one of the fills §2.1's
@@ -461,6 +485,84 @@ band's `SegmentControl`, `CurrencyChip`, `Toast`'s action and `CommandBar`'s
 walked chip. **The set is decided by the mount site, not by the folder**: five
 of the seven live outside `shell/`, and three of those were missed by passes
 that went looking by directory.
+
+### 2.6c What red means, and who may be loud
+
+Red has several claimants in this product and they are not the same thing. The
+separation is **what carries the colour**, not the hue — light `spend` and light
+`danger-solid` sit **1.04:1** apart, which is the same near-identity §2.1 already
+logs as a defect elsewhere, so the carrier is doing all of the work.
+
+| Claimant | Carrier | Token |
+|---|---|---|
+| Money leaving | A **figure**, or a **data mark** standing for one — a chart bar, a day's activity dot | `spend` |
+| A control that destroys | A **control's fill** (irreversible) or its **edge** (reversible) | `danger-solid` + `text-on-danger` · `danger-border` |
+| A refusal | A **field's edge**, a **banner**, a **tag**, or a **mark on the row being refused** — never a button's fill | `danger` · `danger-border` · `danger-bg` |
+
+**A data mark is a figure, and that had to be said.** A first draft of this
+section wrote *"a figure — never a control"* and was false the day it shipped:
+`DayCell`'s activity dot and `YearChart`'s bars are `spend`, and both are drawn
+*inside* a pressable. They are not the control's own surface — they are money,
+rendered small. The rule is about what the colour paints, not what encloses it.
+What `spend` may never be is a control's **own** fill or edge, or chrome.
+
+**A refusal is not always a sentence, and an earlier draft said it was.**
+`Banner` takes `danger-bg`, `danger-border` and `danger`. A `Tag` takes the
+fill and the **ink** — it has no border at all, which the same draft got wrong.
+And `LinesCard` draws a bare **`≠`** beside a total whose lines do not balance:
+one glyph, no sentence, and still unambiguously a refusal. The carrier that
+matters is *what the mark is attached to* — the thing being refused — not how
+many words come with it.
+
+The one carrier a refusal may never take is a **button's fill**. That is
+`danger-solid`'s alone, and `tests/architecture.test.ts` holds it.
+
+**The ink and the edge are shared; the fill is not.** `danger-text` on
+`danger-border` dresses an errored field *and* `dangerQuiet`, the reversible
+destructive button — the same pair, honestly, because both mean *careful* and
+neither is irreversible. So those two tokens are not policed and cannot be.
+What is: **`danger-solid` belongs to a destroying control and nothing else**,
+and **`spend` is never a control's own colour**. `tests/architecture.test.ts`
+holds both.
+
+**A judgement about money is `spend`, not the refusal ink.** `ComparisonTable`
+drew *an increase in spend* in `danger-text`, which is red meaning *this was
+refused* on a figure that means *this went out*. Two reds a reader cannot tell
+apart, separated only by carrier, and the carrier was wrong. It is `spend`.
+
+`spend` is deliberately the quietest of them — *unmistakable, not alarming*
+(§2.1) — because money leaves an account all day and a ledger that alarms every
+time is a ledger nobody opens.
+
+**The escape is never the loudest thing on the screen.** *Cancel*, *Not now*,
+the ✕ — these back out of something; they destroy nothing. Painting an escape
+in the destroying colour teaches a reader that red is the ordinary way out,
+which is exactly the habit that makes them tap through the confirmation that
+matters. Cancel is `ghost` — no fill, no edge — in every dialog, sheet and form
+footer, and `tests/architecture.test.ts` refuses any other variant on it.
+
+**A destructive control differs from the escape in weight, not only in hue.**
+`danger` was an outlined red button and *Cancel* an outlined grey one, four
+pixels apart in `ConfirmDialog`: one object in two colours, which §2.4's own
+rule — *hue alone is not separation* — already refuses everywhere else. The
+destroying button is **filled**; the escape has no fill at all. That survives a
+greyscale screenshot, a colourblind reader, and a hue either token might be
+retuned to later.
+
+This does not break §3.1's *never two primaries in one decision*. That rule is
+about two buttons competing to be the affirmative one; a filled red is not
+competing for that. It is the loudest thing in its pair because it is the thing
+that cannot be undone.
+
+**`danger-solid` is two values, and the second is the interesting one.**
+`#a33d26` carries white at 6.46:1 and stands 6.46:1 off a light card, but only
+**2.4511:1** off a dark one — under the 3:1 a control identified by its own fill
+needs. The dark half is lifted to `#c04a2e`: 3.21:1 off `surface`, still 4.93:1
+under white. The band between those two floors is **4.4 points of L\***, not the thirty an
+earlier draft of this paragraph claimed: the dark value must sit between L\*
+45.5 and 49.9, and `#c04a2e` sits at 47.37 — 1.9 above the floor, 2.5 below the
+ceiling. A retune has almost no headroom and should re-measure rather than
+nudge.
 
 ### 2.7 Motion
 
@@ -481,7 +583,25 @@ than on `font-size`.
 
 **Press feedback is `scale(.97)`, and it is asymmetric.** In at `base`, out at
 `fast`: slow where the person is deciding, quick where the system responds.
-Every `Pressable` in the system gets it through one hook.
+Every `Pressable` in the system gets it — through `<PressableScaled>`, or
+through `usePressScale` wired by hand. `tests/architecture.test.ts` refuses a
+bare `Pressable` **per opening tag**, outside three listed exceptions, and all
+three are the same thing: a **backdrop**, the full-window dismiss area behind a
+sheet, a dialog or a select panel. Scaling one pulls the dismiss target off the
+window edge mid-gesture and would shrink a scrim over the page.
+
+A per-*file* check was tried first and was worse than nothing: one
+`usePressScale` anywhere excused every tag in the file, and two live controls —
+a category row and the dock's reopen chevron — sat unfeedback'd inside files
+that had wired three other controls correctly.
+
+**That sentence used to be a claim, and it was false.** Thirty-three of the
+fifty files rendering a `Pressable` had no press feedback at all — every
+calendar day, every tab, every row of the ledger — because the hook needs three
+coordinated edits (an `Animated.View`, two handlers, and a wrapper style kept
+in step with the child's) and three edits is enough to skip. The component
+makes it one, and the test makes the exceptions a list rather than an accident.
+A rule nobody can see being broken is a rule that is already broken.
 
 **How often an interaction happens decides whether it animates at all.** A
 hundred times a day: no animation. Tens of times: press feedback only.

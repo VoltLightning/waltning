@@ -58,7 +58,7 @@ export function ConfirmDialog({
           <Text style={styles.title}>{title}</Text>
           <Text style={styles.body}>{body}</Text>
           <View style={styles.actions}>
-            <Button label={t("common.cancel")} onPress={onCancel} variant="secondary" />
+            <Button label={t("common.cancel")} onPress={onCancel} variant="ghost" />
             <Button label={confirmLabel} onPress={onConfirm} variant="danger" />
           </View>
         </View>

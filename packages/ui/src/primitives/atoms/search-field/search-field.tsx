@@ -15,9 +15,43 @@
  * bar, borders rather than a glyph, so it never depends on a font shipping
  * one.
  *
- * **The clear control appears only with a value.** An always-visible clear
- * button on an empty field is a target with nothing to do — the same
- * reasoning `TextField`'s counter uses for `maxLength`.
+ * **The clear control appears only with a value — unless there is a search to
+ * leave.** An always-visible clear button on an empty field is a target with
+ * nothing to do, which is why `onClear` alone still hides it. A caller that
+ * passes `onDismiss` has given it something to do: S04 §7 pins this field open
+ * "for as long as the search is on", so on that screen the × is the only way
+ * back out, and hiding it on an empty field stranded the reader in a narrowed
+ * ledger with no exit — open the search, type nothing, and there was no way to
+ * close it.
+ *
+ * **No border, no fill.** The field is composed *inline* under the tabs rather
+ * than as a box sitting on them: the leading magnifier and the placeholder say
+ * what it is, and a boxed input on the ground read as a second surface floating
+ * over the one the page already had.
+ *
+ * **The automatic focus does not ring, and that is a deliberate divergence
+ * from §2.6.** This field takes focus the instant it opens, so with the border
+ * gone the ring became the heaviest thing on the screen on every open, for a
+ * reader who got there by tapping a magnifier. The automatic focus is skipped;
+ * every later one rings, so tabbing away and back shows the indicator.
+ *
+ * **This is not `:focus-visible`, and an earlier version of this comment
+ * claimed it was — backwards.** Selectors-4's heuristic is that an element
+ * which supports keyboard text entry *always* matches `:focus-visible` when
+ * focused, precisely because an unmarked text field cannot be told from an
+ * unfocused one; Chrome and Firefox both ring a programmatically focused
+ * input. This is the single exception `:focus-visible` refuses to make.
+ *
+ * So it is a **decision with a cost, recorded rather than dressed up**: a
+ * sighted keyboard user who opens the search and pauses has only a 1px caret
+ * to go on, and WCAG 2.4.7 attaches to focus, never to how focus arrived. The
+ * alternative on the table was a resting `borderInteractive` edge — the ring
+ * then reads as an increment rather than a box out of nowhere — and it was
+ * declined because it hands the border back on six other screens that are
+ * better without one. `design-system/02` §2.6 carries the divergence and
+ * `conformance.test.ts` names this file, so the exception is visible where the
+ * rule is enforced rather than hiding behind a `focus.` that is still in the
+ * source.
  *
  * **The result count is a visible line, not only an announcement.** It is
  * `accessibilityLiveRegion="polite"` *and* on the page — a live region with no
@@ -25,9 +59,10 @@
  * behind them.
  */
 
-import { useCallback } from "react";
-import { Pressable, Text, TextInput, View } from "react-native";
+import { useCallback, useEffect, useRef } from "react";
+import { Text, TextInput, View } from "react-native";
 import { useT } from "../../../i18n/provider";
+import { PressableScaled } from "../../../primitives/atoms/pressable-scaled/pressable-scaled";
 import { text } from "../../../theme/fonts.ts";
 import { useTheme } from "../../../theme/provider";
 import { makeStyles } from "../../../theme/styles.ts";
@@ -40,6 +75,12 @@ export type SearchFieldProps = {
   placeholder: string;
   /** Called after the value is cleared — the field's own text always empties first. */
   onClear?: () => void;
+  /**
+   * A way out of the search itself, not only its text. When given, the × is
+   * offered whether or not anything is typed, and pressing it empties the
+   * field and then calls this. S04 §7's pinned field is the caller.
+   */
+  onDismiss?: () => void;
   autoFocus?: boolean;
   /** Live match count. Absent while there is nothing to report yet (before typing). */
   resultCount?: number;
@@ -61,6 +102,7 @@ export function SearchField({
   onChangeText,
   placeholder,
   onClear,
+  onDismiss,
   autoFocus = false,
   resultCount,
   ref,
@@ -70,14 +112,38 @@ export function SearchField({
   const styles = useStyles();
   const { focused, handlers } = useInteraction();
 
-  const handleFocus = useCallback(() => handlers.onFocus(), [handlers]);
+  /**
+   * True until `autoFocus` has spent its one free focus; see the header.
+   *
+   * **Cleared on commit, not by the first focus event.** Nothing distinguishes
+   * the autofocus's own event from a person's, so consuming "the first focus"
+   * is only correct when the autofocus actually lands — and RN applies
+   * `autoFocus` once at mount, which is routinely lost across a navigation or
+   * a modal transition. When it did not land, the flag was still set when the
+   * reader's own tap arrived, that focus was swallowed, and the field stayed
+   * ringless for the rest of its mounted life. React applies `autoFocus`
+   * during commit, before effects, so by the time this runs the automatic
+   * focus has either fired or never will.
+   */
+  const pendingAutoFocus = useRef(autoFocus);
+  useEffect(() => {
+    pendingAutoFocus.current = false;
+  }, []);
+  const handleFocus = useCallback(() => {
+    if (pendingAutoFocus.current) {
+      pendingAutoFocus.current = false;
+      return;
+    }
+    handlers.onFocus();
+  }, [handlers]);
   const handleBlur = useCallback(() => handlers.onBlur(), [handlers]);
   const handleClear = useCallback(() => {
     onChangeText("");
     onClear?.();
-  }, [onChangeText, onClear]);
+    onDismiss?.();
+  }, [onChangeText, onClear, onDismiss]);
 
-  const showClear = value !== "";
+  const showClear = value !== "" || onDismiss !== undefined;
   const resultsMessage =
     resultCount === undefined
       ? undefined
@@ -106,9 +172,11 @@ export function SearchField({
           style={styles.input}
         />
         {showClear ? (
-          <Pressable
+          <PressableScaled
             accessibilityRole="button"
-            accessibilityLabel={t("common.clear")}
+            accessibilityLabel={
+              onDismiss === undefined ? t("common.clear") : t("common.closeSearch")
+            }
             onPress={handleClear}
             hitSlop={CLEAR_SLOP}
             style={styles.clear}
@@ -117,7 +185,7 @@ export function SearchField({
               <View style={[styles.clearCrossBar, styles.clearCrossBarA]} />
               <View style={[styles.clearCrossBar, styles.clearCrossBarB]} />
             </View>
-          </Pressable>
+          </PressableScaled>
         ) : null}
       </View>
       {resultsMessage === undefined ? null : (
@@ -136,11 +204,6 @@ const useStyles = makeStyles((theme) => ({
     flexDirection: "row",
     alignItems: "center",
     gap: space.md,
-    borderWidth: 1,
-    borderColor: theme.borderInteractive,
-    borderRadius: radius.sm,
-    backgroundColor: theme.surface,
-    paddingHorizontal: space.x2,
   },
   // §2.6: the ring goes on the interactive element, which here is the whole
   // field — `[icon][input][×]` — not the `TextInput` alone. The input keeps
@@ -153,7 +216,6 @@ const useStyles = makeStyles((theme) => ({
   // here, `outline-style` stays at its CSS-initial `none` and the outline
   // never paints, no matter what `outlineWidth`/`outlineColor` say.
   focused: {
-    borderColor: theme.borderStrong,
     outlineWidth: focus.width,
     outlineStyle: "solid",
     outlineColor: theme.focusRing,

@@ -21,8 +21,9 @@
  */
 
 import { useCallback, useEffect } from "react";
-import { Pressable, Text, View } from "react-native";
+import { Text, View } from "react-native";
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
+import { PressableScaled } from "../../../primitives/atoms/pressable-scaled/pressable-scaled";
 import { text } from "../../../theme/fonts.ts";
 import { makeStyles } from "../../../theme/styles.ts";
 import { focus, motion, radius, space, touchTarget } from "../../../tokens.ts";
@@ -70,7 +71,7 @@ export function Toggle({ label, value, onChange, hint, disabled = false }: Toggl
   const handlePress = useCallback(() => onChange(!value), [onChange, value]);
 
   return (
-    <Pressable
+    <PressableScaled
       accessibilityRole="switch"
       accessibilityLabel={label}
       accessibilityState={{ checked: value, disabled }}
@@ -94,7 +95,7 @@ export function Toggle({ label, value, onChange, hint, disabled = false }: Toggl
       <View style={[styles.track, value ? styles.trackOn : null]}>
         <Animated.View style={[styles.thumb, value ? styles.thumbOn : null, thumbMotion]} />
       </View>
-    </Pressable>
+    </PressableScaled>
   );
 }
 

@@ -22,7 +22,8 @@
  */
 
 import { useCallback } from "react";
-import { Pressable, Text, View } from "react-native";
+import { Text, View } from "react-native";
+import { PressableScaled } from "../../../primitives/atoms/pressable-scaled/pressable-scaled";
 import { useInteraction } from "../../../primitives/interaction.ts";
 import { useSafeArea } from "../../../primitives/safe-area";
 import { text } from "../../../theme/fonts.ts";
@@ -80,7 +81,7 @@ function TabBarTarget({ item, onSelect }: { item: TabBarItem; onSelect: (name: s
   };
 
   return (
-    <Pressable
+    <PressableScaled
       accessibilityRole="tab"
       accessibilityLabel={item.label}
       accessibilityState={{ selected: item.active }}
@@ -91,7 +92,7 @@ function TabBarTarget({ item, onSelect }: { item: TabBarItem; onSelect: (name: s
     >
       <View style={styles.icon}>{item.icon}</View>
       <Text style={[styles.label, item.active ? styles.labelActive : null]}>{item.label}</Text>
-    </Pressable>
+    </PressableScaled>
   );
 }
 

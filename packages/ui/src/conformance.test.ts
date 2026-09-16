@@ -45,7 +45,33 @@ const all = components();
  * element to put them on. The same reason `tests/architecture.test.ts` strips
  * comments before every one of its scans.
  */
-const INTERACTIVE = /\b(?:Pressable|TextInput)\b/;
+const INTERACTIVE = /\b(?:Pressable(?:Scaled)?|TextInput)\b/;
+
+/**
+ * **The count both rules walk, pinned.** `\bPressable\b` does not match
+ * `PressableScaled` — there is no word boundary between the two halves — so
+ * the moment the press sweep renamed 27 components they left the 44px census
+ * and the focus-ring census together, silently, while both kept passing at
+ * half strength. `toBeGreaterThan(3)` could not see 56 become 29.
+ *
+ * An exact count is the only guard that catches a census halving. Raise it
+ * when a component is added; a *drop* is the bug this exists for.
+ */
+const INTERACTIVE_COUNT = 56;
+
+/**
+ * **Components that forward interactivity rather than owning it.** Both rules
+ * below ask a component for something it must draw — a 44px floor, a focus
+ * ring — and a pure pass-through has no box to draw either on. Its caller has
+ * the box, and every caller is itself in this walk, so the rules still cover
+ * every real control; exempting the wrapper does not exempt anything a finger
+ * can reach.
+ *
+ * Kept as a named list rather than a heuristic ("files with no `styles`"),
+ * because the moment a wrapper grows a box of its own it should fall back
+ * under both rules, and a list makes that a decision someone makes here.
+ */
+const FORWARDS_ONLY = new Set(["pressable-scaled.tsx"]);
 
 function code(text: string): string {
   return text.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
@@ -53,15 +79,21 @@ function code(text: string): string {
 
 describe("the 44px floor, fixed at the source (§10)", () => {
   it("every interactive atom carries it", () => {
-    const interactive = all.filter((c) => INTERACTIVE.test(code(c.text)));
+    const interactive = all.filter(
+      (c) => INTERACTIVE.test(code(c.text)) && !FORWARDS_ONLY.has(c.name),
+    );
     const missing = interactive
-      .filter((c) => !/touchTarget\.(?:min|row)|minHeight: 44/.test(c.text))
+      // **`code(c.text)`, not `c.text`.** The selector stripped comments and
+      // the predicate did not, so a docblock *naming* `touchTarget.min` was
+      // enough: a tab bar mutated to an 8px target with the token only in its
+      // prose passed this rule and the pinned count together.
+      .filter((c) => !/touchTarget\.(?:min|row)|minHeight: 44/.test(code(c.text)))
       .map((c) => c.name);
 
     expect(missing, "interactive components with no touch-target floor").toEqual([]);
-    // Non-vacuous: if the walk ever stops finding components, this says so
-    // rather than passing on an empty list.
-    expect(interactive.length, "interactive components found").toBeGreaterThan(3);
+    expect(interactive.length, "the census changed size — see INTERACTIVE_COUNT").toBe(
+      INTERACTIVE_COUNT,
+    );
   });
 });
 
@@ -114,14 +146,44 @@ describe("accessibility that crosses to the web build", () => {
 });
 
 describe("the focus ring, on every interactive element (§2.6)", () => {
+  /**
+   * **The one declared divergence, named here so it is not invisible.**
+   * `SearchField` suppresses the ring for the focus `autoFocus` itself causes
+   * — a decision taken with its cost stated (§2.6, and the component's own
+   * header): the field opens focused, and with its border removed the ring was
+   * the heaviest thing on the screen every time. Every *later* focus rings.
+   *
+   * It is listed rather than left to pass, because this rule greps for the
+   * string `focus.` and `search-field.tsx` still contains `focus.width` — so
+   * it was passing while its ring was conditional, which is the rule telling a
+   * comfortable lie. A listed exception is a decision; a grep that cannot see
+   * the thing it checks is an accident waiting to be repeated.
+   */
+  const RING_IS_CONDITIONAL = new Set(["search-field.tsx"]);
+
   it("is never omitted", () => {
     // "Never removed, never replaced by a colour change alone." A colour-only
     // focus state is invisible to exactly the people it exists for.
-    const interactive = all.filter((c) => INTERACTIVE.test(code(c.text)));
-    const missing = interactive.filter((c) => !/focus\./.test(c.text)).map((c) => c.name);
+    const interactive = all.filter(
+      (c) => INTERACTIVE.test(code(c.text)) && !FORWARDS_ONLY.has(c.name),
+    );
+    // Comments stripped, for the reason the 44px rule states.
+    const missing = interactive
+      .filter((c) => !RING_IS_CONDITIONAL.has(c.name))
+      .filter((c) => !/focus\./.test(code(c.text)))
+      .map((c) => c.name);
 
     expect(missing, "interactive components with no focus ring").toEqual([]);
-    expect(interactive.length, "interactive components found").toBeGreaterThan(3);
+    expect(interactive.length, "the census changed size — see INTERACTIVE_COUNT").toBe(
+      INTERACTIVE_COUNT,
+    );
+    // The divergence has to still exist, or the exemption is stale.
+    for (const name of RING_IS_CONDITIONAL) {
+      expect(
+        interactive.some((c) => c.name === name),
+        `${name} is excused from the ring rule but is no longer interactive`,
+      ).toBe(true);
+    }
   });
 });
 

@@ -21,9 +21,10 @@
  */
 
 import type * as money from "@waltning/core/money";
-import { Pressable, Text, View } from "react-native";
+import { Text, View } from "react-native";
 import { Amount } from "../../../fx/atoms/amount/amount";
 import { useT } from "../../../i18n/provider";
+import { PressableScaled } from "../../../primitives/atoms/pressable-scaled/pressable-scaled";
 import { useInteraction } from "../../../primitives/interaction.ts";
 import { text } from "../../../theme/fonts.ts";
 import { makeStyles } from "../../../theme/styles.ts";
@@ -59,7 +60,7 @@ export function NetWorthStrip({
   const { hovered, focused, handlers } = useInteraction();
 
   return (
-    <Pressable
+    <PressableScaled
       accessibilityRole="button"
       /*
         **No `accessibilityLabel`.** One on a `Pressable` *replaces* the
@@ -115,7 +116,7 @@ export function NetWorthStrip({
       */}
       <View style={styles.chevron} />
       <ScreenReaderDestination />
-    </Pressable>
+    </PressableScaled>
   );
 }
 

@@ -15,7 +15,8 @@
  */
 
 import { memo, useCallback } from "react";
-import { Pressable, Text, View } from "react-native";
+import { Text, View } from "react-native";
+import { PressableScaled } from "../../../primitives/atoms/pressable-scaled/pressable-scaled";
 import { useInteraction } from "../../../primitives/interaction.ts";
 import { text } from "../../../theme/fonts.ts";
 import { makeStyles } from "../../../theme/styles.ts";
@@ -48,7 +49,7 @@ function GatewayCard({ gateway, onSelect }: { gateway: Gateway; onSelect: (key: 
   const press = useCallback(() => onSelect(key), [onSelect, key]);
 
   return (
-    <Pressable
+    <PressableScaled
       accessibilityRole="button"
       // Name and figure together: "Between us" alone makes a reader open it to
       // find out whether anything is owed.
@@ -64,7 +65,7 @@ function GatewayCard({ gateway, onSelect }: { gateway: Gateway; onSelect: (key: 
         <Text style={styles.label}>{gateway.label}</Text>
         {gateway.detail === null ? null : <Text style={styles.detail}>{gateway.detail}</Text>}
       </View>
-    </Pressable>
+    </PressableScaled>
   );
 }
 

@@ -30,12 +30,13 @@
  */
 
 import { memo, useCallback, useMemo } from "react";
-import { Pressable, View } from "react-native";
+import { View } from "react-native";
 import Animated, {
   interpolateColor,
   type SharedValue,
   useAnimatedStyle,
 } from "react-native-reanimated";
+import { PressableScaled } from "../../../primitives/atoms/pressable-scaled/pressable-scaled";
 import { useInteraction } from "../../../primitives/interaction.ts";
 import { text } from "../../../theme/fonts.ts";
 import { useTheme } from "../../../theme/provider";
@@ -100,7 +101,7 @@ function TabItem({
   };
 
   return (
-    <Pressable
+    <PressableScaled
       accessibilityRole="tab"
       accessibilityState={{ selected: active }}
       {...ariaSelectedProps}
@@ -115,7 +116,7 @@ function TabItem({
       <Animated.Text style={[active ? styles.labelActive : styles.label, ink]}>
         {tab.label}
       </Animated.Text>
-    </Pressable>
+    </PressableScaled>
   );
 }
 

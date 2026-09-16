@@ -149,7 +149,7 @@ export function ThinkingIndicator({
       {elapsedMs >= CANCEL_AFTER_MS ? (
         <View style={styles.stillWorking}>
           <Text style={styles.label}>{t("states.thinking.stillWorking")}</Text>
-          <Button label={t("common.cancel")} onPress={onCancel} variant="secondary" size="sm" />
+          <Button label={t("common.cancel")} onPress={onCancel} variant="ghost" size="sm" />
         </View>
       ) : null}
     </View>

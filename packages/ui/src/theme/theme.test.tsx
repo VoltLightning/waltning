@@ -182,9 +182,11 @@ describe("the token spec and the tokens agree", () => {
     // key in `color`, so the light half skips it and only the dark half of
     // that pair is enforced. Splitting the alias into its own light row would
     // not help: it would name a value `tokens.ts` does not hold either.
+    // 44/37 since §2.6c added `danger-solid` and `text-on-danger` to both
+    // halves — a destructive control's fill and the ink on it.
     expect(compared, "a drop here means rows stopped being compared").toEqual({
-      light: 42,
-      dark: 35,
+      light: 44,
+      dark: 37,
     });
   });
 
@@ -379,6 +381,40 @@ describe("a component follows the active theme", () => {
     ]),
   )("keeps %s at the 3:1 boundary floor", (_label, edge, fill) => {
     expect(contrastRatio(edge, fill)).toBeGreaterThanOrEqual(3);
+  });
+
+  /**
+   * **A filled control is identified by its fill, so the fill carries the same
+   * floor** — and `danger-solid` (§2.6c) arrived with prose stating its ratios
+   * and not one assertion checking them. The dark half exists *only* because
+   * the light value measures 2.4511:1 on a dark card, and `button.test.tsx`
+   * renders the light theme alone, so the value that reason produced had no
+   * test at all.
+   *
+   * **Three fills, not the five above, and that is a claim about mount
+   * sites.** A page fill and a card fill are grounds a button sits on;
+   * `hoverFill` and `pressedFill` are *another control's* transient states,
+   * and a `Button` never sits on one — §3.1 excludes both filled variants from
+   * taking a hover fill at all. Measured, the dark fill would fail there
+   * (2.88 and 2.65), so if a filled control is ever mounted onto a hovered
+   * surface, this list is the thing to extend and the value is the thing to
+   * re-tune.
+   */
+  it.each(
+    (["ground", "surface", "subtleFill"] as const).flatMap((fill) => [
+      [`light destructive fill on ${fill}`, light.dangerSolid, light[fill]] as const,
+      [`dark destructive fill on ${fill}`, dark.dangerSolid, dark[fill]] as const,
+    ]),
+  )("keeps %s at the 3:1 boundary floor", (_label, block, fill) => {
+    expect(contrastRatio(block, fill)).toBeGreaterThanOrEqual(3);
+  });
+
+  /** And the label on it clears the text floor in both halves. */
+  it.each([
+    ["light", light.textOnDanger, light.dangerSolid] as const,
+    ["dark", dark.textOnDanger, dark.dangerSolid] as const,
+  ])("keeps the %s destructive label readable on its own fill", (_label, ink, fill) => {
+    expect(contrastRatio(ink, fill)).toBeGreaterThanOrEqual(4.5);
   });
 
   /**

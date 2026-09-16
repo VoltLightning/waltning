@@ -21,9 +21,10 @@
 
 import type { YearMonth } from "@waltning/core/date";
 import { memo, useCallback } from "react";
-import { Pressable, Text, View } from "react-native";
+import { Text, View } from "react-native";
 import { monthShort } from "../../../i18n/locales.ts";
 import { useLocale, useT } from "../../../i18n/provider";
+import { PressableScaled } from "../../../primitives/atoms/pressable-scaled/pressable-scaled";
 import { useInteraction } from "../../../primitives/interaction.ts";
 import { text } from "../../../theme/fonts.ts";
 import { useTheme } from "../../../theme/provider";
@@ -70,7 +71,7 @@ function MonthCell({
   const { focused, handlers } = useInteraction();
   const press = useCallback(() => onPick(month), [onPick, month]);
   return (
-    <Pressable
+    <PressableScaled
       accessibilityRole="button"
       accessibilityLabel={label}
       // `selected` flat as well as in the state object: `react-native-web` maps
@@ -89,7 +90,7 @@ function MonthCell({
       ]}
     >
       <Text style={[styles.cellLabel, selected ? styles.cellLabelSelected : null]}>{label}</Text>
-    </Pressable>
+    </PressableScaled>
   );
 }
 
@@ -113,14 +114,14 @@ function PeriodPickerView({
   return (
     <BottomSheet visible={visible} title={t("shell.pickPeriod")} onDismiss={onDismiss}>
       <View style={styles.yearRow}>
-        <Pressable
+        <PressableScaled
           accessibilityRole="button"
           accessibilityLabel={t("shell.previousYear")}
           onPress={previous}
           style={styles.yearStep}
         >
           <CaretLeftIcon size={ICON} color={ink} />
-        </Pressable>
+        </PressableScaled>
         {/*
           A heading, not a label: it names what the grid below it holds, and a
           reader arriving in the sheet should hear which year they are choosing
@@ -129,14 +130,14 @@ function PeriodPickerView({
         <Text accessibilityRole="header" style={styles.year}>
           {year}
         </Text>
-        <Pressable
+        <PressableScaled
           accessibilityRole="button"
           accessibilityLabel={t("shell.nextYear")}
           onPress={next}
           style={styles.yearStep}
         >
           <CaretRightIcon size={ICON} color={ink} />
-        </Pressable>
+        </PressableScaled>
       </View>
 
       <View style={styles.grid}>

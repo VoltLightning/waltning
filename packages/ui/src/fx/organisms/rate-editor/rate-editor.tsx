@@ -185,7 +185,7 @@ export function RateEditor({
       ) : null}
 
       <View style={styles.actions}>
-        <Button label={t("common.cancel")} onPress={onCancel} variant="secondary" />
+        <Button label={t("common.cancel")} onPress={onCancel} variant="ghost" />
         <Button
           label={confirming ? t("fx.rateEditorConfirmSubmit") : t("fx.rateEditorSubmit")}
           onPress={handlePress}

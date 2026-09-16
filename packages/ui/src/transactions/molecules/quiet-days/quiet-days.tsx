@@ -19,7 +19,8 @@
  */
 
 import { memo } from "react";
-import { Pressable, Text, View } from "react-native";
+import { Text, View } from "react-native";
+import { PressableScaled } from "../../../primitives/atoms/pressable-scaled/pressable-scaled";
 import { useInteraction } from "../../../primitives/interaction.ts";
 import { text } from "../../../theme/fonts.ts";
 import { makeStyles } from "../../../theme/styles.ts";
@@ -65,7 +66,7 @@ function QuietRunView({ label, summary, showLabel, onShow }: QuietRunProps) {
         <Text style={styles.runLabel}>{label}</Text>
         <Text style={styles.runSummary}>{summary}</Text>
       </View>
-      <Pressable
+      <PressableScaled
         accessibilityRole="button"
         // The span, not the bare word: a reader hearing four *Show* buttons
         // in a scroll cannot tell which stretch of days each one opens.
@@ -75,7 +76,7 @@ function QuietRunView({ label, summary, showLabel, onShow }: QuietRunProps) {
         style={[styles.show, focused ? styles.focused : null]}
       >
         <Text style={styles.showText}>{showLabel}</Text>
-      </Pressable>
+      </PressableScaled>
     </View>
   );
 }

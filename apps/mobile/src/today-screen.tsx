@@ -34,6 +34,7 @@ import {
   weekStart,
 } from "@waltning/ui/i18n/locales";
 import { useLocale, useT } from "@waltning/ui/i18n/provider";
+import { PressableScaled } from "@waltning/ui/primitives/pressable-scaled";
 import { Card, GroundPanel } from "@waltning/ui/shell/card";
 import { GatewayGrid } from "@waltning/ui/shell/molecules/gateway-grid/gateway-grid";
 import { MonthSummary } from "@waltning/ui/shell/month-summary";
@@ -64,7 +65,7 @@ import { MonthList } from "@waltning/ui/transactions/organisms/month-list/month-
 import { YearChart, type YearColumn } from "@waltning/ui/transactions/year-chart";
 import { router, useLocalSearchParams } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
-import { Pressable, Text as RNText, useColorScheme, View } from "react-native";
+import { Text as RNText, useColorScheme, View } from "react-native";
 import { useAnimatedScrollHandler, useSharedValue } from "react-native-reanimated";
 import { HomeListPage } from "./home-list-page";
 import { openUnsettled } from "./open-unsettled.ts";
@@ -1152,7 +1153,7 @@ export default function Today() {
           granularity the reader is standing in.
         */}
         {day === undefined && nearestToDay !== null ? (
-          <Pressable
+          <PressableScaled
             accessibilityRole="button"
             onPress={goToNearestDay}
             style={sectionStyles.nearestDay}
@@ -1162,7 +1163,7 @@ export default function Today() {
                 date: dayLabel(nearestToDay.date, locale),
               })}
             </RNText>
-          </Pressable>
+          </PressableScaled>
         ) : null}
       </View>
     );

@@ -21,8 +21,9 @@
  */
 
 import { useCallback } from "react";
-import { Pressable, Text, View } from "react-native";
+import { Text, View } from "react-native";
 import { useT } from "../../../i18n/provider";
+import { PressableScaled } from "../../../primitives/atoms/pressable-scaled/pressable-scaled";
 import { useInteraction } from "../../../primitives/interaction.ts";
 import { text } from "../../../theme/fonts.ts";
 import { makeStyles } from "../../../theme/styles.ts";
@@ -73,7 +74,7 @@ export function CurrencyChip({ pinned, active, onChange, onExpand }: CurrencyChi
   if (pinned.length === 0) return null;
 
   return (
-    <Pressable
+    <PressableScaled
       accessibilityRole="button"
       accessibilityLabel={t("fx.currencyChipLabel", { currency: active })}
       onPress={handlePress}
@@ -90,7 +91,7 @@ export function CurrencyChip({ pinned, active, onChange, onExpand }: CurrencyChi
           </Text>
         ))}
       </View>
-    </Pressable>
+    </PressableScaled>
   );
 }
 

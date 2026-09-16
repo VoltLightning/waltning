@@ -219,6 +219,9 @@ export const color = {
   danger: "#a33d26",
   dangerBg: "#f8e8e2",
   dangerBorder: "#c05e37",
+  /** The fill of a destructive control (§2.6c). Carries `textOnDanger` at 6.46:1. */
+  dangerSolid: "#a33d26",
+  textOnDanger: "#ffffff",
 
   /**
    * The shell: one flat colour, no gradient. A gradient was the one thing on
@@ -307,6 +310,13 @@ export const darkColor = {
   danger: "#f0a28c",
   dangerBg: "#3d241c",
   dangerBorder: "#b36a51",
+  /**
+   * Lifted off the light half's `#a33d26`, which stands only 2.4511:1 from
+   * `surface` here — under the 3:1 floor a filled control needs. This clears
+   * it at 3.21 and still carries white at 4.93.
+   */
+  dangerSolid: "#c04a2e",
+  textOnDanger: "#ffffff",
   /**
    * On a warm-charcoal ground a surface reads by rising, so the dark shell
    * sits well above `ground` (1.97:1) and `surface` (1.79:1) — the 1.5 floor

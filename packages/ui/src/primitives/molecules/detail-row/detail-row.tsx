@@ -15,7 +15,8 @@
  */
 
 import type { ReactNode } from "react";
-import { Pressable, Text, View } from "react-native";
+import { Text, View } from "react-native";
+import { PressableScaled } from "../../../primitives/atoms/pressable-scaled/pressable-scaled";
 import { text } from "../../../theme/fonts.ts";
 import { makeStyles } from "../../../theme/styles.ts";
 import { focus, radius, space, touchTarget } from "../../../tokens.ts";
@@ -62,9 +63,9 @@ export function DetailRow({ label, hint, value, icon, onPress, last }: DetailRow
   ];
   if (onPress === undefined) return <View style={style}>{body}</View>;
   return (
-    <Pressable accessibilityRole="button" onPress={onPress} style={style} {...handlers}>
+    <PressableScaled accessibilityRole="button" onPress={onPress} style={style} {...handlers}>
       {body}
-    </Pressable>
+    </PressableScaled>
   );
 }
 

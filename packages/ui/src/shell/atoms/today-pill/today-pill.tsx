@@ -25,8 +25,9 @@
  */
 
 import { useEffect } from "react";
-import { Pressable, Text, View } from "react-native";
+import { Text, View } from "react-native";
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
+import { PressableScaled } from "../../../primitives/atoms/pressable-scaled/pressable-scaled";
 import { easing } from "../../../primitives/easing.ts";
 import { useInteraction } from "../../../primitives/interaction.ts";
 import { useReducedMotion } from "../../../primitives/reduced-motion.ts";
@@ -89,7 +90,7 @@ export function TodayPill({ label, accessibilityLabel, onPress }: TodayPillProps
     // full-width bar, which is a banner and says something else.
     <View style={styles.layer}>
       <Animated.View style={entrance}>
-        <Pressable
+        <PressableScaled
           accessibilityRole="button"
           accessibilityLabel={accessibilityLabel}
           onPress={onPress}
@@ -105,7 +106,7 @@ export function TodayPill({ label, accessibilityLabel, onPress }: TodayPillProps
             <CalendarBlankIcon size={ICON} color={theme.accentText} />
           </View>
           <Text style={styles.label}>{label}</Text>
-        </Pressable>
+        </PressableScaled>
       </Animated.View>
     </View>
   );

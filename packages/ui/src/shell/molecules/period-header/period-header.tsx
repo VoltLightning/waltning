@@ -19,9 +19,10 @@
  * `textMuted`, and nothing else about the component changes.
  */
 
-import { Pressable, Text, View } from "react-native";
+import { Text, View } from "react-native";
 import { useT } from "../../../i18n/provider";
 import { IconButton } from "../../../primitives/atoms/icon-button/icon-button";
+import { PressableScaled } from "../../../primitives/atoms/pressable-scaled/pressable-scaled";
 import { useInteraction } from "../../../primitives/interaction.ts";
 import { text } from "../../../theme/fonts.ts";
 import { makeStyles } from "../../../theme/styles.ts";
@@ -83,7 +84,7 @@ export function PeriodHeader({
         </IconButton>
       </View>
       {isCurrent ? null : (
-        <Pressable
+        <PressableScaled
           accessibilityRole="button"
           onPress={onToday}
           {...handlers}
@@ -96,7 +97,7 @@ export function PeriodHeader({
           <Text style={[styles.todayLabel, onSurface ? styles.todayLabelOnSurface : null]}>
             {t("shell.today")}
           </Text>
-        </Pressable>
+        </PressableScaled>
       )}
     </View>
   );

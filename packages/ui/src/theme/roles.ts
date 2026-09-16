@@ -197,6 +197,23 @@ export type Theme = {
   dangerFill: string;
   dangerText: string;
   dangerBorder: string;
+  /**
+   * The fill of a control that destroys something, and the ink on it.
+   *
+   * **Separate from `dangerFill`, which is a tag's pale backing.** §2.6c asks
+   * a destructive control to differ from the escape beside it in **weight**
+   * and not in hue alone — an outlined red button and an outlined grey one are
+   * the same object in two colours, which is no separation at all for a reader
+   * who cannot tell the two hues apart. Solid is that weight.
+   *
+   * Two values rather than one because the ground moves: `#a33d26` carries
+   * white at 6.46:1 and stands 6.46:1 off a light card, but only 2.4511:1 off a
+   * dark one — under the 3:1 a control identified by its own edge needs. The
+   * dark half is lifted to clear it (3.21:1) while still carrying white
+   * (4.93:1), the same narrow band `accent` is tuned inside.
+   */
+  dangerSolid: string;
+  textOnDanger: string;
 
   /** A neutral tag — a category, a count, a state that is not a warning. */
   tagNeutralFill: string;
@@ -321,6 +338,8 @@ export const light: Theme = {
   dangerFill: color.dangerBg,
   dangerText: color.danger,
   dangerBorder: color.dangerBorder,
+  dangerSolid: color.dangerSolid,
+  textOnDanger: color.textOnDanger,
 
   tagNeutralFill: color.subtle,
   tagNeutralText: color.muted,
@@ -386,6 +405,8 @@ export const dark: Theme = {
   dangerFill: darkColor.dangerBg,
   dangerText: darkColor.danger,
   dangerBorder: darkColor.dangerBorder,
+  dangerSolid: darkColor.dangerSolid,
+  textOnDanger: darkColor.textOnDanger,
 
   tagNeutralFill: darkColor.subtle,
   tagNeutralText: darkColor.muted,

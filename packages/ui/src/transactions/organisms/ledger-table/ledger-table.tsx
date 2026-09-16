@@ -141,12 +141,12 @@ import {
   FlatList,
   type GestureResponderEvent,
   type ListRenderItemInfo,
-  Pressable,
   Text,
   View,
 } from "react-native";
 import { Amount } from "../../../fx/atoms/amount/amount";
 import { useT } from "../../../i18n/provider";
+import { PressableScaled } from "../../../primitives/atoms/pressable-scaled/pressable-scaled";
 import { nestedScrollProps } from "../../../primitives/nested-scroll.ts";
 import { text } from "../../../theme/fonts.ts";
 import { makeStyles } from "../../../theme/styles.ts";
@@ -597,7 +597,7 @@ function LedgerTableHeaderCell({ column, sort, onSortColumn }: LedgerTableHeader
   const orderNote = active && column === "amount" ? t("transactions.sortedByCurrency") : null;
 
   return (
-    <Pressable
+    <PressableScaled
       accessibilityRole="button"
       accessibilityLabel={t(COLUMN_LABEL_KEY[column])}
       onPress={handlePress}
@@ -608,7 +608,7 @@ function LedgerTableHeaderCell({ column, sort, onSortColumn }: LedgerTableHeader
         {indicator}
       </Text>
       {orderNote === null ? null : <Text style={styles.headerNote}>{orderNote}</Text>}
-    </Pressable>
+    </PressableScaled>
   );
 }
 
@@ -692,7 +692,7 @@ function LedgerTableRowView({
           />
         ) : null}
       </View>
-      <Pressable
+      <PressableScaled
         accessibilityRole="button"
         accessibilityLabel={row.payee || row.account}
         // The file doc's own "one tab stop" paragraph — the container holds
@@ -751,7 +751,7 @@ function LedgerTableRowView({
             kind={TRANSACTION_AMOUNT_KIND[row.type]}
           />
         </View>
-      </Pressable>
+      </PressableScaled>
     </View>
   );
 }
@@ -776,7 +776,7 @@ function LedgerRowCheckbox({ checked, label, onPress, keyboardProps }: LedgerRow
   const t = useT();
   const styles = useStyles();
   return (
-    <Pressable
+    <PressableScaled
       accessibilityRole="checkbox"
       accessibilityLabel={t("transactions.selectRow", { payee: label || t("transactions.payee") })}
       accessibilityState={{ checked }}
@@ -790,7 +790,7 @@ function LedgerRowCheckbox({ checked, label, onPress, keyboardProps }: LedgerRow
       style={styles.checkboxBox}
     >
       {checked ? <View style={styles.checkboxMark} /> : null}
-    </Pressable>
+    </PressableScaled>
   );
 }
 

@@ -11,8 +11,9 @@
 
 import type * as money from "@waltning/core/money";
 import { useCallback } from "react";
-import { Pressable, Text, View } from "react-native";
+import { Text, View } from "react-native";
 import { Amount, type AmountKind } from "../../../fx/atoms/amount/amount";
+import { PressableScaled } from "../../../primitives/atoms/pressable-scaled/pressable-scaled";
 import { useInteraction } from "../../../primitives/interaction.ts";
 import { text } from "../../../theme/fonts.ts";
 import { makeStyles } from "../../../theme/styles.ts";
@@ -63,13 +64,13 @@ function Row({ row, onPress }: { row: RecentWidgetRow; onPress?: (id: string) =>
   if (!onPress) return body;
 
   return (
-    <Pressable
+    <PressableScaled
       onPress={handlePress}
       style={focused ? [styles.pressable, styles.rowFocused] : styles.pressable}
       {...handlers}
     >
       {body}
-    </Pressable>
+    </PressableScaled>
   );
 }
 

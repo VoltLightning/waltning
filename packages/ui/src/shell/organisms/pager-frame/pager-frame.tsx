@@ -165,7 +165,7 @@ function PagerFrameView({
               value={searchQuery}
               onChangeText={onSearchChange}
               placeholder={searchPlaceholder}
-              onClear={onSearchClose}
+              onDismiss={onSearchClose}
               autoFocus
               {...(searchCount === undefined ? {} : { resultCount: searchCount })}
             />

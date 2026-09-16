@@ -3469,3 +3469,249 @@ describe("every scroller declares which kind it is", () => {
     ).toEqual([]);
   });
 });
+
+/**
+ * **The escape is never the loudest thing on the screen** — `design-system/02`
+ * §2.6c.
+ *
+ * A destructive control carries the weight (`variant="danger"`, filled); the
+ * way out of it stays quiet. Cancel was neither one thing nor the other:
+ * `ghost` in six places and `secondary` in three, so the same word was two
+ * different controls depending on which screen you reached it from, and in
+ * `ConfirmDialog` the edged one stood at exactly the weight of the destructive
+ * button beside it.
+ *
+ * The census is on the source rather than on a render because the rule is
+ * about every Cancel that exists, including the ones no story draws.
+ */
+describe("the escape is drawn quietly, everywhere", () => {
+  /**
+   * **The span runs to the tag's own `/>`, not to the first `>`.** Two drafts
+   * got this wrong: `[^>]*` stops at any `>` a prop contains, and
+   * `(?:[^>]|=>)*?` only rescued the arrow-function case — `disabled={count >
+   * 0}`, the comparison this very comment named, still hid the variant behind
+   * it. The span now crosses anything that is not another `<Button` or the
+   * closing `/>`.
+   *
+   * And the roots cannot be one package: `apps/mobile/src` holds a real Cancel
+   * beside a `variant="danger"`, so "refuses any other variant on it" was true
+   * of five sixths of the repository.
+   *
+   * Two forms remain unmatched by construction — a non-self-closing
+   * `<Button>…</Button>` and a label reaching the tag through a prop. The
+   * count below is what notices them: a Cancel that leaves the walk drops it.
+   * A *new* Cancel in either form is still invisible, which is the honest
+   * limit of a regex census and the reason `CANCEL_COUNT` is exact.
+   */
+  const CANCEL =
+    /<Button\b(?:(?!<Button\b|\/>)[\s\S])*?\blabel=\{t\("common\.cancel"\)\}(?:(?!<Button\b|\/>)[\s\S])*?\/>/gs;
+  const CANCEL_ROOTS = ["packages/ui/src", "apps/mobile/src"];
+  /** Every Cancel that exists today. An exact count, so one cannot vanish silently. */
+  const CANCEL_COUNT = 10;
+
+  it("gives every Cancel button the ghost variant and no other", () => {
+    const offenders: string[] = [];
+    for (const file of CANCEL_ROOTS.flatMap((root) => sourceFiles(join(repoRoot, root)))) {
+      if (isTest(file) || file.endsWith(".stories.tsx")) continue;
+      const body = readFileSync(file, "utf8");
+      for (const [tag] of [...body.matchAll(CANCEL)].map((m) => [m[0]] as const)) {
+        if (!/\bvariant="ghost"/.test(tag)) {
+          offenders.push(`${relative(repoRoot, file)} — ${tag.replace(/\s+/g, " ").slice(0, 110)}`);
+        }
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  /**
+   * The regex has to actually find them, or the rule above passes by matching
+   * nothing. **Exact, not a floor**: `toBeGreaterThanOrEqual` lets a Cancel
+   * disappear from the walk — renamed label key, a non-self-closing tag, a
+   * label passed as a prop — without anything saying so.
+   */
+  it("finds every Cancel button it is policing", () => {
+    let seen = 0;
+    for (const file of CANCEL_ROOTS.flatMap((root) => sourceFiles(join(repoRoot, root)))) {
+      if (isTest(file) || file.endsWith(".stories.tsx")) continue;
+      seen += [...readFileSync(file, "utf8").matchAll(CANCEL)].length;
+    }
+    expect(seen, "a Cancel left the walk — update the count or the regex").toBe(CANCEL_COUNT);
+  });
+});
+
+/**
+ * **Every `Pressable` answers the finger** — `design-system/02` §2.7: *"press
+ * feedback is `scale(.97)` … every `Pressable` in the system gets it through
+ * one hook."*
+ *
+ * That sentence was false for two years and nothing could see it: **33 of the
+ * 50** files rendering a `Pressable` had no press feedback at all, including
+ * every calendar day, every tab, every row of the ledger. The cause was
+ * friction, not disagreement — the hook needs an `Animated.View`, two handlers
+ * and a wrapper style kept in step with the child's, and three coordinated
+ * edits is enough to skip. `PressableScaled` makes it one edit; this makes the
+ * rule visible.
+ *
+ * A bare `Pressable` is still the right element for something that is not a
+ * control — a backdrop, a scrim — so the exceptions are a list with reasons
+ * rather than a hole.
+ */
+describe("every pressable answers the finger", () => {
+  /**
+   * Bare `Pressable`s that are deliberately not controls, and why.
+   *
+   * **Every one is a backdrop, and that uniformity is the point.** The list
+   * once also held `toggle.tsx` on the argument that a switch is a state and
+   * its thumb is already a clock — but `checkbox.tsx` animates its mark the
+   * same way and was swept, two directories away, so the reason did not
+   * distinguish the two. Worse, `Toggle` has no `pressed` branch at all and
+   * its thumb is driven by the `value` *prop*, so a parent that does not flip
+   * `value` synchronously — a rejected optimistic write — answered a finger
+   * with nothing whatsoever. It scales now. An exception that needs a
+   * different reason from its neighbours is usually not an exception.
+   */
+  const NOT_A_CONTROL = new Map([
+    [
+      "packages/ui/src/shell/organisms/bottom-sheet/bottom-sheet.tsx",
+      { allowed: 1, why: "the backdrop — a dismiss area covering the screen, not a control" },
+    ],
+    [
+      "packages/ui/src/shell/organisms/confirm-dialog/confirm-dialog.tsx",
+      { allowed: 1, why: "the same backdrop; the dialog's own buttons are `Button`, which scales" },
+    ],
+    [
+      "packages/ui/src/primitives/atoms/select/select.tsx",
+      {
+        allowed: 1,
+        why: "the options backdrop, inset 0 on all four sides. The trigger, the multi-select toggle, the token remove and every option in this same file are controls and do scale — which is why the exemption is a *count*, not a pass for the file",
+      },
+    ],
+  ]);
+
+  /** Every bare `<Pressable` tag the scan sees today: 18 hand-wired, 3 backdrops. */
+  const BARE_TAG_COUNT = 21;
+  /** The docblocks here name `Pressable` constantly; only rendered tags count. */
+  const withoutComments = (text: string) =>
+    text.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+
+  it("renders no bare Pressable outside the listed exceptions", () => {
+    const offenders: string[] = [];
+    for (const root of ["packages/ui/src", "apps/mobile/src"]) {
+      for (const file of sourceFiles(join(repoRoot, root))) {
+        if (isTest(file) || file.endsWith(".stories.tsx")) continue;
+        const rel = relative(repoRoot, file);
+        // **The exemption is a budget, not a pass.** Skipping the whole file
+        // put C3 back the moment it was fixed: `select.tsx` holds five real
+        // controls beside its backdrop, and any of them could have lost its
+        // feedback under a blanket keyed on the filename.
+        let budget = NOT_A_CONTROL.get(rel)?.allowed ?? 0;
+        const body = withoutComments(readFileSync(file, "utf8"));
+        // **Per tag, not per file.** Excusing a whole file for one
+        // `usePressScale` anywhere in it let two live controls through —
+        // `category-sheet.tsx` has four bare tags and three wirings,
+        // `floating-add.tsx` two and one — so the rule this census exists to
+        // make visible was broken in two places it could not see. A hand-wired
+        // `Pressable` carries `onPressIn=` in its own opening tag; that is the
+        // thing to look for.
+        for (const tag of body.match(/<Pressable(?![A-Za-z])[^>]*>/gs) ?? []) {
+          // `onPressIn={press.onPressIn}` specifically: a name-census is what
+          // the last one was, and `onPressIn={anything}` would pass a control
+          // that wires a handler and never the scale.
+          if (/\bonPressIn=\{press\.onPressIn\}/.test(tag)) continue;
+          if (budget > 0) {
+            budget -= 1;
+            continue;
+          }
+          offenders.push(`${rel} — ${tag.replace(/\s+/g, " ").slice(0, 90)}`);
+        }
+      }
+    }
+    expect(offenders, "a Pressable with no press feedback (§2.7)").toEqual([]);
+  });
+
+  /** Every listed exception still exists and still spends exactly its budget. */
+  it("keeps no stale exception, and no unspent budget", () => {
+    for (const [rel, { allowed }] of NOT_A_CONTROL) {
+      const full = join(repoRoot, rel);
+      expect(existsSync(full), `${rel} is listed but gone`).toBe(true);
+      const body = withoutComments(readFileSync(full, "utf8"));
+      const unwired = (body.match(/<Pressable(?![A-Za-z])[^>]*>/gs) ?? []).filter(
+        (tag) => !/\bonPressIn=\{press\.onPressIn\}/.test(tag),
+      ).length;
+      expect(unwired, `${rel} no longer needs a budget of ${allowed}`).toBe(allowed);
+    }
+  });
+
+  /**
+   * **The walk itself, pinned.** `sourceFiles` returns `[]` for a directory
+   * that is not there, so a renamed root makes the census above pass on an
+   * empty list — it has no `CANCEL_COUNT` of its own to notice. This is that
+   * count: every bare `<Pressable` tag the scan sees, wired or not.
+   */
+  it("scans the tags it thinks it scans", () => {
+    let tags = 0;
+    for (const root of ["packages/ui/src", "apps/mobile/src"]) {
+      for (const file of sourceFiles(join(repoRoot, root))) {
+        if (isTest(file) || file.endsWith(".stories.tsx")) continue;
+        tags += (
+          withoutComments(readFileSync(file, "utf8")).match(/<Pressable(?![A-Za-z])[^>]*>/gs) ?? []
+        ).length;
+      }
+    }
+    expect(tags, "the walk changed size — a root may have moved").toBe(BARE_TAG_COUNT);
+  });
+});
+
+/**
+ * **What red may paint, where it is checkable** — §2.6c.
+ *
+ * Red has several claimants told apart by carrier, not hue: light `spend` and
+ * light `danger-solid` are **1.04:1** apart, which no reader separates. Most of
+ * that rule is about what a colour *paints* rather than which file it sits in,
+ * and is not mechanical. Two halves are, and they are the two that were
+ * actually broken:
+ *
+ * - `spend` is money and never a control's own colour. (`DayCell`'s dot and
+ *   `YearChart`'s bars are `spend` *inside* a pressable — those are money
+ *   rendered small, not the control's surface, which is why this looks at the
+ *   button primitives rather than at every file holding a `Pressable`.)
+ * - `danger-solid` is the **fill of a destroying control** and nothing else —
+ *   it must not leak out to a tag, a banner or a figure, where it would be a
+ *   third red doing a job `danger-bg` and `spend` already do.
+ *
+ * The ink and edge tokens are deliberately *not* policed: `dangerQuiet` — the
+ * reversible destructive button — legitimately wears `dangerText` on
+ * `dangerBorder`, the same pair an errored field wears. A first draft of this
+ * test claimed otherwise and failed on the variant this same PR added.
+ */
+describe("what red may paint", () => {
+  const BUTTON_FILES = [
+    "packages/ui/src/primitives/atoms/button/button.tsx",
+    "packages/ui/src/primitives/atoms/icon-button/icon-button.tsx",
+  ];
+
+  it("keeps the money ink out of the button primitives entirely", () => {
+    const offenders = BUTTON_FILES.filter((rel) =>
+      /theme\.spend\b/.test(readFileSync(join(repoRoot, rel), "utf8")),
+    );
+    expect(offenders, "a control painted in the money ink (§2.6c)").toEqual([]);
+  });
+
+  it("keeps the destroying fill on the destroying control and nowhere else", () => {
+    const offenders: string[] = [];
+    for (const root of ["packages/ui/src", "apps/mobile/src"]) {
+      for (const file of sourceFiles(join(repoRoot, root))) {
+        if (isTest(file)) continue;
+        const rel = relative(repoRoot, file);
+        // The token table and the role map declare it; the button spends it.
+        if (BUTTON_FILES.includes(rel)) continue;
+        if (rel.startsWith("packages/ui/src/theme/") || rel === "packages/ui/src/tokens.ts")
+          continue;
+        if (/\bdangerSolid\b|\btextOnDanger\b/.test(readFileSync(file, "utf8"))) {
+          offenders.push(rel);
+        }
+      }
+    }
+    expect(offenders, "the destructive fill used outside Button (§2.6c)").toEqual([]);
+  });
+});

@@ -15,7 +15,8 @@
  */
 
 import { useCallback } from "react";
-import { Pressable, Text, View } from "react-native";
+import { Text, View } from "react-native";
+import { PressableScaled } from "../../../primitives/atoms/pressable-scaled/pressable-scaled";
 import { useInteraction } from "../../../primitives/interaction.ts";
 import { categoryTintFor } from "../../../primitives/monogram.ts";
 import { text } from "../../../theme/fonts.ts";
@@ -63,7 +64,7 @@ function CategoryChip({ category, selected, onPick }: CategoryChipProps) {
   const ink = { color: tint.ink };
   const handlePress = useCallback(() => onPick(category.id), [onPick, category.id]);
   return (
-    <Pressable
+    <PressableScaled
       // The deck's chip is 34 tall; §10's 44 floor is met by the slop, the
       // way `Button`'s smaller sizes meet it.
       hitSlop={CHIP_SLOP}
@@ -76,7 +77,7 @@ function CategoryChip({ category, selected, onPick }: CategoryChipProps) {
       style={[styles.chip, fill, hovered ? styles.hovered : null, focused ? styles.focused : null]}
     >
       <Text style={[selected ? styles.labelSelected : styles.label, ink]}>{category.name}</Text>
-    </Pressable>
+    </PressableScaled>
   );
 }
 

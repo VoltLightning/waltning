@@ -62,7 +62,7 @@
  */
 
 import { memo, useCallback, useState } from "react";
-import { type LayoutChangeEvent, Pressable, View } from "react-native";
+import { type LayoutChangeEvent, View } from "react-native";
 import Animated, {
   type SharedValue,
   useAnimatedReaction,
@@ -70,6 +70,7 @@ import Animated, {
   useSharedValue,
 } from "react-native-reanimated";
 import { scheduleOnRN } from "react-native-worklets";
+import { PressableScaled } from "../../../primitives/atoms/pressable-scaled/pressable-scaled";
 import { useInteraction } from "../../../primitives/interaction.ts";
 import { text, textCap } from "../../../theme/fonts.ts";
 import { useTheme } from "../../../theme/provider";
@@ -149,7 +150,7 @@ function IconButton({
   const styles = useStyles();
   const { focused, handlers } = useInteraction();
   return (
-    <Pressable
+    <PressableScaled
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
       accessibilityState={{ disabled }}
@@ -162,7 +163,7 @@ function IconButton({
       style={[styles.iconButton, focused ? styles.focused : null, disabled ? styles.dim : null]}
     >
       {children}
-    </Pressable>
+    </PressableScaled>
   );
 }
 
@@ -286,7 +287,7 @@ function PagerHeaderView({
         bottom — and a flex row can only ever put it where the box ends.
       */}
       <Animated.View style={[styles.title, title]}>
-        <Pressable
+        <PressableScaled
           accessibilityRole="button"
           accessibilityLabel={labels.pickPeriod}
           onPress={pick}
@@ -319,7 +320,7 @@ function PagerHeaderView({
               {detail}
             </Animated.Text>
           )}
-        </Pressable>
+        </PressableScaled>
       </Animated.View>
 
       {/*

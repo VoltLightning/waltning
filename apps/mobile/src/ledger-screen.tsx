@@ -53,6 +53,7 @@ import { monthLabel } from "@waltning/ui/i18n/locales";
 import { useLocale, useT } from "@waltning/ui/i18n/provider";
 import { Chip } from "@waltning/ui/primitives/chip";
 import { pageScrollProps } from "@waltning/ui/primitives/nested-scroll";
+import { PressableScaled } from "@waltning/ui/primitives/pressable-scaled";
 import { SearchField } from "@waltning/ui/primitives/search-field";
 import { type Segment, SegmentControl } from "@waltning/ui/primitives/segment-control";
 import { MultiSelect, type SelectOption } from "@waltning/ui/primitives/select";
@@ -86,7 +87,7 @@ import { PeriodField } from "@waltning/ui/transactions/period-field";
 import { RunningTotal, RunningTotalSkeleton } from "@waltning/ui/transactions/running-total";
 import { type Href, router, useLocalSearchParams } from "expo-router";
 import { useCallback, useMemo, useRef, useState } from "react";
-import { FlatList, Pressable, Text, type TextInput, View } from "react-native";
+import { FlatList, Text, type TextInput, View } from "react-native";
 
 const SKELETON_ROW_KEYS = ["a", "b", "c", "d", "e"] as const;
 
@@ -761,14 +762,14 @@ export default function Ledger() {
           ))}
           <Chip placeholder={t("transactions.addFilter")} onPress={handleOpenSheet} />
           {filtered ? (
-            <Pressable
+            <PressableScaled
               accessibilityRole="button"
               accessibilityLabel={t("transactions.clearAllFilters")}
               onPress={filters.clearAll}
               style={styles.clearAll}
             >
               <Text style={styles.clearAllText}>{t("transactions.clearAllFilters")}</Text>
-            </Pressable>
+            </PressableScaled>
           ) : null}
         </View>
 

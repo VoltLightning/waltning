@@ -12,8 +12,9 @@
  * has nothing to report.
  */
 
-import { Pressable, Text, View } from "react-native";
+import { Text, View } from "react-native";
 import { useT } from "../../../i18n/provider";
+import { PressableScaled } from "../../../primitives/atoms/pressable-scaled/pressable-scaled";
 import { useInteraction } from "../../../primitives/interaction.ts";
 import { text } from "../../../theme/fonts.ts";
 import { makeStyles } from "../../../theme/styles.ts";
@@ -31,7 +32,7 @@ export function ActiveFilterChip({ label, excludes, onRemove }: ActiveFilterChip
   const styles = useStyles();
   const { focused, handlers } = useInteraction();
   return (
-    <Pressable
+    <PressableScaled
       accessibilityRole="button"
       accessibilityLabel={t("common.remove", { value: label })}
       onPress={onRemove}
@@ -49,7 +50,7 @@ export function ActiveFilterChip({ label, excludes, onRemove }: ActiveFilterChip
         <View style={[styles.crossBar, styles.crossBarA]} />
         <View style={[styles.crossBar, styles.crossBarB]} />
       </View>
-    </Pressable>
+    </PressableScaled>
   );
 }
 

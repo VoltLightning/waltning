@@ -19,8 +19,9 @@
  */
 
 import { useCallback, useEffect } from "react";
-import { Pressable, Text, View } from "react-native";
+import { Text, View } from "react-native";
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
+import { PressableScaled } from "../../../primitives/atoms/pressable-scaled/pressable-scaled";
 import { text } from "../../../theme/fonts.ts";
 import { makeStyles } from "../../../theme/styles.ts";
 import { focus, motion, radius, space, touchTarget } from "../../../tokens.ts";
@@ -69,7 +70,7 @@ export function Checkbox({ label, checked, onChange, hint, disabled = false }: C
   const handlePress = useCallback(() => onChange(!checked), [checked, onChange]);
 
   return (
-    <Pressable
+    <PressableScaled
       accessibilityRole="checkbox"
       accessibilityLabel={label}
       accessibilityState={{ checked, disabled }}
@@ -93,7 +94,7 @@ export function Checkbox({ label, checked, onChange, hint, disabled = false }: C
         <Text style={styles.label}>{label}</Text>
         {hint === undefined ? null : <Text style={styles.hint}>{hint}</Text>}
       </View>
-    </Pressable>
+    </PressableScaled>
   );
 }
 
