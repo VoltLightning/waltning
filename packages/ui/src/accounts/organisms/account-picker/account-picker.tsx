@@ -261,6 +261,28 @@ export function AccountPicker({
               </View>
             </View>
           ))
+        ) : query.trim() === "" ? (
+          /*
+            **Nothing, and nothing searched for — that is first-run.**
+            `design-system/08` §8.1 keeps these apart, and one branch for both
+            rendered *Nothing here matches ""* over a ledger with no accounts
+            at all: a sentence about a search nobody performed, with empty
+            quotes where the term would be. A reader is told their query found
+            nothing when their real problem is that there is nothing to find.
+
+            Each carries the action `EmptyState` requires — an empty state
+            that offers no way out is a dead end — and the sheet's **footer**
+            stands down instead. Two identical *Create account* buttons twenty
+            pixels apart is one of them being the wrong one to press, and the
+            footer is the one that exists for *"I can see the list and none of
+            these is right"*, which is not the situation here.
+          */
+          <EmptyState
+            variant="first-run"
+            title={t("accounts.noneTitle")}
+            body={t("accounts.noneBody")}
+            primaryAction={{ label: t("accounts.create"), onPress: onCreateAccount }}
+          />
         ) : (
           <EmptyState
             variant="filtered"
@@ -270,9 +292,11 @@ export function AccountPicker({
           />
         )}
       </ScrollView>
-      <View style={styles.footer}>
-        <Button label={t("accounts.create")} onPress={onCreateAccount} variant="secondary" />
-      </View>
+      {sections.length === 0 ? null : (
+        <View style={styles.footer}>
+          <Button label={t("accounts.create")} onPress={onCreateAccount} variant="secondary" />
+        </View>
+      )}
     </BottomSheet>
   );
 }

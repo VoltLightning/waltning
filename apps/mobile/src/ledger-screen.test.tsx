@@ -184,7 +184,7 @@ describe("Ledger", () => {
     expect(screen.getByText("Today")).toBeDefined();
     expect(screen.getByText("2026-01-05")).toBeDefined();
     expect(screen.getByText("Corner Bakery")).toBeDefined();
-    expect(screen.getByText("Cash → Bank A")).toBeDefined();
+    expect(screen.getByText("Transfer · Cash → Bank A")).toBeDefined();
     expect(screen.getByText("2 transactions")).toBeDefined();
   });
 

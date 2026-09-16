@@ -146,7 +146,27 @@ export function CreateAccountForm({
   const styles = useStyles();
 
   const [name, setName] = useState("");
-  const [currency, setCurrency] = useState<CurrencyCode | null>(currencies[0]?.code ?? null);
+  /**
+   * **The first currency a capture can actually be valued in**, not the first
+   * one alphabetically.
+   *
+   * `currencies[0]` opened this form on BYN — first by code, and on a fresh
+   * ledger the one with no rate — so the default selection was a currency the
+   * form immediately warns about and an account that cannot take a
+   * transaction until a rate is set. The pivot always satisfies `capturable`
+   * by definition (`§14.6`), so this lands there when nothing else has a rate,
+   * and on whatever the owner has actually set up once something does.
+   *
+   * Falls back to the first entry when every currency says `false`, which is a
+   * ledger with no pivot — a broken bootstrap that `architecture/09` makes
+   * someone else's error to report, not this form's to hide behind an empty
+   * selection.
+   */
+  const [currency, setCurrency] = useState<CurrencyCode | null>(
+    currencies.find((candidate) => candidate.capturable !== false)?.code ??
+      currencies[0]?.code ??
+      null,
+  );
   const [expanded, setExpanded] = useState(defaultExpanded);
 
   const [kind, setKind] = useState<AccountKind>("other");

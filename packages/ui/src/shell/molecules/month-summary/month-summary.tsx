@@ -19,6 +19,15 @@
  * month before the ledger existed is three zeroes, which is the true answer;
  * an empty state here would claim the *screen* had nothing, while the register
  * beneath it may be full.
+ *
+ * **A figure in one currency says what it left out.** S04 — *"empty means
+ * nothing happened, not nothing in the lead currency"* — and these three
+ * figures are the lead currency's alone. A day holding one 48.20 PLN expense
+ * drew *went out 0.00 EUR* under a register listing that expense: true of EUR
+ * and false of the day, four pixels from the row that contradicts it. The
+ * conversion that would state the whole is class **S** and arc-phone does not
+ * do it, so the card carries the Months chart's own note instead of a figure
+ * it cannot compute.
  */
 
 import type * as money from "@waltning/core/money";
@@ -61,6 +70,12 @@ export type MonthSummaryProps = {
   net: money.Money;
   currency: string;
   decimals?: number;
+  /**
+   * How many *other* currencies the period holds rows in — the count, not the
+   * codes. Zero or absent draws nothing: the figures then state the whole
+   * period and a note would be about an emptiness that is not there.
+   */
+  otherCurrencies?: number;
 };
 
 export function MonthSummary({
@@ -70,6 +85,7 @@ export function MonthSummary({
   net,
   currency,
   decimals = 2,
+  otherCurrencies = 0,
 }: MonthSummaryProps) {
   const t = useT();
   const styles = useStyles();
@@ -127,6 +143,12 @@ export function MonthSummary({
           <Amount value={spend} currency={currency} decimals={decimals} size="small" kind="spend" />
         </View>
       </View>
+
+      {otherCurrencies > 0 ? (
+        <Text style={styles.otherCurrencies}>
+          {t("shell.plusOtherCurrencies", { count: otherCurrencies })}
+        </Text>
+      ) : null}
     </Card>
   );
 }
@@ -138,4 +160,5 @@ const useStyles = makeStyles((theme) => ({
   pairItem: { gap: space.xxs },
   pairItemEnd: { gap: space.xxs, alignItems: "flex-end" },
   pairLabel: { color: theme.textMuted, ...text.ui("caption") },
+  otherCurrencies: { color: theme.textMuted, ...text.ui("caption") },
 }));

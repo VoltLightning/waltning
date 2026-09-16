@@ -219,3 +219,34 @@ it("offers Create account… from the pinned footer", () => {
   fireEvent.click(screen.getByRole("button", { name: "Create account…" }));
   expect(onCreateAccount).toHaveBeenCalledOnce();
 });
+
+/**
+ * **`08` §8.1 keeps these apart, and one branch served both.** A ledger with
+ * no accounts rendered *Nothing here matches ""* — a sentence about a search
+ * nobody performed, with empty quotes where the term would be — telling a
+ * reader their query found nothing when the real problem is that there is
+ * nothing to find.
+ */
+it("says first-run when there are no accounts at all, not no-match", () => {
+  renderPicker({ accounts: [] });
+  expect(screen.getByText("No accounts yet")).toBeDefined();
+  expect(screen.queryByText(/Nothing here matches/)).toBeNull();
+  // One way out, not two: the footer stands down so the empty state's action
+  // is the only `Create account` on the sheet.
+  expect(screen.getAllByRole("button", { name: /Create account/ })).toHaveLength(1);
+});
+
+it("says no-match only when something was actually searched for", () => {
+  // Enough accounts for the search field to appear at all — it is offered
+  // above a threshold, which is why the no-match state needs a list to search.
+  const many = [
+    ...ACCOUNTS,
+    ...Array.from({ length: 12 }, (_, i) => ({ ...BANK, id: `x${i}`, name: `Extra ${i} · PLN` })),
+  ];
+  renderPicker({ accounts: many });
+  fireEvent.change(screen.getByPlaceholderText(/Search \d+ accounts/), {
+    target: { value: "zzzzz" },
+  });
+  expect(screen.getByText(/Nothing here matches "zzzzz"/)).toBeDefined();
+  expect(screen.queryByText("No accounts yet")).toBeNull();
+});

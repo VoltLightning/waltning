@@ -335,7 +335,7 @@ describe("QuickAdd — the phone path (Dock + QuickAddComposer)", () => {
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
 
     expect(screen.queryByRole("button", { name: /Category: Eating out/ })).toBeNull();
-    expect(screen.getByRole("button", { name: "Category" })).toBeDefined();
+    expect(screen.getByRole("button", { name: "Category: What was it for?" })).toBeDefined();
   });
 
   /**

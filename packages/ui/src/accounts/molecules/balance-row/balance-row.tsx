@@ -57,6 +57,13 @@ export type BalanceRowProps = {
   expectedBalance?: money.Money | null;
   /** Present only where the row is a target — S16's register, tap to edit. */
   onPress?: () => void;
+  /**
+   * The last row in its card draws no rule — the card's own edge ends the
+   * list, and a hairline two pixels inside it reads as a row that failed to
+   * render. Default `false` so an existing caller is unchanged; `S16`'s
+   * register passes it.
+   */
+  last?: boolean;
 };
 
 export function BalanceRow({
@@ -70,13 +77,14 @@ export function BalanceRow({
   unsettled = false,
   expectedBalance,
   onPress,
+  last = false,
 }: BalanceRowProps) {
   const t = useT();
   const styles = useStyles();
   const { focused, handlers } = useInteraction();
 
   const content = (
-    <View style={styles.row}>
+    <View style={[styles.row, last ? null : styles.ruled]}>
       <View style={styles.identity}>
         <View style={styles.nameLine}>
           <Text style={styles.name}>{account}</Text>
@@ -134,9 +142,15 @@ const useStyles = makeStyles((theme) => ({
     alignItems: "center",
     gap: space.xl,
     paddingVertical: space.lg,
-    borderBottomWidth: hairline.width,
-    borderBottomColor: theme.hairline,
   },
+  /**
+   * A rule *between* rows, never under the last one — a card's own edge
+   * already ends a list, and a hairline two pixels inside it reads as a row
+   * that failed to render. `SettingsMenu` and `BackupCard` take the same
+   * `last` and this row did not, so every account card in the app closed with
+   * a stray line under its final balance.
+   */
+  ruled: { borderBottomWidth: hairline.width, borderBottomColor: theme.hairline },
   identity: { flex: 1, gap: space.xxs },
   nameLine: { flexDirection: "row", alignItems: "center", gap: space.md },
   name: { color: theme.text, ...text.ui("bodySm") },

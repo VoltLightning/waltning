@@ -89,6 +89,13 @@ export const en = {
     decline: "Decline",
   },
   accounts: {
+    /**
+     * The picker over a ledger with **no accounts at all** — `08` §8.1's
+     * `first-run`, which is a different sentence from "nothing matched your
+     * search" and was rendering as the latter with empty quotes.
+     */
+    noneTitle: "No accounts yet",
+    noneBody: "Create one, and captures have somewhere to come from.",
     /** A row, an account or a return target that is no longer there. */
     notFound: "This account is no longer here. It may have been archived on another device.",
     badReturnTarget: "That link did not say where to come back to.",
@@ -253,6 +260,14 @@ export const en = {
     amount: "Amount",
     account: "Account",
     /**
+     * The **prompt** under an unfilled composer row, not the noun again.
+     * `From`/`Account` and `Category`/`Category` were the label repeated as
+     * its own value — the second reading as a field that had somehow filled
+     * itself in with its own name.
+     */
+    chooseAccount: "Which one?",
+    chooseCategory: "What was it for?",
+    /**
      * §14.6: holding a currency and capturing in it are separate capabilities.
      * The message names the currency because the person chose the account, not
      * the currency, and the two are one step apart. No longer names "expense"
@@ -414,6 +429,8 @@ export const en = {
     totalExcludingCapitalMany: "{{amount}} excluding {{count}} one-offs",
     /** Drawn between the two accounts, and the two amounts, of a `TransferRow`. */
     transferArrow: "→",
+    transferTo: "To {{account}}",
+    transferKind: "Transfer",
     /** Short swipe's action (S10 §4, §7) — announced, not only shown. */
     categorise: "Categorise",
     /** `Skeleton`'s accessible label while a page loads. */
@@ -469,6 +486,7 @@ export const en = {
     addIncomeTitle: "Add income",
     howMuch: "How much?",
     fromAccount: "From",
+    intoAccount: "Into",
     person: "Person",
     moreDetails: "More details",
     moreDetailsHint: "Payee, date, scope, person",

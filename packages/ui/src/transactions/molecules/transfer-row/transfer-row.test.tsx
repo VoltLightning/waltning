@@ -22,7 +22,7 @@ describe("TransferRow", () => {
         toCurrency="PLN"
       />,
     );
-    expect(screen.getByText("Cash → Bank A")).toBeDefined();
+    expect(screen.getByText("Transfer · Cash → Bank A")).toBeDefined();
   });
 
   it("renders both legs' own amount, each in its own currency", () => {
@@ -55,4 +55,26 @@ describe("TransferRow", () => {
     );
     expect(screen.getByText("01-05")).toBeDefined();
   });
+});
+
+/**
+ * **The destination survives a narrow row.** S10's drawing gives a transfer the
+ * two-line identity every other row has; one line holding both names under
+ * `numberOfLines={1}` tail-truncated to *Bank A · P…* on a 390pt phone, cutting
+ * away the half of a transfer that says where the money went.
+ */
+it("leads with the destination, and names the pair beneath it", () => {
+  render(
+    <TransferRow
+      date="2026-09-16"
+      fromAccountName="Bank A · PLN"
+      toAccountName="Bank B · EUR"
+      amount={money.toMoney("-200.00000000")}
+      currency="PLN"
+      toAmount={money.toMoney("46.50000000")}
+      toCurrency="EUR"
+    />,
+  );
+  expect(screen.getByText("To Bank B · EUR")).toBeDefined();
+  expect(screen.getByText("Transfer · Bank A · PLN → Bank B · EUR")).toBeDefined();
 });
