@@ -27,6 +27,7 @@ import { useSafeArea } from "@waltning/ui/primitives/safe-area";
 import { type Segment, SegmentControl } from "@waltning/ui/primitives/segment-control";
 import { useBreakpoint } from "@waltning/ui/primitives/use-breakpoint";
 import { GroundPanel } from "@waltning/ui/shell/card";
+import { useKeyboardHeight } from "@waltning/ui/shell/keyboard";
 import { text } from "@waltning/ui/theme/fonts";
 import { makeStyles } from "@waltning/ui/theme/styles";
 import { gutter, space } from "@waltning/ui/tokens";
@@ -596,7 +597,20 @@ export default function QuickAdd() {
 
   // The footer clears the home indicator itself, the way the band above
   // clears the notch: `GroundPanel` between them clears neither edge.
-  const clearBottom = { paddingBottom: gutter + insets.bottom };
+  /**
+   * **The footer rides above the keyboard, and the home indicator's inset goes
+   * with it.** S05 §3 puts Save at the bottom edge because it is pressed in
+   * motion — and with the keyboard up that edge was *behind* the keyboard, so
+   * the one affirmative action on the screen was covered the whole time
+   * someone was typing the amount. `useKeyboardHeight` measures the overlap;
+   * the safe-area inset is dropped while it is non-zero, because the keyboard
+   * is already covering the indicator and paying for both lifts the footer a
+   * second time.
+   */
+  const keyboardHeight = useKeyboardHeight();
+  const clearBottom = {
+    paddingBottom: keyboardHeight > 0 ? gutter + keyboardHeight : gutter + insets.bottom,
+  };
   const composerCategories = useMemo(
     () =>
       snapshot.categories.map((category) => ({
