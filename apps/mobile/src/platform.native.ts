@@ -3,6 +3,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { createAppearance } from "@waltning/client/appearance/create-appearance";
 import { previewResetEnabled } from "@waltning/client/appearance/preview-reset";
+import type { BackupPort } from "@waltning/client/backup/backup-port";
 import { createDisplayCurrencyPreference } from "@waltning/client/currencies/display-currency";
 import { createDevicePreference } from "@waltning/client/device/create-device-preference";
 import { createDeskScopePreference } from "@waltning/client/ledger/desk-scope";
@@ -19,9 +20,13 @@ import {
   parseFloatPosition,
   serializeFloatPosition,
 } from "@waltning/ui/shell/float-geometry";
+import { setStringAsync } from "expo-clipboard";
+import { getRandomBytes } from "expo-crypto";
+import { Directory, File, Paths } from "expo-file-system";
 import * as Haptics from "expo-haptics";
 import * as LocalAuthentication from "expo-local-authentication";
 import { getLocales } from "expo-localization";
+import { isAvailableAsync, shareAsync } from "expo-sharing";
 import { AppState } from "react-native";
 import { mobileDiagnostics } from "./diagnostics.ts";
 
@@ -238,3 +243,60 @@ export const DEVICE_LOCALES: readonly string[] = getLocales().map((locale) => lo
 export function subscribeCommandBarHotkey(_onTrigger: () => void): () => void {
   return () => {};
 }
+
+/* ── §14.3 · the app-owned encrypted export ───────────────────────────────── */
+
+/**
+ * The three things a backup needs from a phone: unpredictable bytes, a way to
+ * hand the file to its owner, and a clipboard.
+ *
+ * **`getRandomBytes` rather than anything reading `crypto`.** `polyfills.ts`
+ * installs `randomUUID` and nothing else, so a global read would throw on the
+ * device and nowhere else — the failure `random.ts` exists to stop repeating.
+ *
+ * **The file goes in the app's own container first, and only then to the share
+ * sheet.** §5.7 keeps app data out of the system photo library and out of any
+ * directory the platform shares by default; `expo-sharing` is what lets a
+ * person move it deliberately instead of the OS doing it for them.
+ *
+ * **Cache, not documents, and one file at a time.** The ciphertext is a copy
+ * the owner is expected to take elsewhere; leaving it in `Documents` would put
+ * a second copy of the whole ledger inside the app forever, and — until §5.7's
+ * backup-exclusion row lands, which needs a build that is ours — inside the
+ * device backup too. The cache is the one directory where the OS reclaiming it
+ * is the correct outcome. Each export clears the last one for the same reason:
+ * a folder quietly accumulating whole-ledger ciphertexts is the opposite of
+ * what this feature is for.
+ */
+const BACKUPS = new Directory(Paths.cache, "backups");
+
+export const backupPort: BackupPort = {
+  random: (length) => getRandomBytes(length),
+  hand: async (name, bytes) => {
+    // `intermediates` because the cache directory itself may be absent on a
+    // cold start, and `idempotent` because it usually is not.
+    BACKUPS.create({ intermediates: true, idempotent: true });
+    for (const stale of BACKUPS.list()) stale.delete();
+
+    const file = new File(BACKUPS, name);
+    file.create({ overwrite: true });
+    file.write(bytes);
+
+    // A folder name, never the URI: that string is rendered on the card, and
+    // a container path is both unreadable and a device identifier.
+    const where = "Files · this app";
+    if (!(await isAvailableAsync())) {
+      // Not a failure. The file is written and confirmed; a device with no
+      // share sheet is one where the owner fetches it over a cable.
+      return { confirmed: true, where };
+    }
+    await shareAsync(file.uri, {
+      mimeType: "application/octet-stream",
+      dialogTitle: name,
+      UTI: "public.data",
+    });
+    return { confirmed: true, where };
+  },
+  /** `setStringAsync` answers whether it took it, and the card renders the answer. */
+  clipboard: (value) => setStringAsync(value),
+};

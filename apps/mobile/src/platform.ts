@@ -18,6 +18,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { createAppearance } from "@waltning/client/appearance/create-appearance";
 import { previewResetEnabled } from "@waltning/client/appearance/preview-reset";
+import type { BackupPort } from "@waltning/client/backup/backup-port";
 import { createDisplayCurrencyPreference } from "@waltning/client/currencies/display-currency";
 import { createDevicePreference } from "@waltning/client/device/create-device-preference";
 import { createDeskScopePreference } from "@waltning/client/ledger/desk-scope";
@@ -255,3 +256,68 @@ const COMPOSING_KEY_CODE = 229;
 
 /** What an open sheet looks like in the DOM — RNW's `Modal` sets this while, and only while, it is visible. */
 const DIALOG_SELECTOR = '[role="dialog"]';
+
+/* ── §14.3 · the app-owned encrypted export ───────────────────────────────── */
+
+/**
+ * The browser's half of the backup port.
+ *
+ * `architecture/14` §14.1 is blunt about what this build is: the same engine
+ * and the same screens over a preview ledger whose storage the browser may
+ * evict. That makes an export *more* useful here, not less — it is the only
+ * way anything survives a cleared origin — so the feature is present rather
+ * than hidden behind a platform check, which is what "the same screens via a
+ * port" means.
+ *
+ * **A download, and it is never confirmed.** There is no container to write to
+ * first, so the bytes go to the browser's own save path — and a page is never
+ * told what became of them. A blocked pop-up, a full disk and a saved file are
+ * indistinguishable from here, so `confirmed` is `false` and the card says
+ * *check your downloads* instead of *backed up*. Claiming otherwise put
+ * "Backed up" over a file that need not exist, above the only copy of its key.
+ *
+ * The object URL is released in a `finally`: a blob holding a whole ledger
+ * that is never revoked sits in memory for as long as the tab is open, and the
+ * throw that skipped the release was the likeliest way to get there. The
+ * release waits a macrotask rather than a microtask — a microtask runs before
+ * the browser has started the download task the click queued.
+ */
+export const backupPort: BackupPort = {
+  random: (length) => {
+    const bytes = new Uint8Array(length);
+    // The browser has this natively; the phone's port uses `expo-crypto` for
+    // the same call, which is why neither this feature's core nor its hooks
+    // ever read a global themselves.
+    globalThis.crypto.getRandomValues(bytes);
+    return bytes;
+  },
+  hand: async (name, bytes) => {
+    const blob = new Blob([bytes as BlobPart], { type: "application/octet-stream" });
+    const url = URL.createObjectURL(blob);
+    try {
+      const link = globalThis.document.createElement("a");
+      link.href = url;
+      link.download = name;
+      link.click();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    } finally {
+      URL.revokeObjectURL(url);
+    }
+    return { confirmed: false, where: "your downloads" };
+  },
+  /**
+   * Absent unless the page has one. `navigator.clipboard` is undefined on a
+   * plain-HTTP origin, and a copy button that throws into a `void` is a button
+   * that does nothing while looking like it worked.
+   */
+  clipboard: globalThis.navigator?.clipboard
+    ? async (value) => {
+        try {
+          await globalThis.navigator.clipboard.writeText(value);
+          return true;
+        } catch {
+          return false;
+        }
+      }
+    : null,
+};

@@ -118,8 +118,22 @@ fi
 # literally here, so including it would make every edit to this hook look like
 # a leaked key. The cost is that a secret pasted into the hook itself is not
 # caught by the hook itself.
-if git diff --cached -- . ':(exclude).githooks/pre-commit' \
-  | grep -qE 'BEGIN (RSA |DSA |EC |OPENSSH |PGP )?PRIVATE KEY|AGE-SECRET-KEY-1|sk-[A-Za-z0-9_-]{24,}|ghp_[A-Za-z0-9]{30,}|xox[baprs]-[A-Za-z0-9-]{20,}|PostgreSQL database dump'; then
+#
+# The age pattern requires the **body**, not the prefix. It used to match
+# `AGE-SECRET-KEY-1` alone, which is sixteen characters of format name and not
+# key material: it refused a docstring explaining what an age identity looks
+# like, a spec paragraph, and a screen drawing with a truncated example — while
+# a real identity is that prefix plus fifty-eight bech32 characters, which no
+# sentence contains by accident.
+#
+# `packages/core/testdata/age/` is exempt, and it is the only exemption. Those
+# are C2SP's published conformance vectors for the age format; each carries the
+# identity it is meant to be decrypted with, they are public by construction,
+# and their whole value is being byte-identical to what every other
+# implementation tests against. Rewriting one to satisfy this hook would make
+# the test that reads it a test of nothing.
+if git diff --cached -- . ':(exclude).githooks/pre-commit' ':(exclude)packages/core/testdata/age' \
+  | grep -qE 'BEGIN (RSA |DSA |EC |OPENSSH |PGP )?PRIVATE KEY|AGE-SECRET-KEY-1[A-Z0-9]{50,}|sk-[A-Za-z0-9_-]{24,}|ghp_[A-Za-z0-9]{30,}|xox[baprs]-[A-Za-z0-9-]{20,}|PostgreSQL database dump'; then
   fail "the staged diff contains key material, a token, or a database dump."
 fi
 

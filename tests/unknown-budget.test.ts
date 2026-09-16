@@ -47,6 +47,10 @@ const BUDGET: Record<string, { max: number; why: string }> = {
     max: 3,
     why: "two in one constraint — the driver's run-result and the schema map, neither of which this module touches — and the JSON payload the drain replays. It was eight: `TRun` and `TSchema` threaded by hand through three declarations, which is one decision typed out three times",
   },
+  "packages/ledger/src/backup/document.ts": {
+    max: 1,
+    why: "`JSON.parse`'s own result, before a single line of checking runs on it — the one binding in this file that genuinely has no type yet, and the case `CLAUDE.md` names outright. Everything under it is narrowed by `parseBackup` before a caller sees it. It was six: a hand-rolled table-name reader that went spelunking for drizzle's `drizzle:Name` symbol, and two SQLite readers constrained on a structural `all` — drizzle exports `is`/`getTableName` and the two store types were already imported, so five of the six were a type nobody had looked up",
+  },
   "packages/ledger/src/migrate.ts": {
     max: 1,
     why: "isPreJournalStoreError's own parameter — a type guard exists to narrow a value of uncertain type, and its one caller passes a catch binding straight through",

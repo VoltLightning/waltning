@@ -227,11 +227,29 @@ describe("packages/core runs on a phone", () => {
     expect(files.length, "core production files found").toBeGreaterThan(5);
   });
 
-  it("depends on decimal.js and zod, and nothing else", () => {
+  it("depends on decimal.js, zod and noble, and nothing else", () => {
     // The floor stated as a set rather than a sentence. A bare specifier that
     // is not relative, not a Node builtin and not on this list is a new
     // dependency for the layer whose whole promise is that it has almost none.
-    const allowed = new Set(["decimal.js", "zod"]);
+    //
+    // **The three `@noble` packages are `src/age`'s, and adding them was a
+    // decision made here on purpose.** `architecture/14` §14.3 makes an
+    // age-encrypted export the *whole* of the phone's durability before a
+    // backend exists, and age is X25519, ChaCha20-Poly1305, HKDF and HMAC —
+    // primitives with exactly two options: a library, or hand-written
+    // cryptography in the package that ships to the phone. They are
+    // zero-dependency, audited, and read no global of their own here, because
+    // `age/keys.ts` takes its randomness as a parameter. A fourth `@noble/*`
+    // is a new decision and belongs in this comment, not in a package.json.
+    const allowed = new Set([
+      "decimal.js",
+      "zod",
+      "@noble/ciphers/chacha.js",
+      "@noble/curves/ed25519.js",
+      "@noble/hashes/hkdf.js",
+      "@noble/hashes/hmac.js",
+      "@noble/hashes/sha2.js",
+    ]);
     const files = sourceFiles(join(repoRoot, "packages/core/src")).filter((f) => !isTest(f));
     const offenders: string[] = [];
     for (const file of files) {
@@ -310,9 +328,26 @@ describe("apps hold only what names a platform", () => {
    * bridge that reads it belongs in an app. The rule reported that bridge as
    * shareable code; it is the opposite, and moving it to `packages/ui` would put
    * a native module in the package that must never name one.
+   *
+   * **And `./platform` counts, because it is the forced file.** An
+   * extension-less import of it resolves to `platform.native.ts` on a device
+   * and `platform.ts` in a browser — that specifier *is* the platform fork,
+   * and `CLAUDE.md` requires it to be written extension-less for exactly that
+   * reason. A file whose whole reason to be in an app is that it binds a
+   * package's behaviour to that fork was reported as shareable code; moving it
+   * to `packages/ui` would take the fork with it, which is the one thing the
+   * forced file exists to prevent.
+   *
+   * **Spelled tightly, and tested against comments.** `./platform` and
+   * `../platform` — the forced file itself — and not `./shims/platform` or
+   * anything merely ending in the word, which would let a file earn the
+   * exemption by naming a module that is not the fork. Comments are stripped
+   * first for the same reason: this repository's files discuss `expo` and
+   * `react-native` constantly in prose, so a docstring alone would otherwise
+   * qualify a file that imports nothing.
    */
   const NAMES_PLATFORM =
-    /from\s+["'](react-native(-[\w-]+)?|expo|expo-.*|@expo(-[\w-]+)?\/.*|@react-navigation\/.*)["']|Platform\.OS|__DEV__|EXPO_PUBLIC_|import\.meta\.env/;
+    /from\s+["'](react-native(-[\w-]+)?|expo|expo-.*|@expo(-[\w-]+)?\/.*|@react-navigation\/.*|\.{1,2}\/platform)["']|Platform\.OS|__DEV__|EXPO_PUBLIC_|import\.meta\.env/;
 
   it("every app source file is platform-bound, a test, or a route", () => {
     const offenders: string[] = [];
@@ -328,7 +363,15 @@ describe("apps hold only what names a platform", () => {
         // `app/`'s, not a second `app/` — so it earns the same exemption
         // without needing to name a platform on its own.
         if (/^apps\/[^/]+\/src\/journeys\//.test(rel(file))) continue;
-        if (!NAMES_PLATFORM.test(readFileSync(file, "utf8"))) offenders.push(rel(file));
+        // Comments stripped the same way the globals census strips them: this
+        // repository's docstrings name `expo` and `react-native` constantly,
+        // and prose must not qualify a file that imports neither.
+        const code = readFileSync(file, "utf8")
+          .replace(/\/\*[\s\S]*?\*\//g, "")
+          .replace(/^\s*\/\/.*$/gm, "");
+        if (!NAMES_PLATFORM.test(code)) {
+          offenders.push(rel(file));
+        }
       }
     }
     expect(
@@ -926,7 +969,7 @@ describe("a card groups rows or holds a figure — never a whole screen", () => 
    * is, because the rule then stops seeing every screen made of it — which
    * is the failure C1 was.
    */
-  const UI_CARD_COMPONENTS = ["MonthSummary", "SettingsMenu", "SharedGroup"];
+  const UI_CARD_COMPONENTS = ["BackupCard", "MonthSummary", "SettingsMenu", "SharedGroup"];
 
   /** The text inside the bracket that opens at `at`, brackets counted. */
   function balanced(src: string, at: number): string | undefined {
@@ -2040,11 +2083,16 @@ describe("every src/ is organised by domain, not by layer", () => {
      * itself does not fold into any single `describe`.
      */
     "apps/mobile/src": ["journeys"],
-    "packages/core/src": ["brands", "capture", "registry"],
+    // `age` is a wire format, which is what `protocol.ts` makes core's
+    // business; it is a folder rather than a file because the format, its
+    // keys and their two encodings are four concerns that each want saying
+    // once (`architecture/14` §14.3).
+    "packages/core/src": ["age", "brands", "capture", "registry"],
     // Foundation (`transport`, `query`) plus one folder per domain.
     "packages/client/src": [
       "accounts",
       "appearance",
+      "backup",
       "connectivity",
       "counterparties",
       "currencies",
@@ -2066,6 +2114,7 @@ describe("every src/ is organised by domain, not by layer", () => {
     // and every domain needs one.
     "packages/ui/src": [
       "accounts",
+      "backup",
       "categories",
       "counterparties",
       "dashboard",
@@ -2097,6 +2146,7 @@ describe("every src/ is organised by domain, not by layer", () => {
      */
     "packages/ledger/src": [
       "accounts",
+      "backup",
       "categories",
       "counterparties",
       "currencies",
@@ -2284,7 +2334,14 @@ describe("platform-neutral packages use only globals the phone has", () => {
           .replace(/^\s*\/\/.*$/gm, "");
 
         for (const [name, why] of Object.entries(ABSENT_ON_DEVICE)) {
-          if (new RegExp(`\\b${name}\\s*[.[]`).test(code)) {
+          // **Not preceded by `/` or `.`**, which is what separates a global
+          // read from a path: `from "./document.ts"` matched `document.` and
+          // made the rule dictate what files may be *called* rather than what
+          // code may reach for. Blanking module specifiers was tried first and
+          // is worse — the replacement is not quote-aware, so a `from "` inside
+          // a string literal swallows the code after it, and a real
+          // `localStorage.length` on that line goes unseen.
+          if (new RegExp(`(?<![\\w./])${name}\\s*[.[]`).test(code)) {
             offenders.push(`${relative} uses \`${name}\` — ${why}`);
           }
         }

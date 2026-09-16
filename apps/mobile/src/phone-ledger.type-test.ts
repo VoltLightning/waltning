@@ -28,11 +28,15 @@
  * because both sides would have moved together.
  */
 
+import type { BackupManifest } from "@waltning/client/backup/backup-port";
 import type {
   PhoneAuditEntry,
   PhoneCounterparty,
+  PhoneExport,
+  PhoneExportOptions,
   TransactionType,
 } from "@waltning/client/ledger/create-phone-ledger";
+import type { ExportManifest, ExportOptions, LedgerExport } from "@waltning/ledger/backup/export";
 import type { LocalAuditEntry } from "@waltning/ledger/transactions/read-audit-log";
 import type { Actor, CounterpartyKind, TxnType } from "@waltning/schema/enums";
 
@@ -68,3 +72,22 @@ export type PhoneTransactionTypeIsSchemaTxnType = Expect<Equals<TransactionType,
 export type PhoneCounterpartyKindIsSchemaKind = Expect<
   Equals<PhoneCounterparty["kind"], CounterpartyKind>
 >;
+
+/**
+ * The backup seam, pinned in all three places it is restated.
+ *
+ * `architecture/14` §14.3 makes this export the phone's only durable copy, and
+ * it crosses the same boundary `actor` drifted across: `packages/client` may
+ * not import `@waltning/ledger`, so the port and the hook each write out the
+ * export's shape by hand. Two hand-written copies of the thing that decides
+ * whether a backup is complete is exactly the arrangement that produced this
+ * file's opening paragraph.
+ *
+ * Invariant equality again, and the narrowing direction is the dangerous one
+ * here: a manifest that quietly lost `outboxEntries` would compile, render a
+ * card with one fewer row, and stop mentioning the half of the backup that
+ * exists nowhere else.
+ */
+export type PhoneExportOptionsMatchLedger = Expect<Equals<PhoneExportOptions, ExportOptions>>;
+export type PhoneExportMatchesLedger = Expect<Equals<PhoneExport, LedgerExport>>;
+export type BackupManifestMatchesLedger = Expect<Equals<BackupManifest, ExportManifest>>;

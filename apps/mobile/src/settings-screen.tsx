@@ -30,6 +30,7 @@ const ROUTES = {
   categories: "/settings/categories",
   currencies: "/settings/currencies",
   rates: "/settings/rates",
+  backup: "/settings/backup",
 } as const;
 
 type Destination = keyof typeof ROUTES;
@@ -40,6 +41,9 @@ const ORDER = [
   "categories",
   "currencies",
   "rates",
+  // Last, and deliberately not first: durability is the thing you go looking
+  // for, not the thing you meant to open Settings for.
+  "backup",
 ] as const satisfies readonly Destination[];
 
 export default function Settings() {

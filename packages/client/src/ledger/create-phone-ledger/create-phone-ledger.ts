@@ -783,6 +783,15 @@ export type PhoneLedgerPort = {
   getTransaction: (id: Id<"transactions">) => PhoneTransactionDetail | null;
   /** S09's audit history — always `unavailable_on_device`; see `PhoneAuditLogResult`'s own doc. */
   getAuditLog: (entity: string, entityId: string) => PhoneAuditLogResult;
+  /**
+   * `architecture/14` §14.3's app-owned encrypted export.
+   *
+   * Structural like the rest of this port — it names no `@waltning/ledger`
+   * type, and the manifest it returns mirrors `ExportManifest` field for
+   * field. It is here rather than on a screen because an export reads **both**
+   * stores, and the session is the only thing that holds them.
+   */
+  exportLedger: (options: PhoneExportOptions) => PhoneExport;
   updateTransaction: (input: UpdateTransactionInput, capture: PhoneCapture) => void;
   deleteTransaction: (input: DeleteTransactionInput, capture: PhoneCapture) => void;
   setTransactionLines: (input: SetTransactionLinesInput, capture: PhoneCapture) => void;
@@ -1385,6 +1394,27 @@ export type SettleDebtDraft = {
   categoryId: string | null;
 };
 
+/** What a caller hands the export. Mirrors `@waltning/ledger`'s `ExportOptions`. */
+export type PhoneExportOptions = {
+  readonly recipient: string;
+  readonly now: Date;
+  readonly random: (length: number) => Uint8Array;
+  readonly verifyWith: string;
+};
+
+/** What it hands back. Mirrors `LedgerExport` — and carries no key, by construction. */
+export type PhoneExport = {
+  readonly file: Uint8Array;
+  readonly manifest: {
+    readonly createdAt: string;
+    readonly recipient: string;
+    readonly bytes: number;
+    readonly counts: Readonly<Record<string, number>>;
+    readonly transactions: number;
+    readonly outboxEntries: number;
+  };
+};
+
 export type PhoneLedgerController = {
   getSnapshot: () => PhoneLedgerSnapshot;
   subscribe: (listener: () => void) => () => void;
@@ -1393,6 +1423,8 @@ export type PhoneLedgerController = {
   getTransaction: (id: Id<"transactions">) => PhoneTransactionDetail | null;
   /** S09's audit history, read fresh — not carried in the snapshot. */
   getAuditLog: (entity: string, entityId: string) => PhoneAuditLogResult;
+  /** §14.3's backup. Reads both stores; the caller supplies the key and never gets one back. */
+  exportLedger: (options: PhoneExportOptions) => PhoneExport;
   createAccount: (
     draft: CreateAccountDraft,
   ) => { id: Id<"accounts"> } | { fieldErrors: readonly FieldError[] };
@@ -2341,6 +2373,7 @@ export function createPhoneLedger(
     },
     getTransaction: (id) => port.getTransaction(id),
     getAuditLog: (entity, entityId) => port.getAuditLog(entity, entityId),
+    exportLedger: (exportOptions) => port.exportLedger(exportOptions),
     readCategoryReferenceCounts: (categoryId) =>
       port.readCategoryReferenceCounts(brandId<"categories">(categoryId)),
     createAccount: (draft) => {

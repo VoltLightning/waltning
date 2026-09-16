@@ -1,7 +1,7 @@
 # S30 · Settings · System
 
 **Surface** both · **Journeys** J10, J15 · **Frequency** rare, and after every alarm
-**Design** [S30.html](design/S30.html)
+**Design** [S30.html](design/S30.html) · [S30-backup.html](design/S30-backup.html) — the status screen, and Back up
 **Status** specified
 
 ---
@@ -58,11 +58,10 @@ promise the app cannot keep.
 **Backup, drill and FX-coverage cards require a backend.** They report on the
 backend, so a backendless phone has none of them to show — not a degraded
 state, just nothing to be a claim about. Its durability is instead the
-app-owned, age-encrypted export (`architecture/14` §14.3): a self-backup the
-owner triggers and controls, key in iCloud Keychain, ciphertext kept
-somewhere Apple is not. Once a backend exists, these cards start reporting on
-it, and the phone's own export becomes a second, independent copy rather than
-the only one. **Ledger invariants** run against the live Postgres database
+app-owned, age-encrypted export (`architecture/14` §14.3), which has a screen
+of its own below. Once a backend exists, these cards start reporting on the
+backend, and the phone's own export becomes a second, independent copy rather
+than the only one. **Ledger invariants** run against the live Postgres database
 (§15.1), so that card also requires a backend. The **outbox** card alone is
 phone-local and renders regardless — see its own note below.
 
@@ -104,6 +103,81 @@ The clearing line is **not a defect** — a non-zero clearing balance is a promp
 to allocate (§6.4), and it appears here as an amount and an age rather than as a
 failure.
 
+### Mobile · Back up — the backendless phone's whole durability
+
+A **separate screen** under Settings, not a card in the list above, and the
+separation is the design. The cards above report on something that already
+happened somewhere else; this one is the only place in the app where the owner
+*does* the durability, and it ends holding a secret that exists nowhere else
+for as long as the screen is up. A row in a status list is the wrong shape for
+that.
+
+```
+  An encrypted copy of your whole
+  ledger, for you to keep somewhere
+  that is not this phone.
+
+                   [   Back up   ]
+```
+
+After — the key is the screen:
+
+```
+  ┌ Your key ─────────────── t6wng2 ┐
+  │                                 │
+  │  AGE-SECRET-KEY-1T6WNG2…  │   ← whole, monospace, selectable
+  │                                 │
+  │  Shown once. Store it somewhere │
+  │  that is not this phone.        │
+  │  [ Copy key ]  Copied           │
+  │                                 │
+  │  File      waltning-2026-09-15- │
+  │            t6wng2.age           │
+  │  Holds     1 180 entries ·      │
+  │            2 356 kB             │
+  │  Not sent  3 captures           │
+  │  Kept in   Files · this app     │
+  └─────────────────────────────────┘
+
+                   [    Done     ]
+```
+
+**The card holds the key; the sentence and both buttons are on the ground**
+(`design-system/05` §5.1). The key is drawn whole and in a monospace face —
+this is the one string in the app read character by character off a screen and
+typed into something else, where `l`/`1` and `0`/`O` are the difference between
+a backup and a file. A truncation with an ellipsis would make it unusable, and
+*Copy key* is offered only where the platform has a clipboard: a copy button
+that silently does nothing is worse than none when the string has no second
+copy anywhere.
+
+**The fingerprint is the card's tag and the filename's last segment** — the
+same six characters, twice, because a key is generated per export and never
+kept (`SPEC.md` §5.7). Pairing a folder of `.age` files with a password manager
+full of keys then needs neither opened. It is **derived from the key beside
+it**, never written down: a literal here agreed with itself and belonged to a
+different key, which is the one failure the fingerprint has.
+
+**The key is on screen before the file is handed anywhere**, and *Copy key*
+says what it did. The other order let a share sheet send the ciphertext while
+the only copy of its key was still a local variable; a copy that fails into a
+`void` renders success and failure identically, directly above the control that
+destroys the key. Where the platform has no clipboard the button is absent, not
+inert, and the key stays selectable.
+
+**"Kept in" becomes "Check" when the platform could not confirm.** A phone
+writes the file and knows it exists; a browser is handed a download and is
+never told what became of it.
+
+**`Not sent` is a row, not a footnote.** On a phone with no backend the outbox
+never drains, so those captures are intent nothing else holds — the one part of
+the file whose absence would not be noticed until it mattered.
+
+**Web draws the same screen.** The preview ledger's storage is evictable in
+ways a phone's container is not (`architecture/14` §14.1), which makes an export
+more useful there, not less; the only difference is the port underneath —
+a download rather than a share sheet, and a destination it cannot confirm.
+
 ### Web — ≥1024px
 
 Two columns: **evidence** left (backups, restore-drill log, FX coverage — the
@@ -124,14 +198,17 @@ drill log and the per-currency coverage table, which are unreadable on a phone.
 | `ProgressBar` | Determinate — drill and backfill both report real progress |
 | `Sparkline` | Model spend over 30 days |
 | `Tag` | `never drilled` · `passed` · `failed` |
+| `BackupCard` | The key an export was written to, and what that file holds. The **only** new component on this screen, and it earns it: nothing else in the system draws a secret that will not be shown again. `design-system/08` §8.8 |
 
-No new components. That is the point of specifying it after `08`.
+One new component, and it is the backendless phone's, not the backend's.
+Everything reporting on a Pi was already specified by `08`.
 
 ## 5. Data
 
 | Reads | Writes |
 |---|---|
 | Backup manifest — last success, size, destination, encryption status | `run_backup` |
+| **The phone's own export** — row counts per table, read from both stores (`architecture/14` §14.3). No backend, and no registry operation: it writes nothing to the ledger | — |
 | Restore-drill log — date, duration, outcome, rows verified | `run_restore_drill` |
 | FX coverage per currency (`fx_rates` grouped by quote) | `backfill_fx_rates(currency, from, to)` |
 | **Ledger invariant results** (`SPEC.md` §15.1) | `run_invariant_checks` |

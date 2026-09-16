@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./age/*": "./src/age/*.ts",
     "./brands/*": "./src/brands/*.ts",
     "./capture/*": "./src/capture/*.ts",
     "./currencies": "./src/currencies.ts",
@@ -23,6 +24,9 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@noble/ciphers": "^2.4.0",
+    "@noble/curves": "^2.4.0",
+    "@noble/hashes": "^2.4.0",
     "decimal.js": "^10.6.0",
     "zod": "^4.4.3"
   }

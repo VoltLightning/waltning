@@ -5,10 +5,10 @@
   "type": "module",
   "exports": {
     "./accounts/*": "./src/accounts/*.ts",
+    "./backup/*": "./src/backup/*.ts",
     "./categories/*": "./src/categories/*.ts",
     "./counterparties/*": "./src/counterparties/*.ts",
     "./currencies/*": "./src/currencies/*.ts",
-    "./transactions/*": "./src/transactions/*.ts",
     "./ddl": "./src/ddl.ts",
     "./diagnostics": "./src/diagnostics.ts",
     "./executor": "./src/executor.ts",
@@ -20,6 +20,7 @@
     "./schema-map": "./src/schema-map.ts",
     "./session": "./src/session.ts",
     "./test/stores": "./src/test/stores.ts",
+    "./transactions/*": "./src/transactions/*.ts",
     "./write": "./src/write.ts"
   },
   "scripts": {

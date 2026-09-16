@@ -241,14 +241,44 @@ purpose, or a merge produces a plausible wrong number that neither device held.
 ## 14.3 Durability with and without a backend
 
 - **With no backend:** an app-owned, age-encrypted export the owner controls,
-  with **one vendor never holding both halves.** On iOS the key lives in **iCloud Keychain**
-  (Apple's HSM-backed escrow, which Apple cannot read) and the ciphertext goes
-  somewhere Apple is **not** — a Mac, a NAS, later the backend; that is a stated
-  dependency on Apple, not a hidden one, and it is the honest version of "your
-  data, your phone, back it up yourself." On Android **the escrow half is
-  unsettled** (`SPEC.md` §5.7): a Keystore key is non-exportable, so an export
-  keyed from it cannot outlive the device the export existed to outlive, and
-  until something else is named the owner holds the key themselves.
+  with **one vendor never holding both halves.** The shipped answer holds no
+  vendor at all: an X25519 identity is generated for each export, shown once,
+  and never written to the device. On Android that is the only answer available
+  — a Keystore key is non-exportable, so an export keyed from it cannot outlive
+  the device the export existed to outlive — and on iOS it stands in for
+  **iCloud Keychain** escrow (Apple's HSM-backed store, which Apple cannot
+  read) until a build that is ours can reach it. While it stands, it is the
+  stronger position and not merely the available one: a stolen phone yields no
+  backup key, because the phone never had one.
+
+  **The file is real `age`.** `age -d -i key.txt backup.age` opens it on any
+  machine, with no part of this repository present — the property the whole
+  backup rests on, since a backup only this app can read has the availability
+  of this app, which is the thing the backup exists because you cannot rely on.
+  Inside is JSON, not a copy of the database files, for the same reason one
+  step further out: on the day it is used, what you want is not to need a
+  working program.
+
+  **The cost of holding nothing is a key per file**, and the two are paired by
+  six characters of the recipient, carried in the filename and shown beside the
+  key. A folder of `.age` files and a password manager full of
+  `AGE-SECRET-KEY-1…` strings can then be matched without opening either.
+
+  **The export reads itself back before reporting success** — decrypted with
+  the key the owner was shown, and checked table by table against a **second,
+  independent `SELECT count(*)`** over both files. Against the document that
+  produced it, the check would prove only that the JSON round-tripped, which
+  the AEAD tag already proves; against the database it catches a reader that
+  silently lost a row. A backup nobody has opened is a hypothesis, and here the
+  check costs one pass.
+
+  **The key reaches the screen before the file reaches the share sheet.** The
+  other order let the ciphertext go to iCloud Drive while its only key was
+  still a local variable, so a dismissed sheet or a back-swipe left a file
+  nobody could open. And the app cannot confirm what a *browser* did with a
+  download — a blocked pop-up, a full disk and a saved file are
+  indistinguishable from the page — so there the screen says *check your
+  downloads* rather than *backed up*.
 - **Once a backend exists:** the server is the durable copy — `pg_dump`,
   age-encrypted, offsite, with a restore drill. This is the existing design and
   it is unchanged.
