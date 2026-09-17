@@ -26,7 +26,7 @@
     "check": "biome check .",
     "fix": "biome check --write .",
     "rules": "npx --yes ai-rulez@4.11.2 generate",
-    "verify": "pnpm check && pnpm typecheck && pnpm test && pnpm test:visual",
+    "verify": "pnpm check && pnpm typecheck && pnpm storybook:build && pnpm test && pnpm --filter @waltning/ui test:visual",
     "verify:fast": "pnpm check && pnpm typecheck && pnpm test",
     "db:up": "docker compose up -d postgres",
     "db:ready": "sh tools/db-ready.sh",

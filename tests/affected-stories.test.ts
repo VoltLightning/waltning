@@ -10,6 +10,20 @@
  * `verify-visual-gate.test.ts` runs the hook rather than re-deriving it. A
  * second copy of the mapping in TypeScript would be a second thing to keep
  * current, and it is always the copy nobody looks at that goes wrong.
+ *
+ * **Which means these tests need a built Storybook, and a fresh checkout has
+ * none.** `stories.mjs` answers `ALL` when the index is absent — the safe
+ * answer, and the right one — so the two cases that assert a *narrowed* answer
+ * used to fail with `expected 'ALL' to be 'Shell/PagerHeader'` in any clone
+ * that had not run the visual suite yet. That reads like a broken mapping and
+ * is a missing file.
+ *
+ * `pnpm verify` now builds the index before `pnpm test` rather than after it,
+ * so the gate always has one (and builds it once instead of twice). A bare
+ * `pnpm test` still may not, so those two say what they are missing instead of
+ * failing at it — `requireIndex` below. Nothing else in this file needs it:
+ * every other case asserts the `ALL` fallback, which is what a missing index
+ * produces anyway.
  */
 
 import { execFileSync } from "node:child_process";
@@ -19,6 +33,23 @@ import { describe, expect, it } from "vitest";
 
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
 const INDEX = `${repoRoot}packages/ui/storybook-static/index.json`;
+
+/**
+ * The built index, or a reason to stand down.
+ *
+ * Skipping is safe *here specifically*: a missing index makes `stories.mjs`
+ * answer `ALL`, so the only thing an absent index can hide is a narrowing that
+ * never happened. It cannot hide a silent miss, which is the failure this file
+ * exists for.
+ */
+function requireIndex(): boolean {
+  if (existsSync(INDEX)) return true;
+  console.warn(
+    "affected-stories.test.ts: no built Storybook index — run `pnpm storybook:build`. " +
+      "Skipping the two cases that assert a narrowed run; `pnpm verify` always has one.",
+  );
+  return false;
+}
 
 /** The script's answer for a hand-given changeset, without touching git. */
 function decide(files: readonly string[]): string {
@@ -52,12 +83,14 @@ describe("what a change can reach", () => {
   });
 
   it("runs a changed component's own stories", () => {
+    if (!requireIndex()) return;
     expect(decide(["packages/ui/src/shell/molecules/pager-header/pager-header.tsx"])).toBe(
       "Shell/PagerHeader",
     );
   });
 
   it("runs the stories of everything that renders a changed component", () => {
+    if (!requireIndex()) return;
     // **The half a naive version gets wrong.** `DayCell` has no story of its
     // own; the ribbon and the grid draw it, and they are what a change to it
     // can move on screen.
