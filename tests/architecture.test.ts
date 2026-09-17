@@ -3736,3 +3736,109 @@ describe("what red may paint", () => {
     expect(offenders, "the destructive fill used outside Button (§2.6c)").toEqual([]);
   });
 });
+
+/**
+ * **A `TextInput` never wears a `lineHeight`.**
+ *
+ * On iOS the property moves where the *value* is drawn without moving the
+ * placeholder, so a field sits correctly until the first character and then
+ * drops toward its bottom edge a frame later — reported as *"I type the first
+ * letter, it is in the right place, a couple of milliseconds pass and it
+ * shifts down"*, in every field in the app at once. Every one of them spread a
+ * `text.ui(…)`/`text.display(…)`, and `step()` puts a `lineHeight` in all of
+ * them.
+ *
+ * `inputStep()` is the same step with that one property moved onto the box as
+ * `height`. The distance is unchanged; what changes is who states it. A text
+ * metric and a box dimension are two opinions about the same height and the
+ * platforms disagree about which wins — and simply dropping it leaves the box
+ * measuring whatever face happens to be loaded, which four fields had nothing
+ * else to fall back on.
+ *
+ * Text keeps its `lineHeight`: leading is the whole point there, and nothing
+ * about it is in dispute. So this checks only the files that render an input,
+ * and only the style objects they hand one.
+ */
+describe("an input's font carries no lineHeight", () => {
+  it("dresses every TextInput through inputStep", () => {
+    const offenders: string[] = [];
+    for (const file of sourceFiles(join(repoRoot, "packages/ui/src"))) {
+      if (isTest(file) || file.endsWith(".stories.tsx")) continue;
+      const rel = relative(repoRoot, file);
+      // `sheet-input.tsx` forwards; it styles nothing.
+      if (rel.endsWith("sheet-input.tsx")) continue;
+      const body = readFileSync(file, "utf8");
+      if (!/<SheetAwareTextInput\b/.test(body)) continue;
+      if (!/\binputStep\s*\(/.test(body)) {
+        offenders.push(`${rel} — renders an input and never calls inputStep`);
+      }
+    }
+    expect(offenders, "a TextInput dressed with a lineHeight (§3.7)").toEqual([]);
+  });
+
+  /**
+   * **And only the input wears it.** The rule above asks whether a file calls
+   * `inputStep`, which a file can satisfy while spreading it somewhere else:
+   * `select.tsx` dressed its `<Text>` label with it, and a label is not a
+   * field. The cost was not cosmetic — `step()`'s `lineHeight` is a constant,
+   * so a labelled box is the same height whatever font has loaded, while
+   * `lineHeight: normal` derives that height from the *loaded* face. The label
+   * therefore measured one height against the fallback and another against IBM
+   * Plex, the panel anchored under it landed a few pixels out on whichever
+   * runs lost that race, and three Select baselines failed about half the time
+   * — a defect that reads as a flaky test rather than as the layout bug it is.
+   *
+   * So every key that carries `inputStep` must be a key the file actually
+   * hands a `SheetAwareTextInput`.
+   */
+  it("spreads inputStep only into a style an input wears", () => {
+    const offenders: string[] = [];
+    for (const file of sourceFiles(join(repoRoot, "packages/ui/src"))) {
+      if (isTest(file) || file.endsWith(".stories.tsx")) continue;
+      const rel = relative(repoRoot, file);
+      // `fonts.ts` declares `inputStep`; declaring it is not wearing it.
+      if (rel.endsWith("theme/fonts.ts")) continue;
+      const body = readFileSync(file, "utf8");
+      if (!/\binputStep\s*\(/.test(body)) continue;
+
+      // Every `styles.x` an input is handed. The slice runs to the element's
+      // own close so a neighbouring element's style cannot be credited here.
+      const worn = new Set<string>();
+      for (const open of body.matchAll(/<SheetAwareTextInput\b/g)) {
+        const start = open.index ?? 0;
+        const end = body.indexOf("/>", start);
+        const element = body.slice(start, end === -1 ? body.length : end);
+        for (const use of element.matchAll(/styles\.(\w+)/g)) worn.add(use[1] as string);
+      }
+
+      // The key an `inputStep` sits under: top-level keys of a style object are
+      // at two spaces, one per line, which is what `makeStyles` looks like
+      // everywhere in this package.
+      const lines = body.split("\n");
+      lines.forEach((line, index) => {
+        if (!/\binputStep\s*\(/.test(line)) return;
+        for (let back = index; back >= 0; back -= 1) {
+          const key = /^ {2}(\w+): \{/.exec(lines[back] as string);
+          if (key === null) continue;
+          const name = key[1] as string;
+          if (!worn.has(name)) {
+            offenders.push(`${rel}:${index + 1} — inputStep in \`${name}\`, which no input wears`);
+          }
+          return;
+        }
+        offenders.push(`${rel}:${index + 1} — inputStep outside any style key`);
+      });
+    }
+    expect(offenders, "inputStep on something that is not a field (§3.7)").toEqual([]);
+  });
+
+  /** The walk has to find them, or the rule above passes by matching nothing. */
+  it("finds every file that renders one", () => {
+    let seen = 0;
+    for (const file of sourceFiles(join(repoRoot, "packages/ui/src"))) {
+      if (isTest(file) || file.endsWith(".stories.tsx")) continue;
+      if (/<SheetAwareTextInput\b/.test(readFileSync(file, "utf8"))) seen += 1;
+    }
+    expect(seen, "input owners — update this when one is added").toBe(9);
+  });
+});

@@ -47,7 +47,7 @@ import { SheetAwareTextInput } from "../../../primitives/sheet-input";
 import { BottomSheet } from "../../../shell/organisms/bottom-sheet/bottom-sheet";
 import { ArrowsLeftRightIcon } from "../../../shell/phosphor";
 import { Banner } from "../../../states/molecules/banner/banner";
-import { text, textCap } from "../../../theme/fonts.ts";
+import { inputStep, text, textCap } from "../../../theme/fonts.ts";
 import { useTheme } from "../../../theme/provider";
 import { makeStyles } from "../../../theme/styles.ts";
 import {
@@ -626,7 +626,7 @@ const useStyles = makeStyles((theme) => ({
     flexShrink: 1,
     padding: 0,
     color: theme.text,
-    ...text.display("displayOne"),
+    ...inputStep(text.display("displayOne")),
     fontVariant: [...tabularNums],
     // The default `auto` renders its own ring regardless of an author
     // `outlineWidth: 0` (`amount-field.tsx`'s own note).
@@ -637,7 +637,7 @@ const useStyles = makeStyles((theme) => ({
     flexShrink: 1,
     padding: 0,
     color: theme.text,
-    ...text.display("displayTwo"),
+    ...inputStep(text.display("displayTwo")),
     fontVariant: [...tabularNums],
     outlineWidth: 0,
     outlineStyle: "solid",

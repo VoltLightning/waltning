@@ -157,6 +157,40 @@ function step(name: TypeStep, family: string): TextStep {
   };
 }
 
+/**
+ * The same step with its `lineHeight` **moved onto the box** — for a
+ * `TextInput` and nothing else.
+ *
+ * **A `TextInput` is not a `Text`, and `lineHeight` is where they part.** On
+ * iOS the property moves where the *value* is drawn without moving the
+ * placeholder, so a field sits correctly until the first character and then
+ * drops toward its bottom edge a frame later. Every field in this app did that,
+ * because every field spread a `text.ui(…)`/`text.display(…)` that carries a
+ * `lineHeight` — the amount card worst of all at `display-hero`, where the step
+ * is 57 against a 54 glyph.
+ *
+ * **Dropping it is not enough, because something has to say how tall the field
+ * is.** Without a `lineHeight` a box takes the height the *loaded* face
+ * reports, so the same field measures one height against the fallback and
+ * another against IBM Plex — and the panel or row laid out under it lands a
+ * few pixels out on whichever runs lose that race. Four fields had nothing
+ * else to fall back on: the amount card, the rate field and both transfer
+ * figures state no height at all, so the step's `lineHeight` *was* their
+ * height.
+ *
+ * So it is restored as `height`, the same number in the place that cannot
+ * disagree with the platform: a box dimension rather than a text metric.
+ * Yoga clamps it up to any `minHeight` the field also states, so the fields
+ * built on `touchTarget.min` are untouched by it.
+ *
+ * Text keeps its `lineHeight`: a paragraph's leading is the whole point there,
+ * and nothing about it is in dispute.
+ */
+export function inputStep(step: TextStep): Omit<TextStep, "lineHeight"> & { height: number } {
+  const { lineHeight, ...rest } = step;
+  return { ...rest, height: lineHeight };
+}
+
 export const text = {
   /** The step's own weight unless a component overrides it. */
   ui: (name: TypeStep, weight: UiWeight = type[name].weight) => step(name, FACES.ui[weight]),

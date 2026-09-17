@@ -64,7 +64,7 @@ import Animated, { type AnimatedStyle } from "react-native-reanimated";
 import { useT } from "../../../i18n/provider";
 import { PressableScaled } from "../../../primitives/atoms/pressable-scaled/pressable-scaled";
 import { SheetAwareTextInput } from "../../../primitives/sheet-input";
-import { text } from "../../../theme/fonts.ts";
+import { inputStep, text } from "../../../theme/fonts.ts";
 import { useTheme } from "../../../theme/provider";
 import { makeStyles } from "../../../theme/styles.ts";
 import { focus, radius, space, touchTarget } from "../../../tokens.ts";
@@ -820,7 +820,7 @@ const useStyles = makeStyles((theme) => ({
     borderBottomWidth: 1,
     borderBottomColor: theme.hairline,
     color: theme.text,
-    ...text.ui("body"),
+    ...inputStep(text.ui("body")),
   },
   noMatches: { minHeight: touchTarget.min, justifyContent: "center", paddingHorizontal: space.x2 },
   noMatchesText: { color: theme.textMuted, ...text.ui("caption") },

@@ -86,7 +86,7 @@ import { useLocale, useT } from "../../../i18n/provider";
 import { Button } from "../../../primitives/atoms/button/button";
 import type { FieldErrorMap } from "../../../primitives/field-errors.ts";
 import { SheetAwareTextInput } from "../../../primitives/sheet-input";
-import { text } from "../../../theme/fonts.ts";
+import { inputStep, text } from "../../../theme/fonts.ts";
 import { makeStyles } from "../../../theme/styles.ts";
 import { focus, radius, space, touchTarget } from "../../../tokens.ts";
 
@@ -688,7 +688,7 @@ const useStyles = makeStyles((theme) => ({
     backgroundColor: theme.surface,
     paddingHorizontal: space.x3,
     color: theme.text,
-    ...text.ui("body"),
+    ...inputStep(text.ui("body")),
   },
   preview: { gap: space.xs, paddingHorizontal: space.x3 },
   hint: { color: theme.textMuted, ...text.ui("caption"), paddingHorizontal: space.x3 },

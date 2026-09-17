@@ -39,13 +39,13 @@
 
 import { useCallback, useState } from "react";
 import { Text, View } from "react-native";
+import { figureEm } from "../../../fx/figure-width.ts";
 import { decimalMark } from "../../../i18n/locales";
 import { useLocale, useT } from "../../../i18n/provider";
 import { SheetAwareTextInput } from "../../../primitives/sheet-input";
-import { text, textCap } from "../../../theme/fonts.ts";
+import { inputStep, text, textCap } from "../../../theme/fonts.ts";
 import { makeStyles } from "../../../theme/styles.ts";
 import {
-  CARET_EM,
   focus,
   radius,
   space,
@@ -101,6 +101,12 @@ export function AmountCard({
   // Sized to the figure, so the affix follows it: an `<input>` otherwise
   // takes its own default width and the currency lands at the far edge.
 
+  // Sized to the figure so the affix follows it. **Horizontal only** — the
+  // shift a reader actually saw was vertical, and `inputStep` below is what
+  // fixes that; a measuring `Text` under an absolutely-positioned input was
+  // tried for this and clipped its own glyphs on the device.
+  const figureWidth = { width: figureEm(display) * typeScale.displayHero.fontSize };
+
   const handleFocus = useCallback(() => setFocused(true), []);
   const handleBlur = useCallback(() => setFocused(false), []);
 
@@ -129,49 +135,23 @@ export function AmountCard({
         >
           {kind === "expense" ? "−" : "+"}
         </Text>
-        {/*
-          **The measure, and the reason there is no arithmetic here.** This
-          `Text` carries the same string in the same style, so the row is
-          exactly as wide as the glyphs actually drawn — on any platform, in
-          any font, at any accessibility scale. The input is laid over it.
-
-          `"0"` when empty, because that is the placeholder the field shows:
-          without it the box would be narrower than what is on screen and the
-          first keystroke would move the affix.
-
-          Hidden from assistive tech in all three dialects — the input beside
-          it carries the accessible name, and a screen reader that read both
-          would say the amount twice.
-        */}
-        <View style={styles.figureBox}>
-          <Text
-            accessibilityElementsHidden
-            importantForAccessibility="no-hide-descendants"
-            aria-hidden
-            maxFontSizeMultiplier={textCap("displayHero")}
-            numberOfLines={1}
-            style={[styles.input, styles.measure]}
-          >
-            {display === "" ? "0" : display}
-          </Text>
-          <SheetAwareTextInput
-            accessibilityLabel={label}
-            value={display}
-            onChangeText={handleChange}
-            placeholder="0"
-            placeholderTextColor={styles.placeholder.color}
-            keyboardType="decimal-pad"
-            inputMode="decimal"
-            // `parseAmount`'s twelve integer digits, the mark and the fraction —
-            // past that the schema would refuse the write anyway.
-            maxLength={AMOUNT_INTEGER_DIGITS + 1 + decimals}
-            autoFocus={autoFocus}
-            onFocus={handleFocus}
-            onBlur={handleBlur}
-            maxFontSizeMultiplier={textCap("displayHero")}
-            style={[styles.input, styles.overlay]}
-          />
-        </View>
+        <SheetAwareTextInput
+          accessibilityLabel={label}
+          value={display}
+          onChangeText={handleChange}
+          placeholder="0"
+          placeholderTextColor={styles.placeholder.color}
+          keyboardType="decimal-pad"
+          inputMode="decimal"
+          // `parseAmount`'s twelve integer digits, the mark and the fraction —
+          // past that the schema would refuse the write anyway.
+          maxLength={AMOUNT_INTEGER_DIGITS + 1 + decimals}
+          autoFocus={autoFocus}
+          onFocus={handleFocus}
+          onBlur={handleBlur}
+          maxFontSizeMultiplier={textCap("displayHero")}
+          style={[styles.input, figureWidth]}
+        />
         {currency === undefined ? null : <Text style={styles.affix}>{currency}</Text>}
       </View>
       {error === undefined ? null : <Text style={styles.error}>{error}</Text>}
@@ -220,32 +200,11 @@ const useStyles = makeStyles((theme) => ({
   signEmpty: { opacity: 0 },
   signOut: { color: theme.spend },
   signIn: { color: theme.income },
-  /**
-   * The row's own width comes from the `Text` inside it; see the header.
-   *
-   * **The one thing measuring cannot give is room for the caret**, because the
-   * caret is not a glyph — it is drawn after the last one, and a box that is
-   * exactly its text leaves it flush against the currency marker. `CARET_EM`
-   * survives for that alone: an affordance expressed as a fraction of the type
-   * scale, never a claim about what a character is wide.
-   */
-  figureBox: { flexShrink: 1, paddingRight: CARET_EM * typeScale.displayHero.fontSize },
-  /**
-   * Laid out, never seen. `opacity: 0` rather than `display: none` or a zero
-   * height — the whole point is that it occupies exactly the space its glyphs
-   * need, which nothing that is not laid out can do.
-   */
-  measure: { opacity: 0 },
-  /**
-   * Over the measure, exactly. `absoluteFill` rather than a second copy of the
-   * geometry: two boxes that must agree are one box that can disagree.
-   */
-  overlay: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0 },
   input: {
     flexShrink: 1,
     padding: 0,
     color: theme.text,
-    ...text.display("displayHero"),
+    ...inputStep(text.display("displayHero")),
     fontVariant: [...tabularNums],
     // The card is the field; the browser's own ring on the input inside it
     // would draw a second box around the figure. `outlineStyle` too, because

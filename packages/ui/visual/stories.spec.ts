@@ -270,6 +270,14 @@ const NEEDS_FROZEN_CLOCK = /ThinkingIndicator/;
  * Observed, not proven exhaustive. If a ninth appears, it belongs here and the
  * card that fixes the measurement takes the whole list with it.
  *
+ * **The ninth is `QuickAddComposer/With Counterparty`**, and it is listed on a
+ * measurement rather than a hunch: the story fails one run in twelve here and
+ * one run in twelve on `main`, so it is the same race and not something a
+ * change brought with it. What moves is the composer *behind* the sheet, by a
+ * pixel, while the sheet itself is stable — the entrance re-lays out the page
+ * it covers. Three clean runs is not evidence about a defect this rare, which
+ * is why the number above is twelve.
+ *
  * **And the list was measured before `reducedMotion` actually applied**, so it
  * is probably wider than it needs to be. It sat in Playwright's top-level `use`
  * where this version's types reject it *and* the runtime ignored it; moving it
@@ -284,7 +292,7 @@ const NEEDS_FROZEN_CLOCK = /ThinkingIndicator/;
  * it is not a screenshot.
  */
 const NO_SCREENSHOT =
-  /^(?:categories-(?:categorysheet|createcategorysheet)--|accounts-accountpicker--searching$|accounts-reconcilesheet--reconcile$|shell-bottomsheet--tall-form$)/;
+  /^(?:categories-(?:categorysheet|createcategorysheet)--|accounts-accountpicker--searching$|accounts-reconcilesheet--reconcile$|shell-bottomsheet--tall-form$|transactions-quickaddcomposer--with-counterparty$)/;
 
 for (const story of STORIES) {
   for (const theme of THEMES) {

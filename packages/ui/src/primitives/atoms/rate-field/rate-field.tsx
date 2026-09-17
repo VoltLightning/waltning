@@ -36,7 +36,7 @@ import { Text, View } from "react-native";
 import { formatRate } from "../../../fx/format-rate.ts";
 import { useLocale, useT } from "../../../i18n/provider";
 import { SheetAwareTextInput } from "../../../primitives/sheet-input";
-import { text } from "../../../theme/fonts.ts";
+import { inputStep, text } from "../../../theme/fonts.ts";
 import { makeStyles } from "../../../theme/styles.ts";
 import { focus, radius, space, tabularNums } from "../../../tokens.ts";
 import { useInteraction } from "../../interaction.ts";
@@ -257,7 +257,7 @@ const useStyles = makeStyles((theme) => ({
   },
   input: {
     color: theme.text,
-    ...text.display("displayThree"),
+    ...inputStep(text.display("displayThree")),
     fontVariant: [...tabularNums],
     borderWidth: 1,
     borderColor: theme.borderInteractive,

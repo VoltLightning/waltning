@@ -29,7 +29,7 @@ import { decimalMark } from "../../../i18n/locales.ts";
 import { useLocale, useT } from "../../../i18n/provider";
 import { PressableScaled } from "../../../primitives/atoms/pressable-scaled/pressable-scaled";
 import { SheetAwareTextInput } from "../../../primitives/sheet-input";
-import { text, textCap } from "../../../theme/fonts.ts";
+import { inputStep, text, textCap } from "../../../theme/fonts.ts";
 import { makeStyles } from "../../../theme/styles.ts";
 import { focus, radius, space, tabularNums } from "../../../tokens.ts";
 
@@ -278,7 +278,7 @@ const useStyles = makeStyles((theme) => ({
   input: {
     flex: 1,
     color: theme.text,
-    ...text.display("displayThree"),
+    ...inputStep(text.display("displayThree")),
     // Right-aligned and tabular so a column of entered amounts lines up with
     // the column of rendered ones beside it.
     textAlign: "right",

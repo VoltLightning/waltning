@@ -21,7 +21,7 @@
 import { useCallback } from "react";
 import { Text, View } from "react-native";
 import { SheetAwareTextInput } from "../../../primitives/sheet-input";
-import { text } from "../../../theme/fonts.ts";
+import { inputStep, text } from "../../../theme/fonts.ts";
 import { useTheme } from "../../../theme/provider";
 import { makeStyles } from "../../../theme/styles.ts";
 import { focus, radius, space, touchTarget } from "../../../tokens.ts";
@@ -168,7 +168,7 @@ const useStyles = makeStyles((theme) => ({
     backgroundColor: theme.surface,
     color: theme.text,
     paddingHorizontal: space.x2,
-    ...text.ui("body"),
+    ...inputStep(text.ui("body")),
   },
   inputHovered: { borderColor: theme.borderStrong },
   // This `TextInput` is the whole interactive element (unlike `search-field`'s

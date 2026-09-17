@@ -51,7 +51,7 @@ import { SheetAwareTextInput } from "../../../primitives/sheet-input";
 import { BottomSheet } from "../../../shell/organisms/bottom-sheet/bottom-sheet";
 import { HouseIcon } from "../../../shell/phosphor";
 import { Banner } from "../../../states/molecules/banner/banner";
-import { text } from "../../../theme/fonts.ts";
+import { inputStep, text } from "../../../theme/fonts.ts";
 import { useTheme } from "../../../theme/provider";
 import { makeStyles } from "../../../theme/styles.ts";
 import { focus, radius, space, touchTarget } from "../../../tokens.ts";
@@ -721,7 +721,7 @@ const useStyles = makeStyles((theme) => ({
   },
   note: {
     color: theme.text,
-    ...text.ui("bodySm"),
+    ...inputStep(text.ui("bodySm")),
     padding: 0,
     // The card is the field — `amount-card.tsx`'s own reason for both lines.
     outlineWidth: 0,
