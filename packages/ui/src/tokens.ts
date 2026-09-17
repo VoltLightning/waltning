@@ -765,15 +765,18 @@ export const DIGIT_EM = 0.6;
 /**
  * The decimal mark's advance, in the same units.
  *
- * **It is not a digit, and counting it as one was visible.** `DIGIT_EM` used
- * to cover every character on the argument that the over-estimate on a comma
- * was "the room the caret needs" — but the affix sits immediately after this
- * box, so typing the mark grew the reserved width by a full 0.6em while the
- * glyph grew by about a third of that, and the currency marker jumped the
- * difference. Caret room is a single allowance at the end, not a per-character
- * fudge that only lands on one character.
+ * **Measured, not guessed — and the guess was wrong.** A first version of this
+ * put it at `0.21` on the reasoning that a comma is "about a third" of a digit.
+ * The real advance, read off a canvas in the field's own computed font
+ * (`IBMPlexSans_600SemiBold`, `tabular-nums`), is **0.299** — so the box grew
+ * by 11.4px where the glyph needed 16.1 at `display-hero`, and the text ran
+ * about five pixels wider than the box reserved for it. That is what the
+ * figure looked like jumping.
+ *
+ * `DIGIT_EM` was measured the same way and is exactly right: 0.6 for every
+ * digit, which is `tabular-nums` doing its job.
  */
-export const MARK_EM = 0.21;
+export const MARK_EM = 0.299;
 
 /** One allowance for the caret, added once — never folded into a glyph. */
 export const CARET_EM = 0.08;

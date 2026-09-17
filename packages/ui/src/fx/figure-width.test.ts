@@ -10,6 +10,14 @@ import { describe, expect, it } from "vitest";
 import { CARET_EM, DIGIT_EM, MARK_EM } from "../tokens.ts";
 import { figureEm } from "./figure-width.ts";
 
+/**
+ * **These check the arithmetic, never the constants.** jsdom has no font, so
+ * nothing here can tell whether `MARK_EM` matches a real comma — and for a
+ * while it did not: `0.21` against a measured `0.299`, which is what made the
+ * figure jump. `visual/glyph-metrics.spec.ts` measures them in a browser,
+ * against the field's own computed font. Neither file is enough alone.
+ */
+
 describe("figureEm", () => {
   it("measures a digit as a digit and the mark as a mark", () => {
     expect(figureEm("48")).toBeCloseTo(2 * DIGIT_EM + CARET_EM, 5);
