@@ -27,23 +27,25 @@
  *    first sat one glyph and one gap to the right of where the first one
  *    landed. It is always mounted now and merely *invisible* while the field
  *    is empty, so it holds its place from the start.
- * 2. The width reserved for the field counted the decimal mark as a full
- *    tabular digit. Plex's comma is roughly a third of one, so typing it grew
- *    the box by 0.6em while the glyph grew by ~0.2em — and the currency affix,
- *    which follows the box, jumped the difference. The mark gets its own
- *    measure, and the caret's room is added once at the end rather than
- *    smuggled in as an over-estimate on one character.
+ * 2. The width reserved for the field was **estimated** from per-character em
+ *    constants, and an estimate can only be right on the platform it was
+ *    measured on. Two numbers were wrong in turn — every character as a digit,
+ *    then a guessed `0.21` against a real `0.299` — and each correction was
+ *    still a guess about a font at a size on a renderer. The field measures
+ *    itself now: an invisible `Text` holding the same value sizes the row with
+ *    its own glyphs, and the input lies over it. No constant decides a width,
+ *    so no constant can be wrong about one.
  */
 
 import { useCallback, useState } from "react";
 import { Text, View } from "react-native";
-import { figureEm } from "../../../fx/figure-width.ts";
 import { decimalMark } from "../../../i18n/locales";
 import { useLocale, useT } from "../../../i18n/provider";
 import { SheetAwareTextInput } from "../../../primitives/sheet-input";
 import { text, textCap } from "../../../theme/fonts.ts";
 import { makeStyles } from "../../../theme/styles.ts";
 import {
+  CARET_EM,
   focus,
   radius,
   space,
@@ -98,9 +100,7 @@ export function AmountCard({
   const [focused, setFocused] = useState(false);
   // Sized to the figure, so the affix follows it: an `<input>` otherwise
   // takes its own default width and the currency lands at the far edge.
-  const figureWidth = {
-    width: figureEm(display) * typeScale.displayHero.fontSize,
-  };
+
   const handleFocus = useCallback(() => setFocused(true), []);
   const handleBlur = useCallback(() => setFocused(false), []);
 
@@ -129,23 +129,49 @@ export function AmountCard({
         >
           {kind === "expense" ? "−" : "+"}
         </Text>
-        <SheetAwareTextInput
-          accessibilityLabel={label}
-          value={display}
-          onChangeText={handleChange}
-          placeholder="0"
-          placeholderTextColor={styles.placeholder.color}
-          keyboardType="decimal-pad"
-          inputMode="decimal"
-          // `parseAmount`'s twelve integer digits, the mark and the fraction —
-          // past that the schema would refuse the write anyway.
-          maxLength={AMOUNT_INTEGER_DIGITS + 1 + decimals}
-          autoFocus={autoFocus}
-          onFocus={handleFocus}
-          onBlur={handleBlur}
-          maxFontSizeMultiplier={textCap("displayHero")}
-          style={[styles.input, figureWidth]}
-        />
+        {/*
+          **The measure, and the reason there is no arithmetic here.** This
+          `Text` carries the same string in the same style, so the row is
+          exactly as wide as the glyphs actually drawn — on any platform, in
+          any font, at any accessibility scale. The input is laid over it.
+
+          `"0"` when empty, because that is the placeholder the field shows:
+          without it the box would be narrower than what is on screen and the
+          first keystroke would move the affix.
+
+          Hidden from assistive tech in all three dialects — the input beside
+          it carries the accessible name, and a screen reader that read both
+          would say the amount twice.
+        */}
+        <View style={styles.figureBox}>
+          <Text
+            accessibilityElementsHidden
+            importantForAccessibility="no-hide-descendants"
+            aria-hidden
+            maxFontSizeMultiplier={textCap("displayHero")}
+            numberOfLines={1}
+            style={[styles.input, styles.measure]}
+          >
+            {display === "" ? "0" : display}
+          </Text>
+          <SheetAwareTextInput
+            accessibilityLabel={label}
+            value={display}
+            onChangeText={handleChange}
+            placeholder="0"
+            placeholderTextColor={styles.placeholder.color}
+            keyboardType="decimal-pad"
+            inputMode="decimal"
+            // `parseAmount`'s twelve integer digits, the mark and the fraction —
+            // past that the schema would refuse the write anyway.
+            maxLength={AMOUNT_INTEGER_DIGITS + 1 + decimals}
+            autoFocus={autoFocus}
+            onFocus={handleFocus}
+            onBlur={handleBlur}
+            maxFontSizeMultiplier={textCap("displayHero")}
+            style={[styles.input, styles.overlay]}
+          />
+        </View>
         {currency === undefined ? null : <Text style={styles.affix}>{currency}</Text>}
       </View>
       {error === undefined ? null : <Text style={styles.error}>{error}</Text>}
@@ -194,6 +220,27 @@ const useStyles = makeStyles((theme) => ({
   signEmpty: { opacity: 0 },
   signOut: { color: theme.spend },
   signIn: { color: theme.income },
+  /**
+   * The row's own width comes from the `Text` inside it; see the header.
+   *
+   * **The one thing measuring cannot give is room for the caret**, because the
+   * caret is not a glyph — it is drawn after the last one, and a box that is
+   * exactly its text leaves it flush against the currency marker. `CARET_EM`
+   * survives for that alone: an affordance expressed as a fraction of the type
+   * scale, never a claim about what a character is wide.
+   */
+  figureBox: { flexShrink: 1, paddingRight: CARET_EM * typeScale.displayHero.fontSize },
+  /**
+   * Laid out, never seen. `opacity: 0` rather than `display: none` or a zero
+   * height — the whole point is that it occupies exactly the space its glyphs
+   * need, which nothing that is not laid out can do.
+   */
+  measure: { opacity: 0 },
+  /**
+   * Over the measure, exactly. `absoluteFill` rather than a second copy of the
+   * geometry: two boxes that must agree are one box that can disagree.
+   */
+  overlay: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0 },
   input: {
     flexShrink: 1,
     padding: 0,
