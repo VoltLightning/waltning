@@ -260,14 +260,32 @@ function AppStack() {
          * appearance, dark on cream and light on the near-black.
          *
          * `app.json` still configures `expo-status-bar` with `style: "light"`,
-         * and that is not a contradiction: the plugin writes the Android
-         * theme's default, which is what shows for the instant before JS
-         * runs. This is the runtime value, and it wins. A first attempt at
-         * this change asserted the glyph colour was "not fixable" without
-         * leaving Expo Go — the option was one line away, in this object,
-         * declared by `expo-router`'s own native-stack types and backed by
-         * `react-native-screens`. Nothing native is needed and
-         * `react-native-edge-to-edge` is not installed.
+         * and that is not a contradiction: that plugin only writes the
+         * *Android* theme's default, which is what shows for the instant
+         * before JS runs. This is the runtime value, and it wins.
+         *
+         * **On iOS this line is only half the change — the other half is in
+         * `app.json`, and it is native.** `react-native-screens` applies the
+         * option by setting the style on the screen's `UIViewController`
+         * (`RNSScreen.mm` → `setStatusBarStyle:`), and iOS only honours a
+         * view controller's `preferredStatusBarStyle` when
+         * `UIViewControllerBasedStatusBarAppearance` is `YES` in `Info.plist`.
+         * Expo's prebuild template writes that key as `false`, so the library
+         * asserts on the mismatch and `RCTLogError`s — a red box over the app
+         * on the first route that mounts, which on a cold start is the first
+         * thing anyone sees. `app.json`'s `ios.infoPlist` flips it to `true`,
+         * and because `Info.plist` is baked into the binary, that fix arrives
+         * with a build: a JS reload will not pick it up, and Expo Go — whose
+         * own `Info.plist` nobody here can edit — cannot honour this option at
+         * all.
+         *
+         * Setting the key is safe **because nothing in this app calls the
+         * imperative status-bar API.** React Native's `RCTStatusBarManager`
+         * refuses `setStyle`/`setHidden` when the key is `YES`, which is the
+         * mirror image of this error and the reason the two approaches cannot
+         * both be used. There is no `<StatusBar>` mounted (see the note above
+         * `I18nProvider`) and `expo-router` mounts none either, so only the
+         * view-controller path is live.
          */
         statusBarStyle: themeName === "dark" ? "light" : "dark",
       }}
