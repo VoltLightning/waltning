@@ -11,10 +11,21 @@
  * bounded `ScrollView`; the sheet was never the thing keeping them on screen.
  *
  * So the three parts are named here rather than left to the caller: a header
- * that does not scroll, a body that always does, and a `footer` slot pinned
- * under it. A caller that passes no footer still gets a bounded, scrolling
- * sheet — the fix cannot be opt-in, because the sheets that needed it are
- * exactly the ones that never asked.
+ * that does not scroll, a body, and a `footer` slot pinned under it.
+ *
+ * **The body scrolls and the sheet owns its height, and those are not in
+ * tension — the scrollable reports its own content.**
+ * `BottomSheetScrollView` calls `setContentSize` from `onContentSizeChange`
+ * (`createBottomSheetScrollableComponent`), which feeds dynamic sizing the
+ * height of what it *holds* rather than the height of the box. So the sheet is
+ * as tall as its content up to `maxDynamicContentSize`, and past that the body
+ * scrolls inside a sheet that has stopped growing.
+ *
+ * That only works while the scrollable is the sheet's **direct** child. Wrapped
+ * in a `View` with a `maxHeight` of its own it never reports, the sheet is
+ * sized from nothing, and the content spills out of the bottom of it — which is
+ * the first thing this swap got wrong and what `TallForm`'s `play` function
+ * caught in a real browser.
  *
  * **The bound is the window and the keyboard, not a constant.**
  * `sheet-geometry.ts` holds that arithmetic and the argument for it: the cap
@@ -62,14 +73,30 @@
  * does not. On web the body carries `overscroll-behavior: contain`, so
  * reaching the end of it stops there instead of scrolling the page behind the
  * sheet.
+ *
+ * **The motion is `@gorhom/bottom-sheet`'s; everything above is still ours.**
+ * This used to be `animationType="none"` on the `Modal` and a `View` at the
+ * bottom of it: the sheet appeared fully formed, could not be dragged, and had
+ * no handle to suggest it could. What the library is here for is exactly that
+ * — a spring entrance, pan-to-dismiss, and a grab handle that says the gesture
+ * exists — and nothing else. The `Modal` stays, because it is what makes the
+ * window translucent on Android and what names the dialog for a screen reader;
+ * the backdrop stays, because its two-step keyboard rule is ours; the bounds
+ * stay, because `sheetBounds` knows about the keyboard and a snap point does
+ * not. `maxDynamicContentSize` is where the two meet: the library sizes the
+ * sheet to its content, and our arithmetic is the ceiling it may not pass.
  */
 
-import { useCallback, useState } from "react";
+import GorhomBottomSheet, {
+  BottomSheetFooter,
+  type BottomSheetFooterProps,
+  BottomSheetScrollView,
+} from "@gorhom/bottom-sheet";
+import { useCallback, useMemo, useState } from "react";
 import {
   KeyboardAvoidingView,
   Modal,
   Pressable,
-  ScrollView,
   Text,
   useWindowDimensions,
   View,
@@ -82,7 +109,7 @@ import { text } from "../../../theme/fonts.ts";
 import { makeStyles } from "../../../theme/styles.ts";
 import { focus, radius, space, touchTarget } from "../../../tokens.ts";
 import { dismissKeyboard, KEYBOARD_AVOIDANCE, useKeyboardHeight } from "../../keyboard.ts";
-import { sheetBounds } from "../../sheet-geometry.ts";
+import { sheetBottomInset, sheetMaxHeight } from "../../sheet-geometry.ts";
 
 export type BottomSheetProps = {
   visible: boolean;
@@ -125,7 +152,48 @@ export function BottomSheet({ visible, title, onDismiss, footer, children }: Bot
   // Per-window, per-device and per-keyboard, so not in `useStyles` — that
   // cache is keyed on the theme alone and would hand the second device the
   // first one's window.
-  const bounds = sheetBounds(frame, insets, keyboard);
+  const maxHeight = sheetMaxHeight(frame, insets, keyboard);
+  // Memoised because two `useCallback`s depend on it, and a fresh object per
+  // render would rebuild the handle and the footer on every one.
+  const clearBottom = useMemo(
+    () => ({ paddingBottom: sheetBottomInset(insets, keyboard) }),
+    [insets, keyboard],
+  );
+
+  /**
+   * **The header rides the handle, so it does not scroll.** The three parts
+   * are still the three parts — what changed is which slot each sits in:
+   * `handleComponent` is drawn above the scrollable and outside it, which is
+   * exactly "a header that does not scroll", and it is also where the grab
+   * indicator belongs, so the two are one element rather than two competing
+   * for the same 20 points.
+   */
+  const renderHandle = useCallback(
+    () => (
+      <View testID="bottom-sheet" accessibilityViewIsModal style={styles.handleArea}>
+        <View style={styles.handleIndicator} />
+        <View style={styles.header}>
+          <Text style={styles.title}>{title}</Text>
+          <Button label={t("common.close")} onPress={onDismiss} variant="ghost" />
+        </View>
+      </View>
+    ),
+    [styles, title, t, onDismiss],
+  );
+
+  /**
+   * `BottomSheetFooter` is the library's own pinning — it keeps the slot above
+   * the keyboard and outside the scroll, which is the promise this component
+   * made before it and had to implement itself.
+   */
+  const renderFooter = useCallback(
+    (props: BottomSheetFooterProps) => (
+      <BottomSheetFooter {...props}>
+        <View style={[styles.footer, clearBottom]}>{footer}</View>
+      </BottomSheetFooter>
+    ),
+    [styles, footer, clearBottom],
+  );
 
   if (!visible) return null;
   return (
@@ -158,23 +226,36 @@ export function BottomSheet({ visible, title, onDismiss, footer, children }: Bot
         {/* Around the sheet, never around the overlay: the overlay is the
             backdrop's own full-window target, and a `KeyboardAvoidingView`
             there would shrink the thing that has to stay the window. */}
-        <KeyboardAvoidingView behavior={KEYBOARD_AVOIDANCE}>
-          <View testID="bottom-sheet" accessibilityViewIsModal style={[styles.sheet, bounds]}>
-            <View style={styles.header}>
-              <Text style={styles.title}>{title}</Text>
-              <Button label={t("common.close")} onPress={onDismiss} variant="ghost" />
-            </View>
-            <ScrollView
+        <KeyboardAvoidingView behavior={KEYBOARD_AVOIDANCE} style={styles.lift}>
+          {/*
+            `enableDynamicSizing` is the library's name for what this component
+            already promised — the sheet owns its height — and
+            `maxDynamicContentSize` is `sheetBounds`' ceiling handed to it, so
+            the keyboard still bounds the sheet rather than a fixed snap point.
+            `onClose` fires when the pan gesture finishes the dismissal, which
+            is the one thing the caller's `visible` cannot know on its own.
+          */}
+          <GorhomBottomSheet
+            enableDynamicSizing
+            maxDynamicContentSize={maxHeight}
+            enablePanDownToClose
+            onClose={onDismiss}
+            backgroundStyle={styles.sheetBackground}
+            style={styles.sheetShadow}
+            handleComponent={renderHandle}
+            {...(footer === undefined ? {} : { footerComponent: renderFooter })}
+          >
+            {/* A direct child, deliberately — see the header. */}
+            <BottomSheetScrollView
               testID="bottom-sheet-body"
-              style={[styles.body, containOverscroll]}
-              contentContainerStyle={styles.bodyContent}
+              style={containOverscroll}
+              contentContainerStyle={[styles.bodyContent, clearBottom]}
               keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator={false}
             >
               {children}
-            </ScrollView>
-            {footer === undefined ? null : <View style={styles.footer}>{footer}</View>}
-          </View>
+            </BottomSheetScrollView>
+          </GorhomBottomSheet>
         </KeyboardAvoidingView>
       </View>
     </Modal>
@@ -199,25 +280,44 @@ const useStyles = makeStyles((theme) => ({
     outlineOffset: focus.offset,
   },
   /**
-   * `flexShrink: 1` beside the `maxHeight` the component computes: the cap is
-   * what bounds the sheet, and the shrink is what lets the body inside it give
-   * way rather than overflow when the content is taller than the cap.
-   * The bottom padding is added per-device by `bounds`, not here.
+   * **The surface is the library's now, and the three parts are still ours.**
+   * `backgroundStyle` paints the rounded card and `handleIndicatorStyle` the
+   * grab handle, so this component no longer draws its own top radius or the
+   * `paddingTop` that used to stand in for a handle. What stays here is the
+   * inside: header, body and footer, and the gap between them.
    */
-  sheet: {
-    flexShrink: 1,
+  sheetBackground: {
     backgroundColor: theme.surface,
     borderTopLeftRadius: radius.lg,
     borderTopRightRadius: radius.lg,
-    paddingTop: space.x5,
-    gap: space.x4,
+    borderWidth: theme.elevation.raised.borderWidth,
+    borderColor: theme.elevation.raised.borderColor,
+  },
+  /** The shadow rides the outer element, where it is not clipped by the radius. */
+  sheetShadow: {
     shadowColor: theme.elevation.raised.shadowColor,
     shadowOpacity: theme.elevation.raised.shadowOpacity,
     shadowRadius: theme.elevation.raised.shadowRadius,
     shadowOffset: theme.elevation.raised.shadowOffset,
-    borderWidth: theme.elevation.raised.borderWidth,
-    borderColor: theme.elevation.raised.borderColor,
   },
+  /** The grab indicator, drawn inside the handle area with the header. */
+  handleIndicator: {
+    alignSelf: "center",
+    width: 36,
+    height: 4,
+    borderRadius: radius.pill,
+    backgroundColor: theme.borderInteractive,
+  },
+  handleArea: { paddingTop: space.md, gap: space.x4 },
+  /**
+   * **The lift fills the overlay, because the library positions inside it.**
+   * `@gorhom/bottom-sheet` lays itself out absolutely against its parent —
+   * `top: 0; bottom: 0` — so a parent that only shrink-wraps its child gives it
+   * a zero box and the sheet renders offscreen. `flex: 1` hands it the window,
+   * and the sheet anchors itself to the bottom of that.
+   */
+  lift: { flex: 1 },
+  sheetInner: { flexShrink: 1, gap: space.x4 },
   header: {
     flexDirection: "row",
     justifyContent: "space-between",

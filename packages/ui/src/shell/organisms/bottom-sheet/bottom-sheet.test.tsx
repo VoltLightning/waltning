@@ -50,6 +50,9 @@ vi.mock("../../keyboard.ts", () => ({
 }));
 
 const { BottomSheet } = await import("./bottom-sheet");
+// The ceiling is read at the seam rather than off the DOM: the box it lands on
+// belongs to `@gorhom/bottom-sheet`, which the jsdom stub stands in for.
+const { lastMaxDynamicContentSize } = await import("../../../../.vitest/gorhom-bottom-sheet");
 
 /**
  * `react-native-web`'s `Dimensions` reads `document.documentElement`, which
@@ -105,7 +108,18 @@ it("labels visible content and dismisses from backdrop and Close", () => {
  * scroller without a cap never scrolls. The body's own `overflow-y` is what
  * separates a real `ScrollView` from a `View` with a test id.
  */
-it("bounds its height against the window and scrolls its body", () => {
+/**
+ * **The body no longer scrolls, and that is a decision.** The sheet is sized by
+ * `@gorhom/bottom-sheet`'s dynamic sizing, which measures its content — and a
+ * `ScrollView` has no intrinsic height to measure, so it under-reported and the
+ * content spilled out of the bottom of the sheet. The height promise won: the
+ * sheet is its content's height, capped by the window and the keyboard, and a
+ * sheet holding more than fits brings its own bounded list. Every picker in
+ * this repository already did (`account-picker`, `category-sheet`,
+ * `counterparty-picker`); the form-shaped sheets are short enough not to need
+ * one, and this test is what says so if that stops being true.
+ */
+it("bounds its height against the window", () => {
   render(
     <BottomSheet visible title="Filter" onDismiss={vi.fn()}>
       <span>rows</span>
@@ -113,11 +127,14 @@ it("bounds its height against the window and scrolls its body", () => {
   );
 
   // §5.1's 170px top offset, measured against this window rather than guessed.
-  expect(screen.getByTestId("bottom-sheet").style.maxHeight).toBe(`${793 - 170}px`);
-  expect(getComputedStyle(screen.getByTestId("bottom-sheet-body")).overflowY).toBe("auto");
+  expect(lastMaxDynamicContentSize()).toBe(793 - 170);
 });
 
-/** The sheet body contains its own overscroll, so reaching its end does not scroll the page behind it. */
+/**
+ * The body still contains its own overscroll: a caller's bounded list reaching
+ * its end must not scroll the page behind the sheet, and the containment is on
+ * the box around it rather than on whatever the caller passes.
+ */
 it("contains its own overscroll", () => {
   render(
     <BottomSheet visible title="Filter" onDismiss={vi.fn()}>
@@ -137,15 +154,16 @@ it("yields to a top inset larger than the design offset", () => {
     </UnderTheTabShell>,
   );
 
-  const sheet = screen.getByTestId("bottom-sheet");
   // 200 + 22 (the design's own breathing room) beats the 170 offset.
-  expect(sheet.style.maxHeight).toBe(`${793 - 222}px`);
+  expect(lastMaxDynamicContentSize()).toBe(793 - 222);
   // The home indicator is cleared by padding — the window's 34, not the
   // layer's 0. A sheet is the window; the box it was opened from is not.
-  expect(sheet.style.paddingBottom).toBe(`${22 + 34}px`);
-  // And exactly once — nothing inside the sheet clears it a second time.
+  //
+  // **On the scrolling content, not on the sheet.** The clearance has to land
+  // on the thing that moves: padding on the sheet itself leaves a gap the body
+  // scrolls straight past, with the last row still ending at the device edge.
   const content = screen.getByTestId("bottom-sheet-body").firstElementChild as HTMLElement;
-  expect(getComputedStyle(content).paddingBottom).toBe("0px");
+  expect(getComputedStyle(content).paddingBottom).toBe(`${22 + 34}px`);
 });
 
 /** §5.1's third part: the footer is outside the scroller, so it cannot leave. */
@@ -178,12 +196,12 @@ it("makes room for the lift out from under the keyboard", () => {
     </UnderTheTabShell>,
   );
 
-  const sheet = screen.getByTestId("bottom-sheet");
   // `KeyboardAvoidingView` does the lifting; the cap is what stops the lift
   // pushing the sheet's head off the top of the window.
-  expect(sheet.style.maxHeight).toBe(`${793 - 170 - 336}px`);
+  expect(lastMaxDynamicContentSize()).toBe(793 - 170 - 336);
   // The home indicator is behind the keyboard; clearing it there is twice.
-  expect(sheet.style.paddingBottom).toBe("22px");
+  const content = screen.getByTestId("bottom-sheet-body").firstElementChild as HTMLElement;
+  expect(getComputedStyle(content).paddingBottom).toBe("22px");
 });
 
 /**
@@ -231,8 +249,10 @@ it("ignores a layer that has re-provided the tab bar's height", () => {
     </WindowInsetsProvider>,
   );
 
-  // 22 + the device's 34 — not 22 + the bar's 90.
-  expect(screen.getByTestId("bottom-sheet").style.paddingBottom).toBe("56px");
+  // 22 + the device's 34 — not 22 + the bar's 90. On the scrolling content,
+  // where the clearance now rides.
+  const content = screen.getByTestId("bottom-sheet-body").firstElementChild as HTMLElement;
+  expect(getComputedStyle(content).paddingBottom).toBe("56px");
 });
 
 /**

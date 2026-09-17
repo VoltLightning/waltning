@@ -40,6 +40,16 @@ export default defineConfig({
         find: /^react-native-svg$/,
         replacement: "react-native-svg/lib/module/ReactNativeSVG.web.js",
       },
+      // The sheet's motion, stood in for under jsdom (see the stub). The real
+      // library needs far more of reanimated than the mock above provides —
+      // it dies on `makeMutable` and does not stop there — and none of what it
+      // adds is observable in a jsdom assertion.
+      {
+        find: /^@gorhom\/bottom-sheet$/,
+        replacement: fileURLToPath(
+          new URL("packages/ui/.vitest/gorhom-bottom-sheet.tsx", import.meta.url),
+        ),
+      },
       { find: /^react-native$/, replacement: "react-native-web" },
     ],
     // Platform extensions, web first — the same order Metro uses for the web
@@ -76,6 +86,9 @@ export default defineConfig({
           // by Node instead, the native half arrives and dies on a Flow
           // `typeof`.
           /react-native-svg/,
+          // The sheet's motion (`bottom-sheet.tsx`). Ships the same
+          // untranspiled Flow `typeof` react-native-svg does, and imports its
+          // own files without extensions.
         ],
       },
     },
