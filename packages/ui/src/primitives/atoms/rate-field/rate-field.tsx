@@ -32,9 +32,10 @@
 
 import * as money from "@waltning/core/money";
 import { useCallback, useState } from "react";
-import { Text, TextInput, View } from "react-native";
+import { Text, View } from "react-native";
 import { formatRate } from "../../../fx/format-rate.ts";
 import { useLocale, useT } from "../../../i18n/provider";
+import { SheetAwareTextInput } from "../../../primitives/sheet-input";
 import { text } from "../../../theme/fonts.ts";
 import { makeStyles } from "../../../theme/styles.ts";
 import { focus, radius, space, tabularNums } from "../../../tokens.ts";
@@ -212,7 +213,7 @@ export function RateField({
         {!manual ? null : <Tag variant="warn">{t("transactions.manualRate")}</Tag>}
       </View>
       {editable ? (
-        <TextInput
+        <SheetAwareTextInput
           accessibilityLabel={label}
           value={displayed}
           onChangeText={handleChangeText}

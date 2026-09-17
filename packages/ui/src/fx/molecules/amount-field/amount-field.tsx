@@ -24,10 +24,11 @@
  */
 
 import { useCallback, useState } from "react";
-import { Text, TextInput, View } from "react-native";
+import { Text, View } from "react-native";
 import { decimalMark } from "../../../i18n/locales.ts";
 import { useLocale, useT } from "../../../i18n/provider";
 import { PressableScaled } from "../../../primitives/atoms/pressable-scaled/pressable-scaled";
+import { SheetAwareTextInput } from "../../../primitives/sheet-input";
 import { text, textCap } from "../../../theme/fonts.ts";
 import { makeStyles } from "../../../theme/styles.ts";
 import { focus, radius, space, tabularNums } from "../../../tokens.ts";
@@ -232,7 +233,7 @@ function EditableAmountField({
           focused ? (error ? styles.focusedError : styles.focused) : null,
         ]}
       >
-        <TextInput
+        <SheetAwareTextInput
           accessibilityLabel={label}
           // `decimal-pad` rather than `numeric`: it offers the separator and not
           // the operators, which is the only thing that can be typed here.

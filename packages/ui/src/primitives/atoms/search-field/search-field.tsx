@@ -60,9 +60,10 @@
  */
 
 import { useCallback, useEffect, useRef } from "react";
-import { Text, TextInput, View } from "react-native";
+import { Text, type TextInput, View } from "react-native";
 import { useT } from "../../../i18n/provider";
 import { PressableScaled } from "../../../primitives/atoms/pressable-scaled/pressable-scaled";
+import { SheetAwareTextInput } from "../../../primitives/sheet-input";
 import { text } from "../../../theme/fonts.ts";
 import { useTheme } from "../../../theme/provider";
 import { makeStyles } from "../../../theme/styles.ts";
@@ -158,7 +159,7 @@ export function SearchField({
           <View style={styles.glassRing} />
           <View style={styles.glassHandle} />
         </View>
-        <TextInput
+        <SheetAwareTextInput
           ref={ref}
           role="searchbox"
           accessibilityLabel={placeholder}

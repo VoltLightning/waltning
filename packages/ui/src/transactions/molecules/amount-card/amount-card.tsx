@@ -36,10 +36,11 @@
  */
 
 import { useCallback, useState } from "react";
-import { Text, TextInput, View } from "react-native";
+import { Text, View } from "react-native";
 import { figureEm } from "../../../fx/figure-width.ts";
 import { decimalMark } from "../../../i18n/locales";
 import { useLocale, useT } from "../../../i18n/provider";
+import { SheetAwareTextInput } from "../../../primitives/sheet-input";
 import { text, textCap } from "../../../theme/fonts.ts";
 import { makeStyles } from "../../../theme/styles.ts";
 import {
@@ -128,7 +129,7 @@ export function AmountCard({
         >
           {kind === "expense" ? "−" : "+"}
         </Text>
-        <TextInput
+        <SheetAwareTextInput
           accessibilityLabel={label}
           value={display}
           onChangeText={handleChange}

@@ -19,7 +19,8 @@
  */
 
 import { useCallback } from "react";
-import { Text, TextInput, View } from "react-native";
+import { Text, View } from "react-native";
+import { SheetAwareTextInput } from "../../../primitives/sheet-input";
 import { text } from "../../../theme/fonts.ts";
 import { useTheme } from "../../../theme/provider";
 import { makeStyles } from "../../../theme/styles.ts";
@@ -98,7 +99,7 @@ export function TextField({
   return (
     <View style={styles.root}>
       {hideLabel ? null : <Text style={styles.label}>{label}</Text>}
-      <TextInput
+      <SheetAwareTextInput
         accessibilityLabel={label}
         value={value}
         onChangeText={onChangeText}
