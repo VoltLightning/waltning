@@ -72,13 +72,25 @@ decision, three symptoms:
   is not a contradiction: the plugin writes the Android theme's default, which
   shows for the instant before JS runs.
 
-  **This was claimed to be unfixable without leaving Expo Go, and that was
-  wrong.** The option is one line in the `screenOptions` the same change was
-  already editing, declared by `expo-router`'s own native-stack types and
-  backed by `react-native-screens`; `react-native-edge-to-edge` is not even
-  installed. The claim survived review of the code and was caught only by
-  someone checking it against the types — which is what this specification's
-  own rule about unenforced claims is for.
+  **On iOS that one line is half the change; the other half is native.**
+  `react-native-screens` applies `statusBarStyle` by setting the style on the
+  screen's own `UIViewController`, and iOS honours that only when
+  `UIViewControllerBasedStatusBarAppearance` is `YES` in `Info.plist`. Expo's
+  prebuild template writes the key `false`, so the library asserts on the
+  mismatch and red-boxes the app on the first route that mounts — a launch
+  failure on a real device, not a cosmetic one. `app.json`'s `ios.infoPlist`
+  sets it `true`.
+
+  Two consequences worth stating, because neither is visible from the
+  `screenOptions` line. The key is baked into the binary, so it takes effect
+  only on a build — never on a JS reload, and never in Expo Go, whose
+  `Info.plist` this repository does not own; the glyph colour is therefore a
+  property of builds that are ours. And the key is safe to set **only because
+  nothing here calls the imperative status-bar API**: React Native's
+  `RCTStatusBarManager` refuses `setStyle`/`setHidden` when the key is `YES`,
+  the exact mirror of the error above. The two approaches are mutually
+  exclusive, which is the second reason — beyond edge-to-edge — that no
+  `<StatusBar>` is mounted anywhere in the tree.
 - **The Android band.** Expo enforces edge-to-edge from SDK 54, so the system
   leaves the status-bar area to the app and backs it itself when nothing claims
   it. `headerStatusBarHeight` defaults to the safe-area inset, so a header grows
