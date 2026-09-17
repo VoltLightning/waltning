@@ -39,11 +39,20 @@
  * Android as of iOS, and why `navigationBarTranslucent` below is part of the
  * reason — so a bottom-anchored sheet is simply behind it: an iOS
  * `decimal-pad` has no return key and covers about 291 of a ~340px sheet,
- * which leaves the header and 49px nobody can scroll their way out of. So the
- * sheet — not the overlay, which must stay the full window for the backdrop —
- * is wrapped in a `KeyboardAvoidingView`, and the cap above shrinks by the
- * same height, on the same keyboard event, so the lift stops the sheet's head
- * at the top of the window rather than pushing it through.
+ * which leaves the header and 49px nobody can scroll their way out of.
+ *
+ * **The lift is the library's, and it needs to be told which field is
+ * focused.** `@gorhom/bottom-sheet` moves the sheet from a registered node:
+ * `BottomSheetTextInput` writes the focused input into `animatedKeyboardState`
+ * on focus and the sheet reads it. A plain `TextInput` registers nothing, so
+ * every sheet here sat still under the keyboard the moment its motion became
+ * the library's — the fields were the same fields, and the thing that used to
+ * move them was gone. `SheetInputProvider` below is how a field learns where
+ * it is; `primitives/sheet-input.tsx` has the rest of that argument.
+ *
+ * The `KeyboardAvoidingView` that used to do this went with it. This
+ * component's own rule has not changed — *one mechanism on both phones is the
+ * point; two would be two things to keep true* — only which one it is.
  *
  * **A backdrop press with the keyboard up puts the keyboard away, not the
  * sheet.** The tap was aimed at the keyboard, and dismissing here would throw
@@ -93,22 +102,16 @@ import GorhomBottomSheet, {
   BottomSheetScrollView,
 } from "@gorhom/bottom-sheet";
 import { useCallback, useMemo, useState } from "react";
-import {
-  KeyboardAvoidingView,
-  Modal,
-  Pressable,
-  Text,
-  useWindowDimensions,
-  View,
-} from "react-native";
+import { Modal, Pressable, Text, useWindowDimensions, View } from "react-native";
 import { useT } from "../../../i18n/provider";
 import { Button } from "../../../primitives/atoms/button/button";
 import { containOverscroll } from "../../../primitives/nested-scroll.ts";
 import { useWindowInsets } from "../../../primitives/safe-area";
+import { SheetInputProvider } from "../../../primitives/sheet-input";
 import { text } from "../../../theme/fonts.ts";
 import { makeStyles } from "../../../theme/styles.ts";
 import { focus, radius, space, touchTarget } from "../../../tokens.ts";
-import { dismissKeyboard, KEYBOARD_AVOIDANCE, useKeyboardHeight } from "../../keyboard.ts";
+import { dismissKeyboard, useKeyboardHeight } from "../../keyboard.ts";
 import { sheetBottomInset, sheetMaxHeight } from "../../sheet-geometry.ts";
 
 export type BottomSheetProps = {
@@ -223,10 +226,7 @@ export function BottomSheet({ visible, title, onDismiss, footer, children }: Bot
           onBlur={handleBlur}
           style={[styles.backdrop, backdropFocused ? styles.backdropFocused : null]}
         />
-        {/* Around the sheet, never around the overlay: the overlay is the
-            backdrop's own full-window target, and a `KeyboardAvoidingView`
-            there would shrink the thing that has to stay the window. */}
-        <KeyboardAvoidingView behavior={KEYBOARD_AVOIDANCE} style={styles.lift}>
+        <View style={styles.lift}>
           {/*
             `enableDynamicSizing` is the library's name for what this component
             already promised — the sheet owns its height — and
@@ -235,28 +235,30 @@ export function BottomSheet({ visible, title, onDismiss, footer, children }: Bot
             `onClose` fires when the pan gesture finishes the dismissal, which
             is the one thing the caller's `visible` cannot know on its own.
           */}
-          <GorhomBottomSheet
-            enableDynamicSizing
-            maxDynamicContentSize={maxHeight}
-            enablePanDownToClose
-            onClose={onDismiss}
-            backgroundStyle={styles.sheetBackground}
-            style={styles.sheetShadow}
-            handleComponent={renderHandle}
-            {...(footer === undefined ? {} : { footerComponent: renderFooter })}
-          >
-            {/* A direct child, deliberately — see the header. */}
-            <BottomSheetScrollView
-              testID="bottom-sheet-body"
-              style={containOverscroll}
-              contentContainerStyle={[styles.bodyContent, clearBottom]}
-              keyboardShouldPersistTaps="handled"
-              showsVerticalScrollIndicator={false}
+          <SheetInputProvider value>
+            <GorhomBottomSheet
+              enableDynamicSizing
+              maxDynamicContentSize={maxHeight}
+              enablePanDownToClose
+              onClose={onDismiss}
+              backgroundStyle={styles.sheetBackground}
+              style={styles.sheetShadow}
+              handleComponent={renderHandle}
+              {...(footer === undefined ? {} : { footerComponent: renderFooter })}
             >
-              {children}
-            </BottomSheetScrollView>
-          </GorhomBottomSheet>
-        </KeyboardAvoidingView>
+              {/* A direct child, deliberately — see the header. */}
+              <BottomSheetScrollView
+                testID="bottom-sheet-body"
+                style={containOverscroll}
+                contentContainerStyle={[styles.bodyContent, clearBottom]}
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={false}
+              >
+                {children}
+              </BottomSheetScrollView>
+            </GorhomBottomSheet>
+          </SheetInputProvider>
+        </View>
       </View>
     </Modal>
   );

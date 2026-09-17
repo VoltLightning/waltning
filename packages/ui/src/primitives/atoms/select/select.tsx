@@ -59,18 +59,11 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { ViewStyle } from "react-native";
-import {
-  Modal,
-  Pressable,
-  ScrollView,
-  Text,
-  TextInput,
-  useWindowDimensions,
-  View,
-} from "react-native";
+import { Modal, Pressable, ScrollView, Text, useWindowDimensions, View } from "react-native";
 import Animated, { type AnimatedStyle } from "react-native-reanimated";
 import { useT } from "../../../i18n/provider";
 import { PressableScaled } from "../../../primitives/atoms/pressable-scaled/pressable-scaled";
+import { SheetAwareTextInput } from "../../../primitives/sheet-input";
 import { text } from "../../../theme/fonts.ts";
 import { useTheme } from "../../../theme/provider";
 import { makeStyles } from "../../../theme/styles.ts";
@@ -590,7 +583,7 @@ function SearchRow({ query, onQueryChange }: SearchRowProps) {
   const { focused, handlers } = useInteraction();
 
   return (
-    <TextInput
+    <SheetAwareTextInput
       accessibilityLabel={t("common.search")}
       value={query}
       onChangeText={onQueryChange}

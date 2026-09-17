@@ -80,11 +80,12 @@ import {
   useRef,
   useState,
 } from "react";
-import { type Role, Text, TextInput, type TextInputKeyPressEvent, View } from "react-native";
+import { type Role, Text, type TextInput, type TextInputKeyPressEvent, View } from "react-native";
 import { Amount } from "../../../fx/atoms/amount/amount";
 import { useLocale, useT } from "../../../i18n/provider";
 import { Button } from "../../../primitives/atoms/button/button";
 import type { FieldErrorMap } from "../../../primitives/field-errors.ts";
+import { SheetAwareTextInput } from "../../../primitives/sheet-input";
 import { text } from "../../../theme/fonts.ts";
 import { makeStyles } from "../../../theme/styles.ts";
 import { focus, radius, space, touchTarget } from "../../../tokens.ts";
@@ -411,7 +412,7 @@ export const CommandBar = forwardRef<CommandBarHandle, CommandBarProps>(function
 
   return (
     <View style={styles.root}>
-      <TextInput
+      <SheetAwareTextInput
         ref={inputRef}
         value={value}
         onChangeText={onChangeText}

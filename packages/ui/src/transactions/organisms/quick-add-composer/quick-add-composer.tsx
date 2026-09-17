@@ -34,7 +34,7 @@ import {
 } from "@waltning/core/capture/payee-memory";
 import type { CurrencyCode } from "@waltning/core/money";
 import { useCallback, useMemo, useState } from "react";
-import { Text, TextInput, View } from "react-native";
+import { Text, View } from "react-native";
 import { useT } from "../../../i18n/provider";
 import { Button } from "../../../primitives/atoms/button/button";
 import { DateField } from "../../../primitives/atoms/date-field/date-field";
@@ -47,6 +47,7 @@ import { Select } from "../../../primitives/atoms/select/select";
 import { TextField } from "../../../primitives/atoms/text-field/text-field";
 import type { FieldErrorMap } from "../../../primitives/field-errors.ts";
 import { categoryTintFor } from "../../../primitives/monogram.ts";
+import { SheetAwareTextInput } from "../../../primitives/sheet-input";
 import { BottomSheet } from "../../../shell/organisms/bottom-sheet/bottom-sheet";
 import { HouseIcon } from "../../../shell/phosphor";
 import { Banner } from "../../../states/molecules/banner/banner";
@@ -491,7 +492,7 @@ export function QuickAddComposer({
       />
 
       <View style={[styles.noteCard, noteFocused ? styles.noteFocused : null]}>
-        <TextInput
+        <SheetAwareTextInput
           accessibilityLabel={t("common.note")}
           value={note}
           onChangeText={onNoteChange}

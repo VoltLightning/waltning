@@ -45,7 +45,7 @@ const all = components();
  * element to put them on. The same reason `tests/architecture.test.ts` strips
  * comments before every one of its scans.
  */
-const INTERACTIVE = /\b(?:Pressable(?:Scaled)?|TextInput)\b/;
+const INTERACTIVE = /\b(?:Pressable(?:Scaled)?|(?:SheetAware)?TextInput)\b/;
 
 /**
  * **The count both rules walk, pinned.** `\bPressable\b` does not match
@@ -53,6 +53,13 @@ const INTERACTIVE = /\b(?:Pressable(?:Scaled)?|TextInput)\b/;
  * the moment the press sweep renamed 27 components they left the 44px census
  * and the focus-ring census together, silently, while both kept passing at
  * half strength. `toBeGreaterThan(3)` could not see 56 become 29.
+ *
+ * **It happened again, and the count caught it.** `SheetAwareTextInput` —
+ * `sheet-input.tsx`, which picks the library's input inside a sheet — takes
+ * five components out of `\bTextInput\b` for the same reason: the boundary is
+ * on the wrong side of the name. A vendor rename is not a rare event, and a
+ * name test that assumes today's spelling will keep losing components
+ * quietly; this exact count is the only thing that notices.
  *
  * An exact count is the only guard that catches a census halving. Raise it
  * when a component is added; a *drop* is the bug this exists for.
@@ -70,8 +77,13 @@ const INTERACTIVE_COUNT = 56;
  * Kept as a named list rather than a heuristic ("files with no `styles`"),
  * because the moment a wrapper grows a box of its own it should fall back
  * under both rules, and a list makes that a decision someone makes here.
+ *
+ * `sheet-input.tsx` is the second: it picks between React Native's `TextInput`
+ * and the library's, and draws nothing. The field around it — `TextField`,
+ * `AmountField`, `SearchField` — is what carries the floor and the ring, and
+ * each of those is in this walk on its own account.
  */
-const FORWARDS_ONLY = new Set(["pressable-scaled.tsx"]);
+const FORWARDS_ONLY = new Set(["pressable-scaled.tsx", "sheet-input.tsx"]);
 
 function code(text: string): string {
   return text.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");

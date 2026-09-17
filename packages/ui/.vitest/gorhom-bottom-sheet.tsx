@@ -21,7 +21,14 @@
  */
 
 import type { ReactNode } from "react";
-import { ScrollView, type ScrollViewProps, View, type ViewProps } from "react-native";
+import {
+  ScrollView,
+  type ScrollViewProps,
+  TextInput,
+  type TextInputProps,
+  View,
+  type ViewProps,
+} from "react-native";
 
 type SheetProps = ViewProps & {
   children?: ReactNode;
@@ -98,6 +105,14 @@ export function BottomSheetView({ children, ...rest }: SheetProps) {
 /** A real `ScrollView`, so `containOverscroll` and the scroll props still land. */
 export function BottomSheetScrollView(props: ScrollViewProps) {
   return <ScrollView {...props} />;
+}
+
+/**
+ * The real one registers the focused node so the sheet can lift for it; under
+ * jsdom there is no keyboard to lift for, so it is the input it wraps.
+ */
+export function BottomSheetTextInput(props: TextInputProps) {
+  return <TextInput {...props} />;
 }
 
 /** The footer wrapper is pure positioning in the real library; here it is its children. */

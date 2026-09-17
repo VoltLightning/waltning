@@ -32,7 +32,7 @@
 import { accountingDate, isAccountingDate } from "@waltning/core/date";
 import * as money from "@waltning/core/money";
 import { useCallback, useState } from "react";
-import { Text, TextInput, View } from "react-native";
+import { Text, View } from "react-native";
 import { Amount } from "../../../fx/atoms/amount/amount";
 import { formatRate } from "../../../fx/format-rate.ts";
 import { parseAmount } from "../../../fx/molecules/amount-field/amount-field";
@@ -43,6 +43,7 @@ import { IconButton } from "../../../primitives/atoms/icon-button/icon-button";
 import { Tag } from "../../../primitives/atoms/tag";
 import { TextField } from "../../../primitives/atoms/text-field/text-field";
 import type { FieldErrorMap } from "../../../primitives/field-errors.ts";
+import { SheetAwareTextInput } from "../../../primitives/sheet-input";
 import { BottomSheet } from "../../../shell/organisms/bottom-sheet/bottom-sheet";
 import { ArrowsLeftRightIcon } from "../../../shell/phosphor";
 import { Banner } from "../../../states/molecules/banner/banner";
@@ -336,7 +337,7 @@ export function TransferComposer({
           </IconButton>
         </View>
         <View style={[styles.figure, focused === "amount" ? styles.figureFocused : null]}>
-          <TextInput
+          <SheetAwareTextInput
             accessibilityLabel={t("transactions.amount")}
             value={amountRaw.replace(",", mark)}
             onChangeText={handleAmountText}
@@ -464,7 +465,7 @@ export function TransferComposer({
             )}
           </View>
           <View style={[styles.figure, focused === "toAmount" ? styles.figureFocused : null]}>
-            <TextInput
+            <SheetAwareTextInput
               accessibilityLabel={t("transactions.destinationAmount")}
               value={toAmountRaw.replace(",", mark)}
               onChangeText={handleToAmountText}

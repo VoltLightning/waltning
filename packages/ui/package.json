@@ -74,6 +74,7 @@
     "./primitives/nested-scroll.test-support": "./src/primitives/nested-scroll.test-support.ts",
     "./primitives/press-scale": "./src/primitives/press-scale.ts",
     "./primitives/pressable-scaled": "./src/primitives/atoms/pressable-scaled/pressable-scaled.tsx",
+    "./primitives/sheet-input": "./src/primitives/sheet-input.tsx",
     "./primitives/radio": "./src/primitives/atoms/radio/radio.tsx",
     "./primitives/rate-field": "./src/primitives/atoms/rate-field/rate-field.tsx",
     "./primitives/reduced-motion": "./src/primitives/reduced-motion.ts",
