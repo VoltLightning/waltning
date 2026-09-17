@@ -3010,8 +3010,8 @@ describe("a control's edge is not the divider colour", () => {
       "the dashboard's own card surface",
     ],
     [
-      "packages/ui/src/shell/organisms/bottom-sheet/bottom-sheet.tsx#sheet",
-      "the sheet's ground, not a control on it",
+      "packages/ui/src/shell/organisms/bottom-sheet/bottom-sheet.tsx#sheetBackground",
+      "the sheet's ground, not a control on it — `@gorhom/bottom-sheet` paints it through `backgroundStyle`, which is why the style is named for the prop rather than for the sheet",
     ],
     [
       "packages/ui/src/shell/organisms/confirm-dialog/confirm-dialog.tsx#card",
@@ -3255,7 +3255,28 @@ describe("a control's edge is not the divider colour", () => {
  * it is already a dependency of this repository.
  */
 describe("every scroller declares which kind it is", () => {
-  const SCROLLERS = new Set(["ScrollView", "FlatList", "SectionList", "VirtualizedList"]);
+  /**
+   * **Wrapped scrollers count, and one nearly escaped.** The set held the four
+   * React Native names, so the moment `BottomSheet`'s body became
+   * `@gorhom/bottom-sheet`'s `BottomSheetScrollView` the census stopped seeing
+   * a scroller it had certified for years — silently, because a census that
+   * finds nothing reports nothing. It is the same defect that let
+   * `PressableScaled` walk out of two accessibility rules: a name test that
+   * assumes the vendor's spelling.
+   *
+   * The library's wrappers are that library's `ScrollView` with its gesture
+   * plumbing attached; they scroll, so they declare their kind like any other.
+   */
+  const SCROLLERS = new Set([
+    "ScrollView",
+    "FlatList",
+    "SectionList",
+    "VirtualizedList",
+    "BottomSheetScrollView",
+    "BottomSheetFlatList",
+    "BottomSheetSectionList",
+    "BottomSheetVirtualizedList",
+  ]);
   const SPREAD_HELPERS = new Set(["nestedScrollProps", "horizontalScrollProps", "pageScrollProps"]);
   const STYLE_HELPERS = new Set(["containOverscroll", "containOverscrollX"]);
   const HELPER_FILE = join(repoRoot, "packages/ui/src/primitives/nested-scroll.ts");
@@ -3439,7 +3460,7 @@ describe("every scroller declares which kind it is", () => {
       "packages/ui/src/primitives/atoms/select/select.tsx#0 <ScrollView> nestedScrollProps",
       "packages/ui/src/shell/molecules/card/card.tsx#0 <ScrollView> pageScrollProps",
       "packages/ui/src/shell/organisms/bottom-sheet/bottom-sheet.stories.tsx#0 <ScrollView> nestedScrollProps",
-      "packages/ui/src/shell/organisms/bottom-sheet/bottom-sheet.tsx#0 <ScrollView> containOverscroll",
+      "packages/ui/src/shell/organisms/bottom-sheet/bottom-sheet.tsx#0 <BottomSheetScrollView> containOverscroll",
       "packages/ui/src/shell/organisms/pager/pager.tsx#0 <ScrollView> pageScrollProps",
       "packages/ui/src/transactions/molecules/day-ribbon/day-ribbon.tsx#0 <ScrollView> horizontalScrollProps",
       "packages/ui/src/transactions/organisms/ledger-filter-rail/ledger-filter-rail.tsx#0 <ScrollView> nestedScrollProps",

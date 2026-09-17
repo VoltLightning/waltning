@@ -4,7 +4,8 @@
  * we need to use a grid there."* One sheet, over `BottomSheet`, used
  * everywhere an account is chosen — `screens/S05` §4 (the account chip), `S16`
  * §3 (how accounts group), and `CategorySheet` (`categories/`) for the
- * anatomy: grabber, `SearchField`, grouped grid, pinned footer.
+ * anatomy: `SearchField`, grouped grid, pinned footer — the grabber is
+ * `BottomSheet`'s own now (`@gorhom/bottom-sheet`'s handle), not drawn here.
  *
  * **Grouped, then by kind (S16 §3).** Accounts sit under their account-group
  * header, in `groups`' own order; an account with no group renders last,
@@ -197,7 +198,6 @@ export function AccountPicker({
 
   return (
     <BottomSheet visible={visible} title={t("transactions.account")} onDismiss={handleDismiss}>
-      <View style={styles.grabber} />
       {live.length > SEARCH_THRESHOLD ? (
         <SearchField
           value={query}
@@ -370,13 +370,6 @@ function AccountTile({ account, selected, machineFilled, caption, onPick }: Acco
 }
 
 const useStyles = makeStyles((theme) => ({
-  grabber: {
-    alignSelf: "center",
-    width: 36,
-    height: 4,
-    borderRadius: radius.pill,
-    backgroundColor: theme.borderInteractive,
-  },
   scroll: { maxHeight: touchTarget.min * 9 },
   section: { gap: space.md },
   sectionLabel: {

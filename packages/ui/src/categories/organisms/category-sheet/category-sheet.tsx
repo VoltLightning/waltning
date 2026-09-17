@@ -336,7 +336,6 @@ export function CategorySheet({
 
   return (
     <BottomSheet visible={visible} title={t("transactions.category")} onDismiss={handleDismiss}>
-      <View style={styles.grabber} />
       {proposedLeaf ? (
         <ProposalRow
           leaf={proposedLeaf}
@@ -761,13 +760,6 @@ function CreateRow({
 }
 
 const useStyles = makeStyles((theme) => ({
-  grabber: {
-    alignSelf: "center",
-    width: 36,
-    height: 4,
-    borderRadius: radius.pill,
-    backgroundColor: theme.borderInteractive,
-  },
   chipRow: { flexGrow: 0 },
   // Eight rows of leaves before the sheet scrolls internally — the same
   // "cap it at a token multiple" shape `select.tsx`'s `panelScroll` uses.

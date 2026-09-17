@@ -281,8 +281,12 @@ describe("TabsShell", () => {
     );
     await settleLayout();
 
-    // space.x5 (22) + the device's 34 — the slot's own bottom is 0.
-    expect(screen.getByTestId("bottom-sheet").style.paddingBottom).toBe("56px");
+    // space.x5 (22) + the device's 34 — the slot's own bottom is 0. The
+    // clearance rides the scrolling content (`bottom-sheet.tsx`), not the
+    // sheet, so that the last row clears the indicator rather than a gap the
+    // body scrolls past.
+    const content = screen.getByTestId("bottom-sheet-body").firstElementChild as HTMLElement;
+    expect(getComputedStyle(content).paddingBottom).toBe("56px");
   });
 
   /** Today's hero band is a better header than a word, so it keeps it. */

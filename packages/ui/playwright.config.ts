@@ -162,6 +162,27 @@ export default defineConfig({
     baseURL: `http://localhost:${PORT}`,
     ...devices["Desktop Chrome"],
     /**
+     * **A baseline is the settled frame, not a frame from the way there.**
+     * `design-system/02` §2.7 requires every animation to have a `motion-none`
+     * branch, and Reanimated takes that branch from the system setting — so
+     * emulating it here is not a trick, it is the branch this system already
+     * promises, screenshotted.
+     *
+     * It became necessary when `BottomSheet` gained a spring
+     * (`@gorhom/bottom-sheet`): dynamic sizing measures the sheet's content
+     * *during* the entrance, so a sheet story settled on a different pixel from
+     * run to run. Two consecutive runs disagreed about which six stories
+     * failed, then about which one — a different sheet each time, which is the
+     * shape of a race rather than a diff.
+     *
+     * **In `contextOptions`, not in `use`.** Playwright 1.62's `use` type does
+     * not carry `reducedMotion`, and at the top level it was *silently* ignored
+     * at runtime too — the suite ran without it while appearing to have it.
+     * Moving it here changed four baselines, which is the only reason the
+     * silence surfaced.
+     */
+    contextOptions: { reducedMotion: "reduce" },
+    /**
      * Pinned, because a screenshot is a function of viewport. Storybook's
      * default frame would otherwise decide the baselines.
      *

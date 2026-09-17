@@ -129,12 +129,28 @@ export const TallForm: Story = {
     if (!(body instanceof HTMLElement)) {
       throw new Error("bottom-sheet.stories.tsx: no sheet body to scroll");
     }
-    if (body.scrollHeight <= body.clientHeight) {
-      // jsdom lays nothing out; in a browser this is the defect itself.
-      if (navigator.userAgent.includes("jsdom")) return;
+    // jsdom lays nothing out, so there is nothing here to wait for or to read.
+    if (navigator.userAgent.includes("jsdom")) return;
+
+    // **Waited for, not read once.** The sheet springs in now
+    // (`@gorhom/bottom-sheet`), so at the instant `play` runs the body has not
+    // reached its final height and `scrollHeight <= clientHeight` is still
+    // true — of an animation, not of the layout. The assertion is the same one;
+    // what changed is that the sheet is no longer fully formed on its first
+    // frame.
+    const settled = await new Promise<boolean>((resolve) => {
+      const deadline = Date.now() + 2000;
+      const look = () => {
+        if (body.scrollHeight > body.clientHeight) return resolve(true);
+        if (Date.now() > deadline) return resolve(false);
+        requestAnimationFrame(look);
+      };
+      look();
+    });
+    if (!settled) {
       throw new Error(
         "bottom-sheet.stories.tsx: the sheet body did not scroll — scrollHeight <= " +
-          "clientHeight in a real browser",
+          "clientHeight in a real browser, after waiting for the sheet to settle",
       );
     }
     body.scrollTop = body.scrollHeight;

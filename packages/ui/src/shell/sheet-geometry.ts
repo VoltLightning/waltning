@@ -59,13 +59,42 @@ export type Frame = { width: number; height: number };
  * The sheet's own box: how tall it may be and what it pads inside itself.
  * The lift out from under the keyboard is `KeyboardAvoidingView`'s.
  */
-export function sheetBounds(frame: Frame, insets: SafeAreaInsets, keyboard: number): ViewStyle {
+/**
+ * The ceiling, as a number.
+ *
+ * **Named separately because a `ViewStyle` widens it.** `maxHeight` on a style
+ * is a `DimensionValue` — it could be `"50%"` — and `@gorhom/bottom-sheet`'s
+ * `maxDynamicContentSize` takes points. Reading it back off `sheetBounds` meant
+ * casting a value this function always computes as a number, which is the kind
+ * of loose seam CLAUDE.md warns about: the cast would have been correct today
+ * and silent the day someone returned a percentage here.
+ */
+export function sheetMaxHeight(frame: Frame, insets: SafeAreaInsets, keyboard: number): number {
   const top = Math.max(SHEET_TOP_OFFSET, insets.top + space.x5);
+  return Math.max(SHEET_MIN_HEIGHT, frame.height - top - keyboard);
+}
+
+export function sheetBounds(frame: Frame, insets: SafeAreaInsets, keyboard: number): ViewStyle {
   return {
-    maxHeight: Math.max(SHEET_MIN_HEIGHT, frame.height - top - keyboard),
-    // The home indicator is behind the keyboard while it is up.
-    paddingBottom: space.x5 + (keyboard > 0 ? 0 : insets.bottom),
+    maxHeight: sheetMaxHeight(frame, insets, keyboard),
+    paddingBottom: sheetBottomInset(insets, keyboard),
   };
+}
+
+/**
+ * The clearance under the sheet's content.
+ *
+ * Separate from the ceiling because the two now have different owners: since
+ * `@gorhom/bottom-sheet` sizes the sheet itself, the *ceiling* is handed to it
+ * as `maxDynamicContentSize` and the content inside must not carry a second,
+ * larger `maxHeight` of its own — it would let the content outgrow the sheet
+ * the library actually drew. The bottom inset is still ours.
+ *
+ * The home indicator is behind the keyboard while it is up, so it is not paid
+ * for twice.
+ */
+export function sheetBottomInset(insets: SafeAreaInsets, keyboard: number): number {
+  return space.x5 + (keyboard > 0 ? 0 : insets.bottom);
 }
 
 /**
