@@ -87,6 +87,7 @@ import { Button } from "../../../primitives/atoms/button/button";
 import type { FieldErrorMap } from "../../../primitives/field-errors.ts";
 import { SheetAwareTextInput } from "../../../primitives/sheet-input";
 import { inputStep, text } from "../../../theme/fonts.ts";
+import { useInputHeight } from "../../../theme/input-height.ts";
 import { makeStyles } from "../../../theme/styles.ts";
 import { focus, radius, space, touchTarget } from "../../../tokens.ts";
 
@@ -223,6 +224,7 @@ export const CommandBar = forwardRef<CommandBarHandle, CommandBarProps>(function
   const t = useT();
   const locale = useLocale();
   const styles = useStyles();
+  const inputHeight = useInputHeight("body");
   const inputRef = useRef<TextInput>(null);
   const [highlight, setHighlight] = useState<number | null>(null);
   // M3 — `aria-activedescendant` names a chip by id, so the ids have to be
@@ -427,7 +429,7 @@ export const CommandBar = forwardRef<CommandBarHandle, CommandBarProps>(function
         role="combobox"
         aria-expanded={ok}
         {...combobox}
-        style={styles.input}
+        style={[styles.input, inputHeight]}
         autoCapitalize="none"
         autoCorrect={false}
       />

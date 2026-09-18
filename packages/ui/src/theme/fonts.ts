@@ -158,8 +158,7 @@ function step(name: TypeStep, family: string): TextStep {
 }
 
 /**
- * The same step with its `lineHeight` **moved onto the box** — for a
- * `TextInput` and nothing else.
+ * The same step, **without `lineHeight`** — for a `TextInput` and nothing else.
  *
  * **A `TextInput` is not a `Text`, and `lineHeight` is where they part.** On
  * iOS the property moves where the *value* is drawn without moving the
@@ -169,26 +168,21 @@ function step(name: TypeStep, family: string): TextStep {
  * `lineHeight` — the amount card worst of all at `display-hero`, where the step
  * is 57 against a 54 glyph.
  *
- * **Dropping it is not enough, because something has to say how tall the field
- * is.** Without a `lineHeight` a box takes the height the *loaded* face
- * reports, so the same field measures one height against the fallback and
- * another against IBM Plex — and the panel or row laid out under it lands a
- * few pixels out on whichever runs lose that race. Four fields had nothing
- * else to fall back on: the amount card, the rate field and both transfer
- * figures state no height at all, so the step's `lineHeight` *was* their
- * height.
- *
- * So it is restored as `height`, the same number in the place that cannot
- * disagree with the platform: a box dimension rather than a text metric.
- * Yoga clamps it up to any `minHeight` the field also states, so the fields
- * built on `touchTarget.min` are untouched by it.
+ * **Half a decision on its own.** Removing the property leaves nothing saying
+ * how tall the field is, and a box with no stated height takes the height the
+ * *loaded* face reports — one answer against the fallback, another against IBM
+ * Plex. `useInputHeight()` is the other half and states it as the ratio
+ * resolved against the live text scale; a field spreads both, for the same
+ * step. A constant was tried for that half and is wrong for the reason
+ * `02-tokens.md` gives: a fixed pair records the relationship nowhere, so the
+ * box stays put while the glyphs grow.
  *
  * Text keeps its `lineHeight`: a paragraph's leading is the whole point there,
  * and nothing about it is in dispute.
  */
-export function inputStep(step: TextStep): Omit<TextStep, "lineHeight"> & { height: number } {
-  const { lineHeight, ...rest } = step;
-  return { ...rest, height: lineHeight };
+export function inputStep(step: TextStep): Omit<TextStep, "lineHeight"> {
+  const { lineHeight: _ignored, ...rest } = step;
+  return rest;
 }
 
 export const text = {

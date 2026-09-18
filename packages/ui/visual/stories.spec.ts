@@ -270,13 +270,16 @@ const NEEDS_FROZEN_CLOCK = /ThinkingIndicator/;
  * Observed, not proven exhaustive. If a ninth appears, it belongs here and the
  * card that fixes the measurement takes the whole list with it.
  *
- * **The ninth is `QuickAddComposer/With Counterparty`**, and it is listed on a
- * measurement rather than a hunch: the story fails one run in twelve here and
- * one run in twelve on `main`, so it is the same race and not something a
- * change brought with it. What moves is the composer *behind* the sheet, by a
- * pixel, while the sheet itself is stable — the entrance re-lays out the page
- * it covers. Three clean runs is not evidence about a defect this rare, which
- * is why the number above is twelve.
+ * **A ninth was proposed and withdrawn.** `QuickAddComposer/With Counterparty`
+ * fails about one run in twelve, here and on `main` alike — but that
+ * comparison decides nothing: against a 1-in-12 control, a branch failing
+ * *half* of all runs still does not reach p < 0.05, so the design cannot see
+ * anything short of a 5x regression. Worse, a flake rate answers "did this
+ * change make the race worse" when the only question a baseline asks is "is
+ * the frame we just accepted correct" — and that story's frame had changed
+ * deterministically, by ~980px confined to the composer behind the sheet.
+ * Silencing it would have committed new pixels and then switched off the check
+ * that reads them. It stays compared.
  *
  * **And the list was measured before `reducedMotion` actually applied**, so it
  * is probably wider than it needs to be. It sat in Playwright's top-level `use`
@@ -292,7 +295,7 @@ const NEEDS_FROZEN_CLOCK = /ThinkingIndicator/;
  * it is not a screenshot.
  */
 const NO_SCREENSHOT =
-  /^(?:categories-(?:categorysheet|createcategorysheet)--|accounts-accountpicker--searching$|accounts-reconcilesheet--reconcile$|shell-bottomsheet--tall-form$|transactions-quickaddcomposer--with-counterparty$)/;
+  /^(?:categories-(?:categorysheet|createcategorysheet)--|accounts-accountpicker--searching$|accounts-reconcilesheet--reconcile$|shell-bottomsheet--tall-form$)/;
 
 for (const story of STORIES) {
   for (const theme of THEMES) {

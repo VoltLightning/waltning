@@ -3760,79 +3760,163 @@ describe("what red may paint", () => {
  * and only the style objects they hand one.
  */
 describe("an input's font carries no lineHeight", () => {
-  it("dresses every TextInput through inputStep", () => {
-    const offenders: string[] = [];
+  /**
+   * Every `style` an input is handed, per file, as the set of `styles.x` keys
+   * it names — and the local bindings produced by `useInputHeight`.
+   *
+   * **The prop, not the element.** An earlier version sliced from the opening
+   * tag to the next `/>` and collected every `styles.x` in between, which
+   * quietly whitelisted `placeholderTextColor={styles.placeholder.color}` — a
+   * key read for a colour that no input ever wears as a style. Three keys were
+   * exempt that way, and a review put `inputStep` in one of them with the
+   * suite green. Reading the `style` prop alone is what closes it, so the
+   * braces are balanced rather than searched for a terminator.
+   */
+  function inputStyles(body: string): { worn: Set<string>; heightless: string[] } {
+    const worn = new Set<string>();
+    const heights = new Set(
+      [...body.matchAll(/const (\w+) = useInputHeight\(/g)].map((m) => m[1] as string),
+    );
+    const heightless: string[] = [];
+    for (const open of body.matchAll(/<SheetAwareTextInput\b/g)) {
+      const at = body.indexOf("style={", open.index ?? 0);
+      if (at === -1) continue;
+      let depth = 0;
+      let end = at + "style=".length;
+      for (; end < body.length; end += 1) {
+        if (body[end] === "{") depth += 1;
+        else if (body[end] === "}") {
+          depth -= 1;
+          if (depth === 0) break;
+        }
+      }
+      const prop = body.slice(at, end + 1);
+      for (const use of prop.matchAll(/styles\.(\w+)/g)) worn.add(use[1] as string);
+      if (![...heights].some((name) => new RegExp(`\\b${name}\\b`).test(prop))) {
+        heightless.push(prop.split("\n")[0] as string);
+      }
+    }
+    return { worn, heightless };
+  }
+
+  /** The top-level style key a line sits under, or `null` outside one. */
+  function keyAt(lines: readonly string[], index: number): string | null {
+    for (let back = index; back >= 0; back -= 1) {
+      const key = /^ {2}(\w+): \{/.exec(lines[back] as string);
+      if (key !== null) return key[1] as string;
+    }
+    return null;
+  }
+
+  /** Prose is not code: a docstring naming `inputStep` is not a call site. */
+  function isComment(line: string): boolean {
+    return /^\s*(?:\/\/|\/?\*)/.test(line);
+  }
+
+  /** Every top-level style key in the file, mapped to its own body. */
+  function styleBodies(body: string): Map<string, string> {
+    const out = new Map<string, string>();
+    const lines = body.split("\n");
+    let key: string | null = null;
+    let buffer: string[] = [];
+    let depth = 0;
+    for (const line of lines) {
+      if (key === null) {
+        const open = /^ {2}(\w+): \{/.exec(line);
+        if (open === null) continue;
+        key = open[1] as string;
+        buffer = [line];
+        depth = (line.match(/\{/g) ?? []).length - (line.match(/\}/g) ?? []).length;
+        if (depth <= 0) {
+          out.set(key, buffer.join("\n"));
+          key = null;
+        }
+        continue;
+      }
+      buffer.push(line);
+      depth += (line.match(/\{/g) ?? []).length - (line.match(/\}/g) ?? []).length;
+      if (depth <= 0) {
+        out.set(key, buffer.join("\n"));
+        key = null;
+      }
+    }
+    return out;
+  }
+
+  function inputFiles(): { rel: string; body: string }[] {
+    const out: { rel: string; body: string }[] = [];
     for (const file of sourceFiles(join(repoRoot, "packages/ui/src"))) {
       if (isTest(file) || file.endsWith(".stories.tsx")) continue;
       const rel = relative(repoRoot, file);
       // `sheet-input.tsx` forwards; it styles nothing.
       if (rel.endsWith("sheet-input.tsx")) continue;
       const body = readFileSync(file, "utf8");
-      if (!/<SheetAwareTextInput\b/.test(body)) continue;
-      if (!/\binputStep\s*\(/.test(body)) {
-        offenders.push(`${rel} — renders an input and never calls inputStep`);
+      if (/<SheetAwareTextInput\b/.test(body) || /\binputStep\s*\(/.test(body)) {
+        if (!rel.endsWith("theme/fonts.ts")) out.push({ rel, body });
       }
     }
-    expect(offenders, "a TextInput dressed with a lineHeight (§3.7)").toEqual([]);
+    return out;
+  }
+
+  /**
+   * **The two sets must be equal, not one contained in the other.**
+   *
+   * Containment in one direction is what the first version asked, and a review
+   * landed two defects through it: a file with two fields passes while only
+   * one is dressed (`transfer-composer` has exactly that shape), and a key
+   * carrying `inputStep` that no input wears passes because nothing walks the
+   * keys inputs wear. Equality asks both questions at once.
+   */
+  it("dresses every input through inputStep, and nothing else", () => {
+    const offenders: string[] = [];
+    for (const { rel, body } of inputFiles()) {
+      const { worn } = inputStyles(body);
+      const bodies = styleBodies(body);
+      const lines = body.split("\n");
+      const dressed = new Set<string>();
+      lines.forEach((line, index) => {
+        if (isComment(line) || !/\binputStep\s*\(/.test(line)) return;
+        const key = keyAt(lines, index);
+        if (key === null) offenders.push(`${rel}:${index + 1} — inputStep outside any style key`);
+        else dressed.add(key);
+      });
+
+      // A field's style array is a base plus its states, and only the base
+      // carries a font — `inputFocused` is a border colour and has no business
+      // naming a step. So the question is asked of the keys that *do* set
+      // type: any of them an input wears must set it through `inputStep`.
+      for (const key of worn) {
+        const style = bodies.get(key) ?? "";
+        if (!/\.\.\.text\.(?:ui|display|mono)\(/.test(style)) continue;
+        if (!dressed.has(key)) {
+          offenders.push(`${rel} — an input wears \`${key}\`, which sets type without inputStep`);
+        }
+      }
+      for (const key of dressed) {
+        if (!worn.has(key))
+          offenders.push(`${rel} — inputStep in \`${key}\`, which no input wears`);
+      }
+    }
+    expect(offenders, "a TextInput dressed with a lineHeight (02-tokens §Scale)").toEqual([]);
   });
 
   /**
-   * **And only the input wears it.** The rule above asks whether a file calls
-   * `inputStep`, which a file can satisfy while spreading it somewhere else:
-   * `select.tsx` dressed its `<Text>` label with it, and a label is not a
-   * field. The cost was not cosmetic — `step()`'s `lineHeight` is a constant,
-   * so a labelled box is the same height whatever font has loaded, while
-   * `lineHeight: normal` derives that height from the *loaded* face. The label
-   * therefore measured one height against the fallback and another against IBM
-   * Plex, the panel anchored under it landed a few pixels out on whichever
-   * runs lost that race, and three Select baselines failed about half the time
-   * — a defect that reads as a flaky test rather than as the layout bug it is.
-   *
-   * So every key that carries `inputStep` must be a key the file actually
-   * hands a `SheetAwareTextInput`.
+   * **And the other half of the decision.** `inputStep` takes the line height
+   * off the text; `useInputHeight` puts the same ratio on the box against the
+   * live text scale. A field with only the first has no stated height and
+   * takes whatever the loaded face reports.
    */
-  it("spreads inputStep only into a style an input wears", () => {
+  it("gives every input a height that scales", () => {
     const offenders: string[] = [];
-    for (const file of sourceFiles(join(repoRoot, "packages/ui/src"))) {
-      if (isTest(file) || file.endsWith(".stories.tsx")) continue;
-      const rel = relative(repoRoot, file);
-      // `fonts.ts` declares `inputStep`; declaring it is not wearing it.
-      if (rel.endsWith("theme/fonts.ts")) continue;
-      const body = readFileSync(file, "utf8");
-      if (!/\binputStep\s*\(/.test(body)) continue;
-
-      // Every `styles.x` an input is handed. The slice runs to the element's
-      // own close so a neighbouring element's style cannot be credited here.
-      const worn = new Set<string>();
-      for (const open of body.matchAll(/<SheetAwareTextInput\b/g)) {
-        const start = open.index ?? 0;
-        const end = body.indexOf("/>", start);
-        const element = body.slice(start, end === -1 ? body.length : end);
-        for (const use of element.matchAll(/styles\.(\w+)/g)) worn.add(use[1] as string);
+    for (const { rel, body } of inputFiles()) {
+      for (const prop of inputStyles(body).heightless) {
+        offenders.push(`${rel} — an input styled \`${prop.trim()}\` with no useInputHeight`);
       }
-
-      // The key an `inputStep` sits under: top-level keys of a style object are
-      // at two spaces, one per line, which is what `makeStyles` looks like
-      // everywhere in this package.
-      const lines = body.split("\n");
-      lines.forEach((line, index) => {
-        if (!/\binputStep\s*\(/.test(line)) return;
-        for (let back = index; back >= 0; back -= 1) {
-          const key = /^ {2}(\w+): \{/.exec(lines[back] as string);
-          if (key === null) continue;
-          const name = key[1] as string;
-          if (!worn.has(name)) {
-            offenders.push(`${rel}:${index + 1} — inputStep in \`${name}\`, which no input wears`);
-          }
-          return;
-        }
-        offenders.push(`${rel}:${index + 1} — inputStep outside any style key`);
-      });
     }
-    expect(offenders, "inputStep on something that is not a field (§3.7)").toEqual([]);
+    expect(offenders, "a field whose box cannot grow with its text").toEqual([]);
   });
 
-  /** The walk has to find them, or the rule above passes by matching nothing. */
+  /** The walk has to find them, or the rules above pass by matching nothing. */
   it("finds every file that renders one", () => {
     let seen = 0;
     for (const file of sourceFiles(join(repoRoot, "packages/ui/src"))) {

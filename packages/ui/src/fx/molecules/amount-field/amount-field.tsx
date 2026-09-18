@@ -30,6 +30,7 @@ import { useLocale, useT } from "../../../i18n/provider";
 import { PressableScaled } from "../../../primitives/atoms/pressable-scaled/pressable-scaled";
 import { SheetAwareTextInput } from "../../../primitives/sheet-input";
 import { inputStep, text, textCap } from "../../../theme/fonts.ts";
+import { useInputHeight } from "../../../theme/input-height.ts";
 import { makeStyles } from "../../../theme/styles.ts";
 import { focus, radius, space, tabularNums } from "../../../tokens.ts";
 
@@ -209,6 +210,7 @@ function EditableAmountField({
   const [focused, setFocused] = useState(false);
 
   const styles = useStyles();
+  const inputHeight = useInputHeight("displayThree");
   const handleTextChange = useCallback(
     (next: string) => {
       setText(next);
@@ -242,7 +244,7 @@ function EditableAmountField({
           onChangeText={handleTextChange}
           onFocus={handleFocus}
           onBlur={handleBlur}
-          style={styles.input}
+          style={[styles.input, inputHeight]}
         />
         {currency === undefined ? null : <Text style={styles.affix}>{currency}</Text>}
       </View>

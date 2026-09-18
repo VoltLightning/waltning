@@ -52,6 +52,7 @@ import { BottomSheet } from "../../../shell/organisms/bottom-sheet/bottom-sheet"
 import { HouseIcon } from "../../../shell/phosphor";
 import { Banner } from "../../../states/molecules/banner/banner";
 import { inputStep, text } from "../../../theme/fonts.ts";
+import { useInputHeight } from "../../../theme/input-height.ts";
 import { useTheme } from "../../../theme/provider";
 import { makeStyles } from "../../../theme/styles.ts";
 import { focus, radius, space, touchTarget } from "../../../tokens.ts";
@@ -198,6 +199,7 @@ export function QuickAddComposer({
   const t = useT();
   const theme = useTheme();
   const styles = useStyles();
+  const noteHeight = useInputHeight("bodySm");
   const [openSheet, setOpenSheet] = useState<OpenSheet>(null);
   const [moreShown, setMoreShown] = useState(false);
   // The note's card wears the ring, the way `AmountCard` does (§2.6).
@@ -501,7 +503,7 @@ export function QuickAddComposer({
           placeholder={t("transactions.notePlaceholder")}
           placeholderTextColor={styles.notePlaceholder.color}
           maxLength={2000}
-          style={styles.note}
+          style={[styles.note, noteHeight]}
         />
       </View>
 

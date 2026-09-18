@@ -38,21 +38,15 @@
  */
 
 import { useCallback, useState } from "react";
-import { Text, View } from "react-native";
-import { figureEm } from "../../../fx/figure-width.ts";
+import { Text, useWindowDimensions, View } from "react-native";
+import { figureWidth } from "../../../fx/figure-width.ts";
 import { decimalMark } from "../../../i18n/locales";
 import { useLocale, useT } from "../../../i18n/provider";
 import { SheetAwareTextInput } from "../../../primitives/sheet-input";
 import { inputStep, text, textCap } from "../../../theme/fonts.ts";
+import { useInputHeight } from "../../../theme/input-height.ts";
 import { makeStyles } from "../../../theme/styles.ts";
-import {
-  focus,
-  radius,
-  space,
-  tabularNums,
-  touchTarget,
-  type as typeScale,
-} from "../../../tokens.ts";
+import { focus, radius, space, tabularNums, touchTarget } from "../../../tokens.ts";
 import { AMOUNT_INTEGER_DIGITS, sanitizeAmount } from "../../amount-keys.ts";
 
 export type AmountCardProps = {
@@ -89,6 +83,8 @@ export function AmountCard({
   const t = useT();
   const locale = useLocale();
   const styles = useStyles();
+  const { fontScale } = useWindowDimensions();
+  const inputHeight = useInputHeight("displayHero");
   const mark = decimalMark(locale);
   const display = raw.replace(",", mark);
   const handleChange = useCallback(
@@ -105,7 +101,7 @@ export function AmountCard({
   // shift a reader actually saw was vertical, and `inputStep` below is what
   // fixes that; a measuring `Text` under an absolutely-positioned input was
   // tried for this and clipped its own glyphs on the device.
-  const figureWidth = { width: figureEm(display) * typeScale.displayHero.fontSize };
+  const figureBox = { width: figureWidth("displayHero", display, fontScale) };
 
   const handleFocus = useCallback(() => setFocused(true), []);
   const handleBlur = useCallback(() => setFocused(false), []);
@@ -150,7 +146,7 @@ export function AmountCard({
           onFocus={handleFocus}
           onBlur={handleBlur}
           maxFontSizeMultiplier={textCap("displayHero")}
-          style={[styles.input, figureWidth]}
+          style={[styles.input, figureBox, inputHeight]}
         />
         {currency === undefined ? null : <Text style={styles.affix}>{currency}</Text>}
       </View>

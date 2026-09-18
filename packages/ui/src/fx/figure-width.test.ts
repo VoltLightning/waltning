@@ -7,8 +7,8 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { CARET_EM, DIGIT_EM, MARK_EM } from "../tokens.ts";
-import { figureEm } from "./figure-width.ts";
+import { CARET_EM, DIGIT_EM, MARK_EM, type as typeScale } from "../tokens.ts";
+import { figureEm, figureWidth } from "./figure-width.ts";
 
 /**
  * **These check the arithmetic, never the constants.** jsdom has no font, so
@@ -55,6 +55,52 @@ describe("figureEm", () => {
       expect(widths[i], `${typed[i]} after ${typed[i - 1]}`).toBeGreaterThanOrEqual(
         widths[i - 1] as number,
       );
+    }
+  });
+});
+
+/**
+ * **What a review measured in Chrome, pinned as arithmetic.** The width was
+ * briefly `figureEm(display) × fontSize` — no tracking, no scale. Measured
+ * against the rendered run, the gap before the affix was 5.40px on the
+ * placeholder and 9.71px on a five-character figure, where it is supposed to be
+ * the caret allowance and nothing else: the affix drifted right by one tracking
+ * step on every keystroke, reaching ~19.5px at `maxLength`.
+ */
+describe("a figure's width in points", () => {
+  it("leaves the caret exactly its allowance, whatever the length", () => {
+    for (const display of ["0", "4", "48", "48,9", "48,90", "123456789,12"]) {
+      const characters = [...display].length;
+      const run =
+        (figureEm(display) - CARET_EM) * typeScale.displayHero.fontSize +
+        typeScale.displayHero.letterSpacing * characters;
+      const gap = figureWidth("displayHero", display, 1) - run;
+      expect(gap, `caret allowance behind "${display}"`).toBeCloseTo(
+        CARET_EM * typeScale.displayHero.fontSize,
+        5,
+      );
+    }
+  });
+
+  it("grows with the text, up to the step's cap", () => {
+    const at1 = figureWidth("displayHero", "48,90", 1);
+    expect(figureWidth("displayHero", "48,90", 1.4) / at1, "at its cap").toBeCloseTo(1.4, 5);
+    expect(figureWidth("displayHero", "48,90", 3), "past its cap").toBeCloseTo(at1 * 1.4, 5);
+  });
+
+  it("never reserves less than the glyphs it shows", () => {
+    for (const scale of [1, 1.2, 1.4]) {
+      for (const display of ["0", "48,90", "1234567890,12"]) {
+        const characters = [...display].length;
+        const run =
+          ((figureEm(display) - CARET_EM) * typeScale.displayHero.fontSize +
+            typeScale.displayHero.letterSpacing * characters) *
+          Math.min(scale, 1.4);
+        expect(
+          figureWidth("displayHero", display, scale),
+          `"${display}" at ${scale}x`,
+        ).toBeGreaterThan(run);
+      }
     }
   });
 });

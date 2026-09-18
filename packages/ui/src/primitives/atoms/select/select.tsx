@@ -65,6 +65,7 @@ import { useT } from "../../../i18n/provider";
 import { PressableScaled } from "../../../primitives/atoms/pressable-scaled/pressable-scaled";
 import { SheetAwareTextInput } from "../../../primitives/sheet-input";
 import { inputStep, text } from "../../../theme/fonts.ts";
+import { useInputHeight } from "../../../theme/input-height.ts";
 import { useTheme } from "../../../theme/provider";
 import { makeStyles } from "../../../theme/styles.ts";
 import { focus, radius, space, touchTarget } from "../../../tokens.ts";
@@ -579,6 +580,7 @@ type SearchRowProps = { query: string; onQueryChange: (query: string) => void };
 function SearchRow({ query, onQueryChange }: SearchRowProps) {
   const t = useT();
   const styles = useStyles();
+  const searchHeight = useInputHeight("body");
   const theme = useTheme();
   const { focused, handlers } = useInteraction();
 
@@ -592,7 +594,7 @@ function SearchRow({ query, onQueryChange }: SearchRowProps) {
       // The keyboard opens on the tap that focuses it, not on disclosure —
       // auto-focusing here would cover half the options with a keyboard the
       // moment the panel arrives.
-      style={[styles.search, focused ? styles.focused : null]}
+      style={[styles.search, searchHeight, focused ? styles.focused : null]}
       onFocus={handlers.onFocus}
       onBlur={handlers.onBlur}
     />

@@ -22,6 +22,7 @@ import { useCallback } from "react";
 import { Text, View } from "react-native";
 import { SheetAwareTextInput } from "../../../primitives/sheet-input";
 import { inputStep, text } from "../../../theme/fonts.ts";
+import { useInputHeight } from "../../../theme/input-height.ts";
 import { useTheme } from "../../../theme/provider";
 import { makeStyles } from "../../../theme/styles.ts";
 import { focus, radius, space, touchTarget } from "../../../tokens.ts";
@@ -82,6 +83,7 @@ export function TextField({
   keyboardType = "default",
 }: TextFieldProps) {
   const styles = useStyles();
+  const inputHeight = useInputHeight("body");
   const theme = useTheme();
   const { hovered, focused, handlers } = useInteraction();
 
@@ -123,6 +125,7 @@ export function TextField({
         onPointerLeave={handlers.onHoverOut}
         style={[
           styles.input,
+          inputHeight,
           hovered && !disabled && !focused ? styles.inputHovered : null,
           // An errored field's ring is the danger colour whether focused or
           // not (`design-system/03` §3.7) — `inputError` alone carries that
