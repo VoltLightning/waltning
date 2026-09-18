@@ -113,6 +113,13 @@
       "when": 1789139779221,
       "tag": "0015_transfer_same_currency_equal",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1789736591806,
+      "tag": "0016_time_of_day",
+      "breakpoints": true
     }
   ]
 }
