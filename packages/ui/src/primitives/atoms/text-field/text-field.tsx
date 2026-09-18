@@ -21,11 +21,12 @@
 import { useCallback } from "react";
 import { Text, View } from "react-native";
 import { SheetAwareTextInput } from "../../../primitives/sheet-input";
+import { focusBorder } from "../../../theme/focus.ts";
 import { inputStep, text } from "../../../theme/fonts.ts";
 import { useInputHeight } from "../../../theme/input-height.ts";
 import { useTheme } from "../../../theme/provider";
 import { makeStyles } from "../../../theme/styles.ts";
-import { focus, radius, space, touchTarget } from "../../../tokens.ts";
+import { radius, space, touchTarget } from "../../../tokens.ts";
 import { useInteraction } from "../../interaction.ts";
 
 export type TextFieldProps = {
@@ -180,21 +181,9 @@ const useStyles = makeStyles((theme) => ({
   // the UA's own width and offset, ignoring an author `outlineWidth`/
   // `outlineOffset` entirely. Naming `outlineStyle: "solid"` is what hands
   // rendering to those author values instead of the browser's.
-  inputFocused: {
-    borderColor: theme.borderStrong,
-    outlineWidth: focus.width,
-    outlineStyle: "solid",
-    outlineColor: theme.focusRing,
-    outlineOffset: focus.offset,
-  },
+  inputFocused: focusBorder(theme.focusRing, { horizontal: space.x2 }),
   inputError: { borderColor: theme.dangerBorder },
-  inputErrorFocused: {
-    borderColor: theme.dangerBorder,
-    outlineWidth: focus.width,
-    outlineStyle: "solid",
-    outlineColor: theme.dangerBorder,
-    outlineOffset: focus.offset,
-  },
+  inputErrorFocused: focusBorder(theme.dangerBorder, { horizontal: space.x2 }),
   inputDisabled: { opacity: 0.45 },
   meta: { flexDirection: "row", alignItems: "flex-start", gap: space.md },
   spacer: { flex: 1 },

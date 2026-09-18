@@ -58,9 +58,10 @@ import { nestedScrollProps } from "../../../primitives/nested-scroll.ts";
 import { usePressScale } from "../../../primitives/press-scale.ts";
 import { BottomSheet } from "../../../shell/organisms/bottom-sheet/bottom-sheet";
 import { EmptyState } from "../../../states/organisms/empty-state/empty-state";
+import { focusBorder } from "../../../theme/focus.ts";
 import { text } from "../../../theme/fonts.ts";
 import { makeStyles } from "../../../theme/styles.ts";
-import { focus, radius, space, touchTarget } from "../../../tokens.ts";
+import { radius, space, touchTarget } from "../../../tokens.ts";
 
 /** `SearchField` only earns its place past this many accounts. */
 const SEARCH_THRESHOLD = 8;
@@ -412,11 +413,7 @@ const useStyles = makeStyles((theme) => ({
   // contrast headroom at 12px anywhere in this palette.
   cellCurrency: { color: theme.textMuted, ...text.ui("bodySm") },
   hint: { color: theme.assertedText, ...text.ui("caption") },
-  focused: {
-    outlineWidth: focus.width,
-    outlineColor: theme.focusRing,
-    outlineOffset: focus.offset,
-  },
+  focused: focusBorder(theme.focusRing, { horizontal: space.x2, vertical: space.lg }),
   check: {
     position: "absolute",
     top: space.lg,

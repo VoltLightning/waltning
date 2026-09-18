@@ -64,11 +64,12 @@ import Animated, { type AnimatedStyle } from "react-native-reanimated";
 import { useT } from "../../../i18n/provider";
 import { PressableScaled } from "../../../primitives/atoms/pressable-scaled/pressable-scaled";
 import { SheetAwareTextInput } from "../../../primitives/sheet-input";
+import { focusBorder } from "../../../theme/focus.ts";
 import { inputStep, text } from "../../../theme/fonts.ts";
 import { useInputHeight } from "../../../theme/input-height.ts";
 import { useTheme } from "../../../theme/provider";
 import { makeStyles } from "../../../theme/styles.ts";
-import { focus, radius, space, touchTarget } from "../../../tokens.ts";
+import { radius, space, touchTarget } from "../../../tokens.ts";
 import { type Anchor, panelPlacement, unanchoredPlacement, useAnchor } from "../../anchor.ts";
 import { useDisclosureMotion } from "../../disclosure-motion.ts";
 import { useInteraction } from "../../interaction.ts";
@@ -728,11 +729,7 @@ const useStyles = makeStyles((theme) => ({
   },
   fieldHovered: { borderColor: theme.borderStrong },
   fieldOpen: { borderColor: theme.borderStrong },
-  focused: {
-    outlineWidth: focus.width,
-    outlineColor: theme.focusRing,
-    outlineOffset: focus.offset,
-  },
+  focused: focusBorder(theme.focusRing, { horizontal: space.x2 }),
   disabled: { opacity: 0.45 },
   value: { flex: 1, color: theme.text, ...text.ui("body") },
   valuePlaceholder: { color: theme.textMuted },

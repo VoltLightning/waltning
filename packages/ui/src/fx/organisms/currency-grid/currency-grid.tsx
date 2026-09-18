@@ -30,9 +30,10 @@ import Animated from "react-native-reanimated";
 import { useInteraction } from "../../../primitives/interaction.ts";
 import { usePressScale } from "../../../primitives/press-scale.ts";
 import { useBreakpoint } from "../../../primitives/use-breakpoint.ts";
+import { focusBorder } from "../../../theme/focus.ts";
 import { text } from "../../../theme/fonts.ts";
 import { makeStyles } from "../../../theme/styles.ts";
-import { focus, radius, space, touchTarget } from "../../../tokens.ts";
+import { radius, space, touchTarget } from "../../../tokens.ts";
 
 export type CurrencyGridItem = { code: CurrencyCode; name: string; symbol: string };
 
@@ -176,9 +177,5 @@ const useStyles = makeStyles((theme) => ({
     transform: [{ rotate: "-45deg" }],
   },
   disabled: { opacity: 0.45 },
-  focused: {
-    outlineWidth: focus.width,
-    outlineColor: theme.focusRing,
-    outlineOffset: focus.offset,
-  },
+  focused: focusBorder(theme.focusRing, { horizontal: space.x2, vertical: space.lg }),
 }));

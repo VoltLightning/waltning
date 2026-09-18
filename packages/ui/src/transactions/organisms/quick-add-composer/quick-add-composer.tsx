@@ -51,11 +51,12 @@ import { SheetAwareTextInput } from "../../../primitives/sheet-input";
 import { BottomSheet } from "../../../shell/organisms/bottom-sheet/bottom-sheet";
 import { HouseIcon } from "../../../shell/phosphor";
 import { Banner } from "../../../states/molecules/banner/banner";
+import { focusBorder } from "../../../theme/focus.ts";
 import { inputStep, text } from "../../../theme/fonts.ts";
 import { useInputHeight } from "../../../theme/input-height.ts";
 import { useTheme } from "../../../theme/provider";
 import { makeStyles } from "../../../theme/styles.ts";
-import { focus, radius, space, touchTarget } from "../../../tokens.ts";
+import { radius, space, touchTarget } from "../../../tokens.ts";
 import { AmountCard } from "../../molecules/amount-card/amount-card";
 import { CategoryChips } from "../../molecules/category-chips/category-chips";
 import {
@@ -715,12 +716,7 @@ const useStyles = makeStyles((theme) => ({
     minHeight: touchTarget.min,
     justifyContent: "center",
   },
-  noteFocused: {
-    outlineWidth: focus.width,
-    outlineStyle: "solid",
-    outlineColor: theme.focusRing,
-    outlineOffset: focus.offset,
-  },
+  noteFocused: focusBorder(theme.focusRing, { horizontal: space.x3, vertical: space.x2 }),
   note: {
     color: theme.text,
     ...inputStep(text.ui("bodySm")),

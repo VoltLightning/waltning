@@ -138,6 +138,7 @@
     "./states/threshold-slider": "./src/states/molecules/threshold-slider/threshold-slider.tsx",
     "./states/toast": "./src/states/molecules/toast/toast.tsx",
     "./states/use-timer": "./src/states/use-timer.ts",
+    "./theme/focus": "./src/theme/focus.ts",
     "./theme/fonts": "./src/theme/fonts.ts",
     "./theme/provider": "./src/theme/provider.tsx",
     "./theme/roles": "./src/theme/roles.ts",

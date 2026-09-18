@@ -36,10 +36,11 @@ import { Text, View } from "react-native";
 import { formatRate } from "../../../fx/format-rate.ts";
 import { useLocale, useT } from "../../../i18n/provider";
 import { SheetAwareTextInput } from "../../../primitives/sheet-input";
+import { focusBorder } from "../../../theme/focus.ts";
 import { inputStep, text } from "../../../theme/fonts.ts";
 import { useInputHeight } from "../../../theme/input-height.ts";
 import { makeStyles } from "../../../theme/styles.ts";
-import { focus, radius, space, tabularNums } from "../../../tokens.ts";
+import { radius, space, tabularNums } from "../../../tokens.ts";
 import { useInteraction } from "../../interaction.ts";
 import { Tag } from "../tag";
 
@@ -272,11 +273,7 @@ const useStyles = makeStyles((theme) => ({
     paddingHorizontal: space.x2,
     minHeight: 44,
   },
-  focused: {
-    outlineWidth: focus.width,
-    outlineColor: theme.focusRing,
-    outlineOffset: focus.offset,
-  },
+  focused: focusBorder(theme.focusRing, { horizontal: space.x2 }),
   invalid: { borderColor: theme.dangerBorder },
   error: { color: theme.dangerText, ...text.ui("caption") },
   referenceRow: { flexDirection: "row", alignItems: "center", gap: space.sm },

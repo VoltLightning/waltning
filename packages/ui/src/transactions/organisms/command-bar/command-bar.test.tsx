@@ -473,7 +473,7 @@ it("L-b — a date the chip cannot format renders as the bare string rather than
  * fills. It is also the *only* signal of where the keyboard is, since
  * `aria-activedescendant` never moves DOM focus.
  */
-it("walks with the band's ring, not the page's green one", () => {
+it("walks in the band's colour, not the page's green one", () => {
   const view = render(
     <ThemeProvider theme={light}>
       <CommandBar {...props({ value: "48.90 cash coffee yesterday", parse: RESOLVED })} />
@@ -482,6 +482,6 @@ it("walks with the band's ring, not the page's green one", () => {
   fireEvent.keyDown(view.getByRole("combobox"), { key: "ArrowDown" });
   const walked = view.getAllByRole("option")[0];
   if (walked === undefined) throw new Error("CommandBar draws no chip");
-  expect(getComputedStyle(walked).outlineColor).toBe("rgb(242, 240, 231)");
+  expect(getComputedStyle(walked).borderColor).toBe("rgb(242, 240, 231)");
   view.unmount();
 });

@@ -470,8 +470,33 @@ the web bundle composes all three.
 
 ### 2.6 Focus
 
-`2px solid focus-ring`, `2px` offset, on **every** interactive element. Never
-removed, never replaced by a colour change alone.
+**Focus is one edge, and a control that has an edge uses that one.** A control
+enclosed in its own border shows focus *in* that border: it thickens to `2px`
+and turns `focus-ring`. A control with no enclosure of its own — a row, a bare
+icon button, a tab — takes `2px solid focus-ring` at `2px` offset outside it.
+On **every** interactive element either way, never removed, and never replaced
+by a colour change alone: the thickening is the second signal, so the state
+does not depend on telling two colours apart.
+
+The rule exists because the literal reading of the older one drew both: a 1px
+border, a 2px gap of whatever the page is made of, then a 2px ring — three
+concentric rectangles to say one thing, on 242 of the app's control-and-story
+pairs, every field among them.
+
+**A divider is not an enclosure.** A row separated from the next by a bottom
+hairline has no edge to turn; turning one side accent would read as a green
+underline rather than a focus state. Such a row takes the offset ring, and the
+rule is asked of all four sides for exactly this reason.
+
+**Removing a ring is an instruction, not an omission.** A focused element that
+names no outline keeps the browser's own `outline-style: auto` and is drawn
+with the UA's ring, at the UA's width, in a colour this palette never names. A
+control showing focus in its border must therefore *say* `0`, with a style
+named, or it has two edges again — one of them blue.
+
+**The border grows inward, and the padding gives way.** A box is sized
+border-box, so an edge thickening by 1 takes 1 of the content's room on each
+side. The padding shrinks to match, or every label steps inward as you tap it.
 
 **One field diverges, deliberately, and it is the only one.** `SearchField`
 does not ring the focus that its own `autoFocus` causes. S04 §7 opens this

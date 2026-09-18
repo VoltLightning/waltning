@@ -47,9 +47,10 @@
 import { useCallback } from "react";
 import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import Animated from "react-native-reanimated";
+import { focusBorder, focusRing } from "../../../theme/focus.ts";
 import { text } from "../../../theme/fonts.ts";
 import { makeStyles } from "../../../theme/styles.ts";
-import { focus, radius, space, touchTarget } from "../../../tokens.ts";
+import { radius, space, touchTarget } from "../../../tokens.ts";
 import { useInteraction } from "../../interaction.ts";
 import { usePressScale } from "../../press-scale.ts";
 
@@ -106,7 +107,7 @@ export function Button({
       // §2.6: on **every** interactive element, never removed and never
       // replaced by a colour change alone — a colour-only focus state is
       // invisible to exactly the people it exists for.
-      focused ? styles.focused : null,
+      focused ? (variant === "secondary" ? styles.focusedBordered : styles.focused) : null,
       inactive ? styles.inactive : null,
     ],
     [focused, hovered, inactive, size, styles, variant],
@@ -192,11 +193,13 @@ const useStyles = makeStyles((theme) => ({
   inkDanger: { color: theme.textOnDanger },
 
   hovered: { backgroundColor: theme.hoverFill },
-  focused: {
-    outlineWidth: focus.width,
-    outlineColor: theme.focusRing,
-    outlineOffset: focus.offset,
-  },
+  /**
+   * Only `secondary` draws a border, so only `secondary` can show focus in
+   * one. The three filled or bare variants have no edge to turn and keep the
+   * ring — which is the rule stated, not an exception to it.
+   */
+  focused: focusRing(theme.focusRing),
+  focusedBordered: focusBorder(theme.focusRing, { horizontal: space.x3 }),
 
   base: {
     justifyContent: "center",

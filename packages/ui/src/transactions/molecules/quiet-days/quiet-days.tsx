@@ -22,9 +22,10 @@ import { memo } from "react";
 import { Text, View } from "react-native";
 import { PressableScaled } from "../../../primitives/atoms/pressable-scaled/pressable-scaled";
 import { useInteraction } from "../../../primitives/interaction.ts";
+import { focusBorder } from "../../../theme/focus.ts";
 import { text } from "../../../theme/fonts.ts";
 import { makeStyles } from "../../../theme/styles.ts";
-import { focus, radius, space, touchTarget } from "../../../tokens.ts";
+import { radius, space, touchTarget } from "../../../tokens.ts";
 
 export type QuietDayProps = {
   /** The date, localised — `Wednesday 13 August`. */
@@ -125,10 +126,6 @@ const useStyles = makeStyles((theme) => ({
     // cannot carry WCAG 1.4.11's 3:1 around something you press.
     borderColor: theme.borderInteractive,
   },
-  focused: {
-    outlineWidth: focus.width,
-    outlineColor: theme.focusRing,
-    outlineOffset: focus.offset,
-  },
+  focused: focusBorder(theme.focusRing, { horizontal: space.md }),
   showText: { ...text.ui("bodySm", 600), color: theme.text },
 }));
