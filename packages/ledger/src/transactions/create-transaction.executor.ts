@@ -145,6 +145,12 @@ export function insertTransaction(
     isBusiness: input.isBusiness,
     isCapital: input.isCapital,
     source: input.source,
+    /**
+     * §7.0a — absent is the normal case, and the absence is a null rather than
+     * a midnight: `00:00` is a real time somebody could mean, so a row that
+     * does not claim to know a minute must not be given one.
+     */
+    ...(input.timeOfDay !== undefined ? { timeOfDay: input.timeOfDay } : {}),
     ...(input.categoryId !== undefined ? { categoryId: input.categoryId } : {}),
     ...(input.counterpartyId !== undefined ? { counterpartyId: input.counterpartyId } : {}),
     ...(input.counterpartyRole !== undefined ? { counterpartyRole: input.counterpartyRole } : {}),

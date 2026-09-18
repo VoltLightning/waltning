@@ -46,6 +46,7 @@ import {
   zId,
   zMoney,
   zPivotPerUnit,
+  zTimeOfDay,
   zUnitsPerPivot,
 } from "../zod.ts";
 
@@ -290,6 +291,14 @@ export const createTransactionInput = z
      * zone; the contract refuses to guess it.
      */
     date: zAccountingDate,
+
+    /**
+     * When in that day it happened (§7.0a) — a description, never an
+     * accounting fact. Absent is the normal case: a card settlement knows its
+     * day and not its minute, and `00:00` is a real time somebody could mean,
+     * so the absence is an omission rather than a midnight.
+     */
+    timeOfDay: zTimeOfDay.optional(),
 
     type: z.enum(TXN_TYPE),
 
@@ -770,6 +779,15 @@ export type ArchiveCategoryInput = z.output<typeof archiveCategoryInput>;
 const transactionPatch = z
   .object({
     date: zAccountingDate.optional(),
+    /**
+     * §7.0a — correctable, unlike `date`, which is resolved once at capture
+     * and immutable. It describes an event rather than recording when the
+     * system was told, so a wrong minute is a typo and not a rewritten fact.
+     *
+     * `null` clears it. Clearing is not setting midnight: a row that stops
+     * claiming to know a minute is different from one that claims 00:00.
+     */
+    timeOfDay: zTimeOfDay.nullable().optional(),
     accountId: zId<"accounts">().optional(),
     amountOriginal: zMoney.optional(),
     categoryId: zId<"categories">().nullable().optional(),

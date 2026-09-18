@@ -1,0 +1,1 @@
+ALTER TABLE `transactions` ADD `time_of_day` text;
