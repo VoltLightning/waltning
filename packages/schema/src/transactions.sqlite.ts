@@ -60,6 +60,12 @@ import { recurringTransactions } from "./recurring-transactions.sqlite.ts";
 export const transactionsColumns = () => ({
   id: k.id<"transactions">("id"),
   date: k.date("date").notNull(),
+  /**
+   * When in that day it happened (§7.0a) — a description, never an accounting
+   * fact. Nullable because most rows never claim to know a minute, and because
+   * `00:00` is a real time somebody could mean.
+   */
+  timeOfDay: k.timeOfDay("time_of_day"),
   type: k.text("type", { enum: TXN_TYPE }).notNull(),
   accountId: k
     .uuid<"accounts">("account_id")

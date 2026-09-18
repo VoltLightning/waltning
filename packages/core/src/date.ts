@@ -255,3 +255,60 @@ export function periodMonthOf(from: string, to: string): YearMonth | null {
   const bounds = monthRange(month);
   return from === bounds.from && to === bounds.to ? month : null;
 }
+
+declare const TIME: unique symbol;
+
+/**
+ * A bare clock time, `HH:MM`, in no timezone and on no date.
+ *
+ * **The weakest of §7.0a's three time fields, on purpose.** It records when in
+ * a day something happened and nothing else: no period is bounded by it, no FX
+ * rate is selected by it, no total is grouped by it, and it never reaches a tax
+ * output. The ledger's unit of account is the day.
+ *
+ * Branded for the same reason `AccountingDate` is — a `Date`, an ISO instant
+ * or a `HH:MM:SS` from a database driver must not compile into one.
+ */
+export type TimeOfDay = string & { readonly [TIME]: "TimeOfDay" };
+
+/**
+ * `HH:MM` on a 24-hour clock, and only that.
+ *
+ * Seconds are excluded rather than optional: nothing in this ledger knows a
+ * second, a `HH:MM:SS` that arrived from somewhere is a different shape than
+ * what was stored, and two representations of the same minute would sort and
+ * compare differently. Postgres `time` renders `14:20:00`, so the read path
+ * narrows it once, at the boundary, rather than letting both spellings loose.
+ */
+const CLOCK = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+/**
+ * Parse a bare clock time.
+ *
+ * Throws for the reason `accountingDate` does: every caller is at a boundary
+ * where the alternative is storing a time that is not one.
+ */
+export function timeOfDay(value: string): TimeOfDay {
+  if (!CLOCK.test(value)) {
+    throw new Error(
+      `not a bare time of day: ${JSON.stringify(value)} — ` +
+        "expected HH:MM on a 24-hour clock, with no seconds, no date and no zone",
+    );
+  }
+  return value as TimeOfDay;
+}
+
+/** Whether a string is a bare clock time, for a boundary that must not throw. */
+export const isTimeOfDay = (value: string): value is TimeOfDay => CLOCK.test(value);
+
+/**
+ * Narrow what a database hands back.
+ *
+ * Postgres `time` comes over the wire as `HH:MM:SS`, and a `time` column that
+ * has never held anything comes back `null`. Both are normal; a shape that is
+ * neither is a bug worth throwing for.
+ */
+export function timeOfDayFromDb(value: string | null): TimeOfDay | null {
+  if (value === null) return null;
+  return timeOfDay(value.slice(0, 5));
+}
