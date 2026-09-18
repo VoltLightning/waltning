@@ -25,9 +25,10 @@ import { Text, View } from "react-native";
 import { useT } from "../../../i18n/provider";
 import { PressableScaled } from "../../../primitives/atoms/pressable-scaled/pressable-scaled";
 import { useInteraction } from "../../../primitives/interaction.ts";
+import { focusBorder } from "../../../theme/focus.ts";
 import { text } from "../../../theme/fonts.ts";
 import { makeStyles } from "../../../theme/styles.ts";
-import { focus, radius, space, touchTarget } from "../../../tokens.ts";
+import { radius, space, touchTarget } from "../../../tokens.ts";
 
 const CYCLE_LIMIT = 3;
 
@@ -129,9 +130,5 @@ const useStyles = makeStyles((theme) => ({
    * because it lives under `fx/` rather than `shell/`: the set is decided by
    * what a component is drawn on, never by which folder holds it.
    */
-  focused: {
-    outlineWidth: focus.width,
-    outlineColor: theme.shellFocusRing,
-    outlineOffset: focus.offset,
-  },
+  focused: focusBorder(theme.shellFocusRing, { horizontal: space.lg, vertical: space.xs }),
 }));

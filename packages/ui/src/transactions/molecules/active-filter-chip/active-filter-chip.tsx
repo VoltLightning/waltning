@@ -16,9 +16,10 @@ import { Text, View } from "react-native";
 import { useT } from "../../../i18n/provider";
 import { PressableScaled } from "../../../primitives/atoms/pressable-scaled/pressable-scaled";
 import { useInteraction } from "../../../primitives/interaction.ts";
+import { focusBorder } from "../../../theme/focus.ts";
 import { text } from "../../../theme/fonts.ts";
 import { makeStyles } from "../../../theme/styles.ts";
-import { focus, radius, space, touchTarget } from "../../../tokens.ts";
+import { radius, space, touchTarget } from "../../../tokens.ts";
 
 export type ActiveFilterChipProps = {
   label: string;
@@ -70,11 +71,7 @@ const useStyles = makeStyles((theme) => ({
    * §2.6 — the chip is a button, so it takes a ring. It carried none in the
    * screen it came from, where the rule that catches this does not run.
    */
-  focused: {
-    outlineWidth: focus.width,
-    outlineColor: theme.focusRing,
-    outlineOffset: focus.offset,
-  },
+  focused: focusBorder(theme.focusRing, { horizontal: space.x3 }),
   label: { color: theme.accentText, ...text.ui("bodySm", 600) },
   excludes: { color: theme.accentText, ...text.ui("caption") },
   cross: { width: 10, height: 10, alignItems: "center", justifyContent: "center" },

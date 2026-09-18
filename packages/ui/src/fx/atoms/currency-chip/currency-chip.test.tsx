@@ -79,7 +79,7 @@ it("marks the active currency with its own 2px accent bar, not weight alone", ()
  * same shape as the `tone` prop that shipped unasserted one round earlier. A
  * ring is only real in a rendered outline.
  */
-it("focuses with the band's ring, not the page's green one", () => {
+it("focuses in the band's colour, not the page's green one", () => {
   const view = render(
     <ThemeProvider theme={light}>
       <CurrencyChip pinned={[{ code: "PLN" }, { code: "EUR" }]} active="PLN" onChange={noop} />
@@ -87,6 +87,6 @@ it("focuses with the band's ring, not the page's green one", () => {
   );
   const chip = view.getByRole("button");
   fireEvent.focusIn(chip);
-  expect(getComputedStyle(chip).outlineColor).toBe("rgb(242, 240, 231)");
+  expect(getComputedStyle(chip).borderColor).toBe("rgb(242, 240, 231)");
   view.unmount();
 });

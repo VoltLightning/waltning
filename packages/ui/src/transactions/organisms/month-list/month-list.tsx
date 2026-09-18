@@ -27,9 +27,10 @@ import { Text, View } from "react-native";
 import { Amount } from "../../../fx/atoms/amount/amount";
 import { PressableScaled } from "../../../primitives/atoms/pressable-scaled/pressable-scaled";
 import { useInteraction } from "../../../primitives/interaction.ts";
+import { focusBorder } from "../../../theme/focus.ts";
 import { text } from "../../../theme/fonts.ts";
 import { makeStyles } from "../../../theme/styles.ts";
-import { focus, radius, space, touchTarget } from "../../../tokens.ts";
+import { radius, space, touchTarget } from "../../../tokens.ts";
 
 export type MonthRow = {
   /** `YYYY-MM`, and the identity of the row. */
@@ -224,9 +225,5 @@ const useStyles = makeStyles((theme) => ({
    * than a zero.
    */
   matchesNone: { ...text.ui("bodySm"), color: theme.textMuted },
-  focused: {
-    outlineWidth: focus.width,
-    outlineColor: theme.focusRing,
-    outlineOffset: focus.offset,
-  },
+  focused: focusBorder(theme.focusRing, { horizontal: space.xl, vertical: space.sm }),
 }));

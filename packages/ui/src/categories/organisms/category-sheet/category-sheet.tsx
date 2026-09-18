@@ -63,9 +63,10 @@ import { horizontalScrollProps, nestedScrollProps } from "../../../primitives/ne
 import { usePressScale } from "../../../primitives/press-scale.ts";
 import { BottomSheet } from "../../../shell/organisms/bottom-sheet/bottom-sheet";
 import { EmptyState } from "../../../states/organisms/empty-state/empty-state";
+import { focusBorder } from "../../../theme/focus.ts";
 import { text, textCap } from "../../../theme/fonts.ts";
 import { makeStyles } from "../../../theme/styles.ts";
-import { focus, radius, space, touchTarget } from "../../../tokens.ts";
+import { radius, space, touchTarget } from "../../../tokens.ts";
 
 /**
  * One node of the flattened tree — a group (`isLeaf: false`) or a leaf, per
@@ -793,11 +794,7 @@ const useStyles = makeStyles((theme) => ({
   cellName: { flex: 1, color: theme.text, ...text.ui("body") },
   cellNameSelected: { color: theme.accentText, ...text.ui("body", 600) },
   cellCount: { color: theme.textMuted, ...text.ui("caption") },
-  focused: {
-    outlineWidth: focus.width,
-    outlineColor: theme.focusRing,
-    outlineOffset: focus.offset,
-  },
+  focused: focusBorder(theme.focusRing, { horizontal: space.x2, vertical: space.lg }),
   groupChip: {
     minHeight: touchTarget.min,
     justifyContent: "center",

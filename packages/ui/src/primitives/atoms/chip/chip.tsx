@@ -16,9 +16,10 @@ import { useCallback } from "react";
 import { Pressable, Text, View } from "react-native";
 import Animated from "react-native-reanimated";
 import { useT } from "../../../i18n/provider";
+import { focusBorder } from "../../../theme/focus.ts";
 import { text } from "../../../theme/fonts.ts";
 import { makeStyles } from "../../../theme/styles.ts";
-import { focus, radius, space, touchTarget } from "../../../tokens.ts";
+import { radius, space, touchTarget } from "../../../tokens.ts";
 import { useInteraction } from "../../interaction.ts";
 import { usePressScale } from "../../press-scale.ts";
 
@@ -159,11 +160,7 @@ const useStyles = makeStyles((theme) => ({
    */
   machine: { borderColor: theme.accentFillBorder, backgroundColor: theme.subtleFill },
   hovered: { backgroundColor: theme.hoverFill },
-  focused: {
-    outlineWidth: focus.width,
-    outlineColor: theme.focusRing,
-    outlineOffset: focus.offset,
-  },
+  focused: focusBorder(theme.focusRing, { horizontal: space.x3 }),
   disabled: { opacity: 0.45 },
   text: { ...text.ui("body") },
   textEmpty: { color: theme.textMuted },

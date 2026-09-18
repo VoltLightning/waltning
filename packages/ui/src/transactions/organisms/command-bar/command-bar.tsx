@@ -86,10 +86,11 @@ import { useLocale, useT } from "../../../i18n/provider";
 import { Button } from "../../../primitives/atoms/button/button";
 import type { FieldErrorMap } from "../../../primitives/field-errors.ts";
 import { SheetAwareTextInput } from "../../../primitives/sheet-input";
+import { focusBorder } from "../../../theme/focus.ts";
 import { inputStep, text } from "../../../theme/fonts.ts";
 import { useInputHeight } from "../../../theme/input-height.ts";
 import { makeStyles } from "../../../theme/styles.ts";
-import { focus, radius, space, touchTarget } from "../../../tokens.ts";
+import { radius, space, touchTarget } from "../../../tokens.ts";
 
 /**
  * RN's own `Role` type has no `"listbox"` entry (see the file doc).
@@ -225,6 +226,9 @@ export const CommandBar = forwardRef<CommandBarHandle, CommandBarProps>(function
   const locale = useLocale();
   const styles = useStyles();
   const inputHeight = useInputHeight("body");
+  const [focused, setFocused] = useState(false);
+  const handleFocus = useCallback(() => setFocused(true), []);
+  const handleBlur = useCallback(() => setFocused(false), []);
   const inputRef = useRef<TextInput>(null);
   const [highlight, setHighlight] = useState<number | null>(null);
   // M3 — `aria-activedescendant` names a chip by id, so the ids have to be
@@ -429,7 +433,9 @@ export const CommandBar = forwardRef<CommandBarHandle, CommandBarProps>(function
         role="combobox"
         aria-expanded={ok}
         {...combobox}
-        style={[styles.input, inputHeight]}
+        onFocus={handleFocus}
+        onBlur={handleBlur}
+        style={[styles.input, inputHeight, focused ? styles.inputFocused : null]}
         autoCapitalize="none"
         autoCorrect={false}
       />
@@ -722,11 +728,8 @@ const useStyles = makeStyles((theme) => ({
    * `CurrencyChip` was: the pass walked `shell/` and `primitives/`, and this
    * file lives under `transactions/`. What decides the set is the mount site.
    */
-  chipHighlighted: {
-    outlineWidth: focus.width,
-    outlineColor: theme.shellFocusRing,
-    outlineOffset: focus.offset,
-  },
+  inputFocused: focusBorder(theme.shellFocusRing, { horizontal: space.x3 }),
+  chipHighlighted: focusBorder(theme.shellFocusRing, { horizontal: space.md }),
   chipText: { color: theme.text, ...text.ui("bodySm", 600) },
   chipTextMuted: { color: theme.textMuted },
   chipMarker: { color: theme.accentText, ...text.ui("caption") },

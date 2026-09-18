@@ -43,10 +43,11 @@ import { figureWidth } from "../../../fx/figure-width.ts";
 import { decimalMark } from "../../../i18n/locales";
 import { useLocale, useT } from "../../../i18n/provider";
 import { SheetAwareTextInput } from "../../../primitives/sheet-input";
+import { focusBorder } from "../../../theme/focus.ts";
 import { inputStep, text, textCap } from "../../../theme/fonts.ts";
 import { useInputHeight } from "../../../theme/input-height.ts";
 import { makeStyles } from "../../../theme/styles.ts";
-import { focus, radius, space, tabularNums, touchTarget } from "../../../tokens.ts";
+import { radius, space, tabularNums, touchTarget } from "../../../tokens.ts";
 import { AMOUNT_INTEGER_DIGITS, sanitizeAmount } from "../../amount-keys.ts";
 
 export type AmountCardProps = {
@@ -185,12 +186,7 @@ const useStyles = makeStyles((theme) => ({
     // §10's floor on the one row that is pressed — the input is the whole line.
     minHeight: touchTarget.min,
   },
-  focused: {
-    outlineWidth: focus.width,
-    outlineStyle: "solid",
-    outlineColor: theme.focusRing,
-    outlineOffset: focus.offset,
-  },
+  focused: focusBorder(theme.focusRing, { horizontal: space.x3b, vertical: space.x5 }),
   sign: { ...text.display("displayHero") },
   /** Holds its width, shows nothing — see the header. */
   signEmpty: { opacity: 0 },

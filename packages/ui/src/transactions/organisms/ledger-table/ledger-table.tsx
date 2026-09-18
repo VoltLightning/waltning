@@ -835,6 +835,13 @@ const useStyles = makeStyles((theme) => ({
   amountCell: { width: AMOUNT_WIDTH, alignItems: "flex-end" },
   empty: { flex: 1, padding: space.x4 },
   checkboxBox: {
+    // **Never the focus carrier.** It is `tabIndex={-1}` on purpose — the row
+    // is the one tab stop and `rowActive` is the ring — but a click can still
+    // focus it, and a focused bordered element with no author outline gets
+    // Chromium's own, in a blue this palette never names. Naming a style at
+    // width 0 is what takes rendering off the UA's `auto`.
+    outlineWidth: 0,
+    outlineStyle: "solid",
     width: 18,
     height: 18,
     borderRadius: radius.xs,

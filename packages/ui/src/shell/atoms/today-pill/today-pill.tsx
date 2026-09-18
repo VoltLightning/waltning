@@ -31,10 +31,11 @@ import { PressableScaled } from "../../../primitives/atoms/pressable-scaled/pres
 import { easing } from "../../../primitives/easing.ts";
 import { useInteraction } from "../../../primitives/interaction.ts";
 import { useReducedMotion } from "../../../primitives/reduced-motion.ts";
+import { focusBorder } from "../../../theme/focus.ts";
 import { text } from "../../../theme/fonts.ts";
 import { useTheme } from "../../../theme/provider";
 import { makeStyles } from "../../../theme/styles.ts";
-import { focus, motion, radius, space, touchTarget } from "../../../tokens.ts";
+import { motion, radius, space, touchTarget } from "../../../tokens.ts";
 import { CalendarBlankIcon } from "../../phosphor";
 
 /** The slide distance. `<Toast>`'s own: an object settling into place, not travelling. */
@@ -146,10 +147,6 @@ const useStyles = makeStyles((theme) => ({
     borderWidth: 1,
     borderColor: theme.borderStrong,
   },
-  focused: {
-    outlineWidth: focus.width,
-    outlineColor: theme.focusRing,
-    outlineOffset: focus.offset,
-  },
+  focused: focusBorder(theme.focusRing, { horizontal: space.x3 }),
   label: { color: theme.accentText, ...text.ui("bodySm", 600) },
 }));

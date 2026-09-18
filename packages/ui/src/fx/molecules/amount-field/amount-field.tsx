@@ -29,10 +29,11 @@ import { decimalMark } from "../../../i18n/locales.ts";
 import { useLocale, useT } from "../../../i18n/provider";
 import { PressableScaled } from "../../../primitives/atoms/pressable-scaled/pressable-scaled";
 import { SheetAwareTextInput } from "../../../primitives/sheet-input";
+import { focusBorder } from "../../../theme/focus.ts";
 import { inputStep, text, textCap } from "../../../theme/fonts.ts";
 import { useInputHeight } from "../../../theme/input-height.ts";
 import { makeStyles } from "../../../theme/styles.ts";
-import { focus, radius, space, tabularNums } from "../../../tokens.ts";
+import { radius, space, tabularNums } from "../../../tokens.ts";
 
 export type AmountFieldFieldProps = {
   variant?: "field";
@@ -300,18 +301,8 @@ const useStyles = makeStyles((theme) => ({
   // own fix: this `View` never receives real DOM focus, so without naming a
   // style `outline-style` stays at its CSS-initial `none` and neither ring
   // ever paints regardless of width or colour.
-  focused: {
-    outlineWidth: focus.width,
-    outlineStyle: "solid",
-    outlineColor: theme.focusRing,
-    outlineOffset: focus.offset,
-  },
-  focusedError: {
-    outlineWidth: focus.width,
-    outlineStyle: "solid",
-    outlineColor: theme.dangerBorder,
-    outlineOffset: focus.offset,
-  },
+  focused: focusBorder(theme.focusRing, { horizontal: space.x2 }),
+  focusedError: focusBorder(theme.dangerBorder, { horizontal: space.x2 }),
   invalid: { borderColor: theme.dangerBorder },
   error: { color: theme.dangerText, ...text.ui("caption") },
   heroField: {
