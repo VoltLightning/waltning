@@ -66,6 +66,13 @@ export const en = {
     closeSearch: "Close search",
     /** `Keypad`'s delete key. */
     delete: "Delete",
+    /** `DatePicker`'s three wheel columns — the accessible name of each. */
+    day: "Day",
+    month: "Month",
+    year: "Year",
+    /** `DatePicker`'s confirm. The drum's value is not committed until this. */
+    pickADate: "Pick a date",
+    useThisDate: "Use this date",
     /** `DateField`'s second shortcut chip. The first reuses `shell.today`. */
     yesterday: "Yesterday",
     /**
