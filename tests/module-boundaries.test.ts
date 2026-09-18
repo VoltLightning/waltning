@@ -218,8 +218,17 @@ describe("mobile features", () => {
       "packages/client/src/query",
       "packages/client/src/device",
     ];
+    /**
+     * **The domain has to be what the import climbs *to*, not a word inside
+     * the path.** Matching the name anywhere flagged
+     * `primitives/molecules/calendar` — a date grid that knows nothing about
+     * the ledger's calendar screen and only shares its noun. A foundation file
+     * reaching a domain always climbs out of its own folder first, so the
+     * domain is the segment immediately after the last `../`, and anything
+     * below that is the domain's own business.
+     */
     const domains =
-      /\/(accounts|transactions|currencies|connectivity|review|shell|dashboard|counterparties|recurring|calendar|reports|tax)\//;
+      /(?:^|\/)\.\.\/(?:\.\.\/)*(accounts|transactions|currencies|connectivity|review|shell|dashboard|counterparties|recurring|calendar|reports|tax)\//;
 
     const reaching: string[] = [];
     for (const dir of foundations) {

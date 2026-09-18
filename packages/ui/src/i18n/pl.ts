@@ -47,6 +47,8 @@ export const pl: Messages = {
     month: "Miesiąc",
     year: "Rok",
     pickADate: "Wybierz datę",
+    previousMonth: "Poprzedni miesiąc",
+    nextMonth: "Następny miesiąc",
     useThisDate: "Użyj tej daty",
     yesterday: "Wczoraj",
     resultsOne: "{{count}} wynik",
