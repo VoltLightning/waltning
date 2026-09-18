@@ -36,6 +36,8 @@ import { View } from "react-native";
 import { useLocale, useT } from "../../../i18n/provider";
 import { makeStyles } from "../../../theme/styles.ts";
 import { space } from "../../../tokens.ts";
+import { useAnchor } from "../../anchor.ts";
+import { Calendar } from "../../molecules/calendar/calendar";
 import { DatePicker } from "../../molecules/date-picker/date-picker";
 import { useBreakpoint } from "../../use-breakpoint.ts";
 import { Chip } from "../chip/chip";
@@ -84,9 +86,23 @@ export function DateField({ label, value, onChange, today, error, hint }: DateFi
   const styles = useStyles();
   const breakpoint = useBreakpoint();
   const [rolling, setRolling] = useState(false);
+  // The desk panel hangs off the field, so the field has to be measured before
+  // it can be placed — `anchor.ts`'s own contract.
+  const { ref, anchor, measure } = useAnchor();
 
-  const openPicker = useCallback(() => setRolling(true), []);
+  const openPicker = useCallback(() => {
+    measure();
+    setRolling(true);
+  }, [measure]);
   const closePicker = useCallback(() => setRolling(false), []);
+
+  const handlePicked = useCallback(
+    (next: AccountingDate) => {
+      onChange(next);
+      setRolling(false);
+    },
+    [onChange],
+  );
 
   const todayDate = accountingDate(today);
   const yesterday = addDays(todayDate, -1);
@@ -96,12 +112,17 @@ export function DateField({ label, value, onChange, today, error, hint }: DateFi
   const handlePickYesterday = useCallback(() => onChange(yesterday), [onChange, yesterday]);
   const handlePickTwoDaysAgo = useCallback(() => onChange(twoDaysAgo), [onChange, twoDaysAgo]);
 
+  // What a picker should open on: the field's own value when it is a real day,
+  // and today when it is half-typed or empty. A picker that opened on nothing
+  // would have to invent a month to show.
+  const shown = isRealCalendarDate(value) ? accountingDate(value) : todayDate;
+
   const computedError =
     value !== "" && !isRealCalendarDate(value) ? t("transactions.invalidDate") : undefined;
   const message = error ?? computedError;
 
   return (
-    <View style={styles.root}>
+    <View ref={ref} style={styles.root}>
       <TextField
         label={label}
         value={value}
@@ -121,16 +142,31 @@ export function DateField({ label, value, onChange, today, error, hint }: DateFi
           affordance is a month grid and is not built yet, so nothing is
           offered there rather than offering the wrong thing.
         */}
-        {breakpoint === "phone" ? (
-          <Chip placeholder={t("common.pickADate")} onPress={openPicker} />
-        ) : null}
+        <Chip placeholder={t("common.pickADate")} onPress={openPicker} />
       </View>
-      {rolling ? (
+      {/*
+        §3.7a — the phone gets the drum, the desk gets the month grid. A wheel
+        is a thumb control: it trades precision for momentum, which is the
+        right trade held in one hand and the wrong one in front of a keyboard,
+        where the typed field above is already the fastest way in. Both write
+        the same bare `AccountingDate`.
+      */}
+      {rolling && breakpoint === "phone" ? (
         <DatePicker
           prompt={label}
-          value={isRealCalendarDate(value) ? accountingDate(value) : todayDate}
-          onChange={onChange}
+          value={shown}
+          onChange={handlePicked}
           today={todayDate}
+          onDismiss={closePicker}
+        />
+      ) : null}
+      {rolling && breakpoint === "desk" ? (
+        <Calendar
+          label={label}
+          value={shown}
+          onChange={handlePicked}
+          today={todayDate}
+          anchor={anchor}
           onDismiss={closePicker}
         />
       ) : null}
