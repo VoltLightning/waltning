@@ -111,8 +111,49 @@ a filter: *mine* and *ours* show together regardless of scope.
 | `SearchField` | Leading icon, clear button, live results |
 | `Keypad` | 0–9, comma, delete. Bottom-anchored, thumb-zone (Fitts) |
 | `RateField` | Editable FX rate, 4dp, shows synced value beside the override |
-| `DateField` | Defaults to today; relative shortcuts (yesterday) |
+| `DateField` | Defaults to today; relative shortcuts (yesterday). Opens a `Wheel` on a phone and a month grid on a desk — §3.7a |
+| `TimeField` | A clock time, where something has one. Opens a `Wheel` of hours and minutes — §3.7a |
 | `Toggle` | Business / personal, write-a-rule. A toggle is a **state**, not an action — a reader hears "on", not "pressed". The thumb slides at `motion-base`; the track swaps instantly underneath, because two clocks on one control read as the thumb outrunning its own background. The whole labelled row is the target |
+
+### 3.7a `Wheel` — picking from a cycle
+
+**A value picked by rolling, not by typing.** Five rows tall, `44` each, the
+middle one banded in `accent-fill` between two `accent-fill-border` hairlines.
+The list scroll-snaps to that band, neighbours fade by distance — `.55`, `.26`,
+`.12` — and the ends of the drum are veiled into the sheet's own surface, so
+the column reads as a curved face rather than a cropped list. The banded row is
+the value; there is no second place a reader could look for it.
+
+**Each column is as wide as the widest thing in it.** Two digits given the same
+room as `September` reads as a gap, and the eye has to cross it to pair a day
+with its month. Day `56`, month `148`, year `76`, hours and minutes `72`.
+
+**A cycle wraps; a scale does not.** Hours and minutes have no first and no
+last, so their columns are endless: the list is drawn three times and returns
+to the middle copy once the flick settles, with snapping suspended for that one
+frame so nothing appears to move. Days, months and years are a **scale** — a
+year is not a cycle, and a wheel that wraps one lets a reader spin into 1970 by
+accident. They stop at their ends.
+
+**The day column offers only days that exist, and clamping is final.** Rolling
+from 31 January to February lands on the 28th, and rolling back to January
+stays on the 28th. The alternative — remembering the 31 — means the value is
+not what the wheel is showing, and a control whose displayed state is a partial
+truth is the one people stop trusting. The cost is stated rather than argued
+away: passing through a short month rewrites a date that was already chosen.
+
+**Relative chips sit above the drum, and go out on their own.** `Today`,
+`Yesterday`, then the two weekdays before them. Tapping one rolls the wheels to
+it; rolling the wheels clears whichever chip no longer matches, because a lit
+chip that disagrees with the banded row is a lie about what is selected. No
+chip is ever the value — the drum is.
+
+**The phone gets the drum; the desk gets a month grid.** A wheel is a thumb
+control: it trades precision for momentum, which is the right trade held in one
+hand and the wrong one in front of a keyboard. On `desk` the field opens the
+calendar popover the web has taught everyone to expect, and the typed
+`YYYY-MM-DD` the field already accepts remains the fastest path for a date
+somebody already knows. Both write the same bare `AccountingDate`.
 
 ### 3.8 Selection
 
