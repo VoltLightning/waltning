@@ -64,7 +64,8 @@ import { Text, type TextInput, View } from "react-native";
 import { useT } from "../../../i18n/provider";
 import { PressableScaled } from "../../../primitives/atoms/pressable-scaled/pressable-scaled";
 import { SheetAwareTextInput } from "../../../primitives/sheet-input";
-import { text } from "../../../theme/fonts.ts";
+import { inputStep, text } from "../../../theme/fonts.ts";
+import { useInputHeight } from "../../../theme/input-height.ts";
 import { useTheme } from "../../../theme/provider";
 import { makeStyles } from "../../../theme/styles.ts";
 import { focus, radius, space, touchTarget } from "../../../tokens.ts";
@@ -111,6 +112,7 @@ export function SearchField({
   const t = useT();
   const theme = useTheme();
   const styles = useStyles();
+  const inputHeight = useInputHeight("body");
   const { focused, handlers } = useInteraction();
 
   /**
@@ -170,7 +172,7 @@ export function SearchField({
           autoFocus={autoFocus}
           onFocus={handleFocus}
           onBlur={handleBlur}
-          style={styles.input}
+          style={[styles.input, inputHeight]}
         />
         {showClear ? (
           <PressableScaled
@@ -254,7 +256,7 @@ const useStyles = makeStyles((theme) => ({
     minHeight: touchTarget.min,
     outlineWidth: 0,
     outlineStyle: "solid",
-    ...text.ui("body"),
+    ...inputStep(text.ui("body")),
   },
   clear: { width: 20, height: 20, alignItems: "center", justifyContent: "center" },
   /** The ×, drawn: two bars crossed — `select.tsx`'s token cross, same construction. */

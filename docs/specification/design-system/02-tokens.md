@@ -293,6 +293,24 @@ numbers leaves the relationship between them recorded nowhere, which is how a
 line box stays put while the glyphs in it grow. The pairs below are the derived
 values at the default text size and are unchanged.
 
+**A field wears the ratio on its box, not the line height on its text.** A
+`TextInput` is not a `Text`: on iOS a `lineHeight` moves where the *value* is
+drawn without moving the placeholder, so the field sits correctly until the
+first character and then drops toward its bottom edge a frame later. Every
+field carries its step with that one property removed, and states its height
+separately as the same ratio resolved against the live text scale — capped
+where the step is capped, so a figure that has stopped growing does not float
+in a box that has not.
+
+The two halves are one decision and must name the same step. Neither survives
+alone: a field with the line height keeps the iOS shift, and a field with
+neither has no stated height at all, so its box takes whatever the *loaded*
+face reports — one answer against the fallback, another against the real face,
+and anything anchored beneath it lands a few pixels out depending on which won
+the race. A fixed number for the box is the trap this section already names:
+it reads as correct wherever text does not scale, and clips everywhere it
+does — `display-hero` reserves 57 around 54 of glyph and overflows at 1.06x.
+
 **How far a step may grow is a decision, per step.** Body text is uncapped:
 capping it defeats the setting for exactly the person who turned it up. The
 display steps are capped and `display-hero` hardest — at 54 it already dominates

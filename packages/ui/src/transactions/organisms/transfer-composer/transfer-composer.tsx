@@ -32,8 +32,9 @@
 import { accountingDate, isAccountingDate } from "@waltning/core/date";
 import * as money from "@waltning/core/money";
 import { useCallback, useState } from "react";
-import { Text, View } from "react-native";
+import { Text, useWindowDimensions, View } from "react-native";
 import { Amount } from "../../../fx/atoms/amount/amount";
+import { figureWidth } from "../../../fx/figure-width.ts";
 import { formatRate } from "../../../fx/format-rate.ts";
 import { parseAmount } from "../../../fx/molecules/amount-field/amount-field";
 import { dayLabel, decimalMark } from "../../../i18n/locales";
@@ -47,18 +48,11 @@ import { SheetAwareTextInput } from "../../../primitives/sheet-input";
 import { BottomSheet } from "../../../shell/organisms/bottom-sheet/bottom-sheet";
 import { ArrowsLeftRightIcon } from "../../../shell/phosphor";
 import { Banner } from "../../../states/molecules/banner/banner";
-import { text, textCap } from "../../../theme/fonts.ts";
+import { inputStep, text, textCap } from "../../../theme/fonts.ts";
+import { useInputHeight } from "../../../theme/input-height.ts";
 import { useTheme } from "../../../theme/provider";
 import { makeStyles } from "../../../theme/styles.ts";
-import {
-  DIGIT_EM,
-  focus,
-  radius,
-  space,
-  tabularNums,
-  touchTarget,
-  type as typeScale,
-} from "../../../tokens.ts";
+import { focus, radius, space, tabularNums, touchTarget } from "../../../tokens.ts";
 import { AMOUNT_INTEGER_DIGITS, sanitizeAmount } from "../../amount-keys.ts";
 import { ComposerRow, ComposerRows } from "../../molecules/composer-rows/composer-rows";
 
@@ -159,6 +153,9 @@ export function TransferComposer({
   const locale = useLocale();
   const theme = useTheme();
   const styles = useStyles();
+  const { fontScale } = useWindowDimensions();
+  const leavesHeight = useInputHeight("displayOne");
+  const arrivesHeight = useInputHeight("displayTwo");
   const [openSheet, setOpenSheet] = useState<OpenSheet>(null);
   const [moreShown, setMoreShown] = useState(false);
   const [focused, setFocused] = useState<"amount" | "toAmount" | null>(null);
@@ -304,13 +301,13 @@ export function TransferComposer({
           },
         );
   const rateShown = realizedRate ?? referenceRate?.rate;
-  // Sized to the figure, so the affix follows it (`amount-card.tsx`'s own reason).
-  const leavesWidth = {
-    width: Math.max(1, amountRaw.length) * DIGIT_EM * typeScale.displayOne.fontSize,
-  };
-  const arrivesWidth = {
-    width: Math.max(1, toAmountRaw.length) * DIGIT_EM * typeScale.displayTwo.fontSize,
-  };
+  // Sized to the figure, so the affix follows it (`amount-card.tsx`'s own
+  // reason). Through `figureWidth`, which knows that a decimal mark is a third
+  // of a digit and that both the size and the tracking move with the text
+  // scale — the arithmetic here counted every character as a tabular digit and
+  // left 8.3px of dead air before the affix on an ordinary amount.
+  const leavesWidth = { width: figureWidth("displayOne", amountRaw, fontScale) };
+  const arrivesWidth = { width: figureWidth("displayTwo", toAmountRaw, fontScale) };
 
   return (
     <View style={styles.root}>
@@ -349,7 +346,7 @@ export function TransferComposer({
             inputMode="decimal"
             maxLength={AMOUNT_INTEGER_DIGITS + 1 + (from?.decimals ?? 2)}
             maxFontSizeMultiplier={textCap("displayOne")}
-            style={[styles.leavesInput, leavesWidth]}
+            style={[styles.leavesInput, leavesWidth, leavesHeight]}
           />
           {from === undefined ? null : (
             <Text style={styles.affix}>{from.symbol ?? from.currency}</Text>
@@ -477,7 +474,7 @@ export function TransferComposer({
               inputMode="decimal"
               maxLength={AMOUNT_INTEGER_DIGITS + 1 + to.decimals}
               maxFontSizeMultiplier={textCap("displayTwo")}
-              style={[styles.arrivesInput, arrivesWidth]}
+              style={[styles.arrivesInput, arrivesWidth, arrivesHeight]}
             />
             <Text style={styles.affixSmall}>{to.symbol ?? to.currency}</Text>
           </View>
@@ -626,7 +623,7 @@ const useStyles = makeStyles((theme) => ({
     flexShrink: 1,
     padding: 0,
     color: theme.text,
-    ...text.display("displayOne"),
+    ...inputStep(text.display("displayOne")),
     fontVariant: [...tabularNums],
     // The default `auto` renders its own ring regardless of an author
     // `outlineWidth: 0` (`amount-field.tsx`'s own note).
@@ -637,7 +634,7 @@ const useStyles = makeStyles((theme) => ({
     flexShrink: 1,
     padding: 0,
     color: theme.text,
-    ...text.display("displayTwo"),
+    ...inputStep(text.display("displayTwo")),
     fontVariant: [...tabularNums],
     outlineWidth: 0,
     outlineStyle: "solid",

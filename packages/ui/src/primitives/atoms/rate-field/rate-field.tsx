@@ -36,7 +36,8 @@ import { Text, View } from "react-native";
 import { formatRate } from "../../../fx/format-rate.ts";
 import { useLocale, useT } from "../../../i18n/provider";
 import { SheetAwareTextInput } from "../../../primitives/sheet-input";
-import { text } from "../../../theme/fonts.ts";
+import { inputStep, text } from "../../../theme/fonts.ts";
+import { useInputHeight } from "../../../theme/input-height.ts";
 import { makeStyles } from "../../../theme/styles.ts";
 import { focus, radius, space, tabularNums } from "../../../tokens.ts";
 import { useInteraction } from "../../interaction.ts";
@@ -140,6 +141,7 @@ export function RateField({
 }: RateFieldProps) {
   const t = useT();
   const styles = useStyles();
+  const inputHeight = useInputHeight("displayThree");
   const { focused, handlers } = useInteraction();
   const locale = useLocale();
   // Seeded once, from whatever `value` held at mount — see the docstring for
@@ -220,7 +222,12 @@ export function RateField({
           keyboardType="decimal-pad"
           autoFocus={autoFocus}
           {...handlers}
-          style={[styles.input, focused ? styles.focused : null, message ? styles.invalid : null]}
+          style={[
+            styles.input,
+            inputHeight,
+            focused ? styles.focused : null,
+            message ? styles.invalid : null,
+          ]}
         />
       ) : (
         <Text style={styles.value}>{displayed}</Text>
@@ -257,7 +264,7 @@ const useStyles = makeStyles((theme) => ({
   },
   input: {
     color: theme.text,
-    ...text.display("displayThree"),
+    ...inputStep(text.display("displayThree")),
     fontVariant: [...tabularNums],
     borderWidth: 1,
     borderColor: theme.borderInteractive,

@@ -157,6 +157,34 @@ function step(name: TypeStep, family: string): TextStep {
   };
 }
 
+/**
+ * The same step, **without `lineHeight`** — for a `TextInput` and nothing else.
+ *
+ * **A `TextInput` is not a `Text`, and `lineHeight` is where they part.** On
+ * iOS the property moves where the *value* is drawn without moving the
+ * placeholder, so a field sits correctly until the first character and then
+ * drops toward its bottom edge a frame later. Every field in this app did that,
+ * because every field spread a `text.ui(…)`/`text.display(…)` that carries a
+ * `lineHeight` — the amount card worst of all at `display-hero`, where the step
+ * is 57 against a 54 glyph.
+ *
+ * **Half a decision on its own.** Removing the property leaves nothing saying
+ * how tall the field is, and a box with no stated height takes the height the
+ * *loaded* face reports — one answer against the fallback, another against IBM
+ * Plex. `useInputHeight()` is the other half and states it as the ratio
+ * resolved against the live text scale; a field spreads both, for the same
+ * step. A constant was tried for that half and is wrong for the reason
+ * `02-tokens.md` gives: a fixed pair records the relationship nowhere, so the
+ * box stays put while the glyphs grow.
+ *
+ * Text keeps its `lineHeight`: a paragraph's leading is the whole point there,
+ * and nothing about it is in dispute.
+ */
+export function inputStep(step: TextStep): Omit<TextStep, "lineHeight"> {
+  const { lineHeight: _ignored, ...rest } = step;
+  return rest;
+}
+
 export const text = {
   /** The step's own weight unless a component overrides it. */
   ui: (name: TypeStep, weight: UiWeight = type[name].weight) => step(name, FACES.ui[weight]),
