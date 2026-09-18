@@ -64,7 +64,7 @@ const INTERACTIVE = /\b(?:Pressable(?:Scaled)?|(?:SheetAware)?TextInput)\b/;
  * An exact count is the only guard that catches a census halving. Raise it
  * when a component is added; a *drop* is the bug this exists for.
  */
-const INTERACTIVE_COUNT = 56;
+const INTERACTIVE_COUNT = 57;
 
 /**
  * **Components that forward interactivity rather than owning it.** Both rules
@@ -173,6 +173,21 @@ describe("the focus ring, on every interactive element (§2.6)", () => {
    */
   const RING_IS_CONDITIONAL = new Set(["search-field.tsx"]);
 
+  /**
+   * **Files whose only own interactive element is a backdrop.**
+   *
+   * `DatePicker` draws chips, a confirm and a cancel, and every one of them is
+   * a `Chip` or a `Button` that rings itself. What it renders directly is the
+   * dismiss area behind the sheet — the exception `tests/architecture.test.ts`
+   * already lists by name for press feedback, for the same reason: it is a
+   * region, not a control.
+   *
+   * Listed rather than satisfied by importing `focus` for something, because
+   * this rule greps for the string `focus.` and a token spent to quiet a grep
+   * is precisely the comfortable lie the entry above was written about.
+   */
+  const RING_BELONGS_TO_CHILDREN = new Set(["date-picker.tsx"]);
+
   it("is never omitted", () => {
     // "Never removed, never replaced by a colour change alone." A colour-only
     // focus state is invisible to exactly the people it exists for.
@@ -181,7 +196,7 @@ describe("the focus ring, on every interactive element (§2.6)", () => {
     );
     // Comments stripped, for the reason the 44px rule states.
     const missing = interactive
-      .filter((c) => !RING_IS_CONDITIONAL.has(c.name))
+      .filter((c) => !RING_IS_CONDITIONAL.has(c.name) && !RING_BELONGS_TO_CHILDREN.has(c.name))
       .filter((c) => !/focus\./.test(code(c.text)))
       .map((c) => c.name);
 
@@ -189,8 +204,8 @@ describe("the focus ring, on every interactive element (§2.6)", () => {
     expect(interactive.length, "the census changed size — see INTERACTIVE_COUNT").toBe(
       INTERACTIVE_COUNT,
     );
-    // The divergence has to still exist, or the exemption is stale.
-    for (const name of RING_IS_CONDITIONAL) {
+    // The divergences have to still exist, or an exemption is stale.
+    for (const name of [...RING_IS_CONDITIONAL, ...RING_BELONGS_TO_CHILDREN]) {
       expect(
         interactive.some((c) => c.name === name),
         `${name} is excused from the ring rule but is no longer interactive`,

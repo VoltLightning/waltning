@@ -85,6 +85,7 @@
     "./primitives/tag": "./src/primitives/atoms/tag.tsx",
     "./primitives/text-field": "./src/primitives/atoms/text-field/text-field.tsx",
     "./primitives/toggle": "./src/primitives/atoms/toggle/toggle.tsx",
+    "./primitives/date-picker": "./src/primitives/molecules/date-picker/date-picker.tsx",
     "./primitives/wheel": "./src/primitives/atoms/wheel/wheel.tsx",
     "./primitives/use-breakpoint": "./src/primitives/use-breakpoint.ts",
     "./review/pill": "./src/review/atoms/pill/pill.tsx",

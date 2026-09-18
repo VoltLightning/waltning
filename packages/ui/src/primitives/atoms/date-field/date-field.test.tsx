@@ -26,8 +26,12 @@ it("the third chip is the weekday two days ago, and sets that exact date", () =>
   const onChange = vi.fn();
   render(<DateField label="Date" value={TODAY} onChange={onChange} today={TODAY} />);
   const buttons = screen.getAllByRole("button");
-  // Today, Yesterday, then the weekday chip — the field carries no other buttons.
-  expect(buttons).toHaveLength(3);
+  // Today, Yesterday, the weekday chip — and, on a phone, the way into the
+  // drum (§3.7a). The fourth is an *action*, not a fourth relative day: it
+  // opens a picker rather than setting anything, which is why it is asserted
+  // separately below rather than folded into this row's meaning.
+  expect(buttons).toHaveLength(4);
+  expect(buttons[3]?.textContent, "the drum's own affordance, last").toBe("Pick a date");
   expect(buttons[2]?.textContent).toBe("Tuesday");
   fireEvent.click(buttons[2] as HTMLElement);
   expect(onChange).toHaveBeenCalledWith("2026-09-01");
@@ -67,4 +71,17 @@ it("keeps TextField's label and value contract", () => {
   render(<DateField label="Opening date" value="" onChange={onChange} today={TODAY} />);
   fireEvent.change(screen.getByLabelText("Opening date"), { target: { value: "2026-01-15" } });
   expect(onChange).toHaveBeenCalledWith("2026-01-15");
+});
+
+it("opens the drum rather than setting a date, and sets nothing until confirmed", () => {
+  const onChange = vi.fn();
+  render(<DateField label="Date" value={TODAY} onChange={onChange} today={TODAY} />);
+
+  fireEvent.click(screen.getByRole("button", { name: "Pick a date" }));
+  // The sheet is up — its confirm is the only new button that commits.
+  expect(screen.getByText("Use this date")).toBeDefined();
+  expect(onChange, "opening a picker is not picking").not.toHaveBeenCalled();
+
+  fireEvent.click(screen.getByText("Use this date"));
+  expect(onChange).toHaveBeenCalledWith(TODAY);
 });

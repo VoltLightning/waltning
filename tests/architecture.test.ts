@@ -3529,7 +3529,7 @@ describe("the escape is drawn quietly, everywhere", () => {
     /<Button\b(?:(?!<Button\b|\/>)[\s\S])*?\blabel=\{t\("common\.cancel"\)\}(?:(?!<Button\b|\/>)[\s\S])*?\/>/gs;
   const CANCEL_ROOTS = ["packages/ui/src", "apps/mobile/src"];
   /** Every Cancel that exists today. An exact count, so one cannot vanish silently. */
-  const CANCEL_COUNT = 10;
+  const CANCEL_COUNT = 11;
 
   it("gives every Cancel button the ghost variant and no other", () => {
     const offenders: string[] = [];
@@ -3602,6 +3602,13 @@ describe("every pressable answers the finger", () => {
       { allowed: 1, why: "the same backdrop; the dialog's own buttons are `Button`, which scales" },
     ],
     [
+      "packages/ui/src/primitives/molecules/date-picker/date-picker.tsx",
+      {
+        allowed: 1,
+        why: "the sheet's backdrop, the fourth of exactly one shape. Its chips are `Chip` and its confirm is `Button`, both of which scale",
+      },
+    ],
+    [
       "packages/ui/src/primitives/atoms/select/select.tsx",
       {
         allowed: 1,
@@ -3610,8 +3617,8 @@ describe("every pressable answers the finger", () => {
     ],
   ]);
 
-  /** Every bare `<Pressable` tag the scan sees today: 18 hand-wired, 3 backdrops. */
-  const BARE_TAG_COUNT = 21;
+  /** Every bare `<Pressable` tag the scan sees today: 18 hand-wired, 4 backdrops. */
+  const BARE_TAG_COUNT = 22;
   /** The docblocks here name `Pressable` constantly; only rendered tags count. */
   const withoutComments = (text: string) =>
     text.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
