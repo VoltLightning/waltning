@@ -36,13 +36,11 @@ import {
 } from "@waltning/core/registry/inputs";
 import { and, eq, ne, sql } from "drizzle-orm";
 import { defineLocalExecutor, LocalRefusal } from "../executor.ts";
-import { ledgerSchema as schema } from "../schema-map.ts";
-import type { LocalTx } from "../write.ts";
+import { type ReplicaTx, ledgerSchema as schema } from "../schema-map.ts";
 import type { LocalCounterpartyRow } from "./create-counterparty.executor.ts";
 import { balancesForCounterparty } from "./read-counterparty-balances.ts";
 
 const { counterparties } = schema;
-type ReplicaTx = LocalTx<unknown, typeof schema>;
 
 export const updateCounterpartyExecutor = defineLocalExecutor<
   typeof updateCounterpartyInput,

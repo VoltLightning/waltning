@@ -59,12 +59,11 @@ import { type AccountingDate, addDays } from "@waltning/core/date";
 import { type SetManualRateInput, setManualRateInput } from "@waltning/core/registry/inputs";
 import { and, asc, eq, gte, lte, ne } from "drizzle-orm";
 import { defineLocalExecutor, LocalRefusal } from "../executor.ts";
-import { ledgerSchema as schema } from "../schema-map.ts";
-import { type Capture, captureDate, type LocalTx } from "../write.ts";
+import { type ReplicaTx, ledgerSchema as schema } from "../schema-map.ts";
+import { type Capture, captureDate } from "../write.ts";
 
 const { currencies, fxRates } = schema;
 
-type ReplicaTx = LocalTx<unknown, typeof schema>;
 type LocalFxRateRow = typeof fxRates.$inferSelect;
 
 /** See `read-rate.ts`'s own copy — the server's carried-forward marker. */

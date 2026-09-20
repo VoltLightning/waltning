@@ -35,6 +35,14 @@ const repoRoot = fileURLToPath(new URL("..", import.meta.url));
  * A file absent from this map must contain **no** `unknown` at all.
  */
 const BUDGET: Record<string, { max: number; why: string }> = {
+  "packages/ledger/src/schema-map.ts": {
+    max: 1,
+    why: "`SQLiteTransaction` is generic in what its driver's `run` returns, the two injected drivers disagree about it, and nothing in this package reads the value. It was thirty-seven — the same `type ReplicaTx = LocalTx<unknown, typeof schema>` copied into every executor, one decision typed out thirty-seven times",
+  },
+  "apps/mobile/src/home-list-page.tsx": {
+    max: 1,
+    why: "`ViewToken.item` is `any` in React Native's own types, so the day a viewable item names is narrowed here by a shape check rather than asserted — a cast in its place is what put `undefined` into `accountingDate` and a render error over the screen",
+  },
   "apps/api/src/common/pg-errors.ts": {
     max: 5,
     why: "catch bindings — the language gives no choice, and each one is narrowed by a type guard rather than cast",
@@ -63,97 +71,9 @@ const BUDGET: Record<string, { max: number; why: string }> = {
     max: 8,
     why: "SchemaRow's four pragma results (table_info, index_list, foreign_key_list, index_xinfo) are each a JSON-serialisable but genuinely heterogeneous row shape SQLite hands back — a constraint position, declared once on the type and once on the cast that builds each one",
   },
-  "packages/ledger/src/accounts/create-account.executor.ts": {
-    max: 1,
-    why: "the driver's run-result, in a position nothing consumes — `expo-sqlite` on the device and `better-sqlite3` in tests, and an executor never reads one because every statement ends in `.all()`",
-  },
-  "packages/ledger/src/transactions/create-transaction.executor.ts": {
-    max: 1,
-    why: "the driver's run-result, in a position nothing consumes — `expo-sqlite` on the device and `better-sqlite3` in tests, and an executor never reads one because every statement ends in `.all()`",
-  },
   // A3 · the same `ReplicaTx = LocalTx<unknown, typeof schema>` as
   // `create-account.executor.ts` above, once per executor file — the driver's
   // run-result, in a position nothing consumes.
-  "packages/ledger/src/accounts/update-account.executor.ts": {
-    max: 1,
-    why: "the driver's run-result, in a position nothing consumes — same as create-account.executor.ts",
-  },
-  "packages/ledger/src/accounts/archive-account.executor.ts": {
-    max: 1,
-    why: "the driver's run-result, in a position nothing consumes — same as create-account.executor.ts",
-  },
-  "packages/ledger/src/accounts/reorder-accounts.executor.ts": {
-    max: 1,
-    why: "the driver's run-result, in a position nothing consumes — same as create-account.executor.ts",
-  },
-  "packages/ledger/src/accounts/update-group.executor.ts": {
-    max: 1,
-    why: "the driver's run-result, in a position nothing consumes — same as create-account.executor.ts",
-  },
-  "packages/ledger/src/accounts/reorder-groups.executor.ts": {
-    max: 1,
-    why: "the driver's run-result, in a position nothing consumes — same as create-account.executor.ts",
-  },
-  "packages/ledger/src/accounts/archive-group.executor.ts": {
-    max: 1,
-    why: "the driver's run-result, in a position nothing consumes — same as create-account.executor.ts",
-  },
-  "packages/ledger/src/accounts/reconcile-account.executor.ts": {
-    max: 1,
-    why: "the driver's run-result, in a position nothing consumes — same as create-account.executor.ts",
-  },
-  "packages/ledger/src/accounts/create-group.executor.ts": {
-    max: 1,
-    why: "the driver's run-result, in a position nothing consumes — same as create-account.executor.ts",
-  },
-  "packages/ledger/src/categories/create-category.executor.ts": {
-    max: 1,
-    why: "the driver's run-result, in a position nothing consumes — same as create-account.executor.ts",
-  },
-  "packages/ledger/src/categories/rename-category.executor.ts": {
-    max: 1,
-    why: "the driver's run-result, in a position nothing consumes — same as create-account.executor.ts",
-  },
-  "packages/ledger/src/categories/reparent-category.executor.ts": {
-    max: 1,
-    why: "the driver's run-result, in a position nothing consumes — same as create-account.executor.ts",
-  },
-  "packages/ledger/src/categories/convert-leaf-group.executor.ts": {
-    max: 1,
-    why: "the driver's run-result, in a position nothing consumes — same as create-account.executor.ts",
-  },
-  "packages/ledger/src/categories/merge-categories.executor.ts": {
-    max: 1,
-    why: "the driver's run-result, in a position nothing consumes — same as create-account.executor.ts",
-  },
-  "packages/ledger/src/categories/archive-category.executor.ts": {
-    max: 1,
-    why: "the driver's run-result, in a position nothing consumes — same as create-account.executor.ts",
-  },
-  "packages/ledger/src/categories/sibling-collision.ts": {
-    max: 1,
-    why: "the driver's run-result, in a position nothing consumes — same as create-account.executor.ts",
-  },
-  "packages/ledger/src/transactions/update-transaction.executor.ts": {
-    max: 1,
-    why: "the driver's run-result, in a position nothing consumes — same as `create-transaction.executor.ts`",
-  },
-  "packages/ledger/src/transactions/delete-transaction.executor.ts": {
-    max: 1,
-    why: "the driver's run-result, in a position nothing consumes — same as `create-transaction.executor.ts`",
-  },
-  "packages/ledger/src/transactions/set-transaction-lines.executor.ts": {
-    max: 1,
-    why: "the driver's run-result, in a position nothing consumes — same as `create-transaction.executor.ts`",
-  },
-  "packages/ledger/src/transactions/supersede-transaction.executor.ts": {
-    max: 1,
-    why: "the driver's run-result, in a position nothing consumes — same as `create-transaction.executor.ts`",
-  },
-  "packages/ledger/src/transactions/categorize-batch.executor.ts": {
-    max: 1,
-    why: "the driver's run-result, in a position nothing consumes — same as `create-transaction.executor.ts`",
-  },
   "packages/ledger/src/executor.ts": {
     max: 3,
     why: "two raw-payload doors (`invoke`, `mintedIds`) taking JSON off a disk, which is exactly as trustworthy as JSON off a wire, and one widened `Row` in a constraint position — a registry is heterogeneous and TypeScript has no existential type for `returns something`",
@@ -257,69 +177,9 @@ const BUDGET: Record<string, { max: number; why: string }> = {
   // E2 · the same `ReplicaTx = LocalTx<unknown, typeof schema>` as
   // `create-account.executor.ts` above, once per executor file — the driver's
   // run-result, in a position nothing consumes.
-  "packages/ledger/src/counterparties/create-counterparty.executor.ts": {
-    max: 1,
-    why: "the driver's run-result, in a position nothing consumes — same as create-account.executor.ts",
-  },
-  "packages/ledger/src/counterparties/update-counterparty.executor.ts": {
-    max: 1,
-    why: "the driver's run-result, in a position nothing consumes — same as create-account.executor.ts",
-  },
-  "packages/ledger/src/counterparties/merge-counterparties.executor.ts": {
-    max: 1,
-    why: "the driver's run-result, in a position nothing consumes — same as create-account.executor.ts",
-  },
-  "packages/ledger/src/counterparties/unmerge-counterparties.executor.ts": {
-    max: 1,
-    why: "the driver's run-result, in a position nothing consumes — same as create-account.executor.ts",
-  },
-  "packages/ledger/src/counterparties/record-distinct-counterparties.executor.ts": {
-    max: 1,
-    why: "the driver's run-result, in a position nothing consumes — same as create-account.executor.ts",
-  },
-  "packages/ledger/src/counterparties/settle-debt.executor.ts": {
-    max: 1,
-    why: "the driver's run-result, in a position nothing consumes — same as create-account.executor.ts",
-  },
-  "packages/ledger/src/counterparties/read-counterparty-balances.ts": {
-    max: 1,
-    why: "balancesForCounterparty's ReplicaTx = LocalTx<unknown, typeof ledgerSchema> — the driver's run-result, in a position nothing consumes — same as create-account.executor.ts. Formerly open-balances.ts, deleted once nothing imported it (E1 review fix).",
-  },
   // E3 · the same `ReplicaTx = LocalTx<unknown, typeof schema>` as
   // `create-account.executor.ts` above, once per FX executor file — the
   // driver's run-result, in a position nothing consumes.
-  "packages/ledger/src/currencies/add-currency.executor.ts": {
-    max: 1,
-    why: "the driver's run-result, in a position nothing consumes — same as create-account.executor.ts",
-  },
-  "packages/ledger/src/currencies/archive-currency.executor.ts": {
-    max: 1,
-    why: "the driver's run-result, in a position nothing consumes — same as create-account.executor.ts",
-  },
-  "packages/ledger/src/currencies/set-rate-source.executor.ts": {
-    max: 1,
-    why: "the driver's run-result, in a position nothing consumes — same as create-account.executor.ts",
-  },
-  "packages/ledger/src/currencies/set-pinned.executor.ts": {
-    max: 1,
-    why: "the driver's run-result, in a position nothing consumes — same as create-account.executor.ts",
-  },
-  "packages/ledger/src/currencies/change-pivot.executor.ts": {
-    max: 1,
-    why: "the driver's run-result, in a position nothing consumes — same as create-account.executor.ts",
-  },
-  "packages/ledger/src/currencies/set-manual-rate.executor.ts": {
-    max: 1,
-    why: "the driver's run-result, in a position nothing consumes — same as create-account.executor.ts",
-  },
-  "packages/ledger/src/currencies/clear-manual-rate.executor.ts": {
-    max: 1,
-    why: "the driver's run-result, in a position nothing consumes — same as create-account.executor.ts",
-  },
-  "packages/ledger/src/currencies/update-currency.executor.ts": {
-    max: 1,
-    why: "the driver's run-result, in a position nothing consumes — same as create-account.executor.ts (E6 review fix — update_currency)",
-  },
   "tools/e2e/setup/servers.ts": {
     max: 1,
     why: "raceWithChildError's rejection handler — Promise.prototype.then's own lib types the rejection reason as any, so this is written out as unknown by hand rather than left to that default, same reasoning as a catch binding even though the language does not force it here",

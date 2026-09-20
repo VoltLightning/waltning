@@ -34,13 +34,11 @@ import { unmergeCounterpartiesInput } from "@waltning/core/registry/inputs";
 import { and, eq, inArray, isNull, ne, sql } from "drizzle-orm";
 import { chunkIds } from "../chunk-ids.ts";
 import { defineLocalExecutor, LocalRefusal } from "../executor.ts";
-import { ledgerSchema as schema } from "../schema-map.ts";
-import type { LocalTx } from "../write.ts";
+import { type ReplicaTx, ledgerSchema as schema } from "../schema-map.ts";
 import type { LocalCounterpartyRow } from "./create-counterparty.executor.ts";
 import type { LocalCounterpartyMergeRow } from "./merge-counterparties.executor.ts";
 
 const { counterparties, counterpartyMerges, transactions } = schema;
-type ReplicaTx = LocalTx<unknown, typeof schema>;
 
 export type UnmergeCounterpartiesResult = {
   merge: LocalCounterpartyMergeRow;

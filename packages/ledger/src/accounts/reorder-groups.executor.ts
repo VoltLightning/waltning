@@ -6,12 +6,10 @@
 import { type ReorderGroupsInput, reorderGroupsInput } from "@waltning/core/registry/inputs";
 import { eq } from "drizzle-orm";
 import { defineLocalExecutor, LocalRefusal } from "../executor.ts";
-import { ledgerSchema as schema } from "../schema-map.ts";
-import type { LocalTx } from "../write.ts";
+import { type ReplicaTx, ledgerSchema as schema } from "../schema-map.ts";
 import type { LocalGroupRow } from "./create-group.executor.ts";
 
 const { accountGroups } = schema;
-type ReplicaTx = LocalTx<unknown, typeof schema>;
 
 export const reorderGroupsExecutor = defineLocalExecutor<
   typeof reorderGroupsInput,

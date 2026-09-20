@@ -1,29 +1,33 @@
 import { describe, expect, it } from "vitest";
-import { reanchors, type ViewableItem, visibleDay } from "./visible-day.ts";
+import { reanchors, type ViewablePosition, visibleDay } from "./visible-day.ts";
 
-const day = (index: number, date: string): ViewableItem => ({
+const at = (index: number | undefined, date: string | null): ViewablePosition => ({
   index,
-  item: { kind: "day", date },
-});
-const quiet = (index: number, from: string): ViewableItem => ({
-  index,
-  item: { kind: "quiet", from },
+  date,
 });
 
 describe("the day a list is on", () => {
   it("is the topmost item, whatever order they arrive in", () => {
-    expect(visibleDay([day(4, "2026-05-21"), day(2, "2026-05-25"), day(9, "2026-05-14")])).toBe(
+    expect(visibleDay([at(4, "2026-05-21"), at(2, "2026-05-25"), at(9, "2026-05-14")])).toBe(
       "2026-05-25",
     );
   });
 
-  it("is the first day of a quiet run, not its last", () => {
-    expect(visibleDay([quiet(1, "2026-05-03"), day(5, "2026-04-28")])).toBe("2026-05-03");
+  /**
+   * A row is the commonest thing on screen and carries its own day. The first
+   * version of this understood only headers, reported `undefined` for a row,
+   * and `accountingDate` threw on it — a render error over the whole screen.
+   */
+  it("is skipped, not fatal, for an item that names no day", () => {
+    expect(visibleDay([at(0, null), at(1, "2026-05-25")]), "a dateless item at the top").toBe(
+      "2026-05-25",
+    );
   });
 
-  it("is nothing when nothing is on screen", () => {
+  it("is nothing when nothing on screen names a day", () => {
     expect(visibleDay([])).toBeNull();
-    expect(visibleDay([{ index: null, item: { kind: "day", date: "2026-05-25" } }])).toBeNull();
+    expect(visibleDay([at(0, null)])).toBeNull();
+    expect(visibleDay([at(undefined, "2026-05-25")]), "an item the list cannot place").toBeNull();
   });
 });
 

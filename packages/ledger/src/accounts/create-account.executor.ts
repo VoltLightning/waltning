@@ -18,8 +18,7 @@
 import { type CreateAccountInput, createAccountInput } from "@waltning/core/registry/inputs";
 import { defineLocalExecutor } from "../executor.ts";
 import { assertMoneyScale } from "../scale.ts";
-import { ledgerSchema as schema } from "../schema-map.ts";
-import type { LocalTx } from "../write.ts";
+import { type ReplicaTx, ledgerSchema as schema } from "../schema-map.ts";
 
 const { accounts } = schema;
 
@@ -33,24 +32,6 @@ const { accounts } = schema;
  * already had.
  */
 export type LocalAccountRow = typeof accounts.$inferSelect;
-
-/**
- * The transaction handle a replica executor is written against.
- *
- * `TRun` — the driver's run-result — is `unknown` here because **this file has
- * no opinion about the driver**: `expo-sqlite` on the device, `better-sqlite3`
- * under Node, and nothing below ever looks at a run-result, because every
- * statement here ends in `.all()` rather than `.run()`. Pinning a concrete run
- * result would name a platform package in a package that must not
- * (`tests/architecture.test.ts`); making the executor a generic *factory* over
- * it would put a type parameter on every call site to describe a value no
- * caller reads. This is the project's sanctioned `unknown`: a type argument
- * in a position nothing consumes.
- *
- * `TSchema` is pinned, because that one is a real claim — these executors write
- * the replica's thirteen shared tables and no others.
- */
-type ReplicaTx = LocalTx<unknown, typeof schema>;
 
 export const createAccountExecutor = defineLocalExecutor<
   typeof createAccountInput,

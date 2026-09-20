@@ -18,13 +18,10 @@ import {
 } from "@waltning/core/registry/inputs";
 import { and, eq, isNull } from "drizzle-orm";
 import { defineLocalExecutor, LocalRefusal } from "../executor.ts";
-import { ledgerSchema as schema } from "../schema-map.ts";
-import type { LocalTx } from "../write.ts";
+import { type ReplicaTx, ledgerSchema as schema } from "../schema-map.ts";
 import type { LocalTransactionRow } from "./create-transaction.executor.ts";
 
 const { transactions } = schema;
-
-type ReplicaTx = LocalTx<unknown, typeof schema>;
 
 export const deleteTransactionExecutor = defineLocalExecutor<
   typeof deleteTransactionInput,

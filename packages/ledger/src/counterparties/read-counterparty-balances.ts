@@ -38,11 +38,9 @@ import * as money from "@waltning/core/money";
 import type { CounterpartyKind } from "@waltning/schema/enums";
 import { and, eq, isNull } from "drizzle-orm";
 import type { ReplicaDb } from "../open.ts";
-import { ledgerSchema } from "../schema-map.ts";
-import type { LocalTx } from "../write.ts";
+import { ledgerSchema, type ReplicaTx } from "../schema-map.ts";
 
 const { counterparties, currencies, transactions } = ledgerSchema;
-type ReplicaTx = LocalTx<unknown, typeof ledgerSchema>;
 
 /**
  * `amountOriginal`/`toAmount`, coalesced with `debt_amount` when

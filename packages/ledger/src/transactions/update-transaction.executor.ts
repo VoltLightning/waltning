@@ -19,17 +19,13 @@ import {
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { assertAmountPositive } from "../amount-sign.ts";
 import { defineLocalExecutor, LocalRefusal } from "../executor.ts";
-import { ledgerSchema as schema } from "../schema-map.ts";
-import type { LocalTx } from "../write.ts";
+import { type ReplicaTx, ledgerSchema as schema } from "../schema-map.ts";
 import {
   assertCategoryNotArchived,
   type LocalTransactionRow,
 } from "./create-transaction.executor.ts";
 
 const { transactionLines, transactions } = schema;
-
-/** See `accounts/create-account.executor.ts` for why `TRun` is `unknown` here. */
-type ReplicaTx = LocalTx<unknown, typeof schema>;
 
 export const updateTransactionExecutor = defineLocalExecutor<
   typeof updateTransactionInput,

@@ -33,16 +33,12 @@ import { eq } from "drizzle-orm";
 import { readNearestRate } from "../currencies/read-rate.ts";
 import { defineLocalExecutor, LocalDeferral, LocalRefusal } from "../executor.ts";
 import { assertMoneyScale } from "../scale.ts";
-import { ledgerSchema as schema } from "../schema-map.ts";
-import type { LocalTx } from "../write.ts";
+import { type ReplicaTx, ledgerSchema as schema } from "../schema-map.ts";
 
 const { accounts, categories, currencies, transactions } = schema;
 
 /** The row as the replica holds it. See `LocalAccountRow` for why not a projection. */
 export type LocalTransactionRow = typeof transactions.$inferSelect;
-
-/** See `accounts/create-account.executor.ts` for why `TRun` is `unknown` here. */
-type ReplicaTx = LocalTx<unknown, typeof schema>;
 
 export const createTransactionExecutor = defineLocalExecutor<
   typeof createTransactionInput,

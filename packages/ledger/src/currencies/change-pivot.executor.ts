@@ -83,13 +83,11 @@ import { dec, rateInBounds, type UnitsPerPivot, unitsPerPivot } from "@waltning/
 import { type ChangePivotInput, changePivotInput } from "@waltning/core/registry/inputs";
 import { eq, isNull, sql } from "drizzle-orm";
 import { defineLocalExecutor, LocalRefusal } from "../executor.ts";
-import { ledgerSchema as schema } from "../schema-map.ts";
-import type { LocalTx } from "../write.ts";
+import { type ReplicaTx, ledgerSchema as schema } from "../schema-map.ts";
 import type { LocalCurrencyRow } from "./add-currency.executor.ts";
 
 const { currencies, fxRates, transactions } = schema;
 
-type ReplicaTx = LocalTx<unknown, typeof schema>;
 type LocalFxRateRow = typeof fxRates.$inferSelect;
 
 /** See `read-rate.ts`'s own copy — the server's carried-forward marker. */

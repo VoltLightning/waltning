@@ -43,16 +43,14 @@ import {
 import { eq } from "drizzle-orm";
 import { defineLocalExecutor, LocalRefusal } from "../executor.ts";
 import { assertMoneyScale } from "../scale.ts";
-import { ledgerSchema as schema } from "../schema-map.ts";
+import { type ReplicaTx, ledgerSchema as schema } from "../schema-map.ts";
 import {
   insertTransaction,
   type LocalTransactionRow,
 } from "../transactions/create-transaction.executor.ts";
-import type { LocalTx } from "../write.ts";
 import { balancesForCounterparty } from "./read-counterparty-balances.ts";
 
 const { accounts, counterparties, currencies } = schema;
-type ReplicaTx = LocalTx<unknown, typeof schema>;
 
 export type SettleDebtResult = {
   row: LocalTransactionRow;
