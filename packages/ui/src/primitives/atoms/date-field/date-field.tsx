@@ -31,11 +31,13 @@ import {
   addDays,
   isAccountingDate,
 } from "@waltning/core/date";
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import { View } from "react-native";
 import { useLocale, useT } from "../../../i18n/provider";
 import { makeStyles } from "../../../theme/styles.ts";
 import { space } from "../../../tokens.ts";
+import { DatePicker } from "../../molecules/date-picker/date-picker";
+import { useBreakpoint } from "../../use-breakpoint.ts";
 import { Chip } from "../chip/chip";
 import { TextField } from "../text-field/text-field";
 
@@ -80,6 +82,11 @@ export function DateField({ label, value, onChange, today, error, hint }: DateFi
   const t = useT();
   const locale = useLocale();
   const styles = useStyles();
+  const breakpoint = useBreakpoint();
+  const [rolling, setRolling] = useState(false);
+
+  const openPicker = useCallback(() => setRolling(true), []);
+  const closePicker = useCallback(() => setRolling(false), []);
 
   const todayDate = accountingDate(today);
   const yesterday = addDays(todayDate, -1);
@@ -106,7 +113,27 @@ export function DateField({ label, value, onChange, today, error, hint }: DateFi
         <Chip placeholder={t("shell.today")} onPress={handlePickToday} />
         <Chip placeholder={t("common.yesterday")} onPress={handlePickYesterday} />
         <Chip placeholder={weekdayLabel(twoDaysAgo, locale)} onPress={handlePickTwoDaysAgo} />
+        {/*
+          §3.7a — the phone gets the drum. A wheel is a thumb control: it
+          trades precision for momentum, which is the right trade held in one
+          hand and the wrong one in front of a keyboard, where the typed
+          `YYYY-MM-DD` above is already the fastest way in. The desk's own
+          affordance is a month grid and is not built yet, so nothing is
+          offered there rather than offering the wrong thing.
+        */}
+        {breakpoint === "phone" ? (
+          <Chip placeholder={t("common.pickADate")} onPress={openPicker} />
+        ) : null}
       </View>
+      {rolling ? (
+        <DatePicker
+          prompt={label}
+          value={isRealCalendarDate(value) ? accountingDate(value) : todayDate}
+          onChange={onChange}
+          today={todayDate}
+          onDismiss={closePicker}
+        />
+      ) : null}
     </View>
   );
 }
