@@ -51,7 +51,7 @@ import {
 import { makeStyles } from "../../../theme/styles.ts";
 import { radius, space } from "../../../tokens.ts";
 import { type DayActivity, DayCell, type DayDirection } from "../../atoms/day-cell/day-cell";
-import { type Grip, grip, LOOSE, letGo, snapsNow, takeHold, ticksNow } from "./grip.ts";
+import { type Grip, grip, LOOSE, letGo, snapsNow, snapTicks, takeHold, ticksNow } from "./grip.ts";
 import {
   aheadCount,
   CELL,
@@ -365,10 +365,6 @@ function DayRibbonView({ days, current, scrollY, placement, onPickDay, onTick }:
       */
         const cell = nearestCell(at.value, measured, count.value);
         if (cell !== ticked.value) {
-          // **`-1` is *unknown*, not a cell.** Re-armed on every re-attach, it
-          // made the first frame of the next touch a "crossing" — a tap for a
-          // gesture that had crossed no day.
-          const first = ticked.value < 0;
           ticked.value = cell;
           snapped.value = false;
           // **`dragging`, not `detached`.** The detach outlives the gesture on
@@ -377,7 +373,7 @@ function DayRibbonView({ days, current, scrollY, placement, onPickDay, onTick }:
           // the glass — the "buzz forty times through one fling" this tick's
           // own doc exists to rule out, on the strip's fling instead of the
           // list's. A tap is something a finger does.
-          if (ticksNow(hold.value, first) && onTick !== undefined) runOnJS(onTick)();
+          if (ticksNow(hold.value) && onTick !== undefined) runOnJS(onTick)();
         }
         /*
           **The snap waits for the finger to leave.** Measured while it was
@@ -392,6 +388,10 @@ function DayRibbonView({ days, current, scrollY, placement, onPickDay, onTick }:
         rest.value = after;
         if (snapsNow(hold.value, justSettled(before, after), snapped.value)) {
           snapped.value = true;
+          // The landing itself, which is the event the tick was asked for and
+          // the one it did not have: the taps stopped with the finger, so the
+          // strip came to rest on a day in silence.
+          if (snapTicks(true) && onTick !== undefined) runOnJS(onTick)();
           shown.value = cell;
           const landing = offsetWithin(cell, measured, content.value);
           wrote.value = landing;
@@ -519,6 +519,13 @@ function DayRibbonView({ days, current, scrollY, placement, onPickDay, onTick }:
         hold.value = takeHold();
         // Stillness is measured from the lift, not through the gesture.
         rest.value = UNREAD;
+        /*
+          **Seeded with the day already under the ring.** Left at *unknown*,
+          the opening crossing of every drag had nothing to compare against and
+          was swallowed — and on a drag of one day that is the whole of the
+          feedback, which is what "no haptics" turned out to mean.
+        */
+        ticked.value = nearestCell(at.value, width.value, count.value);
       },
       onEndDrag: () => {
         hold.value = letGo(hold.value);
@@ -532,7 +539,7 @@ function DayRibbonView({ days, current, scrollY, placement, onPickDay, onTick }:
         shown.value = fracAt(event.contentOffset.x, width.value);
       },
     },
-    [at, hold, rest, shown, width],
+    [at, count, hold, rest, shown, ticked, width],
   );
 
   const cells = useMemo(() => cellsFor(days, band), [days, band]);

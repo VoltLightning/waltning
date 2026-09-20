@@ -1,5 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { type Frame, type Grip, grip, LOOSE, letGo, snapsNow, takeHold, ticksNow } from "./grip.ts";
+import {
+  type Frame,
+  type Grip,
+  grip,
+  LOOSE,
+  letGo,
+  snapsNow,
+  snapTicks,
+  takeHold,
+  ticksNow,
+} from "./grip.ts";
 
 /** A frame in which nothing happened. */
 const QUIET: Frame = { listJumped: false, drifted: false, reachable: true, moved: false };
@@ -79,11 +89,25 @@ describe("when a day crossing taps", () => {
   it("only under a finger", () => {
     // Thirty cells of coasting after a flick is a notification where a texture
     // was wanted.
-    expect(ticksNow({ dragging: false, detached: true }, false)).toBe(false);
-    expect(ticksNow({ dragging: true, detached: true }, false)).toBe(true);
+    expect(ticksNow({ dragging: false, detached: true })).toBe(false);
+    expect(ticksNow({ dragging: true, detached: true })).toBe(true);
   });
 
-  it("not for a crossing with nothing to compare against", () => {
-    expect(ticksNow({ dragging: true, detached: true }, true)).toBe(false);
+  it("taps every crossing, including the first of a drag", () => {
+    // The cell last ticked for was re-armed to *unknown* on every attached
+    // frame, so the opening crossing of each drag compared against nothing and
+    // was swallowed — which on a drag of one day is the whole of the feedback,
+    // and is what "no haptics" turned out to mean. The fix is at the other
+    // end: taking hold seeds it with the day already under the ring.
+    expect(ticksNow(takeHold())).toBe(true);
+  });
+});
+
+describe("the landing itself", () => {
+  it("taps", () => {
+    // The taps stopped with the finger, so the strip came to rest on a day in
+    // silence — and the snap is the event the tick was asked for.
+    expect(snapTicks(true)).toBe(true);
+    expect(snapTicks(false)).toBe(false);
   });
 });

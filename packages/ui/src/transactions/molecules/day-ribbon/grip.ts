@@ -94,13 +94,32 @@ export function snapsNow(hold: Grip, settled: boolean, already: boolean): boolea
 }
 
 /**
+ * Whether the landing itself should tap.
+ *
+ * **The snap is the event the tick was asked for**, and it had none: the taps
+ * were per day crossed and stopped when the finger left, so the strip came to
+ * rest on a day in silence. A snap is a discrete thing that happens *to* the
+ * strip, and it is worth feeling whether or not it moved a whole cell.
+ */
+export function snapTicks(snapping: boolean): boolean {
+  "worklet";
+  return snapping;
+}
+
+/**
  * Whether a day crossing should tap.
  *
  * A tap is something a finger does, so the momentum after a flick does not
  * tap — thirty cells of coasting is a notification where a texture was wanted.
- * `first` is a crossing with nothing to compare against, which is not one.
+ *
+ * **No `first` exception, and there used to be one.** The cell a tick was last
+ * fired for was re-armed to *unknown* on every attached frame, so the opening
+ * crossing of every drag compared against nothing and was swallowed — which on
+ * a one-day drag is the whole of the feedback. The fix is at the other end:
+ * taking hold seeds the last-ticked cell with the one under the ring, so there
+ * is always something to have crossed *from*.
  */
-export function ticksNow(hold: Grip, first: boolean): boolean {
+export function ticksNow(hold: Grip): boolean {
   "worklet";
-  return hold.dragging && !first;
+  return hold.dragging;
 }
