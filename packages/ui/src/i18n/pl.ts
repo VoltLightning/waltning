@@ -597,6 +597,7 @@ export const pl: Messages = {
     appearanceFailed: "Nie udało się zapisać wyglądu.",
     resetTitle: "Usuń dane podglądu",
     resetPrompt: "Usunąć wszystkie konta i transakcje z tego telefonu?",
+    loadDemo: "Wczytaj dane demo",
     resetAction: "Zresetuj dane podglądu",
   },
   backup: {
