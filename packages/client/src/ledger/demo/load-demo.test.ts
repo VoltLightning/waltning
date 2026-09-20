@@ -1,7 +1,8 @@
+import { accountingDate, addDays, daysBetween } from "@waltning/core/date";
 import { describe, expect, it, vi } from "vitest";
 import type { CreateCategoryDraft } from "../create-phone-ledger/create-phone-ledger.ts";
-import { DEMO_ACCOUNTS, DEMO_CATEGORIES, demoTransactions } from "./demo-plan.ts";
-import { type DemoTarget, loadDemo } from "./load-demo.ts";
+import { DEMO_ACCOUNTS, DEMO_CATEGORIES, demoRates, demoTransactions } from "./demo-plan.ts";
+import { type DemoTarget, loadDemo, rateWindows } from "./load-demo.ts";
 
 const TODAY = "2026-09-18";
 
@@ -18,6 +19,10 @@ function target(overrides: Partial<DemoTarget> = {}): DemoTarget {
     convertCategory: vi.fn(() => ({ id: id() })),
     setManualRate: vi.fn(() => ({ written: 1 })),
     existingCategories: [],
+    // A device that has never synced, which bootstraps `currencies.ts`'s own
+    // default rather than the plan's reference currency. That mismatch is the
+    // whole reason the loader reads this rather than stating it.
+    pivot: "USD",
     ...overrides,
   };
 }
@@ -191,22 +196,50 @@ describe("currencies the ledger does not keep its books in", () => {
     loadDemo(t, TODAY, 26);
 
     const calls = vi.mocked(t.setManualRate).mock.calls.map(([draft]) => draft);
-    expect(calls.map((draft) => draft.quote).sort(), "every non-pivot currency").toEqual([
-      "EUR",
-      "USD",
-    ]);
+    expect(
+      [...new Set(calls.map((draft) => draft.quote))].sort(),
+      "every non-pivot currency",
+    ).toEqual(["EUR", "PLN"]);
 
     const dates = demoTransactions(TODAY, 26)
       .map((row) => row.date)
       .sort();
-    for (const draft of calls) {
-      expect(draft.base, "quoted against the pivot").toBe("PLN");
-      expect(draft.from.localeCompare(dates[0] ?? ""), "covers the oldest row").toBeLessThanOrEqual(
+    const oldest = dates[0] ?? "";
+    const newest = dates.at(-1) ?? "";
+
+    /*
+      **Coverage, not one call.** `set_manual_rate` caps a range at 366 days
+      (L11 — it writes one row per day), and the plan is 26 months, so the span
+      arrives as several windows per currency. What has to hold is that the
+      windows *together* leave no day unpriced: the earlier spelling of this
+      test asserted one call each, which is a fact about the implementation and
+      was the reason a refused rate looked like 532 unrelated transaction
+      refusals rather than like a rate that was never written.
+    */
+    for (const quote of ["EUR", "PLN"]) {
+      const windows = calls
+        .filter((draft) => draft.quote === quote)
+        .sort((a, b) => a.from.localeCompare(b.from));
+      expect(windows.length, `${quote} has windows`).toBeGreaterThan(0);
+      expect(windows[0]?.from.localeCompare(oldest), "covers the oldest row").toBeLessThanOrEqual(
         0,
       );
-      expect(draft.to.localeCompare(dates.at(-1) ?? ""), "and the newest").toBeGreaterThanOrEqual(
-        0,
-      );
+      expect(windows.at(-1)?.to.localeCompare(newest), "and the newest").toBeGreaterThanOrEqual(0);
+      for (const draft of windows) {
+        expect(draft.base, "quoted against the device's own pivot").toBe("USD");
+        expect(
+          daysBetween(accountingDate(draft.from), accountingDate(draft.to)) + 1,
+          "within the range the operation accepts",
+        ).toBeLessThanOrEqual(366);
+      }
+      for (let i = 1; i < windows.length; i += 1) {
+        const previous = windows[i - 1];
+        const current = windows[i];
+        if (previous === undefined || current === undefined) continue;
+        expect(current.from, "no day between two windows").toBe(
+          addDays(accountingDate(previous.to), 1),
+        );
+      }
     }
   });
 
@@ -232,5 +265,78 @@ describe("currencies the ledger does not keep its books in", () => {
     expect(order.lastIndexOf("rate"), "every rate precedes it").toBeLessThan(
       order.indexOf("transaction"),
     );
+  });
+});
+
+describe("rateWindows", () => {
+  it("never asks for a range the operation refuses", () => {
+    // L11 caps a manual rate range at 366 days because the operation writes
+    // one row per day. The demo is 26 months, so one call for the whole span
+    // was refused — and the refusal presented as **532 transactions refused
+    // for `needsRate`**, one cause wearing five hundred unrelated symptoms.
+    const windows = rateWindows("2024-07-01", "2026-09-20");
+    expect(windows.length).toBeGreaterThan(1);
+    for (const range of windows) {
+      expect(
+        daysBetween(accountingDate(range.from), accountingDate(range.to)) + 1,
+      ).toBeLessThanOrEqual(366);
+    }
+  });
+
+  it("covers the span exactly, with no gap and no overlap", () => {
+    const windows = rateWindows("2024-07-01", "2026-09-20");
+    expect(windows[0]?.from).toBe("2024-07-01");
+    expect(windows.at(-1)?.to).toBe("2026-09-20");
+    for (let i = 1; i < windows.length; i += 1) {
+      const previous = windows[i - 1];
+      const current = windows[i];
+      if (previous === undefined || current === undefined) continue;
+      // The day after the last one, which is what leaves no day unpriced.
+      expect(current.from).toBe(addDays(accountingDate(previous.to), 1));
+    }
+  });
+
+  it("is one window for a span that fits", () => {
+    expect(rateWindows("2026-01-01", "2026-03-01")).toEqual([
+      { from: "2026-01-01", to: "2026-03-01" },
+    ]);
+  });
+
+  it("is one window for a single day", () => {
+    expect(rateWindows("2026-01-01", "2026-01-01")).toEqual([
+      { from: "2026-01-01", to: "2026-01-01" },
+    ]);
+  });
+});
+
+describe("demoRates", () => {
+  it("quotes every other demo currency against whatever the pivot is", () => {
+    // A phone that has never synced bootstraps `currencies.ts`'s default,
+    // which is USD — the plan was written around PLN, and `set_manual_rate`
+    // refuses any base that is not the pivot.
+    expect(
+      demoRates("USD")
+        .map((r) => r.quote)
+        .sort(),
+    ).toEqual(["EUR", "PLN"]);
+    expect(
+      demoRates("PLN")
+        .map((r) => r.quote)
+        .sort(),
+    ).toEqual(["EUR", "USD"]);
+  });
+
+  it("is the ratio of the reference figures, exactly", () => {
+    // PLN per USD is 4.05 when the books are in PLN, and its reciprocal when
+    // they are in USD. A float divide would put 0.24691358024691357 here.
+    expect(demoRates("PLN").find((r) => r.quote === "USD")?.rate).toBe("4.05000000");
+    expect(demoRates("USD").find((r) => r.quote === "PLN")?.rate).toBe("0.24691358");
+    // 4.32 / 4.05, both directions of the same pair.
+    expect(demoRates("USD").find((r) => r.quote === "EUR")?.rate).toBe("1.06666667");
+  });
+
+  it("asks for nothing when the pivot is a currency the plan does not price", () => {
+    // Inventing a rate would be a ledger whose figures mean nothing.
+    expect(demoRates("JPY")).toEqual([]);
   });
 });

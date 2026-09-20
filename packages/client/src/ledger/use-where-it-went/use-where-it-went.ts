@@ -124,7 +124,14 @@ export function useWhereItWent(
         // bucket are one fact, and two rows under one name is the defect
         // whichever way they were produced.
         const existing = rows.find((other) => other.key === row.key);
-        if (existing === undefined) return [...rows, row];
+        // Pushed rather than spread: a fresh array per row is quadratic in a
+        // month's categories, and the branch below already writes through the
+        // accumulator — so the spread was paying for an immutability this
+        // reducer does not have.
+        if (existing === undefined) {
+          rows.push(row);
+          return rows;
+        }
         existing.amount = money.add(existing.amount, row.amount);
         return rows;
       }, [])

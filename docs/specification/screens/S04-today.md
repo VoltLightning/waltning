@@ -66,6 +66,18 @@ exactly. Summary and Months read its month, and **picking a month sets the
 date to that month's newest day** — a reverse-chronological list is entered
 from its end, not its start.
 
+**The List page writes the date when it settles, never while it moves.** The
+date is a *selection*, and everything downstream treats a change to it as a
+deliberate jump: both halves of the list reload, and the pages play the move
+that says which way you stepped. A scroll that wrote it on every frame was
+therefore asking for a reload and a step animation sixty times a second, in
+the middle of a gesture — which is what made the strip lag the finger, the
+list stall on a tap, and the month title slide sideways when a drag crossed
+into August. So the scroll drives the strip and the title *directly*, and the
+date is written once, when the list comes to rest. The guarantee above is
+unchanged — scroll to 25 May on List and Calendar has 25 May marked — it is
+just answered at the end of the gesture rather than during it.
+
 **The chrome clears the status bar itself.** It is the top of the screen on a
 tab root, so the inset is its own — nothing above it can apply one.
 
@@ -113,6 +125,16 @@ thing that moves rather than two things that trade places, and it is the right
 price. The caret follows whatever the title now ends with, and the stepper is
 the one thing that fades, because it is the one thing that is genuinely new
 rather than a smaller version of something already on screen.
+
+**The title names the month you are looking at; the pages move for the month
+you chose.** Those are two different facts and they were one value. Scrolling
+the List into August has to change the word — the header would otherwise name a
+month that left the screen — but it must not play the *you stepped a period*
+move, which is 24pt sideways and a dip to 40% opacity across every row on
+screen, mid-gesture. So the label follows the scrub and the motion follows the
+selection: an arrow, the picker and the Today pill still slide the pages in
+from the side they came from, and a drag changes the word and nothing else. The
+label changes at most once per month boundary, not once per frame.
 
 **Every part has to fit inside the header at every offset, not only at the
 ends.** The header clips, so a part drawn past its bottom edge is cut with no
@@ -290,9 +312,11 @@ low-frequency destination is better off in it.
 
 The whole ledger, continuous in both directions — the list pages backwards at
 its end and forwards at its start, and a page arriving above keeps the row the
-reader is on where it is rather than pushing it off screen. With `DayRibbon` under the
-tabs reporting where it is. Everything §5, §6 and §7 say about the list is
-this page.
+reader is on where it is rather than pushing it off screen. Paging is the
+list's own: it asks for more when it nears either end, and nothing outside it
+decides when a page is needed. With `DayRibbon` under the tabs, scrubbed by
+the list's own offset. Everything §5, §6 and §7 say about the list is this
+page.
 
 #### Calendar
 
@@ -465,7 +489,7 @@ happened*.
 | `MonthSummary` | The hero, opening month only. *Kept so far* stacked over its figure, a `FlowBar`, then the labelled pair. Draws three zeroes for a period the ledger did not exist in — that is the true answer, not an empty state |
 | `FlowBar` | Track is *came in*, fill is *went out*, gap is *kept*. Fill clamps at 100%; a deficit is carried by the figures, not by an overrunning bar |
 | `SpendRows` | *Where it went* — §6 at leaf granularity, five rows plus a named remainder, bars proportional to the largest row, one colour. Opening month only |
-| `DayRibbon` | Under `PageTabs`, on the List page only. Continuous — a cell for **every** day between the first and the last the list has loaded, not only the days holding rows, because the distance between two marks is part of what the strip draws — and **no further than 45 days either side of the anchor** (`RIBBON_REACH`): the list collapses a five-year gap into one row, the strip cannot, so it draws its neighbourhood rather than the ledger. **Earliest at the left**, and scrolled so the day the list is on is in the middle of it. Horizontally scrollable, clipped at both edges. 48×66 cells with the day number at 17px and room around the weekday letter. Activity mark per §3 |
+| `DayRibbon` | Under `PageTabs`, on the List page only. **A scrubber, not a selector** — the highlight is a ring fixed at the middle of the band and never moves; what moves under it is the run of days, driven by the list's own scroll offset. Continuous — a cell for **every** day between the first and the last the list has loaded, not only the days holding rows, because the distance between two marks is part of what the strip draws — and **no further than 45 days either side of the anchor** (`RIBBON_REACH`): the list collapses a five-year gap into one row, the strip cannot, so it draws its neighbourhood rather than the ledger. **Earliest at the left.** Past today it keeps going: enough further days to reach the band's right edge, drawn in `textMuted` — quieter in ink, never in opacity, which mixes the ground into the number and lands at 2.7:1 where 4.5 is required. Without them a centred ring has nothing to its right on a cold open, and the strip reads as truncated rather than as a position in a run. That count is a function of the measured band, so the resting state is the same on every device and in every month; it is **not** the list's forward horizon, which is §9's month-end and a different question. Horizontally scrollable, clipped at both edges. 48×66 cells with the day number at 17px and room around the weekday letter. Activity mark per §3 |
 | `MonthGrid` | Calendar's own grid — a day per cell with `DayRibbon`'s activity mark, ≥44px |
 | `EmptyState` | Calendar's three, under the grid — §8.1's `filtered`, `range` and `first-run`, never a blank |
 | `YearChart` | Months' hero — twelve paired columns scaled to the busiest month of the year, the current month ticked, empty months drawn as stubs. Carries the year, its net, its two arrows and the button that opens `YearPicker` |
@@ -578,6 +602,41 @@ to delete (`design-system/05` §5.6). Haptic on save arrival.
 Tapping the unsettled banner goes **straight to the unallocated transaction**,
 not to a list. A warning that costs you a search is a warning you learn to
 ignore.
+
+**The strip is scrubbed by the list, and it has three states.**
+
+- **Attached** — the resting state. The strip's offset is a function of the
+  list's: the day tops the list already computes, interpolated against the
+  scroll offset to a *fractional* day, then the same arithmetic that centres a
+  cell. The fraction is the whole difference between a strip that slides and
+  one that snaps — four tenths of the way down a day is four tenths of a cell
+  along. It runs on the UI thread and costs no render.
+- **Detached** — the reader dragged the strip. A hand on a control wins over a
+  control being driven. The ring still marks the middle, so the strip is read
+  the same way; it simply has its own offset now. Lifting the finger changes
+  nothing.
+- **Re-attaching** — the list moved again. The next scroll springs the strip
+  from where the hand left it to where the list says it belongs, over one move,
+  and it is attached from the moment it lands. The thing you touch is the thing
+  that wins, and nothing springs while you are still reading it.
+
+**Dragging the strip does not move the list.** It is a way to look ahead of
+where you are, not a second scroller for the same content — two controls that
+each move the other is how a gesture ends up fighting itself.
+
+**A fling is damped, and only a fling.** Below a threshold the strip tracks the
+list exactly. Above it the strip moves at a fraction of the rate and catches up
+as the fling decays, because 2000pt in 300ms is forty days and forty days at
+1:1 is a blur where dates should be. The cost is honest and bounded: for a few
+hundred milliseconds the strip is behind the list, and it is exact again the
+moment the list is still.
+
+**Tapping a cell costs what it has to and no more.** The day is usually already
+in the list — the strip mostly draws loaded days — and then it is a scroll
+within the rows that are already there: no query, no reload, and the strip
+re-attaches because the list moved. Only a day outside the loaded range is a
+jump, with the reload and the animation a jump has always had. A tap that
+reloaded rows rendered two hundred points away is the lag, not the load.
 
 **Search is the strip's icon, and it filters this list.** Day grouping survives
 — and nothing else about the gaps does, for the reason two paragraphs down —

@@ -49,6 +49,9 @@ export default function Developer() {
         convertCategory: ledger.convertCategory,
         setManualRate: ledger.setManualRate,
         existingCategories: snapshot.categories,
+        // The device's own pivot, not the plan's guess at one: every rate is
+        // quoted against it and `set_manual_rate` refuses any other base.
+        pivot: snapshot.currencies.find((currency) => currency.isPivot)?.code ?? "",
       },
       todayIn(Intl.DateTimeFormat().resolvedOptions().timeZone),
     );
@@ -59,7 +62,7 @@ export default function Developer() {
         accounts: outcome.accounts,
       }) + (outcome.refused > 0 ? t("developer.refused", { count: outcome.refused }) : ""),
     );
-  }, [ledger, snapshot.categories, t]);
+  }, [ledger, snapshot.categories, snapshot.currencies, t]);
 
   const askReset = useCallback(() => setConfirming(true), []);
   const cancelReset = useCallback(() => setConfirming(false), []);

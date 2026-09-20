@@ -1,5 +1,18 @@
 {
   "extends": "../../tsconfig.base.json",
-  "compilerOptions": { "types": ["node"] },
+  "compilerOptions": {
+    "types": ["node"],
+    // **DOM, because `page.evaluate` runs in the browser.** Its callback is
+    // serialised and executed inside the page under test, so the types it
+    // needs are the page's and not this process's — and the base config ships
+    // `ES2023` alone, which is right for shipped code (nothing in `packages/`
+    // may assume a browser) and wrong for a harness whose whole job is to
+    // reach into one. `tests/tsconfig.json` widens its own lib for the same
+    // reason and says so in the same words.
+    //
+    // Scoped here rather than in the base, so a package cannot pick up
+    // `document` by accident.
+    "lib": ["ES2023", "DOM", "DOM.Iterable"]
+  },
   "include": ["src/**/*.ts", "setup/**/*.ts", "specs/**/*.ts", "playwright.config.ts"]
 }

@@ -26,6 +26,7 @@
  */
 
 import type { CurrencyCode } from "@waltning/core/money";
+import * as money from "@waltning/core/money";
 
 export type DemoAccount = {
   /** Referenced by the patterns below, never shown. */
@@ -359,13 +360,51 @@ export const DEMO_MONTHS = 26;
  *
  * Plausible, not accurate. A demo's figures only have to hold still.
  */
-export const DEMO_RATES: readonly { quote: string; rate: string }[] = [
-  { quote: "USD", rate: "4.05" },
-  { quote: "EUR", rate: "4.32" },
-];
+/**
+ * What one unit of each demo currency is worth, in one reference currency.
+ *
+ * **A table, not a rate list, because the demo does not get to pick the
+ * pivot.** The first version stated *USD 4.05, EUR 4.32* and a `DEMO_PIVOT` of
+ * `"PLN"` — and a device that has never synced bootstraps `currencies.ts`'s
+ * own default, which is **USD**. So every rate was quoted against a pivot the
+ * ledger did not have, all six writes were refused with *base must be the
+ * pivot*, and what the reader saw was **532 transactions refused for
+ * `needsRate`**: one cause wearing five hundred unrelated symptoms, twice over
+ * (the 366-day cap was the other).
+ *
+ * The reference here is arbitrary and cancels out — `demoRates` divides two of
+ * these, so only their ratios matter.
+ */
+export const DEMO_REFERENCE: Readonly<Record<string, string>> = {
+  PLN: "1",
+  USD: "4.05",
+  EUR: "4.32",
+};
 
-/** What the ledger keeps its books in — the pivot, which needs no rate. */
-export const DEMO_PIVOT = "PLN";
+/**
+ * The rates this ledger needs, quoted against **its own** pivot.
+ *
+ * One entry per demo currency that is not the pivot, as `PivotPerUnit` — how
+ * much of the pivot one unit of the quote is worth. Exact decimal arithmetic
+ * through `money.ts`, never a float divide: the ratio of two reference figures
+ * is a rate, and a rate is not a place to start rounding.
+ *
+ * A currency the table does not know is skipped rather than guessed: a demo
+ * that invented a rate would be a ledger whose figures mean nothing.
+ */
+export function demoRates(pivot: string): readonly { quote: string; rate: string }[] {
+  const base = DEMO_REFERENCE[pivot];
+  if (base === undefined) return [];
+  const out: { quote: string; rate: string }[] = [];
+  for (const [quote, reference] of Object.entries(DEMO_REFERENCE)) {
+    if (quote === pivot) continue;
+    out.push({
+      quote,
+      rate: money.toPivotByDivision(money.toMoney(reference), money.unitsPerPivot(base)),
+    });
+  }
+  return out;
+}
 
 /** The first and last day the plan can name, for a rate that spans all of it. */
 export function demoSpan(today: string, months: number): { from: string; to: string } {

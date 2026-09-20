@@ -12,9 +12,11 @@ import { I18nProvider } from "@waltning/ui/i18n/provider";
 import { ThemeProvider } from "@waltning/ui/theme/provider";
 import { light } from "@waltning/ui/theme/roles";
 import type { DayRowPlace } from "@waltning/ui/transactions/day-group";
+import { dateOfEntry } from "@waltning/ui/transactions/molecules/list-entry/entry";
 import { Text } from "react-native";
+import type { SharedValue } from "react-native-reanimated";
 import { describe, expect, it, vi } from "vitest";
-import { dateOfEntry, HomeListPage } from "./home-list-page";
+import { HomeListPage } from "./home-list-page";
 
 const PLN = currencyCode("PLN");
 const TODAY = accountingDate("2026-08-14");
@@ -57,6 +59,17 @@ function ledgerWith(older: PhoneSearchTransaction[], newer: PhoneSearchTransacti
   } as unknown as PhoneLedgerController;
 }
 
+/**
+ * The list's own scroll offset, as a still one.
+ *
+ * jsdom does not scroll, so this never changes — which is the honest state for
+ * this suite: what the offset *drives* (the strip's position, the settle that
+ * writes the date) is arithmetic tested in `scrub.ts` and `scroll-settle.ts`,
+ * a story the visual suite shoots in a real browser, and `tools/e2e` against
+ * the built app.
+ */
+const scrollY = { value: 0 } as SharedValue<number>;
+
 function draw(
   ledger: PhoneLedgerController,
   onPickDay = vi.fn(),
@@ -82,6 +95,7 @@ function draw(
           onCategorize={over.onCategorize ?? vi.fn()}
           onReturnToToday={over.onReturnToToday ?? vi.fn()}
           query={over.query ?? null}
+          scrollY={scrollY}
           empty={<Text>nothing yet</Text>}
         />
       </I18nProvider>

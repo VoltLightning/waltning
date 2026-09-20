@@ -6,7 +6,8 @@
 import type { Meta, StoryObj } from "@storybook/react-native-web-vite";
 import { currencyCode, toMoney } from "@waltning/core/money";
 import { Amount } from "../../../fx/atoms/amount/amount";
-import { EntryRow, type LedgerEntry } from "../entry-row/entry-row";
+import { EntryRow } from "../entry-row/entry-row";
+import type { LedgerEntry } from "../entry-row/ledger-entry.ts";
 import { DayGroup } from "./day-group";
 
 const PLN = currencyCode("PLN");

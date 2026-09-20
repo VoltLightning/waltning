@@ -18,6 +18,7 @@
  * refusal is collected and reported, so a run that partly failed says so.
  */
 
+import { accountingDate, addDays } from "@waltning/core/date";
 import type { FieldError } from "../../transport/field-errors/field-errors.ts";
 import type {
   ConvertCategoryDraft,
@@ -29,8 +30,7 @@ import {
   DEMO_ACCOUNTS,
   DEMO_CATEGORIES,
   DEMO_MONTHS,
-  DEMO_PIVOT,
-  DEMO_RATES,
+  demoRates,
   demoSpan,
   demoTransactions,
 } from "./demo-plan.ts";
@@ -77,6 +77,16 @@ export type DemoTarget = {
   }) => { written: number } | { fieldErrors: readonly FieldError[] };
   /** What the device already has, so nothing is created twice. */
   existingCategories: readonly { id: string; name: string }[];
+  /**
+   * **The currency this ledger actually keeps its books in.**
+   *
+   * Read from the device, never assumed. `set_manual_rate` refuses any base
+   * that is not the pivot, and a phone that has never synced bootstraps
+   * `currencies.ts`'s default — which is USD, not the PLN the plan was written
+   * around. Every rate was refused for it, and the six refusals surfaced as
+   * 532 transactions declined for `needsRate`.
+   */
+  pivot: string;
 };
 
 export type DemoOutcome = {
@@ -109,6 +119,35 @@ function accepted<T extends { id: string } | { fieldErrors: readonly FieldError[
     return null;
   }
 }
+
+/**
+ * The span, cut into ranges `set_manual_rate` will accept.
+ *
+ * **One shorter than the cap**, not equal to it: the range is inclusive at
+ * both ends, so a `from`/`to` exactly 366 days apart is 367 days of rows. The
+ * off-by-one is the kind that passes every test written against a span under a
+ * year and fails only on the ledger nobody generated until later.
+ *
+ * Exported so the arithmetic can be checked without a device.
+ */
+export function rateWindows(from: string, to: string): readonly { from: string; to: string }[] {
+  const out: { from: string; to: string }[] = [];
+  let start = from;
+  while (start <= to) {
+    // `demoSpan` hands back plain strings; the brand is checked here rather
+    // than assumed, so a malformed span throws where it is written instead of
+    // producing windows nobody can explain.
+    const end: string = addDays(accountingDate(start), MAX_RATE_WINDOW_DAYS - 1);
+    const stop = end > to ? to : end;
+    out.push({ from: start, to: stop });
+    if (stop >= to) break;
+    start = addDays(accountingDate(stop), 1);
+  }
+  return out;
+}
+
+/** L11's own cap, restated where the loader has to respect it. */
+const MAX_RATE_WINDOW_DAYS = 366;
 
 export function loadDemo(
   target: DemoTarget,
@@ -163,23 +202,33 @@ export function loadDemo(
 
   // ── rates, before anything that needs valuing ─────────────────────────
   // A currency with no rate is not `capturable` and every transaction in it is
-  // declined before the write. One call covers the whole span, so a row two
-  // years back values the same way a row from this morning does.
+  // declined before the write, so the rates for the whole span go in first and
+  // a row two years back values the same way a row from this morning does.
+  //
+  // **In windows, because `set_manual_rate` caps a range at 366 days** (L11:
+  // the operation writes one `manual` row per day, so an unbounded range is an
+  // unbounded write). The demo is 26 months. One call for the whole span was
+  // refused outright — and the refusal is silent in the only way that matters,
+  // because what the reader then sees is not *the rates failed* but **532
+  // transactions refused for `needsRate`**, one cause presenting as five
+  // hundred unrelated symptoms.
   const span = demoSpan(today, months);
-  for (const rate of DEMO_RATES) {
-    try {
-      const result = target.setManualRate({
-        base: DEMO_PIVOT,
-        quote: rate.quote,
-        from: span.from,
-        to: span.to,
-        rate: rate.rate,
-        today,
-      });
-      if ("fieldErrors" in result) outcome.refused += 1;
-      else outcome.rates += result.written;
-    } catch {
-      outcome.refused += 1;
+  for (const rate of demoRates(target.pivot)) {
+    for (const range of rateWindows(span.from, span.to)) {
+      try {
+        const result = target.setManualRate({
+          base: target.pivot,
+          quote: rate.quote,
+          from: range.from,
+          to: range.to,
+          rate: rate.rate,
+          today,
+        });
+        if ("fieldErrors" in result) outcome.refused += 1;
+        else outcome.rates += result.written;
+      } catch {
+        outcome.refused += 1;
+      }
     }
   }
 

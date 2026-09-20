@@ -20,37 +20,11 @@
  * fields, not the client's whole search type.
  */
 
-import type { CurrencyCode, Money } from "@waltning/core/money";
 import { useCallback } from "react";
 import { useT } from "../../../i18n/provider";
 import { TransactionRow } from "../transaction-row/transaction-row";
 import { TransferRow } from "../transfer-row/transfer-row";
-
-/** One entry, as the ledger's own reads hand it over. */
-export type LedgerEntry = {
-  id: string;
-  date: string;
-  type: "income" | "expense" | "transfer" | "adjustment";
-  payee: string;
-  categoryName: string | null;
-  accountName: string;
-  amount: Money;
-  currency: CurrencyCode;
-  decimals: number;
-  isBusiness: boolean;
-  brandKey: string | null;
-  /** The far leg — all four present together, or this is not a transfer. */
-  toAccountName?: string | null;
-  toAmount?: Money | null;
-  toCurrency?: CurrencyCode | null;
-  toDecimals?: number | null;
-  /**
-   * §6.6's three roles. Named as a union rather than `string` so the i18n key
-   * this builds is one the catalogue is known to hold — a widened role would
-   * make `counterparties.role.${role}` a key nobody can prove exists.
-   */
-  counterpartyRole?: "debt" | "contribution" | "reference" | null;
-};
+import type { LedgerEntry } from "./ledger-entry.ts";
 
 export type EntryRowProps = {
   row: LedgerEntry;

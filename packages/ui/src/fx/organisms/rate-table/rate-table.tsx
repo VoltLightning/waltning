@@ -208,6 +208,9 @@ export function RateTable({ pair, header, footer, contentInset }: RateTableProps
       // Wrapped rather than passed through: `ListFooterComponent` takes an
       // element or a component, and `ReactNode` is wider than either. The
       // fragment's own type is stable across renders, so nothing remounts.
+      // Removing it is a type error, not a simplification: checked, in the
+      // change that added this suppression.
+      // biome-ignore lint/complexity/noUselessFragments: narrows ReactNode to the ReactElement this prop takes
       ListFooterComponent={footer === undefined ? null : <>{footer}</>}
       ListEmptyComponent={
         pair === null ? null : <Text style={styles.empty}>{t("fx.rateTableEmptyRange")}</Text>

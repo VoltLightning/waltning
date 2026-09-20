@@ -39,10 +39,6 @@ const BUDGET: Record<string, { max: number; why: string }> = {
     max: 1,
     why: "`SQLiteTransaction` is generic in what its driver's `run` returns, the two injected drivers disagree about it, and nothing in this package reads the value. It was thirty-seven — the same `type ReplicaTx = LocalTx<unknown, typeof schema>` copied into every executor, one decision typed out thirty-seven times",
   },
-  "apps/mobile/src/home-list-page.tsx": {
-    max: 1,
-    why: "`ViewToken.item` is `any` in React Native's own types, so the day a viewable item names is narrowed here by a shape check rather than asserted — a cast in its place is what put `undefined` into `accountingDate` and a render error over the screen",
-  },
   "apps/api/src/common/pg-errors.ts": {
     max: 5,
     why: "catch bindings — the language gives no choice, and each one is narrowed by a type guard rather than cast",

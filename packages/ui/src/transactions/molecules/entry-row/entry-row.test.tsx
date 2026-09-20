@@ -6,7 +6,8 @@ import { expect, it, vi } from "vitest";
 import { I18nProvider } from "../../../i18n/provider";
 import { ThemeProvider } from "../../../theme/provider";
 import { light } from "../../../theme/roles.ts";
-import { EntryRow, type LedgerEntry } from "./entry-row";
+import { EntryRow } from "./entry-row";
+import type { LedgerEntry } from "./ledger-entry.ts";
 
 const ROW: LedgerEntry = {
   id: "t1",

@@ -1,24 +1,26 @@
 /**
- * `<DayRibbon>` — the continuous run of days under `DateStrip`, S04 §3.
+ * `<DayRibbon>` — the continuous run of days under `PageTabs`, S04 §3.
  *
- * **It scrolls; it does not page.** A week strip advancing a week at a time
- * is a control with its own position, and a control with its own position
- * beside a list with one is two sources of truth for *what day am I on* —
- * they diverge on the first fling. This translates with the list instead, and
- * is clipped at both edges so the slivers say there is more in both
- * directions.
+ * **A scrubber, not a selector.** The ring is fixed at the middle of the band
+ * and never moves; what moves under it is the run of days, driven by the
+ * list's own scroll offset. The version this replaces had the list write the
+ * shared date on every scroll frame and the strip re-centre itself in an
+ * effect — which made every frame of a gesture a *selection*, and a selection
+ * reloads both halves of the list and plays the period-step animation. Three
+ * separate complaints (the strip lags, a tap on a day is slow, the month title
+ * lurches) were that one cause. S04 §7 carries the whole argument.
  *
- * **It reports; it does not select.** `current` marks whichever day the list
- * is showing. Tapping a cell asks the list to go there, and the mark follows
- * because the list moved — never because the ribbon decided.
+ * **It is a function of the list, not a reader of its reports.** Nothing here
+ * knows what the date is: `scrub.ts` maps an offset to an offset, on the UI
+ * thread, and React is not involved in a frame of it. What the strip and the
+ * list must never be is two sources of truth about where the reader is — that
+ * rule is unchanged, and this is a stronger form of it.
  *
  * **Earliest at the left.** The list above it is reverse-chronological because
  * a ledger is read from the top; that is a rule about a vertical axis, and
  * carried onto a horizontal one it drew a week running backwards next to a
- * `MonthGrid`, on the same screen, running forwards. S04 §4 fixes the strip's
- * continuity and its clipped edges and leaves the direction open; `ledger-days`
- * sorts the days, and this scrolls the one the list is on into view so the
- * newest end is not the end the reader has to hunt for.
+ * `MonthGrid`, on the same screen, running forwards. `ledger-days` sorts the
+ * days; `marks` is what tells this component that the two orders are reverses.
  *
  * **Nothing here is measured from a date.** The caller hands over days that
  * are already resolved: the weekday letter localised, the activity classed,
@@ -26,29 +28,21 @@
  * need `useT()` and a timezone per cell, sixty times a fling.
  */
 
-import { memo, useCallback, useEffect, useRef, useState } from "react";
-import { type LayoutChangeEvent, ScrollView } from "react-native";
+import { memo, useCallback, useMemo, useState } from "react";
+import { type LayoutChangeEvent, View } from "react-native";
+import Animated, {
+  type SharedValue,
+  scrollTo,
+  useAnimatedRef,
+  useAnimatedScrollHandler,
+  useFrameCallback,
+  useSharedValue,
+} from "react-native-reanimated";
 import { horizontalScrollProps } from "../../../primitives/nested-scroll.ts";
 import { makeStyles } from "../../../theme/styles.ts";
-import { space } from "../../../tokens.ts";
+import { radius, space } from "../../../tokens.ts";
 import { type DayActivity, DayCell, type DayDirection } from "../../atoms/day-cell/day-cell";
-
-/**
- * One cell's footprint along the strip — `DayCell`'s own 48 plus the track's
- * gap. Arithmetic rather than measurement: sixty cells reporting their layout
- * during a fling is the cost this component's memoisation exists to avoid, and
- * the width is a constant in the cell that draws it.
- */
-const CELL = 48;
-const STRIDE = CELL + space.xs;
-/**
- * The track's leading padding, which every cell's position is measured from.
- *
- * Measured in Chrome against the running app rather than assumed: cell 0's
- * `offsetLeft` is 16, not 0, and a first version that left this out centred
- * every cell 16px to the left of where it was asked to.
- */
-const TRACK_LEAD = space.x3;
+import { aheadCount, CELL, follow, fracAt, fracFor, offsetWithin } from "./scrub.ts";
 
 export type RibbonDay = {
   /** `YYYY-MM-DD`, and the identity of the cell. */
@@ -61,6 +55,12 @@ export type RibbonDay = {
   /** Which way the day netted. Absent is `flat` — money moved and none of it left. */
   direction?: DayDirection;
   today?: boolean;
+  /**
+   * Past today: drawn quieter, and **more of them are supplied than are
+   * drawn**. How many fit is a function of the measured band and is this
+   * component's to decide; the screen supplies a ceiling because it is the
+   * thing that can localise them.
+   */
   ahead?: boolean;
   /** The full date and what happened — what a screen reader hears instead of "14". */
   label: string;
@@ -68,8 +68,20 @@ export type RibbonDay = {
 
 export type DayRibbonProps = {
   days: readonly RibbonDay[];
-  /** The day the list is showing. `null` while the list is between days. */
+  /**
+   * The day the list settled on.
+   *
+   * **It marks a cell; it does not place the strip.** Placing is the scroll's
+   * job now, which is the whole of this rewrite — and the two agree at rest,
+   * because the date is written from where the list came to rest.
+   */
   current: string | null;
+  /** The list's scroll offset, written by the list's own animated handler. */
+  scrollY: SharedValue<number>;
+  /** Each of the list's anchor points in its content, ascending (`scrub.ts`). */
+  tops: SharedValue<readonly number[]>;
+  /** The strip cell each of those anchor points stands for. */
+  marks: SharedValue<readonly number[]>;
   onPickDay: (date: string) => void;
 };
 
@@ -112,123 +124,228 @@ function RibbonCell({
 const MemoRibbonCell = memo(RibbonCell);
 
 /**
- * Where the strip must sit for the cell at `index` to be in the middle of a
- * band `band` wide — or `null` when there is nothing to scroll to.
+ * The days that fit — every loaded day, and as many of the days past today as
+ * the measured band has room for.
  *
- * **Its own function because jsdom cannot answer it.** `onLayout` is a
- * `ResizeObserver` on the web and a native measure on the phone, and neither
- * runs under the component suite — so the effect that calls this never fires
- * there and the arithmetic would be untested code inside a tested component.
- * A story with more days than fit carries the rendered half, in a browser that
- * has layout.
- *
- * Clamped at zero at the near end only: the scroller clamps its own far end,
- * and a maximum computed here would need the content width, which is the one
- * number this component never measures.
+ * **A band of zero draws none of them**, which is correct rather than cautious:
+ * before `onLayout` has answered there is no right answer, and sixteen cells
+ * placed against a width of nothing would all be in the same place.
  */
-export function offsetFor(index: number, band: number): number | null {
-  if (index < 0 || band === 0) return null;
-  return Math.max(0, TRACK_LEAD + index * STRIDE + CELL / 2 - band / 2);
-}
-
-/**
- * Which cell stands for `current` — **the day itself, or the nearest one the
- * strip holds at or before it.**
- *
- * The strip runs between the first and last day the *list has loaded*, and a
- * day with no rows on it is not one of those: on any day the reader has not
- * captured anything, the anchor — today included — has no cell at all. An exact
- * match alone left the strip unscrolled, which put its oldest loaded day at the
- * left edge while the list sat at the newest, and that is the same *strip and
- * list disagree* the anchor rule exists to prevent.
- *
- * At or before, never after: the list is reverse-chronological, so the day
- * nearest the anchor in the direction the reader is about to scroll is the one
- * below it. `-1` only when the strip holds nothing at all or every day it holds
- * is later than the anchor, and then the first cell is as near as it gets.
- */
-export function cellFor(days: readonly { date: string }[], current: string | null): number {
-  if (current === null || days.length === 0) return -1;
-  let at = -1;
-  // Ascending, so the last cell that is not past `current` is the nearest one
-  // below it. A linear walk over at most a page of days, once per anchor
-  // change — not per frame.
-  for (let i = 0; i < days.length; i += 1) {
-    const day = days[i];
-    if (day === undefined || day.date > current) break;
-    at = i;
+export function cellsFor(days: readonly RibbonDay[], band: number): readonly RibbonDay[] {
+  const room = aheadCount(band);
+  const out: RibbonDay[] = [];
+  let drawn = 0;
+  // `days` is earliest-first, so the days past today are the tail of it.
+  for (const day of days) {
+    if (day.ahead === true) {
+      if (drawn >= room) break;
+      drawn += 1;
+    }
+    out.push(day);
   }
-  // Every loaded day is later than the anchor — a jump forward past the newest
-  // row. The first cell is the nearest thing the strip has to where the list is.
-  return at === -1 ? 0 : at;
+  return out;
 }
 
-function DayRibbonView({ days, current, onPickDay }: DayRibbonProps) {
+function DayRibbonView({ days, current, scrollY, tops, marks, onPickDay }: DayRibbonProps) {
   const styles = useStyles();
-  const scroller = useRef<ScrollView>(null);
-  // The band's own width, which decides where the middle is. `0` until the
-  // first layout, and the effect below simply does not scroll then — there is
-  // nothing to centre in a box with no width.
+  const scroller = useAnimatedRef<Animated.ScrollView>();
+  /**
+   * The band's own width, twice.
+   *
+   * State because the ring's position and how many days fit are laid out by
+   * React; a shared value because the frame callback needs it on the UI thread
+   * and reading React state from a worklet is how a worklet comes to hold a
+   * number from three renders ago.
+   */
   const [band, setBand] = useState(0);
-  const measure = useCallback((event: LayoutChangeEvent) => {
-    setBand(event.nativeEvent.layout.width);
-  }, []);
+  const width = useSharedValue(0);
+  /** Where the strip is drawn, in fractional days. */
+  const shown = useSharedValue(0);
+  /**
+   * A hand is on the strip, so the list does not get to place it.
+   *
+   * **Inferred from movement, not from `onScrollBeginDrag`.** That event does
+   * not fire for a wheel or a trackpad on `react-native-web` — the same gap
+   * that makes `onMomentumScrollEnd` useless there (`scroll-settle.ts` says
+   * so at length) — so on the web the strip was snapped back to the list's day
+   * within a frame of every attempt to browse it, and §7's *the list of dates
+   * is scrollable too* was true on a phone and false on two of the three
+   * targets that ship. What is true everywhere is that the scroller moved and
+   * this component did not move it.
+   */
+  const detached = useSharedValue(false);
+  /** The list offset this has already acted on — what says the list has moved. */
+  const seen = useSharedValue(0);
+  /**
+   * Where the strip's scroller **actually is**, written on every scroll event.
+   *
+   * **Not the same number as `shown`, and the difference was a real defect.**
+   * A `scrollTo` past the content's end is silently clamped, and the strip's
+   * content grows as the list pages — so on a cold open the strip asked to
+   * centre today, was clamped three cells short because the days past today
+   * had not been generated yet, and then never asked again, because `shown`
+   * had not changed and the frame callback took that as nothing to do. The
+   * ring sat on the 17th over a list showing the 20th for the rest of the
+   * session. Comparing against the scroller's own position instead of against
+   * the last value computed is what makes a clamp self-correct the moment the
+   * room appears.
+   */
+  const at = useSharedValue(0);
+  /** The offset this last asked for — what tells our own move from a hand's. */
+  const wrote = useSharedValue(0);
+  /** `at` as of the previous frame, so a *movement* can be told from a rest. */
+  const was = useSharedValue(0);
+  /** The track's full width, so nothing is ever asked for past its end. */
+  const content = useSharedValue(0);
+  /**
+   * Whether the strip has ever been placed.
+   *
+   * **The first placement is a jump, not a move.** A strip that eased from
+   * cell zero to the day the list opened on would animate on arrival — the
+   * screen would be seen to scroll itself, which is the one thing a cold open
+   * must not do. Every placement after it is the damped follow.
+   */
+  const placed = useSharedValue(false);
+
+  const measure = useCallback(
+    (event: LayoutChangeEvent) => {
+      const next = event.nativeEvent.layout.width;
+      setBand(next);
+      width.value = next;
+    },
+    [width],
+  );
+  const measureContent = useCallback(
+    (contentWidth: number) => {
+      content.value = contentWidth;
+    },
+    [content],
+  );
 
   /**
-   * **The day the list is on, centred.**
+   * **The strip, placed every frame, entirely on the UI thread.**
    *
-   * The strip runs earliest-first, so on a cold open the day a reader cares
-   * about — today — is at the far right, off screen. `current` is what the
-   * ribbon reports; a report the reader has to scroll to find is not one.
-   *
-   * Not animated: this runs when the list *jumps*, and S04 §7 suppresses the
-   * scroll-to-date transition under reduce-motion anyway — a strip that slid
-   * every time the anchor moved would be a second animation over the page
-   * transition already playing.
-   *
-   * It also re-runs when an older page prepends days and every index shifts,
-   * which is what *keeps* the current cell where it was — the content grew on
-   * the same side. The cost is that a reader who scrolled the strip by hand
-   * loses that position when the list pages; the strip reports where the list
-   * is, so following the list is the behaviour to keep.
+   * A frame callback rather than a reaction to `scrollY`: the strip has to keep
+   * moving after the list has stopped — that is what catching up from a fling
+   * *is* — and a derived value only runs when its input changes. It also gives
+   * the real elapsed time, which is what makes the damping frame-rate
+   * independent rather than tuned for one device's refresh rate.
    */
-  const index = cellFor(days, current);
-  useEffect(() => {
-    const x = offsetFor(index, band);
-    if (x === null) return;
-    scroller.current?.scrollTo({ x, animated: false });
-  }, [index, band]);
+  useFrameCallback((frame) => {
+    const measured = width.value;
+    if (measured <= 0) return;
+    // The list moved, so the strip takes orders again (S04 §7). Read before
+    // the detached guard: this is the one thing that can clear it.
+    const listMoved = scrollY.value !== seen.value;
+    if (listMoved) {
+      seen.value = scrollY.value;
+      detached.value = false;
+    }
+    // The strip moved, and it was not this callback that moved it — so a hand
+    // is on it. Checked as a *movement* rather than as a difference, because a
+    // strip resting where it was put differs from `wrote` for ever.
+    const drifted = at.value !== was.value;
+    was.value = at.value;
+    if (drifted && !listMoved) {
+      const ours = at.value - wrote.value;
+      if (ours > 1 || ours < -1) detached.value = true;
+    }
+    if (detached.value) return;
+    const target = fracFor(scrollY.value, tops.value, marks.value);
+    const elapsed = frame.timeSincePreviousFrame;
+    const next = placed.value
+      ? follow(shown.value, target, (elapsed === null ? 16 : elapsed) / 1000)
+      : target;
+    placed.value = true;
+    shown.value = next;
+    const want = offsetWithin(next, measured, content.value);
+    const gap = want - at.value;
+    // Nothing to write is worth not writing: a `scrollTo` per frame on a still
+    // strip is a scroll event per frame for the handler below to discard. Half
+    // a point, because the scroller reports fractional offsets and exact
+    // equality would write one every frame for ever.
+    if (gap < 0.5 && gap > -0.5) return;
+    wrote.value = want;
+    scrollTo(scroller, want, 0, false);
+  });
+
+  /**
+   * A hand on the strip.
+   *
+   * `onScroll` fires for this component's own `scrollTo` as well, which is why
+   * it writes nothing unless a drag has claimed the strip — and why the claim
+   * is made on `onBeginDrag`, the one event a programmatic scroll cannot raise.
+   * Tracking `shown` while detached is what lets the re-attach spring from the
+   * day the reader actually left it on rather than from where the list was.
+   */
+  const handleStripScroll = useAnimatedScrollHandler(
+    {
+      onBeginDrag: () => {
+        detached.value = true;
+      },
+      onScroll: (event) => {
+        // Always: this is where the strip *is*, whoever moved it, and the
+        // frame callback compares against it to notice a clamped `scrollTo`.
+        at.value = event.contentOffset.x;
+        if (!detached.value) return;
+        shown.value = fracAt(event.contentOffset.x, width.value);
+      },
+    },
+    [at, detached, shown, width],
+  );
+
+  const cells = useMemo(() => cellsFor(days, band), [days, band]);
+  // The ring sits in the middle of the band, always. Computed rather than
+  // centred by layout because it is drawn over a scroller, not in it.
+  const ring = useMemo(() => [styles.ring, { left: band / 2 - CELL / 2 }], [styles.ring, band]);
 
   return (
-    <ScrollView
-      ref={scroller}
-      onLayout={measure}
-      horizontal
-      showsHorizontalScrollIndicator={false}
-      // A bounded scroller inside a page that scrolls the other way: it must
-      // contain its own overscroll or a fling along it drags the list behind.
-      {...horizontalScrollProps(styles.band)}
-      contentContainerStyle={styles.track}
-      // A ribbon is a run of days, not a list of controls to tab through one
-      // by one — a keyboard reader reaches a date through the picker, which
-      // is a grid and says so.
-      accessibilityRole="list"
-    >
-      {days.map((day) => (
-        <MemoRibbonCell
-          key={day.date}
-          day={day}
-          current={day.date === current}
-          onPickDay={onPickDay}
-        />
-      ))}
-    </ScrollView>
+    <View style={styles.frame}>
+      <Animated.ScrollView
+        ref={scroller}
+        onLayout={measure}
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        onScroll={handleStripScroll}
+        onContentSizeChange={measureContent}
+        // 16ms: the strip is placed from this and the default reports once per
+        // gesture — a strip that only knows where it was dragged to when the
+        // finger lifts.
+        scrollEventThrottle={16}
+        // A bounded scroller inside a page that scrolls the other way: it must
+        // contain its own overscroll or a fling along it drags the list behind.
+        {...horizontalScrollProps(styles.band)}
+        contentContainerStyle={styles.track}
+        // A ribbon is a run of days, not a list of controls to tab through one
+        // by one — a keyboard reader reaches a date through the picker, which
+        // is a grid and says so.
+        accessibilityRole="list"
+      >
+        {cells.map((day) => (
+          <MemoRibbonCell
+            key={day.date}
+            day={day}
+            current={day.date === current}
+            onPickDay={onPickDay}
+          />
+        ))}
+      </Animated.ScrollView>
+      {/*
+        **Drawn over the strip and after it, so it is never under a cell.**
+        `pointerEvents="none"` because it is a mark, not a target: the cell
+        under it is still the thing a finger lands on. Nothing is drawn before
+        the band is measured — a ring at `-24` is worse than no ring.
+      */}
+      {band > 0 ? <View pointerEvents="none" style={ring} /> : null}
+    </View>
   );
 }
 
 export const DayRibbon = memo(DayRibbonView);
 
-const useStyles = makeStyles(() => ({
+const useStyles = makeStyles((theme) => ({
+  /** The positioning context the ring is placed in, and nothing else. */
+  frame: { position: "relative" },
   /**
    * **`flexGrow: 0` is what keeps this a strip.**
    *
@@ -241,6 +358,24 @@ const useStyles = makeStyles(() => ({
    */
   band: { flexGrow: 0, flexShrink: 0, paddingVertical: space.sm },
   track: { flexDirection: "row", gap: space.xs, paddingHorizontal: space.x3 },
+  /**
+   * The permanent mark: an accent edge around the middle of the band.
+   *
+   * A ring rather than a fill. The fill is `today`'s, and a second filled cell
+   * would be two cells claiming the same kind of importance — where these two
+   * say different things: one is the day you are on, the other is the day it
+   * is. They coincide on a cold open, and the ring over the fill reads as one
+   * strong marker rather than as a conflict.
+   */
+  ring: {
+    position: "absolute",
+    top: space.sm,
+    width: CELL,
+    height: 66,
+    borderWidth: 2,
+    borderColor: theme.accent,
+    borderRadius: radius.md,
+  },
 }));
 
 export type { DayActivity, DayDirection };

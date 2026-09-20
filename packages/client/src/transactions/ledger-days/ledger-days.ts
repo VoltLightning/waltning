@@ -133,6 +133,21 @@ export type LedgerItemOptions = {
    */
   filtered?: boolean;
   /**
+   * Today, where the caller wants the strip to run past it (S04 §4).
+   *
+   * **Past today, never past the last loaded day.** The two are the same thing
+   * on a cold open and nothing like it after a jump: a strip anchored in 2021
+   * that drew sixteen quiet cells off its right-hand end would be claiming the
+   * ledger stops there, when what is past it is a year of rows this page has
+   * not read. So the run is only extended when it already reaches today —
+   * which is exactly when the cells past it really are days nothing can have
+   * happened on yet.
+   *
+   * Absent leaves the run ending where the rows do, which is what every caller
+   * that is not the List page's strip wants.
+   */
+  today?: AccountingDate;
+  /**
    * The day the list is anchored on — S04 §6's cold open (today) or a jump.
    *
    * **The anchor is always an item, quiet if it has to be.** Both halves of the
@@ -221,6 +236,20 @@ export function toLedgerItems<Row extends LedgerDayRow>(
  * and ninety-one cells at most, whatever the ledger's shape.
  */
 export const RIBBON_REACH = 45;
+
+/**
+ * How many days past today the strip may draw — **a supply, not the count**.
+ *
+ * S04 §4 draws the run past today so a ring centred on today is not sitting at
+ * the right-hand edge of a strip that appears to stop. How many of these are
+ * *shown* is a function of the measured band and belongs to `DayRibbon`, which
+ * is the only thing that knows how wide it is; this is the ceiling the screen
+ * formats, sized for the widest band the phone layout is ever asked for.
+ *
+ * Sixteen generated calendar days cost nothing — they hold no rows by
+ * definition, which is why they can be generated at all.
+ */
+export const RIBBON_AHEAD = 16;
 
 /** One day as `DayRibbon` draws it — no words, because words are the screen's. */
 export type RibbonDayModel = {
@@ -347,7 +376,12 @@ export function ribbonDays<Row extends LedgerDayRow>(
   const centre = options.anchor ?? to;
   const nearest = addDays(centre, -RIBBON_REACH);
   const furthest = addDays(centre, RIBBON_REACH);
-  return fillQuietDays(strip, from < nearest ? nearest : from, to > furthest ? furthest : to);
+  // The days past today, where the caller asked for them and the run reaches
+  // today to begin with. `RIBBON_REACH` still clips the result: a strip is
+  // bounded by the constant whatever else is asked of it.
+  const ahead = options.today;
+  const end = ahead !== undefined && to >= ahead ? addDays(ahead, RIBBON_AHEAD) : to;
+  return fillQuietDays(strip, from < nearest ? nearest : from, end > furthest ? furthest : end);
 }
 
 /**
