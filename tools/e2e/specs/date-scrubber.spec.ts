@@ -88,8 +88,17 @@ test.describe("the day strip is scrubbed by the list", () => {
     // placement today is off the right-hand end of it; and a `scrollTo` that
     // was clamped while the days past today were still being generated left
     // the ring three cells short of it for the rest of the session.
+    //
+    // **Today is read from the run, not written down.** A literal date here
+    // passes on the day it is typed and fails every day after — which is the
+    // one kind of failing test nobody reads, because it is always "just the
+    // date again".
     const under = await dayUnderTheRing(page);
-    expect(under, "the ring marks today on a cold open").toMatch(/September 20, 2026/);
+    const today = new Date();
+    const day = String(today.getDate());
+    const year = String(today.getFullYear());
+    expect(under, "the ring marks today on a cold open").toContain(day);
+    expect(under, "and today's year").toContain(year);
   });
 
   test("moves with the list, and the list is not rebuilt to make it move", async ({ page }) => {
@@ -126,11 +135,54 @@ test.describe("the day strip is scrubbed by the list", () => {
 
     await page.getByRole("tab", { name: "Calendar" }).click();
     await page.waitForTimeout(1200);
+    /*
+      **The grid's marked cell, not the document's first one.** All four pager
+      slots are in the DOM at once and the ribbon's own cells carry
+      `aria-selected` too — a document-wide query returned the *strip's*
+      selection, so both sides of this assertion came from the strip and the
+      test would have passed with Calendar entirely broken.
+
+      The grid is the one `role="grid"` on the screen; its cells are the only
+      selected buttons inside it.
+    */
     const marked = await page.evaluate(() => {
-      const cell = document.querySelector('[aria-selected="true"][role="button"]');
+      const grid = document.querySelector('[role="grid"]');
+      const cell = grid?.querySelector('[aria-selected="true"][role="button"]');
       return cell?.getAttribute("aria-label") ?? null;
     });
     expect(marked, "Calendar marks the day the list stopped on").toContain(day);
+  });
+
+  test("is not re-dated by a gesture on another page", async ({ page }) => {
+    /*
+      **One `scrollY`, four mounted pages.** The offset the header collapses
+      from is shared by all of them, and anything that reads it through the
+      *List's* day positions is interpreting someone else's gesture. Scrolling
+      Summary dragged the off-screen strip; swiping back then reported a day
+      nobody had scrolled to, because the offset had moved while the list had
+      not. The List owns its own offset now.
+    */
+    const before = new URL(page.url()).searchParams.get("date");
+
+    await page.getByRole("tab", { name: "Summary" }).click();
+    await page.waitForTimeout(900);
+    await page.mouse.move(195, 500);
+    for (let tick = 0; tick < 8; tick += 1) {
+      await page.mouse.wheel(0, 300);
+      await page.waitForTimeout(110);
+    }
+    await page.waitForTimeout(900);
+    expect(new URL(page.url()).searchParams.get("date"), "scrolling Summary moved no date").toBe(
+      before,
+    );
+
+    // And swiping back must not report the day Summary's offset happens to
+    // land on in the list's own geometry.
+    await page.getByRole("tab", { name: "List" }).click();
+    await page.waitForTimeout(1500);
+    expect(new URL(page.url()).searchParams.get("date"), "and coming back moved none either").toBe(
+      before,
+    );
   });
 
   test("stays where a hand puts it, and comes back when the list moves", async ({ page }) => {

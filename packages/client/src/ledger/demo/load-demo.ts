@@ -19,6 +19,7 @@
  */
 
 import { accountingDate, addDays } from "@waltning/core/date";
+import type { UnitsPerPivot } from "@waltning/core/money";
 import type { FieldError } from "../../transport/field-errors/field-errors.ts";
 import type {
   ConvertCategoryDraft,
@@ -72,7 +73,13 @@ export type DemoTarget = {
     quote: string;
     from: string;
     to: string;
-    rate: string;
+    /**
+     * **`UnitsPerPivot`, not a string.** Typed as a string, this field took the
+     * reciprocal without complaint — and `money.ts` keeps the two directions as
+     * separate types precisely so that mistake is a compile error. A loose type
+     * at a seam is where the contract leaks; this is the seam.
+     */
+    rate: UnitsPerPivot;
     today: string;
   }) => { written: number } | { fieldErrors: readonly FieldError[] };
   /** What the device already has, so nothing is created twice. */

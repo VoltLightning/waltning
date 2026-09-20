@@ -126,15 +126,23 @@ price. The caret follows whatever the title now ends with, and the stepper is
 the one thing that fades, because it is the one thing that is genuinely new
 rather than a smaller version of something already on screen.
 
-**The title names the month you are looking at; the pages move for the month
-you chose.** Those are two different facts and they were one value. Scrolling
-the List into August has to change the word — the header would otherwise name a
-month that left the screen — but it must not play the *you stepped a period*
-move, which is 24pt sideways and a dip to 40% opacity across every row on
-screen, mid-gesture. So the label follows the scrub and the motion follows the
-selection: an arrow, the picker and the Today pill still slide the pages in
-from the side they came from, and a drag changes the word and nothing else. The
-label changes at most once per month boundary, not once per frame.
+**The title names the month you settled on; the pages move for the month you
+chose.** Those are two different facts and they were one value. Scrolling the
+List into August has to change the word — the header would otherwise go on
+naming a month that has left the screen — but it must not play the *you stepped
+a period* move, which is 24pt sideways and a dip to 40% opacity across every
+row, mid-gesture. So the motion follows the *selection* while the word follows
+the *list*: an arrow, the picker and the Today pill still slide the pages in
+from the side they came from, and a drag changes the word and nothing else.
+
+**The word changes when the list comes to rest, not while it moves.** It is the
+same write the date makes, so the title is a month behind for the length of a
+gesture and right within a breath of its end. Driving it continuously is
+possible — the strip already knows the day on every frame — and was left
+undone on purpose: it costs a thread hop per month boundary to fix something
+nobody sees, because a reader mid-fling is not reading the header. If that
+turns out to be wrong on a device it is a small change, and this paragraph is
+where to start.
 
 **Every part has to fit inside the header at every offset, not only at the
 ends.** The header clips, so a part drawn past its bottom edge is cut with no

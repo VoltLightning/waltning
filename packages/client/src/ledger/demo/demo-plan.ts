@@ -384,24 +384,33 @@ export const DEMO_REFERENCE: Readonly<Record<string, string>> = {
 /**
  * The rates this ledger needs, quoted against **its own** pivot.
  *
- * One entry per demo currency that is not the pivot, as `PivotPerUnit` — how
- * much of the pivot one unit of the quote is worth. Exact decimal arithmetic
- * through `money.ts`, never a float divide: the ratio of two reference figures
- * is a rate, and a rate is not a place to start rounding.
+ * **`UnitsPerPivot` — how many of the quote one pivot buys**, which is what
+ * `set_manual_rate` takes (`rate: zUnitsPerPivot`) and what `fx_rates.rate`
+ * stores: the figure you *divide* by. With the books in USD, one unit of the
+ * pivot buys 4.05 PLN, so the USD/PLN rate is `4.05`.
  *
- * A currency the table does not know is skipped rather than guessed: a demo
- * that invented a rate would be a ledger whose figures mean nothing.
+ * **The first version returned the reciprocal**, and the brands did not catch
+ * it because the loader's own `setManualRate` signature typed the field as a
+ * plain `string` — the loose type at a seam `CLAUDE.md` warns about, routed
+ * straight around the pair of types `money.ts` introduced *because* getting
+ * this backwards once cost a 14.1x error. Here it was 16.4x, it looked
+ * entirely plausible on screen (4.05 and 0.2469 are both believable USD/PLN
+ * figures), and a test pinned the wrong values green. The signature is
+ * `UnitsPerPivot` now, so the direction is a compile error rather than a
+ * reading exercise.
+ *
+ * The reference below is arbitrary and cancels: only the ratio of two entries
+ * is used. A currency the table does not price is skipped rather than guessed.
  */
-export function demoRates(pivot: string): readonly { quote: string; rate: string }[] {
+export function demoRates(pivot: string): readonly { quote: string; rate: money.UnitsPerPivot }[] {
   const base = DEMO_REFERENCE[pivot];
   if (base === undefined) return [];
-  const out: { quote: string; rate: string }[] = [];
+  const out: { quote: string; rate: money.UnitsPerPivot }[] = [];
   for (const [quote, reference] of Object.entries(DEMO_REFERENCE)) {
     if (quote === pivot) continue;
-    out.push({
-      quote,
-      rate: money.toPivotByDivision(money.toMoney(reference), money.unitsPerPivot(base)),
-    });
+    // `ref[pivot] / ref[quote]`, at the rate scale rather than the money one —
+    // a rate column is `numeric(24,12)` and this is not a place to round to 8.
+    out.push({ quote, rate: money.unitsPerPivot(money.dec(base).dividedBy(reference)) });
   }
   return out;
 }

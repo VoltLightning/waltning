@@ -50,7 +50,15 @@ export function useScrollSettle(
   const watch = useCallback(
     (frame: FrameInfo) => {
       "worklet";
-      if (!active) return;
+      if (!active) {
+        // **Forgotten, not merely skipped.** Returning early left the last
+        // offset standing, so the first active frame after a page change
+        // compared it against whatever the offset is now and called that a
+        // movement — then reported a settle 140ms later for a gesture that
+        // happened on another page.
+        state.value = UNREAD;
+        return;
+      }
       const elapsed = frame.timeSincePreviousFrame;
       const before = state.value;
       const after = advance(before, offset.value, elapsed === null ? 16 : elapsed);

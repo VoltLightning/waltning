@@ -172,6 +172,10 @@ describe("how many days past today are drawn", () => {
     weekday: "M",
     activity: "none",
     ahead: true,
+    // **`generated` is the budget, `ahead` is only the ink.** Counting by
+    // `ahead` meant a real transaction dated next week was spent against the
+    // band's room and took every cell after it off the strip.
+    generated: true,
     label: `${date}, not yet`,
   });
   // The supply, which is the screen's ceiling rather than the count.
@@ -184,9 +188,9 @@ describe("how many days past today are drawn", () => {
     // 390 is the phone: three loaded days, and four quiet ones to carry the
     // run to the right-hand edge.
     const drawn = cellsFor(SUPPLIED, 390);
-    expect(drawn.filter((d) => d.ahead === true)).toHaveLength(4);
+    expect(drawn.filter((d) => d.generated === true)).toHaveLength(4);
     // Every loaded day survives, whatever the band.
-    expect(drawn.filter((d) => d.ahead !== true)).toHaveLength(DAYS.length);
+    expect(drawn.filter((d) => d.generated !== true)).toHaveLength(DAYS.length);
   });
 
   it("draws more of them on a wider band", () => {
@@ -206,6 +210,34 @@ describe("how many days past today are drawn", () => {
     // the strip stops short of its own edge and the ring sits at the end of a
     // run that appears truncated — the defect the ahead days exist to fix.
     const drawn = cellsFor(SUPPLIED, 1024);
-    expect(drawn.filter((d) => d.ahead === true).length).toBeLessThan(16);
+    expect(drawn.filter((d) => d.generated === true).length).toBeLessThan(16);
+  });
+  it("never drops a real day, however far ahead it is dated", () => {
+    // A transaction dated next week is a row the ledger holds — quieter in
+    // ink, because it is after today, but not expendable. Counted against the
+    // band's room it was dropped, and every cell after it with it.
+    const future: RibbonDay = {
+      date: "2026-08-20",
+      day: 20,
+      weekday: "T",
+      activity: "some",
+      direction: "out",
+      ahead: true,
+      label: "Thursday 20 August, 1 entry",
+    };
+    const drawn = cellsFor(
+      [
+        ...DAYS,
+        future,
+        ...Array.from({ length: 16 }, (_, i) =>
+          ahead(`2026-09-${String(i + 1).padStart(2, "0")}`, i + 1),
+        ),
+      ],
+      390,
+    );
+    expect(
+      drawn.some((d) => d.date === "2026-08-20"),
+      "the real day survived",
+    ).toBe(true);
   });
 });

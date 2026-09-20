@@ -30,6 +30,7 @@
 
 import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { type LayoutChangeEvent, View } from "react-native";
+import type { FrameInfo } from "react-native-reanimated";
 import Animated, {
   runOnJS,
   type SharedValue,
@@ -40,7 +41,13 @@ import Animated, {
   useSharedValue,
 } from "react-native-reanimated";
 import { horizontalScrollProps } from "../../../primitives/nested-scroll.ts";
-import { advance, justSettled, type Settling, UNREAD } from "../../../primitives/scroll-settle.ts";
+import {
+  advance,
+  justSettled,
+  SETTLE_MS,
+  type Settling,
+  UNREAD,
+} from "../../../primitives/scroll-settle.ts";
 import { makeStyles } from "../../../theme/styles.ts";
 import { radius, space } from "../../../tokens.ts";
 import { type DayActivity, DayCell, type DayDirection } from "../../atoms/day-cell/day-cell";
@@ -51,6 +58,7 @@ import {
   fracAt,
   fracFor,
   GAP,
+  markOf,
   nearestCell,
   offsetWithin,
   type StripPlacement,
@@ -75,6 +83,14 @@ export type RibbonDay = {
    * thing that can localise them.
    */
   ahead?: boolean;
+  /**
+   * This cell was invented to fill the band, so it is one the strip may drop.
+   *
+   * **Not `ahead`.** Every day after today is drawn quieter; only the ones the
+   * ledger never had are expendable. Counting the budget by `ahead` took a
+   * real transaction dated next week off the strip, and every cell after it.
+   */
+  generated?: boolean;
   /** The full date and what happened — what a screen reader hears instead of "14". */
   label: string;
 };
@@ -167,9 +183,9 @@ export function cellsFor(days: readonly RibbonDay[], band: number): readonly Rib
   const room = aheadCount(band);
   const out: RibbonDay[] = [];
   let drawn = 0;
-  // `days` is earliest-first, so the days past today are the tail of it.
+  // `days` is earliest-first, so the invented days are the tail of it.
   for (const day of days) {
-    if (day.ahead === true) {
+    if (day.generated === true) {
       if (drawn >= room) break;
       drawn += 1;
     }
@@ -256,6 +272,21 @@ function DayRibbonView({ days, current, scrollY, placement, onPickDay, onTick }:
   const rest = useSharedValue<Settling>(UNREAD);
   /** The day the list was on last frame, so the target's speed can be measured. */
   const aimed = useSharedValue(0);
+  /** The stillness of the *list*, which is what decides when the strip lands. */
+  const listRest = useSharedValue<Settling>(UNREAD);
+  /** The cell the strip is landing on, or `-1` while the list is moving. */
+  const landing = useSharedValue(-1);
+  /**
+   * A finger is **on** the strip right now — not merely that it was.
+   *
+   * **`detached` is not this, and using it for the tick was wrong.** Detach
+   * outlives the gesture on purpose (§7: *lifting the finger changes
+   * nothing*), so a flick that coasts thirty cells fired thirty haptics with
+   * the hand already off the glass — the "buzz forty times through one fling"
+   * the tick's own doc exists to rule out, on the strip's fling instead of the
+   * list's. A tap is a thing a finger does, so it is gated on the finger.
+   */
+  const dragging = useSharedValue(false);
   /** The cell the tick last fired for, so it fires once per day crossed. */
   const ticked = useSharedValue(-1);
   /** Whether the strip has already been snapped where it now sits. */
@@ -285,12 +316,14 @@ function DayRibbonView({ days, current, scrollY, placement, onPickDay, onTick }:
    * the real elapsed time, which is what makes the damping frame-rate
    * independent rather than tuned for one device's refresh rate.
    */
-  useFrameCallback((frame) => {
-    const measured = width.value;
-    if (measured <= 0) return;
-    // The list moved, so the strip takes orders again (S04 §7). Read before
-    // the detached guard: this is the one thing that can clear it.
-    /*
+  const place = useCallback(
+    (frame: FrameInfo) => {
+      "worklet";
+      const measured = width.value;
+      if (measured <= 0) return;
+      // The list moved, so the strip takes orders again (S04 §7). Read before
+      // the detached guard: this is the one thing that can clear it.
+      /*
       **A hand on the strip, inferred — and the two ways that inference was
       wrong.**
 
@@ -309,24 +342,24 @@ function DayRibbonView({ days, current, scrollY, placement, onPickDay, onTick }:
       survives a list *movement* and is cleared by a list *gesture* — which is
       what §7 means by the thing you touch winning.
     */
-    const listMoved = scrollY.value !== seen.value;
-    const listJumped = listMoved && !gliding.value;
-    seen.value = scrollY.value;
-    gliding.value = listMoved;
-    if (listJumped) detached.value = false;
+      const listMoved = scrollY.value !== seen.value;
+      const listJumped = listMoved && !gliding.value;
+      seen.value = scrollY.value;
+      gliding.value = listMoved;
+      if (listJumped) detached.value = false;
 
-    const drifted = at.value !== was.value;
-    was.value = at.value;
-    if (drifted) {
-      const ours = at.value - wrote.value;
-      const reachable = wrote.value <= content.value - measured + 0.5 && wrote.value >= -0.5;
-      if (reachable && (ours > 1 || ours < -1)) detached.value = true;
-    }
-    const elapsed = frame.timeSincePreviousFrame;
-    const step = elapsed === null ? 16 : elapsed;
+      const drifted = at.value !== was.value;
+      was.value = at.value;
+      if (drifted) {
+        const ours = at.value - wrote.value;
+        const reachable = wrote.value <= content.value - measured + 0.5 && wrote.value >= -0.5;
+        if (reachable && (ours > 1 || ours < -1)) detached.value = true;
+      }
+      const elapsed = frame.timeSincePreviousFrame;
+      const step = elapsed === null ? 16 : elapsed;
 
-    if (detached.value) {
-      /*
+      if (detached.value) {
+        /*
         **A hand on the strip, so it snaps and it ticks** (S04 §7).
 
         The snap is this component's own rather than the scroller's
@@ -336,52 +369,139 @@ function DayRibbonView({ days, current, scrollY, placement, onPickDay, onTick }:
         thing this whole rewrite is for is that it does not. Doing it here
         costs a few lines and behaves the same on all three targets.
       */
-      const cell = nearestCell(at.value, measured, count.value);
-      if (cell !== ticked.value) {
-        ticked.value = cell;
-        snapped.value = false;
-        if (onTick !== undefined) runOnJS(onTick)();
+        const cell = nearestCell(at.value, measured, count.value);
+        if (cell !== ticked.value) {
+          // **`-1` is *unknown*, not a cell.** Re-armed on every re-attach, it
+          // made the first frame of the next touch a "crossing" — a tap for a
+          // gesture that had crossed no day.
+          const first = ticked.value < 0;
+          ticked.value = cell;
+          snapped.value = false;
+          // **`dragging`, not `detached`.** The detach outlives the gesture on
+          // purpose (§7: lifting the finger changes nothing), so a flick that
+          // coasts thirty cells fired thirty haptics with the hand already off
+          // the glass — the "buzz forty times through one fling" this tick's
+          // own doc exists to rule out, on the strip's fling instead of the
+          // list's. A tap is something a finger does.
+          if (!first && dragging.value && onTick !== undefined) runOnJS(onTick)();
+        }
+        const before = rest.value;
+        const after = advance(before, at.value, step);
+        rest.value = after;
+        if (!snapped.value && justSettled(before, after)) {
+          snapped.value = true;
+          shown.value = cell;
+          const landing = offsetWithin(cell, measured, content.value);
+          wrote.value = landing;
+          // Animated, because this one *is* a move the reader should see: it is
+          // the strip taking the day they stopped on.
+          scrollTo(scroller, landing, 0, true);
+        }
+        return;
       }
-      const before = rest.value;
-      const after = advance(before, at.value, step);
-      rest.value = after;
-      if (!snapped.value && justSettled(before, after)) {
-        snapped.value = true;
-        shown.value = cell;
-        const landing = offsetWithin(cell, measured, content.value);
-        wrote.value = landing;
-        // Animated, because this one *is* a move the reader should see: it is
-        // the strip taking the day they stopped on.
-        scrollTo(scroller, landing, 0, true);
-      }
-      return;
-    }
-    // Re-armed for the next time a hand arrives, so the first crossing of a
-    // new drag ticks rather than being swallowed as "the cell we ended on".
-    ticked.value = -1;
-    snapped.value = true;
+      // Re-armed for the next time a hand arrives, so the first crossing of a
+      // new drag ticks rather than being swallowed as "the cell we ended on".
+      ticked.value = -1;
+      snapped.value = true;
 
-    const here = placement.value;
-    const target = fracFor(scrollY.value, here.tops, here.marks);
-    // How fast the day being followed is moving, in cells per second — the one
-    // thing `follow` cannot work out for itself, and the thing its damping is
-    // decided by. Measured rather than inferred from the gap, because a gap is
-    // a function of the frame interval and a speed is not.
-    const speed = step > 0 ? ((target - aimed.value) * 1000) / step : 0;
-    aimed.value = target;
-    const next = placed.value ? follow(shown.value, target, speed, step / 1000) : target;
-    placed.value = true;
-    shown.value = next;
-    const want = offsetWithin(next, measured, content.value);
-    const gap = want - at.value;
-    // Nothing to write is worth not writing: a `scrollTo` per frame on a still
-    // strip is a scroll event per frame for the handler below to discard. Half
-    // a point, because the scroller reports fractional offsets and exact
-    // equality would write one every frame for ever.
-    if (gap < 0.5 && gap > -0.5) return;
-    wrote.value = want;
-    scrollTo(scroller, want, 0, false);
-  });
+      const here = placement.value;
+      const target = fracFor(scrollY.value, here.tops, here.marks);
+      // How fast the day being followed is moving, in cells per second — the one
+      // thing `follow` cannot work out for itself, and the thing its damping is
+      // decided by. Measured rather than inferred from the gap, because a gap is
+      // a function of the frame interval and a speed is not.
+      const speed = step > 0 ? ((target - aimed.value) * 1000) / step : 0;
+      aimed.value = target;
+
+      /*
+      **When the list stops, the strip lands on the day the list reports.**
+
+      The ring is continuous, so at rest it sits wherever the scroll stopped
+      and the cell under it is the *nearest* one — while the date written by
+      the settle is the day whose rows are on screen, which is the block the
+      offset is inside. Past a block's midpoint those are different days, and
+      the screen showed a ring on one and Calendar marked on the next: two
+      sources of truth about where the reader is, found by the e2e spec the
+      first time it ran.
+
+      `markOf` is the same rule `dayAt` uses, so the two agree by construction.
+      The land is animated for the same reason the hand-snap is: it is the last
+      fraction of a cell and the reader should see it happen.
+    */
+      const beforeRest = listRest.value;
+      const afterRest = advance(beforeRest, scrollY.value, step);
+      listRest.value = afterRest;
+      if (listMoved) landing.value = -1;
+      /*
+      **A state, not a crossing — and the crossing was a real defect.** The
+      settle writes the date, which moves the anchor, and the strip's run is
+      clipped around the anchor (`RIBBON_REACH`) — so every cell index shifts
+      a frame later. Landing once, on the crossing, latched a cell that then
+      meant a different day: the e2e spec caught the ring a day *past*
+      Calendar, having fixed it being a day behind. Recomputed while at rest,
+      the land follows the re-index and settles where it belongs.
+    */
+      if (afterRest.still >= SETTLE_MS) {
+        const cell = markOf(scrollY.value, here.tops, here.marks);
+        if (cell !== landing.value) {
+          landing.value = cell;
+          shown.value = cell;
+          const rest = offsetWithin(cell, measured, content.value);
+          wrote.value = rest;
+          // Animated: it is the last fraction of a cell, and the reader should
+          // see the strip take the day rather than find it already there.
+          scrollTo(scroller, rest, 0, true);
+        }
+        return;
+      }
+      const next = placed.value ? follow(shown.value, target, speed, step / 1000) : target;
+      placed.value = true;
+      shown.value = next;
+      const want = offsetWithin(next, measured, content.value);
+      const gap = want - at.value;
+      // Nothing to write is worth not writing: a `scrollTo` per frame on a still
+      // strip is a scroll event per frame for the handler below to discard. Half
+      // a point, because the scroller reports fractional offsets and exact
+      // equality would write one every frame for ever.
+      if (gap < 0.5 && gap > -0.5) return;
+      wrote.value = want;
+      scrollTo(scroller, want, 0, false);
+    },
+    [
+      at,
+      aimed,
+      content,
+      count,
+      detached,
+      dragging,
+      gliding,
+      landing,
+      listRest,
+      onTick,
+      placed,
+      placement,
+      rest,
+      scroller,
+      scrollY,
+      seen,
+      shown,
+      snapped,
+      ticked,
+      was,
+      width,
+      wrote,
+    ],
+  );
+  /**
+   * **Memoised, for the reason `use-scroll-settle.ts` sets out at length.**
+   * `useFrameCallback` re-registers on the callback's identity, and the
+   * worklets plugin builds a fresh function per evaluation — so an inline
+   * arrow tore this down and put it back on every render. This component's
+   * props churn on every settle and every page load, which is precisely when a
+   * re-register drops strip frames: the registry's `startTime` is reset, and
+   * emptying the active set restarts the `requestAnimationFrame` loop.
+   */
+  useFrameCallback(place);
 
   /**
    * A hand on the strip.
@@ -396,6 +516,12 @@ function DayRibbonView({ days, current, scrollY, placement, onPickDay, onTick }:
     {
       onBeginDrag: () => {
         detached.value = true;
+        dragging.value = true;
+      },
+      onEndDrag: () => {
+        // The gesture is over; the detach is not (§7). What ends here is the
+        // tick, which belongs to the finger rather than to the momentum.
+        dragging.value = false;
       },
       onScroll: (event) => {
         // Always: this is where the strip *is*, whoever moved it, and the
@@ -405,7 +531,7 @@ function DayRibbonView({ days, current, scrollY, placement, onPickDay, onTick }:
         shown.value = fracAt(event.contentOffset.x, width.value);
       },
     },
-    [at, detached, shown, width],
+    [at, detached, dragging, shown, width],
   );
 
   const cells = useMemo(() => cellsFor(days, band), [days, band]);

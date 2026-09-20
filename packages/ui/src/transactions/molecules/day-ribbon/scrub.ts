@@ -189,6 +189,38 @@ export function offsetWithin(frac: number, band: number, content: number): numbe
 }
 
 /**
+ * The cell of the block the list is *inside* — `fracFor` without the
+ * interpolation.
+ *
+ * **What the ring lands on when the list stops, so that it and the date
+ * agree.** They are two answers to one question and they were allowed to
+ * differ: the ring is continuous, so at rest it sits wherever the scroll
+ * stopped and the cell under it is the *nearest* one — while the date is the
+ * day whose rows are actually on screen, which is the block the offset is
+ * inside. Past the midpoint of a block those are different days, and the
+ * screen then showed a ring on one day and a Calendar marked on the next. Not
+ * a rounding difference to be tuned: two sources of truth about where the
+ * reader is, which is the thing this component exists not to have.
+ *
+ * So the strip lands on this, and `dayAt` reports the same block. Agreement by
+ * construction rather than by the two rules happening to coincide.
+ */
+export function markOf(offset: number, tops: readonly number[], marks: readonly number[]): number {
+  "worklet";
+  const count = tops.length < marks.length ? tops.length : marks.length;
+  if (count === 0 || Number.isNaN(offset)) return 0;
+  const first = tops[0] ?? 0;
+  if (offset <= first) return marks[0] ?? 0;
+  for (let i = 0; i < count - 1; i += 1) {
+    const from = tops[i];
+    const to = tops[i + 1];
+    if (from === undefined || to === undefined) break;
+    if (offset < to) return marks[i] ?? 0;
+  }
+  return marks[count - 1] ?? 0;
+}
+
+/**
  * The fractional day a strip sitting at `offset` is showing under its ring —
  * `offsetFor` read backwards.
  *

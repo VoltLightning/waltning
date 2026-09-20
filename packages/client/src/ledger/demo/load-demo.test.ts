@@ -1,4 +1,5 @@
 import { accountingDate, addDays, daysBetween } from "@waltning/core/date";
+import * as money from "@waltning/core/money";
 import { describe, expect, it, vi } from "vitest";
 import type { CreateCategoryDraft } from "../create-phone-ledger/create-phone-ledger.ts";
 import { DEMO_ACCOUNTS, DEMO_CATEGORIES, demoRates, demoTransactions } from "./demo-plan.ts";
@@ -326,13 +327,28 @@ describe("demoRates", () => {
     ).toEqual(["EUR", "USD"]);
   });
 
-  it("is the ratio of the reference figures, exactly", () => {
-    // PLN per USD is 4.05 when the books are in PLN, and its reciprocal when
-    // they are in USD. A float divide would put 0.24691358024691357 here.
-    expect(demoRates("PLN").find((r) => r.quote === "USD")?.rate).toBe("4.05000000");
-    expect(demoRates("USD").find((r) => r.quote === "PLN")?.rate).toBe("0.24691358");
-    // 4.32 / 4.05, both directions of the same pair.
-    expect(demoRates("USD").find((r) => r.quote === "EUR")?.rate).toBe("1.06666667");
+  it("states how many of the quote one pivot buys, not the reciprocal", () => {
+    // **`UnitsPerPivot` — the figure `fx_rates.rate` stores and the executor
+    // divides by.** With the books in USD one pivot buys 4.05 PLN, so the
+    // USD/PLN rate is 4.05. The first version returned 0.24691358 here, which
+    // is just as plausible a USD/PLN figure, valued every foreign row 16.4x
+    // out, and was pinned green by this very test.
+    expect(demoRates("USD").find((r) => r.quote === "PLN")?.rate).toBe("4.050000000000");
+    // One PLN buys 0.2469… USD, the same pair the other way up.
+    expect(demoRates("PLN").find((r) => r.quote === "USD")?.rate).toBe("0.246913580247");
+    // One USD buys 4.05/4.32 of a EUR.
+    expect(demoRates("USD").find((r) => r.quote === "EUR")?.rate).toBe("0.937500000000");
+  });
+
+  it("round-trips a figure through the rate it writes", () => {
+    // The check that would have caught the inversion without knowing which way
+    // round the field is: value an amount and value it back.
+    const rate = demoRates("USD").find((r) => r.quote === "PLN")?.rate;
+    expect(rate).toBeDefined();
+    if (rate === undefined) return;
+    // 204.30 PLN, divided by "PLN per USD", is ~50.44 USD — not 827.
+    const usd = money.toPivotByDivision(money.toMoney("204.30"), rate);
+    expect(Number(usd)).toBeCloseTo(50.444, 2);
   });
 
   it("asks for nothing when the pivot is a currency the plan does not price", () => {

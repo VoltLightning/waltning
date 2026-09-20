@@ -246,8 +246,13 @@ export const RIBBON_REACH = 45;
  * is the only thing that knows how wide it is; this is the ceiling the screen
  * formats, sized for the widest band the phone layout is ever asked for.
  *
- * Sixteen generated calendar days cost nothing — they hold no rows by
- * definition, which is why they can be generated at all.
+ * Sixteen generated calendar days cost nothing. **It is a phone's number**:
+ * `aheadCount` asks for more than this past a band of about 1712pt, which no
+ * phone reaches and a maximised browser does — and there the run stops a cell
+ * short of the edge rather than filling it. A ragged edge on a desk-width
+ * window is the mildest form this can fail in, and the desk has its own
+ * layout; if the strip is ever shown that wide, this is the constant to
+ * derive from the band rather than to raise.
  */
 export const RIBBON_AHEAD = 16;
 
@@ -261,6 +266,17 @@ export type RibbonDayModel = {
   /** The day's own total, for the label the screen writes. `null` where it could not be priced. */
   pivot: Money | null;
   entries: number;
+  /**
+   * This cell was **synthesised** past today rather than read from the ledger.
+   *
+   * **Not the same question as *is it in the future*, and conflating them
+   * dropped real rows.** The screen greys any day after today, which is right;
+   * the strip also drops the ones that do not fit its band, which must only
+   * ever be the generated ones. Derived from the date, a real transaction
+   * dated next week counted against that budget and took every cell after it
+   * off the strip.
+   */
+  generated?: boolean;
 };
 
 /**
@@ -379,9 +395,23 @@ export function ribbonDays<Row extends LedgerDayRow>(
   // The days past today, where the caller asked for them and the run reaches
   // today to begin with. `RIBBON_REACH` still clips the result: a strip is
   // bounded by the constant whatever else is asked of it.
+  /*
+    **Extended past today, never *replaced* by a range that ends there.**
+    Written as a replacement, an anchor in the future — one press of the
+    header's `>` — collapsed the run to `today + 16`, which is *behind* the
+    anchor: the anchor lost its cell, and past `today + 61` the range inverted
+    and the strip drew nothing at all. `LedgerItemOptions.anchor` promises the
+    anchor is always an item; this is what keeps that true.
+  */
   const ahead = options.today;
-  const end = ahead !== undefined && to >= ahead ? addDays(ahead, RIBBON_AHEAD) : to;
-  return fillQuietDays(strip, from < nearest ? nearest : from, end > furthest ? furthest : end);
+  // Extended only when the run actually reaches today — a jump to 2021 has a
+  // year of unread rows past its last loaded day, not days nothing can have
+  // happened on — and then never to *less* than the run already covers.
+  const wanted = ahead !== undefined && to >= ahead ? addDays(ahead, RIBBON_AHEAD) : to;
+  const end = wanted > to ? wanted : to;
+  const start = from < nearest ? nearest : from;
+  const stop = end > furthest ? furthest : end;
+  return fillQuietDays(strip, start, stop < start ? start : stop, ahead);
 }
 
 /**
@@ -403,20 +433,26 @@ function fillQuietDays(
   marked: readonly RibbonDayModel[],
   from: AccountingDate,
   to: AccountingDate,
+  today?: AccountingDate,
 ): readonly RibbonDayModel[] {
   const held = new Map(marked.map((day) => [day.date as string, day]));
 
   const run: RibbonDayModel[] = [];
   for (let date = from; date <= to; date = addDays(date, 1)) {
-    run.push(
-      held.get(date) ?? {
-        date,
-        activity: "none",
-        direction: "flat",
-        pivot: money.ZERO,
-        entries: 0,
-      },
-    );
+    const real = held.get(date);
+    if (real !== undefined) {
+      run.push(real);
+      continue;
+    }
+    run.push({
+      date,
+      activity: "none",
+      direction: "flat",
+      pivot: money.ZERO,
+      entries: 0,
+      // Invented, and past today: the only cells the strip may drop to fit.
+      ...(today !== undefined && date > today ? { generated: true } : {}),
+    });
   }
   return run;
 }

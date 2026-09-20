@@ -7,6 +7,7 @@ import {
   fracAt,
   fracFor,
   MAX_STEP,
+  markOf,
   nearestCell,
   offsetFor,
   offsetWithin,
@@ -313,5 +314,38 @@ describe("nearestCell", () => {
 
   it("answers for a strip with nothing in it", () => {
     expect(nearestCell(0, band, 0)).toBe(0);
+  });
+});
+
+describe("markOf", () => {
+  const tops = [0, 364, 526, 634];
+  const marks = [2, 1, 0, -1];
+
+  it("is the block the offset is inside, for the whole of it", () => {
+    // **The rule the ring lands on, and the same one `dayAt` names the date
+    // with.** `fracFor` interpolates, so past a block's midpoint it rounds to
+    // the *next* cell — and the screen then showed a ring on one day and
+    // Calendar marked on the next. The e2e spec found it on its first run:
+    // ring on 20 August, Calendar on the 21st.
+    for (const offset of [0, 1, 180, 200, 320, 363]) {
+      expect(markOf(offset, tops, marks), `offset ${offset}`).toBe(2);
+    }
+    expect(markOf(364, tops, marks)).toBe(1);
+    expect(markOf(525, tops, marks)).toBe(1);
+    expect(markOf(526, tops, marks)).toBe(0);
+  });
+
+  it("disagrees with a rounded fracFor exactly where the defect was", () => {
+    // 200pt into a 364pt block: the reader is looking at the first day, and
+    // the interpolation has already crossed into the second.
+    expect(Math.round(fracFor(200, tops, marks))).toBe(1);
+    expect(markOf(200, tops, marks)).toBe(2);
+  });
+
+  it("clamps both ends and answers for an empty list", () => {
+    expect(markOf(-500, tops, marks)).toBe(2);
+    expect(markOf(99999, tops, marks)).toBe(-1);
+    expect(markOf(0, [], [])).toBe(0);
+    expect(markOf(Number.NaN, tops, marks)).toBe(0);
   });
 });

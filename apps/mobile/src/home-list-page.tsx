@@ -17,12 +17,12 @@ import { dayLabel, dayRangeLabel, weekdayInitial } from "@waltning/ui/i18n/local
 import { useLocale, useT } from "@waltning/ui/i18n/provider";
 import { pageScrollProps } from "@waltning/ui/primitives/nested-scroll";
 import { useScrollSettle } from "@waltning/ui/primitives/use-scroll-settle";
-import { GroundPanel, type ScrollHandler } from "@waltning/ui/shell/card";
+import { GroundPanel } from "@waltning/ui/shell/card";
 import { useGroundInset } from "@waltning/ui/shell/ground-inset";
 import { TodayPill } from "@waltning/ui/shell/today-pill";
 import { text } from "@waltning/ui/theme/fonts";
 import { makeStyles } from "@waltning/ui/theme/styles";
-import { space } from "@waltning/ui/tokens";
+
 import {
   DayRibbon,
   type RibbonDay,
@@ -42,7 +42,11 @@ import {
 } from "@waltning/ui/transactions/molecules/list-entry/list-entry";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { type FlatList, Text, View, type ViewToken } from "react-native";
-import Animated, { type SharedValue, useSharedValue } from "react-native-reanimated";
+import Animated, {
+  type SharedValue,
+  useAnimatedScrollHandler,
+  useSharedValue,
+} from "react-native-reanimated";
 
 /**
  * S04's List page — the whole ledger, continuous in both directions.
@@ -110,21 +114,16 @@ export type HomeListPageProps = {
    */
   query: string | null;
   /**
-   * Forwarded to the list, for chrome that moves with the page. This screen
-   * owns its scroller — the panel around it is `scroll="own"`, a plain `View`
-   * — so it is the only thing that can report the offset the header collapses
-   * from.
-   */
-  onScroll?: ScrollHandler | undefined;
-  /**
-   * The same offset as `onScroll`, as a value the UI thread can read.
+   * The screen's shared offset, which the header collapses from.
    *
-   * **The strip is a function of this** (S04 §7): it is interpolated against
-   * the list's day tops and written straight to the strip's scroller, without
-   * React seeing a frame of it. The screen owns it because the header
-   * collapses from the same number, and `list-start-gate.ts` is right that two
-   * animated scroll handlers do not compose — so there is exactly one, up
-   * there, and this is what it writes.
+   * **Written here, read there — and not the value this page's own strip and
+   * settle use.** All four pages are mounted at once and all four write this
+   * one number, so anything that interprets it through *this* page's day
+   * positions is reading someone else's gesture. Scrolling Summary dragged the
+   * off-screen strip, and swiping back to List then reported a day nobody had
+   * scrolled to, because the offset had moved while this page had not. This
+   * page keeps its own copy (`listY` below) for everything that means *where
+   * the list is*, and writes this one purely so the header keeps collapsing.
    */
   scrollY: SharedValue<number>;
   /**
@@ -171,7 +170,6 @@ export function HomeListPage({
   onCategorize,
   onReturnToToday,
   query,
-  onScroll,
   scrollY,
   onTick,
   active,
@@ -244,6 +242,7 @@ export function HomeListPage({
         direction: day.direction,
         ...(day.date === today ? { today: true } : {}),
         ...(day.date > today ? { ahead: true } : {}),
+        ...(day.generated === true ? { generated: true } : {}),
         // The full date and what happened, never the bare number the eye
         // reads: a run of them says nothing about which month or which year.
         // **`entries` is the *loaded* rows, which is a third reading of the
@@ -394,6 +393,26 @@ export function HomeListPage({
       })),
     [entries],
   );
+  /**
+   * **This page's own offset**, written by this page's own scroller and by
+   * nothing else. The screen's `scrollY` is shared by four mounted pages; this
+   * one means *where the list is*, which is the only thing the strip and the
+   * settle can honestly be a function of.
+   *
+   * One handler writing two values, rather than two handlers on one scroller —
+   * `list-start-gate.ts` is right that those do not compose.
+   */
+  const listY = useSharedValue(0);
+  const handleScroll = useAnimatedScrollHandler(
+    {
+      onScroll: (event) => {
+        listY.value = event.contentOffset.y;
+        scrollY.value = event.contentOffset.y;
+      },
+    },
+    [listY, scrollY],
+  );
+
   const geometry = useMemo(() => listGeometry(shape, heights, cellOf), [shape, heights, cellOf]);
   /**
    * **One value, not two arrays.** They were written as two assignments and
@@ -438,7 +457,7 @@ export function HomeListPage({
     },
     [geometry],
   );
-  useScrollSettle(scrollY, reportSettled, active);
+  useScrollSettle(listY, reportSettled, active);
 
   /**
    * **A tap on a day costs what it has to and no more** (S04 §7).
@@ -663,7 +682,7 @@ export function HomeListPage({
       <DayRibbon
         days={days}
         current={anchor}
-        scrollY={scrollY}
+        scrollY={listY}
         placement={placement}
         onPickDay={pickDay}
         onTick={onTick}
@@ -709,7 +728,7 @@ export function HomeListPage({
           // which is the whole difference between paging forward and being
           // thrown.
           maintainVisibleContentPosition={KEEP_POSITION}
-          onScroll={onScroll}
+          onScroll={handleScroll}
           // 16ms: the header interpolates from this, and the default reports
           // once per gesture — a header that jumps when the finger lifts.
           scrollEventThrottle={16}
@@ -776,10 +795,7 @@ const useStyles = makeStyles((theme) => ({
   content: { flexGrow: 1 },
   // Centred in the page it was given, not stacked at the top of it.
   empty: { flex: 1, justifyContent: "center" },
-  dayHeader: { paddingTop: space.x2, paddingBottom: space.sm },
-  firstDayHeader: { paddingBottom: space.sm },
   // A stated fact, not an empty state: one muted line, the weight `QuietDay`
   // gives a day the ledger has nothing for.
   nothingHere: { color: theme.textMuted, textAlign: "center", ...text.ui("body") },
-  unpriced: { color: theme.textMuted, ...text.ui("caption") },
 }));

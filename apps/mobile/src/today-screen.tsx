@@ -1430,7 +1430,6 @@ export default function Today() {
             onCategorize={handleCategorize}
             onReturnToToday={returnToToday}
             query={pager.state.query}
-            onScroll={handleScroll}
             scrollY={scrollY}
             onTick={dayTickHaptic}
             active={pager.state.page === "list"}

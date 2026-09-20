@@ -18,7 +18,7 @@ import { View } from "react-native";
 
 type Callback = (event: never) => void;
 
-class PanBuilder {
+export class PanBuilder {
   // Stored, not discarded: `threshold-slider.test.tsx`'s layout-mid-drag
   // test calls these directly to simulate `onStart`/`onUpdate` without a
   // real gesture-handler runtime — the same reason the callback is kept
@@ -34,22 +34,33 @@ class PanBuilder {
   /**
    * **Which axis the pan owns**, and which one it gives back.
    *
-   * Inert here like every other builder, but present: `swipeable-row.tsx`
-   * needs both of these to sit inside a vertical list at all — without them a
-   * pan activates in *any* direction and eats every scroll that begins on a
-   * row — and a stub missing a name is a `TypeError` on mount rather than a
-   * behaviour nobody tested.
+   * **Recorded, unlike the rest.** `swipeable-row.tsx` needs both of these to
+   * sit inside a vertical list at all — without them a pan activates in *any*
+   * direction and eats every scroll that begins on a row, which is a bug that
+   * shipped. Inert like every other builder here, the axes could be swapped —
+   * the exact inversion of that fix — and every test in the repository still
+   * passed. Storing the values is what lets one assert the thing the spec
+   * states: the sideways threshold is the larger of the two.
    */
-  activeOffsetX(_offsets: number | readonly number[]): this {
+  activeOffsetXValue: number | readonly number[] | null = null;
+  activeOffsetYValue: number | readonly number[] | null = null;
+  failOffsetXValue: number | readonly number[] | null = null;
+  failOffsetYValue: number | readonly number[] | null = null;
+
+  activeOffsetX(offsets: number | readonly number[]): this {
+    this.activeOffsetXValue = offsets;
     return this;
   }
-  activeOffsetY(_offsets: number | readonly number[]): this {
+  activeOffsetY(offsets: number | readonly number[]): this {
+    this.activeOffsetYValue = offsets;
     return this;
   }
-  failOffsetX(_offsets: number | readonly number[]): this {
+  failOffsetX(offsets: number | readonly number[]): this {
+    this.failOffsetXValue = offsets;
     return this;
   }
-  failOffsetY(_offsets: number | readonly number[]): this {
+  failOffsetY(offsets: number | readonly number[]): this {
+    this.failOffsetYValue = offsets;
     return this;
   }
   enabled(_enabled: boolean): this {
