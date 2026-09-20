@@ -40,6 +40,7 @@ import {
 } from "@waltning/core/money";
 import { I18nProvider } from "@waltning/ui/i18n/provider";
 import type { ReactElement } from "react";
+import { Profiler, useEffect, useReducer } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const router = {
@@ -47,9 +48,35 @@ const router = {
   back: vi.fn(),
   canGoBack: () => true,
   dismissTo: vi.fn(),
-  setParams: vi.fn(),
+  /**
+   * **A live param store, not a spy.** A `setParams` that only records leaves
+   * the screen frozen on the params it mounted with — so every behaviour that
+   * *follows* a navigation (a day press changing the day panel, a step moving
+   * the month) was unobservable, and a test asserting the call was asserting
+   * the request rather than the result.
+   */
+  setParams: vi.fn((next: Record<string, string>) => {
+    liveParams = { ...liveParams, ...next };
+    for (const notify of routeListeners) notify();
+  }),
 };
-const useLocalSearchParams = vi.fn(() => ({}));
+let liveParams: Record<string, string> = {};
+const routeListeners = new Set<() => void>();
+
+/**
+ * Reads the live store and subscribes, so a param write re-renders the screen
+ * exactly as the router's own hook would.
+ */
+const useLocalSearchParams = vi.fn(() => {
+  const [, bump] = useReducer((n: number) => n + 1, 0);
+  useEffect(() => {
+    routeListeners.add(bump);
+    return () => {
+      routeListeners.delete(bump);
+    };
+  }, []);
+  return liveParams;
+});
 
 vi.mock("expo-router", () => ({
   get router() {
@@ -375,7 +402,11 @@ function fakeController(options: FakeControllerOptions = {}) {
       rows: direction === "older" ? [...ledgerRows].sort(byDateDesc) : [],
       nextCursor: undefined,
     }),
-    readDayRows: (date) => ledgerRows.filter((row) => row.date === date),
+    readDayRows: (date) => {
+      readDayRowsCalls += 1;
+      commitsAtQuery = commits;
+      return ledgerRows.filter((row) => row.date === date);
+    },
     readDayFlows: (period) => dayFlowsOf(ledgerRows, period),
     readNearestActivity: (period) => nearestActivityOf(ledgerRows, period),
     /**
@@ -563,7 +594,17 @@ const RECENT_ROW: PhoneRecentTransaction = {
 };
 
 function withLedger(element: ReactElement, controller = fakeController()) {
-  return render(<LedgerProvider controller={controller}>{element}</LedgerProvider>);
+  return render(
+    <LedgerProvider controller={controller}>
+      <Profiler id="screen" onRender={countCommit}>
+        {element}
+      </Profiler>
+    </LedgerProvider>,
+  );
+}
+
+function countCommit() {
+  commits += 1;
 }
 
 beforeEach(() => {
@@ -571,9 +612,12 @@ beforeEach(() => {
   router.back.mockClear();
   router.dismissTo.mockClear();
   router.setParams.mockClear();
-  useLocalSearchParams.mockReturnValue({});
+  liveParams = {};
 });
 
+let readDayRowsCalls = 0;
+let commits = 0;
+let commitsAtQuery = 0;
 describe("Today", () => {
   it("renders the empty ledger with a create-account action that navigates", () => {
     withLedger(<Today />);
@@ -992,14 +1036,14 @@ describe("Today", () => {
   it("re-arms the toast's window when a second delete arrives with the same message", async () => {
     vi.useFakeTimers();
     try {
-      useLocalSearchParams.mockReturnValue({ message: "Transaction deleted.", nonce: "1" });
+      liveParams = { message: "Transaction deleted.", nonce: "1" };
       const { rerender } = withLedger(<Today />, fakeController({ accounts: [PLN_ACCOUNT] }));
       expect(screen.getByRole("alert").textContent).toContain("Transaction deleted.");
 
       await act(async () => {
         await vi.advanceTimersByTimeAsync(3_000);
       });
-      useLocalSearchParams.mockReturnValue({ message: "Transaction deleted.", nonce: "2" });
+      liveParams = { message: "Transaction deleted.", nonce: "2" };
       rerender(
         <LedgerProvider controller={fakeController({ accounts: [PLN_ACCOUNT] })}>
           <Today />
@@ -1056,7 +1100,7 @@ describe("QuickAdd", () => {
 
 describe("NewAccount", () => {
   it("renders the create form over the ledger's currencies", () => {
-    useLocalSearchParams.mockReturnValue({ returnTo: "today" });
+    liveParams = { returnTo: "today" };
     withLedger(<NewAccount />);
 
     expect(screen.getByText(/PLN/)).toBeDefined();
@@ -1069,7 +1113,7 @@ describe("NewAccount", () => {
    * and on the day the form is already dated by.
    */
   it("names a currency with no rate and opens S18 on it", () => {
-    useLocalSearchParams.mockReturnValue({ returnTo: "today" });
+    liveParams = { returnTo: "today" };
     withLedger(
       <NewAccount />,
       fakeController({
@@ -1449,9 +1493,7 @@ describe("Today — the pager, with a month in it", () => {
       recent?: readonly PhoneRecentTransaction[];
     } = {},
   ) {
-    useLocalSearchParams.mockReturnValue(
-      extra.q === undefined ? { view, date } : { view, date, q: extra.q },
-    );
+    liveParams = extra.q === undefined ? { view, date } : { view, date, q: extra.q };
     withLedger(
       <Today />,
       fakeController({
@@ -1547,6 +1589,36 @@ describe("Today — the pager, with a month in it", () => {
     expect(router.push).toHaveBeenCalledWith(
       expect.objectContaining({ pathname: "/transaction/[id]" }),
     );
+  });
+
+  /**
+   * **The press paints before the ledger is read.**
+   *
+   * `readDayRows` is a synchronous read of the replica. Run in the commit a
+   * press triggers, it sits between the finger and the paint — which is what
+   * "tapping a day is slow" was. It is not a re-render problem: measured here
+   * at **two commits and one query** per press, which is already tight. The
+   * fix is therefore deferral, not memoisation, and this pins the property
+   * that matters rather than the render count that does not.
+   *
+   * `commitsBeforeQuery` is 0 without `useDeferredValue` and 2 with it.
+   */
+  it("moves the mark before it reads the day", () => {
+    const calendar = open("calendar");
+    const queriesBefore = readDayRowsCalls;
+    const commitsBefore = commits;
+
+    const day = calendar
+      .getAllByRole("button")
+      .filter((node) => /^[A-Z][a-z]+ \d+, \d{4}/.test(node.getAttribute("aria-label") ?? ""))[15];
+    if (day === undefined) throw new Error("no day cell to press");
+    fireEvent.click(day);
+
+    expect(readDayRowsCalls - queriesBefore, "one read, not one per commit").toBe(1);
+    expect(
+      commitsAtQuery - commitsBefore,
+      "the selection commits before the replica is touched",
+    ).toBeGreaterThan(0);
   });
 
   it("opens the tapped day's entries under the Calendar's grid", () => {
