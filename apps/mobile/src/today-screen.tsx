@@ -64,7 +64,7 @@ import type { MonthRow } from "@waltning/ui/transactions/organisms/month-list/mo
 import { MonthList } from "@waltning/ui/transactions/organisms/month-list/month-list";
 import { YearChart, type YearColumn } from "@waltning/ui/transactions/year-chart";
 import { router, useLocalSearchParams } from "expo-router";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useDeferredValue, useMemo, useState } from "react";
 import { Text as RNText, useColorScheme, View } from "react-native";
 import { useAnimatedScrollHandler, useSharedValue } from "react-native-reanimated";
 import { HomeListPage } from "./home-list-page";
@@ -957,7 +957,21 @@ export default function Today() {
    * calendar showing the first thirty rows of one would be a shorter truth
    * than the mark above it, which counted all of them.
    */
-  const dayRows = useDayRows(ledger, pager.state.date, snapshot);
+  /**
+   * **The day's rows lag the selection by a frame, deliberately.**
+   *
+   * `readDayRows` is a synchronous read of the replica, and running it in the
+   * commit a press triggers puts a query between the finger and the paint:
+   * measured at two commits and one query per press, which is not a re-render
+   * problem — it is one blocking read on the wrong frame. Deferring the date
+   * lets the grid move its mark immediately and the panel underneath catch up,
+   * which is the order a reader perceives as "it responded".
+   *
+   * Only this read is deferred. `pager.state.date` still drives the mark, the
+   * header and the period, all of which are cheap and must not lag.
+   */
+  const dayRowsDate = useDeferredValue(pager.state.date);
+  const dayRows = useDayRows(ledger, dayRowsDate, snapshot);
   /**
    * The fold takes its **pivot**, which is the currency it sums in — the same
    * mistake as the label three lines below used to be: handed the lead
