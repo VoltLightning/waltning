@@ -20,6 +20,7 @@
 
 import type { FieldError } from "../../transport/field-errors/field-errors.ts";
 import type {
+  ConvertCategoryDraft,
   CreateAccountDraft,
   CreateCategoryDraft,
   QuickAddDraft,
@@ -44,6 +45,15 @@ export type DemoTarget = {
   createTransaction: (
     draft: QuickAddDraft,
   ) => { id: string; deferred?: boolean } | { fieldErrors: readonly FieldError[] };
+  /**
+   * **The only way to make a group.** `create_category` always writes a leaf
+   * — it never sets `isLeaf: false` — so a group is a leaf that has been
+   * converted, and hanging a child off an unconverted one is refused by
+   * `TAXONOMY.md` R1: a category is a group or a leaf, never both.
+   */
+  convertCategory: (
+    draft: ConvertCategoryDraft,
+  ) => { id: string } | { fieldErrors: readonly FieldError[] };
   /** What the device already has, so nothing is created twice. */
   existingCategories: readonly { id: string; name: string }[];
 };
@@ -56,10 +66,25 @@ export type DemoOutcome = {
   refused: number;
 };
 
+/**
+ * The id a call produced, or `null` for any refusal.
+ *
+ * **Both channels, because the executors use both.** A controller returns
+ * `{ fieldErrors }` for a validation refusal and *throws* `LocalRefusal` for
+ * one the replica makes — and the thrown half is what turned a single refused
+ * category into an uncaught error and a red box over the whole app. A loader
+ * that stops halfway leaves a ledger nobody can reason about, so every call
+ * goes through here.
+ */
 function accepted<T extends { id: string } | { fieldErrors: readonly FieldError[] }>(
-  result: T,
+  call: () => T,
 ): string | null {
-  return "id" in result ? result.id : null;
+  try {
+    const result = call();
+    return "id" in result ? result.id : null;
+  } catch {
+    return null;
+  }
 }
 
 export function loadDemo(
@@ -85,13 +110,24 @@ export function loadDemo(
       outcome.refused += 1;
       continue;
     }
-    const id = accepted(
+
+    const id = accepted(() =>
       target.createCategory({ name: category.name, kind: category.kind, parentId }),
     );
     if (id === null) {
       outcome.refused += 1;
       continue;
     }
+
+    // A group is a converted leaf. Done before its children exist, because
+    // the conversion refuses a category that already has any.
+    if (category.group === null) {
+      if (accepted(() => target.convertCategory({ id, to: "group" })) === null) {
+        outcome.refused += 1;
+        continue;
+      }
+    }
+
     categoryIds.set(category.name, id);
     outcome.categories += 1;
   }
@@ -99,7 +135,7 @@ export function loadDemo(
   // ── accounts ──────────────────────────────────────────────────────────
   const accountIds = new Map<string, string>();
   for (const account of DEMO_ACCOUNTS) {
-    const id = accepted(
+    const id = accepted(() =>
       target.createAccount({
         name: account.name,
         currency: account.currency,
@@ -127,19 +163,21 @@ export function loadDemo(
       outcome.refused += 1;
       continue;
     }
-    const result = target.createTransaction({
-      type: row.type,
-      amount: row.amount,
-      accountId,
-      categoryId: categoryIds.get(row.category) ?? null,
-      date: row.date,
-      payee: row.payee,
-      note: "",
-      isBusiness: false,
-      counterpartyId: null,
-      counterpartyRole: null,
-    });
-    if (accepted(result) === null) outcome.refused += 1;
+    const id = accepted(() =>
+      target.createTransaction({
+        type: row.type,
+        amount: row.amount,
+        accountId,
+        categoryId: categoryIds.get(row.category) ?? null,
+        date: row.date,
+        payee: row.payee,
+        note: "",
+        isBusiness: false,
+        counterpartyId: null,
+        counterpartyRole: null,
+      }),
+    );
+    if (id === null) outcome.refused += 1;
     else outcome.transactions += 1;
   }
 
