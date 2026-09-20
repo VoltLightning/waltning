@@ -21,7 +21,14 @@ import {
   yearMonths,
 } from "@waltning/client/transactions/year-months";
 import { FIRST_YEAR, stepYearPage, yearPage } from "@waltning/client/transactions/year-pages";
-import { accountingDate, addDays, monthRange, shiftMonth, yearMonth } from "@waltning/core/date";
+import {
+  type AccountingDate,
+  accountingDate,
+  addDays,
+  monthRange,
+  shiftMonth,
+  yearMonth,
+} from "@waltning/core/date";
 import * as money from "@waltning/core/money";
 import { CategorySheet } from "@waltning/ui/categories/category-sheet";
 import { SpendRows } from "@waltning/ui/dashboard/spend-rows";
@@ -269,6 +276,27 @@ export default function Today() {
   const pager = usePagerRoute(today);
   // `DayRibbon` hands back the date it drew; this is where a bare string
   // becomes an `AccountingDate`, and the only place it needs to.
+  /**
+   * S04 §6 — *"scroll to 25 May on List and Calendar has 25 May marked."*
+   *
+   * The list reports the day it is on; this writes it where both pages read
+   * it.
+   *
+   * **`showDay` needs no sibling for this.** `enterDay` sets the date and
+   * changes nothing else — no page, no period — and `write` is
+   * `router.setParams`, which replaces the params in place rather than
+   * pushing, so scrolling past thirty days leaves no route entries behind. A
+   * second writer meaning the same thing would be two ways to spell one
+   * operation.
+   *
+   * The list ignores this value coming back to it as its `anchor`
+   * (`visible-day.ts`'s `reanchors`), so the scroll does not re-anchor itself.
+   */
+  const handleVisibleDay = useCallback(
+    (date: AccountingDate) => pager.showDay(date),
+    [pager.showDay],
+  );
+
   const handlePickDay = useCallback(
     (date: string) => pager.showDay(accountingDate(date)),
     [pager.showDay],
@@ -1350,6 +1378,7 @@ export default function Today() {
           <HomeListPage
             ledger={ledger}
             anchor={pager.state.date}
+            onVisibleDay={handleVisibleDay}
             today={today}
             revision={snapshot.revision}
             {...(pivotCurrency === undefined
@@ -1449,6 +1478,7 @@ export default function Today() {
       returnToToday,
       handlePickMonth,
       handleScroll,
+      handleVisibleDay,
       ledger,
       listEmpty,
       month,

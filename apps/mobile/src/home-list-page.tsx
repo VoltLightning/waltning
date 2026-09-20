@@ -5,8 +5,13 @@ import type {
 import type { ListStartGate } from "@waltning/client/ledger/list-start-gate";
 import { listStartGate } from "@waltning/client/ledger/list-start-gate";
 import { useLedgerList } from "@waltning/client/ledger/use-ledger-list";
+import {
+  reanchors,
+  type ViewableItem,
+  visibleDay,
+} from "@waltning/client/ledger/use-ledger-list/visible-day";
 import { ribbonDays, toLedgerItems } from "@waltning/client/transactions/ledger-days";
-import type { AccountingDate } from "@waltning/core/date";
+import { type AccountingDate, accountingDate } from "@waltning/core/date";
 import type { CurrencyCode, Money } from "@waltning/core/money";
 import { Amount } from "@waltning/ui/fx/amount";
 import { dayLabel, dayRangeLabel, weekdayInitial } from "@waltning/ui/i18n/locales";
@@ -26,7 +31,7 @@ import {
 } from "@waltning/ui/transactions/molecules/day-ribbon/day-ribbon";
 import { LedgerRowItem } from "@waltning/ui/transactions/molecules/ledger-row-item/ledger-row-item";
 import { QuietDay, QuietRun } from "@waltning/ui/transactions/molecules/quiet-days/quiet-days";
-import { memo, useCallback, useEffect, useMemo, useRef } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { type FlatList, Text, View, type ViewToken } from "react-native";
 import Animated from "react-native-reanimated";
 
@@ -47,8 +52,20 @@ import Animated from "react-native-reanimated";
 
 export type HomeListPageProps = {
   ledger: PhoneLedgerController;
-  /** Where the list is centred. A change is a jump: both halves reload (S04 §6). */
+  /**
+   * Where the list is centred. A change is a jump: both halves reload (S04 §6)
+   * — **unless it is a date this list just reported**, which is the screen
+   * handing back what the scroll said and is not news (`visible-day.ts`).
+   */
   anchor: AccountingDate;
+  /**
+   * The day the reader has scrolled to, as it changes.
+   *
+   * S04 §6: *"scroll to 25 May on List and Calendar has 25 May marked."* The
+   * list is the only thing that knows which day is on screen, and it reports
+   * rather than writes — where that day is kept is the screen's business.
+   */
+  onVisibleDay?: (date: AccountingDate) => void;
   /** The device's own today, which stays marked wherever the list has scrolled. */
   today: AccountingDate;
   /**
@@ -119,6 +136,7 @@ type Entry =
 export function HomeListPage({
   ledger,
   anchor,
+  onVisibleDay,
   today,
   revision,
   pivotCurrency,
@@ -140,9 +158,30 @@ export function HomeListPage({
   const filter = useMemo(() => (query === null ? undefined : { text: query }), [query]);
   // One list per anchor and query — what the gate, and the scroll to the
   // anchor, both reset on.
-  const listKey = `${anchor}|${query ?? ""}`;
+  /**
+   * **What this list is built around, which is not always what it was told.**
+   *
+   * A date the list itself reported comes back as the `anchor` prop, and
+   * taking that at face value re-keys the list, discards both halves and
+   * scrolls the reader back to where they started — the scroll fighting
+   * itself. `reanchors` is the rule; this is the state it guards.
+   */
+  const [centred, setCentred] = useState(anchor);
+  const reported = useRef<string | null>(null);
+  const visibleDayRef = useRef(onVisibleDay);
+  visibleDayRef.current = onVisibleDay;
+
+  useEffect(() => {
+    if (!reanchors(anchor, centred, reported.current)) return;
+    // A jump is a fresh start: nothing this list said before it applies to
+    // where it is now.
+    reported.current = null;
+    setCentred(anchor);
+  }, [anchor, centred]);
+
+  const listKey = `${centred}|${query ?? ""}`;
   const { rows, settled, hasOlder, hasNewer, loadOlder, loadNewer } = useLedgerList(ledger, {
-    anchor,
+    anchor: centred,
     filter,
     revision,
   });
@@ -359,8 +398,17 @@ export function HomeListPage({
   }, []);
   // Ref-stable: `FlatList` refuses a changing `onViewableItemsChanged`, and
   // this one closes over nothing but a ref.
+  //
+  // **Through refs, because this callback can never change.** `FlatList`
+  // refuses a changing `onViewableItemsChanged`, so the reporter and the day
+  // last reported are read from refs the render keeps current.
   const notedScroll = useRef((info: { viewableItems: ViewToken[] }) => {
     gate.current?.note(info.viewableItems);
+
+    const seen = visibleDay(info.viewableItems as readonly ViewableItem[]);
+    if (seen === null || seen === reported.current) return;
+    reported.current = seen;
+    visibleDayRef.current?.(accountingDate(seen));
   });
 
   /**
