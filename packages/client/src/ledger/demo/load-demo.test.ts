@@ -16,6 +16,7 @@ function target(overrides: Partial<DemoTarget> = {}): DemoTarget {
     createCategory: vi.fn(() => ({ id: id() })),
     createTransaction: vi.fn(() => ({ id: id() })),
     convertCategory: vi.fn(() => ({ id: id() })),
+    setManualRate: vi.fn(() => ({ written: 1 })),
     existingCategories: [],
     ...overrides,
   };
@@ -173,5 +174,63 @@ describe("groups, and refusals that arrive by throwing", () => {
       created.every((draft) => draft.parentId === null),
       "no child was attempted",
     ).toBe(true);
+  });
+});
+
+/**
+ * **What a device found that no test had.** A currency with no rate is not
+ * `capturable`, and the controller declines a transaction in it *before* the
+ * write — the honest refusal, since a row it cannot value would land in no
+ * total. On a phone that has never synced there are no rates at all, so the
+ * USD and EUR accounts took every row with them: 600-odd refusals and a ledger
+ * holding nothing but the PLN ones.
+ */
+describe("currencies the ledger does not keep its books in", () => {
+  it("sets a rate for each of them, spanning every date the plan names", () => {
+    const t = target();
+    loadDemo(t, TODAY, 26);
+
+    const calls = vi.mocked(t.setManualRate).mock.calls.map(([draft]) => draft);
+    expect(calls.map((draft) => draft.quote).sort(), "every non-pivot currency").toEqual([
+      "EUR",
+      "USD",
+    ]);
+
+    const dates = demoTransactions(TODAY, 26)
+      .map((row) => row.date)
+      .sort();
+    for (const draft of calls) {
+      expect(draft.base, "quoted against the pivot").toBe("PLN");
+      expect(draft.from.localeCompare(dates[0] ?? ""), "covers the oldest row").toBeLessThanOrEqual(
+        0,
+      );
+      expect(draft.to.localeCompare(dates.at(-1) ?? ""), "and the newest").toBeGreaterThanOrEqual(
+        0,
+      );
+    }
+  });
+
+  /**
+   * Order is the whole fix: a rate written *after* the rows it values arrives
+   * too late, and every one of them has already been declined.
+   */
+  it("writes them before the first transaction", () => {
+    const order: string[] = [];
+    const t = target({
+      setManualRate: vi.fn(() => {
+        order.push("rate");
+        return { written: 1 };
+      }),
+      createTransaction: vi.fn(() => {
+        order.push("transaction");
+        return { id: "t" };
+      }),
+    });
+    loadDemo(t, TODAY, 1);
+
+    expect(order.indexOf("transaction"), "a transaction was attempted").toBeGreaterThan(-1);
+    expect(order.lastIndexOf("rate"), "every rate precedes it").toBeLessThan(
+      order.indexOf("transaction"),
+    );
   });
 });
