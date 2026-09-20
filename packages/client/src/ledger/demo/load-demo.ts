@@ -25,7 +25,15 @@ import type {
   CreateCategoryDraft,
   QuickAddDraft,
 } from "../create-phone-ledger/create-phone-ledger.ts";
-import { DEMO_ACCOUNTS, DEMO_CATEGORIES, DEMO_MONTHS, demoTransactions } from "./demo-plan.ts";
+import {
+  DEMO_ACCOUNTS,
+  DEMO_CATEGORIES,
+  DEMO_MONTHS,
+  DEMO_PIVOT,
+  DEMO_RATES,
+  demoSpan,
+  demoTransactions,
+} from "./demo-plan.ts";
 
 /**
  * Only what this loader calls.
@@ -54,11 +62,26 @@ export type DemoTarget = {
   convertCategory: (
     draft: ConvertCategoryDraft,
   ) => { id: string } | { fieldErrors: readonly FieldError[] };
+  /**
+   * A rate for a currency the ledger does not keep its books in.
+   *
+   * Returns a count rather than an id, so it does not go through `accepted`.
+   */
+  setManualRate: (draft: {
+    base: string;
+    quote: string;
+    from: string;
+    to: string;
+    rate: string;
+    today: string;
+  }) => { written: number } | { fieldErrors: readonly FieldError[] };
   /** What the device already has, so nothing is created twice. */
   existingCategories: readonly { id: string; name: string }[];
 };
 
 export type DemoOutcome = {
+  /** Rate rows written, one per day per pair. */
+  rates: number;
   accounts: number;
   categories: number;
   transactions: number;
@@ -92,7 +115,13 @@ export function loadDemo(
   today: string,
   months: number = DEMO_MONTHS,
 ): DemoOutcome {
-  const outcome: DemoOutcome = { accounts: 0, categories: 0, transactions: 0, refused: 0 };
+  const outcome: DemoOutcome = {
+    rates: 0,
+    accounts: 0,
+    categories: 0,
+    transactions: 0,
+    refused: 0,
+  };
 
   // ── categories ────────────────────────────────────────────────────────
   // Matched by name against what the device already holds, because a device
@@ -130,6 +159,28 @@ export function loadDemo(
 
     categoryIds.set(category.name, id);
     outcome.categories += 1;
+  }
+
+  // ── rates, before anything that needs valuing ─────────────────────────
+  // A currency with no rate is not `capturable` and every transaction in it is
+  // declined before the write. One call covers the whole span, so a row two
+  // years back values the same way a row from this morning does.
+  const span = demoSpan(today, months);
+  for (const rate of DEMO_RATES) {
+    try {
+      const result = target.setManualRate({
+        base: DEMO_PIVOT,
+        quote: rate.quote,
+        from: span.from,
+        to: span.to,
+        rate: rate.rate,
+        today,
+      });
+      if ("fieldErrors" in result) outcome.refused += 1;
+      else outcome.rates += result.written;
+    } catch {
+      outcome.refused += 1;
+    }
   }
 
   // ── accounts ──────────────────────────────────────────────────────────

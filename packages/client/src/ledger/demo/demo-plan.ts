@@ -345,3 +345,31 @@ export function demoTransactions(today: string, months: number): readonly DemoTr
 
 /** Two years and change: enough that a year chart has two of them. */
 export const DEMO_MONTHS = 26;
+
+/**
+ * A rate to the pivot for every currency the demo spends in but the ledger
+ * does not keep its books in.
+ *
+ * **Without these, most of the demo is refused.** A currency with no rate is
+ * not `capturable`, and the controller declines a transaction in it before the
+ * write — the honest refusal, because a row it cannot value is a row that
+ * would land in no total. On a device that has never synced there are no rates
+ * at all, so the USD and EUR accounts took every row with them: 600-odd
+ * refusals and a ledger of nothing but the PLN ones.
+ *
+ * Plausible, not accurate. A demo's figures only have to hold still.
+ */
+export const DEMO_RATES: readonly { quote: string; rate: string }[] = [
+  { quote: "USD", rate: "4.05" },
+  { quote: "EUR", rate: "4.32" },
+];
+
+/** What the ledger keeps its books in — the pivot, which needs no rate. */
+export const DEMO_PIVOT = "PLN";
+
+/** The first and last day the plan can name, for a rate that spans all of it. */
+export function demoSpan(today: string, months: number): { from: string; to: string } {
+  const rows = demoTransactions(today, months);
+  const dates = rows.map((row) => row.date).sort();
+  return { from: dates[0] ?? today, to: dates.at(-1) ?? today };
+}
