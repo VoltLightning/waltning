@@ -1177,6 +1177,7 @@ export const en = {
     appearanceFailed: "Appearance could not be saved.",
     resetTitle: "Delete preview data",
     resetPrompt: "Delete every account and transaction from this phone?",
+    loadDemo: "Load demo data",
     resetAction: "Reset preview data",
   },
   /**

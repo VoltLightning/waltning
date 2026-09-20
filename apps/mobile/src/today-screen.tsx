@@ -1,4 +1,5 @@
 import { useAppearance } from "@waltning/client/appearance/use-appearance";
+import { loadDemo } from "@waltning/client/ledger/demo/load-demo";
 import { deviceRuntime } from "@waltning/client/ledger/device-runtime";
 import { isPagerPageKey } from "@waltning/client/ledger/pager-date";
 import { useDayFlows } from "@waltning/client/ledger/use-day-flows";
@@ -21,7 +22,14 @@ import {
   yearMonths,
 } from "@waltning/client/transactions/year-months";
 import { FIRST_YEAR, stepYearPage, yearPage } from "@waltning/client/transactions/year-pages";
-import { accountingDate, addDays, monthRange, shiftMonth, yearMonth } from "@waltning/core/date";
+import {
+  accountingDate,
+  addDays,
+  monthRange,
+  shiftMonth,
+  todayIn,
+  yearMonth,
+} from "@waltning/core/date";
 import * as money from "@waltning/core/money";
 import { CategorySheet } from "@waltning/ui/categories/category-sheet";
 import { SpendRows } from "@waltning/ui/dashboard/spend-rows";
@@ -243,6 +251,31 @@ export default function Today() {
   const [refusalToken, setRefusalToken] = useState(0);
   const hasAccounts = snapshot.accounts.length > 0;
   const handleReset = useCallback(() => ledger.reset(), [ledger]);
+
+  /**
+   * Fill the ledger with `client/ledger/demo`'s invented data, straight into
+   * this device's replica — no server, no network, no seeded Postgres. The
+   * loader drives the same controller methods a person's taps do, so what
+   * lands has been through the executors rather than written past them.
+   *
+   * Returns what it wrote, because a partly-refused run has to say so rather
+   * than present as a smaller dataset.
+   */
+  const handleLoadDemo = useCallback(() => {
+    const outcome = loadDemo(
+      {
+        createAccount: ledger.createAccount,
+        createCategory: ledger.createCategory,
+        createTransaction: ledger.createTransaction,
+        existingCategories: snapshot.categories,
+      },
+      todayIn(Intl.DateTimeFormat().resolvedOptions().timeZone),
+    );
+    ledger.refresh();
+    return `${outcome.transactions} rows · ${outcome.accounts} accounts${
+      outcome.refused > 0 ? ` · ${outcome.refused} refused` : ""
+    }`;
+  }, [ledger, snapshot.categories]);
   // The error a failed refresh set stays on the snapshot until the next
   // success (`create-phone-ledger.ts`'s `refresh()`) — `ErrorState`'s action
   // asks for exactly that next attempt. Its own throw is for a caller that
@@ -791,6 +824,7 @@ export default function Today() {
               resetEnabled={PREVIEW_RESET_ENABLED}
               onPreference={handlePreference}
               onReset={handleReset}
+              onLoadDemo={handleLoadDemo}
             />
           </View>
           <GatewayGrid gateways={gateways} onSelect={handleGateway} />
@@ -820,6 +854,7 @@ export default function Today() {
       gateways,
       resolved.preference,
       handleReset,
+      handleLoadDemo,
       sectionStyles,
     ],
   );
