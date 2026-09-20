@@ -72,6 +72,8 @@ export const en = {
     year: "Year",
     /** `DatePicker`'s confirm. The drum's value is not committed until this. */
     pickADate: "Pick a date",
+    previousMonth: "Previous month",
+    nextMonth: "Next month",
     useThisDate: "Use this date",
     /** `DateField`'s second shortcut chip. The first reuses `shell.today`. */
     yesterday: "Yesterday",

@@ -2960,6 +2960,10 @@ describe("a control's edge is not the divider colour", () => {
       "the same area, cut into rows for a virtualised list — the edge belongs to the day, not to the row that happens to carry it",
     ],
     [
+      "packages/ui/src/primitives/molecules/calendar/calendar.tsx#panel",
+      "§3.7a's month grid — a panel drawn above the page, with its own pressable days inside it. `Select`'s panel is the same shape",
+    ],
+    [
       "packages/ui/src/transactions/molecules/amount-card/amount-card.tsx#card",
       "S05's amount card — an area holding the one typed field; the card is bordered as a card, the input inside it is the control",
     ],
@@ -3602,6 +3606,13 @@ describe("every pressable answers the finger", () => {
       { allowed: 1, why: "the same backdrop; the dialog's own buttons are `Button`, which scales" },
     ],
     [
+      "packages/ui/src/primitives/molecules/calendar/calendar.tsx",
+      {
+        allowed: 1,
+        why: "the panel's backdrop, the fifth of exactly one shape. Its days and month arrows are `PressableScaled` and do scale",
+      },
+    ],
+    [
       "packages/ui/src/primitives/molecules/date-picker/date-picker.tsx",
       {
         allowed: 1,
@@ -3617,8 +3628,8 @@ describe("every pressable answers the finger", () => {
     ],
   ]);
 
-  /** Every bare `<Pressable` tag the scan sees today: 18 hand-wired, 4 backdrops. */
-  const BARE_TAG_COUNT = 22;
+  /** Every bare `<Pressable` tag the scan sees today: 18 hand-wired, 5 backdrops. */
+  const BARE_TAG_COUNT = 23;
   /** The docblocks here name `Pressable` constantly; only rendered tags count. */
   const withoutComments = (text: string) =>
     text.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
