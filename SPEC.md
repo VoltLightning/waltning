@@ -1958,12 +1958,13 @@ load-bearing.
 
 Two kinds of time field, and they follow opposite rules.
 
-| | **Accounting date** | **System timestamp** |
-|---|---|---|
-| Columns | `transactions.date`, `fx_rates.date`, `receipts.purchased_at`, `targets.active_from` | `created_at`, `updated_at`, `approved_at`, `applied_at`, `audit_log.at` |
-| Type | `date` — no time, no zone | `timestamptz`, stored UTC |
-| Set by | The **device's local calendar at capture** | The server clock |
-| Rendered | Verbatim. Never converted | Converted to the viewer's locale |
+| | **Accounting date** | **Time of day** | **System timestamp** |
+|---|---|---|---|
+| Columns | `transactions.date`, `fx_rates.date`, `receipts.purchased_at`, `targets.active_from` | `transactions.time_of_day` | `created_at`, `updated_at`, `approved_at`, `applied_at`, `audit_log.at` |
+| Type | `date` — no time, no zone | `time` — no date, no zone, **nullable** | `timestamptz`, stored UTC |
+| Set by | The **device's local calendar at capture** | The person, or nobody | The server clock |
+| Rendered | Verbatim. Never converted | Verbatim. Never converted | Converted to the viewer's locale |
+| Answers | Which day this belongs to | When in that day it happened | When the system did something |
 
 **An accounting date is not an instant.** It is a business fact: NBP publishes a
 rate *for a date*, a tax period is bounded *by dates*, and a month's total is
@@ -1976,6 +1977,41 @@ and is thereafter immutable.
 
 System timestamps have the opposite requirement: an audit entry answers *when
 did this happen*, which is a genuine instant. Those are UTC and render local.
+
+**Time of day is the third kind, and it is deliberately the weakest.** It
+records when in a day something happened — the 14:20 on a receipt, the coffee
+before work rather than after it — and that is *all* it does. It is a bare
+clock time with no zone, paired with a bare date, so the two together are one
+consistent local reading of where the person was standing; `capturedTz` already
+records where that was.
+
+**It is never an accounting fact.** No period is bounded by it, no FX rate is
+selected by it, no total is grouped by it, and **it never reaches a tax
+output**. That is enforced twice and neither place is prose: `tax_ledger`
+enumerates its columns (`SELECT t.id, t.date, t.type, …`) so a new column on
+`transactions` cannot appear in it by growing, and `verify_t1()` asserts the
+set of relations `waltning_export` may read is exactly `{tax_ledger}` — the
+check that already caught `transactions_valued` walking into this gap once.
+
+A ledger's unit of account is the day: that is what NBP publishes a rate for, what a tax period is bounded by,
+and what a month's total is the set of. Adding a clock does not change any of
+that, and a time that could quietly change which period a row falls in would
+undo §7.0a's whole argument.
+
+**Nullable, and the null is not a zero.** Most rows will never have one — a
+card settlement knows its day and not its minute — and `00:00` is a real time
+somebody could mean. A row without one is a row that does not claim to know.
+
+**What it is for is order within a day.** Rows carrying a time sort by it;
+rows without one sort after them, in the order they were entered. That rule is
+total and stable, so a day's list never reshuffles because an unrelated row was
+edited.
+
+**It is the person's, not the device's.** Unlike the accounting date, which is
+resolved once at capture and is thereafter immutable, a time of day is typed or
+picked and can be corrected — it is a description of an event, not a fact about
+when the system was told.
+
 
 This matters here rather than being a footnote because the premise of §7.0 is
 that time is split across three countries.

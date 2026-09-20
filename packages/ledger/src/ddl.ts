@@ -527,6 +527,10 @@ export const REPLICA_STEPS: readonly {
       `CREATE INDEX \`transactions_date_idx\` ON \`transactions\` (\`date\`)`,
     ],
   },
+  {
+    tag: "0014_schema",
+    statements: [`ALTER TABLE \`transactions\` ADD \`time_of_day\` text`],
+  },
 ];
 
 /** One step per file in `drizzle/outbox`, filename order — the queue, its index, and the counter `claimSeq` allocates from. */

@@ -17,7 +17,13 @@
  */
 
 import { z } from "zod";
-import { type AccountingDate, accountingDate, isRealCalendarDate } from "./date.ts";
+import {
+  type AccountingDate,
+  accountingDate,
+  isRealCalendarDate,
+  type TimeOfDay,
+  timeOfDay,
+} from "./date.ts";
 import type { Id, IdTable } from "./id.ts";
 import {
   type CurrencyCode,
@@ -144,6 +150,27 @@ export const zAccountingDate = z
   .regex(/^\d{4}-\d{2}-\d{2}$/, "expected a date as YYYY-MM-DD, with no time and no zone")
   .refine(isRealCalendarDate, "not a real calendar date")
   .transform((v): AccountingDate => accountingDate(v));
+
+/**
+ * A bare `HH:MM` on a 24-hour clock (§7.0a).
+ *
+ * **No seconds, deliberately.** Nothing in this ledger knows a second, and two
+ * spellings of one minute would sort and compare differently — the same
+ * argument that makes an accounting date bare. Postgres renders the column
+ * `HH:MM:SS`; the read boundary narrows it back, and the CHECK underneath
+ * refuses anything that is not a whole minute.
+ *
+ * Unlike `zAccountingDate` there is no second, calendar-shaped check to make:
+ * every `HH:MM` the regex admits is a time that exists, which is why the range
+ * is in the pattern rather than a `.refine`.
+ */
+export const zTimeOfDay = z
+  .string()
+  .regex(
+    /^([01]\d|2[0-3]):[0-5]\d$/,
+    "expected a time as HH:MM on a 24-hour clock, with no seconds, no date and no zone",
+  )
+  .transform((v): TimeOfDay => timeOfDay(v));
 
 /** An ISO 4217 code. Upper-cased first, so `pln` is accepted and `PLN` is stored. */
 export const zCurrencyCode = z

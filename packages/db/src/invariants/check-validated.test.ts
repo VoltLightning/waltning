@@ -150,6 +150,10 @@ const CHECKS: Record<string, () => Promise<unknown>> = {
   transactions_debt_shape: () => insertRow({ debt_amount: "5.00" }),
   // A zero fee — "no fee" is null, never zero.
   transactions_fee_positive: () => insertRow({ fee: "0.00" }),
+  // §7.0a — the minute is the resolution. Postgres `time` would take a second
+  // happily, and a row carrying one is a second spelling of the same minute,
+  // which sorts and compares differently from every other row.
+  transactions_time_of_day_whole_minute: () => insertRow({ time_of_day: "14:20:30" }),
   // A tax FX rate with no tax FX date.
   transactions_tax_fx_shape: () => insertRow({ tax_fx_rate: "1" }),
   // A zero FX rate — `amount_pivot = amount_original × fx_rate` refuses one.

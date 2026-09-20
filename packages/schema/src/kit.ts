@@ -40,7 +40,7 @@
  * layered around the shared tables rather than inside them — §14.7's rule.
  */
 
-import type { AccountingDate } from "@waltning/core/date";
+import type { AccountingDate, TimeOfDay } from "@waltning/core/date";
 import type { Id, IdTable } from "@waltning/core/id";
 import type { CurrencyCode, Money, PivotPerUnit, UnitsPerPivot } from "@waltning/core/money";
 import { randomId } from "@waltning/core/random";
@@ -53,6 +53,7 @@ import {
   numeric as pgNumeric,
   pgTable,
   text as pgText,
+  time as pgTime,
   timestamp as pgTimestamp,
   uniqueIndex as pgUniqueIndex,
   uuid as pgUuid,
@@ -127,6 +128,15 @@ export const pgKit = {
    * is both the wrong shape and, east of UTC, the wrong day.
    */
   date: (name: string) => pgDate(name).$type<AccountingDate>(),
+  /**
+   * A bare `HH:MM` clock time (§7.0a). Nullable wherever it appears — most
+   * rows never claim to know a minute, and `00:00` is a real time somebody
+   * could mean, so the absence has to be a null rather than a zero.
+   *
+   * Branded, so an ISO instant cannot compile into one. Postgres renders this
+   * as `HH:MM:SS`; `timeOfDayFromDb` narrows it at the read boundary.
+   */
+  timeOfDay: (name: string) => pgTime(name).$type<TimeOfDay>(),
   /** An ISO 4217 code, and not the same type as `payee`. */
   currency: (name: string) => pgText(name).$type<CurrencyCode>(),
   /**
@@ -176,6 +186,8 @@ export const sqliteKit = {
   unitsPerPivot: (name: string) => sqliteText(name).$type<UnitsPerPivot>(),
   /** A bare `YYYY-MM-DD` string, which is what Postgres `date` produces too. */
   date: (name: string) => sqliteText(name).$type<AccountingDate>(),
+  /** TEXT. SQLite has no time type, and `HH:MM` sorts correctly as text. */
+  timeOfDay: (name: string) => sqliteText(name).$type<TimeOfDay>(),
   currency: (name: string) => sqliteText(name).$type<CurrencyCode>(),
   qty: (name: string) => sqliteText(name),
   taxRate: (name: string) => sqliteText(name),
