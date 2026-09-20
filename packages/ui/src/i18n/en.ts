@@ -1270,7 +1270,18 @@ export const en = {
     failed: "That did not restore",
     failedCost: "Nothing was written — your ledger is as it was.",
   },
+  /**
+   * Settings · Developer — present in a development build only, so none of
+   * this is copy a person who keeps a ledger will ever read.
+   */
+  developer: {
+    subtitle: "Data for looking at",
+    lede: "Invented accounts and two years of transactions, written straight into this device. Nothing here touches a server.",
+    loaded: "{{transactions}} rows · {{accounts}} accounts",
+    refused: " · {{count}} refused",
+  },
   routes: {
+    developer: "Developer",
     restore: "Restore",
     backup: "Back up",
     expense: "Expense",

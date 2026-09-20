@@ -677,7 +677,14 @@ export const pl: Messages = {
     failed: "Nie udało się przywrócić",
     failedCost: "Nic nie zostało zapisane — księga jest taka jak była.",
   },
+  developer: {
+    subtitle: "Dane do oglądania",
+    lede: "Wymyślone konta i dwa lata transakcji, zapisane wprost na tym urządzeniu. Nic tutaj nie dotyka serwera.",
+    loaded: "{{transactions}} wierszy · {{accounts}} kont",
+    refused: " · {{count}} odrzucono",
+  },
   routes: {
+    developer: "Deweloper",
     restore: "Przywróć",
     backup: "Kopia zapasowa",
     expense: "Wydatek",

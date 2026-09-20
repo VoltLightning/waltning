@@ -319,6 +319,7 @@ function AppStack() {
       <Stack.Screen name="settings/rates" options={{ title: t("routes.rates") }} />
       <Stack.Screen name="settings/backup" options={{ title: t("routes.backup") }} />
       <Stack.Screen name="settings/restore" options={{ title: t("routes.restore") }} />
+      <Stack.Screen name="settings/developer" options={{ title: t("routes.developer") }} />
       <Stack.Screen name="counterparty/[id]" options={{ title: t("routes.counterparty") }} />
       <Stack.Screen name="counterparty/new" options={{ title: t("routes.newCounterparty") }} />
       <Stack.Screen

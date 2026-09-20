@@ -3533,7 +3533,7 @@ describe("the escape is drawn quietly, everywhere", () => {
     /<Button\b(?:(?!<Button\b|\/>)[\s\S])*?\blabel=\{t\("common\.cancel"\)\}(?:(?!<Button\b|\/>)[\s\S])*?\/>/gs;
   const CANCEL_ROOTS = ["packages/ui/src", "apps/mobile/src"];
   /** Every Cancel that exists today. An exact count, so one cannot vanish silently. */
-  const CANCEL_COUNT = 11;
+  const CANCEL_COUNT = 12;
 
   it("gives every Cancel button the ghost variant and no other", () => {
     const offenders: string[] = [];
