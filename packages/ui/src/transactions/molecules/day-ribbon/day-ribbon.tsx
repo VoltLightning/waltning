@@ -51,6 +51,7 @@ import {
 import { makeStyles } from "../../../theme/styles.ts";
 import { radius, space } from "../../../tokens.ts";
 import { type DayActivity, DayCell, type DayDirection } from "../../atoms/day-cell/day-cell";
+import { type Grip, grip, LOOSE, letGo, snapsNow, takeHold, ticksNow } from "./grip.ts";
 import {
   aheadCount,
   CELL,
@@ -209,19 +210,6 @@ function DayRibbonView({ days, current, scrollY, placement, onPickDay, onTick }:
   const width = useSharedValue(0);
   /** Where the strip is drawn, in fractional days. */
   const shown = useSharedValue(0);
-  /**
-   * A hand is on the strip, so the list does not get to place it.
-   *
-   * **Inferred from movement, not from `onScrollBeginDrag`.** That event does
-   * not fire for a wheel or a trackpad on `react-native-web` — the same gap
-   * that makes `onMomentumScrollEnd` useless there (`scroll-settle.ts` says
-   * so at length) — so on the web the strip was snapped back to the list's day
-   * within a frame of every attempt to browse it, and §7's *the list of dates
-   * is scrollable too* was true on a phone and false on two of the three
-   * targets that ship. What is true everywhere is that the scroller moved and
-   * this component did not move it.
-   */
-  const detached = useSharedValue(false);
   /** The list offset this has already acted on — what says the list has moved. */
   const seen = useSharedValue(0);
   /**
@@ -277,16 +265,11 @@ function DayRibbonView({ days, current, scrollY, placement, onPickDay, onTick }:
   /** The cell the strip is landing on, or `-1` while the list is moving. */
   const landing = useSharedValue(-1);
   /**
-   * A finger is **on** the strip right now — not merely that it was.
-   *
-   * **`detached` is not this, and using it for the tick was wrong.** Detach
-   * outlives the gesture on purpose (§7: *lifting the finger changes
-   * nothing*), so a flick that coasts thirty cells fired thirty haptics with
-   * the hand already off the glass — the "buzz forty times through one fling"
-   * the tick's own doc exists to rule out, on the strip's fling instead of the
-   * list's. A tap is a thing a finger does, so it is gated on the finger.
+   * Who is driving the strip — `grip.ts`, where the rule is and where it is
+   * tested. Three reviews found three bugs in this one decision, every one of
+   * them invisible from here: a frame callback has no test that can see it.
    */
-  const dragging = useSharedValue(false);
+  const hold = useSharedValue<Grip>(LOOSE);
   /** The cell the tick last fired for, so it fires once per day crossed. */
   const ticked = useSharedValue(-1);
   /** Whether the strip has already been snapped where it now sits. */
@@ -346,19 +329,30 @@ function DayRibbonView({ days, current, scrollY, placement, onPickDay, onTick }:
       const listJumped = listMoved && !gliding.value;
       seen.value = scrollY.value;
       gliding.value = listMoved;
-      if (listJumped) detached.value = false;
-
+      /*
+        **A finger on the strip outranks the list, and the list moves anyway.**
+        The strip is a horizontal scroller inside a page that scrolls
+        vertically, so a real thumb drag along it moves the list by a point or
+        two as well — and without the guard that counted as the reader taking
+        the list back, cleared the detach mid-gesture, and threw the strip to
+        the day the list is on. On a phone: drag from the 20th toward the 16th
+        and the strip snaps home to the 20th under your thumb.
+      */
       const drifted = at.value !== was.value;
       was.value = at.value;
-      if (drifted) {
-        const ours = at.value - wrote.value;
-        const reachable = wrote.value <= content.value - measured + 0.5 && wrote.value >= -0.5;
-        if (reachable && (ours > 1 || ours < -1)) detached.value = true;
-      }
+      const ours = at.value - wrote.value;
+      hold.value = grip(hold.value, {
+        listJumped,
+        drifted,
+        // The last write was one the scroller could reach, so a difference
+        // from it is somebody else's doing rather than a clamp.
+        reachable: wrote.value <= content.value - measured + 0.5 && wrote.value >= -0.5,
+        moved: ours > 1 || ours < -1,
+      });
       const elapsed = frame.timeSincePreviousFrame;
       const step = elapsed === null ? 16 : elapsed;
 
-      if (detached.value) {
+      if (hold.value.detached) {
         /*
         **A hand on the strip, so it snaps and it ticks** (S04 §7).
 
@@ -383,12 +377,20 @@ function DayRibbonView({ days, current, scrollY, placement, onPickDay, onTick }:
           // the glass — the "buzz forty times through one fling" this tick's
           // own doc exists to rule out, on the strip's fling instead of the
           // list's. A tap is something a finger does.
-          if (!first && dragging.value && onTick !== undefined) runOnJS(onTick)();
+          if (ticksNow(hold.value, first) && onTick !== undefined) runOnJS(onTick)();
         }
+        /*
+          **The snap waits for the finger to leave.** Measured while it was
+          still down, a pause mid-drag was a settle: the strip animated itself
+          to the nearest cell while the thumb was still moving, which reads as
+          the strip jumping somewhere of its own accord — the 10th, on the way
+          from the 20th to the 16th. `rest` is reset when the gesture begins
+          and ends, so stillness is counted from the lift.
+        */
         const before = rest.value;
         const after = advance(before, at.value, step);
         rest.value = after;
-        if (!snapped.value && justSettled(before, after)) {
+        if (snapsNow(hold.value, justSettled(before, after), snapped.value)) {
           snapped.value = true;
           shown.value = cell;
           const landing = offsetWithin(cell, measured, content.value);
@@ -472,9 +474,8 @@ function DayRibbonView({ days, current, scrollY, placement, onPickDay, onTick }:
       aimed,
       content,
       count,
-      detached,
-      dragging,
       gliding,
+      hold,
       landing,
       listRest,
       onTick,
@@ -515,23 +516,23 @@ function DayRibbonView({ days, current, scrollY, placement, onPickDay, onTick }:
   const handleStripScroll = useAnimatedScrollHandler(
     {
       onBeginDrag: () => {
-        detached.value = true;
-        dragging.value = true;
+        hold.value = takeHold();
+        // Stillness is measured from the lift, not through the gesture.
+        rest.value = UNREAD;
       },
       onEndDrag: () => {
-        // The gesture is over; the detach is not (§7). What ends here is the
-        // tick, which belongs to the finger rather than to the momentum.
-        dragging.value = false;
+        hold.value = letGo(hold.value);
+        rest.value = UNREAD;
       },
       onScroll: (event) => {
         // Always: this is where the strip *is*, whoever moved it, and the
         // frame callback compares against it to notice a clamped `scrollTo`.
         at.value = event.contentOffset.x;
-        if (!detached.value) return;
+        if (!hold.value.detached) return;
         shown.value = fracAt(event.contentOffset.x, width.value);
       },
     },
-    [at, detached, dragging, shown, width],
+    [at, hold, rest, shown, width],
   );
 
   const cells = useMemo(() => cellsFor(days, band), [days, band]);

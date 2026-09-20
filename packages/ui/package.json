@@ -170,6 +170,7 @@
     "./transactions/ledger-table": "./src/transactions/organisms/ledger-table/ledger-table.tsx",
     "./transactions/lines-card": "./src/transactions/organisms/lines-card/lines-card.tsx",
     "./transactions/molecules/day-ribbon/day-ribbon": "./src/transactions/molecules/day-ribbon/day-ribbon.tsx",
+    "./transactions/molecules/day-ribbon/grip": "./src/transactions/molecules/day-ribbon/grip.ts",
     "./transactions/molecules/day-ribbon/scrub": "./src/transactions/molecules/day-ribbon/scrub.ts",
     "./transactions/molecules/entry-row/ledger-entry": "./src/transactions/molecules/entry-row/ledger-entry.ts",
     "./transactions/molecules/ledger-row-item/ledger-row-item": "./src/transactions/molecules/ledger-row-item/ledger-row-item.tsx",
