@@ -30,15 +30,6 @@ export type PreviewAppearanceControlsProps = {
   resetEnabled: boolean;
   onPreference: (preference: AppearancePreference) => Promise<void>;
   onReset: () => void;
-  /**
-   * Fill the ledger with invented data (`client/ledger/demo`).
-   *
-   * Gated by the same flag as the reset, and for the same reason: both exist
-   * to make a build you can look at, and neither belongs in a hand somebody
-   * keeps their own ledger in. It reports what it wrote so a partly-refused
-   * run says so rather than looking like a smaller dataset.
-   */
-  onLoadDemo: () => string;
 };
 
 export function PreviewAppearanceControls({
@@ -47,7 +38,6 @@ export function PreviewAppearanceControls({
   resetEnabled,
   onPreference,
   onReset,
-  onLoadDemo,
 }: PreviewAppearanceControlsProps) {
   const t = useT();
   const styles = useStyles();
@@ -63,20 +53,14 @@ export function PreviewAppearanceControls({
   );
   const [sheet, setSheet] = useState<"closed" | "appearance" | "reset">("closed");
   const [appearanceError, setAppearanceError] = useState(false);
-  const [demoResult, setDemoResult] = useState<string | null>(null);
   const showAppearance = useCallback(() => setSheet("appearance"), []);
   const dismiss = useCallback(() => setSheet("closed"), []);
   const showReset = useCallback(() => setSheet("reset"), []);
   const reset = useCallback(() => {
     onReset();
-    setDemoResult(null);
     setSheet("closed");
   }, [onReset]);
 
-  // The sheet stays open: writing two years of rows takes a moment and the
-  // count is the only evidence it happened, so closing on press would leave
-  // the reader guessing whether the press registered.
-  const loadDemo = useCallback(() => setDemoResult(onLoadDemo()), [onLoadDemo]);
   const changePreference = useCallback(
     (next: string) => {
       if (!isAppearancePreference(next)) return;
@@ -113,12 +97,13 @@ export function PreviewAppearanceControls({
             {appearanceError ? (
               <Banner tone="negative" message={t("preview.appearanceFailed")} />
             ) : null}
+            {/*
+              Appearance and nothing else. Filling or emptying a ledger lives
+              in Settings · Developer — a control that rewrites what the app
+              holds has no business sharing a sheet with light and dark.
+            */}
             {resetEnabled ? (
-              <>
-                <Button label={t("preview.loadDemo")} onPress={loadDemo} variant="secondary" />
-                {demoResult === null ? null : <Banner tone="neutral" message={demoResult} />}
-                <Button label={t("preview.resetAction")} onPress={showReset} variant="danger" />
-              </>
+              <Button label={t("preview.resetAction")} onPress={showReset} variant="danger" />
             ) : null}
           </View>
         )}

@@ -97,6 +97,10 @@ it("opens Accounts, and lists it first", () => {
     "Exchange rates",
     "Back up",
     "Restore",
+    // Last, and in a group of its own — a development affordance never sits
+    // among the rows a person uses. Present here because a test runs under
+    // `__DEV__`; a production build has no such row at all.
+    "Developer",
   ]);
   fireEvent.click(screen.getByText("Accounts"));
   expect(router.push).toHaveBeenCalledWith("/accounts");
@@ -132,4 +136,16 @@ it("opens Back up", () => {
 it("draws no title of its own", () => {
   withLedger();
   expect(screen.queryByText("Settings")).toBeNull();
+});
+
+/**
+ * **The gate is the row, not the screen.** `PREVIEW_RESET_ENABLED` is `true`
+ * under a test runner (`__DEV__`), so what is asserted here is that the row
+ * exists and goes to the right place; the production half is asserted by
+ * reading the flag rather than by pretending a build.
+ */
+it("offers the developer screen in a build that carries the preview flag", () => {
+  withLedger();
+  fireEvent.click(screen.getByRole("button", { name: /Developer/ }));
+  expect(router.push).toHaveBeenCalledWith("/settings/developer");
 });

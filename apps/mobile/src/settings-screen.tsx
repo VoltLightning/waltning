@@ -28,6 +28,7 @@ import { radius, space } from "@waltning/ui/tokens";
 import { router } from "expo-router";
 import { useCallback, useMemo } from "react";
 import { Text, View } from "react-native";
+import { PREVIEW_RESET_ENABLED } from "./platform";
 
 /**
  * Every destination, keyed by its own `routes.*` label — so the menu's order
@@ -42,6 +43,7 @@ const ROUTES = {
   rates: "/settings/rates",
   backup: "/settings/backup",
   restore: "/settings/restore",
+  developer: "/settings/developer",
 } as const;
 
 type Destination = keyof typeof ROUTES;
@@ -70,6 +72,12 @@ const GROUPS = [
   ],
 ] as const satisfies readonly (readonly { id: Destination; glyph: SettingsMenuGlyph }[])[];
 
+/** Appended only in a build that carries `PREVIEW_RESET_ENABLED`. */
+const DEVELOPER_GROUP = [{ id: "developer", glyph: "developer" }] as const satisfies readonly {
+  id: Destination;
+  glyph: SettingsMenuGlyph;
+}[];
+
 export default function Settings() {
   const t = useT();
   const styles = useStyles();
@@ -93,9 +101,21 @@ export default function Settings() {
     };
   }, [snapshot.accounts, snapshot.currencies, t]);
 
+  /**
+   * The development group, and **the gate is the row itself**.
+   *
+   * A production build has no door to that screen rather than a door into an
+   * empty one — the same flag the reset has always carried, read in one place
+   * so a second screen cannot forget it.
+   */
+  const visible = useMemo(
+    () => (PREVIEW_RESET_ENABLED ? [...GROUPS, DEVELOPER_GROUP] : GROUPS),
+    [],
+  );
+
   const groups = useMemo(
     (): readonly (readonly SettingsMenuItem<Destination>[])[] =>
-      GROUPS.map((group) =>
+      visible.map((group) =>
         group.map((row) => ({
           id: row.id,
           glyph: row.glyph,
@@ -103,7 +123,7 @@ export default function Settings() {
           ...(values[row.id] === undefined ? {} : { value: values[row.id] as string }),
         })),
       ),
-    [t, values],
+    [t, values, visible],
   );
 
   // No runtime guard: `SettingsMenu` is generic in its id type, so what comes

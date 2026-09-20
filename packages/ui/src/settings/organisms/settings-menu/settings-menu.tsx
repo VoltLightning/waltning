@@ -43,6 +43,7 @@ import {
   CreditCardIcon,
   CurrencyCircleDollarIcon,
   ShieldCheckIcon,
+  SlidersHorizontalIcon,
   TagIcon,
 } from "../../../shell/phosphor";
 import { text } from "../../../theme/fonts.ts";
@@ -57,7 +58,8 @@ export type SettingsMenuGlyph =
   | "currencies"
   | "rates"
   | "backup"
-  | "restore";
+  | "restore"
+  | "developer";
 
 const GLYPHS = {
   accounts: CreditCardIcon,
@@ -66,6 +68,7 @@ const GLYPHS = {
   rates: ArrowsLeftRightIcon,
   backup: ShieldCheckIcon,
   restore: ClockCounterClockwiseIcon,
+  developer: SlidersHorizontalIcon,
 } as const satisfies Record<SettingsMenuGlyph, (props: PhosphorIconProps) => ReactElement>;
 
 /** The box a tile's glyph is drawn in — the deck's 32pt square, and the glyph inside it. */
