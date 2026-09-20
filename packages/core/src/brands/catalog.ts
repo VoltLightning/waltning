@@ -85,6 +85,72 @@ export const BRAND_CATALOG: readonly BrandCatalogEntry[] = [
     accent: "#CC0000",
     mark: "YT",
   },
+  {
+    key: "netflix",
+    name: "Netflix",
+    aliases: ["netflix", "netflix.com"],
+    // Not the brand's own #E50914 (3.66:1 against the white mark). Its darker
+    // wordmark red clears the gate and stays recognisably Netflix.
+    accent: "#B81D24",
+    mark: "N",
+  },
+  {
+    key: "spotify",
+    name: "Spotify",
+    aliases: ["spotify", "spotify premium", "spotify ab"],
+    // #1DB954 is 1.98:1 against white — a brand colour built for a dark
+    // ground. Darkened to clear 4.5:1.
+    accent: "#1A7F3C",
+    mark: "S",
+  },
+  {
+    key: "anthropic",
+    name: "Anthropic",
+    aliases: ["anthropic", "claude", "claude.ai", "anthropic pbc"],
+    accent: "#A8492B",
+    mark: "A",
+  },
+  {
+    key: "ikea",
+    name: "IKEA",
+    aliases: ["ikea", "ikea retail"],
+    // The wordmark's blue, not its yellow: a yellow badge cannot carry a white
+    // mark at any tint that still reads as IKEA.
+    accent: "#0051BA",
+    mark: "IK",
+  },
+  {
+    key: "lidl",
+    name: "Lidl",
+    aliases: ["lidl", "lidl sp. z o.o.", "lidl dyskont"],
+    accent: "#0050AA",
+    mark: "L",
+  },
+  {
+    key: "zabka",
+    name: "Żabka",
+    // Folded (`capture/names.ts`): `ż` → `z`, so the catalogue key and the
+    // alias are both ASCII while the display name keeps its diacritic. An
+    // alias written `żabka` here could never match, because the matcher folds
+    // the incoming payee before looking it up.
+    aliases: ["zabka", "zabka polska"],
+    accent: "#00723F",
+    mark: "Ż",
+  },
+  {
+    key: "allegro",
+    name: "Allegro",
+    aliases: ["allegro", "allegro.pl", "allegro sp. z o.o."],
+    accent: "#B8471F",
+    mark: "A",
+  },
+  {
+    key: "uber",
+    name: "Uber",
+    aliases: ["uber", "uber bv", "uber eats"],
+    accent: "#1F1F1F",
+    mark: "U",
+  },
 ] as const;
 
 export const BRAND_KEYS: ReadonlySet<string> = new Set(BRAND_CATALOG.map((entry) => entry.key));

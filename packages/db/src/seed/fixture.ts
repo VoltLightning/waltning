@@ -22,6 +22,7 @@
 
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { matchBrand } from "@waltning/core/brands/match";
 import { type AccountingDate, accountingDate, todayIn } from "@waltning/core/date";
 import type { Id } from "@waltning/core/id";
 import * as money from "@waltning/core/money";
@@ -88,74 +89,231 @@ const ACCOUNTS: FixtureAccount[] = [
   },
 ];
 
-/** Payee, category leaf, amount, and which account it lands on. */
+/**
+ * Payee, category leaf, amount, and which account it lands on.
+ *
+ * `days` is where in the month the thing happens — a salary on the 27th, rent
+ * on the 5th, groceries four times across the month. Anchoring to real days of
+ * the month rather than walking backwards from today is what gives the ledger
+ * months that look like months: a period total means something, a calendar has
+ * quiet stretches, and the current month is partial because today is partway
+ * through it.
+ */
 type Pattern = {
   payee: string;
   category: string;
   type: "income" | "expense";
   account: string;
-  amounts: string[];
+  /** The typical amount. Each occurrence varies deterministically around it. */
+  amount: string;
+  /** Days of the month it lands on. A day past the month's length is skipped. */
+  days: number[];
+  /** Skip the pattern entirely in months where `month % every !== 0`. */
+  every?: number;
 };
 
 const PATTERNS: Pattern[] = [
+  // ── income ────────────────────────────────────────────────────────────
+  // Employers and clients stay abstract: a real one would be *this* ledger's
+  // private data, which is the thing the placeholder rule is about. Merchants
+  // are not — they are public brands, and the point of naming them is that the
+  // offline matcher (§14.4b) has something real to recognise.
   {
     payee: "Employer",
     category: "Salary",
     type: "income",
     account: "bank-a",
-    amounts: ["14200.00"],
-  },
-  {
-    payee: "Grocer",
-    category: "Groceries",
-    type: "expense",
-    account: "bank-a",
-    amounts: ["184.30", "212.75", "96.40", "310.15"],
-  },
-  {
-    payee: "Transit",
-    category: "Public transport",
-    type: "expense",
-    account: "cash",
-    amounts: ["26.00", "26.00"],
-  },
-  {
-    payee: "Cafe",
-    category: "Eating out",
-    type: "expense",
-    account: "cash",
-    amounts: ["18.00", "22.50", "18.00"],
-  },
-  { payee: "Landlord", category: "Rent", type: "expense", account: "bank-a", amounts: ["3200.00"] },
-  {
-    payee: "Utility Co",
-    category: "Utilities",
-    type: "expense",
-    account: "bank-a",
-    amounts: ["287.60"],
-  },
-  {
-    payee: "Cloud Host",
-    category: "Software & tools",
-    type: "expense",
-    account: "card-a",
-    amounts: ["12.00", "12.00"],
-  },
-  {
-    payee: "Pharmacy",
-    category: "Pharmacy",
-    type: "expense",
-    account: "bank-a",
-    amounts: ["64.90"],
+    amount: "14200.00",
+    days: [27],
   },
   {
     payee: "Client One",
     category: "Services",
     type: "income",
     account: "bank-b",
-    amounts: ["1800.00"],
+    amount: "1800.00",
+    days: [12],
+  },
+  {
+    payee: "Client Two",
+    category: "Services",
+    type: "income",
+    account: "bank-b",
+    amount: "950.00",
+    days: [19],
+    every: 3,
+  },
+
+  // ── subscriptions, every one of them a catalogue hit ──────────────────
+  {
+    payee: "Netflix",
+    category: "Media & streaming",
+    type: "expense",
+    account: "card-a",
+    amount: "12.99",
+    days: [3],
+  },
+  {
+    payee: "Spotify",
+    category: "Media & streaming",
+    type: "expense",
+    account: "card-a",
+    amount: "5.99",
+    days: [3],
+  },
+  {
+    payee: "YouTube Premium",
+    category: "Media & streaming",
+    type: "expense",
+    account: "card-a",
+    amount: "6.99",
+    days: [8],
+  },
+  {
+    payee: "Anthropic",
+    category: "Software & tools",
+    type: "expense",
+    account: "card-a",
+    amount: "20.00",
+    days: [11],
+  },
+
+  // ── the fixed monthly shape ───────────────────────────────────────────
+  {
+    payee: "Landlord",
+    category: "Rent",
+    type: "expense",
+    account: "bank-a",
+    amount: "3200.00",
+    days: [5],
+  },
+  {
+    payee: "Utility Co",
+    category: "Utilities",
+    type: "expense",
+    account: "bank-a",
+    amount: "287.60",
+    days: [14],
+  },
+
+  // ── week to week ──────────────────────────────────────────────────────
+  {
+    payee: "Lidl",
+    category: "Groceries",
+    type: "expense",
+    account: "bank-a",
+    amount: "204.30",
+    days: [2, 16, 29],
+  },
+  {
+    payee: "Żabka",
+    category: "Groceries",
+    type: "expense",
+    account: "cash",
+    amount: "34.80",
+    days: [9, 23],
+  },
+  {
+    payee: "ORLEN",
+    category: "Fuel & parking",
+    type: "expense",
+    account: "bank-a",
+    amount: "280.00",
+    days: [7, 21],
+  },
+  {
+    payee: "Uber",
+    category: "Taxi",
+    type: "expense",
+    account: "card-a",
+    amount: "24.00",
+    days: [6, 20],
+  },
+  // **Deliberately not in the catalogue.** An unmatched payee is the other
+  // half of the feature: it must fall back to a monogram rather than borrow
+  // somebody else's mark, and a fixture where everything matches would never
+  // show that.
+  {
+    payee: "Corner Cafe",
+    category: "Eating out",
+    type: "expense",
+    account: "cash",
+    amount: "19.50",
+    days: [4, 11, 18, 25],
+  },
+  {
+    payee: "Allegro",
+    category: "Household supplies",
+    type: "expense",
+    account: "bank-a",
+    amount: "149.00",
+    days: [17],
+    every: 2,
+  },
+  // Occasional and large — the shape a "this month against the usual" figure
+  // has to survive without calling every month an anomaly.
+  {
+    payee: "IKEA",
+    category: "Furniture & appliances",
+    type: "expense",
+    account: "bank-a",
+    amount: "820.00",
+    days: [13],
+    every: 5,
   },
 ];
+
+/**
+ * Money moved between your own accounts, monthly.
+ *
+ * Present because a ledger without transfers hides a whole class of bug: a
+ * transfer must not count as income or expense anywhere, and nothing proves
+ * that until one exists. The card payment is also the only thing that stops
+ * `card-a` running unboundedly negative across two years.
+ */
+type Move = { from: string; to: string; amount: string; day: number };
+
+const MOVES: Move[] = [
+  { from: "bank-a", to: "cash", amount: "400.00", day: 8 },
+  { from: "bank-a", to: "card-a", amount: "40.00", day: 22 },
+];
+
+/**
+ * A deterministic 0–30 from a key, for varying an amount month to month.
+ *
+ * **Deterministic, not random**, because the fixture is idempotent: the same
+ * external id must produce the same amount on every run, or a second
+ * `pnpm db:fixture` would rewrite every row it already wrote and a diff of two
+ * runs would never be empty.
+ */
+function jitter(key: string): number {
+  let hash = 0;
+  for (let i = 0; i < key.length; i += 1) hash = (hash * 31 + key.charCodeAt(i)) % 100_000;
+  return hash % 31;
+}
+
+/** The typical amount, varied ±15% by `jitter`, in whole cents. */
+function vary(amount: string, key: string): string {
+  const cents = Math.round(Number(amount) * 100);
+  const scaled = Math.round((cents * (85 + jitter(key))) / 100);
+  return (scaled / 100).toFixed(2);
+}
+
+/**
+ * The brand fields a payee resolves to, or nothing.
+ *
+ * `brand_key` and `brand_source` are a valid pair or both absent
+ * (`transactions_brand_shape`), so this returns them together or not at all.
+ */
+function brandOf(payee: string): { brandKey: string; brandSource: "auto" } | Record<string, never> {
+  const matched = matchBrand(payee);
+  return matched === undefined ? {} : { brandKey: matched, brandSource: "auto" };
+}
+
+/** How many days that month has — the same question `DatePicker` asks. */
+function daysInMonth(year: number, month: number): number {
+  return new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+}
 
 /**
  * A leaf id by name, or `null`.
@@ -189,10 +347,6 @@ async function leafId(name: string): Promise<Id<"categories"> | null> {
  * it started on. Seed data has no timezone of its own; a real capture does, and
  * uses `todayIn(zone)`.
  */
-function dayBefore(iso: AccountingDate, days: number): AccountingDate {
-  const ms = Date.parse(`${iso}T00:00:00Z`) - days * 86_400_000;
-  return accountingDate(new Date(ms).toISOString().slice(0, 10));
-}
 
 async function drop(): Promise<void> {
   await db.delete(transactions).where(like(transactions.externalId, `${PREFIX}%`));
@@ -200,7 +354,7 @@ async function drop(): Promise<void> {
   console.log("fixture removed");
 }
 
-async function apply(today: AccountingDate): Promise<void> {
+async function apply(today: AccountingDate, months: number): Promise<void> {
   const accountIds = new Map<string, Id<"accounts">>();
 
   for (const a of ACCOUNTS) {
@@ -234,27 +388,51 @@ async function apply(today: AccountingDate): Promise<void> {
   }
 
   let written = 0;
-  let day = 0;
+  const [thisYear, thisMonth, todayDay] = today.split("-").map(Number);
+  if (thisYear === undefined || thisMonth === undefined || todayDay === undefined) {
+    throw new Error(`today is not a date this can walk back from: ${today}`);
+  }
 
-  // Walked backwards from today so the list always has something recent in it,
-  // and so `period spend` has a partial current month to work with.
-  for (let cycle = 0; cycle < 3; cycle++) {
+  /** A row's own date, as the bare `YYYY-MM-DD` §7.0a requires. */
+  const on = (year: number, month: number, day: number): AccountingDate =>
+    accountingDate(
+      `${String(year).padStart(4, "0")}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`,
+    );
+
+  // Walked back a month at a time from the current one, so the ledger has
+  // whole months behind it and a **partial** month in front — the shape every
+  // period figure is read against, and the one a fixture of consecutive days
+  // never produces.
+  for (let back = 0; back < months; back += 1) {
+    const absolute = thisYear * 12 + (thisMonth - 1) - back;
+    const year = Math.floor(absolute / 12);
+    const month = absolute % 12;
+    const length = daysInMonth(year, month);
+    const isCurrent = back === 0;
+
     for (const pattern of PATTERNS) {
+      if (pattern.every !== undefined && absolute % pattern.every !== 0) continue;
+
       const accountId = accountIds.get(pattern.account);
       const account = ACCOUNTS.find((a) => a.ref === pattern.account);
       if (!accountId || !account) continue;
-
       const categoryId = await leafId(pattern.category);
 
-      for (const [index, amount] of pattern.amounts.entries()) {
-        day += 1;
-        const externalId = `${PREFIX}${pattern.account}-${pattern.payee}-${cycle}-${index}`;
+      for (const day of pattern.days) {
+        // A day the month does not have, and — in the month we are standing
+        // in — a day that has not happened yet. A ledger with rows dated
+        // tomorrow is a different feature (`ExpectedGroup`), not this one.
+        if (day > length) continue;
+        if (isCurrent && day > todayDay) continue;
+
+        const externalId = `${PREFIX}${pattern.account}-${pattern.payee}-${year}-${month + 1}-${day}`;
+        const amount = vary(pattern.amount, externalId);
 
         await db
           .insert(transactions)
           .values({
             externalId,
-            date: dayBefore(today, day),
+            date: on(year, month, day),
             type: pattern.type,
             accountId,
             categoryId,
@@ -262,6 +440,11 @@ async function apply(today: AccountingDate): Promise<void> {
             currency: account.currency,
             fxRate: money.pivotPerUnit(TO_PIVOT[account.currency] ?? "1"),
             payee: pattern.payee,
+            // **Matched, not asserted.** `resolveBrand` is the same function
+            // `create_transaction`'s executor calls, so the fixture exercises
+            // the offline matcher rather than hand-writing its answer — which
+            // is the only way a wrong alias in the catalogue shows up here.
+            ...brandOf(pattern.payee),
           })
           .onConflictDoUpdate({
             target: transactions.externalId,
@@ -274,14 +457,57 @@ async function apply(today: AccountingDate): Promise<void> {
             // undefined — and `targetWhere` will not take an optional under
             // `exactOptionalPropertyTypes`.
             targetWhere: sql`${transactions.externalId} is not null and ${transactions.deletedAt} is null`,
-            set: { amountOriginal: money.toMoney(amount), date: dayBefore(today, day) },
+            set: { amountOriginal: money.toMoney(amount), date: on(year, month, day) },
           });
         written += 1;
       }
     }
+
+    for (const move of MOVES) {
+      if (move.day > length) continue;
+      if (isCurrent && move.day > todayDay) continue;
+
+      const fromId = accountIds.get(move.from);
+      const toId = accountIds.get(move.to);
+      const from = ACCOUNTS.find((a) => a.ref === move.from);
+      const to = ACCOUNTS.find((a) => a.ref === move.to);
+      if (!fromId || !toId || !from || !to) continue;
+
+      const externalId = `${PREFIX}move-${move.from}-${move.to}-${year}-${month + 1}`;
+      const fromRate = TO_PIVOT[from.currency] ?? "1";
+      const toRate = TO_PIVOT[to.currency] ?? "1";
+      // The destination amount is the source converted through the pivot, so a
+      // cross-currency transfer nets to zero the way `computations.md` §5
+      // requires rather than inventing value at the boundary.
+      const toAmount = ((Number(move.amount) * Number(fromRate)) / Number(toRate)).toFixed(2);
+
+      await db
+        .insert(transactions)
+        .values({
+          externalId,
+          date: on(year, month, move.day),
+          type: "transfer",
+          accountId: fromId,
+          toAccountId: toId,
+          amountOriginal: money.toMoney(move.amount),
+          currency: from.currency,
+          fxRate: money.pivotPerUnit(fromRate),
+          toAmount: money.toMoney(toAmount),
+          toCurrency: to.currency,
+          toFxRate: money.pivotPerUnit(toRate),
+        })
+        .onConflictDoUpdate({
+          target: transactions.externalId,
+          targetWhere: sql`${transactions.externalId} is not null and ${transactions.deletedAt} is null`,
+          set: { date: on(year, month, move.day) },
+        });
+      written += 1;
+    }
   }
 
-  console.log(`fixture applied: ${ACCOUNTS.length} accounts, ${written} transactions`);
+  console.log(
+    `fixture applied: ${ACCOUNTS.length} accounts, ${written} transactions across ${months} months`,
+  );
   console.log("  every name invented — this is placeholder data, not a ledger");
 }
 
@@ -296,6 +522,24 @@ async function apply(today: AccountingDate): Promise<void> {
  * means their own today.
  */
 const today = todayIn(Intl.DateTimeFormat().resolvedOptions().timeZone);
+
+/**
+ * How far back to go. Two years by default — enough that a year chart has two
+ * of them, a month stepper has somewhere to step, and "this month against the
+ * usual" has a usual to compare against.
+ */
+const MONTHS_DEFAULT = 26;
+
+function monthsRequested(argv: readonly string[]): number {
+  const flag = argv.find((a) => a.startsWith("--months="));
+  if (flag === undefined) return MONTHS_DEFAULT;
+  const months = Number(flag.slice("--months=".length));
+  if (!Number.isInteger(months) || months < 1 || months > 120) {
+    throw new Error(`--months must be a whole number of months from 1 to 120, got ${flag}`);
+  }
+  return months;
+}
+
 if (process.argv.includes("--drop")) await drop();
-else await apply(today);
+else await apply(today, monthsRequested(process.argv));
 process.exit(0);
