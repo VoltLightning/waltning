@@ -3458,6 +3458,7 @@ describe("every scroller declares which kind it is", () => {
       "packages/ui/src/counterparties/organisms/counterparty-picker/counterparty-picker.tsx#0 <ScrollView> nestedScrollProps",
       "packages/ui/src/fx/organisms/rate-table/rate-table.tsx#0 <FlatList> pageScrollProps",
       "packages/ui/src/primitives/atoms/select/select.tsx#0 <ScrollView> nestedScrollProps",
+      "packages/ui/src/primitives/atoms/wheel/wheel.tsx#0 <ScrollView> nestedScrollProps",
       "packages/ui/src/shell/molecules/card/card.tsx#0 <ScrollView> pageScrollProps",
       "packages/ui/src/shell/organisms/bottom-sheet/bottom-sheet.stories.tsx#0 <ScrollView> nestedScrollProps",
       "packages/ui/src/shell/organisms/bottom-sheet/bottom-sheet.tsx#0 <BottomSheetScrollView> containOverscroll",

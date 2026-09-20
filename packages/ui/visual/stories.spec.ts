@@ -267,6 +267,11 @@ const NEEDS_FROZEN_CLOCK = /ThinkingIndicator/;
  * takes §2.7's `motion-none` branch and removed most of it; this is what was
  * left.
  *
+ * **`Wheel/Live` is here for a different reason** — not a race. It renders
+ * a live commit counter for `visual/wheel.spec.ts` to read, so its frame is a
+ * function of how many times it has been rolled rather than of its inputs. Its
+ * `play` still runs and the contrast pass still reads it.
+ *
  * Observed, not proven exhaustive. If a ninth appears, it belongs here and the
  * card that fixes the measurement takes the whole list with it.
  *
@@ -295,7 +300,7 @@ const NEEDS_FROZEN_CLOCK = /ThinkingIndicator/;
  * it is not a screenshot.
  */
 const NO_SCREENSHOT =
-  /^(?:categories-(?:categorysheet|createcategorysheet)--|accounts-accountpicker--searching$|accounts-reconcilesheet--reconcile$|shell-bottomsheet--tall-form$)/;
+  /^(?:categories-(?:categorysheet|createcategorysheet)--|accounts-accountpicker--searching$|accounts-reconcilesheet--reconcile$|shell-bottomsheet--tall-form$|primitives-wheel--live$)/;
 
 for (const story of STORIES) {
   for (const theme of THEMES) {
