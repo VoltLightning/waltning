@@ -486,7 +486,16 @@ export default function Today() {
    */
   const [chosenMonth, setChosenMonth] = useState(month);
   useEffect(() => {
-    if (settledTo.current === pager.state.date) return;
+    // **Consumed, not merely compared.** Left standing, the last settled day
+    // went on suppressing the step move for ever — so a reader who stepped
+    // back two months and then pressed *Today* got the title changing with no
+    // page motion, and the next deliberate step played nothing at all,
+    // because `chosenMonth` had silently caught up.
+    if (settledTo.current === pager.state.date) {
+      settledTo.current = null;
+      return;
+    }
+    settledTo.current = null;
     setChosenMonth(yearMonth(pager.state.date.slice(0, 7)));
   }, [pager.state.date]);
 
@@ -1424,6 +1433,7 @@ export default function Today() {
             onScroll={handleScroll}
             scrollY={scrollY}
             onTick={dayTickHaptic}
+            active={pager.state.page === "list"}
             empty={listEmpty}
           />
         ) : null,
@@ -1498,6 +1508,7 @@ export default function Today() {
       previousYear,
       shownYear,
       scrollY,
+      pager.state.page,
       today,
       yearColumns,
       yearKept,

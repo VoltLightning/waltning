@@ -30,7 +30,28 @@
 export const CELL = 48;
 export const GAP = 4;
 export const STRIDE = CELL + GAP;
-export const TRACK_LEAD = 16;
+
+/** The least the track is ever inset by — the screen's own gutter. */
+export const TRACK_MIN = 16;
+
+/**
+ * The track's padding, either end: **enough that the first and last cells can
+ * reach the middle of the band.**
+ *
+ * **Both ends, and only one of them used to be padded.** `aheadCount` generates
+ * days past today so the *far* end is reachable; nothing did the same for the
+ * near end, so the oldest cells could not be centred at all — the track had no
+ * room left of them, `offsetFor` clamped at zero, and the ring sat on a day
+ * three newer than the one the list was showing (nine newer on a 1024-wide
+ * band). Padding is the honest fix for both ends: it makes every cell
+ * centrable, which makes `offsetFor` exactly invertible, which is what lets
+ * the component tell its own clamped write from a hand on the strip.
+ */
+export function trackLead(band: number): number {
+  "worklet";
+  const centred = band / 2 - CELL / 2;
+  return centred > TRACK_MIN ? centred : TRACK_MIN;
+}
 
 /**
  * Where the strip must sit for the day at `frac` to be under the ring in the
@@ -48,7 +69,7 @@ export const TRACK_LEAD = 16;
 export function offsetFor(frac: number, band: number): number {
   "worklet";
   if (band <= 0 || Number.isNaN(frac)) return 0;
-  const at = TRACK_LEAD + frac * STRIDE + CELL / 2 - band / 2;
+  const at = trackLead(band) + frac * STRIDE + CELL / 2 - band / 2;
   return at <= 0 ? 0 : at;
 }
 
@@ -57,11 +78,15 @@ export function offsetFor(frac: number, band: number): number {
  * band's right edge.
  *
  * **The count is a function of the band, not a number anyone picked.** With
- * the run ending at today, a ring centred on today has nothing to its right on
- * a cold open, and the strip reads as truncated rather than as a position in a
- * run that continues. A fixed week would leave a ragged edge on a small phone
- * and a gap on a large one; measured, the resting state is identical on every
- * device and in every month.
+ * the run ending at today, a ring centred on today has the track's own padding
+ * to its right on a cold open, and the strip reads as truncated rather than as
+ * a position in a run that continues. A fixed week would leave a ragged edge on
+ * a small phone and a gap on a large one; measured, the resting state is
+ * identical on every device and in every month.
+ *
+ * It is no longer what makes the far end *reachable* — `trackLead` pads both
+ * ends for that — so this is now only about what the reader sees there: real
+ * days rather than blank track.
  *
  * `0` for an unmeasured band — never a guess. A strip drawn against a band of
  * zero would put every future cell at the same place.
@@ -74,6 +99,25 @@ export function aheadCount(band: number): number {
   if (room <= 0) return 0;
   return Math.ceil(room / STRIDE);
 }
+
+/**
+ * What the strip needs to know about the list it follows.
+ *
+ * **Declared here rather than imported.** `list-geometry.ts` produces it, and
+ * it lives in `packages/client` because it is a derived model; this package
+ * may not import that one (`architecture/11` — they are siblings over `core`).
+ * So the strip states the shape it *reads*, the screen passes the richer value
+ * it holds, and the two are joined structurally at the one place both are in
+ * scope. The `dates` half of the geometry is deliberately absent: naming a day
+ * is the list's business and this file has no opinion about it.
+ */
+export type StripPlacement = {
+  readonly tops: readonly number[];
+  readonly marks: readonly number[];
+};
+
+/** A strip with no list behind it yet. */
+export const EMPTY_PLACEMENT: StripPlacement = { tops: [], marks: [] };
 
 /**
  * Where the strip should be, given where the list is.
@@ -155,7 +199,7 @@ export function offsetWithin(frac: number, band: number, content: number): numbe
 export function fracAt(offset: number, band: number): number {
   "worklet";
   if (band <= 0 || Number.isNaN(offset)) return 0;
-  return (offset + band / 2 - CELL / 2 - TRACK_LEAD) / STRIDE;
+  return (offset + band / 2 - CELL / 2 - trackLead(band)) / STRIDE;
 }
 
 /**
@@ -180,15 +224,31 @@ export function nearestCell(offset: number, band: number, count: number): number
  * The time constant the strip catches up over, and the gap below which it
  * does not lag at all.
  *
- * **Reading speed is exact; a fling is damped.** A hard fling covers 2000pt in
- * about 300ms, which on this list is forty days — and forty cells in 300ms is
- * a blur where dates should be. Damped, the same travel is a sweep the eye can
+ * **Reading speed is exact; a fling is damped.** A hard fling covers about
+ * 2000pt in 300ms, which on this list is twenty days of one-row days and
+ * several times that across a collapsed run — either way, more cells per
+ * second than an eye can read. Damped, the same travel is a sweep the eye can
  * follow that lands in the right place. The cost is honest and bounded: for a
  * few hundred milliseconds the strip is behind the list, and it is exact again
  * the moment the list is still.
  */
 export const FOLLOW_TAU = 0.12;
-export const FOLLOW_EXACT = 1.5;
+
+/**
+ * The speed, in cells per second, below which the strip does not lag at all.
+ *
+ * **A speed, not a gap — and the difference is the whole of a real defect.**
+ * The taper used to shrink with the *gap*, and the gap a given drag produces
+ * depends on the frame interval: the closed loop's equilibrium then had a
+ * fold, so a small change in speed or frame rate moved the lag by two orders
+ * of magnitude. At 60fps a 10% speed increase multiplied the lag by 64, and at
+ * 30fps — an ordinary mid-range Android, or a loaded browser tab — the band
+ * this very constant is supposed to make exact lagged by a cell and a half for
+ * the whole drag. Tapering on the target's own speed takes `dt` out of the
+ * decision entirely: fifteen cells a second is fifteen cells a second at any
+ * frame rate.
+ */
+export const EXACT_SPEED = 15;
 
 /**
  * The largest step this will integrate over, in seconds.
@@ -201,41 +261,38 @@ export const FOLLOW_EXACT = 1.5;
 export const MAX_STEP = 0.1;
 
 /**
- * Where the strip should be drawn this frame, given where it was drawn last.
+ * Where the strip should be drawn this frame, given where it was drawn last
+ * and how fast the day it is following is moving.
  *
- * **One formula, and no branch between tracking and lagging.** The obvious
- * spelling is *exact below a threshold, damped above it* — and it snaps: as a
- * fling decays the gap crosses the threshold and the strip jumps the remaining
- * distance, up to `FOLLOW_EXACT` cells of it, which is 78 points. Instead the
- * time constant itself shrinks with the gap, so a strip that is nearly caught
- * up is already tracking exactly and a strip that is a long way behind eases.
- * Continuous by construction, which is what stops the discontinuity existing
- * rather than making it small.
+ * **Tapered on the target's speed, and a gap-tapered version was written first
+ * and was wrong.** Below `EXACT_SPEED` there is no damping at all, so a
+ * reading drag is exact by construction rather than by arithmetic that happens
+ * to converge; above it the time constant ramps in over another `EXACT_SPEED`,
+ * so there is no step at the threshold and no cliff beyond it.
  *
- * The gap stands in for the velocity, and it is the better of the two: it only
- * grows while the target is moving faster than the follower, which is the
- * condition the damping is actually for. Nothing here measures a velocity, so
- * nothing here can disagree with the scroller about what one is.
+ * Tapering on the *gap* instead — the obvious spelling, and the one this
+ * replaces — looked continuous and was not, because the gap a drag produces is
+ * itself a function of the frame interval. The closed loop had a fold: a 10%
+ * change in speed moved the steady-state lag by 64x at 60fps, and at 30fps the
+ * band the tests called exact lagged a cell and a half for the whole gesture.
+ * A follower whose behaviour depends on the device's frame rate is not damped,
+ * it is unpredictable.
  *
- * **The taper is on the square, and a linear one was written first and was
- * wrong.** Tapered linearly, a gap of a fifth of a cell — an ordinary reading
- * drag — still closed only 65% of the way in a frame, so the strip visibly
- * trailed the finger at exactly the speed §7 promises is exact. Squared, the
- * time constant collapses fast enough that anything under about half a cell
- * lands within one frame, while the full damping is still there by the time
- * the gap is a cell and a half. The exact band has to be genuinely exact; less
- * damped is not the same thing.
+ * `speed` is in cells per second and is the caller's to measure, because only
+ * the caller knows what the target did last frame.
  */
-export function follow(shown: number, target: number, dt: number): number {
+export function follow(shown: number, target: number, speed: number, dt: number): number {
   "worklet";
   if (Number.isNaN(shown) || Number.isNaN(target)) return target;
   const gap = target - shown;
-  const size = gap < 0 ? -gap : gap;
-  if (size === 0) return target;
+  if (gap === 0) return target;
   if (dt <= 0) return shown;
   const step = dt > MAX_STEP ? MAX_STEP : dt;
-  const near = size < FOLLOW_EXACT ? size / FOLLOW_EXACT : 1;
-  const tau = FOLLOW_TAU * near * near;
+  const fast = Number.isNaN(speed) ? 0 : speed < 0 ? -speed : speed;
+  // Nothing to damp: reading speed, and the strip is simply where the day is.
+  if (fast <= EXACT_SPEED) return target;
+  const over = (fast - EXACT_SPEED) / EXACT_SPEED;
+  const tau = FOLLOW_TAU * (over > 1 ? 1 : over);
   if (tau <= 0) return target;
   const k = 1 - Math.exp(-step / tau);
   if (k >= 1) return target;

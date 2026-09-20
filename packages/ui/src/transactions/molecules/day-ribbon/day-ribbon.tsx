@@ -40,11 +40,22 @@ import Animated, {
   useSharedValue,
 } from "react-native-reanimated";
 import { horizontalScrollProps } from "../../../primitives/nested-scroll.ts";
-import { advance, justSettled, type Settling } from "../../../primitives/scroll-settle.ts";
+import { advance, justSettled, type Settling, UNREAD } from "../../../primitives/scroll-settle.ts";
 import { makeStyles } from "../../../theme/styles.ts";
 import { radius, space } from "../../../tokens.ts";
 import { type DayActivity, DayCell, type DayDirection } from "../../atoms/day-cell/day-cell";
-import { aheadCount, CELL, follow, fracAt, fracFor, nearestCell, offsetWithin } from "./scrub.ts";
+import {
+  aheadCount,
+  CELL,
+  follow,
+  fracAt,
+  fracFor,
+  GAP,
+  nearestCell,
+  offsetWithin,
+  type StripPlacement,
+  trackLead,
+} from "./scrub.ts";
 
 export type RibbonDay = {
   /** `YYYY-MM-DD`, and the identity of the cell. */
@@ -80,10 +91,15 @@ export type DayRibbonProps = {
   current: string | null;
   /** The list's scroll offset, written by the list's own animated handler. */
   scrollY: SharedValue<number>;
-  /** Each of the list's anchor points in its content, ascending (`scrub.ts`). */
-  tops: SharedValue<readonly number[]>;
-  /** The strip cell each of those anchor points stands for. */
-  marks: SharedValue<readonly number[]>;
+  /**
+   * Where each of the list's day blocks sits and which cell it is
+   * (`list-geometry.ts`).
+   *
+   * **One value, because the two arrays are read together every frame.**
+   * Written as two assignments, a frame landing between them placed the strip
+   * from one list's positions and another's cells.
+   */
+  placement: SharedValue<StripPlacement>;
   onPickDay: (date: string) => void;
   /**
    * One light tap as each day passes under the ring, **while a hand is on the
@@ -162,7 +178,7 @@ export function cellsFor(days: readonly RibbonDay[], band: number): readonly Rib
   return out;
 }
 
-function DayRibbonView({ days, current, scrollY, tops, marks, onPickDay, onTick }: DayRibbonProps) {
+function DayRibbonView({ days, current, scrollY, placement, onPickDay, onTick }: DayRibbonProps) {
   const styles = useStyles();
   const scroller = useAnimatedRef<Animated.ScrollView>();
   /**
@@ -211,8 +227,20 @@ function DayRibbonView({ days, current, scrollY, tops, marks, onPickDay, onTick 
   const wrote = useSharedValue(0);
   /** `at` as of the previous frame, so a *movement* can be told from a rest. */
   const was = useSharedValue(0);
-  /** The track's full width, so nothing is ever asked for past its end. */
+  /**
+   * The track's full width, so nothing is ever asked for past its end.
+   *
+   * **Zero means *not reported yet*, and the detach check treats it as such.**
+   * `onContentSizeChange` arrives a frame or two after the first layout, and
+   * until it does `offsetWithin` clamps nothing — so the first write can run
+   * past the end and be clamped by the scroller. `reachable` below is written
+   * against this value precisely so that an unreported content width makes a
+   * detach impossible rather than certain: with `content` at `0` no write is
+   * ever considered reachable, so the clamped one cannot be read as a hand.
+   */
   const content = useSharedValue(0);
+  /** Whether the list was already moving last frame — a glide, not a new act. */
+  const gliding = useSharedValue(false);
   /**
    * Whether the strip has ever been placed.
    *
@@ -225,7 +253,9 @@ function DayRibbonView({ days, current, scrollY, tops, marks, onPickDay, onTick 
   /** How many cells are drawn, so a snap cannot name one that is not. */
   const count = useSharedValue(0);
   /** The stillness of the strip's *own* scroller — what a snap waits for. */
-  const rest = useSharedValue<Settling>({ at: 0, still: 0 });
+  const rest = useSharedValue<Settling>(UNREAD);
+  /** The day the list was on last frame, so the target's speed can be measured. */
+  const aimed = useSharedValue(0);
   /** The cell the tick last fired for, so it fires once per day crossed. */
   const ticked = useSharedValue(-1);
   /** Whether the strip has already been snapped where it now sits. */
@@ -260,19 +290,37 @@ function DayRibbonView({ days, current, scrollY, tops, marks, onPickDay, onTick 
     if (measured <= 0) return;
     // The list moved, so the strip takes orders again (S04 §7). Read before
     // the detached guard: this is the one thing that can clear it.
+    /*
+      **A hand on the strip, inferred — and the two ways that inference was
+      wrong.**
+
+      It was *the strip moved and the list did not*. Both halves failed.
+
+      The strip also moves when a `scrollTo` is **clamped** by the scroller,
+      and `offsetWithin` only prevents that once `onContentSizeChange` has
+      reported — so on a cold open, before it has, the strip detached with
+      nobody touching it and then stayed detached, because only a list movement
+      clears it. `reachable` below asks whether the last write was clamped
+      rather than trusting that it was not.
+
+      And the list is still gliding for a while after a fling, so a hand
+      arriving during the glide was overruled every frame: the drift check was
+      skipped whenever the list had moved, and the list had moved. A detach now
+      survives a list *movement* and is cleared by a list *gesture* — which is
+      what §7 means by the thing you touch winning.
+    */
     const listMoved = scrollY.value !== seen.value;
-    if (listMoved) {
-      seen.value = scrollY.value;
-      detached.value = false;
-    }
-    // The strip moved, and it was not this callback that moved it — so a hand
-    // is on it. Checked as a *movement* rather than as a difference, because a
-    // strip resting where it was put differs from `wrote` for ever.
+    const listJumped = listMoved && !gliding.value;
+    seen.value = scrollY.value;
+    gliding.value = listMoved;
+    if (listJumped) detached.value = false;
+
     const drifted = at.value !== was.value;
     was.value = at.value;
-    if (drifted && !listMoved) {
+    if (drifted) {
       const ours = at.value - wrote.value;
-      if (ours > 1 || ours < -1) detached.value = true;
+      const reachable = wrote.value <= content.value - measured + 0.5 && wrote.value >= -0.5;
+      if (reachable && (ours > 1 || ours < -1)) detached.value = true;
     }
     const elapsed = frame.timeSincePreviousFrame;
     const step = elapsed === null ? 16 : elapsed;
@@ -313,8 +361,15 @@ function DayRibbonView({ days, current, scrollY, tops, marks, onPickDay, onTick 
     ticked.value = -1;
     snapped.value = true;
 
-    const target = fracFor(scrollY.value, tops.value, marks.value);
-    const next = placed.value ? follow(shown.value, target, step / 1000) : target;
+    const here = placement.value;
+    const target = fracFor(scrollY.value, here.tops, here.marks);
+    // How fast the day being followed is moving, in cells per second — the one
+    // thing `follow` cannot work out for itself, and the thing its damping is
+    // decided by. Measured rather than inferred from the gap, because a gap is
+    // a function of the frame interval and a speed is not.
+    const speed = step > 0 ? ((target - aimed.value) * 1000) / step : 0;
+    aimed.value = target;
+    const next = placed.value ? follow(shown.value, target, speed, step / 1000) : target;
     placed.value = true;
     shown.value = next;
     const want = offsetWithin(next, measured, content.value);
@@ -354,6 +409,11 @@ function DayRibbonView({ days, current, scrollY, tops, marks, onPickDay, onTick 
   );
 
   const cells = useMemo(() => cellsFor(days, band), [days, band]);
+  // Both ends, so every cell can reach the ring — see `trackLead`.
+  const track = useMemo(
+    () => [styles.track, { paddingHorizontal: trackLead(band) }],
+    [styles.track, band],
+  );
   useEffect(() => {
     count.value = cells.length;
   }, [cells.length, count]);
@@ -377,7 +437,7 @@ function DayRibbonView({ days, current, scrollY, tops, marks, onPickDay, onTick 
         // A bounded scroller inside a page that scrolls the other way: it must
         // contain its own overscroll or a fling along it drags the list behind.
         {...horizontalScrollProps(styles.band)}
-        contentContainerStyle={styles.track}
+        contentContainerStyle={track}
         // A ribbon is a run of days, not a list of controls to tab through one
         // by one — a keyboard reader reaches a date through the picker, which
         // is a grid and says so.
@@ -419,7 +479,12 @@ const useStyles = makeStyles((theme) => ({
    * where the bug had been waiting.
    */
   band: { flexGrow: 0, flexShrink: 0, paddingVertical: space.sm },
-  track: { flexDirection: "row", gap: space.xs, paddingHorizontal: space.x3 },
+  /**
+   * **The gap is `GAP`, and the padding is not here.** Either end is inset by
+   * `trackLead(band)` so the first and last cells can reach the middle of the
+   * band — a measured number, applied in the component.
+   */
+  track: { flexDirection: "row", gap: GAP },
   /**
    * The permanent mark: an accent edge around the middle of the band.
    *

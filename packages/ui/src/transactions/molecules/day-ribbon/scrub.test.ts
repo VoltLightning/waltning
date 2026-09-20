@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   aheadCount,
   CELL,
-  FOLLOW_EXACT,
+  EXACT_SPEED,
   follow,
   fracAt,
   fracFor,
@@ -11,7 +11,7 @@ import {
   offsetFor,
   offsetWithin,
   STRIDE,
-  TRACK_LEAD,
+  trackLead,
 } from "./scrub.ts";
 
 const FRAME = 1 / 60;
@@ -20,7 +20,7 @@ describe("offsetFor", () => {
   it("puts the day at the middle of the band", () => {
     const band = 390;
     // The cell's centre, once the strip has been shifted by what this returns.
-    const centre = TRACK_LEAD + 6 * STRIDE + CELL / 2 - offsetFor(6, band);
+    const centre = trackLead(band) + 6 * STRIDE + CELL / 2 - offsetFor(6, band);
     expect(centre).toBe(band / 2);
   });
 
@@ -135,15 +135,26 @@ describe("fracAt", () => {
     }
   });
 
-  it("reports the day under the ring, not the day that was asked for", () => {
-    // The first cells cannot be centred: the track has no room left of them,
-    // so `offsetFor` clamps and the strip sits at zero showing its third cell.
-    // A round trip that returned 0 here would spring a re-attaching strip to a
-    // day it was never on.
-    const band = 390;
-    expect(offsetFor(0, band)).toBe(0);
-    expect(fracAt(0, band)).toBeCloseTo((band / 2 - CELL / 2 - TRACK_LEAD) / STRIDE, 10);
-    expect(fracAt(0, band)).toBeGreaterThan(0);
+  it("can put the very first cell under the ring", () => {
+    // **The near end used to be unreachable.** The track was padded by the
+    // screen's gutter, so the first cells had no room left of them:
+    // `offsetFor(0)` clamped to zero and the ring sat on the *third* cell
+    // while the list showed the first — nine cells out on a 1024-wide band.
+    // `aheadCount` had always done this for the far end; nothing did it here.
+    for (const band of [320, 390, 430, 768, 1024]) {
+      expect(offsetFor(0, band)).toBe(0);
+      expect(fracAt(0, band), `band ${band}`).toBeCloseTo(0, 10);
+    }
+  });
+
+  it("round-trips every real cell, at every band", () => {
+    // What the padding buys: the command and the position agree everywhere,
+    // which is what lets the strip tell its own clamped write from a hand.
+    for (const band of [320, 390, 430, 768, 1024]) {
+      for (const frac of [0, 1, 2.98, 7.5, 40]) {
+        expect(fracAt(offsetFor(frac, band), band), `${band} @ ${frac}`).toBeCloseTo(frac, 10);
+      }
+    }
   });
 
   it("is zero before the band is measured", () => {
@@ -152,87 +163,110 @@ describe("fracAt", () => {
 });
 
 describe("follow", () => {
-  it("tracks a reading drag with nothing behind, sustained", () => {
-    // **The real condition, not one frame from a standing start.** A drag is
-    // continuous and the strip begins it caught up, so what matters is whether
-    // it stays caught up while the finger moves — which is the state a single
-    // step from zero does not describe.
-    //
-    // Up to fifteen days a second: fast for reading dates, and §7 promises
-    // this band is exact. Stated in points, the unit the reader sees, because
-    // a strip a hundredth of a pixel behind is on the pixel it belongs on.
-    // A linear taper left 35% of the gap unclosed here, which is a strip
-    // visibly trailing the finger at the one speed that must not lag.
-    for (const cellsPerSecond of [1, 5, 10, 15]) {
-      const per = cellsPerSecond * FRAME;
-      let shown = 0;
-      let target = 0;
-      let worst = 0;
-      for (let frame = 0; frame < 90; frame += 1) {
-        target += per;
-        shown = follow(shown, target, FRAME);
-        const behind = (target - shown) * STRIDE;
-        if (behind > worst) worst = behind;
+  /** A sustained drag at `cellsPerSecond`, sampled at `fps`. Returns the worst lag, in points. */
+  function drag(cellsPerSecond: number, fps: number): number {
+    const dt = 1 / fps;
+    let shown = 0;
+    let target = 0;
+    let worst = 0;
+    for (let frame = 0; frame < fps * 2; frame += 1) {
+      target += cellsPerSecond * dt;
+      shown = follow(shown, target, cellsPerSecond, dt);
+      const behind = (target - shown) * STRIDE;
+      if (behind > worst) worst = behind;
+    }
+    return worst;
+  }
+
+  it("tracks a reading drag with nothing behind it, at every frame rate", () => {
+    // **The frame rates are the point.** Tapered on the *gap*, the exact band
+    // was a function of the sampling interval: at 30fps — an ordinary
+    // mid-range Android, or a loaded browser tab — fifteen cells a second
+    // lagged by a cell and a half for the whole gesture, while the one test
+    // that existed sampled at 60 and passed.
+    for (const fps of [24, 30, 45, 60, 90, 120]) {
+      for (const speed of [1, 5, 10, 15]) {
+        expect(drag(speed, fps), `${speed} cells/s at ${fps}fps`).toBeLessThan(0.01);
       }
-      expect(worst).toBeLessThan(1);
+    }
+  });
+
+  it("has no cliff just past the exact band", () => {
+    // The gap-tapered version multiplied the lag by 64 for a 10% change in
+    // speed. Doubling the speed may not much more than double the lag.
+    for (const fps of [30, 60, 120]) {
+      const slow = drag(EXACT_SPEED * 1.2, fps);
+      const fast = drag(EXACT_SPEED * 1.32, fps);
+      expect(fast, `${fps}fps`).toBeLessThan(Math.max(slow * 4, 4));
+    }
+  });
+
+  it("lands a fling in the same place whatever the frame rate", () => {
+    // Same wall clock, same travel: 40 cells over 300ms, then a second to
+    // settle. A follower whose resting place depends on the device's refresh
+    // rate is not damped, it is unpredictable.
+    const landing = (fps: number) => {
+      const dt = 1 / fps;
+      const speed = 40 / 0.3;
+      let shown = 0;
+      // The target is a function of the wall clock, not of the frames — so
+      // every rate follows the *same* motion rather than a slightly different
+      // one, which is what makes the comparison about `follow` at all.
+      for (let frame = 1; frame * dt <= 1.3; frame += 1) {
+        const t = frame * dt;
+        const target = speed * Math.min(t, 0.3);
+        shown = follow(shown, target, t <= 0.3 ? speed : 0, dt);
+      }
+      return shown;
+    };
+    const at60 = landing(60);
+    for (const fps of [24, 30, 90, 240]) {
+      expect(Math.abs(landing(fps) - at60) * STRIDE, `${fps}fps`).toBeLessThan(0.5);
     }
   });
 
   it("lags a fling, and never overshoots it", () => {
-    // Forty days in 300ms — the case §7 names.
+    const speed = 40 / 0.3;
     let shown = 0;
+    let target = 0;
     for (let frame = 0; frame < 18; frame += 1) {
-      const target = (frame + 1) * (40 / 18);
-      const next = follow(shown, target, FRAME);
+      target += speed * FRAME;
+      const next = follow(shown, target, speed, FRAME);
       expect(next).toBeGreaterThan(shown);
       expect(next).toBeLessThan(target);
       shown = next;
     }
-    // Behind, but moving — not parked, and not ahead.
-    expect(shown).toBeGreaterThan(20);
+    expect(shown).toBeGreaterThan(10);
     expect(shown).toBeLessThan(40);
   });
 
   it("catches up once the fling is over", () => {
     let shown = 10;
-    for (let frame = 0; frame < 60; frame += 1) shown = follow(shown, 40, FRAME);
-    expect(shown).toBeCloseTo(40, 6);
-  });
-
-  it("is continuous where the damping eases off", () => {
-    // The spelling this replaces snapped here: exact below a threshold and
-    // damped above it jumps the remaining gap as a fling decays. Two gaps
-    // either side of `FOLLOW_EXACT` must move by nearly the same amount.
-    const below = FOLLOW_EXACT - 0.01;
-    const above = FOLLOW_EXACT + 0.01;
-    const movedBelow = follow(0, below, FRAME) - 0;
-    const movedAbove = follow(0, above, FRAME) - 0;
-    expect(Math.abs(movedAbove - movedBelow)).toBeLessThan(0.05);
+    for (let frame = 0; frame < 60; frame += 1) shown = follow(shown, 40, 0, FRAME);
+    expect(shown).toBe(40);
   });
 
   it("always moves toward the target, whichever way it is", () => {
     for (const gap of [-40, -3, -0.2, 0.2, 3, 40]) {
-      const next = follow(0, gap, FRAME);
+      const next = follow(0, gap, 200, FRAME);
       expect(Math.sign(next)).toBe(Math.sign(gap));
       expect(Math.abs(next)).toBeLessThanOrEqual(Math.abs(gap));
     }
   });
 
   it("holds still for a frame that did not happen", () => {
-    expect(follow(3, 40, 0)).toBe(3);
-    expect(follow(3, 40, -1)).toBe(3);
+    expect(follow(3, 40, 200, 0)).toBe(3);
+    expect(follow(3, 40, 200, -1)).toBe(3);
   });
 
   it("integrates a backgrounded screen as one clamped step", () => {
-    // Away for 90 seconds. Without the clamp this is `1 - exp(-750)`, which is
-    // the right answer for the wrong reason.
-    expect(follow(0, 40, 90)).toBe(follow(0, 40, MAX_STEP));
+    expect(follow(0, 40, 200, 90)).toBe(follow(0, 40, 200, MAX_STEP));
   });
 
-  it("settles exactly rather than approaching forever", () => {
-    let shown = 0;
-    for (let frame = 0; frame < 120; frame += 1) shown = follow(shown, 12, FRAME);
-    expect(shown).toBe(12);
+  it("treats a speed it cannot read as reading speed", () => {
+    // `NaN` arrives from a zero-length frame. Exact tracking is the safe
+    // answer: the strip is where the day is, which is never *wrong*.
+    expect(follow(0, 12, Number.NaN, FRAME)).toBe(12);
   });
 });
 
@@ -269,10 +303,10 @@ describe("nearestCell", () => {
   });
 
   it("names only a cell the run actually holds", () => {
-    // `fracAt` is unbounded and the end cells cannot be centred at all — the
-    // track has no room either side of them — so rounding its answer alone
-    // snaps the strip to an offset it can never reach.
-    expect(nearestCell(0, band, 40)).toBe(3);
+    // `fracAt` is unbounded, so its answer still has to be clamped to the run
+    // — but both ends are now genuinely reachable (`trackLead` pads them), so
+    // the near end snaps to the first cell rather than to the third.
+    expect(nearestCell(0, band, 40)).toBe(0);
     expect(nearestCell(99999, band, 40)).toBe(39);
     expect(nearestCell(offsetFor(50, band), band, 40)).toBe(39);
   });

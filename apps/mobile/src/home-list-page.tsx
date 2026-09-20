@@ -4,6 +4,7 @@ import { listStartGate } from "@waltning/client/ledger/list-start-gate";
 import { useLedgerList } from "@waltning/client/ledger/use-ledger-list";
 import { reanchors } from "@waltning/client/ledger/use-ledger-list/anchor-echo";
 import {
+  dayAt,
   type EntryHeights,
   ESTIMATED_HEIGHTS,
   type GeometryEntry,
@@ -26,7 +27,10 @@ import {
   DayRibbon,
   type RibbonDay,
 } from "@waltning/ui/transactions/molecules/day-ribbon/day-ribbon";
-import { fracFor } from "@waltning/ui/transactions/molecules/day-ribbon/scrub";
+import {
+  EMPTY_PLACEMENT,
+  type StripPlacement,
+} from "@waltning/ui/transactions/molecules/day-ribbon/scrub";
 import {
   type DayRowPlaceName,
   dateOfEntry,
@@ -131,6 +135,17 @@ export type HomeListPageProps = {
    */
   onTick?: (() => void) | undefined;
   /**
+   * Whether this page is the one on screen.
+   *
+   * **Because `scrollY` belongs to the screen, not to this page.** All four
+   * pages are mounted at once and all four write that one offset, so without
+   * this the settle below read *Summary's* scroll position through the
+   * *List's* day positions and wrote whatever day that happened to land on —
+   * a gesture that is not a selection at all silently re-dating the whole
+   * screen, which is the exact class of defect this page was rebuilt to end.
+   */
+  active: boolean;
+  /**
    * What stands in place of the list when there is nothing in it (§6, *Empty ·
    * no transactions*).
    *
@@ -159,6 +174,7 @@ export function HomeListPage({
   onScroll,
   scrollY,
   onTick,
+  active,
   empty,
 }: HomeListPageProps) {
   const t = useT();
@@ -360,7 +376,12 @@ export function HomeListPage({
   const [heights, setHeights] = useState<EntryHeights>(ESTIMATED_HEIGHTS);
   const noteHeight = useCallback((key: keyof EntryHeights, height: number) => {
     const found = Math.round(height);
-    if (found <= 0) return;
+    // **Written as *not greater than zero*, because `NaN <= 0` is `false`.**
+    // A measurement that arrives non-finite would otherwise be stored, and a
+    // `NaN` in the height table makes every comparison in `fracFor` false — so
+    // the strip pins on its oldest cell and every settle reports the oldest
+    // day, with nothing thrown and no `NaN` anywhere in the output.
+    if (!(found > 0)) return;
     setHeights((seen) => (seen[key] === found ? seen : { ...seen, [key]: found }));
   }, []);
 
@@ -373,13 +394,25 @@ export function HomeListPage({
       })),
     [entries],
   );
-  const tops = useSharedValue<readonly number[]>([]);
-  const marks = useSharedValue<readonly number[]>([]);
   const geometry = useMemo(() => listGeometry(shape, heights, cellOf), [shape, heights, cellOf]);
+  /**
+   * **One value, not two arrays.** They were written as two assignments and
+   * read together on the UI thread every frame, so a frame landing between the
+   * two placed the strip from one list's positions and another's cells. The
+   * lengths usually match — the window shifts by one at each end — so a guard
+   * on length, which is what `fracFor` had, would never have seen it.
+   */
+  /*
+    **Typed as what the strip reads, not as what the list produces.** The two
+    meet here and nowhere else — `packages/ui` may not import `packages/client`
+    — so this assignment *is* the join, and `tsc` checks it: a `ListGeometry`
+    that stopped carrying `tops` or `marks` would fail on this line. `dates`
+    stays on the JS side, where naming a day belongs.
+  */
+  const placement = useSharedValue<StripPlacement>(EMPTY_PLACEMENT);
   useEffect(() => {
-    tops.value = geometry.tops;
-    marks.value = geometry.marks;
-  }, [geometry, tops, marks]);
+    placement.value = geometry;
+  }, [geometry, placement]);
 
   /**
    * **The one write the scroll makes, and it makes it once.**
@@ -393,15 +426,19 @@ export function HomeListPage({
    */
   const reportSettled = useCallback(
     (at: number) => {
-      const cell = Math.round(fracFor(at, geometry.tops, geometry.marks));
-      const landed = days[cell < 0 ? 0 : cell >= days.length ? days.length - 1 : cell];
-      if (landed === undefined || landed.date === reported.current) return;
-      reported.current = landed.date;
-      visibleDayRef.current?.(accountingDate(landed.date));
+      // **`dayAt`, never the strip's cell.** The strip clamps every day past
+      // its reach onto its end cell, so reading the day back out of it named a
+      // real date that was not the one on screen — out by a month on a list
+      // holding a collapsed run, and silent, because a settle fires once per
+      // stop and the wrong anchor is then quietly accepted.
+      const landed = dayAt(at, geometry.tops, geometry.dates);
+      if (landed === null || landed === reported.current) return;
+      reported.current = landed;
+      visibleDayRef.current?.(accountingDate(landed));
     },
-    [geometry, days],
+    [geometry],
   );
-  useScrollSettle(scrollY, reportSettled);
+  useScrollSettle(scrollY, reportSettled, active);
 
   /**
    * **A tap on a day costs what it has to and no more** (S04 §7).
@@ -424,25 +461,32 @@ export function HomeListPage({
    * same cheap scroll a tap on a cell is.
    */
   const returnToToday = useCallback(() => {
+    // **The screen is told either way.** Telling it only on the expensive path
+    // was the defect: the cheap path set `reported.current`, which is exactly
+    // what makes the settle that follows decline to report — so nothing ever
+    // wrote the date, the anchor stayed where it was, and the pill, which is
+    // drawn on `anchor !== today`, did not dismiss itself. A control whose
+    // whole job is getting you out of somewhere, visibly not doing it.
+    onReturnToToday();
     const index = entries.findIndex((entry) => dateOfEntry(entry) === today);
-    if (index < 0) {
-      onReturnToToday();
-      return;
-    }
+    if (index < 0) return;
+    // The rows are already there, so this is the reader moving rather than the
+    // ledger being re-read. `reported` stops the write coming back as a jump
+    // (`anchor-echo.ts`); it is not what decides whether to write.
     reported.current = today;
     list.current?.scrollToIndex({ index, animated: true, viewPosition: 0 });
   }, [entries, today, onReturnToToday]);
 
   const pickDay = useCallback(
     (date: string) => {
+      // **Always, not only on the jump.** A tap is a selection whichever way
+      // it is served, and the four pages share one date — so a tap that only
+      // scrolled left the ring on one cell and `current` on another, which is
+      // the two-sources-of-truth this component's own header forbids, and left
+      // Calendar, Summary and Months on the day before it.
+      onPickDay(date);
       const index = entries.findIndex((entry) => dateOfEntry(entry) === date);
-      if (index < 0) {
-        onPickDay(date);
-        return;
-      }
-      // The day is on screen already, so this is the reader moving rather than
-      // the ledger being re-read. `reported` is set here as well: the settle
-      // that follows would otherwise read this as news and re-key the list.
+      if (index < 0) return;
       reported.current = date;
       list.current?.scrollToIndex({ index, animated: true, viewPosition: 0 });
     },
@@ -620,8 +664,7 @@ export function HomeListPage({
         days={days}
         current={anchor}
         scrollY={scrollY}
-        tops={tops}
-        marks={marks}
+        placement={placement}
         onPickDay={pickDay}
         onTick={onTick}
       />

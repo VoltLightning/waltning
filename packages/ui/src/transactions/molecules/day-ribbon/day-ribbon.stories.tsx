@@ -12,6 +12,7 @@ import type { Meta, StoryObj } from "@storybook/react-native-web-vite";
 import { useSharedValue } from "react-native-reanimated";
 import type { RibbonDay } from "./day-ribbon";
 import { DayRibbon } from "./day-ribbon";
+import type { StripPlacement } from "./scrub.ts";
 
 function noop() {}
 
@@ -38,15 +39,13 @@ function StillRibbon({
   current: string | null;
 }) {
   const scrollY = useSharedValue(0);
-  const tops = useSharedValue<readonly number[]>([0]);
-  const marks = useSharedValue<readonly number[]>([at]);
+  const placement = useSharedValue<StripPlacement>({ tops: [0], marks: [at] });
   return (
     <DayRibbon
       days={days}
       current={current}
       scrollY={scrollY}
-      tops={tops}
-      marks={marks}
+      placement={placement}
       onPickDay={noop}
     />
   );

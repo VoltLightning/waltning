@@ -39,9 +39,13 @@ function QuietDayView({ label, emptyLabel }: QuietDayProps) {
   const styles = useStyles();
   return (
     <View style={styles.day}>
-      <Text style={styles.dayText}>{label}</Text>
+      <Text numberOfLines={1} style={styles.dayText}>
+        {label}
+      </Text>
       <View style={styles.rule} />
-      <Text style={styles.dayText}>{emptyLabel}</Text>
+      <Text numberOfLines={1} style={styles.dayText}>
+        {emptyLabel}
+      </Text>
     </View>
   );
 }
@@ -64,8 +68,23 @@ function QuietRunView({ label, summary, showLabel, onShow }: QuietRunProps) {
   return (
     <View style={styles.run}>
       <View style={styles.runText}>
-        <Text style={styles.runLabel}>{label}</Text>
-        <Text style={styles.runSummary}>{summary}</Text>
+        {/*
+          **One line, so the row is one height.** A date range is as long as
+          the words in it — `July 21 – August 11, 2026` wraps on a 390pt phone
+          where `August 12 – 13, 2026` does not — and the list above is placed
+          from a table of one height per kind. A run that wrapped put every
+          run below it ~18pt out, cumulatively, which the strip reports as a
+          day that is quietly wrong; and two run heights alternating in the
+          viewport re-measured on every mount, re-running the whole geometry
+          mid-fling. The range is already the collapsed form (`dayRangeLabel`),
+          so there is nothing here that needs a second line.
+        */}
+        <Text numberOfLines={1} style={styles.runLabel}>
+          {label}
+        </Text>
+        <Text numberOfLines={1} style={styles.runSummary}>
+          {summary}
+        </Text>
       </View>
       <PressableScaled
         accessibilityRole="button"

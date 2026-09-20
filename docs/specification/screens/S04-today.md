@@ -644,12 +644,13 @@ row and the list stood still. A row activates on sideways travel and fails on
 downward travel, with the sideways threshold the larger of the two, so the
 gesture a reader makes constantly wins ties over the one they make rarely.
 
-**A fling is damped, and only a fling.** Below a threshold the strip tracks the
-list exactly. Above it the strip moves at a fraction of the rate and catches up
-as the fling decays, because 2000pt in 300ms is forty days and forty days at
-1:1 is a blur where dates should be. The cost is honest and bounded: for a few
-hundred milliseconds the strip is behind the list, and it is exact again the
-moment the list is still.
+**A fling is damped, and only a fling.** Below fifteen days a second the strip
+tracks the list exactly — and *exactly* is a promise about a speed, not about a
+gap, so it holds at whatever rate the device draws frames. Above it the strip
+moves at a fraction of the rate and catches up as the fling decays, because a
+hard fling crosses more days per second than an eye can read. The cost is
+honest and bounded: for a few hundred milliseconds the strip is behind the
+list, and it is exact again the moment the list is still.
 
 **Tapping a cell costs what it has to and no more.** The day is usually already
 in the list — the strip mostly draws loaded days — and then it is a scroll

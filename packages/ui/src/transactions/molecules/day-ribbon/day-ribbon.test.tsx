@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ThemeProvider } from "../../../theme/provider";
 import { light } from "../../../theme/roles.ts";
 import { cellsFor, DayRibbon, type RibbonDay } from "./day-ribbon";
+import type { StripPlacement } from "./scrub.ts";
 
 // Count what actually rendered rather than trusting `memo`, which is a hint
 // the reconciler may ignore and which stops working silently the moment a
@@ -68,15 +69,13 @@ function Wired({
   onPickDay: (date: string) => void;
 }) {
   const scrollY = useSharedValue(0);
-  const tops = useSharedValue<readonly number[]>([0]);
-  const marks = useSharedValue<readonly number[]>([0]);
+  const placement = useSharedValue<StripPlacement>({ tops: [0], marks: [0] });
   return (
     <DayRibbon
       days={days}
       current={current}
       scrollY={scrollY}
-      tops={tops}
-      marks={marks}
+      placement={placement}
       onPickDay={onPickDay}
     />
   );
