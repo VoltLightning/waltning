@@ -15,6 +15,7 @@ function target(overrides: Partial<DemoTarget> = {}): DemoTarget {
     createAccount: vi.fn(() => ({ id: id() })),
     createCategory: vi.fn(() => ({ id: id() })),
     createTransaction: vi.fn(() => ({ id: id() })),
+    convertCategory: vi.fn(() => ({ id: id() })),
     existingCategories: [],
     ...overrides,
   };
@@ -118,5 +119,59 @@ describe("loading it", () => {
     const created = vi.mocked(t.createCategory).mock.calls.map(([draft]) => draft.name);
     expect(created, "Groceries is never created at the root").not.toContain("Groceries");
     expect(outcome.refused, "the group and both its leaves").toBeGreaterThanOrEqual(3);
+  });
+});
+
+/**
+ * **The defect a device found and no test had.** `create_category` always
+ * writes a leaf, so a group is a leaf that was converted — and hanging a child
+ * off an unconverted one is refused by `TAXONOMY.md` R1. The executor refuses
+ * it by *throwing*, which escaped the loader entirely and put a red box over
+ * the app on the first press of Load demo data.
+ */
+describe("groups, and refusals that arrive by throwing", () => {
+  it("converts every group before hanging anything under it", () => {
+    const t = target();
+    loadDemo(t, TODAY, 1);
+
+    const created = vi.mocked(t.createCategory).mock.calls.map(([draft]) => draft);
+    const converted = vi.mocked(t.convertCategory).mock.calls.map(([draft]) => draft.id);
+
+    const roots = created.filter((draft) => draft.parentId === null);
+    expect(roots.length, "the demo has groups").toBeGreaterThan(0);
+    expect(converted.length, "and each one is converted").toBe(roots.length);
+
+    // Every child names a parent that was converted, never a bare leaf.
+    for (const child of created.filter((draft) => draft.parentId !== null)) {
+      expect(converted, `parent of ${child.name}`).toContain(child.parentId);
+    }
+  });
+
+  it("counts a thrown refusal instead of letting it escape", () => {
+    const t = target({
+      createTransaction: vi.fn(() => {
+        throw new Error("create_transaction: the replica refused this row");
+      }),
+    });
+
+    // The whole point: this must not throw.
+    const outcome = loadDemo(t, TODAY, 1);
+    expect(outcome.transactions).toBe(0);
+    expect(outcome.refused, "every row counted, none escaped").toBeGreaterThan(0);
+  });
+
+  it("does not hang children off a group whose conversion was refused", () => {
+    const t = target({
+      convertCategory: vi.fn(() => {
+        throw new Error("convert_leaf_group: refused");
+      }),
+    });
+    loadDemo(t, TODAY, 1);
+
+    const created = vi.mocked(t.createCategory).mock.calls.map(([draft]) => draft);
+    expect(
+      created.every((draft) => draft.parentId === null),
+      "no child was attempted",
+    ).toBe(true);
   });
 });

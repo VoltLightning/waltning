@@ -46,6 +46,7 @@ export default function Developer() {
         createAccount: ledger.createAccount,
         createCategory: ledger.createCategory,
         createTransaction: ledger.createTransaction,
+        convertCategory: ledger.convertCategory,
         existingCategories: snapshot.categories,
       },
       todayIn(Intl.DateTimeFormat().resolvedOptions().timeZone),
