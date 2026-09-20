@@ -11,9 +11,10 @@ import { currencyCode, pivotPerUnit, toMoney } from "@waltning/core/money";
 import { I18nProvider } from "@waltning/ui/i18n/provider";
 import { ThemeProvider } from "@waltning/ui/theme/provider";
 import { light } from "@waltning/ui/theme/roles";
+import type { DayRowPlace } from "@waltning/ui/transactions/day-group";
 import { Text } from "react-native";
-import { expect, it, vi } from "vitest";
-import { HomeListPage } from "./home-list-page";
+import { describe, expect, it, vi } from "vitest";
+import { dateOfEntry, HomeListPage } from "./home-list-page";
 
 const PLN = currencyCode("PLN");
 const TODAY = accountingDate("2026-08-14");
@@ -420,4 +421,68 @@ it("blames the query, not the ledger and not the anchor, when a search finds not
     screen.queryByText(/Nothing recorded on or before/),
     "the anchor's emptiness, not this one",
   ).toBeNull();
+});
+
+/**
+ * **The defect this exists for, and the reason it reached a device.**
+ *
+ * `visibleDay` was written against an assumed item shape and the call site
+ * cast `ViewToken.item` to it. The list renders `Entry`, which has *four*
+ * kinds, and a row — the commonest thing on screen — carries its day on
+ * `row.date` rather than on the entry. The cast silenced the mismatch, the
+ * rule returned `undefined`, and `accountingDate` threw a render error over
+ * the whole screen on the first scroll.
+ *
+ * The rule's own tests passed throughout: they exercised the shape it had
+ * assumed. This asserts the mapping against the shapes the list actually
+ * builds, which is the seam the cast was hiding.
+ */
+describe("every entry says which day it is on", () => {
+  const row: PhoneSearchTransaction = {
+    id: id<"transactions">("44444444-4444-4444-8444-444444444444"),
+    date: accountingDate("2026-05-25"),
+    type: "expense",
+    payee: "Corner Cafe",
+    amount: toMoney("-20.00"),
+    currency: currencyCode("PLN"),
+    accountName: "Cash",
+    categoryName: null,
+  } as PhoneSearchTransaction;
+
+  it("reads a row's day off the row, not off the entry", () => {
+    expect(
+      dateOfEntry({ key: "r", kind: "row", row, place: "only" as DayRowPlace }),
+      "a row is most of the list",
+    ).toBe("2026-05-25");
+  });
+
+  it("reads the other three kinds off their own fields", () => {
+    expect(
+      dateOfEntry({
+        key: "d",
+        kind: "day",
+        date: "2026-05-25",
+        label: "25 May",
+        total: { pivot: toMoney("0"), approximate: false, estimated: false } as never,
+        first: true,
+      }),
+    ).toBe("2026-05-25");
+    expect(dateOfEntry({ key: "q", kind: "quiet", date: "2026-05-24", label: "24 May" })).toBe(
+      "2026-05-24",
+    );
+    expect(
+      dateOfEntry({ key: "u", kind: "run", label: "3 quiet days", days: 3, from: "2026-05-23" }),
+    ).toBe("2026-05-23");
+  });
+
+  /** Never `undefined`: that is the value `accountingDate` threw on. */
+  it("returns a string or null, never undefined", () => {
+    for (const entry of [
+      { key: "r", kind: "row", row, place: "only" as DayRowPlace },
+      { key: "q", kind: "quiet", date: "2026-05-24", label: "24 May" },
+      { key: "u", kind: "run", label: "3 quiet days", days: 3, from: "2026-05-23" },
+    ] as const) {
+      expect(dateOfEntry(entry), entry.kind).not.toBeUndefined();
+    }
+  });
 });

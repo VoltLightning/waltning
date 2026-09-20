@@ -29,15 +29,13 @@ import {
 import { and, eq, isNull, lte, or, sql } from "drizzle-orm";
 import { defineLocalExecutor, LocalRefusal } from "../executor.ts";
 import { assertMoneyScale } from "../scale.ts";
-import { ledgerSchema as schema } from "../schema-map.ts";
+import { type ReplicaTx, ledgerSchema as schema } from "../schema-map.ts";
 import {
   insertTransaction,
   type LocalTransactionRow,
 } from "../transactions/create-transaction.executor.ts";
-import type { LocalTx } from "../write.ts";
 
 const { accounts, transactions } = schema;
-type ReplicaTx = LocalTx<unknown, typeof schema>;
 
 export const reconcileAccountExecutor = defineLocalExecutor<
   typeof reconcileAccountInput,

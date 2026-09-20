@@ -20,32 +20,45 @@
  * component would be dead code in every test that draws it.
  */
 
-/** As much of a list item as this needs: the day it belongs to. */
-export type DatedItem =
-  | { kind: "day"; date: string }
-  /** A run of empty days; the first of them is the one on screen. */
-  | { kind: "quiet"; from: string };
-
-/** As much of `ViewToken` as this decides anything from. */
-export type ViewableItem = { index: number | null; item: DatedItem };
+/**
+ * One viewable position, reduced to the only two things this decides from.
+ *
+ * **A date, already extracted.** The first version of this took the list's
+ * items and read `.date` off them — against a shape it had assumed rather than
+ * the one the list actually renders. The call site papered over the difference
+ * with a cast, the four-kind union arrived as two, and a row (the commonest
+ * thing on screen) fell through to `undefined`, which `accountingDate` then
+ * threw on. The rule does not get to guess what an item looks like: whoever
+ * owns the items says what day each one is.
+ */
+export type ViewablePosition = {
+  /** `undefined` for an item the list cannot place — RN's own type. */
+  index: number | undefined;
+  /** `null` for an item that names no day. */
+  date: string | null;
+};
 
 /**
- * The day the list is on, or `null` when nothing is on screen yet.
+ * The day the list is on, or `null` when nothing on screen names one.
  *
  * **The topmost viewable item, not the most visible one.** A reader scrolling
  * down reads from the top, and a rule that picked whichever day filled most of
  * the screen would flick back and forth across a day boundary while the
  * fraction crossed a half. Lowest index wins, because `viewableItems` is not
  * ordered by contract.
+ *
+ * An item with no day is skipped rather than ending the search: a separator
+ * at the top of the viewport does not mean the list is on no day.
  */
-export function visibleDay(viewableItems: readonly ViewableItem[]): string | null {
-  let best: ViewableItem | null = null;
-  for (const candidate of viewableItems) {
-    if (candidate.index === null) continue;
-    if (best === null || candidate.index < (best.index ?? 0)) best = candidate;
+export function visibleDay(positions: readonly ViewablePosition[]): string | null {
+  let best: ViewablePosition | null = null;
+  for (const candidate of positions) {
+    if (candidate.index === undefined || candidate.date === null) continue;
+    if (best === null || candidate.index < (best.index ?? Number.POSITIVE_INFINITY)) {
+      best = candidate;
+    }
   }
-  if (best === null) return null;
-  return best.item.kind === "day" ? best.item.date : best.item.from;
+  return best?.date ?? null;
 }
 
 /**

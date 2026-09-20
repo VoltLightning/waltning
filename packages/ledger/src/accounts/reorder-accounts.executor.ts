@@ -11,12 +11,10 @@
 import { type ReorderAccountsInput, reorderAccountsInput } from "@waltning/core/registry/inputs";
 import { eq } from "drizzle-orm";
 import { defineLocalExecutor, LocalRefusal } from "../executor.ts";
-import { ledgerSchema as schema } from "../schema-map.ts";
-import type { LocalTx } from "../write.ts";
+import { type ReplicaTx, ledgerSchema as schema } from "../schema-map.ts";
 import type { LocalAccountRow } from "./create-account.executor.ts";
 
 const { accounts } = schema;
-type ReplicaTx = LocalTx<unknown, typeof schema>;
 
 export const reorderAccountsExecutor = defineLocalExecutor<
   typeof reorderAccountsInput,

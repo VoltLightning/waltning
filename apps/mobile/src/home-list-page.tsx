@@ -7,7 +7,7 @@ import { listStartGate } from "@waltning/client/ledger/list-start-gate";
 import { useLedgerList } from "@waltning/client/ledger/use-ledger-list";
 import {
   reanchors,
-  type ViewableItem,
+  type ViewablePosition,
   visibleDay,
 } from "@waltning/client/ledger/use-ledger-list/visible-day";
 import { ribbonDays, toLedgerItems } from "@waltning/client/transactions/ledger-days";
@@ -132,6 +132,44 @@ type Entry =
   | { key: string; kind: "row"; row: PhoneSearchTransaction; place: DayRowPlace }
   | { key: string; kind: "quiet"; date: string; label: string }
   | { key: string; kind: "run"; label: string; days: number; from: string };
+
+/**
+ * The day an entry belongs to, or `null` for one that names none.
+ *
+ * **Exhaustive on purpose.** `Entry` has four kinds and a row carries its day
+ * on `row.date` rather than on the entry — a reader scrolling through rows is
+ * looking at days, so a rule that only understood headers reported nothing for
+ * most of the list. The `never` below makes a fifth kind a compile error
+ * instead of a silent `undefined`, which is exactly what the first version of
+ * this shipped.
+ */
+export function dateOfEntry(entry: Entry): string | null {
+  switch (entry.kind) {
+    case "day":
+      return entry.date;
+    case "row":
+      return entry.row.date;
+    case "quiet":
+      return entry.date;
+    case "run":
+      return entry.from;
+    default: {
+      const exhaustive: never = entry;
+      return exhaustive;
+    }
+  }
+}
+
+/**
+ * `ViewToken.item` is `any` — React Native's own type — so this is the one
+ * place the shape is checked rather than asserted.
+ */
+function positionOf(token: ViewToken): ViewablePosition {
+  const item: unknown = token.item;
+  const known =
+    typeof item === "object" && item !== null && "kind" in item ? (item as Entry) : null;
+  return { index: token.index ?? undefined, date: known === null ? null : dateOfEntry(known) };
+}
 
 export function HomeListPage({
   ledger,
@@ -405,7 +443,7 @@ export function HomeListPage({
   const notedScroll = useRef((info: { viewableItems: ViewToken[] }) => {
     gate.current?.note(info.viewableItems);
 
-    const seen = visibleDay(info.viewableItems as readonly ViewableItem[]);
+    const seen = visibleDay(info.viewableItems.map(positionOf));
     if (seen === null || seen === reported.current) return;
     reported.current = seen;
     visibleDayRef.current?.(accountingDate(seen));

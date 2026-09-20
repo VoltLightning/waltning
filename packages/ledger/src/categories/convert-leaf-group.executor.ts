@@ -12,12 +12,10 @@ import type { Id } from "@waltning/core/id";
 import { type ConvertLeafGroupInput, convertLeafGroupInput } from "@waltning/core/registry/inputs";
 import { and, count, eq, sql } from "drizzle-orm";
 import { defineLocalExecutor, LocalRefusal } from "../executor.ts";
-import { ledgerSchema as schema } from "../schema-map.ts";
-import type { LocalTx } from "../write.ts";
+import { type ReplicaTx, ledgerSchema as schema } from "../schema-map.ts";
 import type { LocalCategoryRow } from "./create-category.executor.ts";
 
 const { categories, recurringTransactions, transactionLines, transactions } = schema;
-type ReplicaTx = LocalTx<unknown, typeof schema>;
 
 export const convertLeafGroupExecutor = defineLocalExecutor<
   typeof convertLeafGroupInput,

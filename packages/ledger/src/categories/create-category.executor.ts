@@ -16,16 +16,13 @@
 import { type CreateCategoryInput, createCategoryInput } from "@waltning/core/registry/inputs";
 import { eq } from "drizzle-orm";
 import { defineLocalExecutor, LocalRefusal } from "../executor.ts";
-import { ledgerSchema as schema } from "../schema-map.ts";
-import type { LocalTx } from "../write.ts";
+import { type ReplicaTx, ledgerSchema as schema } from "../schema-map.ts";
 import { refuseSiblingCollision } from "./sibling-collision.ts";
 
 const { categories } = schema;
 
 /** The row as the replica holds it. See `LocalAccountRow` for why not a projection. */
 export type LocalCategoryRow = typeof categories.$inferSelect;
-
-type ReplicaTx = LocalTx<unknown, typeof schema>;
 
 export const createCategoryExecutor = defineLocalExecutor<
   typeof createCategoryInput,

@@ -13,15 +13,12 @@
 
 import { type CreateGroupInput, createGroupInput } from "@waltning/core/registry/inputs";
 import { defineLocalExecutor } from "../executor.ts";
-import { ledgerSchema as schema } from "../schema-map.ts";
-import type { LocalTx } from "../write.ts";
+import { type ReplicaTx, ledgerSchema as schema } from "../schema-map.ts";
 
 const { accountGroups } = schema;
 
 /** The row as the replica holds it. See `LocalAccountRow` for why not a projection. */
 export type LocalGroupRow = typeof accountGroups.$inferSelect;
-
-type ReplicaTx = LocalTx<unknown, typeof schema>;
 
 export const createGroupExecutor = defineLocalExecutor<
   typeof createGroupInput,

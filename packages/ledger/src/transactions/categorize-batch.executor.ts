@@ -45,16 +45,13 @@
 import { type CategorizeBatchInput, categorizeBatchInput } from "@waltning/core/registry/inputs";
 import { and, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import { defineLocalExecutor, LocalRefusal } from "../executor.ts";
-import { ledgerSchema as schema } from "../schema-map.ts";
-import type { LocalTx } from "../write.ts";
+import { type ReplicaTx, ledgerSchema as schema } from "../schema-map.ts";
 import {
   assertCategoryNotArchived,
   type LocalTransactionRow,
 } from "./create-transaction.executor.ts";
 
 const { transactions, categories } = schema;
-
-type ReplicaTx = LocalTx<unknown, typeof schema>;
 
 export const categorizeBatchExecutor = defineLocalExecutor<
   typeof categorizeBatchInput,

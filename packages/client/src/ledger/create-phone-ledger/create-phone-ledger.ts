@@ -1768,8 +1768,7 @@ function subtotalsOf(accounts: readonly PhoneAccount[]): readonly PhoneCurrencyS
  * text. `null` for anything else — an executor throw this controller does not
  * recognise is a bug to surface loudly, not a refusal to swallow.
  */
-function accountWriteRefusal(error: unknown): FieldError | null {
-  if (!(error instanceof Error)) return null;
+function accountWriteRefusal(error: Error): FieldError | null {
   // `already archived` reaches here only from a race (a second tap before the
   // screen re-rendered without an archived account's *Archive* button) — the
   // account moved under the writer exactly the way a stale version did, so it
@@ -1801,8 +1800,7 @@ function accountWriteRefusal(error: unknown): FieldError | null {
  * for why: a *saved* capture routed through `fieldErrors` here used to read
  * as a failed one to both the caller and the screen.
  */
-function createTransactionRefusal(error: unknown): FieldError | null {
-  if (!(error instanceof Error)) return null;
+function createTransactionRefusal(error: Error): FieldError | null {
   if (
     error.message.includes("cannot sit in a shared account") ||
     error.message.includes("cannot move into a shared account")
@@ -1861,7 +1859,7 @@ const AMOUNT_SCALE_COLUMN_PATH: Readonly<Record<string, string>> = {
 };
 
 /** The column a local `LocalRefusal` or a server envelope named, if either shape did. */
-function columnOf(error: unknown): string | undefined {
+function columnOf(error: Error): string | undefined {
   if (typeof error !== "object" || error === null) return undefined;
   if ((error as { name?: string }).name === "LocalRefusal") {
     const direct = (error as { column?: unknown }).column;
@@ -1874,7 +1872,7 @@ function columnOf(error: unknown): string | undefined {
 }
 
 /** `LocalRefusal.params`, when the thrown value carries one — the same shape `FieldError.params` takes. */
-function paramsOf(error: unknown): Readonly<Record<string, string>> | undefined {
+function paramsOf(error: Error): Readonly<Record<string, string>> | undefined {
   if (typeof error !== "object" || error === null) return undefined;
   const params = (error as { params?: unknown }).params;
   if (typeof params !== "object" || params === null) return undefined;
@@ -1884,7 +1882,7 @@ function paramsOf(error: unknown): Readonly<Record<string, string>> | undefined 
   return entries.length > 0 ? Object.fromEntries(entries) : undefined;
 }
 
-function amountScaleRefusal(error: unknown): FieldError | null {
+function amountScaleRefusal(error: Error): FieldError | null {
   const column = columnOf(error);
   if (column === undefined) return null;
   const path = AMOUNT_SCALE_COLUMN_PATH[column];
@@ -1903,8 +1901,7 @@ function amountScaleRefusal(error: unknown): FieldError | null {
 }
 
 /** `reconcile_account`'s one refusal — S16 §5: a zero difference lands on `observedBalance`. */
-function reconcileAccountRefusal(error: unknown): FieldError | null {
-  if (!(error instanceof Error)) return null;
+function reconcileAccountRefusal(error: Error): FieldError | null {
   if (error.message.includes("nothing to reconcile")) {
     return {
       path: "observedBalance",
@@ -1927,8 +1924,7 @@ function reconcileAccountRefusal(error: unknown): FieldError | null {
  */
 
 /** `create_counterparty`'s one refusal — S15 §6: an exact collision lands on `name`. */
-function createCounterpartyRefusal(error: unknown): FieldError | null {
-  if (!(error instanceof Error)) return null;
+function createCounterpartyRefusal(error: Error): FieldError | null {
   if (error.message.includes("collides with existing counterparty")) {
     return { path: "name", message: error.message, messageKey: "counterparties.nameCollision" };
   }
@@ -1940,8 +1936,7 @@ function createCounterpartyRefusal(error: unknown): FieldError | null {
  * folded-name collision (the same check `create_counterparty` runs), and
  * the archive gate.
  */
-function counterpartyWriteRefusal(error: unknown): FieldError | null {
-  if (!(error instanceof Error)) return null;
+function counterpartyWriteRefusal(error: Error): FieldError | null {
   if (error.message.includes("stale version")) {
     return { path: "version", message: error.message, messageKey: "counterparties.staleVersion" };
   }
@@ -1964,8 +1959,7 @@ function counterpartyWriteRefusal(error: unknown): FieldError | null {
  * `archived`. A pair recorded distinct (§9.1) names no single field and is
  * left to `refusalFromThrow`'s form-level message.
  */
-function mergeCounterpartiesRefusal(error: unknown): FieldError | null {
-  if (!(error instanceof Error)) return null;
+function mergeCounterpartiesRefusal(error: Error): FieldError | null {
   if (error.message.includes("no counterparty")) {
     return {
       path: "counterpartyId",
@@ -1984,8 +1978,7 @@ function mergeCounterpartiesRefusal(error: unknown): FieldError | null {
 }
 
 /** `unmerge_counterparties`'s refusals — S15 §9.2: both name the merge itself. */
-function unmergeCounterpartiesRefusal(error: unknown): FieldError | null {
-  if (!(error instanceof Error)) return null;
+function unmergeCounterpartiesRefusal(error: Error): FieldError | null {
   if (error.message.includes("no merge") || error.message.includes("already unmerged")) {
     return {
       path: "mergeId",
@@ -2013,7 +2006,7 @@ function unmergeCounterpartiesRefusal(error: unknown): FieldError | null {
  * form-level (`path: ""`), carrying the shared `common.couldNotSave` key
  * instead.
  */
-function settleDebtRefusal(error: unknown): FieldError {
+function settleDebtRefusal(error: Error): FieldError {
   const message = errorFromThrown(error).message;
   if (message.includes("no counterparty")) {
     return { path: "counterpartyId", message, messageKey: "settleDebt.noCounterparty" };
@@ -2028,8 +2021,7 @@ function settleDebtRefusal(error: unknown): FieldError {
  * `change_pivot`'s two refusals (C1) — already-the-pivot and the txn-count
  * gate are different situations and get their own text, never one fallback.
  */
-function changePivotRefusal(error: unknown): FieldError | null {
-  if (!(error instanceof Error)) return null;
+function changePivotRefusal(error: Error): FieldError | null {
   if (error.message.includes("is already the pivot")) {
     return { path: "", message: error.message, messageKey: "fx.pivotAlreadyPivot" };
   }
@@ -2515,6 +2507,9 @@ export function createPhoneLedger(
         try {
           port.updateAccount(parsed.data, capture);
         } catch (refusal) {
+          // A thrown refusal is the only thing these mappers read; anything
+          // else is a fault and is rethrown untouched.
+          if (!(refusal instanceof Error)) throw refusal;
           const fieldError = accountWriteRefusal(refusal);
           if (!fieldError) throw refusal;
           return finish(
@@ -2558,6 +2553,9 @@ export function createPhoneLedger(
         try {
           port.archiveAccount(parsed.data, capture);
         } catch (refusal) {
+          // A thrown refusal is the only thing these mappers read; anything
+          // else is a fault and is rethrown untouched.
+          if (!(refusal instanceof Error)) throw refusal;
           const fieldError = accountWriteRefusal(refusal);
           if (!fieldError) throw refusal;
           return finish(
@@ -2642,6 +2640,9 @@ export function createPhoneLedger(
         try {
           port.reconcileAccount(parsed.data, capture);
         } catch (refusal) {
+          // A thrown refusal is the only thing these mappers read; anything
+          // else is a fault and is rethrown untouched.
+          if (!(refusal instanceof Error)) throw refusal;
           const fieldError = reconcileAccountRefusal(refusal);
           if (!fieldError) throw refusal;
           return finish(
@@ -2734,6 +2735,8 @@ export function createPhoneLedger(
         try {
           port.createCounterparty(parsed.data, capture);
         } catch (refusal) {
+          // Only a thrown refusal carries a field error; a fault is not one.
+          if (!(refusal instanceof Error)) throw refusal;
           const fieldError = createCounterpartyRefusal(refusal);
           return finish(
             diagnostics,
@@ -2780,6 +2783,8 @@ export function createPhoneLedger(
         try {
           port.updateCounterparty(parsed.data, capture);
         } catch (refusal) {
+          // Only a thrown refusal carries a field error; a fault is not one.
+          if (!(refusal instanceof Error)) throw refusal;
           const fieldError = counterpartyWriteRefusal(refusal);
           return finish(
             diagnostics,
@@ -2845,6 +2850,8 @@ export function createPhoneLedger(
         try {
           port.mergeCounterparties(parsed.data, capture);
         } catch (writeError) {
+          // Only a thrown refusal carries a field error; a fault is not one.
+          if (!(writeError instanceof Error)) throw writeError;
           const fieldError = mergeCounterpartiesRefusal(writeError);
           return finish(
             diagnostics,
@@ -2887,6 +2894,8 @@ export function createPhoneLedger(
         try {
           port.unmergeCounterparties(parsed.data, capture);
         } catch (writeError) {
+          // Only a thrown refusal carries a field error; a fault is not one.
+          if (!(writeError instanceof Error)) throw writeError;
           const fieldError = unmergeCounterpartiesRefusal(writeError);
           return finish(
             diagnostics,
@@ -3183,6 +3192,7 @@ export function createPhoneLedger(
             phase: "failure",
             error: clientFailure(refusal),
           });
+          if (!(refusal instanceof Error)) throw refusal;
           return { fieldErrors: [settleDebtRefusal(refusal)] };
         }
         refresh();
@@ -3536,6 +3546,9 @@ export function createPhoneLedger(
               { id: parsed.data.id, deferred: true },
             );
           }
+          // A deferral was handled above; anything left that is not an Error
+          // is a fault, and a fault is not a field error.
+          if (!(refusal instanceof Error)) throw refusal;
           const fieldError = createTransactionRefusal(refusal);
           if (!fieldError) throw refusal;
           emitClientDiagnostic(diagnostics, {
@@ -4013,6 +4026,8 @@ export function createPhoneLedger(
         try {
           droppedDates = port.changePivot(parsed.data, runtime.capture()).droppedDates;
         } catch (writeError) {
+          // Only a thrown refusal carries a field error; a fault is not one.
+          if (!(writeError instanceof Error)) throw writeError;
           const fieldError = changePivotRefusal(writeError);
           return finish(
             diagnostics,

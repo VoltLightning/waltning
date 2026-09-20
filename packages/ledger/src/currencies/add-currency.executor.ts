@@ -12,15 +12,12 @@
 import { type AddCurrencyInput, addCurrencyInput } from "@waltning/core/registry/inputs";
 import { eq } from "drizzle-orm";
 import { defineLocalExecutor, LocalRefusal } from "../executor.ts";
-import { ledgerSchema as schema } from "../schema-map.ts";
-import type { LocalTx } from "../write.ts";
+import { type ReplicaTx, ledgerSchema as schema } from "../schema-map.ts";
 
 const { currencies } = schema;
 
 /** The row as the replica holds it. See `LocalAccountRow` for why not a projection. */
 export type LocalCurrencyRow = typeof currencies.$inferSelect;
-
-type ReplicaTx = LocalTx<unknown, typeof schema>;
 
 export const addCurrencyExecutor = defineLocalExecutor<
   typeof addCurrencyInput,

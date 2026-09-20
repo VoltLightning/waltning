@@ -38,11 +38,9 @@ import type { Id } from "@waltning/core/id";
 import type { CategoryKind } from "@waltning/schema/enums";
 import { and, eq, isNull, ne } from "drizzle-orm";
 import { LocalRefusal } from "../executor.ts";
-import { ledgerSchema as schema } from "../schema-map.ts";
-import type { LocalTx } from "../write.ts";
+import { type ReplicaTx, ledgerSchema as schema } from "../schema-map.ts";
 
 const { categories } = schema;
-type ReplicaTx = LocalTx<unknown, typeof schema>;
 
 export function refuseSiblingCollision(
   tx: ReplicaTx,
