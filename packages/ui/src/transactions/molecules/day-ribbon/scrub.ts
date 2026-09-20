@@ -159,6 +159,24 @@ export function fracAt(offset: number, band: number): number {
 }
 
 /**
+ * The cell a strip sitting at `offset` has come to rest nearest.
+ *
+ * **What a snap snaps to**, and what decides when the tick fires. Clamped to
+ * the run the strip actually holds: `fracAt` is unbounded, and the first and
+ * last few cells cannot be centred at all — the track has no room either side
+ * of them — so rounding its answer alone would name a cell that does not
+ * exist and snap the strip to an offset it cannot reach.
+ */
+export function nearestCell(offset: number, band: number, count: number): number {
+  "worklet";
+  if (count <= 0) return 0;
+  const at = Math.round(fracAt(offset, band));
+  if (at < 0) return 0;
+  const last = count - 1;
+  return at > last ? last : at;
+}
+
+/**
  * The time constant the strip catches up over, and the gap below which it
  * does not lag at all.
  *

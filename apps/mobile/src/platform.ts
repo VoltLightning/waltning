@@ -152,6 +152,17 @@ export const displayCurrency = createDisplayCurrencyPreference(
 export function saveHaptic(): void {}
 
 /**
+ * The day strip's tick — a no-op on the web build, for `saveHaptic`'s reason.
+ *
+ * One light tap as each day passes under the ring while the strip is being
+ * dragged, and one as it settles on a day. *Light*, and only while a hand is
+ * on the strip: the same tick fired while the list was being scrolled would
+ * buzz forty times through a fling, which is a notification rather than a
+ * texture.
+ */
+export function dayTickHaptic(): void {}
+
+/**
  * §5.7's launch gate — **no authenticator here, so no gate.** The browser
  * holds a preview ledger and appears in neither of §5.7's tables; the
  * controller settles on `open` and the layout draws the app.

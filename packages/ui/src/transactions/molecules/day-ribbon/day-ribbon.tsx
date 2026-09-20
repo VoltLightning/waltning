@@ -28,9 +28,10 @@
  * need `useT()` and a timezone per cell, sixty times a fling.
  */
 
-import { memo, useCallback, useMemo, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { type LayoutChangeEvent, View } from "react-native";
 import Animated, {
+  runOnJS,
   type SharedValue,
   scrollTo,
   useAnimatedRef,
@@ -39,10 +40,11 @@ import Animated, {
   useSharedValue,
 } from "react-native-reanimated";
 import { horizontalScrollProps } from "../../../primitives/nested-scroll.ts";
+import { advance, justSettled, type Settling } from "../../../primitives/scroll-settle.ts";
 import { makeStyles } from "../../../theme/styles.ts";
 import { radius, space } from "../../../tokens.ts";
 import { type DayActivity, DayCell, type DayDirection } from "../../atoms/day-cell/day-cell";
-import { aheadCount, CELL, follow, fracAt, fracFor, offsetWithin } from "./scrub.ts";
+import { aheadCount, CELL, follow, fracAt, fracFor, nearestCell, offsetWithin } from "./scrub.ts";
 
 export type RibbonDay = {
   /** `YYYY-MM-DD`, and the identity of the cell. */
@@ -83,6 +85,20 @@ export type DayRibbonProps = {
   /** The strip cell each of those anchor points stands for. */
   marks: SharedValue<readonly number[]>;
   onPickDay: (date: string) => void;
+  /**
+   * One light tap as each day passes under the ring, **while a hand is on the
+   * strip** (S04 §7).
+   *
+   * Only then. The same tick fired while the list was being scrolled would
+   * buzz forty times through a single fling — a notification where a texture
+   * was wanted. Dragging the strip is a picker-like gesture and reads like
+   * one; scrolling the ledger is not.
+   *
+   * Platform-bound, so it arrives as a function: `packages/ui` may not name
+   * `expo-haptics` (`architecture/11`), and the web half of the seam is
+   * nothing at all. Must be referentially stable — it is called from a worklet.
+   */
+  onTick?: (() => void) | undefined;
 };
 
 /**
@@ -146,7 +162,7 @@ export function cellsFor(days: readonly RibbonDay[], band: number): readonly Rib
   return out;
 }
 
-function DayRibbonView({ days, current, scrollY, tops, marks, onPickDay }: DayRibbonProps) {
+function DayRibbonView({ days, current, scrollY, tops, marks, onPickDay, onTick }: DayRibbonProps) {
   const styles = useStyles();
   const scroller = useAnimatedRef<Animated.ScrollView>();
   /**
@@ -206,6 +222,14 @@ function DayRibbonView({ days, current, scrollY, tops, marks, onPickDay }: DayRi
    * must not do. Every placement after it is the damped follow.
    */
   const placed = useSharedValue(false);
+  /** How many cells are drawn, so a snap cannot name one that is not. */
+  const count = useSharedValue(0);
+  /** The stillness of the strip's *own* scroller — what a snap waits for. */
+  const rest = useSharedValue<Settling>({ at: 0, still: 0 });
+  /** The cell the tick last fired for, so it fires once per day crossed. */
+  const ticked = useSharedValue(-1);
+  /** Whether the strip has already been snapped where it now sits. */
+  const snapped = useSharedValue(true);
 
   const measure = useCallback(
     (event: LayoutChangeEvent) => {
@@ -250,12 +274,47 @@ function DayRibbonView({ days, current, scrollY, tops, marks, onPickDay }: DayRi
       const ours = at.value - wrote.value;
       if (ours > 1 || ours < -1) detached.value = true;
     }
-    if (detached.value) return;
-    const target = fracFor(scrollY.value, tops.value, marks.value);
     const elapsed = frame.timeSincePreviousFrame;
-    const next = placed.value
-      ? follow(shown.value, target, (elapsed === null ? 16 : elapsed) / 1000)
-      : target;
+    const step = elapsed === null ? 16 : elapsed;
+
+    if (detached.value) {
+      /*
+        **A hand on the strip, so it snaps and it ticks** (S04 §7).
+
+        The snap is this component's own rather than the scroller's
+        `snapToOffsets`. On `react-native-web` that becomes CSS scroll snap,
+        which applies to a *programmatic* `scrollTo` as well as to a gesture —
+        so the continuous scrub above would snap cell to cell, and the one
+        thing this whole rewrite is for is that it does not. Doing it here
+        costs a few lines and behaves the same on all three targets.
+      */
+      const cell = nearestCell(at.value, measured, count.value);
+      if (cell !== ticked.value) {
+        ticked.value = cell;
+        snapped.value = false;
+        if (onTick !== undefined) runOnJS(onTick)();
+      }
+      const before = rest.value;
+      const after = advance(before, at.value, step);
+      rest.value = after;
+      if (!snapped.value && justSettled(before, after)) {
+        snapped.value = true;
+        shown.value = cell;
+        const landing = offsetWithin(cell, measured, content.value);
+        wrote.value = landing;
+        // Animated, because this one *is* a move the reader should see: it is
+        // the strip taking the day they stopped on.
+        scrollTo(scroller, landing, 0, true);
+      }
+      return;
+    }
+    // Re-armed for the next time a hand arrives, so the first crossing of a
+    // new drag ticks rather than being swallowed as "the cell we ended on".
+    ticked.value = -1;
+    snapped.value = true;
+
+    const target = fracFor(scrollY.value, tops.value, marks.value);
+    const next = placed.value ? follow(shown.value, target, step / 1000) : target;
     placed.value = true;
     shown.value = next;
     const want = offsetWithin(next, measured, content.value);
@@ -295,6 +354,9 @@ function DayRibbonView({ days, current, scrollY, tops, marks, onPickDay }: DayRi
   );
 
   const cells = useMemo(() => cellsFor(days, band), [days, band]);
+  useEffect(() => {
+    count.value = cells.length;
+  }, [cells.length, count]);
   // The ring sits in the middle of the band, always. Computed rather than
   // centred by layout because it is drawn over a scroller, not in it.
   const ring = useMemo(() => [styles.ring, { left: band / 2 - CELL / 2 }], [styles.ring, band]);

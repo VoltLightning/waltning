@@ -7,6 +7,7 @@ import {
   fracAt,
   fracFor,
   MAX_STEP,
+  nearestCell,
   offsetFor,
   offsetWithin,
   STRIDE,
@@ -255,5 +256,28 @@ describe("offsetWithin", () => {
 
   it("is zero when the content does not fill the band", () => {
     expect(offsetWithin(12, band, 200)).toBe(0);
+  });
+});
+
+describe("nearestCell", () => {
+  const band = 390;
+
+  it("rounds to the cell the ring is nearest", () => {
+    expect(nearestCell(offsetFor(12, band), band, 40)).toBe(12);
+    expect(nearestCell(offsetFor(12.4, band), band, 40)).toBe(12);
+    expect(nearestCell(offsetFor(12.6, band), band, 40)).toBe(13);
+  });
+
+  it("names only a cell the run actually holds", () => {
+    // `fracAt` is unbounded and the end cells cannot be centred at all — the
+    // track has no room either side of them — so rounding its answer alone
+    // snaps the strip to an offset it can never reach.
+    expect(nearestCell(0, band, 40)).toBe(3);
+    expect(nearestCell(99999, band, 40)).toBe(39);
+    expect(nearestCell(offsetFor(50, band), band, 40)).toBe(39);
+  });
+
+  it("answers for a strip with nothing in it", () => {
+    expect(nearestCell(0, band, 0)).toBe(0);
   });
 });

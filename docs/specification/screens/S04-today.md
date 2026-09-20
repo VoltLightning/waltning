@@ -624,6 +624,26 @@ ignore.
 where you are, not a second scroller for the same content — two controls that
 each move the other is how a gesture ends up fighting itself.
 
+**A hand on the strip snaps, and ticks; the list's own scrubbing does
+neither.** Let go and the strip settles the nearest day under the ring rather
+than between two, and each day crossed under a thumb is one light tap. Both are
+the picker-like half of this control, and both are wrong on the other half: the
+same tick fired while the ledger was being scrolled would buzz forty times
+through one fling, which is a notification where a texture was wanted, and
+snapping a strip that is tracking a list would undo the continuous motion this
+screen was rebuilt for. The snap is the screen's own rather than the scroller's
+`snapToOffsets`, because on the web that becomes CSS scroll snap — which
+applies to a programmatic scroll as well as to a gesture, and so would snap the
+scrubbing too.
+
+**A row owns one axis and gives back the other.** The transaction rows swipe
+sideways (below) inside a list that scrolls vertically, and a pan told only a
+minimum distance activates in *any* direction — so every attempt to scroll that
+began on a row, which is most of the surface of this page, was claimed by that
+row and the list stood still. A row activates on sideways travel and fails on
+downward travel, with the sideways threshold the larger of the two, so the
+gesture a reader makes constantly wins ties over the one they make rarely.
+
 **A fling is damped, and only a fling.** Below a threshold the strip tracks the
 list exactly. Above it the strip moves at a fraction of the rate and catches up
 as the fling decays, because 2000pt in 300ms is forty days and forty days at
@@ -637,6 +657,12 @@ within the rows that are already there: no query, no reload, and the strip
 re-attaches because the list moved. Only a day outside the loaded range is a
 jump, with the reload and the animation a jump has always had. A tap that
 reloaded rows rendered two hundred points away is the lag, not the load.
+
+**`TodayPill` takes the same road.** It is the one control whose whole job is
+getting you out of somewhere, so it is the last place a stall belongs — and a
+reader who *scrolled* away from today has today still loaded, which makes the
+trip back the same cheap scroll a tap on a cell is. Only a reader who jumped
+pays for a jump home.
 
 **Search is the strip's icon, and it filters this list.** Day grouping survives
 — and nothing else about the gaps does, for the reason two paragraphs down —

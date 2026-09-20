@@ -221,6 +221,18 @@ export function saveHaptic(): void {
 }
 
 /**
+ * S04 §7: the day strip's tick, as each day passes under the ring.
+ *
+ * `Light`, not `Medium`, and not a notification: this fires once per *day*
+ * crossed while a thumb is on the strip, so it is a texture the finger reads
+ * rather than an event being announced. A notification-weight buzz repeated a
+ * dozen times across one drag is what a picker feels like when it is wrong.
+ */
+export function dayTickHaptic(): void {
+  void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+}
+
+/**
  * The device's ordered language preferences.
  *
  * **A platform read, so it lives here** — `expo-localization` names a platform

@@ -76,7 +76,7 @@ import { Text as RNText, useColorScheme, View } from "react-native";
 import { useAnimatedScrollHandler, useSharedValue } from "react-native-reanimated";
 import { HomeListPage } from "./home-list-page";
 import { openUnsettled } from "./open-unsettled.ts";
-import { appearance, PREVIEW_RESET_ENABLED } from "./platform";
+import { appearance, dayTickHaptic, PREVIEW_RESET_ENABLED } from "./platform";
 import { PreviewAppearanceControls } from "./preview-appearance-controls";
 import { usePagerRoute } from "./use-pager-route.ts";
 
@@ -1423,6 +1423,7 @@ export default function Today() {
             query={pager.state.query}
             onScroll={handleScroll}
             scrollY={scrollY}
+            onTick={dayTickHaptic}
             empty={listEmpty}
           />
         ) : null,

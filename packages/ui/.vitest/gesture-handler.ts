@@ -31,6 +31,27 @@ class PanBuilder {
   minDistance(_distance: number): this {
     return this;
   }
+  /**
+   * **Which axis the pan owns**, and which one it gives back.
+   *
+   * Inert here like every other builder, but present: `swipeable-row.tsx`
+   * needs both of these to sit inside a vertical list at all — without them a
+   * pan activates in *any* direction and eats every scroll that begins on a
+   * row — and a stub missing a name is a `TypeError` on mount rather than a
+   * behaviour nobody tested.
+   */
+  activeOffsetX(_offsets: number | readonly number[]): this {
+    return this;
+  }
+  activeOffsetY(_offsets: number | readonly number[]): this {
+    return this;
+  }
+  failOffsetX(_offsets: number | readonly number[]): this {
+    return this;
+  }
+  failOffsetY(_offsets: number | readonly number[]): this {
+    return this;
+  }
   enabled(_enabled: boolean): this {
     return this;
   }

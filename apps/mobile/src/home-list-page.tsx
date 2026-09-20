@@ -124,6 +124,13 @@ export type HomeListPageProps = {
    */
   scrollY: SharedValue<number>;
   /**
+   * The strip's tick, one light tap per day crossed while a hand is on it.
+   *
+   * Platform-bound, so the screen supplies it: `packages/ui` may not name
+   * `expo-haptics`, and the web half of that seam is nothing.
+   */
+  onTick?: (() => void) | undefined;
+  /**
    * What stands in place of the list when there is nothing in it (§6, *Empty ·
    * no transactions*).
    *
@@ -151,6 +158,7 @@ export function HomeListPage({
   query,
   onScroll,
   scrollY,
+  onTick,
   empty,
 }: HomeListPageProps) {
   const t = useT();
@@ -405,6 +413,26 @@ export function HomeListPage({
    * is for. Reloading rows that were two hundred points away is the lag that
    * was reported, not the load.
    */
+  /**
+   * **Back to today, at the price the distance actually warrants** (S04 §6).
+   *
+   * The pill used to jump unconditionally: it set the anchor, which re-keyed
+   * the list, discarded both halves and paid a synchronous replica read on the
+   * press frame — a visible stall, on the one control whose whole job is
+   * getting you out of somewhere. Today is usually still loaded, because the
+   * reader scrolled away from it rather than jumping, and then this is the
+   * same cheap scroll a tap on a cell is.
+   */
+  const returnToToday = useCallback(() => {
+    const index = entries.findIndex((entry) => dateOfEntry(entry) === today);
+    if (index < 0) {
+      onReturnToToday();
+      return;
+    }
+    reported.current = today;
+    list.current?.scrollToIndex({ index, animated: true, viewPosition: 0 });
+  }, [entries, today, onReturnToToday]);
+
   const pickDay = useCallback(
     (date: string) => {
       const index = entries.findIndex((entry) => dateOfEntry(entry) === date);
@@ -595,6 +623,7 @@ export function HomeListPage({
         tops={tops}
         marks={marks}
         onPickDay={pickDay}
+        onTick={onTick}
       />
       {/*
         **The pill's layer starts where the list does.** §4 puts `TodayPill`
@@ -656,7 +685,7 @@ export function HomeListPage({
             accessibilityLabel={t("transactions.backToToday", {
               date: dayLabel(anchor, locale),
             })}
-            onPress={onReturnToToday}
+            onPress={returnToToday}
           />
         )}
       </View>
