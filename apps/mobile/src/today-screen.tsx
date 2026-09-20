@@ -71,12 +71,12 @@ import type { MonthRow } from "@waltning/ui/transactions/organisms/month-list/mo
 import { MonthList } from "@waltning/ui/transactions/organisms/month-list/month-list";
 import { YearChart, type YearColumn } from "@waltning/ui/transactions/year-chart";
 import { router, useLocalSearchParams } from "expo-router";
-import { useCallback, useDeferredValue, useMemo, useState } from "react";
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { Text as RNText, useColorScheme, View } from "react-native";
 import { useAnimatedScrollHandler, useSharedValue } from "react-native-reanimated";
 import { HomeListPage } from "./home-list-page";
 import { openUnsettled } from "./open-unsettled.ts";
-import { appearance, PREVIEW_RESET_ENABLED } from "./platform";
+import { appearance, dayTickHaptic, PREVIEW_RESET_ENABLED } from "./platform";
 import { PreviewAppearanceControls } from "./preview-appearance-controls";
 import { usePagerRoute } from "./use-pager-route.ts";
 
@@ -292,8 +292,22 @@ export default function Today() {
    * The list ignores this value coming back to it as its `anchor`
    * (`visible-day.ts`'s `reanchors`), so the scroll does not re-anchor itself.
    */
+  /**
+   * The List page reporting where it came to rest (S04 §7).
+   *
+   * **Recorded as well as forwarded**, because the pages must not play the
+   * *you stepped a period* move for it. Scrolling from 1 September into 31
+   * August changes the month, and the header has to say so — but nobody
+   * stepped anything, and 24pt sideways with a dip to 40% opacity across every
+   * row on screen is what that move looks like mid-read. `chosenMonth` below
+   * is what the motion keys on; this is how it tells the two apart.
+   */
+  const settledTo = useRef<string | null>(null);
   const handleVisibleDay = useCallback(
-    (date: AccountingDate) => pager.showDay(date),
+    (date: AccountingDate) => {
+      settledTo.current = date;
+      pager.showDay(date);
+    },
     [pager.showDay],
   );
 
@@ -461,6 +475,29 @@ export default function Today() {
     [pager.stepUnit, t],
   );
   const month = yearMonth(pager.state.date.slice(0, 7));
+  /**
+   * **The month the reader last chose, as opposed to the one they scrolled
+   * into.** They are the same value on every deliberate act — an arrow, the
+   * picker, the Today pill, a tap on a day — and they part company exactly
+   * when a scroll settles somewhere new. `PagerFrame` keys its motion on this
+   * and its *words* on the month above, which is the whole of S04 §3's
+   * *the title names the month you are looking at; the pages move for the
+   * month you chose.*
+   */
+  const [chosenMonth, setChosenMonth] = useState(month);
+  useEffect(() => {
+    // **Consumed, not merely compared.** Left standing, the last settled day
+    // went on suppressing the step move for ever — so a reader who stepped
+    // back two months and then pressed *Today* got the title changing with no
+    // page motion, and the next deliberate step played nothing at all,
+    // because `chosenMonth` had silently caught up.
+    if (settledTo.current === pager.state.date) {
+      settledTo.current = null;
+      return;
+    }
+    settledTo.current = null;
+    setChosenMonth(yearMonth(pager.state.date.slice(0, 7)));
+  }, [pager.state.date]);
 
   // Half-open — `money.Period`'s own shape — so the range needs no notion of
   // how many days the month has, only `shiftMonth`.
@@ -1393,7 +1430,9 @@ export default function Today() {
             onCategorize={handleCategorize}
             onReturnToToday={returnToToday}
             query={pager.state.query}
-            onScroll={handleScroll}
+            scrollY={scrollY}
+            onTick={dayTickHaptic}
+            active={pager.state.page === "list"}
             empty={listEmpty}
           />
         ) : null,
@@ -1467,6 +1506,8 @@ export default function Today() {
       openYearPicker,
       previousYear,
       shownYear,
+      scrollY,
+      pager.state.page,
       today,
       yearColumns,
       yearKept,
@@ -1512,8 +1553,9 @@ export default function Today() {
         }
         periodDetail={pager.state.page === "months" ? null : String(pager.label.year)}
         /*
-          **The period the page on screen is actually showing**, which is the
-          month for three of them and the year for Months.
+          **The period the reader last chose**, which is the month for three of
+          them and the year for Months — and which is *not* the month the title
+          says on the List page while a scroll is in flight.
 
           Keyed on the month for all four, tapping a row on Months animated the
           whole year sliding — and that page draws the same twelve rows either
@@ -1522,7 +1564,7 @@ export default function Today() {
           for. Sortable in both spellings, which is what tells the pages which
           side to come in from.
         */
-        periodKey={pager.state.page === "months" ? String(pager.label.year) : month}
+        periodKey={pager.state.page === "months" ? String(pager.label.year) : chosenMonth}
         /*
           **The title opens the picker for the unit it names** — the year on
           Months, the month on the other three. It opened the month grid

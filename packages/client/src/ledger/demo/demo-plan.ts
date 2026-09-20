@@ -26,6 +26,7 @@
  */
 
 import type { CurrencyCode } from "@waltning/core/money";
+import * as money from "@waltning/core/money";
 
 export type DemoAccount = {
   /** Referenced by the patterns below, never shown. */
@@ -359,13 +360,60 @@ export const DEMO_MONTHS = 26;
  *
  * Plausible, not accurate. A demo's figures only have to hold still.
  */
-export const DEMO_RATES: readonly { quote: string; rate: string }[] = [
-  { quote: "USD", rate: "4.05" },
-  { quote: "EUR", rate: "4.32" },
-];
+/**
+ * What one unit of each demo currency is worth, in one reference currency.
+ *
+ * **A table, not a rate list, because the demo does not get to pick the
+ * pivot.** The first version stated *USD 4.05, EUR 4.32* and a `DEMO_PIVOT` of
+ * `"PLN"` — and a device that has never synced bootstraps `currencies.ts`'s
+ * own default, which is **USD**. So every rate was quoted against a pivot the
+ * ledger did not have, all six writes were refused with *base must be the
+ * pivot*, and what the reader saw was **532 transactions refused for
+ * `needsRate`**: one cause wearing five hundred unrelated symptoms, twice over
+ * (the 366-day cap was the other).
+ *
+ * The reference here is arbitrary and cancels out — `demoRates` divides two of
+ * these, so only their ratios matter.
+ */
+export const DEMO_REFERENCE: Readonly<Record<string, string>> = {
+  PLN: "1",
+  USD: "4.05",
+  EUR: "4.32",
+};
 
-/** What the ledger keeps its books in — the pivot, which needs no rate. */
-export const DEMO_PIVOT = "PLN";
+/**
+ * The rates this ledger needs, quoted against **its own** pivot.
+ *
+ * **`UnitsPerPivot` — how many of the quote one pivot buys**, which is what
+ * `set_manual_rate` takes (`rate: zUnitsPerPivot`) and what `fx_rates.rate`
+ * stores: the figure you *divide* by. With the books in USD, one unit of the
+ * pivot buys 4.05 PLN, so the USD/PLN rate is `4.05`.
+ *
+ * **The first version returned the reciprocal**, and the brands did not catch
+ * it because the loader's own `setManualRate` signature typed the field as a
+ * plain `string` — the loose type at a seam `CLAUDE.md` warns about, routed
+ * straight around the pair of types `money.ts` introduced *because* getting
+ * this backwards once cost a 14.1x error. Here it was 16.4x, it looked
+ * entirely plausible on screen (4.05 and 0.2469 are both believable USD/PLN
+ * figures), and a test pinned the wrong values green. The signature is
+ * `UnitsPerPivot` now, so the direction is a compile error rather than a
+ * reading exercise.
+ *
+ * The reference below is arbitrary and cancels: only the ratio of two entries
+ * is used. A currency the table does not price is skipped rather than guessed.
+ */
+export function demoRates(pivot: string): readonly { quote: string; rate: money.UnitsPerPivot }[] {
+  const base = DEMO_REFERENCE[pivot];
+  if (base === undefined) return [];
+  const out: { quote: string; rate: money.UnitsPerPivot }[] = [];
+  for (const [quote, reference] of Object.entries(DEMO_REFERENCE)) {
+    if (quote === pivot) continue;
+    // `ref[pivot] / ref[quote]`, at the rate scale rather than the money one —
+    // a rate column is `numeric(24,12)` and this is not a place to round to 8.
+    out.push({ quote, rate: money.unitsPerPivot(money.dec(base).dividedBy(reference)) });
+  }
+  return out;
+}
 
 /** The first and last day the plan can name, for a rate that spans all of it. */
 export function demoSpan(today: string, months: number): { from: string; to: string } {

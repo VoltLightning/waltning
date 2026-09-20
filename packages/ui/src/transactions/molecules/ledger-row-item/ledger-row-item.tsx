@@ -19,7 +19,8 @@
  */
 
 import { memo, useCallback } from "react";
-import { EntryRow, type LedgerEntry } from "../entry-row/entry-row";
+import { EntryRow } from "../entry-row/entry-row";
+import type { LedgerEntry } from "../entry-row/ledger-entry.ts";
 import { SwipeableRow } from "../swipeable-row/swipeable-row";
 
 export type LedgerRowItemProps = {

@@ -12,9 +12,11 @@ import { I18nProvider } from "@waltning/ui/i18n/provider";
 import { ThemeProvider } from "@waltning/ui/theme/provider";
 import { light } from "@waltning/ui/theme/roles";
 import type { DayRowPlace } from "@waltning/ui/transactions/day-group";
+import { dateOfEntry } from "@waltning/ui/transactions/molecules/list-entry/entry";
 import { Text } from "react-native";
+import type { SharedValue } from "react-native-reanimated";
 import { describe, expect, it, vi } from "vitest";
-import { dateOfEntry, HomeListPage } from "./home-list-page";
+import { HomeListPage } from "./home-list-page";
 
 const PLN = currencyCode("PLN");
 const TODAY = accountingDate("2026-08-14");
@@ -57,6 +59,17 @@ function ledgerWith(older: PhoneSearchTransaction[], newer: PhoneSearchTransacti
   } as unknown as PhoneLedgerController;
 }
 
+/**
+ * The list's own scroll offset, as a still one.
+ *
+ * jsdom does not scroll, so this never changes — which is the honest state for
+ * this suite: what the offset *drives* (the strip's position, the settle that
+ * writes the date) is arithmetic tested in `scrub.ts` and `scroll-settle.ts`,
+ * a story the visual suite shoots in a real browser, and `tools/e2e` against
+ * the built app.
+ */
+const scrollY = { value: 0 } as SharedValue<number>;
+
 function draw(
   ledger: PhoneLedgerController,
   onPickDay = vi.fn(),
@@ -82,6 +95,8 @@ function draw(
           onCategorize={over.onCategorize ?? vi.fn()}
           onReturnToToday={over.onReturnToToday ?? vi.fn()}
           query={over.query ?? null}
+          scrollY={scrollY}
+          active
           empty={<Text>nothing yet</Text>}
         />
       </I18nProvider>
@@ -484,5 +499,45 @@ describe("every entry says which day it is on", () => {
     ] as const) {
       expect(dateOfEntry(entry), entry.kind).not.toBeUndefined();
     }
+  });
+});
+
+/**
+ * **The path that ships, which the suite did not have.**
+ *
+ * A tap on a day, and the Today pill, take the cheap road when the day is
+ * already rendered — and the first version of that road told the screen
+ * nothing: it set the echo guard, the settle that followed declined to report
+ * because of it, and so the shared date never moved. The ring and the
+ * `current` highlight ended on different cells, Calendar kept the day before,
+ * and the pill — drawn only while the anchor is not today — would not dismiss
+ * itself.
+ *
+ * The earlier tests anchored on a date whose day is *not* in the list, so they
+ * exercised only the fallback. These anchor where today is loaded.
+ */
+describe("a day that is already on screen", () => {
+  // Anchored on the 14th, so the 13th and the 12th are loaded below it and
+  // today is loaded above — both branches' "already on screen" case.
+  const loaded = () =>
+    ledgerWith(
+      [row("2026-08-13", 2, "-20.00"), row("2026-08-12", 3, "-30.00")],
+      [row("2026-08-14", 1, "-10.00")],
+    );
+
+  it("tells the screen which day was picked, even when nothing reloads", () => {
+    const onPickDay = vi.fn();
+    draw(loaded(), onPickDay, { anchor: accountingDate("2026-08-14") });
+    fireEvent.click(screen.getByRole("button", { name: /August 13, 2026, 1 entry/ }));
+    expect(onPickDay).toHaveBeenCalledWith("2026-08-13");
+  });
+
+  it("tells the screen the pill was pressed, even when nothing reloads", () => {
+    // The pill is drawn on `anchor !== today`; if the press does not reach the
+    // screen the anchor never becomes today and the pill stays on screen.
+    const onReturnToToday = vi.fn();
+    draw(loaded(), vi.fn(), { anchor: accountingDate("2026-08-12"), onReturnToToday });
+    fireEvent.click(screen.getByRole("button", { name: /Back to today/ }));
+    expect(onReturnToToday).toHaveBeenCalledOnce();
   });
 });

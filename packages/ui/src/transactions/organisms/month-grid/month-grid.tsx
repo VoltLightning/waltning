@@ -126,7 +126,15 @@ function MonthGridView({
 }: MonthGridProps) {
   const styles = useStyles();
   return (
-    <View style={styles.root}>
+    /*
+      **A month is a grid, and now says so.** The cells already carry their own
+      full dates; what was missing was anything naming the *thing they are
+      cells of* — so a reader arriving here heard a run of dates with no shape,
+      and, less importantly but more embarrassingly, a test looking for "the
+      day the calendar has marked" found the day strip's marked cell instead,
+      because both draw `DayCell` and both are in the DOM at once.
+    */
+    <View role="grid" style={styles.root}>
       <View style={styles.headings}>
         {headings.map((heading) => (
           // The letter is ambiguous by construction — two Tuesdays and two

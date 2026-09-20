@@ -12,6 +12,8 @@
  * and on the device.
  */
 
+import { useRef } from "react";
+
 import type * as Reanimated from "react-native-reanimated";
 import mock from "react-native-reanimated/lib/module/mock";
 
@@ -53,3 +55,31 @@ export const interpolateColor = (
   const at = input.findIndex((stop) => stop >= value);
   return output[at === -1 ? output.length - 1 : at] ?? output[0] ?? "";
 };
+
+/**
+ * **Three the upstream mock does not carry, and none of them can be faked
+ * into doing anything.**
+ *
+ * `useFrameCallback` is a UI-thread loop, `scrollTo` is a direct write to a
+ * native scroller, and `useAnimatedRef` is the handle that joins them. jsdom
+ * has no frames to run on and no scroller to write to, so a stub that *did*
+ * something would be inventing behaviour this environment cannot have — the
+ * same reason `interpolate` above is a no-op rather than a reimplementation.
+ *
+ * What this costs is that `DayRibbon`'s scrubbing is invisible to the
+ * component suite: the arithmetic is tested directly in `scrub.ts`'s own
+ * tests, the placement is a story the visual suite screenshots in a real
+ * browser, and the wiring is `tools/e2e`, which drives the built app where
+ * both are real. That division is deliberate, and it is written down here
+ * because a test that renders this component and sees a still strip is seeing
+ * the mock, not the component.
+ */
+export const useAnimatedRef = <T>() => useRef<T | null>(null);
+export const scrollTo = () => {};
+export const useFrameCallback = (): {
+  setActive: (active: boolean) => void;
+  isActive: boolean;
+} => ({
+  setActive: () => {},
+  isActive: false,
+});

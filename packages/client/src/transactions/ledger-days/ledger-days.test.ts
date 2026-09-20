@@ -1,7 +1,13 @@
 import { accountingDate } from "@waltning/core/date";
 import { currencyCode, pivotPerUnit, toMoney } from "@waltning/core/money";
 import { describe, expect, it } from "vitest";
-import { type LedgerDayRow, RIBBON_REACH, ribbonDays, toLedgerItems } from "./ledger-days.ts";
+import {
+  type LedgerDayRow,
+  RIBBON_AHEAD,
+  RIBBON_REACH,
+  ribbonDays,
+  toLedgerItems,
+} from "./ledger-days.ts";
 
 const PLN = currencyCode("PLN");
 const EUR = currencyCode("EUR");
@@ -193,6 +199,82 @@ describe("ribbonDays", () => {
   it("counts the entries, so the label can say how many", () => {
     const items = toLedgerItems([...day("2026-08-14", "-10", "-20", "-30")], PLN);
     expect(ribbonDays(items)[0]?.entries).toBe(3);
+  });
+
+  it("runs past today, so a centred ring is not at the right-hand edge", () => {
+    const today = accountingDate("2026-08-14");
+    const items = toLedgerItems([...day("2026-08-14", "-10"), ...day("2026-08-12", "-20")], PLN, {
+      anchor: today,
+    });
+    const strip = ribbonDays(items, { anchor: today, today });
+    const last = strip.at(-1)?.date;
+    expect(last).toBe("2026-08-30");
+    expect(strip.filter((d) => d.date > today)).toHaveLength(RIBBON_AHEAD);
+    // Generated calendar, so nothing claims a figure for a day that has not
+    // happened.
+    expect(strip.filter((d) => d.date > today).every((d) => d.entries === 0)).toBe(true);
+  });
+
+  it("does not run past a run that never reaches today", () => {
+    // A jump to 2021: what sits past the last loaded day is a year of rows this
+    // page has not read, not days nothing can have happened on. Sixteen quiet
+    // cells there would claim the ledger stops in 2021.
+    const anchor = accountingDate("2021-03-14");
+    const items = toLedgerItems([...day("2021-03-14", "-10")], PLN, { anchor });
+    const strip = ribbonDays(items, { anchor, today: accountingDate("2026-08-14") });
+    expect(strip.at(-1)?.date).toBe("2021-03-14");
+  });
+
+  it("leaves the run where the rows end when no today is given", () => {
+    const items = toLedgerItems([...day("2026-08-14", "-10")], PLN);
+    expect(ribbonDays(items).at(-1)?.date).toBe("2026-08-14");
+  });
+
+  it("keeps the anchor on the strip when the anchor is past today", () => {
+    // **The days ahead *extend* the run; they must never replace it.** Written
+    // as a replacement, one press of the header's `>` put the anchor a month
+    // out and collapsed the run to `today + 16` — behind the anchor, so the
+    // day the page is named for had no cell at all. Past `today + 61` the
+    // range inverted and the strip drew nothing.
+    const today = accountingDate("2026-09-20");
+    for (const ahead of ["2026-10-20", "2026-12-01", "2027-06-01"]) {
+      const anchor = accountingDate(ahead);
+      const items = toLedgerItems([], PLN, { anchor });
+      const strip = ribbonDays(items, { anchor, today });
+      expect(strip.length, `anchor ${ahead}`).toBeGreaterThan(0);
+      expect(
+        strip.some((day) => day.date === anchor),
+        `the anchor has a cell at ${ahead}`,
+      ).toBe(true);
+    }
+  });
+
+  it("marks only the days it invented as droppable", () => {
+    // The strip drops generated cells to fit its band. A real row dated after
+    // today is not one of those — counted as such it was dropped, and every
+    // cell after it with it.
+    const today = accountingDate("2026-08-14");
+    const items = toLedgerItems([...day("2026-08-20", "-10")], PLN, { anchor: today });
+    const strip = ribbonDays(items, { anchor: today, today });
+    const real = strip.find((d) => d.date === "2026-08-20");
+    expect(real?.entries, "a real future row").toBe(1);
+    expect(real?.generated, "is not droppable").toBeUndefined();
+    expect(
+      strip.filter((d) => d.generated === true).every((d) => d.entries === 0),
+      "everything droppable is empty",
+    ).toBe(true);
+  });
+
+  it("still clips the days ahead to the ribbon's reach", () => {
+    // The anchor is behind today by almost the whole reach, so `RIBBON_REACH`
+    // and not `RIBBON_AHEAD` is what decides where the strip stops.
+    const anchor = accountingDate("2026-07-02");
+    const today = accountingDate("2026-08-14");
+    const items = toLedgerItems([...day("2026-07-02", "-10"), ...day("2026-08-14", "-20")], PLN, {
+      anchor,
+    });
+    const strip = ribbonDays(items, { anchor, today });
+    expect(strip.at(-1)?.date).toBe("2026-08-16");
   });
 
   /**

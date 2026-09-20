@@ -9,10 +9,47 @@
  */
 
 import type { Meta, StoryObj } from "@storybook/react-native-web-vite";
+import { useSharedValue } from "react-native-reanimated";
 import type { RibbonDay } from "./day-ribbon";
 import { DayRibbon } from "./day-ribbon";
+import type { StripPlacement } from "./scrub.ts";
 
 function noop() {}
+
+/**
+ * **The strip follows a list, and a story has no list — so it follows a still
+ * one.**
+ *
+ * `at` is the fractional day the ring should be over. A `tops` of one entry
+ * and a `marks` of that day is a list that is not going anywhere, which is
+ * exactly what a screenshot wants: the strip places itself on the first frame
+ * (that placement is a jump, never a move) and then has nothing to follow.
+ *
+ * This wrapper is what the stories render, so the visual suite sees the
+ * component wired the way the List page wires it rather than a version of it
+ * with the scrubbing taken out.
+ */
+function StillRibbon({
+  at,
+  days,
+  current,
+}: {
+  at: number;
+  days: readonly RibbonDay[];
+  current: string | null;
+}) {
+  const scrollY = useSharedValue(0);
+  const placement = useSharedValue<StripPlacement>({ tops: [0], marks: [at] });
+  return (
+    <DayRibbon
+      days={days}
+      current={current}
+      scrollY={scrollY}
+      placement={placement}
+      onPickDay={noop}
+    />
+  );
+}
 
 const LETTERS = ["S", "M", "T", "W", "T", "F", "S"];
 
@@ -59,9 +96,9 @@ const LONG_RUN: readonly RibbonDay[] = Array.from({ length: 30 }, (_, at) => {
 
 const meta = {
   title: "Transactions/DayRibbon",
-  component: DayRibbon,
-  args: { days: WEEK, current: "2026-09-08", onPickDay: noop },
-} satisfies Meta<typeof DayRibbon>;
+  component: StillRibbon,
+  args: { days: WEEK, current: "2026-09-08", at: 3 },
+} satisfies Meta<typeof StillRibbon>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;
@@ -75,21 +112,23 @@ type Story = StoryObj<typeof meta>;
 export const AroundToday: Story = {};
 
 /**
- * **Between days.** A list mid-fling is not on any one day, so nothing is
- * tinted — a strip that guessed would move its own mark while the reader
- * scrolled.
+ * **Between days.** Mid-scroll the strip is *between* two cells — the ring is
+ * still exactly in the middle of the band, and the run under it is half a cell
+ * along. Nothing is tinted, because no day has been settled on yet.
+ *
+ * The ring never moves and is never absent: it is where the reader is, and a
+ * mark that disappeared during the gesture it exists for would be no mark.
  */
-export const BetweenDays: Story = { args: { current: null } };
+export const BetweenDays: Story = { args: { current: null, at: 3.5 } };
 
 /**
- * **A month, scrolled to the day the list is on.**
+ * **A month, placed on the day the list is showing.**
  *
- * The strip runs earliest-first, so the day a reader opens on is at its right
- * — off screen the moment there is more than a bandful of days. `current` is
- * what the ribbon reports, and a report the reader has to go looking for is not
- * one, so the strip scrolls to it. This is the case jsdom cannot see:
- * `onLayout` never fires there, so the offset arithmetic has a unit test and
- * the scroll itself has this.
+ * The strip runs earliest-first, so over a month of days the one a reader is
+ * on is nowhere near the band unless the strip is placed — and placing it is
+ * the scroll's job. This is the case jsdom cannot see: `onLayout` never fires
+ * there, so `scrub.ts` has the arithmetic under unit test and the placement
+ * itself has this.
  */
 export const ScrolledToTheDay: Story = {
   args: {
@@ -98,6 +137,7 @@ export const ScrolledToTheDay: Story = {
     // own limit, and a clamped strip looks the same whether the offset was
     // computed correctly or not.
     current: "2026-09-15",
+    at: 14,
   },
 };
 
