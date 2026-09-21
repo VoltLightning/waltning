@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  AT_TOP_SLACK,
   aheadCount,
+  blockAt,
   CELL,
   EXACT_SPEED,
   follow,
@@ -11,6 +13,7 @@ import {
   nearestCell,
   offsetFor,
   offsetWithin,
+  SEEN_LEAD,
   STRIDE,
   trackLead,
 } from "./scrub.ts";
@@ -317,34 +320,57 @@ describe("nearestCell", () => {
   });
 });
 
+describe("blockAt — the day the reader is looking at", () => {
+  // Three days and the sentinel. The first block is 364pt tall.
+  const tops = [0, 364, 526, 634];
+
+  it("is the block the list is inside, while plenty of it is left", () => {
+    for (const offset of [3, 100, 200, 364 - SEEN_LEAD - 1]) {
+      expect(blockAt(offset, tops), `offset ${offset}`).toBe(0);
+    }
+  });
+
+  it("is the *next* block once only a sliver of this one is left", () => {
+    // **The defect a phone reported.** The last sliver of the 24th under the
+    // top edge is, arithmetically, the 24th — and everything a person can read
+    // on that screen is the 23rd. "I end up on August 23rd and the selected
+    // one is the 24th", every time the list stopped near the end of a day.
+    expect(blockAt(364 - SEEN_LEAD, tops)).toBe(1);
+    expect(blockAt(363, tops)).toBe(1);
+  });
+
+  it("is a block the list is resting exactly on, however short it is", () => {
+    // Where a tap on a day puts the list. A quiet day is one line tall, so by
+    // the sliver rule alone a tap on it would select the day after it.
+    const quiet = [0, 28, 56, 400, 500];
+    expect(blockAt(0, quiet)).toBe(0);
+    expect(blockAt(28, quiet)).toBe(1);
+    expect(blockAt(28 + AT_TOP_SLACK, quiet)).toBe(1);
+  });
+
+  it("never advances onto the sentinel, which is a position and not a day", () => {
+    expect(blockAt(633, tops)).toBe(2);
+    expect(blockAt(99999, tops)).toBe(3);
+  });
+
+  it("clamps the top and answers for an empty list", () => {
+    expect(blockAt(-200, tops)).toBe(0);
+    expect(blockAt(0, [])).toBe(-1);
+    expect(blockAt(Number.NaN, tops)).toBe(-1);
+  });
+});
+
 describe("markOf", () => {
   const tops = [0, 364, 526, 634];
   const marks = [2, 1, 0, -1];
 
-  it("is the block the offset is inside, for the whole of it", () => {
-    // **The rule the ring lands on, and the same one `dayAt` names the date
-    // with.** `fracFor` interpolates, so past a block's midpoint it rounds to
-    // the *next* cell — and the screen then showed a ring on one day and
-    // Calendar marked on the next. The e2e spec found it on its first run:
-    // ring on 20 August, Calendar on the 21st.
-    for (const offset of [0, 1, 180, 200, 320, 363]) {
-      expect(markOf(offset, tops, marks), `offset ${offset}`).toBe(2);
+  it("is blockAt, in cells — the same rule the date is named by", () => {
+    for (const offset of [0, 1, 200, 291, 292, 363, 364, 500, 526]) {
+      expect(markOf(offset, tops, marks), `offset ${offset}`).toBe(marks[blockAt(offset, tops)]);
     }
-    expect(markOf(364, tops, marks)).toBe(1);
-    expect(markOf(525, tops, marks)).toBe(1);
-    expect(markOf(526, tops, marks)).toBe(0);
   });
 
-  it("disagrees with a rounded fracFor exactly where the defect was", () => {
-    // 200pt into a 364pt block: the reader is looking at the first day, and
-    // the interpolation has already crossed into the second.
-    expect(Math.round(fracFor(200, tops, marks))).toBe(1);
-    expect(markOf(200, tops, marks)).toBe(2);
-  });
-
-  it("clamps both ends and answers for an empty list", () => {
-    expect(markOf(-500, tops, marks)).toBe(2);
-    expect(markOf(99999, tops, marks)).toBe(-1);
+  it("answers for an empty list", () => {
     expect(markOf(0, [], [])).toBe(0);
     expect(markOf(Number.NaN, tops, marks)).toBe(0);
   });

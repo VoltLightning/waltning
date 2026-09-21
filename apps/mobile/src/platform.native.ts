@@ -28,7 +28,7 @@ import * as Haptics from "expo-haptics";
 import * as LocalAuthentication from "expo-local-authentication";
 import { getLocales } from "expo-localization";
 import { isAvailableAsync, shareAsync } from "expo-sharing";
-import { AppState } from "react-native";
+import { AppState, Platform } from "react-native";
 import { mobileDiagnostics } from "./diagnostics.ts";
 
 const APPEARANCE_KEY = "waltning.appearance";
@@ -223,13 +223,34 @@ export function saveHaptic(): void {
 /**
  * S04 §7: the day strip's tick, as each day passes under the ring.
  *
- * `Light`, not `Medium`, and not a notification: this fires once per *day*
- * crossed while a thumb is on the strip, so it is a texture the finger reads
- * rather than an event being announced. A notification-weight buzz repeated a
- * dozen times across one drag is what a picker feels like when it is wrong.
+ * **The platform's own *selection* tick, not an impact.** It was
+ * `impactAsync(Light)`, which is the wrong primitive twice over: on iOS an
+ * impact is a *collision*, where `selectionAsync` is the feedback UIKit's own
+ * pickers give for exactly this; and on Android `impactAsync` falls back to
+ * the vibrator, where a light one is short enough that many phones do not
+ * render it at all — reported from a device as *the snap points work, but
+ * there is no tick*. `performAndroidHapticsAsync` goes through the view's
+ * haptic constants instead, needs no VIBRATE permission, and `Clock_Tick` is
+ * the one the platform's own time pickers use. It exists on every API level
+ * this app supports, where the newer `Segment_Tick` needs Android 14.
+ *
+ * A rejection is reported once rather than swallowed: a haptic that silently
+ * does nothing is indistinguishable, from the outside, from one that was never
+ * asked for — which is how the first version's failure went unnoticed.
  */
+let tickFailureReported = false;
 export function dayTickHaptic(): void {
-  void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  const tick =
+    Platform.OS === "android"
+      ? Haptics.performAndroidHapticsAsync(Haptics.AndroidHaptics.Clock_Tick)
+      : Haptics.selectionAsync();
+  tick.catch((cause) => {
+    if (tickFailureReported) return;
+    tickFailureReported = true;
+    // Dev only, and once: it is here so that a tick that cannot fire says why
+    // in the Metro log instead of simply not being felt.
+    if (__DEV__) console.warn(`day tick haptic failed: ${String(cause)}`);
+  });
 }
 
 /**

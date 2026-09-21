@@ -5,7 +5,6 @@ import { useLedgerList } from "@waltning/client/ledger/use-ledger-list";
 import { reanchors } from "@waltning/client/ledger/use-ledger-list/anchor-echo";
 import {
   blockOf,
-  dayAt,
   type EntryHeights,
   ESTIMATED_HEIGHTS,
   type GeometryEntry,
@@ -28,6 +27,7 @@ import {
   type RibbonDay,
 } from "@waltning/ui/transactions/molecules/day-ribbon/day-ribbon";
 import {
+  blockAt,
   EMPTY_PLACEMENT,
   type StripPlacement,
 } from "@waltning/ui/transactions/molecules/day-ribbon/scrub";
@@ -523,8 +523,12 @@ function HomeListPageView({
       // real date that was not the one on screen — out by a month on a list
       // holding a collapsed run, and silent, because a settle fires once per
       // stop and the wrong anchor is then quietly accepted.
-      const landed = dayAt(at, geometry.tops, geometry.dates);
-      if (landed === null || landed === reported.current) return;
+      // **`blockAt`, the strip's own rule** — so the day that is named and the
+      // day the ring lands on cannot disagree, and both are the day the reader
+      // is *looking at* rather than the one a sliver of which is still under
+      // the top edge.
+      const landed = geometry.dates[blockAt(at, geometry.tops)];
+      if (landed === undefined || landed === reported.current) return;
       reported.current = landed;
       setShown(accountingDate(landed));
       visibleDayRef.current?.(accountingDate(landed));

@@ -465,6 +465,23 @@ export default function Today() {
    * two — and switching pages carries the offset the new page is at as soon as
    * it moves.
    */
+  /**
+   * **The List hears about a date only while it is the page on screen.**
+   *
+   * All four pages are mounted, and the List answers a new date by reloading
+   * both halves of the ledger around it and rebuilding its virtualised list —
+   * about eleven commits. It did that for *every* date change on *every* page:
+   * the render probe counted a tap on a Calendar day at 19 commits and 4,361
+   * renders, some 1,300 of them cells of a list nobody could see, and a month
+   * step on Summary at over 5,000. Frozen while another page is showing, it
+   * costs nothing there; it catches up when the reader comes back, and
+   * *deferred*, so the page change itself commits first and the rebuild lands
+   * behind it rather than inside the swipe.
+   */
+  const heldAnchor = useRef(pager.state.date);
+  if (pager.state.page === "list") heldAnchor.current = pager.state.date;
+  const listAnchor = useDeferredValue(heldAnchor.current);
+
   const scrollY = useSharedValue(0);
   /**
    * Whether List is the page on screen — for the list's own settle worklet,
@@ -1434,138 +1451,153 @@ export default function Today() {
 
   const flowLabels = useMemo(() => ({ inflow: t("shell.cameIn"), spend: t("shell.wentOut") }), [t]);
 
-  const pages = useMemo(
-    () => [
-      {
-        // The gutter and the scroll belong to the page, not to the pager: the
-        // List page is a full-bleed virtualised list and would be ruined by
-        // the same wrapper Summary needs.
-        key: "summary",
-        label: t("shell.summary"),
-        node: <GroundPanel onScroll={handleScroll}>{body}</GroundPanel>,
-      },
-      {
-        key: "list",
-        label: t("shell.list"),
-        node: leadNetWorth ? (
-          <HomeListPage
-            ledger={ledger}
-            anchor={pager.state.date}
-            onVisibleDay={handleVisibleDay}
-            today={today}
-            revision={snapshot.revision}
-            {...(pivotCurrency === undefined
-              ? // Unreachable once `currencies` has loaded: the server holds a
-                // partial unique index and a trigger over `is_pivot`, so a
-                // ledger has exactly one pivot. Rendering nothing beats
-                // rendering a figure under a currency this screen guessed.
-                { pivotCurrency: leadNetWorth.currency, pivotDecimals: leadNetWorth.decimals }
-              : { pivotCurrency: pivotCurrency.code, pivotDecimals: pivotCurrency.decimals })}
-            onPickDay={handlePickDay}
-            onOpenTransaction={handleOpenTransaction}
-            onCategorize={handleCategorize}
-            onReturnToToday={returnToToday}
-            query={pager.state.query}
-            scrollY={scrollY}
-            onTick={dayTickHaptic}
-            active={listActive}
-            empty={listEmpty}
-          />
-        ) : null,
-      },
-      {
-        key: "calendar",
-        label: t("shell.calendar"),
-        node: (
-          <GroundPanel onScroll={handleScroll}>
-            <MonthGrid
-              weeks={weeks}
-              headings={dayHeadings}
-              current={pager.state.date}
-              today={today}
-              labelFor={dayName}
-              onPickDay={handlePickDay}
-              {...(dayMatches === undefined ? {} : { matches: dayMatches })}
-            />
-            {calendarEmpty ?? dayPanel}
-          </GroundPanel>
-        ),
-      },
-      {
-        key: "months",
-        label: t("shell.months"),
-        node: (
-          <GroundPanel onScroll={handleScroll}>
-            <View style={sectionStyles.year}>
-              <YearChart
-                year={shownYear}
-                columns={yearColumns}
-                current={month}
-                kept={
-                  <Amount
-                    value={yearKept}
-                    currency={leadNetWorth?.currency ?? ""}
-                    decimals={leadNetWorth?.decimals ?? 2}
-                    size="caption"
-                    signed
-                  />
-                }
-                {...(yearKeptNote === undefined ? {} : { keptNote: yearKeptNote })}
-                {...(shownYear > FIRST_YEAR ? { onOlder: previousYear } : {})}
-                {...(shownYear < thisYear ? { onNewer: nextYear } : {})}
-                onPickYear={openYearPicker}
-                labels={chartLabels}
-              />
-              <MonthList
-                rows={monthRows}
-                current={month}
-                labels={flowLabels}
-                onPickMonth={handlePickMonth}
-              />
-            </View>
-          </GroundPanel>
-        ),
-      },
-    ],
+  /*
+    **One memo per page, not one for all four.** Built together, every page was
+    a fresh element whenever *any* input of *any* page changed — so a tap on a
+    Calendar day re-rendered Summary, Months and their charts, which had been
+    told nothing new. A page whose own inputs are unchanged now keeps the very
+    same element, and React skips it without looking inside. The render probe
+    is what says this holds (`tools/e2e/specs/renders.spec.ts`).
+  */
+  const summaryNode = useMemo(
+    () => <GroundPanel onScroll={handleScroll}>{body}</GroundPanel>,
+    [body, handleScroll],
+  );
+  const listNode = useMemo(
+    () =>
+      leadNetWorth ? (
+        <HomeListPage
+          ledger={ledger}
+          anchor={listAnchor}
+          onVisibleDay={handleVisibleDay}
+          today={today}
+          revision={snapshot.revision}
+          {...(pivotCurrency === undefined
+            ? // Unreachable once `currencies` has loaded: the server holds a
+              // partial unique index and a trigger over `is_pivot`, so a
+              // ledger has exactly one pivot. Rendering nothing beats
+              // rendering a figure under a currency this screen guessed.
+              { pivotCurrency: leadNetWorth.currency, pivotDecimals: leadNetWorth.decimals }
+            : { pivotCurrency: pivotCurrency.code, pivotDecimals: pivotCurrency.decimals })}
+          onPickDay={handlePickDay}
+          onOpenTransaction={handleOpenTransaction}
+          onCategorize={handleCategorize}
+          onReturnToToday={returnToToday}
+          query={pager.state.query}
+          scrollY={scrollY}
+          onTick={dayTickHaptic}
+          active={listActive}
+          empty={listEmpty}
+        />
+      ) : null,
     [
-      body,
-      calendarEmpty,
-      weeks,
-      dayHeadings,
-      dayName,
-      dayPanel,
-      chartLabels,
-      dayMatches,
-      flowLabels,
       leadNetWorth,
-      nextYear,
-      openYearPicker,
-      previousYear,
-      shownYear,
+      ledger,
+      listAnchor,
+      handleVisibleDay,
+      today,
+      snapshot.revision,
+      pivotCurrency,
+      handlePickDay,
+      handleCategorize,
+      returnToToday,
+      pager.state.query,
       scrollY,
       listActive,
-      today,
-      yearColumns,
-      yearKept,
-      yearKeptNote,
-      handleCategorize,
-      handlePickDay,
-      pager.state.query,
-      snapshot.revision,
-      returnToToday,
-      handlePickMonth,
-      handleScroll,
-      handleVisibleDay,
-      ledger,
       listEmpty,
-      month,
-      monthRows,
-      pager.state.date,
-      pivotCurrency,
-      sectionStyles.year,
-      t,
-      thisYear,
     ],
+  );
+  const calendarNode = useMemo(
+    () => (
+      <GroundPanel onScroll={handleScroll}>
+        <MonthGrid
+          weeks={weeks}
+          headings={dayHeadings}
+          current={pager.state.date}
+          today={today}
+          labelFor={dayName}
+          onPickDay={handlePickDay}
+          {...(dayMatches === undefined ? {} : { matches: dayMatches })}
+        />
+        {calendarEmpty ?? dayPanel}
+      </GroundPanel>
+    ),
+    [
+      handleScroll,
+      weeks,
+      dayHeadings,
+      pager.state.date,
+      today,
+      dayName,
+      handlePickDay,
+      dayMatches,
+      calendarEmpty,
+      dayPanel,
+    ],
+  );
+  const monthsNode = useMemo(
+    () => (
+      <GroundPanel onScroll={handleScroll}>
+        <View style={sectionStyles.year}>
+          <YearChart
+            year={shownYear}
+            columns={yearColumns}
+            current={month}
+            kept={
+              <Amount
+                value={yearKept}
+                currency={leadNetWorth?.currency ?? ""}
+                decimals={leadNetWorth?.decimals ?? 2}
+                size="caption"
+                signed
+              />
+            }
+            {...(yearKeptNote === undefined ? {} : { keptNote: yearKeptNote })}
+            {...(shownYear > FIRST_YEAR ? { onOlder: previousYear } : {})}
+            {...(shownYear < thisYear ? { onNewer: nextYear } : {})}
+            onPickYear={openYearPicker}
+            labels={chartLabels}
+          />
+          <MonthList
+            rows={monthRows}
+            current={month}
+            labels={flowLabels}
+            onPickMonth={handlePickMonth}
+          />
+        </View>
+      </GroundPanel>
+    ),
+    [
+      handleScroll,
+      sectionStyles.year,
+      shownYear,
+      yearColumns,
+      month,
+      yearKept,
+      leadNetWorth,
+      yearKeptNote,
+      previousYear,
+      nextYear,
+      thisYear,
+      openYearPicker,
+      chartLabels,
+      monthRows,
+      flowLabels,
+      handlePickMonth,
+    ],
+  );
+
+  const pages = useMemo(
+    () => [
+      // The gutter and the scroll belong to the page, not to the pager: the
+      // List page is a full-bleed virtualised list and would be ruined by the
+      // same wrapper Summary needs.
+      { key: "summary", label: t("shell.summary"), node: summaryNode },
+      { key: "list", label: t("shell.list"), node: listNode },
+      { key: "calendar", label: t("shell.calendar"), node: calendarNode },
+      { key: "months", label: t("shell.months"), node: monthsNode },
+    ],
+    [t, summaryNode, listNode, calendarNode, monthsNode],
   );
 
   return (

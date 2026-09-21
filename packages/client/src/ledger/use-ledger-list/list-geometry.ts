@@ -78,7 +78,9 @@ export type ListGeometry = {
   /**
    * The day each top stands for, unclamped.
    *
-   * **What the settle reports.** Reading the day back out of `marks` made
+   * **What the settle reports** — indexed by the strip's own `blockAt`, so the
+   * day that is named and the day the ring lands on are one rule. Reading the
+   * day back out of `marks` made
    * every day past the strip's reach report the strip's end day instead: on a
    * list holding a collapsed run, a third of one flick reported a day that was
    * not on screen, and deeper in it was out by a month. The error was
@@ -211,42 +213,6 @@ export function listGeometry(
   }
 
   return { tops, marks, dates };
-}
-
-/**
- * The day a list sitting at `offset` has come to rest on.
- *
- * **Read from `dates`, never from `marks`.** The two differ exactly where the
- * strip stops being able to show a day, and that is precisely where reading
- * the wrong one is undetectable: `marks` hands back a real date that is not
- * the date on screen, and S04 §3's promise — *scroll to 25 May on List and
- * Calendar has 25 May marked* — quietly stops holding.
- *
- * **The block the offset is *inside*, never the nearer one.** Rounding to the
- * nearer anchor crosses at the midpoint of a day, so the second half of every
- * day block reported the *next* day — with that day's header still below the
- * fold and this day's rows filling the screen. On a six-row day that is 182 of
- * its 364 points, and S04 §3's worked example (*scroll to 25 May and Calendar
- * has 25 May marked*) fails at 200pt into 25 May. The rule this replaced —
- * the topmost viewable item — got this right, and the fraction is still
- * fractional for the strip; it is only the *date* that must not be.
- */
-export function dayAt(
-  offset: number,
-  tops: readonly number[],
-  dates: readonly string[],
-): string | null {
-  const count = tops.length < dates.length ? tops.length : dates.length;
-  if (count === 0 || Number.isNaN(offset)) return null;
-  const first = tops[0] ?? 0;
-  if (offset <= first) return dates[0] ?? null;
-  for (let i = 0; i < count - 1; i += 1) {
-    const from = tops[i];
-    const to = tops[i + 1];
-    if (from === undefined || to === undefined) break;
-    if (offset < to) return dates[i] ?? null;
-  }
-  return dates[count - 1] ?? null;
 }
 
 /**

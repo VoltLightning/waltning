@@ -63,6 +63,7 @@ import {
   markOf,
   nearestCell,
   offsetWithin,
+  SEEN_LEAD,
   type StripPlacement,
   trackLead,
 } from "./scrub.ts";
@@ -397,13 +398,11 @@ function DayRibbonView({ days, current, scrollY, placement, onPickDay, onTick }:
         }
         return;
       }
-      // Re-armed for the next time a hand arrives, so the first crossing of a
-      // new drag ticks rather than being swallowed as "the cell we ended on".
-      ticked.value = -1;
-      snapped.value = true;
-
       const here = placement.value;
-      const target = fracFor(scrollY.value, here.tops, here.marks);
+      // **Read at the line the reader is looking at, not at the top edge** —
+      // `SEEN_LEAD` below it, the same line `blockAt` names the day by, so the
+      // ring in motion and the ring at rest are about the same place.
+      const target = fracFor(scrollY.value + SEEN_LEAD, here.tops, here.marks);
       // How fast the day being followed is moving, in cells per second — the one
       // thing `follow` cannot work out for itself, and the thing its damping is
       // decided by. Measured rather than inferred from the gap, because a gap is
@@ -444,6 +443,10 @@ function DayRibbonView({ days, current, scrollY, placement, onPickDay, onTick }:
         if (cell !== landing.value) {
           landing.value = cell;
           shown.value = cell;
+          // The day it rests on is a day already counted: the line in motion
+          // and the rule at rest can differ by one, and the difference is not
+          // a day passing the ring.
+          ticked.value = cell;
           const rest = offsetWithin(cell, measured, content.value);
           wrote.value = rest;
           sinceWrite.value = 0;
@@ -453,7 +456,22 @@ function DayRibbonView({ days, current, scrollY, placement, onPickDay, onTick }:
         }
         return;
       }
-      const next = placed.value ? follow(shown.value, target, speed, step / 1000) : target;
+      // The first placement is where the strip will *rest* — the day's own
+      // cell — rather than the moving line, or a cold open lands twice.
+      const next = placed.value
+        ? follow(shown.value, target, speed, step / 1000)
+        : markOf(scrollY.value, here.tops, here.marks);
+
+      // A day passing the ring taps, whoever sent it past (`grip.ts`).
+      const passing = Math.round(next);
+      if (ticked.value < 0) ticked.value = passing;
+      else if (passing !== ticked.value) {
+        ticked.value = passing;
+        if (placed.value && ticksNow(hold.value, sinceTick.value) && onTick !== undefined) {
+          sinceTick.value = 0;
+          runOnJS(onTick)();
+        }
+      }
       placed.value = true;
       shown.value = next;
       const want = offsetWithin(next, measured, content.value);
