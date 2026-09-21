@@ -646,16 +646,33 @@ ignore.
   along. It runs on the UI thread and costs no render.
 - **Detached** — the reader dragged the strip. A hand on a control wins over a
   control being driven. The ring still marks the middle, so the strip is read
-  the same way; it simply has its own offset now. Lifting the finger changes
-  nothing.
+  the same way; it simply has its own offset now. Lifting the finger snaps it
+  to a day and starts the pause below.
 - **Re-attaching** — the list moved again. The next scroll springs the strip
   from where the hand left it to where the list says it belongs, over one move,
   and it is attached from the moment it lands. The thing you touch is the thing
   that wins, and nothing springs while you are still reading it.
 
-**Dragging the strip does not move the list.** It is a way to look ahead of
-where you are, not a second scroller for the same content — two controls that
-each move the other is how a gesture ends up fighting itself.
+**Browsing the strip does not move the list; leaving it somewhere does.** A
+strip under a thumb is a way to look ahead of where you are, and while it is
+moving nothing else does — two controls that each move the other is how a
+gesture ends up fighting itself. But a strip *left* on a day is a choice: once
+it has snapped and been still for a little over a second, the list goes to the
+day under the ring, exactly as for a tap on it — a scroll when the day is
+loaded, a jump when it is not (§6). The pause is counted from the strip's last
+movement, so every further nudge starts it again; a finger back on the strip
+cancels it. While the list is on its way the strip stays where it was left
+rather than re-attaching to a list that is still somewhere else, and is
+attached again, already on the right day, when the list arrives.
+
+**A scroll to a day is finished, not fired.** Every day's position is summed
+from row heights, and rows nobody has scrolled past have only their kind's
+estimate; a virtualised list also cannot be scrolled past the content it has
+laid out. So a tap on a day a month up the list, the pill, a strip left on a
+day, and the opening scroll of a jump are each checked when the list stops:
+if the day is not at the top, the list is sent on, against the geometry that
+getting there measured — a few short legs at most. A finger on the list, or a
+stop long after the scroll was sent, ends it: the list is the reader's.
 
 **A hand on the strip snaps; every day the ring reaches ticks.** Let go — with
 a flick or without one — and the strip settles the nearest day under the ring

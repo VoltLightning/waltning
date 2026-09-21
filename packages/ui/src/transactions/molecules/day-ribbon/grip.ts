@@ -201,3 +201,32 @@ export function relandsNow(gap: number, sinceWrite: number): boolean {
   if (Number.isNaN(gap) || sinceWrite < LAND_MS) return false;
   return gap >= 0.5 || gap <= -0.5;
 }
+
+/**
+ * How long a strip left on a day by hand waits before the list follows it.
+ *
+ * **A trailing pause, counted from the last movement.** Every further nudge
+ * starts it again, so browsing along the strip moves nothing: only a strip
+ * that has been *left* somewhere is an instruction. Long enough to read the
+ * cells and move on; short enough that letting go feels like choosing.
+ */
+export const LEAD_MS = 1200;
+
+/**
+ * Whether the strip should now take the list to the day under its ring.
+ *
+ * Only a strip a hand has placed and let go of, settled on a cell, still for
+ * `LEAD_MS`, and not already told — `told` is the cell the list was last sent
+ * to, so one rest is one instruction.
+ */
+export function leadsNow(
+  hold: Grip,
+  snapped: boolean,
+  still: number,
+  cell: number,
+  told: number,
+): boolean {
+  "worklet";
+  if (!hold.detached || hold.dragging || !snapped) return false;
+  return still >= LEAD_MS && cell !== told;
+}

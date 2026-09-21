@@ -382,11 +382,29 @@ describe("the anchor", () => {
 describe("the strip's run", () => {
   const today = accountingDate("2026-09-21");
 
-  it("starts on a 1 January, ten years before today, over an empty ledger", () => {
+  it("starts on the 1 January of a decade, at least ten years back", () => {
     const run = ribbonRun(today);
-    expect(run.origin).toBe(`${2026 - RIBBON_BACK_YEARS}-01-01`);
+    expect(run.origin).toBe("2010-01-01");
+    expect(Number(run.origin.slice(0, 4))).toBeLessThanOrEqual(2026 - RIBBON_BACK_YEARS);
     expect(run.through).toBe(today);
     expect(ribbonDate(run.count - 1, run)).toBe(today);
+  });
+
+  /**
+   * **Seen as a strip showing the same date a year earlier.** The origin was
+   * the oldest loaded year less ten, so a jump from 2026 into 2025 moved every
+   * cell's index by 365 under a strip that had just been left on a day.
+   */
+  it("does not move when the list loads an earlier year", () => {
+    const before = ribbonRun(today, { oldest: accountingDate("2026-08-01") });
+    const after = ribbonRun(today, { oldest: accountingDate("2025-10-17") });
+    expect(after.origin).toBe(before.origin);
+  });
+
+  it("never moves forward again, once it has gone back", () => {
+    const far = ribbonRun(today, { oldest: accountingDate("1950-06-01") });
+    const home = ribbonRun(today, { oldest: accountingDate("2026-08-01"), floor: far.origin });
+    expect(home.origin).toBe(far.origin);
   });
 
   it("makes a cell's index the days since the origin — nothing to clamp", () => {
@@ -406,6 +424,7 @@ describe("the strip's run", () => {
   it("reaches behind a jump to 1950, by whole years", () => {
     const run = ribbonRun(today, { oldest: accountingDate("1950-06-01") });
     expect(run.origin).toBe("1940-01-01");
+    expect(run.origin < "1950-06-01").toBe(true);
     expect(ribbonCell(accountingDate("1950-06-01"), run)).toBeGreaterThan(0);
   });
 

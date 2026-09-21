@@ -67,6 +67,7 @@ import {
   grip,
   LAND_MS,
   LOOSE,
+  leadsNow,
   letGo,
   RESEAT_CELLS,
   relandsNow,
@@ -91,6 +92,8 @@ import {
   trackWidth,
 } from "./scrub.ts";
 
+/** How long the list is given to start moving before a lead is called finished. */
+const LEAD_GRACE_MS = 1000;
 /** Cells drawn before the first scroll: a band and a half on the widest phone. */
 const INITIAL_CELLS = 16;
 /** The render window, in bands. Wide, for a flick (see the list below). */
@@ -155,6 +158,11 @@ export type DayRibbonProps = {
    */
   placement: SharedValue<StripPlacement>;
   onPickDay: (date: string) => void;
+  /**
+   * The strip was left on this cell by hand, and the list should come to it
+   * (S04 §7). Asked once per rest, after `grip.ts`'s `LEAD_MS`.
+   */
+  onLead?: (cell: number) => void;
   /**
    * One light tap as each day passes under the ring, **while a hand is on the
    * strip** (S04 §7).
@@ -294,6 +302,7 @@ function StripView({
   scrollY,
   placement,
   onPickDay,
+  onLead,
   onTick,
 }: Omit<DayRibbonProps, "current">) {
   const styles = useStyles();
@@ -370,6 +379,15 @@ function StripView({
   const nearest = useSharedValue(-1);
   /** Where the ring was over the strip last frame, in fractional days. */
   const under = useSharedValue(Number.NaN);
+  /** The cell the list was last sent to from here, so one rest is one instruction. */
+  const told = useSharedValue(-1);
+  /**
+   * The list is on its way to a day this strip chose. **Its movement is then
+   * not the reader taking the list back**: re-attached at the first frame, the
+   * strip sprang to wherever the list still was and rode back with it.
+   */
+  const leading = useSharedValue(false);
+  const sinceLead = useSharedValue(0);
   /** Where the strip sat when it was last re-sent home, so it is asked once. */
   const stuck = useSharedValue(Number.NaN);
   /** A re-seat in flight: cells swept over are not days going past (`grip.ts`). */
@@ -437,7 +455,19 @@ function StripView({
       was.value = at.value;
       sinceWrite.value += step;
       sinceTick.value += step;
-      hold.value = grip(hold.value, { listJumped, drifted, sinceWrite: sinceWrite.value });
+      sinceLead.value += step;
+      if (leading.value && sinceLead.value > LEAD_GRACE_MS && !listMoved && !gliding.value) {
+        // The list has arrived (or never had to move): the strip is its again,
+        // and already on the day it will be asked to land on.
+        leading.value = false;
+        hold.value = LOOSE;
+        told.value = -1;
+      }
+      hold.value = grip(hold.value, {
+        listJumped: listJumped && !leading.value,
+        drifted,
+        sinceWrite: sinceWrite.value,
+      });
 
       /*
         **The tick, read off where the strip actually is** (S04 §7) — one rule
@@ -499,6 +529,16 @@ function StripView({
           // Animated, because this one *is* a move the reader should see: it is
           // the strip taking the day they stopped on.
           scrollTo(scroller, landing, 0, true);
+        }
+        if (
+          onLead !== undefined &&
+          !leading.value &&
+          leadsNow(hold.value, snapped.value, after.still, cell, told.value)
+        ) {
+          told.value = cell;
+          leading.value = true;
+          sinceLead.value = 0;
+          runOnJS(onLead)(cell);
         }
         return;
       }
@@ -601,9 +641,11 @@ function StripView({
       gliding,
       hold,
       landing,
+      leading,
       listRest,
       muted,
       nearest,
+      onLead,
       onTick,
       placed,
       placement,
@@ -612,11 +654,13 @@ function StripView({
       scrollY,
       seen,
       shown,
+      sinceLead,
       sinceTick,
       sinceWrite,
       snapped,
       stuck,
       ticked,
+      told,
       under,
       was,
       width,
@@ -647,6 +691,7 @@ function StripView({
     {
       onBeginDrag: () => {
         hold.value = takeHold();
+        leading.value = false;
         // Stillness is measured from the lift, not through the gesture.
         rest.value = UNREAD;
         /*
