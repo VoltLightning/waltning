@@ -135,14 +135,17 @@ it("draws one quiet day as a line and a run as a single row", () => {
   // **One range, not two dates.** `July 21, 2026 – August 11, 2026` spells the
   // year twice over a row whose whole content is that nothing happened; §6's
   // own example of it is the much shorter "3 – 4 August · 2 days · nothing".
-  expect(
-    screen.getByRole("button", { name: /Show: July 21\u2009–\u2009August 11, 2026/ }),
-  ).toBeTruthy();
+  // `getByText` folds the range's thin spaces into plain ones before matching.
+  expect(screen.getByText(/July 21\s–\sAugust 11, 2026/)).toBeTruthy();
+  // The same muted line the single day is — the span and its length, and
+  // nothing to press.
+  expect(screen.getByText(/22 days · nothing recorded/)).toBeTruthy();
+  expect(screen.queryByRole("button", { name: /Show/ })).toBeNull();
 });
 
 it("writes a run inside one month without saying the month twice", () => {
   draw(ledgerWith([row("2026-08-14", 1, "-96"), row("2026-08-11", 2, "-10")]));
-  expect(screen.getByRole("button", { name: /Show: August 12\u2009–\u200913, 2026/ })).toBeTruthy();
+  expect(screen.getByText(/August 12\s–\s13, 2026/)).toBeTruthy();
 });
 
 it("shows no figure at all on a day it cannot price", () => {
@@ -158,14 +161,6 @@ it("shows no figure at all on a day it cannot price", () => {
     ]),
   );
   expect(screen.getByText("—")).toBeTruthy();
-});
-
-it("asks the list to move when a collapsed run is opened", () => {
-  const { onPickDay } = draw(
-    ledgerWith([row("2026-08-14", 1, "-96"), row("2026-07-20", 2, "-10")]),
-  );
-  screen.getByRole("button", { name: /Show:/ }).click();
-  expect(onPickDay).toHaveBeenCalledExactlyOnceWith("2026-08-13");
 });
 
 /**
