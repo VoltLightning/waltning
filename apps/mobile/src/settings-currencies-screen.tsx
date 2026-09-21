@@ -43,10 +43,10 @@ import {
 } from "@waltning/ui/fx/currency-row";
 import { resolveFieldErrorMessage } from "@waltning/ui/i18n/field-error-messages";
 import { useT } from "@waltning/ui/i18n/provider";
+import { BottomSheet } from "@waltning/ui/primitives/bottom-sheet";
 import { Button } from "@waltning/ui/primitives/button";
 import { Select, type SelectOption } from "@waltning/ui/primitives/select";
 import { TextField } from "@waltning/ui/primitives/text-field";
-import { BottomSheet } from "@waltning/ui/shell/bottom-sheet";
 import { Card } from "@waltning/ui/shell/card";
 import { ConfirmDialog } from "@waltning/ui/shell/confirm-dialog";
 import { Toast } from "@waltning/ui/states/toast";

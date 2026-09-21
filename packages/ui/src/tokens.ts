@@ -818,30 +818,3 @@ export const touchTarget = { min: 44, row: 54 } as const;
  * and the desk's band sat 2px wide of the panel under it.
  */
 export const gutter = space.x4;
-
-/**
- * A tabular digit's advance in IBM Plex Sans, as a fraction of the font size —
- * what a typed figure's `TextInput` is sized by, so the currency affix sits
- * beside the figure rather than at the far edge of a field that grew to fill
- * the row. Plex's tabular figures are 0.6em.
- */
-export const DIGIT_EM = 0.6;
-
-/**
- * The decimal mark's advance, in the same units.
- *
- * **Measured, not guessed — and the guess was wrong.** A first version of this
- * put it at `0.21` on the reasoning that a comma is "about a third" of a digit.
- * The real advance, read off a canvas in the field's own computed font
- * (`IBMPlexSans_600SemiBold`, `tabular-nums`), is **0.299** — so the box grew
- * by 11.4px where the glyph needed 16.1 at `display-hero`, and the text ran
- * about five pixels wider than the box reserved for it. That is what the
- * figure looked like jumping.
- *
- * `DIGIT_EM` was measured the same way and is exactly right: 0.6 for every
- * digit, which is `tabular-nums` doing its job.
- */
-export const MARK_EM = 0.299;
-
-/** One allowance for the caret, added once — never folded into a glyph. */
-export const CARET_EM = 0.08;

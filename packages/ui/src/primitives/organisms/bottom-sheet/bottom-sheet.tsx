@@ -103,16 +103,17 @@ import GorhomBottomSheet, {
 } from "@gorhom/bottom-sheet";
 import { useCallback, useMemo, useState } from "react";
 import { Modal, Pressable, Text, useWindowDimensions, View } from "react-native";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { useT } from "../../../i18n/provider";
-import { Button } from "../../../primitives/atoms/button/button";
-import { dismissKeyboard, useKeyboardHeight } from "../../../primitives/keyboard.ts";
-import { containOverscroll } from "../../../primitives/nested-scroll.ts";
-import { useWindowInsets } from "../../../primitives/safe-area";
-import { SheetInputProvider } from "../../../primitives/sheet-input";
 import { text } from "../../../theme/fonts.ts";
 import { makeStyles } from "../../../theme/styles.ts";
 import { focus, radius, space, touchTarget } from "../../../tokens.ts";
+import { Button } from "../../atoms/button/button";
+import { dismissKeyboard, useKeyboardHeight } from "../../keyboard.ts";
+import { containOverscroll } from "../../nested-scroll.ts";
+import { useWindowInsets } from "../../safe-area";
 import { sheetBottomInset, sheetMaxHeight } from "../../sheet-geometry.ts";
+import { SheetInputProvider } from "../../sheet-input";
 
 export type BottomSheetProps = {
   visible: boolean;
@@ -124,10 +125,24 @@ export type BottomSheetProps = {
    * position and at any window height.
    */
   footer?: React.ReactNode;
+  /**
+   * The body rolls on its own — a drum. **The sheet is then dragged by its
+   * handle and header, not by its content**: a pan anywhere on the body is how
+   * the library closes a sheet, and over a wheel that gesture is the wheel's.
+   * Left on, the first downward roll of a date closed the picker.
+   */
+  bodyRolls?: boolean;
   children: React.ReactNode;
 };
 
-export function BottomSheet({ visible, title, onDismiss, footer, children }: BottomSheetProps) {
+export function BottomSheet({
+  visible,
+  title,
+  onDismiss,
+  footer,
+  bodyRolls = false,
+  children,
+}: BottomSheetProps) {
   const t = useT();
   const [backdropFocused, setBackdropFocused] = useState(false);
   const styles = useStyles();
@@ -217,7 +232,15 @@ export function BottomSheet({ visible, title, onDismiss, footer, children }: Bot
       statusBarTranslucent
       navigationBarTranslucent
     >
-      <View style={styles.overlay}>
+      {/*
+        **A gesture root of its own, because an Android `Modal` is a separate
+        native window.** The app's `GestureHandlerRootView` does not reach into
+        it, so every gesture the library registers in here — the pan that drags
+        a sheet down to close it — was never delivered: on Android no sheet in
+        the app could be swiped away, only closed by its button or its backdrop.
+        iOS presents a modal inside the same window and never needed this.
+      */}
+      <GestureHandlerRootView style={styles.overlay}>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={t("common.dismissSheet", { title })}
@@ -240,6 +263,7 @@ export function BottomSheet({ visible, title, onDismiss, footer, children }: Bot
               enableDynamicSizing
               maxDynamicContentSize={maxHeight}
               enablePanDownToClose
+              enableContentPanningGesture={!bodyRolls}
               onClose={onDismiss}
               backgroundStyle={styles.sheetBackground}
               style={styles.sheetShadow}
@@ -259,7 +283,7 @@ export function BottomSheet({ visible, title, onDismiss, footer, children }: Bot
             </GorhomBottomSheet>
           </SheetInputProvider>
         </View>
-      </View>
+      </GestureHandlerRootView>
     </Modal>
   );
 }

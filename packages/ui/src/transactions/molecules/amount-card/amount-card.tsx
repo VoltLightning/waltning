@@ -20,35 +20,22 @@
  * the sign are drawn here, and why `context` arrives as a finished sentence
  * rather than a number this component would have to format.
  *
- * **Nothing in this row may move while a digit is typed.** Two things did, and
- * both read as the figure lurching under the thumb:
- *
- * 1. The sign was mounted on the first keystroke, so every character after the
- *    first sat one glyph and one gap to the right of where the first one
- *    landed. It is always mounted now and merely *invisible* while the field
- *    is empty, so it holds its place from the start.
- * 2. The width reserved for the field was **estimated** from per-character em
- *    constants, and an estimate can only be right on the platform it was
- *    measured on. Two numbers were wrong in turn — every character as a digit,
- *    then a guessed `0.21` against a real `0.299` — and each correction was
- *    still a guess about a font at a size on a renderer. The field measures
- *    itself now: an invisible `Text` holding the same value sizes the row with
- *    its own glyphs, and the input lies over it. No constant decides a width,
- *    so no constant can be wrong about one.
+ * **The figure itself is `FigureInput`** — text drawn in a row with a
+ * transparent input over it — which has the whole argument for why, and the
+ * three ways the other arrangement failed on a device.
  */
 
-import { useCallback, useState } from "react";
-import { Text, useWindowDimensions, View } from "react-native";
-import { figureWidth } from "../../../fx/figure-width.ts";
+import { useCallback, useMemo, useState } from "react";
+import { Text, View } from "react-native";
 import { decimalMark } from "../../../i18n/locales";
 import { useLocale, useT } from "../../../i18n/provider";
-import { SheetAwareTextInput } from "../../../primitives/sheet-input";
 import { focusBorder } from "../../../theme/focus.ts";
-import { inputStep, text, textCap } from "../../../theme/fonts.ts";
-import { useInputHeight } from "../../../theme/input-height.ts";
+import { text, textCap } from "../../../theme/fonts.ts";
+import { useTheme } from "../../../theme/provider";
 import { makeStyles } from "../../../theme/styles.ts";
-import { radius, space, tabularNums, touchTarget } from "../../../tokens.ts";
+import { radius, space } from "../../../tokens.ts";
 import { AMOUNT_INTEGER_DIGITS, sanitizeAmount } from "../../amount-keys.ts";
+import { FigureInput } from "../figure-input/figure-input";
 
 export type AmountCardProps = {
   /** The card's own label — *How much?* */
@@ -84,8 +71,6 @@ export function AmountCard({
   const t = useT();
   const locale = useLocale();
   const styles = useStyles();
-  const { fontScale } = useWindowDimensions();
-  const inputHeight = useInputHeight("displayHero");
   const mark = decimalMark(locale);
   const display = raw.replace(",", mark);
   const handleChange = useCallback(
@@ -95,62 +80,41 @@ export function AmountCard({
   // The card is the field, so the card wears the ring (§2.6) — the input
   // inside it has its own suppressed, see `input` below.
   const [focused, setFocused] = useState(false);
-  // Sized to the figure, so the affix follows it: an `<input>` otherwise
-  // takes its own default width and the currency lands at the far edge.
-
-  // Sized to the figure so the affix follows it. **Horizontal only** — the
-  // shift a reader actually saw was vertical, and `inputStep` below is what
-  // fixes that; a measuring `Text` under an absolutely-positioned input was
-  // tried for this and clipped its own glyphs on the device.
-  const figureBox = { width: figureWidth("displayHero", display, fontScale) };
 
   const handleFocus = useCallback(() => setFocused(true), []);
   const handleBlur = useCallback(() => setFocused(false), []);
 
+  const theme = useTheme();
+  const sign = useMemo(
+    () =>
+      kind === "expense"
+        ? ({ glyph: "−", color: theme.spend } as const)
+        : ({ glyph: "+", color: theme.income } as const),
+    [kind, theme],
+  );
+
   return (
     <View style={[styles.card, focused ? styles.focused : null]}>
       <Text style={styles.label}>{label}</Text>
-      <View style={styles.figure}>
-        {/*
-          Always mounted, invisible until there is a figure to sign: a sign
-          that appears on the first keystroke pushes every later digit sideways.
-          `opacity` rather than a conditional, so the row's geometry is the same
-          empty and full.
-        */}
-        <Text
-          // All three: the native pair and the web one. `react-native-web`
-          // maps neither native prop (`conformance.test.ts`).
-          accessibilityElementsHidden={raw === ""}
-          importantForAccessibility={raw === "" ? "no-hide-descendants" : "auto"}
-          aria-hidden={raw === "" ? true : undefined}
-          maxFontSizeMultiplier={textCap("displayHero")}
-          style={[
-            styles.sign,
-            kind === "expense" ? styles.signOut : styles.signIn,
-            raw === "" ? styles.signEmpty : null,
-          ]}
-        >
-          {kind === "expense" ? "−" : "+"}
-        </Text>
-        <SheetAwareTextInput
-          accessibilityLabel={label}
-          value={display}
-          onChangeText={handleChange}
-          placeholder="0"
-          placeholderTextColor={styles.placeholder.color}
-          keyboardType="decimal-pad"
-          inputMode="decimal"
-          // `parseAmount`'s twelve integer digits, the mark and the fraction —
-          // past that the schema would refuse the write anyway.
-          maxLength={AMOUNT_INTEGER_DIGITS + 1 + decimals}
-          autoFocus={autoFocus}
-          onFocus={handleFocus}
-          onBlur={handleBlur}
-          maxFontSizeMultiplier={textCap("displayHero")}
-          style={[styles.input, figureBox, inputHeight]}
-        />
-        {currency === undefined ? null : <Text style={styles.affix}>{currency}</Text>}
-      </View>
+      <FigureInput
+        label={label}
+        value={display}
+        onChangeText={handleChange}
+        step="displayHero"
+        maxLength={AMOUNT_INTEGER_DIGITS + 1 + decimals}
+        sign={sign}
+        affix={
+          currency === undefined ? undefined : (
+            <Text maxFontSizeMultiplier={textCap("displayHero")} style={styles.affix}>
+              {currency}
+            </Text>
+          )
+        }
+        focused={focused}
+        onFocus={handleFocus}
+        onBlur={handleBlur}
+        autoFocus={autoFocus}
+      />
       {error === undefined ? null : <Text style={styles.error}>{error}</Text>}
       {context === undefined ? null : (
         <View style={styles.contextRow}>
@@ -179,34 +143,7 @@ const useStyles = makeStyles((theme) => ({
     gap: space.md,
   },
   label: { color: theme.textMuted, ...text.ui("label") },
-  figure: {
-    flexDirection: "row",
-    alignItems: "baseline",
-    gap: space.md,
-    // §10's floor on the one row that is pressed — the input is the whole line.
-    minHeight: touchTarget.min,
-  },
   focused: focusBorder(theme.focusRing, { horizontal: space.x3b, vertical: space.x5 }),
-  sign: { ...text.display("displayHero") },
-  /** Holds its width, shows nothing — see the header. */
-  signEmpty: { opacity: 0 },
-  signOut: { color: theme.spend },
-  signIn: { color: theme.income },
-  input: {
-    flexShrink: 1,
-    padding: 0,
-    color: theme.text,
-    ...inputStep(text.display("displayHero")),
-    fontVariant: [...tabularNums],
-    // The card is the field; the browser's own ring on the input inside it
-    // would draw a second box around the figure. `outlineStyle` too, because
-    // the default `auto` renders its own ring at its own width regardless of
-    // an author `outlineWidth: 0` (`amount-field.tsx`'s own note).
-    outlineWidth: 0,
-    outlineStyle: "solid",
-  },
-  // `textMuted`, never `textFaint`: a placeholder is read (`tests/architecture.test.ts`'s faint-ink rule).
-  placeholder: { color: theme.textMuted },
   affix: { color: theme.accentText, ...text.ui("displayTwo") },
   contextRow: { flexDirection: "row", marginTop: space.xs },
   context: {

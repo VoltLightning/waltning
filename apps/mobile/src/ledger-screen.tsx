@@ -51,6 +51,7 @@ import {
 import { CategorySheet } from "@waltning/ui/categories/category-sheet";
 import { monthLabel } from "@waltning/ui/i18n/locales";
 import { useLocale, useT } from "@waltning/ui/i18n/provider";
+import { BottomSheet } from "@waltning/ui/primitives/bottom-sheet";
 import { Chip } from "@waltning/ui/primitives/chip";
 import { pageScrollProps } from "@waltning/ui/primitives/nested-scroll";
 import { PressableScaled } from "@waltning/ui/primitives/pressable-scaled";
@@ -58,7 +59,6 @@ import { SearchField } from "@waltning/ui/primitives/search-field";
 import { type Segment, SegmentControl } from "@waltning/ui/primitives/segment-control";
 import { MultiSelect, type SelectOption } from "@waltning/ui/primitives/select";
 import { useBreakpoint } from "@waltning/ui/primitives/use-breakpoint";
-import { BottomSheet } from "@waltning/ui/shell/bottom-sheet";
 import { Card, GroundPanel } from "@waltning/ui/shell/card";
 import { useGroundInset } from "@waltning/ui/shell/ground-inset";
 import { Banner } from "@waltning/ui/states/banner";

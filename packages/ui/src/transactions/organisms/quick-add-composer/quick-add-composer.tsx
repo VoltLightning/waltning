@@ -53,9 +53,9 @@ import { DatePicker } from "../../../primitives/molecules/date-picker/date-picke
 import { readTyped } from "../../../primitives/molecules/time-picker/clock.ts";
 import { TimePicker } from "../../../primitives/molecules/time-picker/time-picker";
 import { categoryTintFor } from "../../../primitives/monogram.ts";
+import { BottomSheet } from "../../../primitives/organisms/bottom-sheet/bottom-sheet";
 import { SheetAwareTextInput } from "../../../primitives/sheet-input";
 import { useBreakpoint } from "../../../primitives/use-breakpoint.ts";
-import { BottomSheet } from "../../../shell/organisms/bottom-sheet/bottom-sheet";
 import { HouseIcon } from "../../../shell/phosphor";
 import { Banner } from "../../../states/molecules/banner/banner";
 import { focusBorder } from "../../../theme/focus.ts";

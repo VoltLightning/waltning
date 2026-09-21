@@ -1,10 +1,10 @@
 import type { AppearancePreference } from "@waltning/client/appearance/create-appearance";
 import { useT } from "@waltning/ui/i18n/provider";
+import { BottomSheet } from "@waltning/ui/primitives/bottom-sheet";
 import { Button } from "@waltning/ui/primitives/button";
 import { IconButton } from "@waltning/ui/primitives/icon-button";
 import { SegmentControl, type SegmentControlProps } from "@waltning/ui/primitives/segment-control";
 import { AppearanceIcon } from "@waltning/ui/shell/appearance-icon";
-import { BottomSheet } from "@waltning/ui/shell/bottom-sheet";
 import { Banner } from "@waltning/ui/states/banner";
 import { text } from "@waltning/ui/theme/fonts";
 import { makeStyles } from "@waltning/ui/theme/styles";

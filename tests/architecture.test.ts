@@ -3010,7 +3010,7 @@ describe("a control's edge is not the divider colour", () => {
       "the dashboard's own card surface",
     ],
     [
-      "packages/ui/src/shell/organisms/bottom-sheet/bottom-sheet.tsx#sheetBackground",
+      "packages/ui/src/primitives/organisms/bottom-sheet/bottom-sheet.tsx#sheetBackground",
       "the sheet's ground, not a control on it — `@gorhom/bottom-sheet` paints it through `backgroundStyle`, which is why the style is named for the prop rather than for the sheet",
     ],
     [
@@ -3458,9 +3458,9 @@ describe("every scroller declares which kind it is", () => {
       "packages/ui/src/fx/organisms/rate-table/rate-table.tsx#0 <FlatList> pageScrollProps",
       "packages/ui/src/primitives/atoms/select/select.tsx#0 <ScrollView> nestedScrollProps",
       "packages/ui/src/primitives/atoms/wheel/wheel.tsx#0 <ScrollView> nestedScrollProps",
+      "packages/ui/src/primitives/organisms/bottom-sheet/bottom-sheet.stories.tsx#0 <ScrollView> nestedScrollProps",
+      "packages/ui/src/primitives/organisms/bottom-sheet/bottom-sheet.tsx#0 <BottomSheetScrollView> containOverscroll",
       "packages/ui/src/shell/molecules/card/card.tsx#0 <ScrollView> pageScrollProps",
-      "packages/ui/src/shell/organisms/bottom-sheet/bottom-sheet.stories.tsx#0 <ScrollView> nestedScrollProps",
-      "packages/ui/src/shell/organisms/bottom-sheet/bottom-sheet.tsx#0 <BottomSheetScrollView> containOverscroll",
       "packages/ui/src/shell/organisms/pager/pager.tsx#0 <ScrollView> pageScrollProps",
       "packages/ui/src/transactions/molecules/day-ribbon/day-ribbon.tsx#0 <FlatList> horizontalScrollProps",
       "packages/ui/src/transactions/organisms/ledger-filter-rail/ledger-filter-rail.tsx#0 <ScrollView> nestedScrollProps",
@@ -3594,7 +3594,7 @@ describe("every pressable answers the finger", () => {
    */
   const NOT_A_CONTROL = new Map([
     [
-      "packages/ui/src/shell/organisms/bottom-sheet/bottom-sheet.tsx",
+      "packages/ui/src/primitives/organisms/bottom-sheet/bottom-sheet.tsx",
       { allowed: 1, why: "the backdrop — a dismiss area covering the screen, not a control" },
     ],
     [
@@ -3609,20 +3609,6 @@ describe("every pressable answers the finger", () => {
       },
     ],
     [
-      "packages/ui/src/primitives/molecules/date-picker/date-picker.tsx",
-      {
-        allowed: 1,
-        why: "the sheet's backdrop, the fourth of exactly one shape. Its chips are `Chip` and its confirm is `Button`, both of which scale",
-      },
-    ],
-    [
-      "packages/ui/src/primitives/molecules/time-picker/time-picker.tsx",
-      {
-        allowed: 1,
-        why: "the sheet's backdrop — `date-picker.tsx`'s twin, and the same one shape. Its chips are `Chip` and its confirm is `Button`, both of which scale",
-      },
-    ],
-    [
       "packages/ui/src/primitives/atoms/select/select.tsx",
       {
         allowed: 1,
@@ -3632,7 +3618,7 @@ describe("every pressable answers the finger", () => {
   ]);
 
   /** Every bare `<Pressable` tag the scan sees today: 18 hand-wired, 5 backdrops. */
-  const BARE_TAG_COUNT = 24;
+  const BARE_TAG_COUNT = 22;
   /** The docblocks here name `Pressable` constantly; only rendered tags count. */
   const withoutComments = (text: string) =>
     text.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
@@ -3945,6 +3931,6 @@ describe("an input's font carries no lineHeight", () => {
       if (isTest(file) || file.endsWith(".stories.tsx")) continue;
       if (/<SheetAwareTextInput\b/.test(readFileSync(file, "utf8"))) seen += 1;
     }
-    expect(seen, "input owners — update this when one is added").toBe(9);
+    expect(seen, "input owners — update this when one is added").toBe(8);
   });
 });

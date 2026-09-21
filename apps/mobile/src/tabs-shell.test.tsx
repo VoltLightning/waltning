@@ -20,12 +20,12 @@ import { basePort } from "@waltning/client/ledger/test-port";
 import { accountingDate } from "@waltning/core/date";
 import { id } from "@waltning/core/id";
 import { currencyCode, toMoney } from "@waltning/core/money";
+import { BottomSheet } from "@waltning/ui/primitives/bottom-sheet";
 import {
   SafeAreaProvider,
   useSafeArea,
   WindowInsetsProvider,
 } from "@waltning/ui/primitives/safe-area";
-import { BottomSheet } from "@waltning/ui/shell/bottom-sheet";
 import { installPhoneLayout, settleLayout } from "@waltning/ui/shell/floating-add.test-support";
 import { useFloatingClearance } from "@waltning/ui/shell/floating-clearance";
 import { floating } from "@waltning/ui/tokens";
