@@ -73,6 +73,7 @@ import { radius, space, touchTarget } from "../../../tokens.ts";
 import { type Anchor, panelPlacement, unanchoredPlacement, useAnchor } from "../../anchor.ts";
 import { useDisclosureMotion } from "../../disclosure-motion.ts";
 import { useInteraction } from "../../interaction.ts";
+import { useKeyboardTopInWindow } from "../../keyboard-room.ts";
 import { nestedScrollProps } from "../../nested-scroll.ts";
 import { useWindowInsets } from "../../safe-area";
 
@@ -373,15 +374,24 @@ function PanelOverlay({
   // window, and `bottom-sheet.tsx` states the argument beside its own read.
   const insets = useWindowInsets();
   const frame = useWindowDimensions();
+  const keyboardTop = useKeyboardTopInWindow();
 
   if (!open) return null;
 
   // A per-render position, like `FloatingAdd`'s dock frame: computed beside
   // the JSX rather than in `useStyles`, whose cache is keyed on the theme.
+  /*
+    **The room is what the keyboard leaves.** A searchable panel opens a
+    keyboard the moment its filter is tapped, and one placed against the whole
+    window then has its list behind it — the options a search exists to find.
+    With the keyboard up the window's floor is the keyboard's top edge, and the
+    bottom inset is under it rather than above it.
+  */
+  const usable = keyboardTop === null ? frame : { ...frame, height: keyboardTop + insets.bottom };
   const placement =
     anchor === null
-      ? unanchoredPlacement(frame, insets, PANEL_CAP)
-      : panelPlacement(anchor, frame, insets, PANEL_CAP);
+      ? unanchoredPlacement(usable, insets, PANEL_CAP)
+      : panelPlacement(anchor, usable, insets, PANEL_CAP);
 
   return (
     // `statusBarTranslucent`/`navigationBarTranslucent` — under Android's

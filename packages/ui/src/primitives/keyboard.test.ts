@@ -88,23 +88,49 @@ describe("keyboardEvents", () => {
  * cap short by the nav-bar inset and §5.1's 170px offset became 170 − N.
  */
 describe("keyboardHeightFrom", () => {
-  /** Pixel 8, 892dp tall, 300dp IME over a 48dp three-button nav bar. */
+  /** Pixel 8 under edge-to-edge: the window *is* the 892dp screen. 300dp IME over a 48dp nav bar. */
+  const edgeToEdge = { screenHeight: 892, windowHeight: 892, statusBar: 24, bottomInset: 48 };
+
   it("reads screenY, not the height field, where the two disagree", () => {
     const android: KeyboardMetrics = { screenX: 0, screenY: 592, width: 412, height: 252 };
-    expect(keyboardHeightFrom(892, android)).toBe(300);
-    expect(keyboardHeightFrom(892, android)).not.toBe(android.height);
+    expect(keyboardHeightFrom(edgeToEdge, android)).toBe(300);
+    expect(keyboardHeightFrom(edgeToEdge, android)).not.toBe(android.height);
+  });
+
+  /**
+   * **Measured on an emulator, and the reason this takes a device rather than
+   * a window height.** Pixel 10 Pro in Expo Go: a 952pt screen, window metrics
+   * of 876 (less a 52pt status bar and a 24pt navigation bar), and a layout
+   * that nonetheless runs to the bottom of the screen because the navigation
+   * bar is translucent. `876 − 616` was 260; the keyboard covered 336, and on
+   * Add the 76pt difference was the Save button.
+   */
+  it("measures from where the layout ends, not from the window's height", () => {
+    const pixel = { screenHeight: 952, windowHeight: 876, statusBar: 52, bottomInset: 24 };
+    const keyboard: KeyboardMetrics = { screenX: 0, screenY: 616, width: 427, height: 312 };
+    expect(keyboardHeightFrom(pixel, keyboard)).toBe(336);
+  });
+
+  it("stops at the navigation bar where the layout does", () => {
+    // No bottom inset: the app is not drawn under the bar, so its layout ends
+    // at the bar's top edge — and there the cover *is* the event's `height`.
+    const opaque = { screenHeight: 952, windowHeight: 876, statusBar: 52, bottomInset: 0 };
+    const keyboard: KeyboardMetrics = { screenX: 0, screenY: 616, width: 427, height: 312 };
+    expect(keyboardHeightFrom(opaque, keyboard)).toBe(312);
   });
 
   /** iPhone 14: a docked keyboard's `screenY + height` is the window, so both agree. */
   it("is the same number on iOS, where the two fields agree", () => {
+    const iphone = { screenHeight: 844, windowHeight: 844, statusBar: 0, bottomInset: 34 };
     const ios: KeyboardMetrics = { screenX: 0, screenY: 508, width: 390, height: 336 };
-    expect(keyboardHeightFrom(844, ios)).toBe(336);
-    expect(keyboardHeightFrom(844, ios)).toBe(ios.height);
+    expect(keyboardHeightFrom(iphone, ios)).toBe(336);
+    expect(keyboardHeightFrom(iphone, ios)).toBe(ios.height);
   });
 
   /** A keyboard already off the bottom of the window covers none of it. */
   it("never reports a negative cover", () => {
+    const iphone = { screenHeight: 844, windowHeight: 844, statusBar: 0, bottomInset: 34 };
     const gone: KeyboardMetrics = { screenX: 0, screenY: 900, width: 390, height: 0 };
-    expect(keyboardHeightFrom(844, gone)).toBe(0);
+    expect(keyboardHeightFrom(iphone, gone)).toBe(0);
   });
 });

@@ -111,7 +111,7 @@
     "./shell/floating-add.test-support": "./src/shell/organisms/floating-add/floating-add.test-support.ts",
     "./shell/floating-clearance": "./src/shell/atoms/floating-clearance.tsx",
     "./shell/ground-inset": "./src/shell/ground-inset.ts",
-    "./shell/keyboard": "./src/shell/keyboard.ts",
+    "./primitives/keyboard": "./src/primitives/keyboard.ts",
     "./shell/molecules/gateway-grid/gateway-grid": "./src/shell/molecules/gateway-grid/gateway-grid.tsx",
     "./shell/molecules/page-tabs/page-tabs": "./src/shell/molecules/page-tabs/page-tabs.tsx",
     "./shell/molecules/pager-header/collapse": "./src/shell/molecules/pager-header/collapse.ts",
