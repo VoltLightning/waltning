@@ -33,6 +33,7 @@ import {
 } from "@waltning/core/date";
 import { useCallback, useState } from "react";
 import { View } from "react-native";
+import { dayLabel } from "../../../i18n/locales";
 import { useLocale, useT } from "../../../i18n/provider";
 import { makeStyles } from "../../../theme/styles.ts";
 import { space } from "../../../tokens.ts";
@@ -41,6 +42,7 @@ import { Calendar } from "../../molecules/calendar/calendar";
 import { DatePicker } from "../../molecules/date-picker/date-picker";
 import { useBreakpoint } from "../../use-breakpoint.ts";
 import { Chip } from "../chip/chip";
+import { FieldButton } from "../field-button/field-button";
 import { TextField } from "../text-field/text-field";
 
 export type DateFieldProps = {
@@ -78,6 +80,18 @@ function weekdayLabel(date: AccountingDate, locale: string): string {
   const [year, month, day] = date.split("-").map(Number) as [number, number, number];
   const asDate = new Date(Date.UTC(year, month - 1, day));
   return new Intl.DateTimeFormat(locale, { weekday: "long", timeZone: "UTC" }).format(asDate);
+}
+
+/** *Today*, *Yesterday*, or the day written out — what the field says it holds. */
+function wordsFor(
+  date: AccountingDate,
+  today: AccountingDate,
+  t: ReturnType<typeof useT>,
+  locale: ReturnType<typeof useLocale>,
+): string {
+  if (date === today) return t("shell.today");
+  if (date === addDays(today, -1)) return t("common.yesterday");
+  return dayLabel(date, locale);
 }
 
 export function DateField({ label, value, onChange, today, error, hint }: DateFieldProps) {
@@ -121,6 +135,41 @@ export function DateField({ label, value, onChange, today, error, hint }: DateFi
     value !== "" && !isRealCalendarDate(value) ? t("transactions.invalidDate") : undefined;
   const message = error ?? computedError;
 
+  /*
+    **On a phone the field *is* the way in.** A tap opens the drum, and the
+    relative days — *Today*, *Yesterday* — are chips on the drum itself. It used
+    to be a typed field over a row of chips, one of which opened the drum: three
+    controls, and the one that mattered was the fourth thing in a wrapping row.
+    A keyboard is the wrong tool for a date in one hand anyway.
+  */
+  if (breakpoint === "phone") {
+    return (
+      <View style={styles.root}>
+        <FieldButton
+          label={label}
+          value={
+            isRealCalendarDate(value)
+              ? wordsFor(accountingDate(value), todayDate, t, locale)
+              : undefined
+          }
+          placeholder={t("common.pickADate")}
+          onPress={openPicker}
+          {...(hint === undefined ? {} : { hint })}
+          {...(message === undefined ? {} : { error: message })}
+        />
+        {rolling ? (
+          <DatePicker
+            prompt={label}
+            value={shown}
+            onChange={handlePicked}
+            today={todayDate}
+            onDismiss={closePicker}
+          />
+        ) : null}
+      </View>
+    );
+  }
+
   return (
     <View ref={ref} style={styles.root}>
       <TextField
@@ -134,33 +183,10 @@ export function DateField({ label, value, onChange, today, error, hint }: DateFi
         <Chip placeholder={t("shell.today")} onPress={handlePickToday} />
         <Chip placeholder={t("common.yesterday")} onPress={handlePickYesterday} />
         <Chip placeholder={weekdayLabel(twoDaysAgo, locale)} onPress={handlePickTwoDaysAgo} />
-        {/*
-          §3.7a — the phone gets the drum. A wheel is a thumb control: it
-          trades precision for momentum, which is the right trade held in one
-          hand and the wrong one in front of a keyboard, where the typed
-          `YYYY-MM-DD` above is already the fastest way in. The desk's own
-          affordance is a month grid and is not built yet, so nothing is
-          offered there rather than offering the wrong thing.
-        */}
+        {/* The desk's own way in: the month grid the web taught everyone. */}
         <Chip placeholder={t("common.pickADate")} onPress={openPicker} />
       </View>
-      {/*
-        §3.7a — the phone gets the drum, the desk gets the month grid. A wheel
-        is a thumb control: it trades precision for momentum, which is the
-        right trade held in one hand and the wrong one in front of a keyboard,
-        where the typed field above is already the fastest way in. Both write
-        the same bare `AccountingDate`.
-      */}
-      {rolling && breakpoint === "phone" ? (
-        <DatePicker
-          prompt={label}
-          value={shown}
-          onChange={handlePicked}
-          today={todayDate}
-          onDismiss={closePicker}
-        />
-      ) : null}
-      {rolling && breakpoint === "desk" ? (
+      {rolling ? (
         <Calendar
           label={label}
           value={shown}

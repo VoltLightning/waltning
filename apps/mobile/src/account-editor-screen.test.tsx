@@ -35,6 +35,7 @@ vi.mock("expo-router", () => ({
   useLocalSearchParams: () => useLocalSearchParams(),
 }));
 
+import { pickDate } from "@waltning/ui/primitives/date-field.test-support";
 import AccountEditorScreen from "./account-editor-screen";
 
 const PLN = currencyCode("PLN");
@@ -195,7 +196,7 @@ describe("AccountEditorScreen", () => {
     expect(balanceAsOf).toHaveBeenCalledWith(ACCOUNT.id, today);
     expect(sheet.getByText("1 240.50")).toBeDefined();
 
-    fireEvent.change(sheet.getByLabelText("As of"), { target: { value: "2026-08-15" } });
+    pickDate("As of", "2026-08-15");
 
     expect(balanceAsOf).toHaveBeenCalledWith(ACCOUNT.id, "2026-08-15");
     expect(sheet.getByText("900.00")).toBeDefined();

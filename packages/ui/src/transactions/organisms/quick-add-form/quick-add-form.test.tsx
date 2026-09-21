@@ -2,8 +2,26 @@
 
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { currencyCode } from "@waltning/core/money";
-import { expect, it, vi } from "vitest";
+import { afterAll, beforeAll, expect, it, vi } from "vitest";
 import { type QuickAddDraft, QuickAddForm, type QuickAddFormProps } from "./quick-add-form";
+
+/** `use-breakpoint.test.tsx`'s own real-resize technique: the desk's typed field, or the phone's drum. */
+function resizeTo(width: number) {
+  Object.defineProperty(document.documentElement, "clientWidth", {
+    value: width,
+    configurable: true,
+  });
+  window.dispatchEvent(new Event("resize"));
+}
+
+/**
+ * **This is the desk's form, so it is tested at the desk's width.** Its date is
+ * a typed field there; on a phone `DateField` is a button that opens the drum,
+ * and a malformed date — which two tests below are about — cannot be entered
+ * at all.
+ */
+beforeAll(() => resizeTo(1440));
+afterAll(() => resizeTo(390));
 
 const accounts = [
   { id: "account-a", name: "Bank A · PLN", currency: currencyCode("PLN"), capturable: true },

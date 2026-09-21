@@ -2,12 +2,25 @@
 
 import { fireEvent, render, screen } from "@testing-library/react";
 import { currencyCode } from "@waltning/core/money";
-import { expect, it, vi } from "vitest";
+import { afterEach, expect, it, vi } from "vitest";
+import { pickDate } from "../../../primitives/atoms/date-field/date-field.test-support.ts";
 import {
   type CreateAccountCurrency,
   CreateAccountForm,
   type CreateAccountGroup,
 } from "./create-account-form";
+
+/** `use-breakpoint.test.tsx`'s own real-resize technique: the desk's typed field, or the phone's drum. */
+function resizeTo(width: number) {
+  Object.defineProperty(document.documentElement, "clientWidth", {
+    value: width,
+    configurable: true,
+  });
+  window.dispatchEvent(new Event("resize"));
+}
+
+// A test that asks for the desk's typed field hands the phone back, pass or fail.
+afterEach(() => resizeTo(390));
 
 const currencies: readonly CreateAccountCurrency[] = [
   { code: currencyCode("PLN"), name: "Polish Złoty", symbol: "zł" },
@@ -165,6 +178,7 @@ it("switching ownership to shared forces business off and disables the toggle", 
 });
 
 it("an invalid opening date blocks Save with the field error", () => {
+  resizeTo(1440);
   render(
     <CreateAccountForm
       currencies={currencies}
@@ -177,6 +191,7 @@ it("an invalid opening date blocks Save with the field error", () => {
   fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Bank A" } });
   fireEvent.click(screen.getByRole("button", { name: "More details" }));
 
+  // Only a desk can type a date that is not one: a phone's drum offers real days.
   fireEvent.change(screen.getByLabelText("Opening date"), { target: { value: "not-a-date" } });
 
   expect(screen.getByText("Enter a date as YYYY-MM-DD.")).toBeDefined();
@@ -205,7 +220,7 @@ it("reaches onSave with the whole draft once More details is filled in", () => {
   fireEvent.click(screen.getByRole("switch", { name: "Business" }));
 
   fireEvent.change(screen.getByLabelText("Opening balance"), { target: { value: "1234,56" } });
-  fireEvent.change(screen.getByLabelText("Opening date"), { target: { value: "2026-01-15" } });
+  pickDate("Opening date", "2026-01-15");
   fireEvent.change(screen.getByLabelText("Memo"), {
     target: { value: "Migrated from Money Manager" },
   });

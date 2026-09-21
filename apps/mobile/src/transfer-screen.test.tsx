@@ -331,7 +331,10 @@ describe("Transfer — the phone path", () => {
     expect(screen.getByRole("button", { name: "Move money" })).toHaveProperty("disabled", false);
 
     openDate();
-    fireEvent.click(screen.getByRole("button", { name: "Yesterday" }));
+    // The row opens the drum itself; *Yesterday* is a chip on it, and nothing is
+    // set until it is confirmed.
+    fireEvent.click(screen.getByText("Yesterday"));
+    fireEvent.click(screen.getByText("Use this date"));
 
     expect(readCrossRate).toHaveBeenCalledWith(
       expect.objectContaining({ from: USD, to: PLN, date: yesterday }),

@@ -307,7 +307,10 @@ describe("J16 — move money", () => {
     // Yesterday's own rate, 4.40 PLN/USD (`setupJourney`, above): 100 PLN
     // is 22.73 USD there, not 25.00.
     openDate();
-    fireEvent.click(screen.getByRole("button", { name: "Yesterday" }));
+    // The row opens the drum itself; *Yesterday* is a chip on it, and nothing is
+    // set until it is confirmed.
+    fireEvent.click(screen.getByText("Yesterday"));
+    fireEvent.click(screen.getByText("Use this date"));
 
     await waitFor(() =>
       expect(screen.getByLabelText("Destination amount")).toHaveProperty("value", "22.73"),

@@ -3,6 +3,10 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import * as money from "@waltning/core/money";
 import { expect, it, vi } from "vitest";
+import {
+  dateFieldName,
+  pickDate,
+} from "../../../primitives/atoms/date-field/date-field.test-support.ts";
 import { ReconcileSheet } from "./reconcile-sheet";
 
 const TODAY = "2026-09-03";
@@ -43,7 +47,7 @@ it("shows the computed balance for the given asOf and starts with Save disabled"
     />,
   );
   expect(screen.getByText("1 240.50")).toBeDefined();
-  expect(screen.getByLabelText("As of")).toHaveProperty("value", TODAY);
+  expect(screen.getByRole("button", { name: dateFieldName("As of", TODAY, TODAY) })).toBeDefined();
   expect(screen.getByRole("button", { name: "Save" }).getAttribute("aria-disabled")).toBe("true");
 });
 
@@ -62,12 +66,12 @@ it("is controlled — moving the date calls onAsOfChange rather than updating it
       onSave={noop}
     />,
   );
-  fireEvent.change(screen.getByLabelText("As of"), { target: { value: "2026-08-15" } });
+  pickDate("As of", "2026-08-15");
 
   expect(onAsOfChange).toHaveBeenCalledWith("2026-08-15");
-  // Controlled: the field still shows the prop's value, not what was typed —
+  // Controlled: the field still shows the prop's value, not what was picked —
   // the screen owns `asOf` and refolds `computedBalance` before handing a new one back.
-  expect(screen.getByLabelText("As of")).toHaveProperty("value", TODAY);
+  expect(screen.getByRole("button", { name: dateFieldName("As of", TODAY, TODAY) })).toBeDefined();
 });
 
 /**

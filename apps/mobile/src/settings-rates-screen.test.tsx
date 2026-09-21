@@ -16,7 +16,7 @@ import { basePort } from "@waltning/client/ledger/test-port";
 import { accountingDate, addDays, daysBetween } from "@waltning/core/date";
 import { id } from "@waltning/core/id";
 import { currencyCode, unitsPerPivot } from "@waltning/core/money";
-import { expect, it, vi } from "vitest";
+import { afterEach, expect, it, vi } from "vitest";
 
 /**
  * The screen draws its own header now (`PushedPage`), and a header has a way
@@ -26,7 +26,20 @@ vi.mock("expo-router", () => ({
   router: { push: vi.fn(), back: vi.fn(), canGoBack: () => true, dismissTo: vi.fn() },
 }));
 
+import { dateFieldName, pickDate } from "@waltning/ui/primitives/date-field.test-support";
 import SettingsRatesScreen, { type SettingsRatesScreenProps } from "./settings-rates-screen";
+
+/** `use-breakpoint.test.tsx`'s own real-resize technique: the desk's typed field, or the phone's drum. */
+function resizeTo(width: number) {
+  Object.defineProperty(document.documentElement, "clientWidth", {
+    value: width,
+    configurable: true,
+  });
+  window.dispatchEvent(new Event("resize"));
+}
+
+// A test that asks for the desk's typed field hands the phone back, pass or fail.
+afterEach(() => resizeTo(390));
 
 const PLN = currencyCode("PLN");
 const USD = currencyCode("USD");
@@ -170,11 +183,13 @@ it("R2 M1 — a backdated link moves the range onto its own day", () => {
   const linked = addDays(today, -365);
   withLedger({}, { quote: "PLN", date: linked });
 
-  expect(screen.getByLabelText("From")).toHaveProperty("value", linked);
+  expect(screen.getByRole("button", { name: dateFieldName("From", linked, today) })).toBeDefined();
   // R4 L2 — the window *moves*, it does not stretch back to today: 30 days,
   // the same span the screen opens with, so the link cannot set the size of
   // what gets drawn or of what *Clear manual* would delete.
-  expect(screen.getByLabelText("To")).toHaveProperty("value", addDays(linked, 29));
+  expect(
+    screen.getByRole("button", { name: dateFieldName("To", addDays(linked, 29), today) }),
+  ).toBeDefined();
   // And the linked day is a row on the page behind the sheet, so the write
   // about to happen lands somewhere visible. (`FlatList` under jsdom mounts
   // only its first ten rows, and the widened range opens on this one. The
@@ -186,8 +201,10 @@ it("R2 M1 — a backdated link moves the range onto its own day", () => {
 it("R2 M1 — with no link, the range is the plain 30-day window", () => {
   const today = deviceRuntime().capture().date;
   withLedger();
-  expect(screen.getByLabelText("From")).toHaveProperty("value", addDays(today, -29));
-  expect(screen.getByLabelText("To")).toHaveProperty("value", today);
+  expect(
+    screen.getByRole("button", { name: dateFieldName("From", addDays(today, -29), today) }),
+  ).toBeDefined();
+  expect(screen.getByRole("button", { name: dateFieldName("To", today, today) })).toBeDefined();
 });
 
 /**
@@ -440,6 +457,8 @@ it("draws neither the table card nor the hint when the ledger names no pivot", (
 });
 
 it("draws neither the table card nor the hint when the custom range does not parse", () => {
+  // Only a desk can type a date that is not one; a phone's drum offers real days.
+  resizeTo(1440);
   withLedger({});
   // The table is there on the default 30-day preset — the absence below is
   // the range's doing, not the fixture's.
@@ -466,8 +485,8 @@ it("R1 M1 — a multi-year range still draws and still clears", () => {
   const clearManualRate = vi.fn(() => ({ deleted: 812 }));
   withLedger({ clearManualRate });
 
-  fireEvent.change(screen.getByLabelText("From"), { target: { value: "2020-01-01" } });
-  fireEvent.change(screen.getByLabelText("To"), { target: { value: "2026-09-03" } });
+  pickDate("From", "2020-01-01");
+  pickDate("To", "2026-09-03");
 
   expect(screen.getByText("Date")).toBeDefined();
   fireEvent.click(screen.getByText("Clear manual"));
@@ -491,6 +510,8 @@ it("R1 M1 — a multi-year range still draws and still clears", () => {
  * field, three readings.
  */
 it("R1 L9 — a shape-valid date that is not a calendar day draws no table", () => {
+  // Only a desk can type a date that is not one; a phone's drum offers real days.
+  resizeTo(1440);
   withLedger({});
   expect(screen.getByText("Date")).toBeDefined();
 
@@ -585,8 +606,8 @@ it("R1 M3 — the rate field is the first control in the sheet", () => {
 it("R4 L2 — a link a thousand years back still opens on its day, in a 30-day window", () => {
   withLedger({}, { quote: "PLN", date: "1000-01-01" });
 
-  expect(screen.getByLabelText("From")).toHaveProperty("value", "1000-01-01");
-  expect(screen.getByLabelText("To")).toHaveProperty("value", "1000-01-30");
+  expect(screen.getByRole("button", { name: dateFieldName("From", "1000-01-01") })).toBeDefined();
+  expect(screen.getByRole("button", { name: dateFieldName("To", "1000-01-30") })).toBeDefined();
   // The editor is open on the linked day itself, not on the window's end.
   expect(screen.getByText("Set PLN per USD, 1000-01-01 … 1000-01-01")).toBeDefined();
   // And the table drew that window: its first and last rows, and nothing past.

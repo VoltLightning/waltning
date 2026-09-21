@@ -28,6 +28,7 @@ import { readTyped } from "../../molecules/time-picker/clock.ts";
 import { TimePicker } from "../../molecules/time-picker/time-picker";
 import { useBreakpoint } from "../../use-breakpoint.ts";
 import { Chip } from "../chip/chip";
+import { FieldButton } from "../field-button/field-button";
 import { TextField } from "../text-field/text-field";
 
 export type TimeFieldProps = {
@@ -60,6 +61,36 @@ export function TimeField({ label, value, onChange, now, error, hint }: TimeFiel
   const computedError = value !== "" && read === null ? t("transactions.invalidTime") : undefined;
   const message = error ?? computedError;
 
+  /*
+    **On a phone the field is the way in**, as `DateField` is: a tap opens the
+    drum, *Now* is a chip on it, and *No time* is an action in it. No typed
+    field and no row of chips in between.
+  */
+  if (breakpoint === "phone") {
+    return (
+      <View style={styles.root}>
+        <FieldButton
+          label={label}
+          value={read ?? undefined}
+          placeholder={t("common.noTime")}
+          onPress={openPicker}
+          {...(hint === undefined ? {} : { hint })}
+          {...(message === undefined ? {} : { error: message })}
+        />
+        {rolling ? (
+          <TimePicker
+            prompt={label}
+            value={shown}
+            onChange={onChange}
+            now={now}
+            onDismiss={closePicker}
+            {...(value === "" ? {} : { onClear: handleClear })}
+          />
+        ) : null}
+      </View>
+    );
+  }
+
   return (
     <View style={styles.root}>
       <TextField
@@ -72,20 +103,8 @@ export function TimeField({ label, value, onChange, now, error, hint }: TimeFiel
       />
       <View style={styles.chips}>
         <Chip placeholder={t("common.now")} onPress={handleNow} />
-        {breakpoint === "phone" ? (
-          <Chip placeholder={t("common.pickATime")} onPress={openPicker} />
-        ) : null}
         {value === "" ? null : <Chip placeholder={t("common.noTime")} onPress={handleClear} />}
       </View>
-      {rolling && breakpoint === "phone" ? (
-        <TimePicker
-          prompt={label}
-          value={shown}
-          onChange={onChange}
-          now={now}
-          onDismiss={closePicker}
-        />
-      ) : null}
     </View>
   );
 }

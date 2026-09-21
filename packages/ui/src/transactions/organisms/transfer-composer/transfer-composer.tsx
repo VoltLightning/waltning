@@ -44,7 +44,9 @@ import { IconButton } from "../../../primitives/atoms/icon-button/icon-button";
 import { Tag } from "../../../primitives/atoms/tag";
 import { TextField } from "../../../primitives/atoms/text-field/text-field";
 import type { FieldErrorMap } from "../../../primitives/field-errors.ts";
+import { DatePicker } from "../../../primitives/molecules/date-picker/date-picker";
 import { SheetAwareTextInput } from "../../../primitives/sheet-input";
+import { useBreakpoint } from "../../../primitives/use-breakpoint.ts";
 import { BottomSheet } from "../../../shell/organisms/bottom-sheet/bottom-sheet";
 import { ArrowsLeftRightIcon } from "../../../shell/phosphor";
 import { Banner } from "../../../states/molecules/banner/banner";
@@ -167,6 +169,7 @@ export function TransferComposer({
   const mark = decimalMark(locale);
 
   const closeSheet = useCallback(() => setOpenSheet(null), []);
+  const phone = useBreakpoint() === "phone";
   const handleOpenFeeSheet = useCallback(() => setOpenSheet("fee"), []);
   const handleOpenDateSheet = useCallback(() => setOpenSheet("date"), []);
   const handleOpenNoteSheet = useCallback(() => setOpenSheet("note"), []);
@@ -552,8 +555,23 @@ export function TransferComposer({
           {...(feeError === undefined ? {} : { error: feeError })}
         />
       </BottomSheet>
+      {/*
+        **The row opens the drum, with nothing in between** (S31). It used to
+        open a sheet holding a date field, whose *Pick a date* chip opened the
+        drum: three taps and two surfaces for one choice. A desk keeps the
+        sheet, because there the field is typed and the drum is a thumb's tool.
+      */}
+      {openSheet === "date" && phone ? (
+        <DatePicker
+          prompt={t("transactions.date")}
+          value={isAccountingDate(date) ? accountingDate(date) : accountingDate(today)}
+          onChange={onDateChange}
+          today={accountingDate(today)}
+          onDismiss={closeSheet}
+        />
+      ) : null}
       <BottomSheet
-        visible={openSheet === "date"}
+        visible={openSheet === "date" && !phone}
         title={t("transactions.date")}
         onDismiss={closeSheet}
       >

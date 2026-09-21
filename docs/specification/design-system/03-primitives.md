@@ -111,8 +111,8 @@ a filter: *mine* and *ours* show together regardless of scope.
 | `SearchField` | Leading icon, clear button, live results. **A field, drawn as one**: `surface`, the interactive edge and `radius-sm` — the same box `TextField` is, since it is the same thing. Composed bare on the ground it read as a caption: grey words nothing said could be typed into. The magnifier and the × are **vendored icon paths**, never shapes assembled from views — a ring and a rotated bar is, at 16pt, a circle with a stick near it |
 | `Keypad` | 0–9, comma, delete. Bottom-anchored, thumb-zone (Fitts) |
 | `RateField` | Editable FX rate, 4dp, shows synced value beside the override |
-| `DateField` | Defaults to today; relative shortcuts (yesterday). Opens a `Wheel` on a phone and a month grid on a desk — §3.7a |
-| `TimeField` | A clock time, where something has one. **Empty is a value, and the normal one** — a time of day is a description (`SPEC` §7.0a), most rows never have one, and *No time* takes one back off: clearing is not setting midnight. Typed loosely and read strictly (`9:05`, `0930`, `9.30` → `09:30`); *Now* is one tap, from the device's wall clock in its own zone. On a phone it opens a `Wheel` of hours and minutes — §3.7a; on a desk the typed field is the fastest way in and nothing else is offered |
+| `DateField` | Defaults to today. **On a phone the field is a button and a tap opens the `Wheel`** — nothing in between: the relative days (*Today*, *Yesterday*, two weekdays) are chips on the drum itself. It was a typed field over a row of chips, one of which opened the drum, and on Add that arrangement sat inside a bottom sheet of its own: three taps and two surfaces for one choice. The button says what it holds in words — *Today*, *Yesterday*, *March 4, 2026* — never `2026-03-04`. On a desk it stays a typed `YYYY-MM-DD` with the chips and a month grid — §3.7a. A composer's *Date* row (Add, Transfer, a transaction's own card) opens the same drum directly |
+| `TimeField` | A clock time, where something has one. **Empty is a value, and the normal one** — a time of day is a description (`SPEC` §7.0a), most rows never have one, and *No time* takes one back off: clearing is not setting midnight. Typed loosely and read strictly (`9:05`, `0930`, `9.30` → `09:30`); *Now* is one tap, from the device's wall clock in its own zone. **On a phone the field is a button and a tap opens the `Wheel`** of hours and minutes — §3.7a — where *Now* is a chip and *No time* is an action, offered only when there is a time to take off. On a desk the typed field is the fastest way in and nothing else is offered |
 | `Toggle` | Business / personal, write-a-rule. A toggle is a **state**, not an action — a reader hears "on", not "pressed". The thumb slides at `motion-base`; the track swaps instantly underneath, because two clocks on one control read as the thumb outrunning its own background. The whole labelled row is the target |
 
 ### 3.7a `Wheel` — picking from a cycle
@@ -123,6 +123,15 @@ The list scroll-snaps to that band, neighbours fade by distance — `.55`, `.26`
 `.12` — and the ends of the drum are veiled into the sheet's own surface, so
 the column reads as a curved face rather than a cropped list. The banded row is
 the value; there is no second place a reader could look for it.
+
+**A row can be pressed.** Rolling was the drum's whole interface: nothing for a
+screen reader or a switch to operate, and no way to take the neighbour a reader
+can already see except by nudging the drum onto it. Pressing a row picks it and
+the drum follows, the way it follows a chip. A wrapping column draws every
+option three times and **speaks one of them**. The month column says the month
+and not the year — the year has a column of its own, and the drum read
+*18 · September 2026 · 2026* — and a weekday chip is *Wed*, because
+*Wednesday, September 16* twice is a chip row on two lines.
 
 **Each column is as wide as the widest thing in it.** Two digits given the same
 room as `September` reads as a gap, and the eye has to cross it to pair a day

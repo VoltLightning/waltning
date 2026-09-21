@@ -35,6 +35,11 @@ import { act, fireEvent, render, screen, waitFor, within } from "@testing-librar
 import { deviceRuntime } from "@waltning/client/ledger/device-runtime";
 import * as money from "@waltning/core/money";
 import { ledgerSchema } from "@waltning/ledger/schema-map";
+import {
+  chooseOnDrum,
+  dateFieldName,
+  pickDate,
+} from "@waltning/ui/primitives/date-field.test-support";
 import { installPhoneLayout, settleLayout } from "@waltning/ui/shell/floating-add.test-support";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { lastCapture } from "../platform";
@@ -202,12 +207,8 @@ describe("J10 — currency and rates", () => {
     // default 30-day preset: this journey is about *which* rate Sunday's own
     // row states, so it narrows to the four days it seeded rather than
     // scanning thirty for one date.
-    fireEvent.change(screen.getByRole("textbox", { name: "From" }), {
-      target: { value: FRIDAY },
-    });
-    fireEvent.change(screen.getByRole("textbox", { name: "To" }), {
-      target: { value: MONDAY },
-    });
+    pickDate("From", FRIDAY);
+    pickDate("To", MONDAY);
 
     // Sunday's own row — carried across the weekend gap from Friday's
     // rate, never Monday's (S18 §3–§5, screens/S18 §3–§5).
@@ -225,11 +226,9 @@ describe("J10 — currency and rates", () => {
 
     fireEvent.change(screen.getByLabelText("How much?"), { target: { value: "100" } });
     fireEvent.click(screen.getByRole("button", { name: /^More details/ }));
+    // The row opens the drum itself — no sheet, no field, nothing to close.
     fireEvent.click(screen.getByRole("button", { name: /^Date/ }));
-    fireEvent.change(screen.getByRole("textbox", { name: "Date" }), {
-      target: { value: SUNDAY },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    chooseOnDrum(SUNDAY);
     fireEvent.click(screen.getByRole("radio", { name: "Eating out" })); // the chip
     fireEvent.click(screen.getByRole("button", { name: "Save expense" }));
 
@@ -292,7 +291,7 @@ describe("J10 — currency and rates", () => {
     // own initial window under jsdom. Before that fix this assertion needed
     // two `DateField` edits a person arriving from a link has no reason to
     // make, which is what "a success that looks like nothing happened" means.
-    expect(screen.getByRole("textbox", { name: "From" })).toHaveProperty("value", UNRATED);
+    expect(screen.getByRole("button", { name: dateFieldName("From", UNRATED) })).toBeDefined();
 
     const row = screen.getByRole("button", { name: UNRATED });
     expect(within(row).getByText(formatRate(LINKED_RATE))).toBeDefined();
