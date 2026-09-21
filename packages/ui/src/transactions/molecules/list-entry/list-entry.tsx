@@ -103,7 +103,7 @@ function body(
     case "quiet":
       return <QuietDay label={entry.label} emptyLabel={t("transactions.nothingThatDay")} />;
     case "run":
-      return <QuietRunItem entry={entry} onPickDay={handlers.onPickDay} />;
+      return <QuietRunItem entry={entry} />;
     default:
       return (
         // The deck's 14 between one day's card and the next day's kicker, and 6
@@ -156,34 +156,15 @@ function ListRowView({ row, handlers }: { row: Row; handlers: ListEntryHandlers 
 
 const ListRow = memo(ListRowView);
 
-/**
- * A collapsed run, with its own handler.
- *
- * `.bind()` and an arrow inside JSX are both refused (`architecture/11`), and
- * for a reason this row shows plainly: a fresh function per render would make
- * `QuietRun`'s `memo` compare unequal every time and re-render every collapsed
- * run in the list on any change at all.
- */
-function QuietRunItem({
-  entry,
-  onPickDay,
-}: {
-  entry: { label: string; days: number; from: string };
-  onPickDay: (date: string) => void;
-}) {
+/** A collapsed run: the span and how long it is, on one quiet line. */
+function QuietRunItem({ entry }: { entry: { label: string; days: number } }) {
   const t = useT();
-  const from = entry.from;
-  // Showing a run is going to it: the list draws every day it holds, so this
-  // is a move rather than a mode.
-  const show = useCallback(() => onPickDay(from), [onPickDay, from]);
   return (
     <QuietRun
       label={entry.label}
       summary={t(entry.days === 1 ? "transactions.quietRunOne" : "transactions.quietRunMany", {
         count: entry.days,
       })}
-      showLabel={t("shell.show")}
-      onShow={show}
     />
   );
 }

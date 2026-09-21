@@ -107,8 +107,9 @@ export const ESTIMATED_HEIGHTS: EntryHeights = {
   rowFirst: 55,
   rowMiddle: 55,
   rowLast: 56,
-  quiet: 34,
-  run: 44,
+  quiet: 42,
+  // The same line a quiet day is, with a range on it.
+  run: 42,
 };
 
 /**
