@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isTimeOfDay, timeOfDay, timeOfDayFromDb } from "./date.ts";
+import { clockIn, isTimeOfDay, timeOfDay, timeOfDayFromDb } from "./date.ts";
 
 describe("a bare clock time", () => {
   it("takes every minute of a 24-hour day", () => {
@@ -38,5 +38,24 @@ describe("what the database hands back", () => {
 
   it("throws on a shape that is neither", () => {
     expect(() => timeOfDayFromDb("2026-09-18 14:20:00")).toThrow(/not a bare time of day/);
+  });
+});
+
+describe("the clock in a named zone", () => {
+  // 2026-03-12T23:30Z — the instant `todayIn`'s own tests use, for the same
+  // reason: it is a different day, and a different hour, depending on where
+  // the person holding the phone is standing.
+  const at = new Date("2026-03-12T23:30:00Z");
+
+  it("is the wall clock there, not UTC's", () => {
+    expect(clockIn("Europe/Warsaw", at)).toBe("00:30");
+    expect(clockIn("America/New_York", at)).toBe("19:30");
+    expect(clockIn("UTC", at)).toBe("23:30");
+  });
+
+  it("says midnight as 00:00, never 24:00", () => {
+    // `en-GB` without `hourCycle: "h23"` is free to render 24:00, which
+    // `timeOfDay` refuses — and the refusal would land on a tap of *Now*.
+    expect(clockIn("UTC", new Date("2026-03-12T00:00:00Z"))).toBe("00:00");
   });
 });

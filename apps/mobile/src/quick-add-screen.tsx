@@ -14,7 +14,7 @@ import { useLastUsedAccount } from "@waltning/client/transactions/last-capture";
 import { mapFieldErrors } from "@waltning/client/transport/field-errors";
 import { fold } from "@waltning/core/capture/names";
 import { proposeCategory } from "@waltning/core/capture/payee-memory";
-import { accountingDate } from "@waltning/core/date";
+import { accountingDate, clockIn } from "@waltning/core/date";
 import * as money from "@waltning/core/money";
 import { AccountPicker, type AccountPickerAccount } from "@waltning/ui/accounts/account-picker";
 import { CategorySheet } from "@waltning/ui/categories/category-sheet";
@@ -23,6 +23,7 @@ import { KNOWN_PATHS, resolveFieldErrorMessage } from "@waltning/ui/i18n/field-e
 import { weekdayLabel } from "@waltning/ui/i18n/locales";
 import { useLocale, useT } from "@waltning/ui/i18n/provider";
 import { Button } from "@waltning/ui/primitives/button";
+import { readTyped } from "@waltning/ui/primitives/clock";
 import { useSafeArea } from "@waltning/ui/primitives/safe-area";
 import { type Segment, SegmentControl } from "@waltning/ui/primitives/segment-control";
 import { useBreakpoint } from "@waltning/ui/primitives/use-breakpoint";
@@ -139,6 +140,8 @@ export default function QuickAdd() {
   // is the same call `phone-ledger.*.ts` already makes to build the runtime.
   const capture = deviceRuntime().capture();
   const today = capture.date;
+  // The wall clock the person is looking at (§7.0a) — `TimeField`'s *Now*.
+  const now = clockIn(capture.timeZone, capture.at);
   const breakpoint = useBreakpoint();
   const styles = useStyles();
   const insets = useSafeArea();
@@ -230,6 +233,8 @@ export default function QuickAdd() {
   const [categoryProposalDismissed, setCategoryProposalDismissed] = useState(false);
   const [composerPayee, setComposerPayee] = useState("");
   const [composerDate, setComposerDate] = useState<string>(today);
+  // Empty, which is the normal case: a time is set only when someone has one.
+  const [composerTime, setComposerTime] = useState<string>("");
   const [composerNote, setComposerNote] = useState("");
   const [composerIsBusiness, setComposerIsBusiness] = useState(false);
   // The same membership check the account gets: a route naming an archived
@@ -544,6 +549,11 @@ export default function QuickAdd() {
       categoryId: effectiveCategoryId,
       payee: composerPayee,
       date: composerDate,
+      // Read loosely (`0930`, `9.30`) and sent strictly; what does not read as
+      // a time is sent as typed, so the refusal lands on the row that holds it.
+      ...(composerTime.trim() === ""
+        ? {}
+        : { timeOfDay: readTyped(composerTime) ?? composerTime.trim() }),
       note: composerNote,
       isBusiness: composerIsBusiness,
       counterpartyId: composerCounterpartyId,
@@ -585,6 +595,7 @@ export default function QuickAdd() {
     composerCounterpartyId,
     composerCounterpartyRole,
     composerDate,
+    composerTime,
     composerIsBusiness,
     composerNote,
     composerPayee,
@@ -768,6 +779,9 @@ export default function QuickAdd() {
             payee={composerPayee}
             onPayeeChange={handleComposerPayeeChange}
             date={composerDate}
+            time={composerTime}
+            onTimeChange={setComposerTime}
+            now={now}
             onDateChange={handleComposerDateChange}
             today={today}
             isBusiness={composerIsBusiness}

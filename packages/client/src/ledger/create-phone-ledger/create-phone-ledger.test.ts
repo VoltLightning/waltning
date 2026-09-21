@@ -596,6 +596,31 @@ describe("phone ledger controller", () => {
   });
 
   /**
+   * **A time given on Add reaches the write, and one not given is not
+   * midnight** (§7.0a). The operation always accepted `timeOfDay`; no draft
+   * carried one, so the field existed in the ledger and nowhere on a screen.
+   */
+  it("sends the time of day a draft carries, and nothing when it carries none", () => {
+    const { controller, createTransaction } = harness();
+    const accountId = idOf(controller.createAccount(minimalDraft("Bank A · PLN", PLN)));
+
+    controller.createTransaction({ ...expenseDraft(accountId), timeOfDay: "08:12" });
+    expect(createTransaction.mock.calls[0]?.[0]).toMatchObject({ timeOfDay: "08:12" });
+
+    controller.createTransaction(expenseDraft(accountId));
+    expect(createTransaction.mock.calls[1]?.[0]).not.toHaveProperty("timeOfDay");
+  });
+
+  it("refuses a time that is not one, on the field that holds it", () => {
+    const { controller } = harness();
+    const accountId = idOf(controller.createAccount(minimalDraft("Bank A · PLN", PLN)));
+    const result = controller.createTransaction({ ...expenseDraft(accountId), timeOfDay: "25:00" });
+    expect("fieldErrors" in result && result.fieldErrors.map((error) => error.path)).toEqual([
+      "timeOfDay",
+    ]);
+  });
+
+  /**
    * The draft is the user-owned subset of `CreateTransactionInput` (B3) — an
    * income, its category, its editable date, a note, business, and a
    * counterparty and role all reach the write, not only amount and account.

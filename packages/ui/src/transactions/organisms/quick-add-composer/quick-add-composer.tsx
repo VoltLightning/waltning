@@ -32,6 +32,7 @@ import {
   type CategoryProposal,
   PROPOSAL_DISPLAY_THRESHOLD,
 } from "@waltning/core/capture/payee-memory";
+import type { TimeOfDay } from "@waltning/core/date";
 import type { CurrencyCode } from "@waltning/core/money";
 import { useCallback, useMemo, useState } from "react";
 import { Text, View } from "react-native";
@@ -45,7 +46,9 @@ import {
 } from "../../../primitives/atoms/segment-control/segment-control";
 import { Select } from "../../../primitives/atoms/select/select";
 import { TextField } from "../../../primitives/atoms/text-field/text-field";
+import { TimeField } from "../../../primitives/atoms/time-field/time-field";
 import type { FieldErrorMap } from "../../../primitives/field-errors.ts";
+import { readTyped } from "../../../primitives/molecules/time-picker/clock.ts";
 import { categoryTintFor } from "../../../primitives/monogram.ts";
 import { SheetAwareTextInput } from "../../../primitives/sheet-input";
 import { BottomSheet } from "../../../shell/organisms/bottom-sheet/bottom-sheet";
@@ -140,6 +143,14 @@ export type QuickAddComposerProps = {
   onDateChange: (date: string) => void;
   /** The device's local `AccountingDate` (§7.0a) — the date row's *Today* and `DateField`'s shortcuts. */
   today: string;
+  /**
+   * When in the day it happened — what is typed, `""` for none, which is the
+   * normal case (§7.0a). The screen reads it with `clock.ts`'s `readTyped`.
+   */
+  time: string;
+  onTimeChange: (time: string) => void;
+  /** The device's clock (§7.0a) — `TimeField`'s *Now*. */
+  now: TimeOfDay;
   isBusiness: boolean;
   onBusinessChange: (isBusiness: boolean) => void;
   note: string;
@@ -161,7 +172,7 @@ export type QuickAddComposerProps = {
   fieldErrors?: FieldErrorMap;
 };
 
-type OpenSheet = "date" | "scope" | "payee" | "counterparty" | null;
+type OpenSheet = "date" | "time" | "scope" | "payee" | "counterparty" | null;
 
 export function QuickAddComposer({
   raw,
@@ -183,6 +194,9 @@ export function QuickAddComposer({
   onPayeeChange,
   date,
   onDateChange,
+  time,
+  onTimeChange,
+  now,
   today,
   isBusiness,
   onBusinessChange,
@@ -211,6 +225,7 @@ export function QuickAddComposer({
   const selectedAccount = accounts.find((account) => account.id === accountId);
   const closeSheet = useCallback(() => setOpenSheet(null), []);
   const handleOpenDateSheet = useCallback(() => setOpenSheet("date"), []);
+  const handleOpenTimeSheet = useCallback(() => setOpenSheet("time"), []);
   const handleOpenScopeSheet = useCallback(() => setOpenSheet("scope"), []);
   const handleOpenPayeeSheet = useCallback(() => setOpenSheet("payee"), []);
   const handleOpenCounterpartySheet = useCallback(() => setOpenSheet("counterparty"), []);
@@ -344,12 +359,18 @@ export function QuickAddComposer({
   const categoryError = fieldErrors?.byField["categoryId"]?.[0];
   const payeeError = fieldErrors?.byField["payee"]?.[0];
   const dateError = fieldErrors?.byField["date"]?.[0];
+  const timeError = fieldErrors?.byField["timeOfDay"]?.[0];
   const counterpartyError = fieldErrors?.byField["counterpartyId"]?.[0];
   const counterpartyRoleError = fieldErrors?.byField["counterpartyRole"]?.[0];
   /** §6.7's mirror (`create-transaction.executor.ts`'s own refusal), named onto the row the scope renders. */
   const scopeError = fieldErrors?.byField["isBusiness"]?.[0];
   const moreError =
-    payeeError ?? dateError ?? scopeError ?? counterpartyError ?? counterpartyRoleError;
+    payeeError ??
+    dateError ??
+    timeError ??
+    scopeError ??
+    counterpartyError ??
+    counterpartyRoleError;
 
   /** What the collapsed *More details* row says it holds — only the fields that hold something. */
   const moreSummary = [
@@ -448,6 +469,14 @@ export function QuickAddComposer({
               error={dateError}
             />
             <ComposerRow
+              label={t("transactions.time")}
+              value={time.trim() === "" ? undefined : (readTyped(time) ?? time)}
+              tile={<ComposerTileGlyph glyph="◷" ink={theme.textMuted} />}
+              tileFill={theme.subtleFill}
+              onPress={handleOpenTimeSheet}
+              error={timeError}
+            />
+            <ComposerRow
               label={t("transactions.scope")}
               value={scopeLabel(t, selectedAccount, isBusiness)}
               tile={<ComposerTileGlyph glyph="◐" ink={theme.textMuted} />}
@@ -518,6 +547,20 @@ export function QuickAddComposer({
           value={date}
           onChange={onDateChange}
           today={today}
+        />
+      </BottomSheet>
+
+      <BottomSheet
+        visible={openSheet === "time"}
+        title={t("transactions.time")}
+        onDismiss={closeSheet}
+      >
+        <TimeField
+          label={t("transactions.time")}
+          value={time}
+          onChange={onTimeChange}
+          now={now}
+          hint={t("transactions.timeHint")}
         />
       </BottomSheet>
 

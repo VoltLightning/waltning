@@ -8,6 +8,7 @@
  */
 
 import { fireEvent, render, screen } from "@testing-library/react";
+import { timeOfDay } from "@waltning/core/date";
 import { currencyCode } from "@waltning/core/money";
 import { expect, it, vi } from "vitest";
 import { I18nProvider } from "../../../i18n/provider";
@@ -74,6 +75,9 @@ function base(): QuickAddComposerProps {
     date: TODAY,
     onDateChange: vi.fn(),
     today: TODAY,
+    time: "",
+    onTimeChange: vi.fn(),
+    now: timeOfDay("14:37"),
     isBusiness: false,
     onBusinessChange: vi.fn(),
     note: "",
@@ -107,7 +111,7 @@ it("draws two rows at rest — the account and the category — and the rest beh
   expect(screen.getByRole("button", { name: /^From/ })).toBeDefined();
   expect(screen.getByRole("button", { name: "Category: What was it for?" })).toBeDefined();
   expect(
-    screen.getByRole("button", { name: "More details: Payee, date, scope, person" }),
+    screen.getByRole("button", { name: "More details: Payee, date, time, scope, person" }),
   ).toBeDefined();
   expect(screen.queryByRole("button", { name: "Payee" })).toBeNull();
   openMore();

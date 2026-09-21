@@ -312,3 +312,21 @@ export function timeOfDayFromDb(value: string | null): TimeOfDay | null {
   if (value === null) return null;
   return timeOfDay(value.slice(0, 5));
 }
+
+/**
+ * The clock, in a named zone — `todayIn`'s twin.
+ *
+ * **The zone is required, for the reason it is there.** A capture's time of
+ * day is the wall clock the person was looking at, and `toISOString()` reads a
+ * different wall. `hourCycle: "h23"` because `en-GB` at midnight is otherwise
+ * free to say `24:00`, which `timeOfDay` rightly refuses.
+ */
+export function clockIn(timeZone: string, now = new Date()): TimeOfDay {
+  const formatted = new Intl.DateTimeFormat("en-GB", {
+    timeZone,
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).format(now);
+  return timeOfDay(formatted);
+}

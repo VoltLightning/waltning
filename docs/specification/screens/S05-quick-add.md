@@ -51,7 +51,7 @@ the phone is typed on.
 │  │ G  Category                               › ││
 │  │    Groceries                                ││
 │  │ ─────────────────────────────────────────── ││
-│  │ …  More details                           › ││  ← payee · date · scope · person, folded
+│  │ …  More details                           › ││  ← payee · date · time · scope · person, folded
 │  └─────────────────────────────────────────────┘│
 │  [Groceries] [Transport] [Home] [Fun]           │  ← this kind's four most-used, tinted by name
 │  ┌─────────────────────────────────────────────┐│
@@ -100,8 +100,8 @@ top-right, "out of the thumb zone" — and out of the design.
 **Two rows at rest, and the rest behind one.** *From* and *Category* are the
 two choices a capture always needs, and they are drawn as rows in one card: a
 32 tile in the account's or the category's own tint, the field's name over its
-value, a caret saying it opens something. Payee, date, scope and person wait
-behind *More details*, a row in the same card that unfolds them — the chip row
+value, a caret saying it opens something. Payee, date, time, scope and person
+wait behind *More details*, a row in the same card that unfolds them — the chip row
 this replaces put seven placeholders in one wrapping line, every one the same
 weight, so the two that mattered were no more visible than the five that
 rarely do. The folded row summarises what it holds (*Corner Café · Business*)

@@ -8,6 +8,7 @@
  */
 
 import type { Meta, StoryObj } from "@storybook/react-native-web-vite";
+import { timeOfDay } from "@waltning/core/date";
 import { currencyCode } from "@waltning/core/money";
 import { useCallback, useState } from "react";
 import { View } from "react-native";
@@ -72,6 +73,9 @@ const meta = {
     date: TODAY,
     onDateChange: noop,
     today: TODAY,
+    time: "",
+    onTimeChange: noop,
+    now: timeOfDay("14:37"),
     isBusiness: false,
     onBusinessChange: noop,
     note: "",
