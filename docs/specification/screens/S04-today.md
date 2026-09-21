@@ -657,9 +657,17 @@ ignore.
 where you are, not a second scroller for the same content — two controls that
 each move the other is how a gesture ends up fighting itself.
 
-**A hand on the strip snaps; every day that passes the ring ticks.** Let go — with a flick or without one — and the strip settles the
-nearest day under the ring rather than between two. Every day a hand sends past
-the ring is one light tap, *the coast after a flick included*: each cell is a
+**A hand on the strip snaps; every day the ring reaches ticks.** Let go — with
+a flick or without one — and the strip settles the nearest day under the ring
+rather than between two. **The tick is a day arriving, not a day leaving**: it
+fires when a day's centre is under the ring — reached, or passed through on the
+way to another — and never at the halfway line between two cells, where it
+would mark the last day being left and let the settle onto the new one go by in
+silence. It is read off where the strip *is*, not where it was sent, so it is
+felt when the day is seen to arrive; a strip that is merely being re-seated — a
+cold open, a run of days re-cut around a new anchor — lands without one. Every
+day a hand brings to the ring is one light tap, *the coast after a flick
+included*: each cell is a
 snap point, and feedback that cuts out the moment the finger lifts reads as
 broken; a floor between taps keeps a fast coast a purr rather than a rattle.
 A strip the *list* is driving taps too, on a longer floor: scrolling the ledger
@@ -673,6 +681,18 @@ screen was rebuilt for. The snap is the screen's own rather than the scroller's
 `snapToOffsets`, because on the web that becomes CSS scroll snap — which
 applies to a programmatic scroll as well as to a gesture, and so would snap the
 scrubbing too.
+
+**At rest the ring is on the list's day, and that is checked rather than
+assumed.** When the list stops the strip lands on the day §3 names. A landing
+is an animated scroll, and on a device that is a request, not a fact: the run
+of days is re-cut around the settled day, the track changes under the
+animation, and the scroller may drop it — a ring left a day or two into the
+future over a list on today. So a resting, attached strip that is not where it
+belongs once its landing has had time to finish is sent there again; once per
+place it is stuck, because a strip that did not move when asked is against its
+own end. The track's width is computed from the band and the count of cells,
+never taken from a content-size report, which the web does not repeat when the
+track's padding changes.
 
 **A row owns one axis and gives back the other.** The transaction rows swipe
 sideways (below) inside a list that scrolls vertically, and a pan told only a

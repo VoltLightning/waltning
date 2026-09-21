@@ -16,6 +16,7 @@ import {
   SEEN_LEAD,
   STRIDE,
   trackLead,
+  trackWidth,
 } from "./scrub.ts";
 
 const FRAME = 1 / 60;
@@ -373,5 +374,25 @@ describe("markOf", () => {
   it("answers for an empty list", () => {
     expect(markOf(0, [], [])).toBe(0);
     expect(markOf(Number.NaN, tops, marks)).toBe(0);
+  });
+});
+
+describe("the track's width", () => {
+  it("is what lets the last day reach the ring, at any band", () => {
+    // Found on a 1216pt band, where a measured width that never updated left
+    // the strip 1,100pt short. The furthest the scroller goes is the width
+    // less the band — and that has to be exactly the last cell's offset.
+    for (const band of [320, 390, 1216]) {
+      const count = 30;
+      expect(trackWidth(band, count) - band).toBe(offsetFor(count - 1, band));
+      expect(offsetWithin(count - 1, band, trackWidth(band, count))).toBe(
+        offsetFor(count - 1, band),
+      );
+    }
+  });
+
+  it("clamps nothing before there is a band or a day", () => {
+    expect(trackWidth(0, 30)).toBe(0);
+    expect(trackWidth(390, 0)).toBe(0);
   });
 });
