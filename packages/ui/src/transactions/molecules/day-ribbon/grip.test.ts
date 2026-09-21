@@ -7,8 +7,10 @@ import {
   type Grip,
   grip,
   LAND_MS,
+  LEAD_MS,
   LIST_TICK_GAP_MS,
   LOOSE,
+  leadsNow,
   letGo,
   QUIET_MS,
   relandsNow,
@@ -200,5 +202,33 @@ describe("a landing that never arrived", () => {
 
   it("checks before a strip being put back could be read as a hand", () => {
     expect(LAND_MS).toBeLessThan(QUIET_MS);
+  });
+});
+
+describe("when a strip left by hand takes the list with it", () => {
+  const LEFT: Grip = { dragging: false, detached: true };
+
+  it("once it has been still for the pause", () => {
+    expect(leadsNow(LEFT, true, LEAD_MS, 40, -1)).toBe(true);
+  });
+
+  it("not while it is being browsed — every nudge starts the pause again", () => {
+    expect(leadsNow(LEFT, true, LEAD_MS - 1, 40, -1)).toBe(false);
+  });
+
+  it("not with a finger still on it, however still", () => {
+    expect(leadsNow({ dragging: true, detached: true }, true, LEAD_MS * 3, 40, -1)).toBe(false);
+  });
+
+  it("not between two days: the snap names the day first", () => {
+    expect(leadsNow(LEFT, false, LEAD_MS, 40, -1)).toBe(false);
+  });
+
+  it("once per rest, not once per frame of it", () => {
+    expect(leadsNow(LEFT, true, LEAD_MS * 2, 40, 40)).toBe(false);
+  });
+
+  it("never for a strip the list is driving", () => {
+    expect(leadsNow(LOOSE, true, LEAD_MS * 2, 40, -1)).toBe(false);
   });
 });

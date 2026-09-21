@@ -235,7 +235,51 @@ export function blockOf(date: string, dates: readonly string[]): number {
   for (let i = 0; i < dates.length; i += 1) {
     const block = dates[i];
     if (block === undefined || block < date) break;
+    // The sentinel repeats the last day's date and stands at the *end* of its
+    // block: a tap on the oldest loaded day went to the bottom of the list.
+    if (at >= 0 && dates[at] === block) continue;
     at = i;
   }
   return at;
+}
+
+/** How near a day's top counts as *on* it, in points — a scroller's rounding. */
+export const ARRIVED_SLACK = 2;
+
+/**
+ * How long after a scroll to a day was sent a stop still counts as *its* stop.
+ * Each leg is an animated scroll of a third of a second; past this, a list
+ * that has stopped somewhere else was put there by the reader.
+ */
+export const FINISH_WITHIN_MS = 2000;
+
+/**
+ * Where to send the list **again**, after a scroll that was meant to land on
+ * `date` came to rest at `at` — or `null` when it is there, or is no longer
+ * this scroll's to finish.
+ *
+ * **A day's position is only known once the rows above it have been drawn,
+ * and neither is the list's own height.** Everything nobody has scrolled past
+ * is summed at its kind's estimated height (`listGeometry`'s `exact`), and a
+ * virtualised list cannot be scrolled past the content it has laid out — so a
+ * tap on a day a month up the list was sent to a confident guess, stopped
+ * where the drawn content ran out, and named the day it found there: the 16th,
+ * for a tap on the 15th. Getting part of the way draws those rows, which
+ * measures them and lengthens the list; so the scroll is checked at each stop
+ * against the geometry it produced, and sent on.
+ *
+ * `sinceSent` is what keeps this from fighting a hand: a stop long after the
+ * scroll was sent is the reader's, and is left where it is.
+ */
+export function correctionFor(
+  date: string,
+  at: number,
+  geometry: ListGeometry,
+  sinceSent: number,
+): number | null {
+  if (sinceSent > FINISH_WITHIN_MS) return null;
+  const top = geometry.tops[blockOf(date, geometry.dates)];
+  if (top === undefined) return null;
+  const gap = top - at;
+  return gap > ARRIVED_SLACK || gap < -ARRIVED_SLACK ? top : null;
 }

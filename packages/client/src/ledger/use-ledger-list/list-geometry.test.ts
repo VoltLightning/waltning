@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { blockOf, ESTIMATED_HEIGHTS, type GeometryEntry, listGeometry } from "./list-geometry.ts";
+import {
+  blockOf,
+  correctionFor,
+  ESTIMATED_HEIGHTS,
+  FINISH_WITHIN_MS,
+  type GeometryEntry,
+  listGeometry,
+} from "./list-geometry.ts";
 
 // Four row heights, deliberately all different: a rule that read the wrong
 // one for a place would land on a number no other combination produces.
@@ -203,6 +210,12 @@ describe("blockOf", () => {
     expect(blockOf("2026-08-12", dates)).toBe(1);
   });
 
+  it("finds the last day's own block, not the sentinel that repeats its date", () => {
+    // The sentinel stands at the end of the content. Found instead of the day,
+    // a tap on the oldest loaded day scrolled to the bottom of the list.
+    expect(blockOf("2026-08-06", [...dates, "2026-08-06"])).toBe(3);
+  });
+
   it("says a day outside what is loaded is a jump", () => {
     expect(blockOf("2026-08-15", dates)).toBe(-1);
     expect(blockOf("2026-08-05", dates)).toBe(-1);
@@ -248,5 +261,47 @@ describe("an entry that is not its kind's height", () => {
     const exact = listGeometry(entries, H, strip, 0, new Map([["transfer-1", 92]]));
     expect(usual.tops[1]).toBe(H.firstDay + H.rowOnly);
     expect(exact.tops[1]).toBe(H.firstDay + 92);
+  });
+});
+
+describe("a scroll to a day, checked on arrival", () => {
+  // The 14th (one row), then the 13th. Estimated, the row is 58; drawn, it is
+  // a transfer and 92 — so the 13th is 34pt further down than it was thought.
+  const entries: readonly GeometryEntry[] = [
+    day("2026-08-14", true),
+    { kind: "row", date: null, place: "only", key: "transfer-1" },
+    day("2026-08-13"),
+    row("only"),
+  ];
+  const strip = stripOf(["2026-08-13", "2026-08-14"]);
+  const guessed = listGeometry(entries, H, strip);
+  const measured = listGeometry(entries, H, strip, 0, new Map([["transfer-1", 92]]));
+  const aimed = guessed.tops[1] ?? 0;
+
+  it("is finished when getting there moved the day", () => {
+    // **The one a hand reported**: a tap on the 15th left the list on the 16th.
+    expect(correctionFor("2026-08-13", aimed, measured, 400)).toBe(measured.tops[1]);
+  });
+
+  it("is sent on when the list stopped short, where its drawn content ran out", () => {
+    // A virtualised list clamps to what it has laid out. Read as *the reader
+    // moved it*, the scroll was abandoned at the first leg.
+    expect(correctionFor("2026-08-13", aimed - 80, measured, 400)).toBe(measured.tops[1]);
+  });
+
+  it("is left alone once it is there", () => {
+    const there = measured.tops[1] ?? 0;
+    expect(correctionFor("2026-08-13", there, measured, 400)).toBeNull();
+    expect(correctionFor("2026-08-13", there + 1, measured, 400)).toBeNull();
+  });
+
+  it("is the reader's stop, not this scroll's, once enough time has passed", () => {
+    // Hauling the list back to a day tapped a while ago would be the list
+    // fighting the hand on it.
+    expect(correctionFor("2026-08-13", aimed + 300, measured, FINISH_WITHIN_MS + 1)).toBeNull();
+  });
+
+  it("is dropped for a day the list no longer holds", () => {
+    expect(correctionFor("2026-01-01", aimed, measured, 400)).toBeNull();
   });
 });

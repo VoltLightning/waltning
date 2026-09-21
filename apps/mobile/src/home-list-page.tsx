@@ -5,6 +5,7 @@ import { useLedgerList } from "@waltning/client/ledger/use-ledger-list";
 import { reanchors } from "@waltning/client/ledger/use-ledger-list/anchor-echo";
 import {
   blockOf,
+  correctionFor,
   type EntryHeights,
   ESTIMATED_HEIGHTS,
   type GeometryEntry,
@@ -49,6 +50,7 @@ import { LedgerScroller } from "@waltning/ui/transactions/organisms/ledger-scrol
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { type FlatList, Text, View, type ViewToken } from "react-native";
 import {
+  runOnJS,
   type SharedValue,
   useAnimatedScrollHandler,
   useSharedValue,
@@ -271,10 +273,14 @@ function HomeListPageView({
     () => ribbonMarks(items, { filtered, anchor: centred }),
     [items, filtered, centred],
   );
-  const run = useMemo(
-    () => ribbonRun(today, { oldest: marks.from, newest: marks.to }),
-    [today, marks.from, marks.to],
-  );
+  // The origin only ever moves back (`ribbonRun`'s `floor`): coming home from
+  // a jump to 1950 must not re-index the strip a second time.
+  const floor = useRef<AccountingDate | undefined>(undefined);
+  const run = useMemo(() => {
+    const next = ribbonRun(today, { oldest: marks.from, newest: marks.to, floor: floor.current });
+    floor.current = next.origin;
+    return next;
+  }, [today, marks.from, marks.to]);
   const stripCount = filtered ? marks.days.length : run.count;
 
   /**
@@ -517,14 +523,24 @@ function HomeListPageView({
    * `list-start-gate.ts` is right that those do not compose.
    */
   const listY = useSharedValue(0);
+  /** The scroll to a day that is still being finished (`finish`, below). */
+  const sent = useRef<{ date: string; at: number; legs: number } | null>(null);
+  /** A finger on the list ends it at once: the list is the reader's. */
+  const dropSent = useCallback(() => {
+    sent.current = null;
+  }, []);
+
   const handleScroll = useAnimatedScrollHandler(
     {
+      onBeginDrag: () => {
+        runOnJS(dropSent)();
+      },
       onScroll: (event) => {
         listY.value = event.contentOffset.y;
         scrollY.value = event.contentOffset.y;
       },
     },
-    [listY, scrollY],
+    [listY, scrollY, dropSent],
   );
 
   const geometry = useMemo(
@@ -562,8 +578,32 @@ function HomeListPageView({
    * every frame, the gesture pays for a reload and a period animation sixty
    * times a second, which is the defect this page was rebuilt around.
    */
+  /**
+   * **A scroll to a day is checked on arrival, and finished**
+   * (`list-geometry.ts`'s `correctionFor`). A day's offset is a guess until
+   * the rows above it have been drawn, and getting there is what draws them.
+   * `true` while it is still on its way — the day it paused on is not reported.
+   */
+  const finish = useCallback(
+    (at: number): boolean => {
+      const last = sent.current;
+      if (last === null) return false;
+      const top = correctionFor(last.date, at, geometry, Date.now() - last.at);
+      // Four legs, because each draws rows the one before could not see; past
+      // that the day is against the end of the list and cannot reach the top.
+      if (top === null || last.legs >= 4) {
+        sent.current = null;
+        return false;
+      }
+      sent.current = { date: last.date, at: Date.now(), legs: last.legs + 1 };
+      list.current?.scrollToOffset({ offset: top, animated: true });
+      return true;
+    },
+    [geometry],
+  );
   const reportSettled = useCallback(
     (at: number) => {
+      if (finish(at)) return;
       // **`dayAt`, never the strip's cell.** The strip clamps every day past
       // its reach onto its end cell, so reading the day back out of it named a
       // real date that was not the one on screen — out by a month on a list
@@ -579,7 +619,7 @@ function HomeListPageView({
       setShown(accountingDate(landed));
       visibleDayRef.current?.(accountingDate(landed));
     },
-    [geometry],
+    [geometry, finish],
   );
   useScrollSettle(listY, reportSettled, active);
 
@@ -615,6 +655,7 @@ function HomeListPageView({
       reported.current = date;
       setShown(accountingDate(date));
       visibleDayRef.current?.(accountingDate(date));
+      sent.current = { date, at: Date.now(), legs: 0 };
       list.current?.scrollToOffset({ offset: top, animated: true });
       return true;
     },
@@ -632,6 +673,19 @@ function HomeListPageView({
       if (!goTo(date)) onPickDay(date);
     },
     [goTo, onPickDay],
+  );
+
+  // Read through a ref: `shown` changes on every settle, and as a dependency
+  // it handed the strip a new prop — and re-rendered all of it — per stop.
+  const shownRef = useRef(shown);
+  shownRef.current = shown;
+  /** The strip, left on a day by hand: the list goes there, as for a tap (§7). */
+  const leadTo = useCallback(
+    (cell: number) => {
+      const date = dayAt(cell).date;
+      if (date !== shownRef.current) pickDay(date);
+    },
+    [dayAt, pickDay],
   );
 
   /**
@@ -668,8 +722,13 @@ function HomeListPageView({
   useEffect(() => {
     if (anchorIndex <= 0 || scrolledFor.current === listKey) return;
     scrolledFor.current = listKey;
+    // **An approximation, finished like any other scroll to a day.** By index
+    // the list lands from average row heights, and a jump to a quiet day came
+    // to rest on the busier day above it — the ring on 4 November for a jump
+    // to 29 October. The settle checks it against the measured geometry.
+    sent.current = { date: anchor, at: Date.now(), legs: 0 };
     list.current?.scrollToIndex({ index: anchorIndex, animated: false, viewPosition: 0 });
-  }, [anchorIndex, listKey]);
+  }, [anchorIndex, listKey, anchor]);
   const handleEndReached = useCallback(() => {
     if (hasOlder) loadOlder();
   }, [hasOlder, loadOlder]);
@@ -796,6 +855,7 @@ function HomeListPageView({
         scrollY={listY}
         placement={placement}
         onPickDay={pickDay}
+        onLead={leadTo}
         onTick={onTick}
       />
       {/*

@@ -247,19 +247,29 @@ export type RibbonRun = {
 /**
  * The run the strip draws, from what the screen knows.
  *
- * `origin` is a **1 January**, so that it moves once in a long while rather
- * than whenever an older page loads: it only moves when the reader jumps
- * further back than the run already reaches, and then by whole years.
+ * `origin` is **1 January of a decade**, at least `RIBBON_BACK_YEARS` behind
+ * the oldest day heard of — and **never later than `floor`**, the origin the
+ * caller already has. It was the oldest loaded day's own year less ten, so a
+ * jump from 2026 into 2025 moved it a year: every cell's index shifted by 365
+ * under a strip that had just been left on a day, which then showed the same
+ * date a year earlier until it was landed again. An origin that only ever
+ * moves back, and by decades, moves once in a ledger's life.
+ *
  * `through` is today, or the newest day the list holds if that is later — a
  * real row dated next week, or an anchor stepped past today.
  */
 export function ribbonRun(
   today: AccountingDate,
-  held: { oldest?: AccountingDate | undefined; newest?: AccountingDate | undefined } = {},
+  held: {
+    oldest?: AccountingDate | undefined;
+    newest?: AccountingDate | undefined;
+    floor?: AccountingDate | undefined;
+  } = {},
 ): RibbonRun {
   const oldest = held.oldest !== undefined && held.oldest < today ? held.oldest : today;
-  const year = Number(oldest.slice(0, 4)) - RIBBON_BACK_YEARS;
-  const origin = accountingDate(`${String(year).padStart(4, "0")}-01-01`);
+  const decade = Math.floor((Number(oldest.slice(0, 4)) - RIBBON_BACK_YEARS) / 10) * 10;
+  const computed = accountingDate(`${String(decade).padStart(4, "0")}-01-01`);
+  const origin = held.floor !== undefined && held.floor < computed ? held.floor : computed;
   const through = held.newest !== undefined && held.newest > today ? held.newest : today;
   return { origin, through, count: daysBetween(origin, through) + 1 };
 }

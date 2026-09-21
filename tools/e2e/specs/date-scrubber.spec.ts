@@ -379,7 +379,8 @@ test.describe("the day strip is scrubbed by the list", () => {
       await page.mouse.wheel(-600, 0);
       await page.waitForTimeout(30);
     }
-    await page.waitForTimeout(1500);
+    // Read inside the pause, before the strip takes the list anywhere.
+    await page.waitForTimeout(800);
 
     // A year of cells is 19,000pt; the old strip ended 2,300pt from today.
     expect(resting - (await stripOffset(page)), "well past the old end").toBeGreaterThan(19_000);
@@ -387,11 +388,59 @@ test.describe("the day strip is scrubbed by the list", () => {
     expect(under, "a cell is drawn out here, not blank track").not.toBeNull();
     expect(under, "an unread day is its date and nothing else").toMatch(/^\w+ \d+, \d{4}$/);
 
-    // And the list takes it back from there, all the way.
-    await scrollTheList(page, 2);
-    expect(await stripOffset(page), "re-attached from two years out").toBeGreaterThan(
-      resting - 2_000,
+    // Left there, it is an instruction: the list jumps to that day, and the
+    // strip is still on it when the list arrives.
+    await page.waitForTimeout(4500);
+    expect(new URL(page.url()).searchParams.get("date"), "a jump, by the route").not.toBeNull();
+    expect(await dayUnderTheRing(page), "the strip did not leave the day").toContain(under ?? "-");
+  });
+
+  /**
+   * **A tap a month up the list stopped a day short** — the 16th, for the 15th.
+   * A day's offset is a guess until the rows above it are drawn, and a
+   * virtualised list cannot be scrolled past what it has laid out; the scroll
+   * is finished leg by leg (`list-geometry.ts`'s `correctionFor`).
+   */
+  test("a tap on a day far up the strip brings that day, not its neighbour", async ({ page }) => {
+    await page.mouse.move(195, 190);
+    for (let tick = 0; tick < 8; tick += 1) {
+      await page.mouse.wheel(-200, 0);
+      await page.waitForTimeout(40);
+    }
+    await page.waitForTimeout(700);
+    const wanted = await dayUnderTheRing(page);
+    expect(wanted).not.toBeNull();
+    const name = (wanted ?? "").split(",").slice(0, 2).join(",");
+    await page
+      .getByRole("button", { name: new RegExp(`^${name}`) })
+      .first()
+      .click();
+    await page.waitForTimeout(3000);
+    expect(await dayUnderTheRing(page), "the ring").toContain(name);
+    expect(name, "and the list").toContain((await dayAtTheTopOfTheList(page)) ?? "nothing");
+  });
+
+  /**
+   * **A strip left on a day takes the list there** (S04 §7), after a pause
+   * counted from its last movement — browsing along it moves nothing.
+   */
+  test("left on a day by hand, takes the list there after a pause", async ({ page }) => {
+    const opened = await dayAtTheTopOfTheList(page);
+    await page.mouse.move(195, 190);
+    for (let tick = 0; tick < 8; tick += 1) {
+      await page.mouse.wheel(-200, 0);
+      await page.waitForTimeout(40);
+    }
+    // Still inside the pause: the list has not been asked for anything.
+    await page.waitForTimeout(600);
+    expect(await dayAtTheTopOfTheList(page), "browsing moves nothing").toBe(opened);
+    const left = ((await dayUnderTheRing(page)) ?? "").split(",").slice(0, 2).join(",");
+
+    await page.waitForTimeout(4000);
+    expect(left, "the list came to the day").toContain(
+      (await dayAtTheTopOfTheList(page)) ?? "nothing",
     );
+    expect(await dayUnderTheRing(page), "and the strip did not leave it").toContain(left);
   });
 
   test("stays where a hand puts it, and comes back when the list moves", async ({ page }) => {
@@ -406,12 +455,13 @@ test.describe("the day strip is scrubbed by the list", () => {
       await page.mouse.wheel(-200, 0);
       await page.waitForTimeout(90);
     }
-    await page.waitForTimeout(1200);
+    await page.waitForTimeout(700);
     const dragged = await stripOffset(page);
     expect(dragged, "the strip went where it was pushed").toBeLessThan(resting - 100);
 
-    // And stayed. Nothing springs while the reader is still looking at it.
-    await page.waitForTimeout(1200);
+    // And stayed. Nothing springs while the reader is still looking at it —
+    // read inside the pause, after which a strip left alone leads the list.
+    await page.waitForTimeout(300);
     expect(await stripOffset(page), "and stayed there").toBe(dragged);
 
     // The next touch on the list takes it back.
