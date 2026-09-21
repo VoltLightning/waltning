@@ -40,8 +40,13 @@ import { focus, radius, space, tabularNums, touchTarget } from "../../../tokens.
  */
 const COUNT_BOX = 12;
 
-/** How much moved that day, in three steps a reader can tell apart at a glance. */
-export type DayActivity = "none" | "some" | "heavy";
+/**
+ * How much moved that day, in three steps a reader can tell apart at a glance
+ * — and `unread`, for a day nothing has been loaded for. **Not `none`**: that
+ * draws the quiet dot, which says *nothing happened*; an unread day draws no
+ * mark at all, because nothing is known.
+ */
+export type DayActivity = "none" | "some" | "heavy" | "unread";
 
 /**
  * Which way the day netted. `flat` is not "nothing" — it is a day where money
@@ -186,6 +191,7 @@ function markStyle(
   direction: DayDirection,
   today: boolean,
 ): object[] {
+  if (activity === "unread") return [styles.markNone, styles.markUnread];
   if (activity === "none") return [styles.markNone];
   const size = activity === "heavy" ? styles.markHeavy : styles.markSome;
   if (today) return [size, styles.markOnFill];
@@ -267,6 +273,8 @@ const useStyles = makeStyles((theme) => ({
   },
   countOnFill: { color: theme.textOnAccent },
   markNone: { width: 5, height: 5, backgroundColor: theme.insetFill },
+  /** The quiet mark's box with nothing in it, so the number does not shift. */
+  markUnread: { backgroundColor: "transparent" },
   /** A searched cell with no match: the count's own slot, drawn in nothing. */
   markEmpty: { width: COUNT_BOX, height: COUNT_BOX, backgroundColor: "transparent" },
   markSome: { width: 8, height: 8 },

@@ -43,9 +43,13 @@ function StillRibbon({
 }) {
   const scrollY = useSharedValue(0);
   const placement = useSharedValue<StripPlacement>({ tops: [0], marks: [at] });
+  const dayAt = useCallback((cell: number) => days[cell] ?? days[0] ?? BLANK, [days]);
   return (
     <DayRibbon
-      days={days}
+      count={days.length}
+      dayAt={dayAt}
+      fill={false}
+      start={at}
       current={current}
       scrollY={scrollY}
       placement={placement}
@@ -56,7 +60,7 @@ function StillRibbon({
 
 const LETTERS = ["S", "M", "T", "W", "T", "F", "S"];
 
-/** One day, written the way `ribbonDays` hands one over. */
+/** One day, written the way `ribbonMarks` hands one over. */
 function day(
   date: string,
   activity: RibbonDay["activity"],
@@ -96,6 +100,10 @@ const LONG_RUN: readonly RibbonDay[] = Array.from({ length: 30 }, (_, at) => {
   const activity = at % 7 === 3 ? "heavy" : at % 3 === 0 ? "none" : "some";
   return day(date, activity, activity === "none" ? "flat" : at % 5 === 0 ? "in" : "out");
 });
+
+/** What a lookup answers past the end of a story's run, where nothing asks. */
+const BLANK: RibbonDay = day("2026-09-01", "none", "flat");
+const longRunDay = (cell: number): RibbonDay => LONG_RUN[cell] ?? BLANK;
 
 const meta = {
   title: "Transactions/DayRibbon",
@@ -185,7 +193,10 @@ function TickingRibbon() {
   return (
     <View>
       <DayRibbon
-        days={LONG_RUN}
+        count={LONG_RUN.length}
+        dayAt={longRunDay}
+        fill={false}
+        start={LONG_RUN.length - 1}
         current={null}
         scrollY={scrollY}
         placement={placement}

@@ -95,7 +95,7 @@ export function otherCurrenciesInYear(
 
 /**
  * The largest month in the year, for a bar that is relative to what is on
- * screen rather than to an absolute figure — the same argument `ribbonDays`
+ * screen rather than to an absolute figure — the same argument `ribbonMarks`
  * and `monthGrid` make for their marks.
  *
  * **Measured on the larger of income and spend, not on the net.** A month that

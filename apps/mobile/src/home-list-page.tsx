@@ -10,10 +10,18 @@ import {
   type GeometryEntry,
   listGeometry,
 } from "@waltning/client/ledger/use-ledger-list/list-geometry";
-import { RIBBON_REACH, ribbonDays, toLedgerItems } from "@waltning/client/transactions/ledger-days";
-import { type AccountingDate, accountingDate, daysBetween } from "@waltning/core/date";
+import {
+  type RibbonDayModel,
+  ribbonCell,
+  ribbonDate,
+  ribbonDayOn,
+  ribbonMarks,
+  ribbonRun,
+  toLedgerItems,
+} from "@waltning/client/transactions/ledger-days";
+import { type AccountingDate, accountingDate, yearMonth } from "@waltning/core/date";
 import type { CurrencyCode } from "@waltning/core/money";
-import { dayLabel, dayRangeLabel, weekdayInitial } from "@waltning/ui/i18n/locales";
+import { dayLabel, dayRangeLabel, monthShort, weekdayInitial } from "@waltning/ui/i18n/locales";
 import { useLocale, useT } from "@waltning/ui/i18n/provider";
 import { useScrollSettle } from "@waltning/ui/primitives/use-scroll-settle";
 import { GroundPanel } from "@waltning/ui/shell/card";
@@ -107,7 +115,7 @@ export type HomeListPageProps = {
    * **It narrows more than the rows.** A filtered set has no day totals to
    * state and no quiet days to mark — its gaps are days the query excluded, not
    * days the ledger was quiet on — so it reaches `toLedgerItems` and
-   * `ribbonDays` as their `filtered` option too. §7 says the day grouping
+   * `ribbonMarks` as their `filtered` option too. §7 says the day grouping
    * survives; it is the *rules about what the gaps mean* that do not.
    */
   query: string | null;
@@ -239,14 +247,6 @@ function HomeListPageView({
   );
 
   /**
-   * **Where the strip's window is centred — coarser than the anchor, on
-   * purpose.** The strip draws `RIBBON_REACH` days either side of a centre, so
-   * the centre has to follow the reader eventually; but following *every*
-   * settle rebuilt every cell of the strip each time the list stopped. It
-   * moves only once the anchor has drifted most of the way to the window's
-   * edge, which is once in a long scroll rather than once per stop.
-   */
-  /**
    * **The day this list is showing — held here, not in the route.**
    *
    * A scroll settling, a tap on a loaded day, the pill: each moves *this* and
@@ -258,45 +258,83 @@ function HomeListPageView({
   const [shown, setShown] = useState<AccountingDate>(anchor);
   useEffect(() => setShown(anchor), [anchor]);
 
-  const [windowCentre, setWindowCentre] = useState(anchor);
-  useEffect(() => {
-    const drift = Math.abs(daysBetween(windowCentre, shown));
-    if (drift > RIBBON_REACH / 2) setWindowCentre(shown);
-  }, [shown, windowCentre]);
-
-  const days = useMemo<readonly RibbonDay[]>(
-    () =>
-      // The strip gets the anchor in its own right, so the day this page is
-      // named for has a cell from the first frame and over an empty ledger —
-      // the one cell an empty List has.
-      ribbonDays(items, { filtered: query !== null, anchor: windowCentre, today }).map((day) => ({
-        date: day.date,
-        day: Number(day.date.slice(8, 10)),
-        weekday: weekdayInitial(day.date, locale),
-        activity: day.activity,
-        direction: day.direction,
-        ...(day.date === today ? { today: true } : {}),
-        ...(day.date > today ? { ahead: true } : {}),
-        ...(day.generated === true ? { generated: true } : {}),
-        // The full date and what happened, never the bare number the eye
-        // reads: a run of them says nothing about which month or which year.
-        // **`entries` is the *loaded* rows, which is a third reading of the
-        // search and disagrees with the other two.** A day holding forty
-        // matches renders thirty of them in one page, so "30 entries" would
-        // stand under a grid cell reading 40. Under a filter the cell says it
-        // matched and leaves the counting to the pages built to count.
-        label:
-          query !== null
-            ? t("transactions.ribbonDayMatched", { date: dayLabel(day.date, locale) })
-            : day.entries === 0
-              ? t("transactions.ribbonDayEmpty", { date: dayLabel(day.date, locale) })
-              : t(day.entries === 1 ? "transactions.ribbonDayOne" : "transactions.ribbonDayMany", {
-                  date: dayLabel(day.date, locale),
-                  count: day.entries,
-                }),
-      })),
-    [items, locale, query, t, today, windowCentre],
+  /**
+   * **The strip's run: every day from a fixed origin to today and past it**
+   * (`ledger-days.ts`'s `ribbonRun`). A cell's index is the number of days
+   * since the origin, so nothing here is clamped or re-cut as the reader
+   * moves, and the strip under a thumb has no end to meet. Under a search the
+   * strip is the matched days and nothing else — not continuous, because a gap
+   * between two matches says nothing about the ledger.
+   */
+  const filtered = query !== null;
+  const marks = useMemo(
+    () => ribbonMarks(items, { filtered, anchor: centred }),
+    [items, filtered, centred],
   );
+  const run = useMemo(
+    () => ribbonRun(today, { oldest: marks.from, newest: marks.to }),
+    [today, marks.from, marks.to],
+  );
+  const stripCount = filtered ? marks.days.length : run.count;
+
+  /**
+   * One cell's day, asked for when the cell is drawn.
+   *
+   * **Remembered per cell**, because the strip's cells are memoised on the
+   * object they are handed and the list asks again on every window it draws.
+   * The memory lasts as long as what it was built from.
+   */
+  const dayAt = useMemo(() => {
+    const drawn = new Map<number, RibbonDay>();
+    const draw = (day: RibbonDayModel): RibbonDay => ({
+      date: day.date,
+      day: Number(day.date.slice(8, 10)),
+      // **The 1st says its month, and 1 January its year** (S04 §4). A strip
+      // with no end is a run of bare numbers two years from anything that
+      // names them; the first of a month is where a reader looks for which.
+      weekday: !day.date.endsWith("-01")
+        ? weekdayInitial(day.date, locale)
+        : day.date.endsWith("-01-01")
+          ? day.date.slice(0, 4)
+          : monthShort(yearMonth(day.date.slice(0, 7)), locale),
+      activity: day.activity,
+      direction: day.direction,
+      ...(day.date === today ? { today: true } : {}),
+      ...(day.date > today ? { ahead: true } : {}),
+      ...(day.generated === true ? { generated: true } : {}),
+      // The full date and what happened, never the bare number the eye
+      // reads: a run of them says nothing about which month or which year.
+      // **`entries` is the *loaded* rows, which is a third reading of the
+      // search and disagrees with the other two.** A day holding forty
+      // matches renders thirty of them in one page, so "30 entries" would
+      // stand under a grid cell reading 40. Under a filter the cell says it
+      // matched and leaves the counting to the pages built to count.
+      // **An unread day says its date and no more**: "nothing" would be a
+      // claim about a day the list has never loaded.
+      label: filtered
+        ? t("transactions.ribbonDayMatched", { date: dayLabel(day.date, locale) })
+        : day.activity === "unread"
+          ? dayLabel(day.date, locale)
+          : day.entries === 0
+            ? t("transactions.ribbonDayEmpty", { date: dayLabel(day.date, locale) })
+            : t(day.entries === 1 ? "transactions.ribbonDayOne" : "transactions.ribbonDayMany", {
+                date: dayLabel(day.date, locale),
+                count: day.entries,
+              }),
+    });
+    return (cell: number): RibbonDay => {
+      const seen = drawn.get(cell);
+      if (seen !== undefined) return seen;
+      const model = filtered
+        ? (marks.days[cell] ?? marks.days.at(-1))
+        : ribbonDayOn(ribbonDate(cell, run), marks, today);
+      // Only under a search with no matches, where the strip draws no cell to
+      // ask about: answered with today rather than with a throw.
+      const day = draw(model ?? ribbonDayOn(today, marks, today));
+      drawn.set(cell, day);
+      return day;
+    };
+  }, [filtered, marks, run, today, locale, t]);
 
   const entries = useMemo<readonly ListEntry[]>(() => {
     const out: ListEntry[] = [];
@@ -368,17 +406,25 @@ function HomeListPageView({
    * numbers is confidently wrong rather than visibly broken.
    */
   const cellOf = useMemo(() => {
-    const at = new Map(days.map((day, index) => [day.date, index]));
-    const first = days[0]?.date ?? "";
-    const last = days.length - 1;
+    if (!filtered) {
+      // Arithmetic: a day's cell is how far it is from the run's first day.
+      // Only a day before the origin has none, and the origin is ten years
+      // behind the oldest day this list has heard of.
+      return (date: string): number => {
+        const cell = ribbonCell(accountingDate(date), run);
+        return cell < 0 ? 0 : cell;
+      };
+    }
+    const at = new Map(marks.days.map((day, index) => [day.date as string, index]));
+    const first = marks.days[0]?.date ?? "";
+    const last = marks.days.length - 1;
     return (date: string): number => {
       const found = at.get(date);
       if (found !== undefined) return found;
-      // Outside `RIBBON_REACH`: clamp to the nearer end, which is what keeps
-      // the interpolation monotonic across a stretch the strip cannot follow.
+      // Not a matched day: the nearer end, which keeps the marks monotonic.
       return date < first ? 0 : last < 0 ? 0 : last;
     };
-  }, [days]);
+  }, [filtered, marks.days, run]);
 
   /**
    * One height per kind, measured once each.
@@ -742,7 +788,10 @@ function HomeListPageView({
     */
     <GroundPanel scroll="own">
       <DayRibbon
-        days={days}
+        count={stripCount}
+        dayAt={dayAt}
+        fill={!filtered}
+        start={cellOf(anchor)}
         current={shown}
         scrollY={listY}
         placement={placement}

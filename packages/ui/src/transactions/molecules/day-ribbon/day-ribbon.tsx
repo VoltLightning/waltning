@@ -28,8 +28,17 @@
  * need `useT()` and a timezone per cell, sixty times a fling.
  */
 
-import { memo, useCallback, useEffect, useMemo, useState } from "react";
-import { type LayoutChangeEvent, View } from "react-native";
+import {
+  createContext,
+  memo,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  useSyncExternalStore,
+} from "react";
+import { type LayoutChangeEvent, type ListRenderItemInfo, View } from "react-native";
 import type { FrameInfo } from "react-native-reanimated";
 import Animated, {
   runOnJS,
@@ -76,10 +85,16 @@ import {
   nearestCell,
   offsetWithin,
   SEEN_LEAD,
+  STRIDE,
   type StripPlacement,
   trackLead,
   trackWidth,
 } from "./scrub.ts";
+
+/** Cells drawn before the first scroll: a band and a half on the widest phone. */
+const INITIAL_CELLS = 16;
+/** The render window, in bands. Wide, for a flick (see the list below). */
+const WINDOW_BANDS = 9;
 
 export type RibbonDay = {
   /** `YYYY-MM-DD`, and the identity of the cell. */
@@ -112,14 +127,21 @@ export type RibbonDay = {
 };
 
 export type DayRibbonProps = {
-  days: readonly RibbonDay[];
   /**
-   * The day the list settled on.
+   * How many days the run holds, and the day each cell stands for.
    *
-   * **It marks a cell; it does not place the strip.** Placing is the scroll's
-   * job now, which is the whole of this rewrite — and the two agree at rest,
-   * because the date is written from where the list came to rest.
+   * **A count and a lookup, not an array** — the run is ten years long
+   * (`ledger-days.ts`'s `ribbonRun`) and the strip is virtualised, so a day is
+   * asked for when its cell is drawn and at no other time. `dayAt` must answer
+   * for cells *past* `count` when `fill` is set: those are the days drawn to
+   * carry the run to the band's right-hand edge.
    */
+  count: number;
+  dayAt: (cell: number) => RibbonDay;
+  /** Whether the run continues past `count` far enough to fill the band. */
+  fill: boolean;
+  /** The cell the strip opens on, so the first window drawn is the right one. */
+  start: number;
   current: string | null;
   /** The list's scroll offset, written by the list's own animated handler. */
   scrollY: SharedValue<number>;
@@ -159,16 +181,50 @@ export type DayRibbonProps = {
  * works. `useCallback` per cell keyed on the date is what makes the memo
  * real, and `day-ribbon.test.tsx` counts the renders rather than trusting it.
  */
-function RibbonCell({
-  day,
-  current,
-  onPickDay,
-}: {
-  day: RibbonDay;
-  current: boolean;
-  onPickDay: (date: string) => void;
-}) {
+/**
+ * The day the list is on, for the cells — **beside the list rather than
+ * through it, and heard only by the cells it concerns.**
+ *
+ * Handed down in `renderItem` it re-made that function on every settle, and a
+ * virtualised list re-renders every cell wrapper it holds when `renderItem`
+ * changes: forty-eight of them per stop, to move one highlight
+ * (`tools/e2e`'s `renders.spec.ts` is what noticed). A plain context would
+ * reach the cells and still wake all of them. Each cell instead subscribes to
+ * one boolean — *is it me?* — so a settle re-renders the day that lost the
+ * mark and the day that gained it, and nothing else.
+ */
+type CurrentDayStore = {
+  read: () => string | null;
+  write: (date: string | null) => void;
+  subscribe: (heard: () => void) => () => void;
+};
+
+function currentDayStore(initial: string | null): CurrentDayStore {
+  let value = initial;
+  const hearers = new Set<() => void>();
+  return {
+    read: () => value,
+    write: (date) => {
+      if (date === value) return;
+      value = date;
+      for (const heard of hearers) heard();
+    },
+    subscribe: (heard) => {
+      hearers.add(heard);
+      return () => {
+        hearers.delete(heard);
+      };
+    },
+  };
+}
+
+const CurrentDay = createContext<CurrentDayStore>(currentDayStore(null));
+
+function RibbonCell({ day, onPickDay }: { day: RibbonDay; onPickDay: (date: string) => void }) {
   const date = day.date;
+  const store = useContext(CurrentDay);
+  const isCurrent = useCallback(() => store.read() === date, [store, date]);
+  const current = useSyncExternalStore(store.subscribe, isCurrent, isCurrent);
   const press = useCallback(() => onPickDay(date), [onPickDay, date]);
   return (
     <DayCell
@@ -187,32 +243,61 @@ function RibbonCell({
 
 const MemoRibbonCell = memo(RibbonCell);
 
-/**
- * The days that fit — every loaded day, and as many of the days past today as
- * the measured band has room for.
- *
- * **A band of zero draws none of them**, which is correct rather than cautious:
- * before `onLayout` has answered there is no right answer, and sixteen cells
- * placed against a width of nothing would all be in the same place.
- */
-export function cellsFor(days: readonly RibbonDay[], band: number): readonly RibbonDay[] {
-  const room = aheadCount(band);
-  const out: RibbonDay[] = [];
-  let drawn = 0;
-  // `days` is earliest-first, so the invented days are the tail of it.
-  for (const day of days) {
-    if (day.generated === true) {
-      if (drawn >= room) break;
-      drawn += 1;
-    }
-    out.push(day);
-  }
-  return out;
+/** The cells, as the list wants them: their own indices. */
+function indices(total: number): readonly number[] {
+  return Array.from({ length: total }, (_, cell) => cell);
 }
 
-function DayRibbonView({ days, current, scrollY, placement, onPickDay, onTick }: DayRibbonProps) {
+const keyOf = (cell: number): string => String(cell);
+
+/** Fixed cells, so the list never measures one — and can open anywhere. */
+const layoutOf = (
+  _data: ArrayLike<number> | null | undefined,
+  index: number,
+): { length: number; offset: number; index: number } => ({
+  length: STRIDE,
+  offset: STRIDE * index,
+  index,
+});
+
+/**
+ * The first cell of the first window drawn.
+ *
+ * **Half a window before the day the strip opens on**, because the ring is in
+ * the middle of the band: opened *on* that day, the list draws it and the days
+ * after it, and the half of the band to its left is blank track until the
+ * first scroll event widens the window.
+ */
+export function opensOn(start: number, total: number): number {
+  if (total <= 0) return 0;
+  const first = start - INITIAL_CELLS / 2;
+  const last = total - 1;
+  return first < 0 ? 0 : first > last ? last : first;
+}
+
+function Gap() {
+  return <View style={GAP_STYLE} />;
+}
+const GAP_STYLE = { width: GAP };
+
+/**
+ * The strip itself — **everything but the day the list is on.** That one prop
+ * changes on every settle, and a list that takes it re-renders every wrapper
+ * it holds to move one highlight; so the strip below never sees it, and
+ * `DayRibbonView` hands it to the cells directly (`CurrentDay`).
+ */
+function StripView({
+  count: held,
+  dayAt,
+  fill,
+  start,
+  scrollY,
+  placement,
+  onPickDay,
+  onTick,
+}: Omit<DayRibbonProps, "current">) {
   const styles = useStyles();
-  const scroller = useAnimatedRef<Animated.ScrollView>();
+  const scroller = useAnimatedRef<Animated.FlatList<number>>();
   /**
    * The band's own width, twice.
    *
@@ -458,13 +543,12 @@ function DayRibbonView({ days, current, scrollY, placement, onPickDay, onTick }:
       listRest.value = afterRest;
       if (listMoved) landing.value = -1;
       /*
-      **A state, not a crossing — and the crossing was a real defect.** The
-      settle writes the date, which moves the anchor, and the strip's run is
-      clipped around the anchor (`RIBBON_REACH`) — so every cell index shifts
-      a frame later. Landing once, on the crossing, latched a cell that then
-      meant a different day: the e2e spec caught the ring a day *past*
-      Calendar, having fixed it being a day behind. Recomputed while at rest,
-      the land follows the re-index and settles where it belongs.
+      **A state, not a crossing.** The cell a day stands for can change
+      under a strip at rest — under a search the strip is the matched days,
+      and the run's origin moves after a jump behind it — and a land latched
+      once, on the crossing, then meant a different day: the e2e spec caught
+      the ring a day *past* Calendar, having fixed it being a day behind.
+      Recomputed while at rest, the land follows the re-index.
     */
       if (afterRest.still >= SETTLE_MS) {
         const cell = markOf(scrollY.value, here.tops, here.marks);
@@ -590,23 +674,43 @@ function DayRibbonView({ days, current, scrollY, placement, onPickDay, onTick }:
     [at, count, hold, rest, shown, ticked, width],
   );
 
-  const cells = useMemo(() => cellsFor(days, band), [days, band]);
+  const total = held + (fill ? aheadCount(band) : 0);
+  const cells = useMemo(() => indices(total), [total]);
   // Both ends, so every cell can reach the ring — see `trackLead`.
-  const track = useMemo(
-    () => [styles.track, { paddingHorizontal: trackLead(band) }],
-    [styles.track, band],
-  );
+  const track = useMemo(() => ({ paddingHorizontal: trackLead(band) }), [band]);
   useEffect(() => {
-    count.value = cells.length;
-  }, [cells.length, count]);
+    count.value = total;
+  }, [total, count]);
+  const renderCell = useCallback(
+    ({ item }: ListRenderItemInfo<number>) => {
+      return <MemoRibbonCell day={dayAt(item)} onPickDay={onPickDay} />;
+    },
+    [dayAt, onPickDay],
+  );
   // The ring sits in the middle of the band, always. Computed rather than
   // centred by layout because it is drawn over a scroller, not in it.
   const ring = useMemo(() => [styles.ring, { left: band / 2 - CELL / 2 }], [styles.ring, band]);
 
   return (
     <View style={styles.frame}>
-      <Animated.ScrollView
+      {/*
+        **A virtualised list, because the run is ten years long** and a dozen
+        cells of it are ever on screen. Fixed cells (`layoutOf`) are what let
+        it open on `start` without drawing its way there, and the window is
+        wide because a flick along the strip covers a month in a breath — a
+        narrow one shows blank track under the ring.
+      */}
+      <Animated.FlatList
         ref={scroller}
+        data={cells}
+        renderItem={renderCell}
+        keyExtractor={keyOf}
+        getItemLayout={layoutOf}
+        ItemSeparatorComponent={Gap}
+        initialScrollIndex={opensOn(start, total)}
+        initialNumToRender={INITIAL_CELLS}
+        windowSize={WINDOW_BANDS}
+        maxToRenderPerBatch={INITIAL_CELLS}
         onLayout={measure}
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -623,16 +727,7 @@ function DayRibbonView({ days, current, scrollY, placement, onPickDay, onTick }:
         // by one — a keyboard reader reaches a date through the picker, which
         // is a grid and says so.
         accessibilityRole="list"
-      >
-        {cells.map((day) => (
-          <MemoRibbonCell
-            key={day.date}
-            day={day}
-            current={day.date === current}
-            onPickDay={onPickDay}
-          />
-        ))}
-      </Animated.ScrollView>
+      />
       {/*
         **Drawn over the strip and after it, so it is never under a cell.**
         `pointerEvents="none"` because it is a mark, not a target: the cell
@@ -641,6 +736,19 @@ function DayRibbonView({ days, current, scrollY, placement, onPickDay, onTick }:
       */}
       {band > 0 ? <View pointerEvents="none" style={ring} /> : null}
     </View>
+  );
+}
+
+const Strip = memo(StripView);
+
+function DayRibbonView({ current, ...strip }: DayRibbonProps) {
+  // Made once with the day it opens on, so the first paint is already marked.
+  const [currentDay] = useState(() => currentDayStore(current));
+  useEffect(() => currentDay.write(current), [currentDay, current]);
+  return (
+    <CurrentDay.Provider value={currentDay}>
+      <Strip {...strip} />
+    </CurrentDay.Provider>
   );
 }
 
@@ -665,7 +773,7 @@ const useStyles = makeStyles((theme) => ({
    * `trackLead(band)` so the first and last cells can reach the middle of the
    * band — a measured number, applied in the component.
    */
-  track: { flexDirection: "row", gap: GAP },
+
   /**
    * The permanent mark: an accent edge around the middle of the band.
    *

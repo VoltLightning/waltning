@@ -87,6 +87,12 @@ test("a scroll coming to rest re-renders no cell and no navigator", async ({ pag
   const settle = await read(page);
 
   expect(cellsIn(settle), "no list cell hears about a settle").toBe(0);
+  // The strip is a list too, and the day it marks changes on a settle: the day
+  // that lost the mark and the day that gained it, and not the list around them.
+  expect(settle.renders["RibbonCell"] ?? 0, "two strip cells, not the strip").toBeLessThanOrEqual(
+    2,
+  );
+  expect(settle.renders["StripView"] ?? 0).toBe(0);
   expect(navigationIn(settle), "and the route is not written").toBeLessThanOrEqual(1);
   // One commit, with headroom for the first settle's month label.
   expect(settle.commits).toBeLessThanOrEqual(2);

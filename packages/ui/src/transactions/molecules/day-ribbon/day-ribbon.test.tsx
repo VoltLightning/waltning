@@ -1,11 +1,12 @@
 /** @vitest-environment jsdom */
 
 import { render, screen } from "@testing-library/react";
+import { useCallback } from "react";
 import { useSharedValue } from "react-native-reanimated";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, expect, it, vi } from "vitest";
 import { ThemeProvider } from "../../../theme/provider";
 import { light } from "../../../theme/roles.ts";
-import { cellsFor, DayRibbon, type RibbonDay } from "./day-ribbon";
+import { DayRibbon, type RibbonDay } from "./day-ribbon";
 import type { StripPlacement } from "./scrub.ts";
 
 // Count what actually rendered rather than trusting `memo`, which is a hint
@@ -47,6 +48,8 @@ const SOME: RibbonDay = {
   label: "Friday 15 August, 7 850 in, 1 entry",
 };
 const DAYS: readonly RibbonDay[] = [QUIET, HEAVY, SOME];
+/** A cell past the run is never asked for here; the lookup still has to answer. */
+const FALLBACK = QUIET;
 
 /**
  * The component, wired to a list that is not going anywhere.
@@ -70,9 +73,13 @@ function Wired({
 }) {
   const scrollY = useSharedValue(0);
   const placement = useSharedValue<StripPlacement>({ tops: [0], marks: [0] });
+  const dayAt = useCallback((cell: number) => days[cell] ?? FALLBACK, [days]);
   return (
     <DayRibbon
-      days={days}
+      count={days.length}
+      dayAt={dayAt}
+      fill={false}
+      start={0}
       current={current}
       scrollY={scrollY}
       placement={placement}
@@ -163,81 +170,4 @@ it("keeps a flat day neutral — money moved and none of it left", () => {
   };
   draw({ days: [flat], current: "2026-08-16" });
   expect(screen.getByRole("button", { name: /moved between your accounts/ })).toBeTruthy();
-});
-
-describe("how many days past today are drawn", () => {
-  const ahead = (date: string, day: number): RibbonDay => ({
-    date,
-    day,
-    weekday: "M",
-    activity: "none",
-    ahead: true,
-    // **`generated` is the budget, `ahead` is only the ink.** Counting by
-    // `ahead` meant a real transaction dated next week was spent against the
-    // band's room and took every cell after it off the strip.
-    generated: true,
-    label: `${date}, not yet`,
-  });
-  // The supply, which is the screen's ceiling rather than the count.
-  const SUPPLIED: readonly RibbonDay[] = [
-    ...DAYS,
-    ...Array.from({ length: 16 }, (_, i) => ahead(`2026-08-${16 + i}`, 16 + i)),
-  ];
-
-  it("draws as many as the band has room for, and no more", () => {
-    // 390 is the phone: three loaded days, and four quiet ones to carry the
-    // run to the right-hand edge.
-    const drawn = cellsFor(SUPPLIED, 390);
-    expect(drawn.filter((d) => d.generated === true)).toHaveLength(4);
-    // Every loaded day survives, whatever the band.
-    expect(drawn.filter((d) => d.generated !== true)).toHaveLength(DAYS.length);
-  });
-
-  it("draws more of them on a wider band", () => {
-    const narrow = cellsFor(SUPPLIED, 320).length;
-    const wide = cellsFor(SUPPLIED, 768).length;
-    expect(wide).toBeGreaterThan(narrow);
-  });
-
-  it("draws none of them before the band is measured", () => {
-    // Sixteen cells placed against a width of nothing are sixteen cells in one
-    // place. No answer beats a wrong one for the one frame before `onLayout`.
-    expect(cellsFor(SUPPLIED, 0)).toEqual(DAYS);
-  });
-
-  it("never runs out of supply before it runs out of band", () => {
-    // The screen supplies a ceiling; if the band ever wants more than that,
-    // the strip stops short of its own edge and the ring sits at the end of a
-    // run that appears truncated — the defect the ahead days exist to fix.
-    const drawn = cellsFor(SUPPLIED, 1024);
-    expect(drawn.filter((d) => d.generated === true).length).toBeLessThan(16);
-  });
-  it("never drops a real day, however far ahead it is dated", () => {
-    // A transaction dated next week is a row the ledger holds — quieter in
-    // ink, because it is after today, but not expendable. Counted against the
-    // band's room it was dropped, and every cell after it with it.
-    const future: RibbonDay = {
-      date: "2026-08-20",
-      day: 20,
-      weekday: "T",
-      activity: "some",
-      direction: "out",
-      ahead: true,
-      label: "Thursday 20 August, 1 entry",
-    };
-    const drawn = cellsFor(
-      [
-        ...DAYS,
-        future,
-        ...Array.from({ length: 16 }, (_, i) =>
-          ahead(`2026-09-${String(i + 1).padStart(2, "0")}`, i + 1),
-        ),
-      ],
-      390,
-    );
-    expect(
-      drawn.some((d) => d.date === "2026-08-20"),
-      "the real day survived",
-    ).toBe(true);
-  });
 });

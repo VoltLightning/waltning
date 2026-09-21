@@ -65,7 +65,7 @@ describe("what a day is worth", () => {
     );
     const cells = daysOf(grid);
     // The 4th is `heavy` because it is the only day and therefore the largest —
-    // the same construction `ribbonDays` uses. What matters here is the 5th: a
+    // the same construction `ribbonMarks` uses. What matters here is the 5th: a
     // day the ledger has nothing for is `none`, drawn by the absence of a mark
     // rather than by a mark saying zero.
     expect(cells.find((c) => c.day === 4)?.activity).toBe("heavy");
