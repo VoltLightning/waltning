@@ -54,7 +54,8 @@ import type {
   KeyboardMetrics,
   PlatformOSType,
 } from "react-native";
-import { Keyboard, Platform, useWindowDimensions } from "react-native";
+import { Dimensions, Keyboard, Platform, StatusBar, useWindowDimensions } from "react-native";
+import { useWindowInsets } from "./safe-area";
 
 /**
  * Whether the keyboard covers the window rather than the window shrinking to
@@ -89,23 +90,53 @@ export function keyboardEvents(os: PlatformOSType): {
     : { show: "keyboardDidShow", hide: "keyboardDidHide" };
 }
 
+/** What the device says about its own geometry, in points. */
+export type DeviceFrame = {
+  /** `Dimensions.get("screen")` — the whole display. */
+  screenHeight: number;
+  /** `Dimensions.get("window")` — which may or may not include the system bars. */
+  windowHeight: number;
+  /** The status bar, which is where a window that gave the bars up begins. */
+  statusBar: number;
+  /** The safe-area inset at the bottom: non-zero exactly when the layout runs under the navigation bar. */
+  bottomInset: number;
+};
+
 /**
- * How much of the window a keyboard event covers — **from `screenY`, not from
+ * Where the app's layout ends, in **screen** coordinates — the one number a
+ * keyboard's `screenY` can be taken from.
+ *
+ * **`window.height` is not it, and an emulator is what said so.** On a Pixel
+ * the window metrics were 876 of a 952pt screen — the display less both system
+ * bars — while the layout ran from under the status bar to the very bottom of
+ * the screen, 900pt, because the navigation bar is translucent and the app
+ * draws under it. `876 − screenY` came up 76pt short: on *Add*, exactly one
+ * Save button, hidden behind the keyboard it was supposed to be riding.
+ *
+ * The layout reaches the bottom of the screen when it draws under the
+ * navigation bar — which is what a non-zero bottom inset *means* — or when the
+ * window already is the screen (edge-to-edge, and iOS). Otherwise it ends where
+ * the window does, which starts under the status bar.
+ */
+export function layoutBottomOnScreen(device: DeviceFrame): number {
+  if (device.bottomInset > 0 || device.windowHeight >= device.screenHeight) {
+    return device.screenHeight;
+  }
+  return device.statusBar + device.windowHeight;
+}
+
+/**
+ * How much of the layout a keyboard event covers — **from `screenY`, not from
  * `height`**, because those are two different numbers on Android and this has
  * to be the same quantity `KeyboardAvoidingView` lifts by.
- *
- * `KeyboardAvoidingView` computes its lift as `frame.y + frame.height −
- * keyboardFrame.screenY`. `ReactRootView.java` builds the two fields from
- * different inset sets: `height` is `ime().bottom − systemBars().bottom`,
- * explicitly net of the navigation bar, while `screenY` is the visible
- * frame's own bottom edge. So on Android a cap that shrank by `height` while
- * the lift moved by `screenY` under-shrank by the navigation-bar inset, and
- * §5.1's 170px top offset silently became 170 − N — 122 on a Pixel with
- * three-button navigation. On iOS the two agree for a docked keyboard, so
- * this is the same number there and the right one on both.
+ * `ReactRootView.java` builds the two fields from different inset sets:
+ * `height` is `ime().bottom − systemBars().bottom`, explicitly net of the
+ * navigation bar, while `screenY` is the visible frame's own bottom edge. So a
+ * cap that shrank by `height` under-shrank by the navigation-bar inset wherever
+ * the layout runs under that bar. On iOS the two agree for a docked keyboard.
  */
-export function keyboardHeightFrom(frameHeight: number, keyboard: KeyboardMetrics): number {
-  return Math.max(0, frameHeight - keyboard.screenY);
+export function keyboardHeightFrom(device: DeviceFrame, keyboard: KeyboardMetrics): number {
+  return Math.max(0, layoutBottomOnScreen(device) - keyboard.screenY);
 }
 
 /** This platform's answers, resolved once. */
@@ -121,25 +152,52 @@ export const KEYBOARD_AVOIDANCE = keyboardAvoidance(Platform.OS);
  * subscription behind it, so a component reading it once renders correctly
  * only if it happens to re-render at the right moment.
  */
-export function useKeyboardHeight(): number {
-  const [height, setHeight] = useState(0);
+/** Both halves of what a layout needs to know about the keyboard. */
+export type KeyboardCover = {
+  /** How much of the layout it covers, in points. Zero with it away. */
+  height: number;
+  /** Its top edge in **screen** coordinates, or `null` with it away. */
+  top: number | null;
+};
+
+const AWAY: KeyboardCover = { height: 0, top: null };
+
+export function useKeyboard(): KeyboardCover {
+  const [cover, setCover] = useState(AWAY);
   const frame = useWindowDimensions();
-  const frameHeight = frame.height;
+  const windowHeight = frame.height;
+  // **The window's inset, not the slot's.** The tab shell hands its slot a zero
+  // bottom, and a zero bottom here reads as *the layout stops at the
+  // navigation bar* — which is a fact about the device, not about the slot.
+  const bottomInset = useWindowInsets().bottom;
 
   useEffect(() => {
     if (!KEYBOARD_OVERLAPS_WINDOW) return;
     const { show, hide } = keyboardEvents(Platform.OS);
     const shown = Keyboard.addListener(show, (event) => {
-      setHeight(keyboardHeightFrom(frameHeight, event.endCoordinates));
+      const device = {
+        screenHeight: Dimensions.get("screen").height,
+        windowHeight,
+        statusBar: StatusBar.currentHeight ?? 0,
+        bottomInset,
+      };
+      setCover({
+        height: keyboardHeightFrom(device, event.endCoordinates),
+        top: event.endCoordinates.screenY,
+      });
     });
-    const hidden = Keyboard.addListener(hide, () => setHeight(0));
+    const hidden = Keyboard.addListener(hide, () => setCover(AWAY));
     return () => {
       shown.remove();
       hidden.remove();
     };
-  }, [frameHeight]);
+  }, [windowHeight, bottomInset]);
 
-  return height;
+  return cover;
+}
+
+export function useKeyboardHeight(): number {
+  return useKeyboard().height;
 }
 
 /**

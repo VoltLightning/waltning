@@ -101,9 +101,15 @@
  * spreads the values onto the list's own `contentContainerStyle`.
  */
 
+import { useRef } from "react";
 import { Text, View } from "react-native";
 import Animated, { type useAnimatedScrollHandler } from "react-native-reanimated";
 import { Tag } from "../../../primitives/atoms/tag";
+import {
+  CONTENT_TOP_MARK_PROPS,
+  KEYBOARD_SCROLL_PROPS,
+  useKeyboardRoom,
+} from "../../../primitives/keyboard-room.ts";
 import { pageScrollProps } from "../../../primitives/nested-scroll.ts";
 import { useSafeArea } from "../../../primitives/safe-area";
 import { text } from "../../../theme/fonts.ts";
@@ -202,6 +208,10 @@ export function GroundPanel({
   const styles = useStyles();
   const insets = useSafeArea();
   const floatClearance = useFloatingClearance();
+  const panel = useRef<View>(null);
+  const scroller = useRef<Animated.ScrollView>(null);
+  const contentTop = useRef<View>(null);
+  const room = useKeyboardRoom(panel, scroller, contentTop);
 
   if (scroll === "own") {
     // **No gutter and no bottom clearance here.** Both belong to the scroller
@@ -219,25 +229,25 @@ export function GroundPanel({
   const clearance = {
     paddingLeft: gutter + insets.left,
     paddingRight: gutter + insets.right,
-    paddingBottom: gutter + deviceBottom + (clearBottom ? floatClearance : 0),
+    // `room`: what the keyboard covers of *this* scroller, so the last field
+    // can be brought above it (`primitives/keyboard-room.ts`).
+    paddingBottom: gutter + deviceBottom + (clearBottom ? floatClearance : 0) + room,
   };
 
   return (
-    <View style={styles.panel}>
+    <View ref={panel} collapsable={false} style={styles.panel}>
       <Animated.ScrollView
         testID="ground-panel-scroll"
         onScroll={onScroll}
         // 16ms: the header derives its shape from this, and a default of 0
         // reports once per gesture — a header that jumps when the finger lifts.
         scrollEventThrottle={16}
+        {...KEYBOARD_SCROLL_PROPS}
         {...pageScrollProps(styles.scroll)}
         contentContainerStyle={[styles.scrollContent, clearance]}
-        keyboardShouldPersistTaps="handled"
-        keyboardDismissMode="on-drag"
-        // iOS-only; harmless elsewhere (`react-native`'s own contract for a
-        // prop a platform does not implement).
-        automaticallyAdjustKeyboardInsets
+        ref={scroller}
       >
+        <View ref={contentTop} {...CONTENT_TOP_MARK_PROPS} />
         {children}
       </Animated.ScrollView>
     </View>

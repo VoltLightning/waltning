@@ -37,7 +37,7 @@ function UnderTheTabShell({
  */
 let keyboardHeight = 0;
 const dismissKeyboard = vi.fn();
-vi.mock("../../keyboard.ts", () => ({
+vi.mock("../../../primitives/keyboard.ts", () => ({
   useKeyboardHeight: () => keyboardHeight,
   dismissKeyboard: () => dismissKeyboard(),
   // `"padding"` rather than `undefined`: the height and the behaviour are one

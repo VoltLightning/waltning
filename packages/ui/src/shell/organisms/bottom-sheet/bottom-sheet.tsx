@@ -105,13 +105,13 @@ import { useCallback, useMemo, useState } from "react";
 import { Modal, Pressable, Text, useWindowDimensions, View } from "react-native";
 import { useT } from "../../../i18n/provider";
 import { Button } from "../../../primitives/atoms/button/button";
+import { dismissKeyboard, useKeyboardHeight } from "../../../primitives/keyboard.ts";
 import { containOverscroll } from "../../../primitives/nested-scroll.ts";
 import { useWindowInsets } from "../../../primitives/safe-area";
 import { SheetInputProvider } from "../../../primitives/sheet-input";
 import { text } from "../../../theme/fonts.ts";
 import { makeStyles } from "../../../theme/styles.ts";
 import { focus, radius, space, touchTarget } from "../../../tokens.ts";
-import { dismissKeyboard, useKeyboardHeight } from "../../keyboard.ts";
 import { sheetBottomInset, sheetMaxHeight } from "../../sheet-geometry.ts";
 
 export type BottomSheetProps = {

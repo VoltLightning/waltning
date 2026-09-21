@@ -12,6 +12,37 @@ One codebase via Expo + React Native Web (`SPEC.md` §14.6).
 | Keyboard | J/K/A/R/S/T on import review is web-only; mobile uses swipe |
 | Haptics | Approve, Save, Undo on native; no-op on web |
 | Safe area | The app reads the device once and provides four numbers; `packages/ui` renders numbers and imports no safe-area library |
+| Soft keyboard | **Everything stays reachable with it up** — see below. One module (`primitives/keyboard.ts`, `keyboard-room.ts`); iOS keeps the platform's own scroll-view inset, Android is given the same thing by measurement, the web's window really does shrink and needs neither |
+
+**With the keyboard up, everything is still reachable.** On a phone the
+keyboard *covers* the window rather than shrinking it, on both platforms, so a
+layout that does nothing has its lower half behind it. Four rules, each found
+on a device rather than reasoned out:
+
+- **A scroller holding a field gets the keyboard's *overlap* as room**, and the
+  focused field is brought above the keyboard with air under it. The overlap,
+  not the keyboard's height: a scroller whose bottom edge a footer or a sheet
+  has already lifted is covered by less, or by nothing.
+- **A drag never dismisses the keyboard.** `on-drag` put it away on the first
+  point of any scroll, so a field behind the keyboard could not be scrolled to
+  *while typing* — the only time it matters. It is dismissed by its own
+  control, by a tap on bare page, or on iOS by dragging it down.
+- **A bottom-anchored action rides the keyboard.** *Save* on Add and *Move
+  money* on Transfer sit on its top edge, the home-indicator inset dropped
+  while it is up.
+- **A popover places itself in the room the keyboard leaves**, so a searchable
+  `Select`'s options are never the thing behind it.
+
+**Two coordinate spaces, and a window height that is not the layout's.** A
+keyboard event speaks in *screen* coordinates; `measureInWindow` answers in the
+*window's*. Where the window sits between the system bars they differ by the
+status bar — 52pt on a phone with a camera cut-out. And `Dimensions`' window
+height excludes the navigation bar even where the app draws under it, so
+`window − screenY` under-measures the cover by that bar. The cover is measured
+from where the layout actually ends (`layoutBottomOnScreen`); anything compared
+against a measured view is first moved into the window's space
+(`windowTopOnScreen`). Both are pure functions with the device's own numbers in
+their tests.
 
 **The device's chrome is a value, not a read.** A status bar is 24 on Android
 and 59 on an iPhone with a Dynamic Island, and the shell's clearance was a

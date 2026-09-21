@@ -74,6 +74,7 @@ import { useLocale, useT } from "../../../i18n/provider";
 import { PressableScaled } from "../../../primitives/atoms/pressable-scaled/pressable-scaled";
 import { Tag } from "../../../primitives/atoms/tag";
 import { useInteraction } from "../../../primitives/interaction.ts";
+import { KEYBOARD_SCROLL_PROPS } from "../../../primitives/keyboard-room.ts";
 import { pageScrollProps } from "../../../primitives/nested-scroll.ts";
 import { text } from "../../../theme/fonts.ts";
 import { makeStyles } from "../../../theme/styles.ts";
@@ -219,6 +220,13 @@ export function RateTable({ pair, header, footer, contentInset }: RateTableProps
       // header and footer riding inside this list rather than beside it is the
       // whole shape, and `getByText` at document scope cannot tell them apart.
       testID="rate-table"
+      // The screen's own fields live in `header`, so this list is what a tap
+      // has to reach past an open keyboard — the same props `GroundPanel` sets
+      // on the page scroller it is standing in for here. Never `on-drag`: the
+      // list could not be scrolled while the range was being typed
+      // (`primitives/keyboard-room.ts`). The fields are at the top of the
+      // list, so they need no room made under them.
+      {...KEYBOARD_SCROLL_PROPS}
       // This list *is* the screen's page (`header` and `footer` ride inside
       // it), so it takes the page's props and its gutter goes on the
       // *content*: a padded `View` around it would clip the bar 22 pt inside
@@ -226,12 +234,6 @@ export function RateTable({ pair, header, footer, contentInset }: RateTableProps
       // (`shell/ground-inset.ts`).
       {...pageScrollProps(styles.list)}
       contentContainerStyle={contentInset}
-      // The screen's own fields live in `header`, so this list is what a tap
-      // has to reach past an open keyboard — the same two props `GroundPanel`
-      // sets on the page scroller it is standing in for here.
-      keyboardShouldPersistTaps="handled"
-      keyboardDismissMode="on-drag"
-      automaticallyAdjustKeyboardInsets
     />
   );
 }
