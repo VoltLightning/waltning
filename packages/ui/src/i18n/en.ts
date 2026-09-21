@@ -75,6 +75,12 @@ export const en = {
     previousMonth: "Previous month",
     nextMonth: "Next month",
     useThisDate: "Use this date",
+    pickATime: "Pick a time",
+    useThisTime: "Use this time",
+    now: "Now",
+    noTime: "No time",
+    hours: "Hours",
+    minutes: "Minutes",
     /** `DateField`'s second shortcut chip. The first reuses `shell.today`. */
     yesterday: "Yesterday",
     /**
@@ -363,6 +369,9 @@ export const en = {
     more: "More",
     date: "Date",
     invalidDate: "Not a valid date (YYYY-MM-DD).",
+    invalidTime: "Not a valid time (HH:MM, 24-hour).",
+    time: "Time",
+    timeHint: "Only if it matters to you. It changes nothing but the order within the day.",
     /**
      * L-b — `zAccountingDate`'s calendar refusal, in the reader's language.
      *
@@ -499,7 +508,7 @@ export const en = {
     intoAccount: "Into",
     person: "Person",
     moreDetails: "More details",
-    moreDetailsHint: "Payee, date, scope, person",
+    moreDetailsHint: "Payee, date, time, scope, person",
     notePlaceholder: "A note, if you want one",
     savedOnPhone: "Saved on your phone — syncs when you're back online",
     saveExpense: "Save expense",

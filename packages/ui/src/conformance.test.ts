@@ -64,7 +64,7 @@ const INTERACTIVE = /\b(?:Pressable(?:Scaled)?|(?:SheetAware)?TextInput)\b/;
  * An exact count is the only guard that catches a census halving. Raise it
  * when a component is added; a *drop* is the bug this exists for.
  */
-const INTERACTIVE_COUNT = 57;
+const INTERACTIVE_COUNT = 58;
 
 /**
  * **Components that forward interactivity rather than owning it.** Both rules
@@ -186,7 +186,10 @@ describe("the focus ring, on every interactive element (§2.6)", () => {
    * this rule greps for the string `focus.` and a token spent to quiet a grep
    * is precisely the comfortable lie the entry above was written about.
    */
-  const RING_BELONGS_TO_CHILDREN = new Set(["date-picker.tsx"]);
+  // `time-picker.tsx` is the date sheet's twin: its own `Pressable` is the
+  // backdrop, and every focusable thing in it is a `Chip`, a `Wheel` or a
+  // `Button`, each of which draws its own ring.
+  const RING_BELONGS_TO_CHILDREN = new Set(["date-picker.tsx", "time-picker.tsx"]);
 
   it("is never omitted", () => {
     // "Never removed, never replaced by a colour change alone." A colour-only

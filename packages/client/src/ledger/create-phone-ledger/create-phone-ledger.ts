@@ -1135,6 +1135,11 @@ export type QuickAddDraft = {
   /** `AccountingDate`'s shape (`YYYY-MM-DD`), defaulted by the form to today. */
   date: string;
   /**
+   * When in the day it happened (§7.0a) — a bare `HH:MM`, and **absent is the
+   * normal case**: most rows never have one, and none is not midnight.
+   */
+  timeOfDay?: string;
+  /**
    * D4b's chip. **Optional**, not merely defaulted — `QuickAddForm`'s own
    * draft (`quick-add-form.tsx`, structurally distinct from this type) has no
    * payee field at all, and both it and D4b's composer call this same
@@ -3485,6 +3490,7 @@ export function createPhoneLedger(
           amountOriginal: normalized,
           currency: account.currency,
           categoryId: draft.categoryId ?? undefined,
+          ...(draft.timeOfDay === undefined ? {} : { timeOfDay: draft.timeOfDay }),
           payee: draft.payee ?? "",
           note: draft.note,
           isBusiness: draft.isBusiness,

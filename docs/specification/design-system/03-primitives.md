@@ -112,7 +112,7 @@ a filter: *mine* and *ours* show together regardless of scope.
 | `Keypad` | 0–9, comma, delete. Bottom-anchored, thumb-zone (Fitts) |
 | `RateField` | Editable FX rate, 4dp, shows synced value beside the override |
 | `DateField` | Defaults to today; relative shortcuts (yesterday). Opens a `Wheel` on a phone and a month grid on a desk — §3.7a |
-| `TimeField` | A clock time, where something has one. Opens a `Wheel` of hours and minutes — §3.7a |
+| `TimeField` | A clock time, where something has one. **Empty is a value, and the normal one** — a time of day is a description (`SPEC` §7.0a), most rows never have one, and *No time* takes one back off: clearing is not setting midnight. Typed loosely and read strictly (`9:05`, `0930`, `9.30` → `09:30`); *Now* is one tap, from the device's wall clock in its own zone. On a phone it opens a `Wheel` of hours and minutes — §3.7a; on a desk the typed field is the fastest way in and nothing else is offered |
 | `Toggle` | Business / personal, write-a-rule. A toggle is a **state**, not an action — a reader hears "on", not "pressed". The thumb slides at `motion-base`; the track swaps instantly underneath, because two clocks on one control read as the thumb outrunning its own background. The whole labelled row is the target |
 
 ### 3.7a `Wheel` — picking from a cycle
@@ -141,6 +141,18 @@ stays on the 28th. The alternative — remembering the 31 — means the value is
 not what the wheel is showing, and a control whose displayed state is a partial
 truth is the one people stop trusting. The cost is stated rather than argued
 away: passing through a short month rewrites a date that was already chosen.
+
+**A clock is the same drum.** Two columns, hours `00`–`23` and minutes
+`00`–`59`, both wrapping, with a `:` on the banded row between them — so a
+reader who has set a date already knows how to set a time. **Every minute, not
+steps of five**: that was drawn for a schedule, where nobody needs the minute; a
+transaction's time comes off a receipt or off the clock, both of which say
+`12:47`, and a drum that cannot band the row *Now* lands on is showing
+something other than the value. The columns wrap, so sixty is never more than
+thirty detents from anywhere. Above it, *Now* and three landmark times —
+`09:00`, `12:00`, `18:00` — **labelled with the time they set**, because
+*Morning* does not say which minute a tap will write, and four worded chips do
+not fit one row of a phone.
 
 **Relative chips sit above the drum, and go out on their own.** `Today`,
 `Yesterday`, then the two weekdays before them. Tapping one rolls the wheels to
