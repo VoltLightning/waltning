@@ -81,8 +81,10 @@ export function BrandIcon({ brandKey, payee, category, size = 24 }: BrandIconPro
   // gives an unmatched name, derived from the payee rather than the brand.
   const monogram = monogramFor(payee, theme);
   const tint = category ? categoryTintFor(category, theme) : null;
-  const fill = { backgroundColor: tint?.fill ?? monogram.fill };
-  const ink = { color: tint?.ink ?? monogram.ink };
+  // The category's *mark* — its solid, under white — so a row's tile is the
+  // same colour as that category's icon square in the picker.
+  const fill = { backgroundColor: tint?.solid ?? monogram.fill };
+  const ink = { color: tint?.onSolid ?? monogram.ink };
   return (
     <View style={[styles.badge, box, fill]} {...DECORATIVE}>
       <Text style={[styles.mark, ink]} numberOfLines={1}>

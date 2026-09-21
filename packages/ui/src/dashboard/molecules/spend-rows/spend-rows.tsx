@@ -91,7 +91,9 @@ export function SpendRows({ rows, currency, decimals = 2 }: SpendRowsProps) {
     */
     fill: {
       width: `${share(row.amount, widest)}%` as const,
-      backgroundColor: categoryTintFor(row.label, theme).fill,
+      // A bar is the category's *mark*, not its wash: the pale tint is 1.1:1
+      // against the track.
+      backgroundColor: categoryTintFor(row.label, theme).solid,
     },
   }));
 

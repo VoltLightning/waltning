@@ -12,7 +12,7 @@ shell, which stays a deep sage in both themes because it is the single place
 the brand colour is allowed to be a surface.
 
 Money's two event colours are *not* the brand: `income` is a livelier green
-than `accent` and `spend` a warm, restrained red, and both hold their meaning
+than `accent` and `spend` a true, vivid red, and both hold their meaning
 whatever the chrome around them does.
 
 | Token | Value | Use |
@@ -22,7 +22,7 @@ whatever the chrome around them does.
 | `surface` | `#ffffff` | Cards, sheets, rows |
 | `subtle` | `#f1ebe0` | Table headers, inset boxes, neutral tag fills, the segment track |
 | `track` | `#f1ebe0` | The unfilled part of a money bar — `MonthList`'s two, `FlowBar`'s empty one, `IncomeVsExpenseWidget`'s. **Quiet on purpose**: the fill is the signal and the track is only its room. A lifted track (1.91:1) drew a year of empty months as twelve full-width bars, so a month holding nothing looked like a month holding everything. `income` and `spend` keep **3:1 on it** — 5.25 at the tightest — which is the floor that matters, because the fill is the datum |
-| `income-fill` | `#bccaa9` | `FlowBar`'s track when the month has flow — income as a *field*, where `income` is income as *ink*. The two money colours are the same lightness by design (a figure is told apart by hue), so `spend` on `income` was **1.0045:1** and the bar was one uniform rectangle. `green-300`, so the ramp gives the value. `spend` reads on it at 3.60. **A card fill**: 1.5:1 on `ground`, `surface` and `inset` only — 1.46 on `subtle`, 1.38 on `hover`, 1.28 on `pressed`, so a money bar in a chip or under a finger is a bar this cannot carry |
+| `income-fill` | `#bccaa9` | `FlowBar`'s track when the month has flow — income as a *field*, where `income` is income as *ink*. The two money colours are the same lightness by design (a figure is told apart by hue), so `spend` on `income` was **1.0045:1** and the bar was one uniform rectangle. `green-300`, so the ramp gives the value. `spend` reads on it at 3.75. **A card fill**: 1.5:1 on `ground`, `surface` and `inset` only — 1.46 on `subtle`, 1.38 on `hover`, 1.28 on `pressed`, so a money bar in a chip or under a finger is a bar this cannot carry |
 | `hover` | `#ece5d7` | The fill under a pointer |
 | `pressed` | `#e6ddcb` | The transient fill under a finger |
 | `border` | `#eae3d5` | Card edges and dividers — a boundary between two areas, which WCAG sets no floor for. **Never a control's edge**: at 1.19:1 on `ground` it cannot carry 1.4.11, so an unfilled chip takes `border-interactive` like every other control |
@@ -38,14 +38,14 @@ whatever the chrome around them does.
 | `accent-fill` | `#eef0e6` | A subtle sage fill: a selected segment, a toggled chip. `accent-text` reads on it at 5.8:1 |
 | `accent-fill-border` | `#b9c6ae` | The edge of `accent-fill` |
 | `income` | `#396c2e` | Credits, positive deltas. Deliberately livelier than `accent`: an event, not a control. **Job 3** |
-| `spend` | `#974b35` | Debits, negative balances, rising spend. A warm, restrained red — unmistakable, not alarming |
+| `spend` | `#b91c1c` | Debits, negative balances, rising spend. **A true red, not a terracotta.** It was `#974b35`, *warm and restrained*, and in the hand it read as dim — a brown that had to be looked at to be seen as a minus. Red and a vivid green are the two colours money has everywhere else a reader meets it; the warmth of this product is its grounds and its type, not a muted figure. 4.80 on the tightest page fill, which is more than the terracotta's 4.61 |
 | `green-100` … `green-900` | as below | The data ramp. **Job 4** |
 | `amber` | `#f4ecdf` | Fill — *not finished, or not fully observed* (P4). Never error, never success, never chrome |
 | `amber-ink` | `#77591c` | Text on amber |
 | `amber-border` | `#d9bd75` | Edge of an amber tag or chip |
-| `danger` | `#a33d26` | A destructive action, a refused write. **Never chrome** |
+| `danger` | `#b91c1c` | A destructive action, a refused write. **Never chrome** |
 | `danger-bg` | `#f8e8e2` | Fill behind a danger tag |
-| `danger-solid` | `#a33d26` | **Fill** of a control that destroys (§2.6c). White on it reads 6.46:1 |
+| `danger-solid` | `#b91c1c` | **Fill** of a control that destroys (§2.6c). White on it reads 6.47:1 |
 | `text-on-danger` | `#ffffff` | The label on that fill |
 | `danger-border` | `#c05e37` | Edge of a danger control — an outlined button, an errored input. A control with no fill is identified by its edge, so this carries the same **3:1** floor as `border-interactive`, in the danger hue (3.17 at the tightest of the two themes) |
 | `shell` | `#3c4f38` | The header shell. **One flat colour.** A deep sage at L\* 31 — see below |
@@ -121,12 +121,12 @@ with dark text.
 | `accentFill` | `#2c3226` |
 | `accentFillBorder` | `#46543c` |
 | `income` | `#8fd47c` |
-| `spend` | `#e0937b` |
+| `spend` | `#ff6b5c` |
 | `assertedFill` | `#3a311d` |
 | `assertedText` | `#e6cd8c` |
 | `assertedBorder` | `#8f7a3a` |
 | `dangerFill` | `#3d241c` |
-| `dangerText` | `#f0a28c` |
+| `dangerText` | `#ff8a7d` |
 | `dangerBorder` | `#b36a51` |
 | `dangerSolid` | `#c04a2e` |
 | `textOnDanger` | `#ffffff` |
@@ -174,45 +174,66 @@ as light as the darkest bar drawn on it allows, and the money bars and the
 category bars do not have the same headroom.
 
 **A category is recognised by a colour, and the colour is derived from its
-name.** Six tints — cocoa, teal, indigo, slate, mauve, sky — carrying a
-category across a ledger row's tile, its *Where it went* bar and, later, a
-report's slices, so it is known without being read. **Not the green ramp**,
-which is sequential: one hue at nine lightnesses, built so adjacent slices of a
-stacked bar separate from each other, and unable to carry identity because every
-category would be a shade of the same green.
+name.** Ten hues, carrying a category across a ledger row's tile, its option in
+the picker, its chip on Add and its *Where it went* bar, so it is known without
+being read. **Not the green ramp**, which is sequential: one hue at nine
+lightnesses, built so adjacent slices of a stacked bar separate from each other,
+and unable to carry identity because every category would be a shade of the same
+green.
+
+| Hue | `tint` | `ink` | `solid` | dark `tint` | dark `ink` |
+|---|---|---|---|---|---|
+| amber | `#f9ecdc` | `#8e5310` | `#a56112` | `#47341f` | `#f8c181` |
+| teal | `#dff6f4` | `#206f69` | `#247e78` | `#1f4745` | `#92e8e2` |
+| sky | `#dcedf9` | `#1a6393` | `#1f77b1` | `#1f3747` | `#88c7f2` |
+| indigo | `#dfe2f6` | `#273486` | `#5968cf` | `#1f2447` | `#96a1e9` |
+| rose | `#f7dee6` | `#8c2141` | `#cf3462` | `#471f2b` | `#ed91ad` |
+| plum | `#f1e4f1` | `#723b72` | `#a254a2` | `#432343` | `#d9a1d9` |
+| olive | `#eef4e1` | `#576b29` | `#63792e` | `#3b471f` | `#cbe198` |
+| cocoa | `#f2e9e3` | `#754f38` | `#976649` | `#452e21` | `#dbb59f` |
+| slate | `#e7eaee` | `#475666` | `#60738a` | `#2a323c` | `#aabbcf` |
+| coral | `#f9e2dc` | `#983016` | `#cc401d` | `#47271f` | `#f59b84` |
+
+**Each hue is three things.** A pale **tint with its own ink** — colour as a
+wash: a chip, a group, the option that is chosen. A **solid that carries white**
+— the *mark* a category is spotted by: the icon square on a picker tile, the
+tile on a ledger row, a bar. And the dark theme's pair, a deep fill under a
+bright ink. The solids are one set of values for both themes.
 
 **Hue is identity here, never magnitude.** Length is magnitude and remains so; a
 bar's colour says *which category*, and the two encodings answer different
 questions.
 
-**Derived rather than stored, and that is a decision.** A category has no colour
-column and no icon, so every category gets a stable tint today with no migration
-and no picker; a chosen one can be added later and simply wins over the
-derivation. Folded before hashing, so `Groceries` and `groceries ` are one
-category to the eye and to this.
+**Derived rather than stored, and that is a decision.** Every category gets a
+stable hue today with no migration and no picker; a chosen one can be added
+later and simply wins over the derivation. Folded before hashing, so `Groceries`
+and `groceries ` are one category to the eye and to this.
 
-**Six, and lightness carries what hue cannot.** Green is the accent and
-`income`; yellow is `asserted`'s one meaning; purple this product refuses; and a
-tint within 58 of `spend` in RGB is a tile the colour of the amount beside it.
-Measured across the wheel, that leaves **eight usable hues at any single
-lightness** — five blues and three plums. So the ramp is spread 0.060 → 0.455 in
-relative luminance rather than sitting in one band, and the top is capped there:
-running to 0.579 bought a wider separation and cost the last two steps their
-colour, a pale pink and a near-white tile on a cream ground.
+**It was six muted fills, and it read as mud.** Cocoa, teal, indigo, slate,
+mauve, sky — spread across lightness so that a greyscale screenshot still told
+them apart, with green, yellow, purple and anything near `spend` refused. It was
+defensible on every count and it made every option in a picker the same: browns
+and greys that blended into the cream they sat on. The refusals are lifted for
+*categories* — olive, plum, amber and coral are in — because a category hue is
+never a control, never chrome and never a figure: it cannot be mistaken for the
+accent, for `asserted`, or for an amount, since it is always a wash or a small
+square *beside* a name.
 
-**Three floors, and the third is the one a drawn palette fails.** Each tint
-clears **1.5:1** against all four grounds — cream surface and ground, charcoal
-surface and ground — because a tile is an area and the ramp is one set of values
-for both themes, the same property `chart-ramp` has. Each carries its own ink at
-**4.5:1**, which is §7.2's treemap rule. And each is **1.2:1** from every other
-*in lightness*, because hue alone is not separation: a colourblind reader and a
-greyscale screenshot both see luminance. Measured, the four hues on the boards
-sit 1.0–1.3 apart and three of them fail their ink — one colour wearing four
-names. Ours are 1.21 at the tightest.
+**Never colour alone — that is the guarantee that replaced lightness
+separation.** Pale tints cannot differ in lightness, so two categories may be
+one grey to a colourblind reader or in a greyscale screenshot. What holds
+instead is WCAG 1.4.1 as written: everything tinted carries its **name or its
+letter**, so the hue is a second way to find a category and never the only one.
+A chart that distinguishes slices by hue with no label is therefore not
+something this ramp can carry.
 
-**The ramp skips a band.** A fill between 0.183 and 0.264 relative luminance
-carries neither white nor `green-900` at 4.5, so three tints sit below that gap
-and three above, and each step records which side it is on.
+**Three floors, all of them about reading.** Each `ink` clears **4.5:1** on its
+`tint`, in both themes. White clears **4.5:1** on every `solid`. And every
+`solid` stands **3:1** off the card and the page of both themes, because the
+mark is a graphic (1.4.11). The last two together leave a narrow band — a solid
+must be dark enough for white and light enough to show on a charcoal card,
+0.148–0.183 in relative luminance — and all ten sit at 0.166, which is why they
+read as one family.
 
 ### 2.1a Two floors, and which text gets which
 
@@ -573,9 +594,11 @@ drew *an increase in spend* in `danger-text`, which is red meaning *this was
 refused* on a figure that means *this went out*. Two reds a reader cannot tell
 apart, separated only by carrier, and the carrier was wrong. It is `spend`.
 
-`spend` is deliberately the quietest of them — *unmistakable, not alarming*
-(§2.1) — because money leaves an account all day and a ledger that alarms every
-time is a ledger nobody opens.
+`spend` shares its hue with the other two and is kept from alarming by its
+**carrier**, not by being dimmed: it is only ever a figure or a small data mark,
+never a fill, an edge or a sentence. Money leaves an account all day, and what
+keeps a ledger from shouting is that a red *number* is the most ordinary thing
+in it — a dimmed one was only harder to read.
 
 **The escape is never the loudest thing on the screen.** *Cancel*, *Not now*,
 the ✕ — these back out of something; they destroy nothing. Painting an escape
@@ -598,8 +621,8 @@ competing for that. It is the loudest thing in its pair because it is the thing
 that cannot be undone.
 
 **`danger-solid` is two values, and the second is the interesting one.**
-`#a33d26` carries white at 6.46:1 and stands 6.46:1 off a light card, but only
-**2.4511:1** off a dark one — under the 3:1 a control identified by its own fill
+`#b91c1c` carries white at 6.47:1 and stands 6.47:1 off a light card, but only
+**2.45:1** off a dark one — under the 3:1 a control identified by its own fill
 needs. The dark half is lifted to `#c04a2e`: 3.21:1 off `surface`, still 4.93:1
 under white. The band between those two floors is **4.4 points of L\***, not the thirty an
 earlier draft of this paragraph claimed: the dark value must sit between L\*

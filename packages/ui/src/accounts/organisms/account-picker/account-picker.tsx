@@ -54,12 +54,15 @@ import { Button } from "../../../primitives/atoms/button/button";
 import { SearchField } from "../../../primitives/atoms/search-field/search-field";
 import { Tag } from "../../../primitives/atoms/tag";
 import { useInteraction } from "../../../primitives/interaction.ts";
+import { type HueName, hueNamed } from "../../../primitives/monogram.ts";
 import { nestedScrollProps } from "../../../primitives/nested-scroll.ts";
 import { usePressScale } from "../../../primitives/press-scale.ts";
 import { BottomSheet } from "../../../shell/organisms/bottom-sheet/bottom-sheet";
+import { CreditCardIcon, CurrencyCircleDollarIcon, HouseIcon } from "../../../shell/phosphor";
 import { EmptyState } from "../../../states/organisms/empty-state/empty-state";
 import { focusBorder } from "../../../theme/focus.ts";
 import { text } from "../../../theme/fonts.ts";
+import { useTheme } from "../../../theme/provider";
 import { makeStyles } from "../../../theme/styles.ts";
 import { radius, space, touchTarget } from "../../../tokens.ts";
 
@@ -311,9 +314,35 @@ type AccountTileProps = {
 };
 
 /** One cell of the two-column grid — `role="radio"` inside its section's `radiogroup`. */
+/**
+ * **A kind has a hue and a mark** (`02-tokens` §2.1), so a bank account, a card
+ * and cash are told apart before their names are read. Five white tiles with a
+ * name and a balance each were one tile five times.
+ */
+const KIND_HUE: Record<AccountKind, HueName> = {
+  cash: "amber",
+  bank: "sky",
+  card: "indigo",
+  loan_receivable: "teal",
+  loan_payable: "rose",
+  clearing: "slate",
+  investment: "plum",
+  deposit: "olive",
+  other: "cocoa",
+};
+
+function KindMark({ kind, color }: { kind: AccountKind; color: string }) {
+  if (kind === "card") return <CreditCardIcon size={18} color={color} />;
+  if (kind === "bank" || kind === "deposit") return <HouseIcon size={18} color={color} />;
+  return <CurrencyCircleDollarIcon size={18} color={color} />;
+}
+
 function AccountTile({ account, selected, machineFilled, caption, onPick }: AccountTileProps) {
   const t = useT();
   const styles = useStyles();
+  const theme = useTheme();
+  const tint = useMemo(() => hueNamed(KIND_HUE[account.kind], theme), [account.kind, theme]);
+  const wash = useMemo(() => ({ backgroundColor: tint.fill }), [tint]);
   const { hovered, focused, handlers } = useInteraction();
   const press = usePressScale();
   const handlePress = useCallback(() => onPick(account.id), [account.id, onPick]);
@@ -338,16 +367,22 @@ function AccountTile({ account, selected, machineFilled, caption, onPick }: Acco
           focused ? styles.focused : null,
         ]}
       >
-        <Text
-          style={[
-            styles.cellName,
-            selected ? styles.cellNameSelected : null,
-            account.capturable ? null : styles.cellNameMuted,
-          ]}
-          numberOfLines={1}
-        >
-          {account.name}
-        </Text>
+        <View style={styles.cellHead}>
+          <View style={[styles.cellMark, wash]}>
+            <KindMark kind={account.kind} color={tint.ink} />
+          </View>
+          <Text
+            style={[
+              styles.cellName,
+              styles.cellNameBeside,
+              selected ? styles.cellNameSelected : null,
+              account.capturable ? null : styles.cellNameMuted,
+            ]}
+            numberOfLines={1}
+          >
+            {account.name}
+          </Text>
+        </View>
         <View style={styles.cellMeta}>
           <Text style={styles.cellCurrency}>{account.currency}</Text>
           {account.balance === undefined ? null : (
@@ -383,6 +418,15 @@ const useStyles = makeStyles((theme) => ({
   // `CategorySheet`'s own leaf grid uses.
   grid: { flexDirection: "row", flexWrap: "wrap", gap: space.md },
   cellWrap: { width: "48%" },
+  cellHead: { flexDirection: "row", alignItems: "center", gap: space.md },
+  cellMark: {
+    width: 30,
+    height: 30,
+    borderRadius: radius.sm,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  cellNameBeside: { flex: 1 },
   cell: {
     minHeight: touchTarget.min,
     gap: space.xs,
