@@ -242,5 +242,7 @@ const useStyles = makeStyles((theme) => ({
   },
   // The tabs' own hairline runs edge to edge; the field sits inside the same
   // gutter every other row of the chrome does, with room under it.
-  search: { paddingBottom: space.xs },
+  // A box now, so it needs the room a box needs: `xs` was the gap under a
+  // line of text, and it set the field's edge against the page below it.
+  search: { paddingTop: space.md, paddingBottom: space.x2 },
 }));

@@ -10,10 +10,12 @@
  * `AccessibilityRole` `select.tsx`'s roles use) is the one that carries
  * `"searchbox"`, so it is passed directly rather than through `useInteraction`.
  *
- * **The magnifier and the clear cross are drawn**, the same vocabulary as
- * `FloatingAdd`'s plus and `Select`'s token ×: a ring and a short diagonal
- * bar, borders rather than a glyph, so it never depends on a font shipping
- * one.
+ * **The magnifier and the clear cross are the vendored icons**
+ * (`primitives/icons.tsx`), not shapes built from views. They were a ring and a
+ * rotated bar — borders rather than a glyph, so as never to depend on a font —
+ * and at 16pt that is a circle with a stick near it: the handle never met the
+ * ring, and on a phone it read as a broken icon. A path has no font to depend
+ * on either.
  *
  * **The clear control appears only with a value — unless there is a search to
  * leave.** An always-visible clear button on an empty field is a target with
@@ -24,16 +26,19 @@
  * ledger with no exit — open the search, type nothing, and there was no way to
  * close it.
  *
- * **No border, no fill.** The field is composed *inline* under the tabs rather
- * than as a box sitting on them: the leading magnifier and the placeholder say
- * what it is, and a boxed input on the ground read as a second surface floating
- * over the one the page already had.
+ * **A field, drawn as one** — `surface`, the interactive edge, `radius.sm`:
+ * the same box `TextField` is, because it is the same thing (S10's board draws
+ * it so). It was composed inline, bare on the ground, on the argument that a
+ * box under the tabs read as a second surface; what it read as instead was a
+ * caption — grey words with a mark beside them, on Home, in the Ledger and in
+ * every picker, that nothing said could be typed into.
  *
- * **The automatic focus does not ring, and that is a deliberate divergence
- * from §2.6.** This field takes focus the instant it opens, so with the border
- * gone the ring became the heaviest thing on the screen on every open, for a
- * reader who got there by tapping a magnifier. The automatic focus is skipped;
- * every later one rings, so tabbing away and back shows the indicator.
+ * **The automatic focus is not marked, and that is a deliberate divergence
+ * from §2.6.** This field takes focus the instant it opens, for a reader who
+ * got there by tapping a magnifier: a thickened accent edge on every open says
+ * *you are here* to someone who has just put themselves there. The automatic
+ * focus is skipped; every later one is marked, so tabbing away and back shows
+ * the indicator.
  *
  * **This is not `:focus-visible`, and an earlier version of this comment
  * claimed it was — backwards.** Selectors-4's heuristic is that an element
@@ -64,11 +69,13 @@ import { Text, type TextInput, View } from "react-native";
 import { useT } from "../../../i18n/provider";
 import { PressableScaled } from "../../../primitives/atoms/pressable-scaled/pressable-scaled";
 import { SheetAwareTextInput } from "../../../primitives/sheet-input";
+import { focusBorder } from "../../../theme/focus.ts";
 import { inputStep, text } from "../../../theme/fonts.ts";
 import { useInputHeight } from "../../../theme/input-height.ts";
 import { useTheme } from "../../../theme/provider";
 import { makeStyles } from "../../../theme/styles.ts";
-import { focus, radius, space, touchTarget } from "../../../tokens.ts";
+import { radius, space, touchTarget } from "../../../tokens.ts";
+import { MagnifyingGlassIcon, XIcon } from "../../icons";
 import { useInteraction } from "../../interaction.ts";
 
 export type SearchFieldProps = {
@@ -157,10 +164,7 @@ export function SearchField({
   return (
     <View style={styles.root}>
       <View style={[styles.field, focused ? styles.focused : null]}>
-        <View style={styles.glass}>
-          <View style={styles.glassRing} />
-          <View style={styles.glassHandle} />
-        </View>
+        <MagnifyingGlassIcon size={18} color={theme.textMuted} />
         <SheetAwareTextInput
           ref={ref}
           role="searchbox"
@@ -184,10 +188,7 @@ export function SearchField({
             hitSlop={CLEAR_SLOP}
             style={styles.clear}
           >
-            <View style={styles.clearCross}>
-              <View style={[styles.clearCrossBar, styles.clearCrossBarA]} />
-              <View style={[styles.clearCrossBar, styles.clearCrossBarB]} />
-            </View>
+            <XIcon size={16} color={theme.textMuted} />
           </PressableScaled>
         ) : null}
       </View>
@@ -207,6 +208,11 @@ const useStyles = makeStyles((theme) => ({
     flexDirection: "row",
     alignItems: "center",
     gap: space.md,
+    borderWidth: 1,
+    borderColor: theme.borderInteractive,
+    borderRadius: radius.sm,
+    backgroundColor: theme.surface,
+    paddingHorizontal: space.x2,
   },
   // §2.6: the ring goes on the interactive element, which here is the whole
   // field — `[icon][input][×]` — not the `TextInput` alone. The input keeps
@@ -218,38 +224,9 @@ const useStyles = makeStyles((theme) => ({
   // browser's own `outline-style: auto` for free — so without naming a style
   // here, `outline-style` stays at its CSS-initial `none` and the outline
   // never paints, no matter what `outlineWidth`/`outlineColor` say.
-  focused: {
-    outlineWidth: focus.width,
-    outlineStyle: "solid",
-    outlineColor: theme.focusRing,
-    outlineOffset: focus.offset,
-  },
-  glass: { width: 16, height: 16, alignItems: "center", justifyContent: "center" },
-  glassRing: {
-    width: 10,
-    height: 10,
-    borderRadius: radius.pill,
-    borderWidth: 1.5,
-    borderColor: theme.textMuted,
-  },
-  glassHandle: {
-    position: "absolute",
-    width: 1.5,
-    height: 6,
-    backgroundColor: theme.textMuted,
-    transform: [{ rotate: "45deg" }],
-    right: 1,
-    bottom: 0,
-  },
-  // Suppresses the browser's own native focus ring on this `TextInput` —
-  // without it, focusing the field draws that ring *here*, on the actual DOM
-  // node that receives focus, bisecting the field instead of enclosing it.
-  // The real ring is `focused` above, on the wrapper. **Both properties are
-  // required**: Chromium's default `outline-style: auto` renders its own
-  // native ring at its own width regardless of an author `outlineWidth: 0`
-  // — `auto` defers the whole rendering, width included, to the UA. Naming
-  // an actual style (`"solid"`, RN-web's type has no `"none"`) is what makes
-  // the explicit zero width win.
+  // The field draws its own border, so the border is the indicator (§2.6):
+  // a ring outside an edge is two edges.
+  focused: focusBorder(theme.focusRing, { horizontal: space.x2 }),
   input: {
     flex: 1,
     color: theme.text,
@@ -260,9 +237,5 @@ const useStyles = makeStyles((theme) => ({
   },
   clear: { width: 20, height: 20, alignItems: "center", justifyContent: "center" },
   /** The ×, drawn: two bars crossed — `select.tsx`'s token cross, same construction. */
-  clearCross: { width: 10, height: 10, alignItems: "center", justifyContent: "center" },
-  clearCrossBar: { position: "absolute", width: 11, height: 1.5, backgroundColor: theme.textMuted },
-  clearCrossBarA: { transform: [{ rotate: "45deg" }] },
-  clearCrossBarB: { transform: [{ rotate: "-45deg" }] },
   results: { color: theme.textMuted, paddingHorizontal: space.xs, ...text.ui("caption") },
 }));
