@@ -26,7 +26,7 @@ import { Button } from "../../../primitives/atoms/button/button";
 import { RadioGroup } from "../../../primitives/atoms/radio/radio";
 import { Select, type SelectOption } from "../../../primitives/atoms/select/select";
 import { TextField } from "../../../primitives/atoms/text-field/text-field";
-import { BottomSheet } from "../../../shell/organisms/bottom-sheet/bottom-sheet";
+import { BottomSheet } from "../../../primitives/organisms/bottom-sheet/bottom-sheet";
 import { text } from "../../../theme/fonts.ts";
 import { makeStyles } from "../../../theme/styles.ts";
 import { space } from "../../../tokens.ts";

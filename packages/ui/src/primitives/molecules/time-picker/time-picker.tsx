@@ -22,8 +22,8 @@
  */
 
 import { type TimeOfDay, timeOfDay } from "@waltning/core/date";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Modal, Pressable, Text, View } from "react-native";
+import { useCallback, useEffect, useState } from "react";
+import { Text, View } from "react-native";
 import { useT } from "../../../i18n/provider";
 import { text } from "../../../theme/fonts.ts";
 import { makeStyles } from "../../../theme/styles.ts";
@@ -31,7 +31,7 @@ import { radius, space, touchTarget } from "../../../tokens.ts";
 import { Button } from "../../atoms/button/button";
 import { Chip } from "../../atoms/chip/chip";
 import { Wheel, type WheelOption } from "../../atoms/wheel/wheel";
-import { useWindowInsets } from "../../safe-area";
+import { BottomSheet } from "../../organisms/bottom-sheet/bottom-sheet";
 import { HOURS, MINUTES, partsOfTime, timeOfParts } from "./clock.ts";
 
 /** §3.7a — each column as wide as the widest thing in it. */
@@ -75,10 +75,6 @@ export function TimePicker({ prompt, value, onChange, now, onDismiss, onClear }:
   const styles = useStyles();
   const t = useT();
   const [draft, setDraft] = useState(value);
-  // The sheet runs to the bottom of the window, so its buttons clear the home
-  // indicator themselves — they sat on the gesture bar.
-  const bottom = useWindowInsets().bottom;
-  const clearBottom = useMemo(() => ({ paddingBottom: space.x3 + bottom }), [bottom]);
 
   // Re-open on whatever the field holds now, not on where this was left.
   useEffect(() => setDraft(value), [value]);
@@ -102,66 +98,51 @@ export function TimePicker({ prompt, value, onChange, now, onDismiss, onClear }:
     onDismiss();
   }, [onClear, onDismiss]);
 
+  const actions = (
+    <View style={styles.actions}>
+      <Button label={t("common.cancel")} variant="ghost" onPress={onDismiss} />
+      {onClear === undefined ? null : (
+        <Button label={t("common.noTime")} variant="ghost" onPress={handleClear} />
+      )}
+      <Button label={t("common.useThisTime")} variant="primary" onPress={handleConfirm} />
+    </View>
+  );
+
   return (
-    <Modal
-      accessibilityLabel={prompt}
-      transparent
-      visible
-      onRequestClose={onDismiss}
-      animationType="none"
-      statusBarTranslucent
-      navigationBarTranslucent
-    >
-      <View style={styles.overlay}>
-        {/* A backdrop, so a bare `Pressable` — `Select`'s own exception. */}
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={t("common.dismissOptions")}
-          onPress={onDismiss}
-          style={styles.backdrop}
-        />
-        <View style={[styles.panel, clearBottom]}>
-          <View style={styles.grab} />
-          <View style={styles.chips}>
-            <TimeChip label={t("common.now")} at={now} draft={draft} onPick={setDraft} />
-            {LANDMARKS.map((at) => (
-              <TimeChip key={at} label={at} at={at} draft={draft} onPick={setDraft} />
-            ))}
-          </View>
-
-          <View style={styles.drum}>
-            <View style={styles.band} />
-            <Wheel
-              label={t("common.hours")}
-              options={HOUR_OPTIONS}
-              value={HOURS[parts.hour] ?? "00"}
-              onChange={handleHour}
-              width={COLUMN}
-              wraps
-            />
-            <Text style={styles.colon} aria-hidden>
-              :
-            </Text>
-            <Wheel
-              label={t("common.minutes")}
-              options={MINUTE_OPTIONS}
-              value={MINUTES[parts.minute] ?? "00"}
-              onChange={handleMinute}
-              width={COLUMN}
-              wraps
-            />
-          </View>
-
-          <View style={styles.actions}>
-            <Button label={t("common.cancel")} variant="ghost" onPress={onDismiss} />
-            {onClear === undefined ? null : (
-              <Button label={t("common.noTime")} variant="ghost" onPress={handleClear} />
-            )}
-            <Button label={t("common.useThisTime")} variant="primary" onPress={handleConfirm} />
-          </View>
-        </View>
+    <BottomSheet visible title={prompt} onDismiss={onDismiss} bodyRolls>
+      <View style={styles.chips}>
+        <TimeChip label={t("common.now")} at={now} draft={draft} onPick={setDraft} />
+        {LANDMARKS.map((at) => (
+          <TimeChip key={at} label={at} at={at} draft={draft} onPick={setDraft} />
+        ))}
       </View>
-    </Modal>
+
+      <View style={styles.drum}>
+        <View style={styles.band} />
+        <Wheel
+          label={t("common.hours")}
+          options={HOUR_OPTIONS}
+          value={HOURS[parts.hour] ?? "00"}
+          onChange={handleHour}
+          width={COLUMN}
+          wraps
+        />
+        <Text style={styles.colon} aria-hidden>
+          :
+        </Text>
+        <Wheel
+          label={t("common.minutes")}
+          options={MINUTE_OPTIONS}
+          value={MINUTES[parts.minute] ?? "00"}
+          onChange={handleMinute}
+          width={COLUMN}
+          wraps
+        />
+      </View>
+      {/* In the body, under the drum: the sheet's pinned footer floats over its
+          content, and here the content is five rows that all have to be seen. */}
+      {actions}
+    </BottomSheet>
   );
 }
 
@@ -178,26 +159,14 @@ function TimeChip({ label, at, draft, onPick }: TimeChipProps) {
 }
 
 const useStyles = makeStyles((theme) => ({
-  overlay: { flex: 1, justifyContent: "flex-end" },
-  backdrop: { ...({ position: "absolute" } as const), top: 0, right: 0, bottom: 0, left: 0 },
-  panel: {
-    backgroundColor: theme.surface,
-    borderTopLeftRadius: radius.lg,
-    borderTopRightRadius: radius.lg,
-    padding: space.x3,
-    gap: space.x2,
-  },
-  grab: {
-    width: 36,
-    height: 4,
-    borderRadius: radius.pill,
-    backgroundColor: theme.border,
-    alignSelf: "center",
-  },
   chips: { flexDirection: "row", gap: space.sm, flexWrap: "wrap" },
   drum: { flexDirection: "row", justifyContent: "center", alignItems: "center", gap: space.xs },
   // Between the two columns, on the banded row: the drum reads `14 : 37`.
-  colon: { color: theme.text, ...text.ui("displayThree") },
+  // **A whole-pixel width, not the glyph's own.** The colon's advance is a
+  // fraction of a pixel, and everything to its right inherits the fraction:
+  // the minutes landed on a half pixel and rasterised one way or the other
+  // from run to run.
+  colon: { width: space.x3, textAlign: "center", color: theme.text, ...text.ui("displayThree") },
   band: {
     ...({ position: "absolute" } as const),
     left: 0,

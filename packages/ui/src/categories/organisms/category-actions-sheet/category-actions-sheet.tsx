@@ -19,7 +19,7 @@
 import { View } from "react-native";
 import { useT } from "../../../i18n/provider";
 import { Button } from "../../../primitives/atoms/button/button";
-import { BottomSheet } from "../../../shell/organisms/bottom-sheet/bottom-sheet";
+import { BottomSheet } from "../../../primitives/organisms/bottom-sheet/bottom-sheet";
 import { Banner } from "../../../states/molecules/banner/banner";
 import { makeStyles } from "../../../theme/styles.ts";
 import { space } from "../../../tokens.ts";

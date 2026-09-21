@@ -124,6 +124,24 @@ The list scroll-snaps to that band, neighbours fade by distance — `.55`, `.26`
 the column reads as a curved face rather than a cropped list. The banded row is
 the value; there is no second place a reader could look for it.
 
+**It is a bottom sheet, not something shaped like one.** The drum opens in
+`BottomSheet` — the scrim behind it, the handle, the title and *Close*, a swipe
+down to dismiss — the same surface every other choice in the app opens in. It
+was a hand-built modal with a transparent backdrop and no gesture at all. One
+thing differs: **the sheet is dragged by its handle and header, never by its
+body**, because a vertical pan on the body is the drum's own gesture; left on,
+the first downward roll of a date closed the picker.
+
+**On a row, always — and a tick for each one that passes.** `snapToInterval` is
+a request, dropped whenever something interrupts the deceleration: on a phone
+the minutes came to rest half a row off the band. So the drum does not settle
+when the finger lifts — the coast is still to come, and settling there moved a
+wrapping drum to its middle copy mid-flight, which cancels the snap — but where
+the coast *ends*; and a drum found between two rows is put on the nearer one.
+Each row passing the band under a hand is one selection tick, the platform's
+own (`primitives/haptics.tsx`, provided once by the app); a chip or a pressed
+row rolls the drum through a dozen rows and ticks for none of them.
+
 **A row can be pressed.** Rolling was the drum's whole interface: nothing for a
 screen reader or a switch to operate, and no way to take the neighbour a reader
 can already see except by nudging the drum onto it. Pressing a row picks it and

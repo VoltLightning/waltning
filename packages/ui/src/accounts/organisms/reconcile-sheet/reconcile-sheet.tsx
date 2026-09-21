@@ -31,7 +31,7 @@ import { Button } from "../../../primitives/atoms/button/button";
 import { DateField } from "../../../primitives/atoms/date-field/date-field";
 import { TextField } from "../../../primitives/atoms/text-field/text-field";
 import type { FieldErrorMap } from "../../../primitives/field-errors.ts";
-import { BottomSheet } from "../../../shell/organisms/bottom-sheet/bottom-sheet";
+import { BottomSheet } from "../../../primitives/organisms/bottom-sheet/bottom-sheet";
 import { text } from "../../../theme/fonts.ts";
 import { makeStyles } from "../../../theme/styles.ts";
 import { space } from "../../../tokens.ts";

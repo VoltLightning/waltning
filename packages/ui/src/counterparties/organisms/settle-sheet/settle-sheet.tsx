@@ -46,7 +46,7 @@ import { RadioGroup, type RadioGroupProps } from "../../../primitives/atoms/radi
 import { RateField } from "../../../primitives/atoms/rate-field/rate-field";
 import { TextField } from "../../../primitives/atoms/text-field/text-field";
 import type { FieldErrorMap } from "../../../primitives/field-errors.ts";
-import { BottomSheet } from "../../../shell/organisms/bottom-sheet/bottom-sheet";
+import { BottomSheet } from "../../../primitives/organisms/bottom-sheet/bottom-sheet";
 import { text } from "../../../theme/fonts.ts";
 import { makeStyles } from "../../../theme/styles.ts";
 import { radius, space } from "../../../tokens.ts";

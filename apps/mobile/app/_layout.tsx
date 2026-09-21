@@ -18,6 +18,7 @@ import { usePhoneLedgerStartup } from "@waltning/client/ledger/use-phone-ledger-
 import { describeDiagnosticError } from "@waltning/core/diagnostics";
 import { resolveLocale } from "@waltning/ui/i18n/locales";
 import { I18nProvider, useT } from "@waltning/ui/i18n/provider";
+import { HapticsProvider } from "@waltning/ui/primitives/haptics";
 import { StartupFailed } from "@waltning/ui/states/startup-failed";
 import { ThemeProvider, useTheme, useThemeName } from "@waltning/ui/theme/provider";
 import { makeStyles } from "@waltning/ui/theme/styles";
@@ -35,6 +36,7 @@ import {
   appearance,
   appLock,
   DEVICE_LOCALES,
+  dayTickHaptic,
   displayCurrency,
   floatPosition,
 } from "../src/platform";
@@ -183,36 +185,42 @@ export default function RootLayout() {
           module, so it arrives with the build that is ours (E0 · Leave Expo
           Go).
         */}
-          <I18nProvider locale={resolveLocale(DEVICE_LOCALES)}>
-            {/* The one place the platform-resolved ledger meets the tree: every
+          {/*
+            The device's tick, handed down once: a drum is four components deep
+            in a form, and `packages/ui` names no haptics library.
+          */}
+          <HapticsProvider tick={dayTickHaptic}>
+            <I18nProvider locale={resolveLocale(DEVICE_LOCALES)}>
+              {/* The one place the platform-resolved ledger meets the tree: every
               screen below reads it from context, so a test or a diff preview
               can hand the same screens a different controller. A startup
               failure is a screen too — never expo-router's own
               `ErrorBoundary`, which reports a missing default export rather
               than what actually broke. */}
-            {ready && startup ? (
-              startup.status === "ready" ? (
-                // §5.7's launch gate sits between the ledger and the screen:
-                // the session is open (its file is the platform's to protect),
-                // and whether the person holding the phone may see it is the
-                // gate's to say. A failure screen needs no gate — it shows
-                // nothing the ledger holds.
-                <LedgerProvider controller={startup.controller}>
-                  <LockGate lock={appLock}>
-                    <AppShell />
-                  </LockGate>
-                </LedgerProvider>
+              {ready && startup ? (
+                startup.status === "ready" ? (
+                  // §5.7's launch gate sits between the ledger and the screen:
+                  // the session is open (its file is the platform's to protect),
+                  // and whether the person holding the phone may see it is the
+                  // gate's to say. A failure screen needs no gate — it shows
+                  // nothing the ledger holds.
+                  <LedgerProvider controller={startup.controller}>
+                    <LockGate lock={appLock}>
+                      <AppShell />
+                    </LockGate>
+                  </LedgerProvider>
+                ) : (
+                  <StartupFailed
+                    error={startup.error}
+                    cause={startup.cause}
+                    onRetry={startup.retryable ? retry : undefined}
+                  />
+                )
               ) : (
-                <StartupFailed
-                  error={startup.error}
-                  cause={startup.cause}
-                  onRetry={startup.retryable ? retry : undefined}
-                />
-              )
-            ) : (
-              <StartupBlank />
-            )}
-          </I18nProvider>
+                <StartupBlank />
+              )}
+            </I18nProvider>
+          </HapticsProvider>
         </ThemeProvider>
       </DeviceInsets>
     </GestureHandlerRootView>

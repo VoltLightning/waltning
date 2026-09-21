@@ -24,8 +24,8 @@
  */
 
 import { type AccountingDate, addDays } from "@waltning/core/date";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Modal, Pressable, View } from "react-native";
+import { useCallback, useEffect, useState } from "react";
+import { View } from "react-native";
 import { monthName, weekdayShort } from "../../../i18n/locales";
 import { useLocale, useT } from "../../../i18n/provider";
 import { makeStyles } from "../../../theme/styles.ts";
@@ -33,7 +33,7 @@ import { radius, space, touchTarget } from "../../../tokens.ts";
 import { Button } from "../../atoms/button/button";
 import { Chip } from "../../atoms/chip/chip";
 import { Wheel, type WheelOption } from "../../atoms/wheel/wheel";
-import { useWindowInsets } from "../../safe-area";
+import { BottomSheet } from "../../organisms/bottom-sheet/bottom-sheet";
 import { clampDay, dateOf, daysIn, partsOf, yearsAround } from "./parts.ts";
 
 /** §3.7a sizes each column to the widest thing in it. */
@@ -57,10 +57,6 @@ export function DatePicker({ prompt, value, onChange, today, onDismiss }: DatePi
   const locale = useLocale();
   const t = useT();
   const [draft, setDraft] = useState(value);
-  // The sheet runs to the bottom of the window, so its buttons clear the home
-  // indicator themselves — they sat on the gesture bar.
-  const bottom = useWindowInsets().bottom;
-  const clearBottom = useMemo(() => ({ paddingBottom: space.x3 + bottom }), [bottom]);
 
   // Re-open on whatever the field holds now, not on where this was left.
   useEffect(() => setDraft(value), [value]);
@@ -111,71 +107,56 @@ export function DatePicker({ prompt, value, onChange, today, onDismiss }: DatePi
     onDismiss();
   }, [draft, onChange, onDismiss]);
 
+  const actions = (
+    <View style={styles.actions}>
+      <Button label={t("common.cancel")} variant="ghost" onPress={onDismiss} />
+      <Button label={t("common.useThisDate")} variant="primary" onPress={handleConfirm} />
+    </View>
+  );
+
   return (
-    <Modal
-      accessibilityLabel={prompt}
-      transparent
-      visible
-      onRequestClose={onDismiss}
-      animationType="none"
-      statusBarTranslucent
-      navigationBarTranslucent
-    >
-      <View style={styles.overlay}>
-        {/* A backdrop, so a bare `Pressable` — `Select`'s own exception. */}
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={t("common.dismissOptions")}
-          onPress={onDismiss}
-          style={styles.backdrop}
-        />
-        <View style={[styles.panel, clearBottom]}>
-          <View style={styles.grab} />
-          <View style={styles.chips}>
-            {CHIP_DAYS.map((back) => (
-              <RelativeChip
-                key={back}
-                back={back}
-                today={today}
-                draft={draft}
-                locale={locale}
-                onPick={setDraft}
-              />
-            ))}
-          </View>
-
-          <View style={styles.drum}>
-            <View style={styles.band} />
-            <Wheel
-              label={t("common.day")}
-              options={days}
-              value={String(parts.day)}
-              onChange={handleDay}
-              width={COLUMN.day}
-            />
-            <Wheel
-              label={t("common.month")}
-              options={months}
-              value={String(parts.month)}
-              onChange={handleMonth}
-              width={COLUMN.month}
-            />
-            <Wheel
-              label={t("common.year")}
-              options={years.map((year) => ({ value: String(year), label: String(year) }))}
-              value={String(parts.year)}
-              onChange={handleYear}
-              width={COLUMN.year}
-            />
-          </View>
-
-          <View style={styles.actions}>
-            <Button label={t("common.cancel")} variant="ghost" onPress={onDismiss} />
-            <Button label={t("common.useThisDate")} variant="primary" onPress={handleConfirm} />
-          </View>
-        </View>
+    <BottomSheet visible title={prompt} onDismiss={onDismiss} bodyRolls>
+      <View style={styles.chips}>
+        {CHIP_DAYS.map((back) => (
+          <RelativeChip
+            key={back}
+            back={back}
+            today={today}
+            draft={draft}
+            locale={locale}
+            onPick={setDraft}
+          />
+        ))}
       </View>
-    </Modal>
+
+      <View style={styles.drum}>
+        <View style={styles.band} />
+        <Wheel
+          label={t("common.day")}
+          options={days}
+          value={String(parts.day)}
+          onChange={handleDay}
+          width={COLUMN.day}
+        />
+        <Wheel
+          label={t("common.month")}
+          options={months}
+          value={String(parts.month)}
+          onChange={handleMonth}
+          width={COLUMN.month}
+        />
+        <Wheel
+          label={t("common.year")}
+          options={years.map((year) => ({ value: String(year), label: String(year) }))}
+          value={String(parts.year)}
+          onChange={handleYear}
+          width={COLUMN.year}
+        />
+      </View>
+      {/* In the body, under the drum: the sheet's pinned footer floats over its
+          content, and here the content is five rows that all have to be seen. */}
+      {actions}
+    </BottomSheet>
   );
 }
 
@@ -202,22 +183,6 @@ function RelativeChip({ back, today, draft, locale, onPick }: RelativeChipProps)
 }
 
 const useStyles = makeStyles((theme) => ({
-  overlay: { flex: 1, justifyContent: "flex-end" },
-  backdrop: { ...({ position: "absolute" } as const), top: 0, right: 0, bottom: 0, left: 0 },
-  panel: {
-    backgroundColor: theme.surface,
-    borderTopLeftRadius: radius.lg,
-    borderTopRightRadius: radius.lg,
-    padding: space.x3,
-    gap: space.x2,
-  },
-  grab: {
-    width: 36,
-    height: 4,
-    borderRadius: radius.pill,
-    backgroundColor: theme.border,
-    alignSelf: "center",
-  },
   chips: { flexDirection: "row", gap: space.sm, flexWrap: "wrap" },
   drum: { flexDirection: "row", justifyContent: "center", gap: space.xs },
   band: {

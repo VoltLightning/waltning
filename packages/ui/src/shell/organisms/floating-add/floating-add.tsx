@@ -52,6 +52,7 @@ import { Button } from "../../../primitives/atoms/button/button";
 import { PressableScaled } from "../../../primitives/atoms/pressable-scaled/pressable-scaled";
 import { easing } from "../../../primitives/easing.ts";
 import { useInteraction } from "../../../primitives/interaction.ts";
+import { BottomSheet } from "../../../primitives/organisms/bottom-sheet/bottom-sheet";
 import { usePressScale } from "../../../primitives/press-scale.ts";
 import { useReducedMotion } from "../../../primitives/reduced-motion.ts";
 import { useSafeArea } from "../../../primitives/safe-area";
@@ -67,7 +68,6 @@ import {
   releaseAt,
   settleSpring,
 } from "../../float-geometry.ts";
-import { BottomSheet } from "../bottom-sheet/bottom-sheet";
 
 /** S05 §9.1's third entry point — the long-press picker's own three choices. */
 export type FloatingAddType = "expense" | "transfer" | "income";

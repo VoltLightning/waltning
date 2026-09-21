@@ -21,8 +21,8 @@ import { SearchField } from "../../../primitives/atoms/search-field/search-field
 import { useInteraction } from "../../../primitives/interaction.ts";
 import { monogramFor } from "../../../primitives/monogram.ts";
 import { nestedScrollProps } from "../../../primitives/nested-scroll.ts";
+import { BottomSheet } from "../../../primitives/organisms/bottom-sheet/bottom-sheet";
 import { usePressScale } from "../../../primitives/press-scale.ts";
-import { BottomSheet } from "../../../shell/organisms/bottom-sheet/bottom-sheet";
 import { text } from "../../../theme/fonts.ts";
 import { useTheme } from "../../../theme/provider";
 import { makeStyles } from "../../../theme/styles.ts";

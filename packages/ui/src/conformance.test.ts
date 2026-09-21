@@ -64,7 +64,7 @@ const INTERACTIVE = /\b(?:Pressable(?:Scaled)?|(?:SheetAware)?TextInput)\b/;
  * An exact count is the only guard that catches a census halving. Raise it
  * when a component is added; a *drop* is the bug this exists for.
  */
-const INTERACTIVE_COUNT = 60;
+const INTERACTIVE_COUNT = 57;
 
 /**
  * **Components that forward interactivity rather than owning it.** Both rules
@@ -186,10 +186,16 @@ describe("the focus ring, on every interactive element (§2.6)", () => {
    * this rule greps for the string `focus.` and a token spent to quiet a grep
    * is precisely the comfortable lie the entry above was written about.
    */
-  // `time-picker.tsx` is the date sheet's twin: its own `Pressable` is the
-  // backdrop, and every focusable thing in it is a `Chip`, a `Wheel` or a
-  // `Button`, each of which draws its own ring.
-  const RING_BELONGS_TO_CHILDREN = new Set(["date-picker.tsx", "time-picker.tsx"]);
+  // Empty since the pickers became `BottomSheet`s: their backdrop was the only
+  // `Pressable` either owned. Kept, because the next sheet-shaped thing built
+  // by hand will want the same excuse and should have to argue for it here.
+  const RING_BELONGS_TO_CHILDREN = new Set<string>();
+  /**
+   * `figure-input.tsx` is a figure *inside* a field: the card on Add and the
+   * row on Transfer are the field, and the ring is theirs — it is told
+   * `focused` so it can draw its caret, and draws no edge of its own to ring.
+   */
+  const RING_BELONGS_TO_OWNER = new Set(["figure-input.tsx"]);
 
   it("is never omitted", () => {
     // "Never removed, never replaced by a colour change alone." A colour-only
@@ -199,7 +205,12 @@ describe("the focus ring, on every interactive element (§2.6)", () => {
     );
     // Comments stripped, for the reason the 44px rule states.
     const missing = interactive
-      .filter((c) => !RING_IS_CONDITIONAL.has(c.name) && !RING_BELONGS_TO_CHILDREN.has(c.name))
+      .filter(
+        (c) =>
+          !RING_IS_CONDITIONAL.has(c.name) &&
+          !RING_BELONGS_TO_CHILDREN.has(c.name) &&
+          !RING_BELONGS_TO_OWNER.has(c.name),
+      )
       .filter((c) => !/focus\./.test(code(c.text)))
       .map((c) => c.name);
 
@@ -208,7 +219,11 @@ describe("the focus ring, on every interactive element (§2.6)", () => {
       INTERACTIVE_COUNT,
     );
     // The divergences have to still exist, or an exemption is stale.
-    for (const name of [...RING_IS_CONDITIONAL, ...RING_BELONGS_TO_CHILDREN]) {
+    for (const name of [
+      ...RING_IS_CONDITIONAL,
+      ...RING_BELONGS_TO_CHILDREN,
+      ...RING_BELONGS_TO_OWNER,
+    ]) {
       expect(
         interactive.some((c) => c.name === name),
         `${name} is excused from the ring rule but is no longer interactive`,

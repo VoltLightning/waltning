@@ -24,12 +24,13 @@
  * component that re-renders sixty times a second while a thumb is down.
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { NativeScrollEvent, NativeSyntheticEvent } from "react-native";
 import { ScrollView, Text, View } from "react-native";
 import { text } from "../../../theme/fonts.ts";
 import { makeStyles } from "../../../theme/styles.ts";
 import { focus, radius, space, touchTarget } from "../../../tokens.ts";
+import { useHaptics } from "../../haptics";
 import { useInteraction } from "../../interaction.ts";
 import { nestedScrollProps } from "../../nested-scroll.ts";
 import { PressableScaled } from "../pressable-scaled/pressable-scaled";
@@ -42,6 +43,13 @@ const VISIBLE = 5;
 
 /** How long the drum must be still before it counts as rested, in ms. */
 const REST = 120;
+
+/**
+ * How long a lifted finger is given to turn into a coast before the drum is
+ * called still. A flick raises `onMomentumScrollBegin` within a frame or two;
+ * a finger lifted with no flick raises nothing more at all.
+ */
+const LIFT_GRACE = 80;
 
 /** How far a row is from the band, clamped to the classes that exist. */
 const NEAR = 1;
@@ -113,7 +121,10 @@ export function Wheel({ label, options, value, onChange, wraps = false, width }:
   // already is, or every settled scroll would fight the animation it caused.
   const opened = useRef(false);
 
-  useEffect(() => {
+  // **Before paint, not after it.** As a plain effect the drum was painted once
+  // at its first option and then moved: a flash of the wrong rows on open, and
+  // a screenshot that caught it about one run in five.
+  useLayoutEffect(() => {
     if (settle.current) {
       settle.current = false;
       return;
@@ -131,16 +142,41 @@ export function Wheel({ label, options, value, onChange, wraps = false, width }:
     opened.current = true;
   }, [selected, offset]);
 
+  /** Whether the drum is coasting — between a flick and its natural stop. */
+  const coasting = useRef(false);
+  /** Whether a hand moved it, as opposed to a chip or a pressed row. */
+  const handled = useRef(false);
+
+  /*
+    **Placed again once it has a size.** Inside a sheet the drum mounts before
+    the sheet has laid it out, and a `scrollTo` on a scroller with no height is
+    clamped to zero and forgotten — the drum then opened on its first option,
+    some of the time. Layout is the first moment the placement can hold.
+  */
+  const placeOnLayout = useCallback(() => {
+    if (handled.current || coasting.current) return;
+    scroller.current?.scrollTo({ y: (selected + offset) * WHEEL_ROW, animated: false });
+  }, [selected, offset]);
+
   const settleAt = useCallback(
     (offsetY: number) => {
       const picked = options[rowAt(offsetY, options.length)];
       if (picked === undefined) return;
 
-      // Back to the middle copy with no animation — the value under the band
-      // is identical, so nothing appears to move.
-      if (wraps) {
-        const home = recentreTo(offsetY, options.length);
-        if (home !== null) scroller.current?.scrollTo({ y: home, animated: false });
+      /*
+        **On a row, always — the drum's own guarantee, not the platform's.**
+        `snapToInterval` is a request: it is dropped when anything interrupts
+        the deceleration, and on an iPhone the minutes came to rest half a row
+        off the band. So a drum that has stopped between two rows is put on
+        the nearer one, and a wrapping drum is taken back to its middle copy
+        in the same move — the value under the band is identical, so nothing
+        appears to change.
+      */
+      const aligned = Math.round(offsetY / WHEEL_ROW) * WHEEL_ROW;
+      const home = wraps ? recentreTo(aligned, options.length) : null;
+      if (home !== null) scroller.current?.scrollTo({ y: home, animated: false });
+      else if (Math.abs(aligned - offsetY) > 0.5) {
+        scroller.current?.scrollTo({ y: aligned, animated: true });
       }
       if (picked.value !== value) {
         settle.current = true;
@@ -167,8 +203,33 @@ export function Wheel({ label, options, value, onChange, wraps = false, width }:
 
   const handleSettled = useCallback(() => {
     clearTimeout(idle.current);
+    coasting.current = false;
+    handled.current = false;
     settleAt(at.current);
   }, [settleAt]);
+
+  /*
+    **A lift is not a stop.** `onScrollEndDrag` fires the instant the finger
+    leaves, with the whole coast still to come — and settling there moved the
+    drum to its middle copy *mid-flight*, which cancels the deceleration and
+    with it the snap. The lift now waits to see whether a coast begins, and a
+    coast is settled where it ends.
+  */
+  const handleLift = useCallback(() => {
+    clearTimeout(idle.current);
+    idle.current = setTimeout(() => {
+      if (!coasting.current) handleSettled();
+    }, LIFT_GRACE);
+  }, [handleSettled]);
+  const handleCoastBegin = useCallback(() => {
+    coasting.current = true;
+    clearTimeout(idle.current);
+  }, []);
+  const handleTouch = useCallback(() => {
+    handled.current = true;
+  }, []);
+
+  const { tick } = useHaptics();
 
   useEffect(() => () => clearTimeout(idle.current), []);
 
@@ -187,11 +248,20 @@ export function Wheel({ label, options, value, onChange, wraps = false, width }:
       const offsetY = event.nativeEvent.contentOffset.y;
       at.current = offsetY;
       const index = rowAt(offsetY, options.length);
-      setRow((current) => (current === index ? current : index));
+      setRow((current) => {
+        if (current === index) return current;
+        // One tick per row that passes the band — under a hand only. A chip or
+        // a pressed row rolls the drum through a dozen rows to get somewhere,
+        // and that is a move, not a dozen choices.
+        if (handled.current) tick();
+        return index;
+      });
       clearTimeout(idle.current);
-      idle.current = setTimeout(handleSettled, REST);
+      // The timer is the web's settle, where no momentum event ever fires. A
+      // coasting drum is still reporting offsets and is not idle.
+      if (!coasting.current) idle.current = setTimeout(handleSettled, REST);
     },
-    [handleSettled, options.length],
+    [handleSettled, options.length, tick],
   );
 
   return (
@@ -204,8 +274,12 @@ export function Wheel({ label, options, value, onChange, wraps = false, width }:
         decelerationRate="fast"
         scrollEventThrottle={16}
         onScroll={handleScroll}
+        onLayout={placeOnLayout}
+        onContentSizeChange={placeOnLayout}
+        onScrollBeginDrag={handleTouch}
+        onScrollEndDrag={handleLift}
+        onMomentumScrollBegin={handleCoastBegin}
         onMomentumScrollEnd={handleSettled}
-        onScrollEndDrag={handleSettled}
         contentContainerStyle={styles.content}
         contentOffset={{ x: 0, y: (selected + offset) * WHEEL_ROW }}
         // A bounded vertical scroller inside a sheet: a roll that reaches the

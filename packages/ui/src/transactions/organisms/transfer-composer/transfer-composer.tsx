@@ -32,9 +32,8 @@
 import { accountingDate, isAccountingDate } from "@waltning/core/date";
 import * as money from "@waltning/core/money";
 import { useCallback, useState } from "react";
-import { Text, useWindowDimensions, View } from "react-native";
+import { Text, View } from "react-native";
 import { Amount } from "../../../fx/atoms/amount/amount";
-import { figureWidth } from "../../../fx/figure-width.ts";
 import { formatRate } from "../../../fx/format-rate.ts";
 import { parseAmount } from "../../../fx/molecules/amount-field/amount-field";
 import { dayLabel, decimalMark } from "../../../i18n/locales";
@@ -45,18 +44,17 @@ import { Tag } from "../../../primitives/atoms/tag";
 import { TextField } from "../../../primitives/atoms/text-field/text-field";
 import type { FieldErrorMap } from "../../../primitives/field-errors.ts";
 import { DatePicker } from "../../../primitives/molecules/date-picker/date-picker";
-import { SheetAwareTextInput } from "../../../primitives/sheet-input";
+import { BottomSheet } from "../../../primitives/organisms/bottom-sheet/bottom-sheet";
 import { useBreakpoint } from "../../../primitives/use-breakpoint.ts";
-import { BottomSheet } from "../../../shell/organisms/bottom-sheet/bottom-sheet";
 import { ArrowsLeftRightIcon } from "../../../shell/phosphor";
 import { Banner } from "../../../states/molecules/banner/banner";
-import { inputStep, text, textCap } from "../../../theme/fonts.ts";
-import { useInputHeight } from "../../../theme/input-height.ts";
+import { text } from "../../../theme/fonts.ts";
 import { useTheme } from "../../../theme/provider";
 import { makeStyles } from "../../../theme/styles.ts";
-import { focus, radius, space, tabularNums, touchTarget } from "../../../tokens.ts";
+import { focus, radius, space, tabularNums } from "../../../tokens.ts";
 import { AMOUNT_INTEGER_DIGITS, sanitizeAmount } from "../../amount-keys.ts";
 import { ComposerRow, ComposerRows } from "../../molecules/composer-rows/composer-rows";
+import { FigureInput } from "../../molecules/figure-input/figure-input";
 
 export type TransferComposerAccount = {
   id: string;
@@ -155,9 +153,6 @@ export function TransferComposer({
   const locale = useLocale();
   const theme = useTheme();
   const styles = useStyles();
-  const { fontScale } = useWindowDimensions();
-  const leavesHeight = useInputHeight("displayOne");
-  const arrivesHeight = useInputHeight("displayTwo");
   const [openSheet, setOpenSheet] = useState<OpenSheet>(null);
   const [moreShown, setMoreShown] = useState(false);
   const [focused, setFocused] = useState<"amount" | "toAmount" | null>(null);
@@ -304,13 +299,6 @@ export function TransferComposer({
           },
         );
   const rateShown = realizedRate ?? referenceRate?.rate;
-  // Sized to the figure, so the affix follows it (`amount-card.tsx`'s own
-  // reason). Through `figureWidth`, which knows that a decimal mark is a third
-  // of a digit and that both the size and the tracking move with the text
-  // scale — the arithmetic here counted every character as a tabular digit and
-  // left 8.3px of dead air before the affix on an ordinary amount.
-  const leavesWidth = { width: figureWidth("displayOne", amountRaw, fontScale) };
-  const arrivesWidth = { width: figureWidth("displayTwo", toAmountRaw, fontScale) };
 
   return (
     <View style={styles.root}>
@@ -337,23 +325,21 @@ export function TransferComposer({
           </IconButton>
         </View>
         <View style={[styles.figure, focused === "amount" ? styles.figureFocused : null]}>
-          <SheetAwareTextInput
-            accessibilityLabel={t("transactions.amount")}
+          <FigureInput
+            label={t("transactions.amount")}
             value={amountRaw.replace(",", mark)}
             onChangeText={handleAmountText}
+            step="displayOne"
+            maxLength={AMOUNT_INTEGER_DIGITS + 1 + (from?.decimals ?? 2)}
+            affix={
+              from === undefined ? undefined : (
+                <Text style={styles.affix}>{from.symbol ?? from.currency}</Text>
+              )
+            }
+            focused={focused === "amount"}
             onFocus={handleAmountFocus}
             onBlur={handleBlur}
-            placeholder="0"
-            placeholderTextColor={styles.placeholder.color}
-            keyboardType="decimal-pad"
-            inputMode="decimal"
-            maxLength={AMOUNT_INTEGER_DIGITS + 1 + (from?.decimals ?? 2)}
-            maxFontSizeMultiplier={textCap("displayOne")}
-            style={[styles.leavesInput, leavesWidth, leavesHeight]}
           />
-          {from === undefined ? null : (
-            <Text style={styles.affix}>{from.symbol ?? from.currency}</Text>
-          )}
         </View>
         {amountError === undefined ? null : <Text style={styles.fieldError}>{amountError}</Text>}
         {/* A same-currency pair has no *Arrives* card, so a refusal on the
@@ -465,21 +451,17 @@ export function TransferComposer({
             )}
           </View>
           <View style={[styles.figure, focused === "toAmount" ? styles.figureFocused : null]}>
-            <SheetAwareTextInput
-              accessibilityLabel={t("transactions.destinationAmount")}
+            <FigureInput
+              label={t("transactions.destinationAmount")}
               value={toAmountRaw.replace(",", mark)}
               onChangeText={handleToAmountText}
+              step="displayTwo"
+              maxLength={AMOUNT_INTEGER_DIGITS + 1 + to.decimals}
+              affix={<Text style={styles.affixSmall}>{to.symbol ?? to.currency}</Text>}
+              focused={focused === "toAmount"}
               onFocus={handleToAmountFocus}
               onBlur={handleBlur}
-              placeholder="0"
-              placeholderTextColor={styles.placeholder.color}
-              keyboardType="decimal-pad"
-              inputMode="decimal"
-              maxLength={AMOUNT_INTEGER_DIGITS + 1 + to.decimals}
-              maxFontSizeMultiplier={textCap("displayTwo")}
-              style={[styles.arrivesInput, arrivesWidth, arrivesHeight]}
             />
-            <Text style={styles.affixSmall}>{to.symbol ?? to.currency}</Text>
           </View>
           {toAmountError === undefined ? null : (
             <Text style={styles.fieldError}>{toAmountError}</Text>
@@ -623,13 +605,8 @@ const useStyles = makeStyles((theme) => ({
     flexShrink: 1,
   },
   provenance: { color: theme.textMuted, ...text.ui("caption"), flexShrink: 1 },
-  figure: {
-    flexDirection: "row",
-    alignItems: "baseline",
-    gap: space.md,
-    minHeight: touchTarget.min,
-    borderRadius: radius.xs,
-  },
+  // `FigureInput` lays the row out; this is only the box the focus ring is drawn on.
+  figure: { borderRadius: radius.xs },
   // The card is the field; the ring is on the row the input fills (§2.6).
   figureFocused: {
     outlineWidth: focus.width,
@@ -637,28 +614,6 @@ const useStyles = makeStyles((theme) => ({
     outlineColor: theme.focusRing,
     outlineOffset: focus.offset,
   },
-  leavesInput: {
-    flexShrink: 1,
-    padding: 0,
-    color: theme.text,
-    ...inputStep(text.display("displayOne")),
-    fontVariant: [...tabularNums],
-    // The default `auto` renders its own ring regardless of an author
-    // `outlineWidth: 0` (`amount-field.tsx`'s own note).
-    outlineWidth: 0,
-    outlineStyle: "solid",
-  },
-  arrivesInput: {
-    flexShrink: 1,
-    padding: 0,
-    color: theme.text,
-    ...inputStep(text.display("displayTwo")),
-    fontVariant: [...tabularNums],
-    outlineWidth: 0,
-    outlineStyle: "solid",
-  },
-  // `textMuted`, never `textFaint`: a placeholder is read.
-  placeholder: { color: theme.textMuted },
   affix: { color: theme.accentText, ...text.ui("displayThree") },
   affixSmall: { color: theme.accentText, ...text.ui("body", 600) },
   fieldError: { color: theme.dangerText, ...text.ui("caption") },

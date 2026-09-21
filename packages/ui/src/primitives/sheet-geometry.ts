@@ -39,8 +39,8 @@
  */
 
 import type { ViewStyle } from "react-native";
-import type { SafeAreaInsets } from "../primitives/safe-area";
 import { space, touchTarget } from "../tokens.ts";
+import type { SafeAreaInsets } from "./safe-area";
 
 /** `05-composites` §5.1: the sheet may reach to 170px from the top of the window. */
 export const SHEET_TOP_OFFSET = 170;
