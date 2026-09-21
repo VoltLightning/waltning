@@ -71,12 +71,13 @@ import Animated, {
 } from "react-native-reanimated";
 import { scheduleOnRN } from "react-native-worklets";
 import { PressableScaled } from "../../../primitives/atoms/pressable-scaled/pressable-scaled";
+import { MagnifyingGlassIcon } from "../../../primitives/icons";
 import { useInteraction } from "../../../primitives/interaction.ts";
 import { text, textCap } from "../../../theme/fonts.ts";
 import { useTheme } from "../../../theme/provider";
 import { makeStyles } from "../../../theme/styles.ts";
 import { focus, radius, touchTarget } from "../../../tokens.ts";
-import { CaretDownIcon, CaretLeftIcon, CaretRightIcon, MagnifyingGlassIcon } from "../../phosphor";
+import { CaretDownIcon, CaretLeftIcon, CaretRightIcon } from "../../phosphor";
 import {
   CARET_REST,
   COLLAPSED_HEIGHT,

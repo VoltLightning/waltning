@@ -234,14 +234,3 @@ export function ShieldCheckIcon({ size, color }: PhosphorIconProps) {
     </Svg>
   );
 }
-
-export function MagnifyingGlassIcon({ size, color }: PhosphorIconProps) {
-  return (
-    <Svg width={size} height={size} viewBox={VIEW_BOX}>
-      <Path
-        d="M229.66 218.34l-50.06-50.06a88.21 88.21 0 1 0-11.32 11.32l50.06 50.06a8 8 0 0 0 11.32-11.32M40 112a72 72 0 1 1 72 72 72.08 72.08 0 0 1-72-72"
-        fill={color}
-      />
-    </Svg>
-  );
-}
