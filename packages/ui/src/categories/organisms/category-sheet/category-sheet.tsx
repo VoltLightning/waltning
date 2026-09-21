@@ -59,12 +59,14 @@ import { PressableScaled } from "../../../primitives/atoms/pressable-scaled/pres
 import { Tag } from "../../../primitives/atoms/tag";
 import { TextField } from "../../../primitives/atoms/text-field/text-field";
 import { useInteraction } from "../../../primitives/interaction.ts";
+import { categoryTintFor } from "../../../primitives/monogram.ts";
 import { horizontalScrollProps, nestedScrollProps } from "../../../primitives/nested-scroll.ts";
 import { usePressScale } from "../../../primitives/press-scale.ts";
 import { BottomSheet } from "../../../shell/organisms/bottom-sheet/bottom-sheet";
 import { EmptyState } from "../../../states/organisms/empty-state/empty-state";
 import { focusBorder } from "../../../theme/focus.ts";
 import { text, textCap } from "../../../theme/fonts.ts";
+import { useTheme } from "../../../theme/provider";
 import { makeStyles } from "../../../theme/styles.ts";
 import { radius, space, touchTarget } from "../../../tokens.ts";
 
@@ -556,6 +558,16 @@ type GroupChipProps = {
  */
 function GroupChip({ id, name, selected, onPress }: GroupChipProps) {
   const styles = useStyles();
+  const theme = useTheme();
+  // **A group wears its hue as a wash** (`02-tokens` §2.1): four outlined
+  // chips reading *Food · Home · Shopping* were one shape four times. The
+  // chosen one takes the hue's solid as its edge.
+  const tint = useMemo(() => categoryTintFor(name, theme), [name, theme]);
+  const wash = useMemo(
+    () => ({ backgroundColor: tint.fill, borderColor: selected ? tint.solid : tint.fill }),
+    [tint, selected],
+  );
+  const ink = useMemo(() => ({ color: tint.ink }), [tint]);
   const { hovered, focused, handlers } = useInteraction();
   const press = usePressScale();
   const handlePress = useCallback(() => onPress(id), [id, onPress]);
@@ -581,18 +593,25 @@ function GroupChip({ id, name, selected, onPress }: GroupChipProps) {
         {...handlers}
         style={[
           styles.groupChip,
-          selected ? styles.groupChipSelected : null,
+          wash,
           hovered && !selected ? styles.groupChipHovered : null,
           focused ? styles.focused : null,
         ]}
       >
-        <Text style={[styles.groupChipText, selected ? styles.groupChipTextSelected : null]}>
+        <Text style={[styles.groupChipText, ink, selected ? styles.groupChipTextSelected : null]}>
           {name}
         </Text>
       </Pressable>
     </Animated.View>
   );
 }
+
+/** The mark is a second way to find a name that is already there: not read out. */
+const DECORATIVE = {
+  accessibilityElementsHidden: true,
+  importantForAccessibility: "no-hide-descendants",
+  "aria-hidden": true,
+} as const;
 
 type LeafCellProps = {
   leaf: CategoryTreeNode;
@@ -608,6 +627,20 @@ function LeafCell({ leaf, count, selected, onPress }: LeafCellProps) {
   const { hovered, focused, handlers } = useInteraction();
   const press = usePressScale();
   const handlePress = useCallback(() => onPress(leaf.id), [leaf.id, onPress]);
+  const theme = useTheme();
+  /*
+    **Each option carries its category's mark** (`02-tokens` §2.1) — the solid
+    square a ledger row wears for the same category, with its letter. Ten white
+    outlined tiles were ten of one thing: a reader found *Groceries* by reading
+    every name. The chosen tile takes the hue's wash and its solid as an edge,
+    so *which one is picked* is said in the option's own colour.
+  */
+  const tint = useMemo(() => categoryTintFor(leaf.name, theme), [leaf.name, theme]);
+  const mark = useMemo(() => ({ backgroundColor: tint.solid }), [tint]);
+  const onMark = useMemo(() => ({ color: tint.onSolid }), [tint]);
+  const chosen = useMemo(() => ({ backgroundColor: tint.fill, borderColor: tint.solid }), [tint]);
+  const chosenInk = useMemo(() => ({ color: tint.ink }), [tint]);
+  const letter = Array.from(leaf.name.trim())[0]?.toUpperCase() ?? "?";
   const label =
     count === undefined
       ? leaf.name
@@ -626,13 +659,21 @@ function LeafCell({ leaf, count, selected, onPress }: LeafCellProps) {
         style={[
           styles.cell,
           selected ? styles.cellSelected : null,
+          selected ? chosen : null,
           hovered && !selected ? styles.cellHovered : null,
           focused ? styles.focused : null,
         ]}
       >
+        <View style={[styles.cellMark, mark]} {...DECORATIVE}>
+          <Text style={[styles.cellMarkLetter, onMark]}>{letter}</Text>
+        </View>
         <Text
-          style={[styles.cellName, selected ? styles.cellNameSelected : null]}
-          numberOfLines={1}
+          style={[
+            styles.cellName,
+            selected ? styles.cellNameSelected : null,
+            selected ? chosenInk : null,
+          ]}
+          numberOfLines={2}
         >
           {leaf.name}
         </Text>
@@ -790,9 +831,20 @@ const useStyles = makeStyles((theme) => ({
     paddingVertical: space.lg,
   },
   cellHovered: { backgroundColor: theme.hoverFill },
-  cellSelected: { borderColor: theme.accentFillBorder, backgroundColor: theme.accentFill },
-  cellName: { flex: 1, color: theme.text, ...text.ui("body") },
-  cellNameSelected: { color: theme.accentText, ...text.ui("body", 600) },
+  // The colours are the category's own, set inline; the weight is the state's.
+  cellSelected: { borderWidth: 2 },
+  cellMark: {
+    width: 28,
+    height: 28,
+    borderRadius: radius.sm,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  cellMarkLetter: { ...text.ui("label", 700) },
+  // Two lines: the mark takes a third of a narrow tile, and *Furniture & …*
+  // is a name the reader has to open the tile to finish.
+  cellName: { flex: 1, color: theme.text, ...text.ui("bodySm", 500) },
+  cellNameSelected: { ...text.ui("bodySm", 600) },
   cellCount: { color: theme.textMuted, ...text.ui("caption") },
   focused: focusBorder(theme.focusRing, { horizontal: space.x2, vertical: space.lg }),
   groupChip: {
@@ -805,9 +857,8 @@ const useStyles = makeStyles((theme) => ({
     marginRight: space.md,
   },
   groupChipHovered: { backgroundColor: theme.hoverFill },
-  groupChipSelected: { borderColor: theme.accentFillBorder, backgroundColor: theme.accentFill },
-  groupChipText: { color: theme.text, ...text.ui("body") },
-  groupChipTextSelected: { color: theme.accentText, ...text.ui("body", 600) },
+  groupChipText: { ...text.ui("body", 500) },
+  groupChipTextSelected: { ...text.ui("body", 700) },
   uncategorizedDivider: {
     borderTopWidth: 1,
     borderTopColor: theme.border,

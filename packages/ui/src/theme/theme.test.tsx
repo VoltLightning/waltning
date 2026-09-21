@@ -687,54 +687,45 @@ describe("a component follows the active theme", () => {
   });
 
   /**
-   * **The categorical ramp, which the drawn palette could not have passed.**
-   *
-   * Four category hues are drawn on the boards. Measured: three of the four
-   * fail 3:1 in dark, and all four sit **1.0–1.3:1 from each other** — the same
-   * lightness, so in greyscale or to a colourblind reader they are one colour.
-   * A palette whose entire job is telling categories apart that does not tell
-   * them apart is drawn rather than designed, and this is the check that keeps
-   * the replacement honest.
-   *
-   * Three properties, and the third is the one the drawing failed:
-   *
-   * 1. **Visible in both themes from one set of values.** A tile is an area, so
-   *    the floor is the shell pair's 1.5 rather than 1.4.11's 3:1 — and it has
-   *    to clear on all four grounds, because a categorical ramp is theme-fixed
-   *    for the reason `chartRamp` is: its job is separating categories from
-   *    each other, not from the page.
-   * 2. **Carries its own ink at 4.5.** `design-system/07` §7.2 already states
-   *    this rule for a treemap tile; a category tile is the same object.
-   * 3. **Separated from each other in lightness, not only in hue.**
+   * **The categorical ramp: never colour alone, and every pair held to
+   * contrast** (`02-tokens` §2.1). It was six muted fills spread across
+   * lightness so a greyscale screenshot told them apart, and it read as mud.
+   * Pale tints cannot differ in lightness, so that guarantee moved: everything
+   * tinted carries its name or its letter, and what is pinned here is that the
+   * name can be read — on the wash and on the mark, in both themes.
    */
-  it("keeps every category tint visible on both themes' grounds", () => {
+  it("gives every category wash an ink that reads on it, in both themes", () => {
+    for (const step of categoryRamp) {
+      expect(contrastRatio(step.ink, step.tint), `${step.name} light`).toBeGreaterThanOrEqual(4.5);
+      expect(
+        contrastRatio(step.darkInk, step.darkTint),
+        `${step.name} dark`,
+      ).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+
+  it("carries white on every category mark", () => {
+    for (const step of categoryRamp) {
+      expect(contrastRatio("#ffffff", step.solid), step.name).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+
+  it("keeps every category mark a shape on every surface it is drawn on", () => {
+    // The mark is a graphic the category is spotted by: 1.4.11's 3:1, against
+    // the card and the page of both themes.
     for (const step of categoryRamp) {
       for (const ground of [light.surface, light.ground, dark.surface, dark.ground]) {
-        expect(contrastRatio(step.fill, ground), step.fill).toBeGreaterThanOrEqual(1.5);
+        expect(
+          contrastRatio(step.solid, ground),
+          `${step.name} on ${ground}`,
+        ).toBeGreaterThanOrEqual(3);
       }
     }
   });
 
-  it("gives every category tint an ink that reads on it", () => {
-    for (const step of categoryRamp) {
-      const ink = step.light ? light.textOnAccent : color.green900;
-      expect(contrastRatio(ink, step.fill), step.fill).toBeGreaterThanOrEqual(4.5);
-    }
-  });
-
-  /**
-   * **The one the boards fail.** Hue alone is not separation: a colourblind
-   * reader and a greyscale screenshot both see lightness. 1.2 is where two
-   * tints stop reading as the same colour; the drawn four are at 1.01.
-   */
-  it("separates the category tints from each other in lightness", () => {
-    for (let i = 0; i < categoryRamp.length; i++) {
-      for (let j = i + 1; j < categoryRamp.length; j++) {
-        const a = categoryRamp[i]?.fill ?? "";
-        const b = categoryRamp[j]?.fill ?? "";
-        expect(contrastRatio(a, b), `${a} vs ${b}`).toBeGreaterThanOrEqual(1.2);
-      }
-    }
+  it("names ten hues, and no two the same", () => {
+    expect(new Set(categoryRamp.map((step) => step.solid)).size).toBe(categoryRamp.length);
+    expect(categoryRamp.length).toBe(10);
   });
 
   /**

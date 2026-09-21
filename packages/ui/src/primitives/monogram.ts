@@ -93,31 +93,47 @@ export function monogramFor(name: string, theme: Theme): Monogram {
 }
 
 /** A category's tint, and the ink that reads on it. */
-export type CategoryTint = { fill: string; ink: string };
+export type CategoryTint = {
+  /** The wash: a chip, a selected tile. */
+  fill: string;
+  /** What is written on the wash. */
+  ink: string;
+  /** The mark a category is spotted by — an icon square, a bar. */
+  solid: string;
+  /** What is written on the mark. */
+  onSolid: string;
+};
 
 /**
- * `categoryTintFor` — the colour a category is recognised by, from its name.
- *
- * **The same move `monogramFor` makes, on the palette that can carry it.** A
- * counterparty gets a step of the green ramp because it needs to be *stable*,
- * not *distinguishable* — two people sharing a tint costs nothing. A category
- * is read across a ledger row, a *Where it went* bar and, later, a report's
- * slices, and there the whole job is telling one from another. `categoryRamp`
- * is the palette built for that; its own doc has the measurements.
- *
- * **Derived, not stored, and that is a decision rather than a shortcut.** The
- * schema has no colour on a category and no icon — the drawn palette assumed
- * both. A derived tint gives every category a consistent identity today,
- * across every screen, with no migration and no picker to build; a chosen one
- * is a column and an editor, and it can be added later without moving this,
- * because a stored value simply wins over the derivation.
- *
- * **Folded, so the tint survives a rename that is not one.** `Groceries` and
- * `groceries ` are the same category to a reader and hash the same here.
- * Renaming it to something genuinely different moves the tint, which is
- * correct: it is a different name.
+ * `hashOf`, finished with an avalanche. djb2 alone leaves its low bits
+ * correlated for short names, and ten hues read only those: three of the ten
+ * categories a first ledger shows landed on one hue. Still a hash — two
+ * siblings can share a hue, and only a *stored* colour can promise otherwise.
  */
-export function categoryTintFor(name: string, theme: Theme): CategoryTint {
-  const step = categoryRamp[hashOf(fold(name.trim())) % categoryRamp.length] ?? categoryRamp[0];
-  return { fill: step.fill, ink: step.light ? theme.textOnAccent : DARK_INK };
+function spreadOf(s: string): number {
+  let hash = hashOf(s);
+  hash ^= hash >>> 16;
+  hash = Math.imul(hash, 0x45d9f3b) >>> 0;
+  hash ^= hash >>> 16;
+  return hash >>> 0;
 }
+
+export function categoryTintFor(name: string, theme: Theme): CategoryTint {
+  const step = categoryRamp[spreadOf(fold(name.trim())) % categoryRamp.length] ?? categoryRamp[0];
+  return theme.scheme === "dark"
+    ? { fill: step.darkTint, ink: step.darkInk, solid: step.solid, onSolid: WHITE }
+    : { fill: step.tint, ink: step.ink, solid: step.solid, onSolid: WHITE };
+}
+
+/** A hue asked for by name, for the few things that are not a category. */
+export type HueName = (typeof categoryRamp)[number]["name"];
+
+export function hueNamed(name: HueName, theme: Theme): CategoryTint {
+  const step = categoryRamp.find((candidate) => candidate.name === name) ?? categoryRamp[0];
+  return theme.scheme === "dark"
+    ? { fill: step.darkTint, ink: step.darkInk, solid: step.solid, onSolid: WHITE }
+    : { fill: step.tint, ink: step.ink, solid: step.solid, onSolid: WHITE };
+}
+
+/** White on every `solid`, in both themes: the solids are one set of values. */
+const WHITE = "#ffffff";

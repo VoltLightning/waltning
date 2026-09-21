@@ -118,7 +118,7 @@ describe("SpendRows", () => {
     // against the track, an invisible bar — because the contrast assertions
     // live on the tokens and nothing tied the component to them.
     for (const drawn of colours) {
-      expect(categoryRamp.map((step) => rgb(step.fill))).toContain(drawn);
+      expect(categoryRamp.map((step) => rgb(step.solid))).toContain(drawn);
     }
 
     // Stable across renders: a tint that moved on re-render would be a

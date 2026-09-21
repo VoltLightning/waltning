@@ -188,7 +188,7 @@ export const color = {
    * gained or lost. Job 3 is `income`.
    */
   income: "#396c2e",
-  spend: "#974b35",
+  spend: "#b91c1c",
 
   /**
    * The green ramp is the **entire** chart palette: magnitude reads as depth,
@@ -216,11 +216,11 @@ export const color = {
   amberBorder: "#d9bd75",
 
   /** Danger — a destructive action, a refused write. **Never chrome.** */
-  danger: "#a33d26",
+  danger: "#b91c1c",
   dangerBg: "#f8e8e2",
   dangerBorder: "#c05e37",
   /** The fill of a destructive control (§2.6c). Carries `textOnDanger` at 6.46:1. */
-  dangerSolid: "#a33d26",
+  dangerSolid: "#b91c1c",
   textOnDanger: "#ffffff",
 
   /**
@@ -303,11 +303,11 @@ export const darkColor = {
   accentFillBorder: "#46543c",
   textOnAccent: "#ffffff",
   income: "#8fd47c",
-  spend: "#e0937b",
+  spend: "#ff6b5c",
   amber: "#3a311d",
   amberInk: "#e6cd8c",
   amberBorder: "#8f7a3a",
-  danger: "#f0a28c",
+  danger: "#ff8a7d",
   dangerBg: "#3d241c",
   dangerBorder: "#b36a51",
   /**
@@ -332,43 +332,108 @@ export const darkColor = {
 } as const;
 
 /**
- * **The categorical ramp — eight tints a category is recognised by.**
+ * **The categorical ramp — ten hues a category is recognised by**
+ * (`design-system/02` §2.1).
  *
- * A different kind of palette from `green100…900`, and the difference is the
- * whole reason this exists. That ramp is *sequential*: one hue, nine
- * lightnesses, built so adjacent slices of a stacked bar separate from each
- * other. It cannot carry identity — every category would be a shade of the
- * same green — and `chartBar`'s own doc records what happened when it was
- * asked to.
+ * A different kind of palette from `green100…900`. That ramp is *sequential*:
+ * one hue, nine lightnesses, built so adjacent slices of a stacked bar
+ * separate. It cannot carry identity — every category would be a shade of the
+ * same green.
  *
- * **The drawn palette was not usable.** The boards give four categories a
- * hue each; measured, three of the four fail 3:1 in dark and all four sit
- * **1.0–1.3:1 from each other**. They are the same lightness, so in
- * greyscale, or to a colourblind reader, they are one colour — a palette
- * whose entire job is telling categories apart that does not.
+ * **Each hue is three things.** A pale `tint` with its own `ink`, for a chip
+ * or a selected tile — colour as a wash, the way the boards draw it; a `solid`
+ * that carries white, for the mark a category is spotted by (the icon square,
+ * a bar); and the dark theme's pair, a deep fill under a bright ink.
  *
- * **So these vary in lightness as well as hue**, spread 0.060 → 0.500 in
- * relative luminance, and the worst pair here is **1.21:1**. Interleaved
- * against hue too, so neighbours on the wheel are not neighbours on the
- * ramp.
- *
- * **No green.** Sage is the accent and `income` is the other one; a category
- * tile in either would be a tile that looks like a control or a credit.
- *
- * **One set of values for both themes**, like `chartRamp` and for the same
- * reason: a categorical ramp's job is separating categories from each other,
- * not from the page. Each clears 1.5:1 against all four grounds — cream
- * surface and ground, charcoal surface and ground — so a tile is visible in
- * either theme, and each carries its own ink at 4.5:1, which is the rule
- * `design-system/07` §7.2 already states for a treemap tile.
+ * **It was six muted fills spread across lightness**, so that a greyscale
+ * screenshot still told them apart — and it read as mud: browns, a slate, a
+ * mauve, every option in a picker the same. The guarantee that replaced
+ * lightness separation is **never colour alone**: everything tinted carries
+ * its name or its letter, which is WCAG 1.4.1's actual requirement, and each
+ * pair here is held to contrast instead — ink on tint and white on solid at
+ * 4.5:1, in both themes (`theme.test.tsx`).
  */
 export const categoryRamp = [
-  { fill: "#534236", light: true },
-  { fill: "#2a6963", light: true },
-  { fill: "#6773a4", light: true },
-  { fill: "#7a94a6", light: false },
-  { fill: "#b299a6", light: false },
-  { fill: "#d2ad8d", light: false },
+  {
+    name: "amber",
+    tint: "#f9ecdc",
+    ink: "#8e5310",
+    solid: "#a56112",
+    darkTint: "#47341f",
+    darkInk: "#f8c181",
+  },
+  {
+    name: "teal",
+    tint: "#dff6f4",
+    ink: "#206f69",
+    solid: "#247e78",
+    darkTint: "#1f4745",
+    darkInk: "#92e8e2",
+  },
+  {
+    name: "sky",
+    tint: "#dcedf9",
+    ink: "#1a6393",
+    solid: "#1f77b1",
+    darkTint: "#1f3747",
+    darkInk: "#88c7f2",
+  },
+  {
+    name: "indigo",
+    tint: "#dfe2f6",
+    ink: "#273486",
+    solid: "#5968cf",
+    darkTint: "#1f2447",
+    darkInk: "#96a1e9",
+  },
+  {
+    name: "rose",
+    tint: "#f7dee6",
+    ink: "#8c2141",
+    solid: "#cf3462",
+    darkTint: "#471f2b",
+    darkInk: "#ed91ad",
+  },
+  {
+    name: "plum",
+    tint: "#f1e4f1",
+    ink: "#723b72",
+    solid: "#a254a2",
+    darkTint: "#432343",
+    darkInk: "#d9a1d9",
+  },
+  {
+    name: "olive",
+    tint: "#eef4e1",
+    ink: "#576b29",
+    solid: "#63792e",
+    darkTint: "#3b471f",
+    darkInk: "#cbe198",
+  },
+  {
+    name: "cocoa",
+    tint: "#f2e9e3",
+    ink: "#754f38",
+    solid: "#976649",
+    darkTint: "#452e21",
+    darkInk: "#dbb59f",
+  },
+  {
+    name: "slate",
+    tint: "#e7eaee",
+    ink: "#475666",
+    solid: "#60738a",
+    darkTint: "#2a323c",
+    darkInk: "#aabbcf",
+  },
+  {
+    name: "coral",
+    tint: "#f9e2dc",
+    ink: "#983016",
+    solid: "#cc401d",
+    darkTint: "#47271f",
+    darkInk: "#f59b84",
+  },
 ] as const;
 
 /* ── 2.2 Typography ──────────────────────────────────────────────────────── */

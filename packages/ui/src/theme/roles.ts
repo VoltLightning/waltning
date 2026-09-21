@@ -54,6 +54,8 @@ export type ThemeElevation = {
  * broken on every other screen that uses the same role.
  */
 export type Theme = {
+  /** Which of the two this is, for the few values that are a pair rather than a role. */
+  scheme: "light" | "dark";
   /** The page. Every card sits on it. */
   ground: string;
   /** A card, sheet or row lifted above `ground`. */
@@ -297,6 +299,7 @@ function floating(layer: ShadowLayer, rim: string, rimWidth: number): ThemeEleva
  * prevent, moved one file along.
  */
 export const light: Theme = {
+  scheme: "light",
   ground: color.ground,
   surface: color.surface,
   subtleFill: color.subtle,
@@ -362,6 +365,7 @@ export const light: Theme = {
 };
 
 export const dark: Theme = {
+  scheme: "dark",
   ground: darkColor.ground,
   surface: darkColor.surface,
   subtleFill: darkColor.subtle,
