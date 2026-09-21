@@ -402,7 +402,16 @@ function DayRibbonView({ days, current, scrollY, placement, onPickDay, onTick }:
       // **Read at the line the reader is looking at, not at the top edge** —
       // `SEEN_LEAD` below it, the same line `blockAt` names the day by, so the
       // ring in motion and the ring at rest are about the same place.
-      const target = fracFor(scrollY.value + SEEN_LEAD, here.tops, here.marks);
+      //
+      // **Only while the list is actually moving.** The line in motion and the
+      // rule at rest differ by a fraction of a cell, and on a list that has
+      // never moved that fraction was read as *a day going past*: the strip
+      // ticked once on every cold open, and drifted off the day for the 140ms
+      // before it landed back on it. Found by the first spec to run this in a
+      // browser with frames (`visual/day-ribbon.spec.ts`).
+      const target = listRest.value.moved
+        ? fracFor(scrollY.value + SEEN_LEAD, here.tops, here.marks)
+        : markOf(scrollY.value, here.tops, here.marks);
       // How fast the day being followed is moving, in cells per second — the one
       // thing `follow` cannot work out for itself, and the thing its damping is
       // decided by. Measured rather than inferred from the gap, because a gap is

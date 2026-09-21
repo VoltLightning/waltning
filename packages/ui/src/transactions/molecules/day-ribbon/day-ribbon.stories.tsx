@@ -9,7 +9,10 @@
  */
 
 import type { Meta, StoryObj } from "@storybook/react-native-web-vite";
+import { useCallback, useState } from "react";
+import { Text, View } from "react-native";
 import { useSharedValue } from "react-native-reanimated";
+import { Button } from "../../../primitives/atoms/button/button";
 import type { RibbonDay } from "./day-ribbon";
 import { DayRibbon } from "./day-ribbon";
 import type { StripPlacement } from "./scrub.ts";
@@ -154,3 +157,46 @@ export const Quiet: Story = {
     })),
   },
 };
+
+/**
+ * **A list that moves, and a count of the taps it asked for.**
+ *
+ * The one part of this component no component test can see: whether a day
+ * passing the ring actually *asks for a tick*. That decision is made in a
+ * frame callback, and jsdom has no frames — so for as long as it has existed
+ * it could be silently never firing, which on a device is exactly what *no
+ * haptics* looked like. Here the frame loop is real. `visual/day-ribbon.spec.ts`
+ * scrolls the pretend list a day at a time and reads the count.
+ *
+ * Every day block is 100pt tall, so one press of *Scroll a day* is one day.
+ */
+function TickingRibbon() {
+  const scrollY = useSharedValue(0);
+  const placement = useSharedValue<StripPlacement>({
+    tops: LONG_RUN.map((_, index) => index * 100),
+    // Newest first, the way the list runs: the last cell is the top of the list.
+    marks: LONG_RUN.map((_, index) => LONG_RUN.length - 1 - index),
+  });
+  const [ticks, setTicks] = useState(0);
+  const tick = useCallback(() => setTicks((seen) => seen + 1), []);
+  const scroll = useCallback(() => {
+    scrollY.value += 100;
+  }, [scrollY]);
+  return (
+    <View>
+      <DayRibbon
+        days={LONG_RUN}
+        current={null}
+        scrollY={scrollY}
+        placement={placement}
+        onPickDay={noop}
+        onTick={tick}
+      />
+      <Button label="Scroll a day" onPress={scroll} variant="ghost" />
+      <Text accessibilityLabel="Ticks">{ticks}</Text>
+    </View>
+  );
+}
+
+// A behaviour, not a look — `stories.spec.ts` takes no screenshot of it.
+export const Ticking: Story = { render: TickingRibbon };

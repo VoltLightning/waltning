@@ -300,7 +300,7 @@ const NEEDS_FROZEN_CLOCK = /ThinkingIndicator/;
  * it is not a screenshot.
  */
 const NO_SCREENSHOT =
-  /^(?:categories-(?:categorysheet|createcategorysheet)--|accounts-accountpicker--searching$|accounts-reconcilesheet--reconcile$|shell-bottomsheet--tall-form$|primitives-wheel--live$)/;
+  /^(?:categories-(?:categorysheet|createcategorysheet)--|accounts-accountpicker--searching$|accounts-reconcilesheet--reconcile$|shell-bottomsheet--tall-form$|primitives-wheel--live$|transactions-dayribbon--ticking$)/;
 
 for (const story of STORIES) {
   for (const theme of THEMES) {
