@@ -3,9 +3,12 @@ import { currencyCode, pivotPerUnit, toMoney } from "@waltning/core/money";
 import { describe, expect, it } from "vitest";
 import {
   type LedgerDayRow,
-  RIBBON_AHEAD,
-  RIBBON_REACH,
-  ribbonDays,
+  RIBBON_BACK_YEARS,
+  ribbonCell,
+  ribbonDate,
+  ribbonDayOn,
+  ribbonMarks,
+  ribbonRun,
   toLedgerItems,
 } from "./ledger-days.ts";
 
@@ -159,7 +162,7 @@ describe("toLedgerItems", () => {
   });
 });
 
-describe("ribbonDays", () => {
+describe("ribbonMarks", () => {
   const day = (date: string, ...amounts: string[]) => amounts.map((a) => row(date, a));
 
   it("makes heavy relative to what is on screen, not to an absolute figure", () => {
@@ -170,18 +173,18 @@ describe("ribbonDays", () => {
       [...day("2026-08-14", "-200"), ...day("2026-08-13", "-20"), ...day("2026-08-12", "-120")],
       PLN,
     );
-    expect(ribbonDays(items).map((d) => d.activity)).toEqual(["heavy", "some", "heavy"]);
+    expect(ribbonMarks(items).days.map((d) => d.activity)).toEqual(["heavy", "some", "heavy"]);
   });
 
   it("calls a day that nets to zero with rows on it flat, never in or out", () => {
     // Transfers between your own accounts: money moved and none of it left.
     const items = toLedgerItems([...day("2026-08-14", "-100", "100")], PLN);
-    expect(ribbonDays(items)[0]).toMatchObject({ direction: "flat", activity: "some" });
+    expect(ribbonMarks(items).days[0]).toMatchObject({ direction: "flat", activity: "some" });
   });
 
   it("reads a positive day as in", () => {
     const items = toLedgerItems([...day("2026-08-14", "7850")], PLN);
-    expect(ribbonDays(items)[0]).toMatchObject({ direction: "in" });
+    expect(ribbonMarks(items).days[0]).toMatchObject({ direction: "in" });
   });
 
   it("says something happened on a day it cannot price, and no more", () => {
@@ -189,7 +192,7 @@ describe("ribbonDays", () => {
       [row("2026-08-14", "-50", { toAmount: toMoney("50"), toCurrency: EUR, toFxRate: null })],
       PLN,
     );
-    expect(ribbonDays(items)[0]).toMatchObject({
+    expect(ribbonMarks(items).days[0]).toMatchObject({
       activity: "some",
       direction: "flat",
       pivot: null,
@@ -198,102 +201,16 @@ describe("ribbonDays", () => {
 
   it("counts the entries, so the label can say how many", () => {
     const items = toLedgerItems([...day("2026-08-14", "-10", "-20", "-30")], PLN);
-    expect(ribbonDays(items)[0]?.entries).toBe(3);
+    expect(ribbonMarks(items).days[0]?.entries).toBe(3);
   });
 
-  it("runs past today, so a centred ring is not at the right-hand edge", () => {
-    const today = accountingDate("2026-08-14");
-    const items = toLedgerItems([...day("2026-08-14", "-10"), ...day("2026-08-12", "-20")], PLN, {
-      anchor: today,
-    });
-    const strip = ribbonDays(items, { anchor: today, today });
-    const last = strip.at(-1)?.date;
-    expect(last).toBe("2026-08-30");
-    expect(strip.filter((d) => d.date > today)).toHaveLength(RIBBON_AHEAD);
-    // Generated calendar, so nothing claims a figure for a day that has not
-    // happened.
-    expect(strip.filter((d) => d.date > today).every((d) => d.entries === 0)).toBe(true);
-  });
-
-  it("does not run past a run that never reaches today", () => {
-    // A jump to 2021: what sits past the last loaded day is a year of rows this
-    // page has not read, not days nothing can have happened on. Sixteen quiet
-    // cells there would claim the ledger stops in 2021.
-    const anchor = accountingDate("2021-03-14");
-    const items = toLedgerItems([...day("2021-03-14", "-10")], PLN, { anchor });
-    const strip = ribbonDays(items, { anchor, today: accountingDate("2026-08-14") });
-    expect(strip.at(-1)?.date).toBe("2021-03-14");
-  });
-
-  it("leaves the run where the rows end when no today is given", () => {
-    const items = toLedgerItems([...day("2026-08-14", "-10")], PLN);
-    expect(ribbonDays(items).at(-1)?.date).toBe("2026-08-14");
-  });
-
-  it("keeps the anchor on the strip when the anchor is past today", () => {
-    // **The days ahead *extend* the run; they must never replace it.** Written
-    // as a replacement, one press of the header's `>` put the anchor a month
-    // out and collapsed the run to `today + 16` — behind the anchor, so the
-    // day the page is named for had no cell at all. Past `today + 61` the
-    // range inverted and the strip drew nothing.
-    const today = accountingDate("2026-09-20");
-    for (const ahead of ["2026-10-20", "2026-12-01", "2027-06-01"]) {
-      const anchor = accountingDate(ahead);
-      const items = toLedgerItems([], PLN, { anchor });
-      const strip = ribbonDays(items, { anchor, today });
-      expect(strip.length, `anchor ${ahead}`).toBeGreaterThan(0);
-      expect(
-        strip.some((day) => day.date === anchor),
-        `the anchor has a cell at ${ahead}`,
-      ).toBe(true);
-    }
-  });
-
-  it("marks only the days it invented as droppable", () => {
-    // The strip drops generated cells to fit its band. A real row dated after
-    // today is not one of those — counted as such it was dropped, and every
-    // cell after it with it.
-    const today = accountingDate("2026-08-14");
-    const items = toLedgerItems([...day("2026-08-20", "-10")], PLN, { anchor: today });
-    const strip = ribbonDays(items, { anchor: today, today });
-    const real = strip.find((d) => d.date === "2026-08-20");
-    expect(real?.entries, "a real future row").toBe(1);
-    expect(real?.generated, "is not droppable").toBeUndefined();
-    expect(
-      strip.filter((d) => d.generated === true).every((d) => d.entries === 0),
-      "everything droppable is empty",
-    ).toBe(true);
-  });
-
-  it("still clips the days ahead to the ribbon's reach", () => {
-    // The anchor is behind today by almost the whole reach, so `RIBBON_REACH`
-    // and not `RIBBON_AHEAD` is what decides where the strip stops.
-    const anchor = accountingDate("2026-07-02");
-    const today = accountingDate("2026-08-14");
-    const items = toLedgerItems([...day("2026-07-02", "-10"), ...day("2026-08-14", "-20")], PLN, {
-      anchor,
-    });
-    const strip = ribbonDays(items, { anchor, today });
-    expect(strip.at(-1)?.date).toBe("2026-08-16");
-  });
-
-  /**
-   * **The list runs newest-first and the strip does not.**
-   *
-   * Handed the list's order unchanged, the ribbon drew `11 10 9 8 7` left to
-   * right — a week running backwards under the tabs, beside a `MonthGrid` on
-   * the next page of the same screen running forwards. Reverse-chronological is
-   * a rule about reading a ledger down a page; it does not survive the turn
-   * onto a horizontal axis, and both languages this app ships read left to
-   * right.
-   */
   it("runs earliest-first, whichever way the list it came from ran", () => {
     const items = toLedgerItems(
       [...day("2026-08-14", "-200"), ...day("2026-08-13", "-20"), ...day("2026-08-12", "-120")],
       PLN,
     );
     expect(items[0]).toMatchObject({ date: "2026-08-14" });
-    expect(ribbonDays(items).map((d) => d.date)).toEqual([
+    expect(ribbonMarks(items).days.map((d) => d.date)).toEqual([
       "2026-08-12",
       "2026-08-13",
       "2026-08-14",
@@ -306,45 +223,84 @@ describe("ribbonDays", () => {
     const items = toLedgerItems([...day("2026-08-14", "-200"), ...day("2026-08-10", "-20")], PLN, {
       filtered: true,
     });
-    expect(ribbonDays(items, { filtered: true }).map((d) => d.date)).toEqual([
+    expect(ribbonMarks(items, { filtered: true }).days.map((d) => d.date)).toEqual([
       "2026-08-10",
       "2026-08-14",
     ]);
   });
 });
 
-describe("the ribbon is continuous", () => {
-  it("draws a cell for every day between the first and the last, not only the busy ones", () => {
-    // §7.2 says continuous. A strip built only from the days that hold rows is
-    // not a strip: one transaction drew one cell, which reads as a broken
-    // control rather than as a quiet month, and the gap between two marks said
-    // nothing about whether they were a day or a fortnight apart.
-    const items = toLedgerItems([row("2026-09-01", "-10"), row("2026-09-05", "-20")], PLN);
-    const days = ribbonDays(items);
-    expect(days.map((day) => day.date)).toEqual([
-      "2026-09-01",
-      "2026-09-02",
-      "2026-09-03",
-      "2026-09-04",
-      "2026-09-05",
-    ]);
+describe("a day of the strip, asked for when it is drawn", () => {
+  const today = accountingDate("2026-09-10");
+
+  it("is the loaded day where there is one", () => {
+    const marks = ribbonMarks(toLedgerItems([row("2026-09-05", "-20")], PLN));
+    expect(ribbonDayOn(accountingDate("2026-09-05"), marks, today)).toMatchObject({ entries: 1 });
   });
 
-  it("marks a filled day and leaves a quiet one bare", () => {
-    const items = toLedgerItems([row("2026-09-01", "-10"), row("2026-09-03", "-20")], PLN);
-    const byDate = new Map(ribbonDays(items).map((day) => [day.date as string, day]));
-    expect(byDate.get("2026-09-02")?.activity).toBe("none");
-    expect(byDate.get("2026-09-02")?.entries).toBe(0);
-    expect(byDate.get("2026-09-03")?.activity).not.toBe("none");
+  it("is quiet between two loaded days, where a gap really is a gap in the ledger", () => {
+    const marks = ribbonMarks(
+      toLedgerItems([row("2026-09-05", "-20"), row("2026-09-01", "-10")], PLN),
+    );
+    expect(ribbonDayOn(accountingDate("2026-09-03"), marks, today)).toMatchObject({
+      activity: "none",
+      entries: 0,
+    });
   });
 
-  it("draws one cell for a list that loaded one day", () => {
-    const items = toLedgerItems([row("2026-09-01", "-10")], PLN);
-    expect(ribbonDays(items).map((day) => day.date)).toEqual(["2026-09-01"]);
+  /**
+   * **The one an endless strip makes necessary.** Most of its days are days
+   * the list has never loaded, and `none` draws the quiet dot and reads
+   * *"nothing"* — a claim about a day that may hold forty rows.
+   */
+  it("is unread outside what the list has loaded, on either side", () => {
+    const marks = ribbonMarks(
+      toLedgerItems([row("2026-09-05", "-20"), row("2026-09-01", "-10")], PLN),
+    );
+    for (const date of ["2026-08-31", "2019-02-03", "2026-09-06", "2026-09-10"]) {
+      expect(ribbonDayOn(accountingDate(date), marks, today), date).toMatchObject({
+        activity: "unread",
+        pivot: null,
+      });
+    }
   });
 
-  it("is empty for a list that loaded nothing", () => {
-    expect(ribbonDays([])).toEqual([]);
+  it("is invented past today, once the list reaches today", () => {
+    const marks = ribbonMarks(toLedgerItems([row("2026-09-10", "-20")], PLN, { anchor: today }));
+    expect(ribbonDayOn(accountingDate("2026-09-12"), marks, today)).toMatchObject({
+      activity: "none",
+      generated: true,
+    });
+  });
+
+  it("is not invented after a jump to 2021, where the days after are unread", () => {
+    // What sits past the last loaded day is five years of rows this page has
+    // not read, not days nothing can have happened on.
+    const anchor = accountingDate("2021-03-14");
+    const marks = ribbonMarks(toLedgerItems([row("2021-03-14", "-10")], PLN, { anchor }), {
+      anchor,
+    });
+    expect(ribbonDayOn(accountingDate("2026-09-12"), marks, today).generated).toBeUndefined();
+    expect(ribbonDayOn(accountingDate("2021-03-15"), marks, today).activity).toBe("unread");
+  });
+
+  it("never calls a real row dated after today invented", () => {
+    // The strip may drop invented cells to fit its band; a real row is a row.
+    const marks = ribbonMarks(toLedgerItems([row("2026-09-20", "-10")], PLN, { anchor: today }), {
+      anchor: today,
+    });
+    const real = ribbonDayOn(accountingDate("2026-09-20"), marks, today);
+    expect(real.entries).toBe(1);
+    expect(real.generated).toBeUndefined();
+  });
+
+  it("knows no span under a filter, where a gap says nothing about the ledger", () => {
+    const marks = ribbonMarks(
+      toLedgerItems([row("2026-09-05", "-20"), row("2026-09-01", "-10")], PLN, { filtered: true }),
+      { filtered: true, anchor: today },
+    );
+    expect(marks.from).toBeUndefined();
+    expect(marks.days.map((day) => day.date)).toEqual(["2026-09-01", "2026-09-05"]);
   });
 });
 
@@ -397,78 +353,71 @@ describe("the anchor", () => {
     expect(kinds(items)).toEqual(["day"]);
   });
 
-  it("gives the ribbon a cell, so the day the screen is named for is on it", () => {
-    const strip = ribbonDays(toLedgerItems([row("2026-09-09", "-10")], PLN, { anchor }), {
+  it("is inside what the ribbon calls loaded, so the day the screen is named for is quiet, not unread", () => {
+    const marks = ribbonMarks(toLedgerItems([row("2026-09-09", "-10")], PLN, { anchor }), {
       anchor,
     });
-    expect(strip.map((day) => day.date)).toEqual(["2026-09-09", "2026-09-10", "2026-09-11"]);
-    expect(strip[2]).toMatchObject({ activity: "none", entries: 0 });
+    expect(marks).toMatchObject({ from: "2026-09-09", to: anchor });
+    expect(ribbonDayOn(anchor, marks, anchor)).toMatchObject({ activity: "none", entries: 0 });
   });
 
   /**
    * The page hands the *list* no anchor until both halves have answered, and
    * none at all over an empty ledger — the first-run state stands where the
-   * rows would. The strip still names the day, from its own option: that is
-   * the one cell an empty ledger's List has, and the page is named for it.
+   * rows would. The strip still names the day, from its own option.
    */
-  it("is the whole ribbon when the list holds nothing, from the ribbon's own option", () => {
-    const strip = ribbonDays([], { anchor });
-    expect(strip.map((day) => day.date)).toEqual([anchor]);
-    expect(strip[0]).toMatchObject({ activity: "none", entries: 0 });
-  });
-
-  it("is not a cell under a filter, where the strip is not continuous", () => {
-    expect(ribbonDays([], { anchor, filtered: true })).toEqual([]);
+  it("is the whole of what is loaded when the list holds nothing", () => {
+    const marks = ribbonMarks([], { anchor });
+    expect(marks).toMatchObject({ from: anchor, to: anchor });
+    expect(ribbonDayOn(anchor, marks, anchor)).toMatchObject({ activity: "none", entries: 0 });
   });
 });
 
 /**
- * **A jump to 1950 asked for 27 613 cells.** `YearPicker` pages back to 1900
- * and the year it lands on becomes the List's anchor; the anchor became an
- * item; the strip filled every day between its first item and its last. The
- * list drew three rows for the same input. `DayRibbon` is a plain `ScrollView`
- * with no virtualisation, and the page formats two `Intl` strings per cell.
+ * **The strip has no end to meet, and no window to re-cut.** It was 45 days
+ * either side of a centre that moved when the reader strayed from it: a thumb
+ * met the end after six weeks, and every re-cut shifted every cell's index
+ * under a strip in the middle of landing on one.
  */
-describe("the ribbon's reach", () => {
-  it("is bounded by the constant, not by how far apart two loaded days are", () => {
-    const anchor = accountingDate("1950-06-01");
-    const items = toLedgerItems([row("2026-01-05", "-10")], PLN, { anchor });
-    expect(kinds(items), "the list collapses the gap").toEqual(["day", "quiet", "quiet"]);
+describe("the strip's run", () => {
+  const today = accountingDate("2026-09-21");
 
-    const strip = ribbonDays(items, { anchor });
-    expect(strip.length).toBe(RIBBON_REACH + 1);
-    expect(strip[0]?.date).toBe(anchor);
-    expect(strip.at(-1)?.date).toBe("1950-07-16");
-    expect(
-      strip.some((day) => day.date === "2026-01-05"),
-      "the far row is off the strip",
-    ).toBe(false);
+  it("starts on a 1 January, ten years before today, over an empty ledger", () => {
+    const run = ribbonRun(today);
+    expect(run.origin).toBe(`${2026 - RIBBON_BACK_YEARS}-01-01`);
+    expect(run.through).toBe(today);
+    expect(ribbonDate(run.count - 1, run)).toBe(today);
   });
 
-  it("reaches both ways from the anchor when the rows are on both sides", () => {
-    const anchor = accountingDate("2026-06-01");
-    const items = toLedgerItems([row("2026-12-25", "-10"), row("2026-01-05", "-10")], PLN, {
-      anchor,
-    });
-    const strip = ribbonDays(items, { anchor });
-    expect(strip.length).toBe(2 * RIBBON_REACH + 1);
-    expect(strip[0]?.date).toBe("2026-04-17");
-    expect(strip.at(-1)?.date).toBe("2026-07-16");
-    expect(strip[RIBBON_REACH]?.date).toBe(anchor);
+  it("makes a cell's index the days since the origin — nothing to clamp", () => {
+    const run = ribbonRun(today);
+    expect(ribbonCell(run.origin, run)).toBe(0);
+    expect(ribbonCell(today, run)).toBe(run.count - 1);
+    const cell = ribbonCell(accountingDate("2024-02-29"), run);
+    expect(ribbonDate(cell, run)).toBe("2024-02-29");
   });
 
-  it("centres on the newest day for a caller with no anchor", () => {
-    const strip = ribbonDays(
-      toLedgerItems([row("2026-12-25", "-10"), row("2026-01-05", "-10")], PLN),
-    );
-    expect(strip.length).toBe(RIBBON_REACH + 1);
-    expect(strip.at(-1)?.date).toBe("2026-12-25");
+  it("does not move when an older page of the same year loads", () => {
+    const before = ribbonRun(today, { oldest: accountingDate("2026-08-01") });
+    const after = ribbonRun(today, { oldest: accountingDate("2026-02-11") });
+    expect(after).toEqual(before);
   });
 
-  it("does not pad a short span out to the reach", () => {
-    const strip = ribbonDays(
-      toLedgerItems([row("2026-09-09", "-10"), row("2026-09-07", "-10")], PLN),
-    );
-    expect(strip.map((day) => day.date)).toEqual(["2026-09-07", "2026-09-08", "2026-09-09"]);
+  it("reaches behind a jump to 1950, by whole years", () => {
+    const run = ribbonRun(today, { oldest: accountingDate("1950-06-01") });
+    expect(run.origin).toBe("1940-01-01");
+    expect(ribbonCell(accountingDate("1950-06-01"), run)).toBeGreaterThan(0);
+  });
+
+  it("runs through a real day past today, and keeps counting past it", () => {
+    const newest = accountingDate("2026-10-03");
+    const run = ribbonRun(today, { newest });
+    expect(run.through).toBe(newest);
+    // The cells drawn to fill the band come after `through`, by arithmetic.
+    expect(ribbonDate(run.count, run)).toBe("2026-10-04");
+  });
+
+  it("says a day before the origin has no cell", () => {
+    expect(ribbonCell(accountingDate("1999-01-01"), ribbonRun(today))).toBe(-1);
   });
 });

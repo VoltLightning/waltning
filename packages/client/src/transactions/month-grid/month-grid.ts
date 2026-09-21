@@ -7,7 +7,7 @@
  * component that made them could only be checked by rendering it. What is left
  * for `packages/ui` is drawing a grid of what it is handed.
  *
- * **`heavy` is relative to the month on screen, exactly as `ribbonDays` makes
+ * **`heavy` is relative to the month on screen, exactly as `ribbonMarks` makes
  * it relative to the list on screen.** A ledger whose largest day is 200 zł
  * and one whose largest is 20 000 would otherwise draw every mark the same
  * size — one all small, the other all large — where the mark exists to say
@@ -21,7 +21,7 @@
  * **A day holding two currencies has no figure.** `dayFlows` refuses to fold
  * them (`money.ts`) and so does this: the day still gets a mark, because
  * something happened, and `net` is `null` because no single number is true.
- * The same shape `ribbonDays` uses for a day it could not price.
+ * The same shape `ribbonMarks` uses for a day it could not price.
  */
 
 import { type AccountingDate, accountingDate, addDays, type YearMonth } from "@waltning/core/date";

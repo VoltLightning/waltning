@@ -366,18 +366,24 @@ it("still offers a first capture when the ledger itself is empty, under a strip 
 
 /**
  * `YearPicker` pages back to 1900, and the year picked becomes this page's
- * anchor. The strip fills every day between its ends, so a far anchor over a
- * 2026 ledger asked for 27 613 cells in a `ScrollView` — each with two `Intl`
- * formats — where the list drew three rows. `ledger-days` bounds it; this pins
- * that the page hands the anchor to the strip, which is where the bound bites.
+ * anchor. The strip's run is every day from ten years before the oldest day it
+ * has heard of to today — 31 000 cells here — and it was once a `ScrollView`
+ * that drew every one of them, each with two `Intl` formats, where the list
+ * drew three rows. It is a virtualised list: what is drawn is one window,
+ * around the anchor.
  */
-it("draws a bounded strip after a jump far behind the ledger", () => {
+it("draws a window of the strip, not the run, after a jump far behind the ledger", () => {
   draw(ledgerWith([], [row("2026-08-14", 2, "-10")]), vi.fn(), {
     anchor: accountingDate("1950-06-01"),
   });
-  const cells = screen.getByRole("list").querySelectorAll("[aria-label]");
-  expect(cells.length).toBe(46);
-  expect(cells[0]?.getAttribute("aria-label")).toMatch(/June 1, 1950/);
+  const cells = Array.from(
+    screen.getByRole("list").querySelectorAll("[aria-label]"),
+    (cell) => cell.getAttribute("aria-label") ?? "",
+  );
+  expect(cells.length).toBeLessThanOrEqual(16);
+  expect(cells.some((label) => /June 1, 1950/.test(label))).toBe(true);
+  // Days nothing has been loaded for say their date and make no claim.
+  expect(cells.find((label) => /May 30, 1950/.test(label))).toBe("May 30, 1950");
 });
 
 /**
@@ -392,8 +398,14 @@ it("draws the ribbon earliest-first, under a list that runs newest-first", () =>
     strip.querySelectorAll("[aria-label]"),
     (cell) => cell.getAttribute("aria-label") ?? "",
   );
-  expect(dates[0]).toMatch(/August 12/);
-  expect(dates[dates.length - 1]).toMatch(/August 14/);
+  // Every day has a cell, so the run is read for its order, not for its ends:
+  // the 12th is drawn before the 14th, and the day between them is between.
+  const at = (day: RegExp) => dates.findIndex((label) => day.test(label));
+  expect(at(/August 12, 2026, 1 entry/)).toBeGreaterThanOrEqual(0);
+  expect(at(/August 13, 2026, nothing/)).toBe(at(/August 12/) + 1);
+  expect(at(/August 14, 2026, 1 entry/)).toBe(at(/August 12/) + 2);
+  // Before the oldest loaded day the list has read nothing, and says so.
+  expect(dates[at(/August 12/) - 1]).toBe("August 11, 2026");
 });
 
 /**

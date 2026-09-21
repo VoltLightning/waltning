@@ -1,4 +1,4 @@
-import { type AccountingDate, addDays, daysBetween } from "@waltning/core/date";
+import { type AccountingDate, accountingDate, addDays, daysBetween } from "@waltning/core/date";
 import type { CurrencyCode, Money, PivotPerUnit } from "@waltning/core/money";
 import * as money from "@waltning/core/money";
 
@@ -160,7 +160,7 @@ export type LedgerItemOptions = {
    * three days newer. Under a filter it is not drawn: the anchor is a date the
    * query did not match, and the filtered list says nothing about those.
    *
-   * `ribbonDays` takes it too, and separately: the page hands the list no
+   * `ribbonMarks` takes it too, and separately: the page hands the list no
    * anchor until both halves have answered — a quiet line drawn before the
    * read is a statement nothing has read — while the strip above it names the
    * day from the first frame, over an empty ledger included.
@@ -224,43 +224,68 @@ export function toLedgerItems<Row extends LedgerDayRow>(
 }
 
 /**
- * How far the ribbon reaches either side of the day it is centred on, in days.
+ * How far back the strip runs before the oldest day it has heard of, in years.
  *
- * **The strip is a neighbourhood, not the ledger.** It fills every day between
- * the first and the last it holds, and the anchor is one of them — so a jump
- * to 1950 in a ledger that begins in 2026 asked for twenty-seven thousand
- * cells in a plain `ScrollView`, each with two `Intl` formats behind it. The
- * list survives the same input because it collapses the gap into one row; the
- * ribbon cannot, because the distance is what it draws, so it draws less of
- * it. Forty-five is a quarter each way: further than a thumb scrolls a strip,
- * and ninety-one cells at most, whatever the ledger's shape.
+ * **The strip is endless to a hand, and a fixed run to the arithmetic.** It was
+ * a window of days around the anchor, re-cut whenever the reader strayed from
+ * its middle — so a thumb on the strip met its end after six weeks, and every
+ * re-cut moved every cell's index under a strip that was in the middle of
+ * landing on one. A run that starts on a fixed day makes a cell's index *the
+ * number of days since that day*: nothing is clamped, nothing is re-cut, and
+ * the strip is virtualised so its length costs nothing.
  */
-export const RIBBON_REACH = 45;
+export const RIBBON_BACK_YEARS = 10;
+
+/** The strip's run: `count` days from `origin`, the last of them `through`. */
+export type RibbonRun = {
+  origin: AccountingDate;
+  /** The last day that is not invented to fill the band — today, or later. */
+  through: AccountingDate;
+  count: number;
+};
 
 /**
- * How many days past today the strip may draw — **a supply, not the count**.
+ * The run the strip draws, from what the screen knows.
  *
- * S04 §4 draws the run past today so a ring centred on today is not sitting at
- * the right-hand edge of a strip that appears to stop. How many of these are
- * *shown* is a function of the measured band and belongs to `DayRibbon`, which
- * is the only thing that knows how wide it is; this is the ceiling the screen
- * formats, sized for the widest band the phone layout is ever asked for.
- *
- * Sixteen generated calendar days cost nothing. **It is a phone's number**:
- * `aheadCount` asks for more than this past a band of about 1712pt, which no
- * phone reaches and a maximised browser does — and there the run stops a cell
- * short of the edge rather than filling it. A ragged edge on a desk-width
- * window is the mildest form this can fail in, and the desk has its own
- * layout; if the strip is ever shown that wide, this is the constant to
- * derive from the band rather than to raise.
+ * `origin` is a **1 January**, so that it moves once in a long while rather
+ * than whenever an older page loads: it only moves when the reader jumps
+ * further back than the run already reaches, and then by whole years.
+ * `through` is today, or the newest day the list holds if that is later — a
+ * real row dated next week, or an anchor stepped past today.
  */
-export const RIBBON_AHEAD = 16;
+export function ribbonRun(
+  today: AccountingDate,
+  held: { oldest?: AccountingDate | undefined; newest?: AccountingDate | undefined } = {},
+): RibbonRun {
+  const oldest = held.oldest !== undefined && held.oldest < today ? held.oldest : today;
+  const year = Number(oldest.slice(0, 4)) - RIBBON_BACK_YEARS;
+  const origin = accountingDate(`${String(year).padStart(4, "0")}-01-01`);
+  const through = held.newest !== undefined && held.newest > today ? held.newest : today;
+  return { origin, through, count: daysBetween(origin, through) + 1 };
+}
 
-/** One day as `DayRibbon` draws it — no words, because words are the screen's. */
+/** The cell a day has in a run, or `-1` when the run does not reach it. */
+export function ribbonCell(date: AccountingDate, run: RibbonRun): number {
+  const at = daysBetween(run.origin, date);
+  return at < 0 ? -1 : at;
+}
+
+/** The day a cell stands for — including the ones past `through`. */
+export function ribbonDate(cell: number, run: RibbonRun): AccountingDate {
+  return addDays(run.origin, cell);
+}
+
 export type RibbonDayModel = {
   date: AccountingDate;
-  /** `none` · `some` · `heavy` — how much moved, not which way. */
-  activity: "none" | "some" | "heavy";
+  /**
+   * `none` · `some` · `heavy` — how much moved, not which way.
+   *
+   * **`unread` is not `none`.** A day outside what the list has loaded is a
+   * day the screen knows nothing about, and an endless strip is mostly those.
+   * Drawn as `none` it would say *nothing happened* about a day holding forty
+   * rows nobody has scrolled to.
+   */
+  activity: "none" | "some" | "heavy" | "unread";
   /** Which way the day netted. `flat` is movement that left nothing behind. */
   direction: "out" | "in" | "flat";
   /** The day's own total, for the label the screen writes. `null` where it could not be priced. */
@@ -277,6 +302,19 @@ export type RibbonDayModel = {
    * off the strip.
    */
   generated?: boolean;
+};
+
+/**
+ * What the loaded list knows about its days: the ones holding rows, classed,
+ * and the span it has loaded — `undefined` under a filter, where a gap between
+ * two matched days says nothing about the ledger.
+ */
+export type RibbonMarks = {
+  /** The days holding rows, **earliest first** — the whole strip under a filter. */
+  days: readonly RibbonDayModel[];
+  held: ReadonlyMap<string, RibbonDayModel>;
+  from: AccountingDate | undefined;
+  to: AccountingDate | undefined;
 };
 
 /**
@@ -308,10 +346,10 @@ export type RibbonDayModel = {
  * A day whose total could not be computed is `some` and `flat` — something
  * happened, and the screen may not say what.
  */
-export function ribbonDays<Row extends LedgerDayRow>(
+export function ribbonMarks<Row extends LedgerDayRow>(
   items: readonly LedgerItem<Row>[],
   options: LedgerItemOptions = {},
-): readonly RibbonDayModel[] {
+): RibbonMarks {
   const days = items.filter((item) => item.kind === "day");
   let largest = money.ZERO;
   for (const day of days) {
@@ -373,86 +411,56 @@ export function ribbonDays<Row extends LedgerDayRow>(
   // it is still a strip, and a strip that changed direction when a search was
   // typed would be two controls wearing one name.
   const strip = [...marked].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
-  if (options.filtered === true) return strip;
-  // The span is every item's and the anchor's, not only the busy days': the
-  // anchor may sit past the last row on either side — or be the only thing
-  // there is, over a ledger holding nothing — and a strip that ran only
-  // between rows left the day the screen is named for with no cell.
-  let from: AccountingDate | undefined = options.anchor;
-  let to: AccountingDate | undefined = options.anchor;
-  for (const item of items) {
-    const [low, high] = item.kind === "day" ? [item.date, item.date] : [item.to, item.from];
-    if (from === undefined || low < from) from = low;
-    if (to === undefined || high > to) to = high;
+  let from: AccountingDate | undefined;
+  let to: AccountingDate | undefined;
+  if (options.filtered !== true) {
+    from = options.anchor;
+    to = options.anchor;
+    for (const item of items) {
+      const [low, high] = item.kind === "day" ? [item.date, item.date] : [item.to, item.from];
+      if (from === undefined || low < from) from = low;
+      if (to === undefined || high > to) to = high;
+    }
   }
-  if (from === undefined || to === undefined) return strip;
-  // Clipped to `RIBBON_REACH` either side of the anchor — or of the newest day,
-  // for a caller with no anchor — so the cell count is bounded by the constant
-  // and not by how far apart two loaded days happen to be.
-  const centre = options.anchor ?? to;
-  const nearest = addDays(centre, -RIBBON_REACH);
-  const furthest = addDays(centre, RIBBON_REACH);
-  // The days past today, where the caller asked for them and the run reaches
-  // today to begin with. `RIBBON_REACH` still clips the result: a strip is
-  // bounded by the constant whatever else is asked of it.
-  /*
-    **Extended past today, never *replaced* by a range that ends there.**
-    Written as a replacement, an anchor in the future — one press of the
-    header's `>` — collapsed the run to `today + 16`, which is *behind* the
-    anchor: the anchor lost its cell, and past `today + 61` the range inverted
-    and the strip drew nothing at all. `LedgerItemOptions.anchor` promises the
-    anchor is always an item; this is what keeps that true.
-  */
-  const ahead = options.today;
-  // Extended only when the run actually reaches today — a jump to 2021 has a
-  // year of unread rows past its last loaded day, not days nothing can have
-  // happened on — and then never to *less* than the run already covers.
-  const wanted = ahead !== undefined && to >= ahead ? addDays(ahead, RIBBON_AHEAD) : to;
-  const end = wanted > to ? wanted : to;
-  const start = from < nearest ? nearest : from;
-  const stop = end > furthest ? furthest : end;
-  return fillQuietDays(strip, start, stop < start ? start : stop, ahead);
+  return { days: strip, held: new Map(strip.map((day) => [day.date as string, day])), from, to };
 }
 
 /**
- * **The ribbon is continuous** (S04 §7.2): a cell for every day between the
- * first and the last the list has loaded, whether or not the ledger has
- * anything for it.
+ * One day of the strip, asked for when its cell is drawn.
  *
- * A strip built only from the days that hold rows is not a strip — a ledger
- * with one transaction drew one cell, which reads as a broken control rather
- * than as a quiet month, and the gaps between two marks said nothing about
- * whether they were a day or a fortnight apart. The list itself collapses a
- * quiet run into one row, because a list of nothings is unreadable; the ribbon
- * cannot, because the distance *is* what it draws.
+ * **The ribbon is continuous** (S04 §7.2): a cell for every day, whether or not
+ * the ledger has anything for it, because the distance between two marks is
+ * part of what the strip draws. Three kinds of day hold no rows, and they are
+ * not the same:
  *
- * A day with nothing on it is `none` and `flat`, which is the mark's absence —
- * the same shape a month grid's empty cell has.
+ * - **inside what the list has loaded** — `none`: a gap between two loaded
+ *   days really is a gap in the ledger;
+ * - **past today and past everything loaded** — `none` and `generated`: days
+ *   nothing can have happened on, drawn so a centred ring has a run to its
+ *   right;
+ * - **anywhere else** — `unread`: the list has not been there.
+ *
+ * Asked per cell rather than built as an array: the run is ten years long and
+ * a dozen cells of it are on screen.
  */
-function fillQuietDays(
-  marked: readonly RibbonDayModel[],
-  from: AccountingDate,
-  to: AccountingDate,
-  today?: AccountingDate,
-): readonly RibbonDayModel[] {
-  const held = new Map(marked.map((day) => [day.date as string, day]));
-
-  const run: RibbonDayModel[] = [];
-  for (let date = from; date <= to; date = addDays(date, 1)) {
-    const real = held.get(date);
-    if (real !== undefined) {
-      run.push(real);
-      continue;
-    }
-    run.push({
-      date,
-      activity: "none",
-      direction: "flat",
-      pivot: money.ZERO,
-      entries: 0,
-      // Invented, and past today: the only cells the strip may drop to fit.
-      ...(today !== undefined && date > today ? { generated: true } : {}),
-    });
+export function ribbonDayOn(
+  date: AccountingDate,
+  marks: RibbonMarks,
+  today: AccountingDate,
+): RibbonDayModel {
+  const real = marks.held.get(date);
+  if (real !== undefined) return real;
+  const quiet = { date, direction: "flat" as const, pivot: money.ZERO, entries: 0 };
+  const newest = marks.to === undefined || marks.to < today ? today : marks.to;
+  if (date > newest) {
+    // Invented only when the list reaches today: after a jump to 2021 the days
+    // after its last loaded one are unread, not impossible.
+    const reaches = marks.to === undefined || marks.to >= today;
+    return reaches
+      ? { ...quiet, activity: "none", generated: true }
+      : { ...quiet, pivot: null, activity: "unread" };
   }
-  return run;
+  const inside =
+    marks.from !== undefined && marks.to !== undefined && date >= marks.from && date <= marks.to;
+  return inside ? { ...quiet, activity: "none" } : { ...quiet, pivot: null, activity: "unread" };
 }

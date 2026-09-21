@@ -522,7 +522,7 @@ happened*.
 | `MonthSummary` | The hero, opening month only. *Kept so far* stacked over its figure, a `FlowBar`, then the labelled pair. Draws three zeroes for a period the ledger did not exist in — that is the true answer, not an empty state |
 | `FlowBar` | Track is *came in*, fill is *went out*, gap is *kept*. Fill clamps at 100%; a deficit is carried by the figures, not by an overrunning bar |
 | `SpendRows` | *Where it went* — §6 at leaf granularity, five rows plus a named remainder, bars proportional to the largest row, one colour. Opening month only |
-| `DayRibbon` | Under `PageTabs`, on the List page only. **A scrubber, not a selector** — the highlight is a ring fixed at the middle of the band and never moves; what moves under it is the run of days, driven by the list's own scroll offset. Continuous — a cell for **every** day between the first and the last the list has loaded, not only the days holding rows, because the distance between two marks is part of what the strip draws — and **no further than 45 days either side of the anchor** (`RIBBON_REACH`): the list collapses a five-year gap into one row, the strip cannot, so it draws its neighbourhood rather than the ledger. **Earliest at the left.** Past today it keeps going: enough further days to reach the band's right edge, drawn in `textMuted` — quieter in ink, never in opacity, which mixes the ground into the number and lands at 2.7:1 where 4.5 is required. Without them a centred ring has nothing to its right on a cold open, and the strip reads as truncated rather than as a position in a run. That count is a function of the measured band, so the resting state is the same on every device and in every month; it is **not** the list's forward horizon, which is §9's month-end and a different question. Horizontally scrollable, clipped at both edges. 48×66 cells with the day number at 17px and room around the weekday letter. Activity mark per §3 |
+| `DayRibbon` | Under `PageTabs`, on the List page only. **A scrubber, not a selector** — the highlight is a ring fixed at the middle of the band and never moves; what moves under it is the run of days, driven by the list's own scroll offset. Continuous and **endless to a hand** — a cell for **every** day, from a 1 January ten years before the oldest day the list has heard of, to today and past it — because the distance between two marks is part of what the strip draws, and a strip a thumb can reach the end of after six weeks is a window, not a scrubber. A cell's index is *the number of days since that first day*: pure arithmetic, so nothing is clamped to an end and nothing is re-cut as the reader moves (a run re-centred around the anchor moved every cell's index under a strip that was in the middle of landing on one). The list collapses a five-year gap into one row and the strip cannot — so it is **virtualised**: a dozen cells are on screen, a few bands either side of them are drawn, and a day is asked for when its cell is. **Three kinds of day hold no rows and they are not the same**: between two loaded days it is *quiet* (the faint dot, *“nothing”*) — a gap there really is a gap in the ledger; past today, once the list reaches today, it is *not yet*; anywhere else it is **unread** — no mark at all and a label that is only its date, because *nothing* would be a claim about a day the list has never loaded. **The 1st says its month and 1 January its year**, in the weekday letter's place: two years from anything that names them, bare day numbers say nothing about where the reader is. Under a search the strip is the matched days and nothing else — not continuous, since a gap between two matches says nothing about the ledger. **Earliest at the left.** Past today it keeps going: enough further days to reach the band's right edge, drawn in `textMuted` — quieter in ink, never in opacity, which mixes the ground into the number and lands at 2.7:1 where 4.5 is required. Without them a centred ring has nothing to its right on a cold open, and the strip reads as truncated rather than as a position in a run. That count is a function of the measured band, so the resting state is the same on every device and in every month; it is **not** the list's forward horizon, which is §9's month-end and a different question. Horizontally scrollable, clipped at both edges. 48×66 cells with the day number at 17px and room around the weekday letter. Activity mark per §3 |
 | `MonthGrid` | Calendar's own grid — a day per cell with `DayRibbon`'s activity mark, ≥44px |
 | `EmptyState` | Calendar's three, under the grid — §8.1's `filtered`, `range` and `first-run`, never a blank |
 | `YearChart` | Months' hero — twelve paired columns scaled to the busiest month of the year, the current month ticked, empty months drawn as stubs. Carries the year, its net, its two arrows and the button that opens `YearPicker` |
@@ -665,7 +665,8 @@ way to another — and never at the halfway line between two cells, where it
 would mark the last day being left and let the settle onto the new one go by in
 silence. It is read off where the strip *is*, not where it was sent, so it is
 felt when the day is seen to arrive; a strip that is merely being re-seated — a
-cold open, a run of days re-cut around a new anchor — lands without one. Every
+cold open, a jump to a far day, a search changing which days it holds — lands
+without one. Every
 day a hand brings to the ring is one light tap, *the coast after a flick
 included*: each cell is a
 snap point, and feedback that cuts out the moment the finger lifts reads as
@@ -684,10 +685,9 @@ scrubbing too.
 
 **At rest the ring is on the list's day, and that is checked rather than
 assumed.** When the list stops the strip lands on the day §3 names. A landing
-is an animated scroll, and on a device that is a request, not a fact: the run
-of days is re-cut around the settled day, the track changes under the
-animation, and the scroller may drop it — a ring left a day or two into the
-future over a list on today. So a resting, attached strip that is not where it
+is an animated scroll, and on a device that is a request, not a fact: a
+scroller may drop one that anything interrupts, and what it leaves is a ring a
+day or two from the list's day with nothing left that would look again. So a resting, attached strip that is not where it
 belongs once its landing has had time to finish is sent there again; once per
 place it is stuck, because a strip that did not move when asked is against its
 own end. The track's width is computed from the band and the count of cells,

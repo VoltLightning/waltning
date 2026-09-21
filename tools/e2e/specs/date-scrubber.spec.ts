@@ -364,6 +364,36 @@ test.describe("the day strip is scrubbed by the list", () => {
     expect(opened, "and the list").toContain((await dayAtTheTopOfTheList(page)) ?? "nothing");
   });
 
+  /**
+   * **The strip has no end to meet** (S04 §4). It was 45 days either side of
+   * the anchor, so a hand on it stopped six weeks out. It is every day for ten
+   * years, virtualised — and the days out there that the list has never loaded
+   * say their date and make no claim about what they hold.
+   */
+  test("goes on for years under a hand, and claims nothing about days it has not read", async ({
+    page,
+  }) => {
+    const resting = await stripOffset(page);
+    await page.mouse.move(195, 190);
+    for (let tick = 0; tick < 60; tick += 1) {
+      await page.mouse.wheel(-600, 0);
+      await page.waitForTimeout(30);
+    }
+    await page.waitForTimeout(1500);
+
+    // A year of cells is 19,000pt; the old strip ended 2,300pt from today.
+    expect(resting - (await stripOffset(page)), "well past the old end").toBeGreaterThan(19_000);
+    const under = await dayUnderTheRing(page);
+    expect(under, "a cell is drawn out here, not blank track").not.toBeNull();
+    expect(under, "an unread day is its date and nothing else").toMatch(/^\w+ \d+, \d{4}$/);
+
+    // And the list takes it back from there, all the way.
+    await scrollTheList(page, 2);
+    expect(await stripOffset(page), "re-attached from two years out").toBeGreaterThan(
+      resting - 2_000,
+    );
+  });
+
   test("stays where a hand puts it, and comes back when the list moves", async ({ page }) => {
     const resting = await stripOffset(page);
 

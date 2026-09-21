@@ -114,10 +114,10 @@ export const ESTIMATED_HEIGHTS: EntryHeights = {
 /**
  * The two arrays, from the entries the list is rendering.
  *
- * `cellOf` maps a date to its cell in the strip — the screen's, because the
- * strip's run is clipped to `RIBBON_REACH` and this file has no opinion about
- * that. A date the strip does not hold clamps to its nearer end, which is what
- * keeps the interpolation monotonic across a jump the strip cannot follow.
+ * `cellOf` maps a date to its cell in the strip — the screen's, because what
+ * the strip's run is (`ledger-days.ts`'s `ribbonRun`; the matched days under a
+ * search) is not this file's business. A date the strip does not hold clamps
+ * to its nearer end, which keeps the interpolation monotonic.
  *
  * `leading` is the content's own top padding, so the first day's top is where
  * it actually is rather than zero.
