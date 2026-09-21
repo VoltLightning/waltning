@@ -38,7 +38,7 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
-import { type LayoutChangeEvent, type ListRenderItemInfo, View } from "react-native";
+import { type LayoutChangeEvent, type ListRenderItemInfo, ScrollView, View } from "react-native";
 import type { FrameInfo } from "react-native-reanimated";
 import Animated, {
   runOnJS,
@@ -49,7 +49,7 @@ import Animated, {
   useFrameCallback,
   useSharedValue,
 } from "react-native-reanimated";
-import { horizontalScrollProps } from "../../../primitives/nested-scroll.ts";
+import { horizontalScrollProps, nestedScrollProps } from "../../../primitives/nested-scroll.ts";
 import {
   advance,
   justSettled,
@@ -739,40 +739,52 @@ function StripView({
   return (
     <View style={styles.frame}>
       {/*
+        **A still scroller of the other axis, so the strip is not read as the
+        pager's.** S04's pages sit in a horizontal `ScrollView`, and React
+        Native reports any virtualised list under a plain scroller of its own
+        orientation — it cannot tell a strip with its own bounded band from a
+        list that would grow to its content and never window. The nearest
+        scroller is what it asks, so the nearest one is vertical and does not
+        move: `scrollEnabled={false}` claims no gesture, and the lane is as
+        tall as the strip and no taller.
+      */}
+      <ScrollView scrollEnabled={false} {...nestedScrollProps(styles.lane)}>
+        {/*
         **A virtualised list, because the run is ten years long** and a dozen
         cells of it are ever on screen. Fixed cells (`layoutOf`) are what let
         it open on `start` without drawing its way there, and the window is
         wide because a flick along the strip covers a month in a breath — a
         narrow one shows blank track under the ring.
       */}
-      <Animated.FlatList
-        ref={scroller}
-        data={cells}
-        renderItem={renderCell}
-        keyExtractor={keyOf}
-        getItemLayout={layoutOf}
-        ItemSeparatorComponent={Gap}
-        initialScrollIndex={opensOn(start, total)}
-        initialNumToRender={INITIAL_CELLS}
-        windowSize={WINDOW_BANDS}
-        maxToRenderPerBatch={INITIAL_CELLS}
-        onLayout={measure}
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        onScroll={handleStripScroll}
-        // 16ms: the strip is placed from this and the default reports once per
-        // gesture — a strip that only knows where it was dragged to when the
-        // finger lifts.
-        scrollEventThrottle={16}
-        // A bounded scroller inside a page that scrolls the other way: it must
-        // contain its own overscroll or a fling along it drags the list behind.
-        {...horizontalScrollProps(styles.band)}
-        contentContainerStyle={track}
-        // A ribbon is a run of days, not a list of controls to tab through one
-        // by one — a keyboard reader reaches a date through the picker, which
-        // is a grid and says so.
-        accessibilityRole="list"
-      />
+        <Animated.FlatList
+          ref={scroller}
+          data={cells}
+          renderItem={renderCell}
+          keyExtractor={keyOf}
+          getItemLayout={layoutOf}
+          ItemSeparatorComponent={Gap}
+          initialScrollIndex={opensOn(start, total)}
+          initialNumToRender={INITIAL_CELLS}
+          windowSize={WINDOW_BANDS}
+          maxToRenderPerBatch={INITIAL_CELLS}
+          onLayout={measure}
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          onScroll={handleStripScroll}
+          // 16ms: the strip is placed from this and the default reports once per
+          // gesture — a strip that only knows where it was dragged to when the
+          // finger lifts.
+          scrollEventThrottle={16}
+          // A bounded scroller inside a page that scrolls the other way: it must
+          // contain its own overscroll or a fling along it drags the list behind.
+          {...horizontalScrollProps(styles.band)}
+          contentContainerStyle={track}
+          // A ribbon is a run of days, not a list of controls to tab through one
+          // by one — a keyboard reader reaches a date through the picker, which
+          // is a grid and says so.
+          accessibilityRole="list"
+        />
+      </ScrollView>
       {/*
         **Drawn over the strip and after it, so it is never under a cell.**
         `pointerEvents="none"` because it is a mark, not a target: the cell
@@ -802,6 +814,8 @@ export const DayRibbon = memo(DayRibbonView);
 const useStyles = makeStyles((theme) => ({
   /** The positioning context the ring is placed in, and nothing else. */
   frame: { position: "relative" },
+  /** `flexGrow: 0` for the reason `band` gives: a scroller grows by default. */
+  lane: { flexGrow: 0 },
   /**
    * **`flexGrow: 0` is what keeps this a strip.**
    *

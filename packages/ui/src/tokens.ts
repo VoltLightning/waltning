@@ -668,6 +668,13 @@ export const shadow = {
   },
 } as const;
 
+/**
+ * The ink of an input that is drawn elsewhere (`FigureInput`). **Nearly clear,
+ * not `transparent`**: Android reads a zero colour on an input as *unset* and
+ * draws the default ink.
+ */
+export const unseenInk = "rgba(0,0,0,0.01)";
+
 export const hairline = { width: 1, color: "rgba(23,29,26,.10)" } as const;
 
 /* ── 2.6 Focus ───────────────────────────────────────────────────────────── */
