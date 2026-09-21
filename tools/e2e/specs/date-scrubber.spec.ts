@@ -55,6 +55,71 @@ async function dayUnderTheRing(page: import("@playwright/test").Page): Promise<s
   });
 }
 
+/**
+ * The day whose block is at the top of the List's own viewport — read off the
+ * page, not out of the app: the last date heading at or above the scroller's
+ * top edge is the block the reader is inside.
+ */
+async function dayAtTheTopOfTheList(page: import("@playwright/test").Page): Promise<string | null> {
+  return page.evaluate(() => {
+    const DATE = /^[A-Z][a-z]+ \d{1,2}, \d{4}$/;
+    // A collapsed run is headed by a *range* — `August 31 – September 1, 2026`
+    // or `September 7 – 8, 2026` — and the day it stands for is its newer end,
+    // because the list runs backwards and that is the end the reader meets.
+    const RANGE = /^([A-Z][a-z]+) \d{1,2}\s*[–-]\s*(?:([A-Z][a-z]+) )?(\d{1,2}), (\d{4})$/;
+    const dayOf = (text: string): string | null => {
+      if (DATE.test(text)) return text;
+      const run = RANGE.exec(text);
+      return run === null ? null : `${run[2] ?? run[1]} ${run[3]}, ${run[4]}`;
+    };
+    // **On screen, not merely in the document.** All four pager pages are
+    // mounted at once and Summary draws day headings too — first in DOM order,
+    // so an unscoped query read Summary's scroller and called it the List's.
+    const width = document.documentElement.clientWidth;
+    const headings = [...document.querySelectorAll("div")].filter((node) => {
+      if (node.children.length !== 0 || dayOf((node.textContent ?? "").trim()) === null)
+        return false;
+      const box = node.getBoundingClientRect();
+      return box.left >= 0 && box.right <= width && box.width > 0;
+    });
+    // The List's scroller is the tall vertical one that holds those headings.
+    const scroller = headings
+      .map((node) => {
+        let up: HTMLElement | null = node.parentElement;
+        while (up !== null && !(up.scrollHeight > up.clientHeight + 200 && up.clientHeight > 300)) {
+          up = up.parentElement;
+        }
+        return up;
+      })
+      .find((node) => node !== null);
+    if (scroller === undefined || scroller === null) return null;
+    const top = scroller.getBoundingClientRect().top;
+    const content = scroller.firstElementChild;
+    // **The cell's top, not the text's.** A day header pads above its words,
+    // so the text sits 14pt below the block it names — and a list resting
+    // exactly on a block's top, which is where a tap puts it, read as still
+    // being on the day before.
+    const cellOf = (node: Element): Element => {
+      let up: Element = node;
+      while (up.parentElement !== null && up.parentElement !== content) up = up.parentElement;
+      return up;
+    };
+    let inside: string | null = null;
+    for (const heading of headings) {
+      if (!scroller.contains(heading)) continue;
+      if (cellOf(heading).getBoundingClientRect().top <= top + 1) {
+        inside = dayOf((heading.textContent ?? "").trim());
+      }
+    }
+    // Nothing above the edge yet: the list is at its very top, on its first day.
+    if (inside === null) {
+      const first = headings.find((heading) => scroller.contains(heading));
+      inside = first === undefined ? null : dayOf((first.textContent ?? "").trim());
+    }
+    return inside;
+  });
+}
+
 async function stripOffset(page: import("@playwright/test").Page): Promise<number> {
   return page.evaluate(() => {
     const band = [...document.querySelectorAll('[role="list"]')].find(
@@ -70,8 +135,9 @@ async function scrollTheList(page: import("@playwright/test").Page, ticks: numbe
     await page.mouse.wheel(0, 300);
     await page.waitForTimeout(110);
   }
-  // Past `SETTLE_MS`, so the date has been written.
-  await page.waitForTimeout(600);
+  // Past `SETTLE_MS` and past the strip's landing animation, which begins
+  // there: read sooner, the ring is still between two cells.
+  await page.waitForTimeout(1200);
 }
 
 test.describe("the day strip is scrubbed by the list", () => {
@@ -151,6 +217,52 @@ test.describe("the day strip is scrubbed by the list", () => {
       return cell?.getAttribute("aria-label") ?? null;
     });
     expect(marked, "Calendar marks the day the list stopped on").toContain(day);
+  });
+
+  test("the ring and the list name the same day, wherever the list stops", async ({ page }) => {
+    // **Alignment, asserted rather than eyeballed** — at several stops, some of
+    // them mid-block, which is where a rule that rounds and a rule that floors
+    // disagree and where this was wrong once already.
+    for (const ticks of [1, 2, 3, 5, 4]) {
+      await page.mouse.move(195, 600);
+      for (let tick = 0; tick < ticks; tick += 1) {
+        await page.mouse.wheel(0, 170);
+        await page.waitForTimeout(90);
+      }
+      await page.waitForTimeout(1200);
+      const ring = await dayUnderTheRing(page);
+      const list = await dayAtTheTopOfTheList(page);
+      expect(list, "a day at the top of the list").not.toBeNull();
+      expect(ring, `the ring agrees with the list at "${list}"`).toContain(list ?? "");
+    }
+  });
+
+  test("a tap on a day brings that day to the top of the list", async ({ page }) => {
+    await scrollTheList(page, 4);
+    const name = await page.evaluate(() => {
+      const band = [...document.querySelectorAll('[role="list"]')].find(
+        (node) => node.scrollWidth > node.clientWidth,
+      );
+      if (band === undefined) return null;
+      const box = band.getBoundingClientRect();
+      const middle = box.left + box.width / 2;
+      const cells = [...band.querySelectorAll('[role="button"]')];
+      const at = cells.findIndex((cell) => {
+        const r = cell.getBoundingClientRect();
+        return r.left <= middle && middle <= r.right;
+      });
+      // Three days earlier than where the list is — loaded, and off-centre.
+      return cells[at - 3]?.getAttribute("aria-label") ?? null;
+    });
+    expect(name, "a loaded day to tap").not.toBeNull();
+    if (name === null) return;
+    const day = /(\w+ \d+, \d+)/.exec(name)?.[1] ?? "";
+
+    await page.getByRole("button", { name }).first().click();
+    await page.waitForTimeout(1800);
+
+    expect(await dayAtTheTopOfTheList(page), "the list went to the tapped day").toBe(day);
+    expect(await dayUnderTheRing(page), "and the ring went with it").toContain(day);
   });
 
   test("is not re-dated by a gesture on another page", async ({ page }) => {

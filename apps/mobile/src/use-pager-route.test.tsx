@@ -2,7 +2,7 @@
 
 import { renderHook } from "@testing-library/react";
 import { accountingDate, yearMonth } from "@waltning/core/date";
-import { beforeEach, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { usePagerRoute } from "./use-pager-route.ts";
 
 let params: { view?: string; date?: string; q?: string } = {};
@@ -106,5 +106,69 @@ it("clears the search by writing it empty", () => {
     view: "list",
     date: "2026-05-25",
     q: "",
+  });
+});
+
+/**
+ * **A scroll does not write the route; the next act carries the day.**
+ *
+ * `router.setParams` re-renders the whole navigation tree — four commits and
+ * ~2,400 component renders per stop, by the render probe's count — and nothing
+ * reads the date while the List is on screen except the List, which already
+ * knows. S04 §3's promise (*scroll to 25 May on List and Calendar has 25 May
+ * marked*) is kept by the swipe that takes you to Calendar, in the same write.
+ */
+describe("the day the List says it is on", () => {
+  it("writes nothing when it is noted", () => {
+    params = { view: "list", date: "2026-09-20" };
+    const { result } = renderHook(() => usePagerRoute(TODAY));
+    result.current.noteDay(accountingDate("2026-05-25"));
+    expect(setParams).not.toHaveBeenCalled();
+  });
+
+  it("is carried by the page change, in one write", () => {
+    params = { view: "list", date: "2026-09-20" };
+    const { result } = renderHook(() => usePagerRoute(TODAY));
+    result.current.noteDay(accountingDate("2026-05-25"));
+    result.current.showPage("calendar");
+    expect(setParams).toHaveBeenCalledExactlyOnceWith({
+      view: "calendar",
+      date: "2026-05-25",
+      q: "",
+    });
+  });
+
+  it("is where a step starts from", () => {
+    // Scrolled to May while the route still says September: the stepper goes
+    // to April, because that is the month before the one on screen.
+    params = { view: "list", date: "2026-09-20" };
+    const { result } = renderHook(() => usePagerRoute(TODAY));
+    result.current.noteDay(accountingDate("2026-05-25"));
+    result.current.previous();
+    expect(setParams).toHaveBeenCalledExactlyOnceWith({ view: "list", date: "2026-04-25", q: "" });
+  });
+
+  it("is spent by the write that carried it", () => {
+    params = { view: "list", date: "2026-09-20" };
+    const { result, rerender } = renderHook(() => usePagerRoute(TODAY));
+    result.current.noteDay(accountingDate("2026-05-25"));
+    result.current.showPage("calendar");
+    params = { view: "calendar", date: "2026-05-25" };
+    rerender();
+    setParams.mockClear();
+    // A deliberate day picked on Calendar must not be dragged back to May.
+    result.current.showDay(accountingDate("2026-05-27"));
+    params = { view: "calendar", date: "2026-05-27" };
+    rerender();
+    result.current.showPage("list");
+    expect(setParams).toHaveBeenLastCalledWith({ view: "list", date: "2026-05-27", q: "" });
+  });
+
+  it("is overruled by a deliberate day", () => {
+    params = { view: "list", date: "2026-09-20" };
+    const { result } = renderHook(() => usePagerRoute(TODAY));
+    result.current.noteDay(accountingDate("2026-05-25"));
+    result.current.showDay(accountingDate("2026-01-02"));
+    expect(setParams).toHaveBeenCalledExactlyOnceWith({ view: "list", date: "2026-01-02", q: "" });
   });
 });

@@ -62,7 +62,7 @@ export type ListEntryProps = {
    * over a month. The callback returns on the second entry of each kind, so
    * five measurements at mount is the whole cost.
    */
-  onMeasure: (key: EntryHeightKey, height: number) => void;
+  onMeasure: (key: EntryHeightKey, height: number, entry: string) => void;
 };
 
 function ListEntryView({ entry, handlers, currency, decimals, onMeasure }: ListEntryProps) {
@@ -70,8 +70,8 @@ function ListEntryView({ entry, handlers, currency, decimals, onMeasure }: ListE
   const t = useT();
   const key = heightKeyOf(entry);
   const report = useCallback(
-    (event: LayoutChangeEvent) => onMeasure(key, event.nativeEvent.layout.height),
-    [key, onMeasure],
+    (event: LayoutChangeEvent) => onMeasure(key, event.nativeEvent.layout.height, entry.key),
+    [key, entry.key, onMeasure],
   );
 
   return (

@@ -48,6 +48,16 @@ export type Settling = {
   moved: boolean;
 };
 
+/**
+ * A scroller a finger has just left.
+ *
+ * **Already moved, because the drag was the movement.** Seeded as `UNREAD`, a
+ * finger lifted *without* a flick never settled: nothing moved after the lift,
+ * so there was nothing to have stopped, and the strip stayed between two days.
+ * Only a flick snapped — the momentum supplied the movement the rule wanted.
+ */
+export const LIFTED: Settling = { at: null, still: 0, moved: true };
+
 /** What a scroller that has not been read yet is. */
 export const UNREAD: Settling = { at: null, still: 0, moved: false };
 
@@ -62,7 +72,9 @@ export function advance(previous: Settling, offset: number, dt: number): Settlin
   "worklet";
   // The first read is a position, never a stop: there is nothing for it to
   // have been still *since*, and nothing has moved yet.
-  if (previous.at === null) return { at: offset, still: 0, moved: false };
+  // `moved` carries over: a state seeded as already-moved (`LIFTED`) settles
+  // on stillness alone, which is what a finger lifted without a flick needs.
+  if (previous.at === null) return { at: offset, still: 0, moved: previous.moved };
   if (offset !== previous.at) return { at: offset, still: 0, moved: true };
   const step = dt > 0 ? dt : 0;
   return { at: previous.at, still: previous.still + step, moved: previous.moved };

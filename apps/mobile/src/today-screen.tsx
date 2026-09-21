@@ -303,12 +303,26 @@ export default function Today() {
    * is what the motion keys on; this is how it tells the two apart.
    */
   const settledTo = useRef<string | null>(null);
+  /**
+   * The month the List has scrolled into, where it differs from the route's.
+   *
+   * **The one thing a scroll is allowed to re-render up here, and only at a
+   * month boundary.** The day itself is *noted* rather than written
+   * (`use-pager-route.ts`): a route write re-renders the whole navigation
+   * tree, four commits and ~2,400 renders per stop by the probe's count, to
+   * tell pages that are not on screen something they will be told anyway the
+   * moment they are. The title is on screen, so it follows — once per month
+   * crossed, not once per settle.
+   */
+  const [scrubMonth, setScrubMonth] = useState<string | null>(null);
   const handleVisibleDay = useCallback(
     (date: AccountingDate) => {
       settledTo.current = date;
-      pager.showDay(date);
+      pager.noteDay(date);
+      const month = date.slice(0, 7);
+      setScrubMonth((held) => (held === month ? held : month));
     },
-    [pager.showDay],
+    [pager.noteDay],
   );
 
   const handlePickDay = useCallback(
@@ -452,6 +466,15 @@ export default function Today() {
    * it moves.
    */
   const scrollY = useSharedValue(0);
+  /**
+   * Whether List is the page on screen — for the list's own settle worklet,
+   * and for nothing React renders. A boolean prop here re-rendered the List
+   * page and every mounted cell on each swipe between pages.
+   */
+  const listActive = useSharedValue(pager.state.page === "list");
+  useEffect(() => {
+    listActive.value = pager.state.page === "list";
+  }, [listActive, pager.state.page]);
   // **The dependency array is not optional here.** Without it Reanimated
   // rebuilds the handler on every render, and `pages` is built from it — so a
   // stable handler is what lets the four page elements stay the same objects
@@ -474,7 +497,20 @@ export default function Today() {
     }),
     [pager.stepUnit, t],
   );
+  // The route's month, unless the List has scrolled into another one since.
+  // Cleared whenever the route's own date moves: that is a fresh fact, and the
+  // scrub that preceded it has either been carried by it or overruled.
+  const routeDate = pager.state.date;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the route's date moving is the event; its value is not read
+  useEffect(() => setScrubMonth(null), [routeDate]);
   const month = yearMonth(pager.state.date.slice(0, 7));
+  // **The title's month only.** `month` feeds the period every figure on
+  // Summary is read for; pointing *that* at the scrub would re-query the
+  // screen at each month boundary of a scroll, to update pages nobody is
+  // looking at. The title is the only thing on screen that names a month.
+  const titleMonth = yearMonth(
+    pager.state.page === "list" && scrubMonth !== null ? scrubMonth : month,
+  );
   /**
    * **The month the reader last chose, as opposed to the one they scrolled
    * into.** They are the same value on every deliberate act — an arrow, the
@@ -1432,7 +1468,7 @@ export default function Today() {
             query={pager.state.query}
             scrollY={scrollY}
             onTick={dayTickHaptic}
-            active={pager.state.page === "list"}
+            active={listActive}
             empty={listEmpty}
           />
         ) : null,
@@ -1507,7 +1543,7 @@ export default function Today() {
       previousYear,
       shownYear,
       scrollY,
-      pager.state.page,
+      listActive,
       today,
       yearColumns,
       yearKept,
@@ -1549,9 +1585,9 @@ export default function Today() {
         periodLabel={
           pager.state.page === "months"
             ? String(shownYear)
-            : monthLabel(month, locale).replace(/\s+\d{4}$/, "")
+            : monthLabel(titleMonth, locale).replace(/\s+\d{4}$/, "")
         }
-        periodDetail={pager.state.page === "months" ? null : String(pager.label.year)}
+        periodDetail={pager.state.page === "months" ? null : titleMonth.slice(0, 4)}
         /*
           **The period the reader last chose**, which is the month for three of
           them and the year for Months — and which is *not* the month the title

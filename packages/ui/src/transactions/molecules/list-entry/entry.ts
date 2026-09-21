@@ -43,10 +43,26 @@ export type DayRowPlaceName = "only" | "first" | "middle" | "last";
  * `firstDay` is the ungapped first header — the same component in a different
  * box, which is a different height and therefore its own key.
  *
+ * **A row is four kinds, not one.** Where it sits in its day decides its
+ * borders — the first carries the card's top edge, the last its bottom, the
+ * ones between a hairline, an only child both edges — so the four differ by a
+ * point or two. Keyed as one `row`, every position below was out by that
+ * much *per row*: a day's worth of drift within a couple of screens, which the
+ * e2e suite found as the ring on the 1st over a list on the 2nd, and a tap on
+ * the 4th landing the list on the 5th.
+ *
  * **Declared here because the component that reports them is here**, and
  * pinned against `list-geometry.ts`'s own table at the one place both meet.
  */
-export type EntryHeightKey = "day" | "firstDay" | "row" | "quiet" | "run";
+export type EntryHeightKey =
+  | "day"
+  | "firstDay"
+  | "rowOnly"
+  | "rowFirst"
+  | "rowMiddle"
+  | "rowLast"
+  | "quiet"
+  | "run";
 
 /**
  * The day an entry belongs to, or `null` for one that names none.
@@ -79,5 +95,13 @@ export function dateOfEntry(entry: ListEntry): string | null {
 /** Which measured height an entry occupies. */
 export function heightKeyOf(entry: ListEntry): EntryHeightKey {
   if (entry.kind === "day") return entry.first ? "firstDay" : "day";
+  if (entry.kind === "row") return ROW_KEY[entry.place];
   return entry.kind;
 }
+
+const ROW_KEY = {
+  only: "rowOnly",
+  first: "rowFirst",
+  middle: "rowMiddle",
+  last: "rowLast",
+} as const satisfies Record<DayRowPlaceName, EntryHeightKey>;
