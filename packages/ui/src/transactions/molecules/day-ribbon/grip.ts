@@ -105,6 +105,18 @@ export function snapsNow(hold: Grip, settled: boolean, already: boolean): boolea
 export const TICK_GAP_MS = 30;
 
 /**
+ * The floor while the *list* is what moves the strip.
+ *
+ * **Scrolling the ledger taps too — it was decided once that it should not,
+ * and a device overruled that.** The argument was that forty days through one
+ * fling is a notification rather than a texture; what it felt like in the hand
+ * was *no haptics*, because scrolling the list is how this strip is moved
+ * nearly all of the time. The longer floor is what is left of the argument: a
+ * reading scroll ticks every day, and a fling is thinned to a purr.
+ */
+export const LIST_TICK_GAP_MS = 70;
+
+/**
  * Whether a day passing under the ring should tap.
  *
  * **Every day a hand sends past the ring, coasting included** — each cell is
@@ -114,10 +126,10 @@ export const TICK_GAP_MS = 30;
  * moment you let go, which is worse. The floor between taps is what keeps a
  * fast coast a purr rather than a rattle, the way the system pickers do it.
  *
- * Never for a strip the *list* is driving: scrolling the ledger is not this
- * gesture, and forty taps through a fling of the list is a notification.
+ * A strip the *list* is driving taps as well, on a longer floor — see
+ * `LIST_TICK_GAP_MS`.
  */
 export function ticksNow(hold: Grip, sinceTick: number): boolean {
   "worklet";
-  return hold.detached && sinceTick >= TICK_GAP_MS;
+  return sinceTick >= (hold.detached ? TICK_GAP_MS : LIST_TICK_GAP_MS);
 }

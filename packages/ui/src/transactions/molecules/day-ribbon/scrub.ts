@@ -189,35 +189,69 @@ export function offsetWithin(frac: number, band: number, content: number): numbe
 }
 
 /**
- * The cell of the block the list is *inside* — `fracFor` without the
- * interpolation.
+ * How much of a day has to be left at the top of the list for it still to be
+ * *the day the reader is on*, in points — about a day's heading and most of a
+ * row.
+ */
+export const SEEN_LEAD = 72;
+
+/** How close to a block's own top counts as resting on it. */
+export const AT_TOP_SLACK = 2;
+
+/**
+ * Which day block the reader is *looking at* — the index into `tops`.
  *
- * **What the ring lands on when the list stops, so that it and the date
- * agree.** They are two answers to one question and they were allowed to
- * differ: the ring is continuous, so at rest it sits wherever the scroll
- * stopped and the cell under it is the *nearest* one — while the date is the
- * day whose rows are actually on screen, which is the block the offset is
- * inside. Past the midpoint of a block those are different days, and the
- * screen then showed a ring on one day and a Calendar marked on the next. Not
- * a rounding difference to be tuned: two sources of truth about where the
- * reader is, which is the thing this component exists not to have.
+ * **Not the block the offset is inside, which is what this first was.** The
+ * last sliver of the 24th under the top edge is, arithmetically, the 24th; and
+ * everything a person can actually read on that screen is the 23rd. Reported
+ * from a phone as *I end up on August 23rd and the selected one is the 24th* —
+ * off by one, every time the list stopped near the end of a day. So a day that
+ * has less than `SEEN_LEAD` left on screen has been scrolled past, and the day
+ * below it is the one being read.
  *
- * So the strip lands on this, and `dayAt` reports the same block. Agreement by
- * construction rather than by the two rules happening to coincide.
+ * **Except a block the list is resting exactly on top of**, however short:
+ * that is where a tap on a day puts the list, and a quiet day is only one line
+ * tall — by the rule above a tap on it would select the day *after* it.
+ *
+ * The last entry of `tops` is `list-geometry.ts`'s sentinel — a position, not
+ * a day — so nothing is ever advanced onto it.
+ */
+export function blockAt(offset: number, tops: readonly number[]): number {
+  "worklet";
+  const count = tops.length;
+  if (count === 0 || Number.isNaN(offset)) return -1;
+  let inside = count - 1;
+  if (offset <= (tops[0] ?? 0)) inside = 0;
+  else {
+    for (let i = 0; i < count - 1; i += 1) {
+      const to = tops[i + 1];
+      if (to === undefined) break;
+      if (offset < to) {
+        inside = i;
+        break;
+      }
+    }
+  }
+  const top = tops[inside] ?? 0;
+  if (offset - top <= AT_TOP_SLACK) return inside;
+  const next = tops[inside + 1];
+  if (next !== undefined && inside + 1 < count - 1 && next - offset <= SEEN_LEAD) return inside + 1;
+  return inside;
+}
+
+/**
+ * The strip cell of the day the reader is looking at — `blockAt`, in cells.
+ *
+ * **What the ring lands on when the list stops, and the same rule the date is
+ * named by**, so the two agree by construction. They are two answers to one
+ * question and were once allowed to differ: the screen showed a ring on one
+ * day and a Calendar marked on the next.
  */
 export function markOf(offset: number, tops: readonly number[], marks: readonly number[]): number {
   "worklet";
-  const count = tops.length < marks.length ? tops.length : marks.length;
-  if (count === 0 || Number.isNaN(offset)) return 0;
-  const first = tops[0] ?? 0;
-  if (offset <= first) return marks[0] ?? 0;
-  for (let i = 0; i < count - 1; i += 1) {
-    const from = tops[i];
-    const to = tops[i + 1];
-    if (from === undefined || to === undefined) break;
-    if (offset < to) return marks[i] ?? 0;
-  }
-  return marks[count - 1] ?? 0;
+  const at = blockAt(offset, tops);
+  if (at < 0) return 0;
+  return marks[at < marks.length ? at : marks.length - 1] ?? 0;
 }
 
 /**

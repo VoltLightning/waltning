@@ -1,9 +1,9 @@
 /** @vitest-environment jsdom */
 
-import { renderHook } from "@testing-library/react";
+import { act, renderHook } from "@testing-library/react";
 import { accountingDate, yearMonth } from "@waltning/core/date";
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import { usePagerRoute } from "./use-pager-route.ts";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { URL_LAG_MS, usePagerRoute } from "./use-pager-route.ts";
 
 let params: { view?: string; date?: string; q?: string } = {};
 const setParams = vi.fn();
@@ -20,7 +20,19 @@ const TODAY = accountingDate("2026-09-08");
 beforeEach(() => {
   params = {};
   setParams.mockClear();
+  vi.useFakeTimers();
 });
+
+afterEach(() => {
+  vi.useRealTimers();
+});
+
+/** Let the URL catch up with the screen — the route is written `URL_LAG_MS` behind it. */
+function caughtUp(): void {
+  act(() => {
+    vi.advanceTimersByTime(URL_LAG_MS);
+  });
+}
 
 it("reads the page and the day out of the URL", () => {
   // The link the agent hands you: S03's "see them in the ledger".
@@ -38,14 +50,20 @@ it("lands somewhere sensible when the URL is nonsense", () => {
 it("writes the whole state, so a step is linkable the moment it happens", () => {
   params = { view: "list", date: "2026-05-25" };
   const { result } = renderHook(() => usePagerRoute(TODAY));
-  result.current.previous();
+  act(() => {
+    result.current.previous();
+  });
+  caughtUp();
   expect(setParams).toHaveBeenCalledExactlyOnceWith({ view: "list", date: "2026-04-25", q: "" });
 });
 
 it("keeps the date when only the page changes, which is the pager's premise", () => {
   params = { view: "list", date: "2026-05-25" };
   const { result } = renderHook(() => usePagerRoute(TODAY));
-  result.current.showPage("calendar");
+  act(() => {
+    result.current.showPage("calendar");
+  });
+  caughtUp();
   expect(setParams).toHaveBeenCalledExactlyOnceWith({
     view: "calendar",
     date: "2026-05-25",
@@ -56,7 +74,10 @@ it("keeps the date when only the page changes, which is the pager's premise", ()
 it("enters a month at its newest day, through the same rule the pure module holds", () => {
   params = { view: "months", date: "2026-09-08" };
   const { result } = renderHook(() => usePagerRoute(TODAY));
-  result.current.showMonth(yearMonth("2026-04"));
+  act(() => {
+    result.current.showMonth(yearMonth("2026-04"));
+  });
+  caughtUp();
   expect(setParams).toHaveBeenCalledExactlyOnceWith({ view: "months", date: "2026-04-30", q: "" });
 });
 
@@ -64,7 +85,10 @@ it("steps a year on Months and a month elsewhere, from the route's own page", ()
   params = { view: "months", date: "2026-09-08" };
   const { result } = renderHook(() => usePagerRoute(TODAY));
   expect(result.current.stepUnit).toBe("year");
-  result.current.next();
+  act(() => {
+    result.current.next();
+  });
+  caughtUp();
   expect(setParams).toHaveBeenCalledExactlyOnceWith({ view: "months", date: "2027-09-08", q: "" });
 });
 
@@ -73,7 +97,10 @@ it("never pushes — a swipe is not a place you have been", () => {
   // swiped past would be a history of their thumb.
   params = { view: "summary", date: "2026-09-08" };
   const { result } = renderHook(() => usePagerRoute(TODAY));
-  result.current.showPage("list");
+  act(() => {
+    result.current.showPage("list");
+  });
+  caughtUp();
   expect(setParams).toHaveBeenCalledOnce();
 });
 
@@ -85,7 +112,10 @@ it("carries the search in the URL, and keeps it through a page change", () => {
   params = { view: "list", date: "2026-05-25", q: "market" };
   const { result } = renderHook(() => usePagerRoute(TODAY));
   expect(result.current.state.query).toBe("market");
-  result.current.showPage("calendar");
+  act(() => {
+    result.current.showPage("calendar");
+  });
+  caughtUp();
   expect(setParams).toHaveBeenCalledExactlyOnceWith({
     view: "calendar",
     date: "2026-05-25",
@@ -101,7 +131,10 @@ it("carries the search in the URL, and keeps it through a page change", () => {
 it("clears the search by writing it empty", () => {
   params = { view: "list", date: "2026-05-25", q: "market" };
   const { result } = renderHook(() => usePagerRoute(TODAY));
-  result.current.setQuery(null);
+  act(() => {
+    result.current.setQuery(null);
+  });
+  caughtUp();
   expect(setParams).toHaveBeenCalledExactlyOnceWith({
     view: "list",
     date: "2026-05-25",
@@ -123,6 +156,7 @@ describe("the day the List says it is on", () => {
     params = { view: "list", date: "2026-09-20" };
     const { result } = renderHook(() => usePagerRoute(TODAY));
     result.current.noteDay(accountingDate("2026-05-25"));
+    caughtUp();
     expect(setParams).not.toHaveBeenCalled();
   });
 
@@ -130,7 +164,10 @@ describe("the day the List says it is on", () => {
     params = { view: "list", date: "2026-09-20" };
     const { result } = renderHook(() => usePagerRoute(TODAY));
     result.current.noteDay(accountingDate("2026-05-25"));
-    result.current.showPage("calendar");
+    act(() => {
+      result.current.showPage("calendar");
+    });
+    caughtUp();
     expect(setParams).toHaveBeenCalledExactlyOnceWith({
       view: "calendar",
       date: "2026-05-25",
@@ -144,7 +181,10 @@ describe("the day the List says it is on", () => {
     params = { view: "list", date: "2026-09-20" };
     const { result } = renderHook(() => usePagerRoute(TODAY));
     result.current.noteDay(accountingDate("2026-05-25"));
-    result.current.previous();
+    act(() => {
+      result.current.previous();
+    });
+    caughtUp();
     expect(setParams).toHaveBeenCalledExactlyOnceWith({ view: "list", date: "2026-04-25", q: "" });
   });
 
@@ -152,15 +192,22 @@ describe("the day the List says it is on", () => {
     params = { view: "list", date: "2026-09-20" };
     const { result, rerender } = renderHook(() => usePagerRoute(TODAY));
     result.current.noteDay(accountingDate("2026-05-25"));
-    result.current.showPage("calendar");
+    act(() => {
+      result.current.showPage("calendar");
+    });
     params = { view: "calendar", date: "2026-05-25" };
     rerender();
     setParams.mockClear();
     // A deliberate day picked on Calendar must not be dragged back to May.
-    result.current.showDay(accountingDate("2026-05-27"));
+    act(() => {
+      result.current.showDay(accountingDate("2026-05-27"));
+    });
     params = { view: "calendar", date: "2026-05-27" };
     rerender();
-    result.current.showPage("list");
+    act(() => {
+      result.current.showPage("list");
+    });
+    caughtUp();
     expect(setParams).toHaveBeenLastCalledWith({ view: "list", date: "2026-05-27", q: "" });
   });
 
@@ -168,7 +215,58 @@ describe("the day the List says it is on", () => {
     params = { view: "list", date: "2026-09-20" };
     const { result } = renderHook(() => usePagerRoute(TODAY));
     result.current.noteDay(accountingDate("2026-05-25"));
-    result.current.showDay(accountingDate("2026-01-02"));
+    act(() => {
+      result.current.showDay(accountingDate("2026-01-02"));
+    });
+    caughtUp();
     expect(setParams).toHaveBeenCalledExactlyOnceWith({ view: "list", date: "2026-01-02", q: "" });
+  });
+});
+
+/**
+ * **The screen moves first; the URL catches up.** `router.setParams`
+ * re-renders expo-router's whole tree, twice — as the only store, that stood
+ * between a finger on a Calendar day and the day being marked.
+ */
+describe("the screen does not wait for the route", () => {
+  it("shows the new state at once, before anything is written", () => {
+    params = { view: "calendar", date: "2026-05-25" };
+    const { result } = renderHook(() => usePagerRoute(TODAY));
+    act(() => {
+      result.current.showDay(accountingDate("2026-05-09"));
+    });
+    expect(result.current.state.date).toBe("2026-05-09");
+    expect(setParams).not.toHaveBeenCalled();
+  });
+
+  it("writes a burst of steps once", () => {
+    params = { view: "summary", date: "2026-05-25" };
+    const { result } = renderHook(() => usePagerRoute(TODAY));
+    act(() => {
+      result.current.previous();
+      result.current.previous();
+      result.current.previous();
+    });
+    caughtUp();
+    expect(setParams).toHaveBeenCalledExactlyOnceWith({
+      view: "summary",
+      date: "2026-02-25",
+      q: "",
+    });
+  });
+
+  it("gives way to a route it did not write", () => {
+    // A deep link, the agent's "see them in the ledger", a back gesture.
+    params = { view: "list", date: "2026-05-25" };
+    const { result, rerender } = renderHook(() => usePagerRoute(TODAY));
+    act(() => {
+      result.current.showPage("calendar");
+    });
+    caughtUp();
+    params = { view: "calendar", date: "2026-05-25" };
+    rerender();
+    params = { view: "months", date: "2021-03-14" };
+    rerender();
+    expect(result.current.state).toEqual({ page: "months", date: "2021-03-14", query: null });
   });
 });

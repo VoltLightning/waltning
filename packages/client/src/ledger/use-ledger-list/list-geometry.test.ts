@@ -1,11 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  blockOf,
-  dayAt,
-  ESTIMATED_HEIGHTS,
-  type GeometryEntry,
-  listGeometry,
-} from "./list-geometry.ts";
+import { blockOf, ESTIMATED_HEIGHTS, type GeometryEntry, listGeometry } from "./list-geometry.ts";
 
 // Four row heights, deliberately all different: a rule that read the wrong
 // one for a place would land on a number no other combination produces.
@@ -132,57 +126,26 @@ describe("listGeometry", () => {
   });
 });
 
-describe("the day a settle reports", () => {
-  /**
-   * The strip runs a bounded distance either side of the anchor
-   * (`RIBBON_REACH`), so `cellOf` clamps every day past it onto the end cell.
-   * That is right for *placing* the strip and catastrophic for *naming* a day:
-   * reading the date back out of `marks` hands back a real date that is not
-   * the one on screen, and S04 §3 — *scroll to 25 May on List and Calendar has
-   * 25 May marked* — quietly stops holding.
-   */
-  const strip = stripOf(["2026-06-30", "2026-07-01", "2026-07-02"]);
-  const entries: readonly GeometryEntry[] = [
-    day("2026-07-02", true),
-    day("2026-07-01"),
-    day("2026-06-30"),
-    // Past the strip's reach — every one of these clamps onto cell 0.
-    day("2026-06-01"),
-    day("2026-05-26"),
-  ];
-
-  it("names the day on screen, not the cell the strip clamped it to", () => {
-    const { tops, marks, dates } = listGeometry(entries, H, strip);
-    // The clamp is real and stays: three different days share one cell.
+describe("the days a settle can name", () => {
+  it("are unclamped, where the strip's cells are not", () => {
+    // The strip runs a bounded distance either side of the anchor, so `cellOf`
+    // clamps every day past it onto the end cell — right for *placing* the
+    // strip, catastrophic for *naming* a day. `dates` is indexed by the same
+    // block (`scrub.ts`'s `blockAt`) and carries the day itself.
+    const strip = stripOf(["2026-06-30", "2026-07-01", "2026-07-02"]);
+    const { marks, dates } = listGeometry(
+      [
+        day("2026-07-02", true),
+        day("2026-07-01"),
+        day("2026-06-30"),
+        day("2026-06-01"),
+        day("2026-05-26"),
+      ],
+      H,
+      strip,
+    );
     expect(marks.slice(2, 5)).toEqual([0, 0, 0]);
-    // And the dates do not.
     expect(dates.slice(2, 5)).toEqual(["2026-06-30", "2026-06-01", "2026-05-26"]);
-    // The bottom of the list is the 26th, and that is what a settle there says.
-    expect(dayAt(tops.at(-1) ?? 0, tops, dates)).toBe("2026-05-26");
-  });
-
-  it("names the block the reader is inside, for the whole of it", () => {
-    // **The whole block, not its first half.** Rounding to the nearer anchor
-    // crosses at the midpoint of a day, so the second half of every day block
-    // reported the *next* day — that day's header still below the fold, this
-    // day's rows filling the screen. On a six-row day that is 182 of its 364
-    // points, and §3's own worked example fails 200pt into it.
-    const { tops, dates } = listGeometry(entries, H, strip);
-    const first = tops[0] ?? 0;
-    const second = tops[1] ?? 0;
-    for (const through of [0, 0.1, 0.49, 0.5, 0.51, 0.9, 0.999]) {
-      expect(dayAt(first + (second - first) * through, tops, dates)).toBe("2026-07-02");
-    }
-    // And the next block is the next day, from its very top.
-    expect(dayAt(second, tops, dates)).toBe("2026-07-01");
-  });
-
-  it("clamps at both ends and answers for an empty list", () => {
-    const { tops, dates } = listGeometry(entries, H, strip);
-    expect(dayAt(-500, tops, dates)).toBe("2026-07-02");
-    expect(dayAt(99999, tops, dates)).toBe("2026-05-26");
-    expect(dayAt(0, [], [])).toBeNull();
-    expect(dayAt(Number.NaN, tops, dates)).toBeNull();
   });
 });
 

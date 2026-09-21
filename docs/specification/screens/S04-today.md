@@ -80,6 +80,29 @@ Calendar, and 25 May is marked, because the swipe carried it. A tap on a day
 that is already in the list is the same: the list scrolls to it and notes it,
 and nothing is re-read or re-routed for rows that are on screen.
 
+**The day the List is on is the day the reader is looking at, not the one a
+sliver of which is still under the top edge.** A day with less than about a
+heading and a row left on screen has been scrolled past, and the day below it
+is the one being read; named by the block the offset was arithmetically inside,
+the strip sat a day *behind* what was on screen every time the list stopped
+near the end of a day. The one exception is a list resting exactly on a block's
+top — which is where a tap on a day puts it — however short that block is: a
+quiet day is one line tall, and must still be the day its own tap selects.
+
+**The screen moves first, and the route catches up.** A deliberate act — a tap
+on a Calendar day, a step, a page change — lands in the pager's own state at
+once and is written to the route a quarter of a second later, so that a burst
+of steps is one write and no tap waits on the router re-rendering its tree.
+The route is still where the state lives: a link carries it, a reload restores
+it, and a route this screen did not write — a deep link, the agent — outranks
+whatever it was holding.
+
+**The List hears about a date only while it is the page on screen.** All four
+pages are mounted, and the List answers a new date by re-reading the ledger
+around it; doing that off screen, for every day tapped on Calendar, was most of
+what made the *other* pages slow. It catches up the moment it is the page
+again, so the promise above costs nothing to keep.
+
 **The chrome clears the status bar itself.** It is the top of the screen on a
 tab root, so the inset is its own — nothing above it can apply one.
 
@@ -634,16 +657,18 @@ ignore.
 where you are, not a second scroller for the same content — two controls that
 each move the other is how a gesture ends up fighting itself.
 
-**A hand on the strip snaps, and ticks; the list's own scrubbing does
-neither.** Let go — with a flick or without one — and the strip settles the
+**A hand on the strip snaps; every day that passes the ring ticks.** Let go — with a flick or without one — and the strip settles the
 nearest day under the ring rather than between two. Every day a hand sends past
 the ring is one light tap, *the coast after a flick included*: each cell is a
 snap point, and feedback that cuts out the moment the finger lifts reads as
 broken; a floor between taps keeps a fast coast a purr rather than a rattle.
-Both are the picker-like half of this control, and both are wrong on the other
-half: the same tick fired while the ledger was being scrolled would buzz forty
-times through one fling, which is a notification where a texture was wanted, and
-snapping a strip that is tracking a list would undo the continuous motion this
+A strip the *list* is driving taps too, on a longer floor: scrolling the ledger
+is how this strip is moved nearly all of the time, so a strip that tapped only
+under a thumb was, in the hand, a strip with no haptics — decided the other way
+once, and overruled by a device. The tap is the platform's own *selection*
+feedback (UIKit's picker tick; Android's `CLOCK_TICK`), never an impact. The
+snap is the picker-like half only: snapping a strip that is tracking a list
+would undo the continuous motion this
 screen was rebuilt for. The snap is the screen's own rather than the scroller's
 `snapToOffsets`, because on the web that becomes CSS scroll snap — which
 applies to a programmatic scroll as well as to a gesture, and so would snap the

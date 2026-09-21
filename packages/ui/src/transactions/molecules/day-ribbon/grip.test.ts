@@ -4,6 +4,7 @@ import {
   type Frame,
   type Grip,
   grip,
+  LIST_TICK_GAP_MS,
   LOOSE,
   letGo,
   QUIET_MS,
@@ -125,10 +126,19 @@ describe("when a day passing the ring taps", () => {
     expect(ticksNow({ dragging: false, detached: true }, TICK_GAP_MS)).toBe(true);
   });
 
-  it("never for a strip the list is driving", () => {
-    // Scrolling the ledger is not this gesture; forty taps through one fling
-    // of the list is a notification, not a texture.
-    expect(ticksNow(LOOSE, 1000)).toBe(false);
+  it("when the list is what sent it past, too", () => {
+    // **Decided the other way once, and overruled by a device.** Scrolling the
+    // ledger is how this strip is moved nearly all of the time, so a strip
+    // that only tapped under a thumb was, in the hand, a strip with no
+    // haptics at all.
+    expect(ticksNow(LOOSE, LIST_TICK_GAP_MS)).toBe(true);
+  });
+
+  it("thins a fling of the list to a purr", () => {
+    // What is left of the argument against it: forty days through one fling
+    // is a notification, so the list's floor is the longer of the two.
+    expect(LIST_TICK_GAP_MS).toBeGreaterThan(TICK_GAP_MS);
+    expect(ticksNow(LOOSE, LIST_TICK_GAP_MS - 1)).toBe(false);
   });
 
   it("no faster than the engine can say them apart", () => {

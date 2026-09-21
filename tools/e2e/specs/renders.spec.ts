@@ -130,3 +130,34 @@ test("a page change does not reach the list", async ({ page }) => {
   await page.waitForTimeout(1200);
   expect(cellsIn(await read(page)), "swiping away re-renders no list cell").toBe(0);
 });
+
+/**
+ * **The other three pages had the List's problem, because they had the List.**
+ * All four are mounted, and the off-screen List answered every date change on
+ * every page by reloading the ledger around it — a tap on a Calendar day was
+ * 19 commits and 4,361 renders, some 1,300 of them cells of a list nobody
+ * could see. The List is frozen while it is not the page on screen; the pager
+ * moves first and writes the route a moment later; and each page is its own
+ * memo, so a page that was told nothing new is not re-rendered.
+ */
+test("a tap on a Calendar day reaches neither the List nor the router", async ({ page }) => {
+  await page.getByRole("tab", { name: "Calendar" }).click();
+  await page.waitForTimeout(1500);
+  const grid = page.locator('[role="grid"]');
+  // The ninth day of the month on screen: past, loaded, and not today.
+  const name = await grid.getByRole("button").nth(8).getAttribute("aria-label");
+  expect(name).not.toBeNull();
+
+  await reset(page);
+  await grid
+    .getByRole("button", { name: name ?? "" })
+    .first()
+    .click();
+  await page.waitForTimeout(150);
+  const press = await read(page);
+
+  expect(cellsIn(press), "the hidden List hears nothing").toBe(0);
+  expect(press.renders["HomeListPageView"] ?? 0).toBe(0);
+  expect(press.renders["Tabs"] ?? 0, "and the route is not what the press waits on").toBe(0);
+  expect(press.renders["YearChartView"] ?? 0, "nor is Months re-rendered for a day").toBe(0);
+});

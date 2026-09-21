@@ -104,18 +104,26 @@ async function dayAtTheTopOfTheList(page: import("@playwright/test").Page): Prom
       while (up.parentElement !== null && up.parentElement !== content) up = up.parentElement;
       return up;
     };
-    let inside: string | null = null;
-    for (const heading of headings) {
-      if (!scroller.contains(heading)) continue;
-      if (cellOf(heading).getBoundingClientRect().top <= top + 1) {
-        inside = dayOf((heading.textContent ?? "").trim());
-      }
-    }
-    // Nothing above the edge yet: the list is at its very top, on its first day.
-    if (inside === null) {
-      const first = headings.find((heading) => scroller.contains(heading));
-      inside = first === undefined ? null : dayOf((first.textContent ?? "").trim());
-    }
+    /*
+      **The day the reader is *looking at*, by the app's own rule restated.**
+      A day with less than 72pt left under the top edge has been scrolled past
+      and the one below it is being read — unless the list is resting exactly
+      on a block's top, which is where a tap puts it. (`scrub.ts`'s `blockAt`;
+      restated here rather than imported so the two can disagree.)
+    */
+    const blocks = headings
+      .filter((heading) => scroller.contains(heading))
+      .map((heading) => ({
+        day: dayOf((heading.textContent ?? "").trim()),
+        at: cellOf(heading).getBoundingClientRect().top - top,
+      }))
+      .sort((one, other) => one.at - other.at);
+    let index = 0;
+    for (let i = 0; i < blocks.length; i += 1) if ((blocks[i]?.at ?? 1) <= 0.5) index = i;
+    const here = blocks[index];
+    const next = blocks[index + 1];
+    const resting = here !== undefined && -here.at <= 2;
+    const inside = !resting && next !== undefined && next.at <= 72 ? next.day : (here?.day ?? null);
     return inside;
   });
 }
@@ -263,6 +271,32 @@ test.describe("the day strip is scrubbed by the list", () => {
 
     expect(await dayAtTheTopOfTheList(page), "the list went to the tapped day").toBe(day);
     expect(await dayUnderTheRing(page), "and the ring went with it").toContain(day);
+  });
+
+  test("the List catches up with a day picked elsewhere, once it is the page again", async ({
+    page,
+  }) => {
+    // The List is frozen while another page is showing — it used to reload the
+    // whole ledger around every date picked on Calendar, off screen, at ~1,300
+    // cell renders a tap. What that must not cost is the promise: come back to
+    // the List and it is on the day that was picked.
+    await page.getByRole("tab", { name: "Calendar" }).click();
+    await page.waitForTimeout(1000);
+    const grid = page.locator('[role="grid"]');
+    // The ninth day of the month on screen: past, loaded, and not today.
+    const picked = await grid.getByRole("button").nth(8).getAttribute("aria-label");
+    expect(picked, "a day with entries on the Calendar").not.toBeNull();
+    const day = /(\w+ \d+, \d+)/.exec(picked ?? "")?.[1] ?? "";
+    await grid
+      .getByRole("button", { name: picked ?? "" })
+      .first()
+      .click();
+    await page.waitForTimeout(800);
+
+    await page.getByRole("tab", { name: "List" }).click();
+    await page.waitForTimeout(2500);
+    expect(await dayUnderTheRing(page), "the ring is on the picked day").toContain(day);
+    expect(await dayAtTheTopOfTheList(page), "and so is the list").toBe(day);
   });
 
   test("is not re-dated by a gesture on another page", async ({ page }) => {

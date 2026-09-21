@@ -1645,7 +1645,7 @@ describe("Today — the pager, with a month in it", () => {
     expect(calendar.queryByText("No transactions yet"), "the ledger is not empty").toBeNull();
   });
 
-  it("jumps to the day it named, and stays on the Calendar", () => {
+  it("jumps to the day it named, and stays on the Calendar", async () => {
     const calendar = open("calendar", `${Number(MONTH.slice(0, 4)) - 1}-12-05`);
 
     fireEvent.click(calendar.getByRole("button", { name: /Go to/ }));
@@ -1654,8 +1654,13 @@ describe("Today — the pager, with a month in it", () => {
     // forwards is that month's earliest row (the 2nd here, not the 9th). The
     // panel underneath therefore opens on entries rather than on nothing,
     // which a jump to the month's first day would not guarantee.
-    expect(router.setParams).toHaveBeenCalledWith(
-      expect.objectContaining({ view: "calendar", date: `${MONTH}-02` }),
+    //
+    // Waited for, because the screen moves first and the URL catches up a
+    // moment later (`use-pager-route.ts`) — a tap does not wait on the router.
+    await vi.waitFor(() =>
+      expect(router.setParams).toHaveBeenCalledWith(
+        expect.objectContaining({ view: "calendar", date: `${MONTH}-02` }),
+      ),
     );
   });
 
