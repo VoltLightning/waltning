@@ -29,8 +29,10 @@ import type { NativeScrollEvent, NativeSyntheticEvent } from "react-native";
 import { ScrollView, Text, View } from "react-native";
 import { text } from "../../../theme/fonts.ts";
 import { makeStyles } from "../../../theme/styles.ts";
-import { radius, space, touchTarget } from "../../../tokens.ts";
+import { focus, radius, space, touchTarget } from "../../../tokens.ts";
+import { useInteraction } from "../../interaction.ts";
 import { nestedScrollProps } from "../../nested-scroll.ts";
+import { PressableScaled } from "../pressable-scaled/pressable-scaled";
 
 /** One row, and the height every measurement here is a multiple of. */
 export const WHEEL_ROW = touchTarget.min;
@@ -215,7 +217,12 @@ export function Wheel({ label, options, value, onChange, wraps = false, width }:
           <Row
             key={`${option.value}-${Math.floor(index / options.length)}`}
             label={option.label}
+            value={option.value}
             distance={Math.abs((index % options.length) - row)}
+            // One copy speaks: a wrapping drum draws every option three times,
+            // and a screen reader should hear *March* once.
+            spoken={Math.floor(index / options.length) === (wraps ? 1 : 0)}
+            onPick={onChange}
           />
         ))}
       </ScrollView>
@@ -223,16 +230,40 @@ export function Wheel({ label, options, value, onChange, wraps = false, width }:
   );
 }
 
-type RowProps = { label: string; distance: number };
+type RowProps = {
+  label: string;
+  value: string;
+  distance: number;
+  spoken: boolean;
+  onPick: (value: string) => void;
+};
 
 /**
  * Its own component so a row re-renders only when its own distance changes —
  * crossing one row restyles three of them, not forty.
+ *
+ * **A row can be pressed, and that is the drum's only way in without a
+ * scroll.** Rolling was the whole interface: nothing for a screen reader or a
+ * switch to operate, and no way to take the neighbour a reader can see except
+ * by nudging the drum onto it. A press picks the row; the drum follows the
+ * value the way it follows a chip.
  */
-function Row({ label, distance }: RowProps) {
+function Row({ label, value, distance, spoken, onPick }: RowProps) {
   const styles = useStyles();
+  const handlePress = useCallback(() => onPick(value), [onPick, value]);
+  const { focused, handlers } = useInteraction();
+  const chosen = distance === 0;
   return (
-    <View style={styles.row}>
+    <PressableScaled
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ selected: chosen }}
+      aria-selected={chosen}
+      {...(spoken ? {} : UNSPOKEN)}
+      onPress={handlePress}
+      {...handlers}
+      style={[styles.row, focused ? styles.rowFocused : null]}
+    >
       <Text
         style={[
           styles.option,
@@ -248,15 +279,31 @@ function Row({ label, distance }: RowProps) {
       >
         {label}
       </Text>
-    </View>
+    </PressableScaled>
   );
 }
+
+/** The outer copies of a wrapping drum: drawn, pressable, and not read out. */
+const UNSPOKEN = {
+  accessibilityElementsHidden: true,
+  importantForAccessibility: "no-hide-descendants",
+  "aria-hidden": true,
+} as const;
 
 const useStyles = makeStyles((theme) => ({
   column: { height: WHEEL_ROW * VISIBLE, overflow: "hidden" },
   /** Two rows of air either side, so the first option can reach the band. */
   content: { paddingVertical: WHEEL_ROW * 2 },
   row: { height: WHEEL_ROW, justifyContent: "center" },
+  // A row has no edge of its own, so the ring is drawn *inside* it: outside,
+  // the column's `overflow: hidden` would cut it off on both sides.
+  rowFocused: {
+    outlineWidth: focus.width,
+    outlineStyle: "solid",
+    outlineColor: theme.focusRing,
+    outlineOffset: -focus.width,
+    borderRadius: radius.sm,
+  },
   option: {
     textAlign: "center",
     color: theme.text,

@@ -32,11 +32,12 @@ import {
   type CategoryProposal,
   PROPOSAL_DISPLAY_THRESHOLD,
 } from "@waltning/core/capture/payee-memory";
-import type { TimeOfDay } from "@waltning/core/date";
+import { accountingDate, isAccountingDate, type TimeOfDay } from "@waltning/core/date";
 import type { CurrencyCode } from "@waltning/core/money";
 import { useCallback, useMemo, useState } from "react";
 import { Text, View } from "react-native";
-import { useT } from "../../../i18n/provider";
+import { dayLabel } from "../../../i18n/locales";
+import { useLocale, useT } from "../../../i18n/provider";
 import { Button } from "../../../primitives/atoms/button/button";
 import { DateField } from "../../../primitives/atoms/date-field/date-field";
 import { RadioGroup, type RadioGroupProps } from "../../../primitives/atoms/radio/radio";
@@ -48,9 +49,12 @@ import { Select } from "../../../primitives/atoms/select/select";
 import { TextField } from "../../../primitives/atoms/text-field/text-field";
 import { TimeField } from "../../../primitives/atoms/time-field/time-field";
 import type { FieldErrorMap } from "../../../primitives/field-errors.ts";
+import { DatePicker } from "../../../primitives/molecules/date-picker/date-picker";
 import { readTyped } from "../../../primitives/molecules/time-picker/clock.ts";
+import { TimePicker } from "../../../primitives/molecules/time-picker/time-picker";
 import { categoryTintFor } from "../../../primitives/monogram.ts";
 import { SheetAwareTextInput } from "../../../primitives/sheet-input";
+import { useBreakpoint } from "../../../primitives/use-breakpoint.ts";
 import { BottomSheet } from "../../../shell/organisms/bottom-sheet/bottom-sheet";
 import { HouseIcon } from "../../../shell/phosphor";
 import { Banner } from "../../../states/molecules/banner/banner";
@@ -212,6 +216,7 @@ export function QuickAddComposer({
   fieldErrors,
 }: QuickAddComposerProps) {
   const t = useT();
+  const locale = useLocale();
   const theme = useTheme();
   const styles = useStyles();
   const noteHeight = useInputHeight("bodySm");
@@ -226,6 +231,8 @@ export function QuickAddComposer({
   const closeSheet = useCallback(() => setOpenSheet(null), []);
   const handleOpenDateSheet = useCallback(() => setOpenSheet("date"), []);
   const handleOpenTimeSheet = useCallback(() => setOpenSheet("time"), []);
+  const clearTime = useCallback(() => onTimeChange(""), [onTimeChange]);
+  const phone = useBreakpoint() === "phone";
   const handleOpenScopeSheet = useCallback(() => setOpenSheet("scope"), []);
   const handleOpenPayeeSheet = useCallback(() => setOpenSheet("payee"), []);
   const handleOpenCounterpartySheet = useCallback(() => setOpenSheet("counterparty"), []);
@@ -373,9 +380,12 @@ export function QuickAddComposer({
     counterpartyRoleError;
 
   /** What the collapsed *More details* row says it holds — only the fields that hold something. */
+  // In words, like everything else a reader is shown: `2026-08-21` is how the
+  // ledger stores a day, not how anyone says one.
+  const dateWords = isAccountingDate(date) ? dayLabel(accountingDate(date), locale) : date;
   const moreSummary = [
     payee.trim() === "" ? null : payee,
-    date === today ? null : date,
+    date === today ? null : dateWords,
     isBusiness ? t("shell.scopeBusiness") : null,
     pickedCounterparty?.name ?? null,
   ]
@@ -462,7 +472,7 @@ export function QuickAddComposer({
             />
             <ComposerRow
               label={t("transactions.date")}
-              value={date === today ? t("shell.today") : date}
+              value={date === today ? t("shell.today") : dateWords}
               tile={<ComposerTileGlyph glyph={date.slice(8, 10)} ink={theme.textMuted} />}
               tileFill={theme.subtleFill}
               onPress={handleOpenDateSheet}
@@ -537,8 +547,23 @@ export function QuickAddComposer({
         />
       </View>
 
+      {/*
+        **The row opens the drum, with nothing in between** (S05 §3). It used to
+        open a sheet holding a date field, whose *Pick a date* chip opened the
+        drum: three taps and two surfaces for one choice. A desk keeps the
+        sheet, because there the field is typed and the drum is a thumb's tool.
+      */}
+      {openSheet === "date" && phone ? (
+        <DatePicker
+          prompt={t("transactions.date")}
+          value={isAccountingDate(date) ? accountingDate(date) : accountingDate(today)}
+          onChange={onDateChange}
+          today={accountingDate(today)}
+          onDismiss={closeSheet}
+        />
+      ) : null}
       <BottomSheet
-        visible={openSheet === "date"}
+        visible={openSheet === "date" && !phone}
         title={t("transactions.date")}
         onDismiss={closeSheet}
       >
@@ -550,8 +575,18 @@ export function QuickAddComposer({
         />
       </BottomSheet>
 
+      {openSheet === "time" && phone ? (
+        <TimePicker
+          prompt={t("transactions.time")}
+          value={readTyped(time) ?? now}
+          onChange={onTimeChange}
+          now={now}
+          onDismiss={closeSheet}
+          {...(time.trim() === "" ? {} : { onClear: clearTime })}
+        />
+      ) : null}
       <BottomSheet
-        visible={openSheet === "time"}
+        visible={openSheet === "time" && !phone}
         title={t("transactions.time")}
         onDismiss={closeSheet}
       >

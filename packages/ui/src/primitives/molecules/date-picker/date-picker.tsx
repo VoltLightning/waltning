@@ -24,15 +24,16 @@
  */
 
 import { type AccountingDate, addDays } from "@waltning/core/date";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Modal, Pressable, View } from "react-native";
-import { monthLabel, weekdayLabel } from "../../../i18n/locales";
+import { monthName, weekdayShort } from "../../../i18n/locales";
 import { useLocale, useT } from "../../../i18n/provider";
 import { makeStyles } from "../../../theme/styles.ts";
 import { radius, space, touchTarget } from "../../../tokens.ts";
 import { Button } from "../../atoms/button/button";
 import { Chip } from "../../atoms/chip/chip";
 import { Wheel, type WheelOption } from "../../atoms/wheel/wheel";
+import { useWindowInsets } from "../../safe-area";
 import { clampDay, dateOf, daysIn, partsOf, yearsAround } from "./parts.ts";
 
 /** §3.7a sizes each column to the widest thing in it. */
@@ -56,6 +57,10 @@ export function DatePicker({ prompt, value, onChange, today, onDismiss }: DatePi
   const locale = useLocale();
   const t = useT();
   const [draft, setDraft] = useState(value);
+  // The sheet runs to the bottom of the window, so its buttons clear the home
+  // indicator themselves — they sat on the gesture bar.
+  const bottom = useWindowInsets().bottom;
+  const clearBottom = useMemo(() => ({ paddingBottom: space.x3 + bottom }), [bottom]);
 
   // Re-open on whatever the field holds now, not on where this was left.
   useEffect(() => setDraft(value), [value]);
@@ -72,7 +77,7 @@ export function DatePicker({ prompt, value, onChange, today, onDismiss }: DatePi
   for (let month = 0; month < 12; month += 1) {
     months.push({
       value: String(month),
-      label: monthLabel(monthKey(parts.year, month), locale),
+      label: monthName(month, locale),
     });
   }
 
@@ -124,7 +129,7 @@ export function DatePicker({ prompt, value, onChange, today, onDismiss }: DatePi
           onPress={onDismiss}
           style={styles.backdrop}
         />
-        <View style={styles.panel}>
+        <View style={[styles.panel, clearBottom]}>
           <View style={styles.grab} />
           <View style={styles.chips}>
             {CHIP_DAYS.map((back) => (
@@ -191,15 +196,9 @@ function RelativeChip({ back, today, draft, locale, onPick }: RelativeChipProps)
   const when = addDays(today, -back);
   const handlePress = useCallback(() => onPick(when), [onPick, when]);
   const label =
-    back === 0 ? t("shell.today") : back === 1 ? t("common.yesterday") : weekdayLabel(when, locale);
+    back === 0 ? t("shell.today") : back === 1 ? t("common.yesterday") : weekdayShort(when, locale);
 
   return <Chip placeholder={label} selected={when === draft} onPress={handlePress} />;
-}
-
-function monthKey(year: number, month: number) {
-  return `${String(year).padStart(4, "0")}-${String(month + 1).padStart(2, "0")}` as Parameters<
-    typeof monthLabel
-  >[0];
 }
 
 const useStyles = makeStyles((theme) => ({

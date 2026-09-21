@@ -22,7 +22,7 @@
  */
 
 import { type TimeOfDay, timeOfDay } from "@waltning/core/date";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Modal, Pressable, Text, View } from "react-native";
 import { useT } from "../../../i18n/provider";
 import { text } from "../../../theme/fonts.ts";
@@ -31,6 +31,7 @@ import { radius, space, touchTarget } from "../../../tokens.ts";
 import { Button } from "../../atoms/button/button";
 import { Chip } from "../../atoms/chip/chip";
 import { Wheel, type WheelOption } from "../../atoms/wheel/wheel";
+import { useWindowInsets } from "../../safe-area";
 import { HOURS, MINUTES, partsOfTime, timeOfParts } from "./clock.ts";
 
 /** §3.7a — each column as wide as the widest thing in it. */
@@ -62,12 +63,22 @@ export type TimePickerProps = {
   /** The clock, as the caller reads it: this file names no platform. */
   now: TimeOfDay;
   onDismiss: () => void;
+  /**
+   * Take the time back off. **Offered only where there is one to take off** —
+   * a time of day is optional (§7.0a), so the picker that sets it is also
+   * where it is unset; clearing is not setting midnight.
+   */
+  onClear?: () => void;
 };
 
-export function TimePicker({ prompt, value, onChange, now, onDismiss }: TimePickerProps) {
+export function TimePicker({ prompt, value, onChange, now, onDismiss, onClear }: TimePickerProps) {
   const styles = useStyles();
   const t = useT();
   const [draft, setDraft] = useState(value);
+  // The sheet runs to the bottom of the window, so its buttons clear the home
+  // indicator themselves — they sat on the gesture bar.
+  const bottom = useWindowInsets().bottom;
+  const clearBottom = useMemo(() => ({ paddingBottom: space.x3 + bottom }), [bottom]);
 
   // Re-open on whatever the field holds now, not on where this was left.
   useEffect(() => setDraft(value), [value]);
@@ -86,6 +97,10 @@ export function TimePicker({ prompt, value, onChange, now, onDismiss }: TimePick
     onChange(draft);
     onDismiss();
   }, [draft, onChange, onDismiss]);
+  const handleClear = useCallback(() => {
+    onClear?.();
+    onDismiss();
+  }, [onClear, onDismiss]);
 
   return (
     <Modal
@@ -105,7 +120,7 @@ export function TimePicker({ prompt, value, onChange, now, onDismiss }: TimePick
           onPress={onDismiss}
           style={styles.backdrop}
         />
-        <View style={styles.panel}>
+        <View style={[styles.panel, clearBottom]}>
           <View style={styles.grab} />
           <View style={styles.chips}>
             <TimeChip label={t("common.now")} at={now} draft={draft} onPick={setDraft} />
@@ -139,6 +154,9 @@ export function TimePicker({ prompt, value, onChange, now, onDismiss }: TimePick
 
           <View style={styles.actions}>
             <Button label={t("common.cancel")} variant="ghost" onPress={onDismiss} />
+            {onClear === undefined ? null : (
+              <Button label={t("common.noTime")} variant="ghost" onPress={handleClear} />
+            )}
             <Button label={t("common.useThisTime")} variant="primary" onPress={handleConfirm} />
           </View>
         </View>

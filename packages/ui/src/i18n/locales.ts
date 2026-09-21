@@ -242,3 +242,28 @@ export function resolveLocale(preferred: readonly string[]): Locale {
   }
   return "en";
 }
+
+/**
+ * A month's own name — *September* — for a column that sits beside a year.
+ *
+ * `monthLabel` says *September 2026*, which is right for a heading and wrong
+ * on the date drum: the year has a column of its own, so the drum read
+ * *18 · September 2026 · 2026*.
+ */
+export function monthName(month: number, locale: Locale): string {
+  return new Intl.DateTimeFormat(locale, { month: "long", timeZone: "UTC" }).format(
+    new Date(Date.UTC(2024, month, 1)),
+  );
+}
+
+/**
+ * *Wed* — a weekday short enough to be one of four chips on a phone.
+ * `weekdayLabel` is *Wednesday, September 16*, and two of those wrapped the
+ * drum's chip row onto a second line.
+ */
+export function weekdayShort(date: AccountingDate, locale: Locale): string {
+  const [year, mo, day] = date.split("-").map(Number) as [number, number, number];
+  return new Intl.DateTimeFormat(locale, { weekday: "short", timeZone: "UTC" }).format(
+    new Date(Date.UTC(year, mo - 1, day)),
+  );
+}

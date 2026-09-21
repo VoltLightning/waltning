@@ -219,7 +219,9 @@ it("lets someone type a payee through its own sheet, and the More row then says 
 it("summarises the rarer fields on the More row while they are folded away", () => {
   draw({ payee: "Corner Café", date: "2026-09-01", isBusiness: true, accountId: "account-a" });
   expect(
-    screen.getByRole("button", { name: "More details: Corner Café · 2026-09-01 · Business" }),
+    screen.getByRole("button", {
+      name: "More details: Corner Café · September 1, 2026 · Business",
+    }),
   ).toBeDefined();
 });
 

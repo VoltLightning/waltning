@@ -36,7 +36,7 @@
  * matching `QuickAddForm`'s own `fieldErrors` contract.
  */
 
-import { isAccountingDate } from "@waltning/core/date";
+import { accountingDate, isAccountingDate } from "@waltning/core/date";
 import type { AccountKind } from "@waltning/core/registry/inputs";
 import { useCallback, useMemo, useState } from "react";
 import { Pressable, Text, View } from "react-native";
@@ -49,7 +49,9 @@ import { Toggle } from "../../../primitives/atoms/toggle/toggle";
 import { useDisclosureMotion } from "../../../primitives/disclosure-motion.ts";
 import type { FieldErrorMap } from "../../../primitives/field-errors.ts";
 import { useInteraction } from "../../../primitives/interaction.ts";
+import { DatePicker } from "../../../primitives/molecules/date-picker/date-picker";
 import { usePressScale } from "../../../primitives/press-scale.ts";
+import { useBreakpoint } from "../../../primitives/use-breakpoint.ts";
 import { text } from "../../../theme/fonts.ts";
 import { makeStyles } from "../../../theme/styles.ts";
 import { focus, hairline, space, touchTarget } from "../../../tokens.ts";
@@ -152,7 +154,18 @@ export function FieldsCard({
       return next;
     });
   }, []);
-  const handleToggleDate = useCallback(() => toggleField("date"), [toggleField]);
+  /*
+    **On a phone the date row opens the drum itself.** Unfolding the row to show
+    a date field, to tap the field, to get the drum, is two steps too many; a
+    desk still unfolds, because there the field is typed into.
+  */
+  const phone = useBreakpoint() === "phone";
+  const [pickingDate, setPickingDate] = useState(false);
+  const closeDatePicker = useCallback(() => setPickingDate(false), []);
+  const handleToggleDate = useCallback(() => {
+    if (phone) setPickingDate(true);
+    else toggleField("date");
+  }, [phone, toggleField]);
   const handleTogglePayee = useCallback(() => toggleField("payee"), [toggleField]);
   const handleToggleNote = useCallback(() => toggleField("note"), [toggleField]);
 
@@ -214,6 +227,15 @@ export function FieldsCard({
           {...(dateValid ? {} : { error: t("transactions.invalidDate") })}
         />
       </FieldDisclosureRow>
+      {pickingDate ? (
+        <DatePicker
+          prompt={t("transactions.date")}
+          value={isAccountingDate(date) ? accountingDate(date) : accountingDate(today)}
+          onChange={setDate}
+          today={accountingDate(today)}
+          onDismiss={closeDatePicker}
+        />
+      ) : null}
 
       <FieldDisclosureRow
         label={t("transactions.account")}

@@ -60,7 +60,9 @@ export const Expanded: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await userEvent.click(await canvas.findByRole("button", { name: "More" }));
-    await expect(canvas.findByLabelText("Date")).resolves.toBeDefined();
+    // At the visual suite's phone width the date is a button that opens the
+    // drum; on a desk it is a typed field. Either way it is *called* Date.
+    await expect(canvas.findByLabelText(/^Date/)).resolves.toBeDefined();
   },
 };
 
