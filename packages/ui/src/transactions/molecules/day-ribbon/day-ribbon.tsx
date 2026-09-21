@@ -52,7 +52,19 @@ import {
 import { makeStyles } from "../../../theme/styles.ts";
 import { radius, space } from "../../../tokens.ts";
 import { type DayActivity, DayCell, type DayDirection } from "../../atoms/day-cell/day-cell";
-import { type Grip, grip, LOOSE, letGo, snapsNow, takeHold, ticksNow } from "./grip.ts";
+import {
+  arrivedAt,
+  type Grip,
+  grip,
+  LAND_MS,
+  LOOSE,
+  letGo,
+  RESEAT_CELLS,
+  relandsNow,
+  snapsNow,
+  takeHold,
+  ticksNow,
+} from "./grip.ts";
 import {
   aheadCount,
   CELL,
@@ -66,6 +78,7 @@ import {
   SEEN_LEAD,
   type StripPlacement,
   trackLead,
+  trackWidth,
 } from "./scrub.ts";
 
 export type RibbonDay = {
@@ -237,18 +250,6 @@ function DayRibbonView({ days, current, scrollY, placement, onPickDay, onTick }:
   const sinceTick = useSharedValue(1000);
   /** `at` as of the previous frame, so a *movement* can be told from a rest. */
   const was = useSharedValue(0);
-  /**
-   * The track's full width, so nothing is ever asked for past its end.
-   *
-   * **Zero means *not reported yet*, and the detach check treats it as such.**
-   * `onContentSizeChange` arrives a frame or two after the first layout, and
-   * until it does `offsetWithin` clamps nothing — so the first write can run
-   * past the end and be clamped by the scroller. `reachable` below is written
-   * against this value precisely so that an unreported content width makes a
-   * detach impossible rather than certain: with `content` at `0` no write is
-   * ever considered reachable, so the clamped one cannot be read as a hand.
-   */
-  const content = useSharedValue(0);
   /** Whether the list was already moving last frame — a glide, not a new act. */
   const gliding = useSharedValue(false);
   /**
@@ -280,6 +281,14 @@ function DayRibbonView({ days, current, scrollY, placement, onPickDay, onTick }:
   const ticked = useSharedValue(-1);
   /** Whether the strip has already been snapped where it now sits. */
   const snapped = useSharedValue(true);
+  /** The cell nearest the ring last frame — what re-arms the snap. */
+  const nearest = useSharedValue(-1);
+  /** Where the ring was over the strip last frame, in fractional days. */
+  const under = useSharedValue(Number.NaN);
+  /** Where the strip sat when it was last re-sent home, so it is asked once. */
+  const stuck = useSharedValue(Number.NaN);
+  /** A re-seat in flight: cells swept over are not days going past (`grip.ts`). */
+  const muted = useSharedValue(true);
 
   const measure = useCallback(
     (event: LayoutChangeEvent) => {
@@ -288,12 +297,6 @@ function DayRibbonView({ days, current, scrollY, placement, onPickDay, onTick }:
       width.value = next;
     },
     [width],
-  );
-  const measureContent = useCallback(
-    (contentWidth: number) => {
-      content.value = contentWidth;
-    },
-    [content],
   );
 
   /**
@@ -318,12 +321,11 @@ function DayRibbonView({ days, current, scrollY, placement, onPickDay, onTick }:
 
       It was *the strip moved and the list did not*. Both halves failed.
 
-      The strip also moves when a `scrollTo` is **clamped** by the scroller,
-      and `offsetWithin` only prevents that once `onContentSizeChange` has
-      reported — so on a cold open, before it has, the strip detached with
-      nobody touching it and then stayed detached, because only a list movement
-      clears it. `reachable` below asks whether the last write was clamped
-      rather than trusting that it was not.
+      The strip also moves when a `scrollTo` is **clamped** by the scroller —
+      so nothing is asked for past the track's end (`scrub.ts`'s `trackWidth`,
+      arithmetic rather than a measurement that arrives late or not at all),
+      and a strip moved by this component's own write is never read as a hand
+      (`grip.ts`'s `QUIET_MS`).
 
       And the list is still gliding for a while after a fling, so a hand
       arriving during the glide was overruled every frame: the drift check was
@@ -352,6 +354,30 @@ function DayRibbonView({ days, current, scrollY, placement, onPickDay, onTick }:
       sinceTick.value += step;
       hold.value = grip(hold.value, { listJumped, drifted, sinceWrite: sinceWrite.value });
 
+      /*
+        **The tick, read off where the strip actually is** (S04 §7) — one rule
+        for a thumb, a coast, the list's scrub and a landing, because all four
+        end the same way: a day's centre under the ring. `at` rather than the
+        value last asked for, so the tap is felt when the day is *seen* to
+        arrive, which on a device is a frame or two after the write.
+      */
+      const ringAt = fracAt(at.value, measured);
+      const arrived = arrivedAt(under.value, ringAt);
+      under.value = ringAt;
+      if (muted.value && placed.value && (listMoved || sinceWrite.value >= LAND_MS)) {
+        muted.value = false;
+      }
+      if (ticked.value < 0 || muted.value) {
+        // Seeded, not ticked: the day already under the ring was not reached.
+        ticked.value = Math.round(ringAt);
+      } else if (arrived >= 0 && arrived !== ticked.value) {
+        ticked.value = arrived;
+        if (ticksNow(hold.value, sinceTick.value) && onTick !== undefined) {
+          sinceTick.value = 0;
+          runOnJS(onTick)();
+        }
+      }
+
       if (hold.value.detached) {
         /*
         **A hand on the strip, so it snaps and it ticks** (S04 §7).
@@ -364,16 +390,9 @@ function DayRibbonView({ days, current, scrollY, placement, onPickDay, onTick }:
         costs a few lines and behaves the same on all three targets.
       */
         const cell = nearestCell(at.value, measured, count.value);
-        if (ticked.value < 0) {
-          // Seeded, not ticked: the day already under the ring was not crossed.
-          ticked.value = cell;
-        } else if (cell !== ticked.value) {
-          ticked.value = cell;
+        if (cell !== nearest.value) {
+          nearest.value = cell;
           snapped.value = false;
-          if (ticksNow(hold.value, sinceTick.value) && onTick !== undefined) {
-            sinceTick.value = 0;
-            runOnJS(onTick)();
-          }
         }
         /*
           **The snap waits for the finger to leave.** Measured while it was
@@ -389,7 +408,7 @@ function DayRibbonView({ days, current, scrollY, placement, onPickDay, onTick }:
         if (snapsNow(hold.value, justSettled(before, after), snapped.value)) {
           snapped.value = true;
           shown.value = cell;
-          const landing = offsetWithin(cell, measured, content.value);
+          const landing = offsetWithin(cell, measured, trackWidth(measured, count.value));
           wrote.value = landing;
           sinceWrite.value = 0;
           // Animated, because this one *is* a move the reader should see: it is
@@ -449,19 +468,24 @@ function DayRibbonView({ days, current, scrollY, placement, onPickDay, onTick }:
     */
       if (afterRest.still >= SETTLE_MS) {
         const cell = markOf(scrollY.value, here.tops, here.marks);
-        if (cell !== landing.value) {
+        const home = offsetWithin(cell, measured, trackWidth(measured, count.value));
+        // Sent once per day landed on — and again if it never got there, which
+        // on a device it sometimes does not (`grip.ts`'s `relandsNow`).
+        const again = at.value !== stuck.value && relandsNow(home - at.value, sinceWrite.value);
+        if (cell !== landing.value || again) {
+          // Sent again once per place it is stuck: a strip a re-send did not
+          // move is against its own end, and asking for ever is a write a frame.
+          stuck.value = again ? at.value : Number.NaN;
           landing.value = cell;
           shown.value = cell;
-          // The day it rests on is a day already counted: the line in motion
-          // and the rule at rest can differ by one, and the difference is not
-          // a day passing the ring.
-          ticked.value = cell;
-          const rest = offsetWithin(cell, measured, content.value);
-          wrote.value = rest;
+          const reach = cell - ringAt;
+          if (reach > RESEAT_CELLS || reach < -RESEAT_CELLS) muted.value = true;
+          wrote.value = home;
           sinceWrite.value = 0;
           // Animated: it is the last fraction of a cell, and the reader should
-          // see the strip take the day rather than find it already there.
-          scrollTo(scroller, rest, 0, true);
+          // see the strip take the day rather than find it already there. The
+          // tick is its arrival, above — not this write.
+          scrollTo(scroller, home, 0, true);
         }
         return;
       }
@@ -471,19 +495,11 @@ function DayRibbonView({ days, current, scrollY, placement, onPickDay, onTick }:
         ? follow(shown.value, target, speed, step / 1000)
         : markOf(scrollY.value, here.tops, here.marks);
 
-      // A day passing the ring taps, whoever sent it past (`grip.ts`).
-      const passing = Math.round(next);
-      if (ticked.value < 0) ticked.value = passing;
-      else if (passing !== ticked.value) {
-        ticked.value = passing;
-        if (placed.value && ticksNow(hold.value, sinceTick.value) && onTick !== undefined) {
-          sinceTick.value = 0;
-          runOnJS(onTick)();
-        }
-      }
+      // The first placement is a re-seat: it lands in silence.
+      if (!placed.value) muted.value = true;
       placed.value = true;
       shown.value = next;
-      const want = offsetWithin(next, measured, content.value);
+      const want = offsetWithin(next, measured, trackWidth(measured, count.value));
       const gap = want - at.value;
       // Nothing to write is worth not writing: a `scrollTo` per frame on a still
       // strip is a scroll event per frame for the handler below to discard. Half
@@ -497,12 +513,13 @@ function DayRibbonView({ days, current, scrollY, placement, onPickDay, onTick }:
     [
       at,
       aimed,
-      content,
       count,
       gliding,
       hold,
       landing,
       listRest,
+      muted,
+      nearest,
       onTick,
       placed,
       placement,
@@ -514,7 +531,9 @@ function DayRibbonView({ days, current, scrollY, placement, onPickDay, onTick }:
       sinceTick,
       sinceWrite,
       snapped,
+      stuck,
       ticked,
+      under,
       was,
       width,
       wrote,
@@ -592,7 +611,6 @@ function DayRibbonView({ days, current, scrollY, placement, onPickDay, onTick }:
         horizontal
         showsHorizontalScrollIndicator={false}
         onScroll={handleStripScroll}
-        onContentSizeChange={measureContent}
         // 16ms: the strip is placed from this and the default reports once per
         // gesture — a strip that only knows where it was dragged to when the
         // finger lifts.

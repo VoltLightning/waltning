@@ -364,3 +364,22 @@ export function follow(shown: number, target: number, speed: number, dt: number)
   if (k >= 1) return target;
   return shown + gap * k;
 }
+
+/**
+ * The track's full width — arithmetic, where it used to be measured.
+ *
+ * **`onContentSizeChange` is not dependable enough to clamp by.** The track's
+ * padding depends on the band, so its width changes one layout after the band
+ * is known — and `react-native-web` does not report that second size. The
+ * clamp then held the width of a track with no padding: on a 1216pt band the
+ * strip stopped 1,100pt short of the day it was sent to, and stayed there.
+ * Invisible at phone width, where the two widths are a few points apart. The
+ * cells are a fixed size, so the width is known the moment the band is.
+ *
+ * `0` for an unmeasured band or an empty run, which clamps nothing.
+ */
+export function trackWidth(band: number, count: number): number {
+  "worklet";
+  if (band <= 0 || count <= 0) return 0;
+  return 2 * trackLead(band) + count * STRIDE - GAP;
+}

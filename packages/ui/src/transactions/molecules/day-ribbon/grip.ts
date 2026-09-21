@@ -133,3 +133,71 @@ export function ticksNow(hold: Grip, sinceTick: number): boolean {
   "worklet";
   return sinceTick >= (hold.detached ? TICK_GAP_MS : LIST_TICK_GAP_MS);
 }
+
+/**
+ * How near a cell's centre counts as *on* it, in cells — about four points.
+ *
+ * An animated landing ends a rounding error short of where it was sent, so
+ * exact equality would let the one arrival that matters most go by in silence.
+ */
+export const ARRIVE_SLACK = 0.08;
+
+/**
+ * The cell whose centre the ring has just reached, or `-1`.
+ *
+ * **Arrival, not the halfway line** (S04 §7). The tick was fired when the
+ * *nearest* cell changed, which is the midpoint between two days: in the hand
+ * it marked leaving a day rather than reaching one, and a strip that then
+ * snapped the last half cell did so in silence. A tick is the ring *taking* a
+ * day, so it fires when a centre is under the ring — reached, or passed through
+ * between two frames, since a fling never rests on the ones it crosses.
+ *
+ * The caller holds the cell last ticked and compares; resting on a centre
+ * answers with it every frame.
+ */
+export function arrivedAt(before: number, now: number): number {
+  "worklet";
+  if (Number.isNaN(before) || Number.isNaN(now)) return -1;
+  const near = Math.round(now);
+  const off = now - near;
+  if (off <= ARRIVE_SLACK && off >= -ARRIVE_SLACK) return near;
+  if (now > before) {
+    const passed = Math.floor(now);
+    return passed > before ? passed : -1;
+  }
+  if (now < before) {
+    const passed = Math.ceil(now);
+    return passed < before ? passed : -1;
+  }
+  return -1;
+}
+
+/**
+ * How long a landing is given to finish before it is checked. Under
+ * `QUIET_MS`, so a strip being put back is never read as a hand moving it.
+ */
+export const LAND_MS = 450;
+
+/**
+ * A landing further than this is the strip being *re-seated* — a cold open, a
+ * re-indexed run of days — and the cells it sweeps over on the way are not
+ * days going past the reader. It lands in silence.
+ */
+export const RESEAT_CELLS = 1.5;
+
+/**
+ * Whether a strip at rest has to be sent home again.
+ *
+ * **A landing was written once and believed.** On a device an animated
+ * `scrollTo` is not a promise: the strip's run of days is re-cut around the
+ * day the list settled on, the content changes size under the animation, and
+ * the scroller drops it — leaving the ring a day or two from the list's day
+ * with nothing left that would ever look again. Seen on a phone as *scroll
+ * back to the top and the ring is on Wednesday*; never in a browser, where the
+ * write is synchronous. `gap` is where it should be less where it **is**.
+ */
+export function relandsNow(gap: number, sinceWrite: number): boolean {
+  "worklet";
+  if (Number.isNaN(gap) || sinceWrite < LAND_MS) return false;
+  return gap >= 0.5 || gap <= -0.5;
+}

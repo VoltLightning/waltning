@@ -38,6 +38,21 @@ test("a day passing the ring asks for a tick, and a still strip asks for none", 
   await expect.poll(() => ticks(page), { timeout: 2000 }).toBeGreaterThanOrEqual(4);
   expect(await ticks(page), "one a day, not a burst").toBeLessThanOrEqual(6);
 
+  // **And the strip really went there.** This suite once counted days the
+  // strip was *asked* to show while it sat clamped 1,100pt short of them — the
+  // tick is now read off where the strip is, so a strip that does not move
+  // does not tick, and this says which of the two a failure is.
+  const moved = await page.evaluate(() => {
+    const strip = Array.from(document.querySelectorAll("*")).find(
+      (node) =>
+        node.scrollWidth > node.clientWidth + 5 && getComputedStyle(node).overflowX !== "visible",
+    );
+    return strip === undefined ? -1 : strip.scrollWidth - strip.clientWidth - strip.scrollLeft;
+  });
+  // Five days of 52pt back from the far end, where the top of the list is.
+  expect(moved, "five cells from the end of the track").toBeGreaterThan(5 * 52 - 8);
+  expect(moved).toBeLessThan(5 * 52 + 8);
+
   // And once it is still again it is quiet again.
   const settled = await ticks(page);
   await page.waitForTimeout(800);

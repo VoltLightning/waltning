@@ -331,6 +331,39 @@ test.describe("the day strip is scrubbed by the list", () => {
     );
   });
 
+  /**
+   * **Both reported from a phone, where the ring came to rest on a day in the
+   * future** — Wednesday after a scroll back to the top, Tuesday after the
+   * pill. A landing used to be written once and believed; the strip's run of
+   * days is re-cut around the settled day, and a device drops the animation
+   * that is in flight when it is. `grip.ts`'s `relandsNow` is the fix and its
+   * unit test the proof; a browser does not drop the write, so these two pin
+   * the journeys rather than the defect.
+   */
+  test("comes back to today when the list is scrolled back to the top", async ({ page }) => {
+    const opened = await dayUnderTheRing(page);
+    await scrollTheList(page, 24);
+    expect(await dayUnderTheRing(page), "it left today").not.toBe(opened);
+
+    await page.mouse.move(195, 600);
+    for (let tick = 0; tick < 40; tick += 1) {
+      await page.mouse.wheel(0, -400);
+      await page.waitForTimeout(40);
+    }
+    await page.waitForTimeout(1800);
+    expect(await dayUnderTheRing(page), "the top of the list is today").toBe(opened);
+  });
+
+  test("comes back to today by the pill", async ({ page }) => {
+    const opened = await dayUnderTheRing(page);
+    await scrollTheList(page, 24);
+    await page.getByRole("button", { name: /Back to today/ }).click();
+    await page.waitForTimeout(2200);
+    expect(await dayUnderTheRing(page), "the ring, not only the list").toBe(opened);
+    // The list names the day; the strip names it and what it holds.
+    expect(opened, "and the list").toContain((await dayAtTheTopOfTheList(page)) ?? "nothing");
+  });
+
   test("stays where a hand puts it, and comes back when the list moves", async ({ page }) => {
     const resting = await stripOffset(page);
 

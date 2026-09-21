@@ -1,13 +1,17 @@
 import { describe, expect, it } from "vitest";
 import { advance, justSettled, LIFTED, type Settling } from "../../../primitives/scroll-settle.ts";
 import {
+  ARRIVE_SLACK,
+  arrivedAt,
   type Frame,
   type Grip,
   grip,
+  LAND_MS,
   LIST_TICK_GAP_MS,
   LOOSE,
   letGo,
   QUIET_MS,
+  relandsNow,
   snapsNow,
   TICK_GAP_MS,
   takeHold,
@@ -143,5 +147,58 @@ describe("when a day passing the ring taps", () => {
 
   it("no faster than the engine can say them apart", () => {
     expect(ticksNow({ dragging: false, detached: true }, TICK_GAP_MS - 1)).toBe(false);
+  });
+});
+
+describe("which day the ring has reached", () => {
+  /**
+   * **The one a hand reported.** The tick fired when the *nearest* cell
+   * changed — the halfway line between two days — so it marked leaving a day,
+   * and the half cell the strip then snapped went by in silence.
+   */
+  it("none at the halfway line, where the tick used to be", () => {
+    expect(arrivedAt(44.4, 44.6)).toBe(-1);
+    expect(arrivedAt(44.6, 44.4)).toBe(-1);
+  });
+
+  it("the day whose centre comes under the ring, from either side", () => {
+    expect(arrivedAt(44.8, 45 - ARRIVE_SLACK / 2)).toBe(45);
+    expect(arrivedAt(45.2, 45 + ARRIVE_SLACK / 2)).toBe(45);
+  });
+
+  it("a landing that ends a rounding error short", () => {
+    expect(arrivedAt(44.99, 44.9999)).toBe(45);
+  });
+
+  it("a centre passed through between two frames, which a fling never rests on", () => {
+    expect(arrivedAt(44.7, 45.3)).toBe(45);
+    expect(arrivedAt(45.3, 44.7)).toBe(45);
+    // Several in one frame: the last one reached.
+    expect(arrivedAt(42.5, 45.4)).toBe(45);
+    expect(arrivedAt(45.4, 42.5)).toBe(43);
+  });
+
+  it("nothing for a strip that has not been read yet", () => {
+    expect(arrivedAt(Number.NaN, 12.5)).toBe(-1);
+  });
+});
+
+describe("a landing that never arrived", () => {
+  it("is sent again once it has had its time", () => {
+    // Two cells out, long after the write: the scroller dropped it.
+    expect(relandsNow(104, LAND_MS)).toBe(true);
+    expect(relandsNow(-104, LAND_MS)).toBe(true);
+  });
+
+  it("is left alone while it is still on its way", () => {
+    expect(relandsNow(104, LAND_MS - 1)).toBe(false);
+  });
+
+  it("is not re-sent for the fraction of a point a scroller rounds by", () => {
+    expect(relandsNow(0.3, LAND_MS * 4)).toBe(false);
+  });
+
+  it("checks before a strip being put back could be read as a hand", () => {
+    expect(LAND_MS).toBeLessThan(QUIET_MS);
   });
 });
