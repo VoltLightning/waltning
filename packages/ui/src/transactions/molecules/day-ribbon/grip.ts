@@ -40,33 +40,41 @@ export type Grip = {
 
 export const LOOSE: Grip = { dragging: false, detached: false };
 
+/**
+ * How long after one of this component's own writes a movement is still
+ * presumed to be that write arriving, in milliseconds.
+ *
+ * **Because on a phone `scrollTo` is asynchronous.** The scroller reports where
+ * it is through scroll events, and they trail the write that caused them — by a
+ * frame or two for a plain write, by the whole animation for an animated one.
+ * The first version asked *is the strip where I put it?*, which on the web is
+ * a fair question (the write is synchronous) and on a device is always *no*
+ * while the list is scrolling: the strip detached itself mid-scroll, every
+ * scroll, and stopped following the list. It shipped because every suite that
+ * could see it runs in a browser.
+ *
+ * So the question is asked the other way round: *have I written recently?* If
+ * so, movement is mine. Only a strip that moves after this component has been
+ * silent for longer than any of its own animations has been moved by a hand.
+ */
+export const QUIET_MS = 500;
+
 /** What a frame can tell the strip about who moved what. */
 export type Frame = {
   /** The list started moving this frame, rather than continuing to glide. */
   listJumped: boolean;
   /** The strip's own offset changed since the last frame. */
   drifted: boolean;
-  /**
-   * The last offset this component asked for was one the scroller could
-   * actually reach — so a difference from it is somebody else's doing.
-   *
-   * **Without this a clamped write is a hand.** The strip's content grows as
-   * the list pages, and until `onContentSizeChange` has reported there is no
-   * clamping at all, so the first write on a cold open ran past the end.
-   */
-  reachable: boolean;
-  /** The strip is further from where it was put than a rounding error. */
-  moved: boolean;
+  /** Milliseconds since this component last wrote to the strip's scroller. */
+  sinceWrite: number;
 };
 
 export function grip(before: Grip, frame: Frame): Grip {
   "worklet";
   // A finger outranks the list, and the list moves during a strip drag anyway.
-  const detached =
-    frame.listJumped && !before.dragging
-      ? false
-      : before.detached || (frame.drifted && frame.reachable && frame.moved);
-  return { dragging: before.dragging, detached };
+  if (frame.listJumped && !before.dragging) return { dragging: false, detached: false };
+  const byHand = frame.drifted && frame.sinceWrite > QUIET_MS;
+  return { dragging: before.dragging, detached: before.detached || byHand };
 }
 
 export function takeHold(): Grip {
@@ -93,33 +101,23 @@ export function snapsNow(hold: Grip, settled: boolean, already: boolean): boolea
   return !hold.dragging && !already && settled;
 }
 
-/**
- * Whether the landing itself should tap.
- *
- * **The snap is the event the tick was asked for**, and it had none: the taps
- * were per day crossed and stopped when the finger left, so the strip came to
- * rest on a day in silence. A snap is a discrete thing that happens *to* the
- * strip, and it is worth feeling whether or not it moved a whole cell.
- */
-export function snapTicks(snapping: boolean): boolean {
-  "worklet";
-  return snapping;
-}
+/** The least time between two taps — the haptic engine's own floor, roughly. */
+export const TICK_GAP_MS = 30;
 
 /**
- * Whether a day crossing should tap.
+ * Whether a day passing under the ring should tap.
  *
- * A tap is something a finger does, so the momentum after a flick does not
- * tap — thirty cells of coasting is a notification where a texture was wanted.
+ * **Every day a hand sends past the ring, coasting included** — each cell is
+ * a snap point, and a snap point that passes in silence is the picker feeling
+ * broken. This was narrowed to *finger down only* once, on the argument that
+ * a long coast buzzes; on a device that reads as the feedback cutting out the
+ * moment you let go, which is worse. The floor between taps is what keeps a
+ * fast coast a purr rather than a rattle, the way the system pickers do it.
  *
- * **No `first` exception, and there used to be one.** The cell a tick was last
- * fired for was re-armed to *unknown* on every attached frame, so the opening
- * crossing of every drag compared against nothing and was swallowed — which on
- * a one-day drag is the whole of the feedback. The fix is at the other end:
- * taking hold seeds the last-ticked cell with the one under the ring, so there
- * is always something to have crossed *from*.
+ * Never for a strip the *list* is driving: scrolling the ledger is not this
+ * gesture, and forty taps through a fling of the list is a notification.
  */
-export function ticksNow(hold: Grip): boolean {
+export function ticksNow(hold: Grip, sinceTick: number): boolean {
   "worklet";
-  return hold.dragging;
+  return hold.detached && sinceTick >= TICK_GAP_MS;
 }

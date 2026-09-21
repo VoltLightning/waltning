@@ -66,17 +66,19 @@ exactly. Summary and Months read its month, and **picking a month sets the
 date to that month's newest day** — a reverse-chronological list is entered
 from its end, not its start.
 
-**The List page writes the date when it settles, never while it moves.** The
+**Scrolling the List does not write the date; the next act carries it.** The
 date is a *selection*, and everything downstream treats a change to it as a
 deliberate jump: both halves of the list reload, and the pages play the move
-that says which way you stepped. A scroll that wrote it on every frame was
-therefore asking for a reload and a step animation sixty times a second, in
-the middle of a gesture — which is what made the strip lag the finger, the
-list stall on a tap, and the month title slide sideways when a drag crossed
-into August. So the scroll drives the strip and the title *directly*, and the
-date is written once, when the list comes to rest. The guarantee above is
-unchanged — scroll to 25 May on List and Calendar has 25 May marked — it is
-just answered at the end of the gesture rather than during it.
+that says which way you stepped. It also lives in the route, and a route write
+re-renders the whole navigation tree — measured at four commits and about 2,400
+component renders every time a scroll came to rest, to tell three pages that
+are not on screen something they cannot show. So the List *notes* the day it
+has settled on, and that day rides the next deliberate write — a swipe to
+another page, a step, a search — in the same update. The guarantee above is
+unchanged and is kept to the letter: scroll to 25 May on List, swipe to
+Calendar, and 25 May is marked, because the swipe carried it. A tap on a day
+that is already in the list is the same: the list scrolls to it and notes it,
+and nothing is re-read or re-routed for rows that are on screen.
 
 **The chrome clears the status bar itself.** It is the top of the screen on a
 tab root, so the inset is its own — nothing above it can apply one.
@@ -633,11 +635,14 @@ where you are, not a second scroller for the same content — two controls that
 each move the other is how a gesture ends up fighting itself.
 
 **A hand on the strip snaps, and ticks; the list's own scrubbing does
-neither.** Let go and the strip settles the nearest day under the ring rather
-than between two, and each day crossed under a thumb is one light tap. Both are
-the picker-like half of this control, and both are wrong on the other half: the
-same tick fired while the ledger was being scrolled would buzz forty times
-through one fling, which is a notification where a texture was wanted, and
+neither.** Let go — with a flick or without one — and the strip settles the
+nearest day under the ring rather than between two. Every day a hand sends past
+the ring is one light tap, *the coast after a flick included*: each cell is a
+snap point, and feedback that cuts out the moment the finger lifts reads as
+broken; a floor between taps keeps a fast coast a purr rather than a rattle.
+Both are the picker-like half of this control, and both are wrong on the other
+half: the same tick fired while the ledger was being scrolled would buzz forty
+times through one fling, which is a notification where a texture was wanted, and
 snapping a strip that is tracking a list would undo the continuous motion this
 screen was rebuilt for. The snap is the screen's own rather than the scroller's
 `snapToOffsets`, because on the web that becomes CSS scroll snap — which

@@ -44,6 +44,7 @@ import { horizontalScrollProps } from "../../../primitives/nested-scroll.ts";
 import {
   advance,
   justSettled,
+  LIFTED,
   SETTLE_MS,
   type Settling,
   UNREAD,
@@ -51,7 +52,7 @@ import {
 import { makeStyles } from "../../../theme/styles.ts";
 import { radius, space } from "../../../tokens.ts";
 import { type DayActivity, DayCell, type DayDirection } from "../../atoms/day-cell/day-cell";
-import { type Grip, grip, LOOSE, letGo, snapsNow, snapTicks, takeHold, ticksNow } from "./grip.ts";
+import { type Grip, grip, LOOSE, letGo, snapsNow, takeHold, ticksNow } from "./grip.ts";
 import {
   aheadCount,
   CELL,
@@ -227,8 +228,12 @@ function DayRibbonView({ days, current, scrollY, placement, onPickDay, onTick }:
    * room appears.
    */
   const at = useSharedValue(0);
-  /** The offset this last asked for — what tells our own move from a hand's. */
+  /** The offset this last asked for. */
   const wrote = useSharedValue(0);
+  /** Milliseconds since this last wrote to the scroller — `grip.ts`'s `QUIET_MS`. */
+  const sinceWrite = useSharedValue(0);
+  /** Milliseconds since the last tap, for the floor between two. */
+  const sinceTick = useSharedValue(1000);
   /** `at` as of the previous frame, so a *movement* can be told from a rest. */
   const was = useSharedValue(0);
   /**
@@ -338,19 +343,13 @@ function DayRibbonView({ days, current, scrollY, placement, onPickDay, onTick }:
         the day the list is on. On a phone: drag from the 20th toward the 16th
         and the strip snaps home to the 20th under your thumb.
       */
-      const drifted = at.value !== was.value;
-      was.value = at.value;
-      const ours = at.value - wrote.value;
-      hold.value = grip(hold.value, {
-        listJumped,
-        drifted,
-        // The last write was one the scroller could reach, so a difference
-        // from it is somebody else's doing rather than a clamp.
-        reachable: wrote.value <= content.value - measured + 0.5 && wrote.value >= -0.5,
-        moved: ours > 1 || ours < -1,
-      });
       const elapsed = frame.timeSincePreviousFrame;
       const step = elapsed === null ? 16 : elapsed;
+      const drifted = at.value !== was.value;
+      was.value = at.value;
+      sinceWrite.value += step;
+      sinceTick.value += step;
+      hold.value = grip(hold.value, { listJumped, drifted, sinceWrite: sinceWrite.value });
 
       if (hold.value.detached) {
         /*
@@ -364,16 +363,16 @@ function DayRibbonView({ days, current, scrollY, placement, onPickDay, onTick }:
         costs a few lines and behaves the same on all three targets.
       */
         const cell = nearestCell(at.value, measured, count.value);
-        if (cell !== ticked.value) {
+        if (ticked.value < 0) {
+          // Seeded, not ticked: the day already under the ring was not crossed.
+          ticked.value = cell;
+        } else if (cell !== ticked.value) {
           ticked.value = cell;
           snapped.value = false;
-          // **`dragging`, not `detached`.** The detach outlives the gesture on
-          // purpose (§7: lifting the finger changes nothing), so a flick that
-          // coasts thirty cells fired thirty haptics with the hand already off
-          // the glass — the "buzz forty times through one fling" this tick's
-          // own doc exists to rule out, on the strip's fling instead of the
-          // list's. A tap is something a finger does.
-          if (ticksNow(hold.value) && onTick !== undefined) runOnJS(onTick)();
+          if (ticksNow(hold.value, sinceTick.value) && onTick !== undefined) {
+            sinceTick.value = 0;
+            runOnJS(onTick)();
+          }
         }
         /*
           **The snap waits for the finger to leave.** Measured while it was
@@ -388,13 +387,10 @@ function DayRibbonView({ days, current, scrollY, placement, onPickDay, onTick }:
         rest.value = after;
         if (snapsNow(hold.value, justSettled(before, after), snapped.value)) {
           snapped.value = true;
-          // The landing itself, which is the event the tick was asked for and
-          // the one it did not have: the taps stopped with the finger, so the
-          // strip came to rest on a day in silence.
-          if (snapTicks(true) && onTick !== undefined) runOnJS(onTick)();
           shown.value = cell;
           const landing = offsetWithin(cell, measured, content.value);
           wrote.value = landing;
+          sinceWrite.value = 0;
           // Animated, because this one *is* a move the reader should see: it is
           // the strip taking the day they stopped on.
           scrollTo(scroller, landing, 0, true);
@@ -450,6 +446,7 @@ function DayRibbonView({ days, current, scrollY, placement, onPickDay, onTick }:
           shown.value = cell;
           const rest = offsetWithin(cell, measured, content.value);
           wrote.value = rest;
+          sinceWrite.value = 0;
           // Animated: it is the last fraction of a cell, and the reader should
           // see the strip take the day rather than find it already there.
           scrollTo(scroller, rest, 0, true);
@@ -467,6 +464,7 @@ function DayRibbonView({ days, current, scrollY, placement, onPickDay, onTick }:
       // equality would write one every frame for ever.
       if (gap < 0.5 && gap > -0.5) return;
       wrote.value = want;
+      sinceWrite.value = 0;
       scrollTo(scroller, want, 0, false);
     },
     [
@@ -486,6 +484,8 @@ function DayRibbonView({ days, current, scrollY, placement, onPickDay, onTick }:
       scrollY,
       seen,
       shown,
+      sinceTick,
+      sinceWrite,
       snapped,
       ticked,
       was,
@@ -529,7 +529,9 @@ function DayRibbonView({ days, current, scrollY, placement, onPickDay, onTick }:
       },
       onEndDrag: () => {
         hold.value = letGo(hold.value);
-        rest.value = UNREAD;
+        // Already moved — the drag *was* the movement — so a finger lifted
+        // without a flick still settles, and snaps.
+        rest.value = LIFTED;
       },
       onScroll: (event) => {
         // Always: this is where the strip *is*, whoever moved it, and the

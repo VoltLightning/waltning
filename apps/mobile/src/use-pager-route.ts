@@ -27,6 +27,19 @@ export type PagerRoute = {
   showMonth: (month: YearMonth) => void;
   showYear: (year: number) => void;
   showDay: (date: AccountingDate) => void;
+  /**
+   * The List page saying which day it is on — **recorded, not written**.
+   *
+   * `router.setParams` re-renders the whole navigation tree, and the render
+   * probe counted what that costs here: four commits and ~2,400 component
+   * renders, every time a scroll came to rest. Nothing reads the date while
+   * the List is the page on screen except the List itself, which already
+   * knows. So the day is held here and folded into the *next* write — a page
+   * change, a step — in the same `setParams`. S04 §3's promise is kept to the
+   * letter: scroll to 25 May, swipe to Calendar, and 25 May is marked, because
+   * the swipe carried it.
+   */
+  noteDay: (date: AccountingDate) => void;
   /** The screen's search (S04 §7). `null` clears it. */
   setQuery: (query: string | null) => void;
 };
@@ -67,7 +80,13 @@ export function usePagerRoute(today: AccountingDate): PagerRoute {
     [params.view, params.date, params.q, today],
   );
 
+  /** The day the List last said it was on, until a write carries it. */
+  const noted = useRef<AccountingDate | null>(null);
+
   const write = useCallback((next: PagerState) => {
+    // Whatever was noted is in `next` already (`base` below) or has just been
+    // overruled by a deliberate date; either way it is spent.
+    noted.current = null;
     router.setParams(pagerStateParams(next));
   }, []);
 
@@ -88,11 +107,21 @@ export function usePagerRoute(today: AccountingDate): PagerRoute {
   const latest = useRef(state);
   latest.current = state;
 
-  const previous = useCallback(() => write(step(latest.current, -1)), [write]);
-  const next = useCallback(() => write(step(latest.current, 1)), [write]);
+  /** The state an act starts from: the route's, moved to the noted day if there is one. */
+  const base = useCallback(
+    (): PagerState =>
+      noted.current === null ? latest.current : enterDay(latest.current, noted.current),
+    [],
+  );
+  const noteDay = useCallback((date: AccountingDate) => {
+    noted.current = date === latest.current.date ? null : date;
+  }, []);
+
+  const previous = useCallback(() => write(step(base(), -1)), [base, write]);
+  const next = useCallback(() => write(step(base(), 1)), [base, write]);
   const showPage = useCallback(
-    (page: PagerPageKey) => write(goToPage(latest.current, page)),
-    [write],
+    (page: PagerPageKey) => write(goToPage(base(), page)),
+    [base, write],
   );
   const showMonth = useCallback(
     (month: YearMonth) => write(enterMonth(latest.current, month, today)),
@@ -107,8 +136,8 @@ export function usePagerRoute(today: AccountingDate): PagerRoute {
     [write],
   );
   const setQuery = useCallback(
-    (query: string | null) => write(search(latest.current, query)),
-    [write],
+    (query: string | null) => write(search(base(), query)),
+    [base, write],
   );
 
   const label = useMemo(() => periodLabel(state), [state]);
@@ -123,6 +152,7 @@ export function usePagerRoute(today: AccountingDate): PagerRoute {
     showMonth,
     showYear,
     showDay,
+    noteDay,
     setQuery,
   };
 }

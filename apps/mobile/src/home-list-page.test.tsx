@@ -69,6 +69,7 @@ function ledgerWith(older: PhoneSearchTransaction[], newer: PhoneSearchTransacti
  * the built app.
  */
 const scrollY = { value: 0 } as SharedValue<number>;
+const active = { value: true } as SharedValue<boolean>;
 
 function draw(
   ledger: PhoneLedgerController,
@@ -76,6 +77,7 @@ function draw(
   over: {
     anchor?: AccountingDate;
     onReturnToToday?: () => void;
+    onVisibleDay?: (date: AccountingDate) => void;
     onCategorize?: () => void;
     query?: string | null;
   } = {},
@@ -86,6 +88,7 @@ function draw(
         <HomeListPage
           ledger={ledger}
           anchor={over.anchor ?? TODAY}
+          {...(over.onVisibleDay === undefined ? {} : { onVisibleDay: over.onVisibleDay })}
           today={TODAY}
           revision={0}
           pivotCurrency={PLN}
@@ -96,7 +99,7 @@ function draw(
           onReturnToToday={over.onReturnToToday ?? vi.fn()}
           query={over.query ?? null}
           scrollY={scrollY}
-          active
+          active={active}
           empty={<Text>nothing yet</Text>}
         />
       </I18nProvider>
@@ -506,15 +509,15 @@ describe("every entry says which day it is on", () => {
  * **The path that ships, which the suite did not have.**
  *
  * A tap on a day, and the Today pill, take the cheap road when the day is
- * already rendered — and the first version of that road told the screen
- * nothing: it set the echo guard, the settle that followed declined to report
- * because of it, and so the shared date never moved. The ring and the
- * `current` highlight ended on different cells, Calendar kept the day before,
- * and the pill — drawn only while the anchor is not today — would not dismiss
- * itself.
+ * already rendered: the list scrolls to it and the screen is *told* — never
+ * asked to write the route, because a route write re-renders the whole
+ * navigation tree and the rows are already there. The first version of that
+ * road told the screen nothing at all: the ring and the highlight ended on
+ * different cells, and the pill — drawn only while the list is off today —
+ * would not dismiss itself.
  *
  * The earlier tests anchored on a date whose day is *not* in the list, so they
- * exercised only the fallback. These anchor where today is loaded.
+ * exercised only the jump. These anchor where the day is loaded.
  */
 describe("a day that is already on screen", () => {
   // Anchored on the 14th, so the 13th and the 12th are loaded below it and
@@ -525,19 +528,27 @@ describe("a day that is already on screen", () => {
       [row("2026-08-14", 1, "-10.00")],
     );
 
-  it("tells the screen which day was picked, even when nothing reloads", () => {
+  it("tells the screen which day it went to, and asks for no jump", () => {
     const onPickDay = vi.fn();
-    draw(loaded(), onPickDay, { anchor: accountingDate("2026-08-14") });
+    const onVisibleDay = vi.fn();
+    draw(loaded(), onPickDay, { anchor: accountingDate("2026-08-14"), onVisibleDay });
     fireEvent.click(screen.getByRole("button", { name: /August 13, 2026, 1 entry/ }));
-    expect(onPickDay).toHaveBeenCalledWith("2026-08-13");
+    expect(onVisibleDay).toHaveBeenCalledWith("2026-08-13");
+    // A jump re-reads the ledger; the rows are already on screen.
+    expect(onPickDay).not.toHaveBeenCalled();
   });
 
-  it("tells the screen the pill was pressed, even when nothing reloads", () => {
-    // The pill is drawn on `anchor !== today`; if the press does not reach the
-    // screen the anchor never becomes today and the pill stays on screen.
+  it("dismisses the pill once the list is back on today", () => {
     const onReturnToToday = vi.fn();
-    draw(loaded(), vi.fn(), { anchor: accountingDate("2026-08-12"), onReturnToToday });
+    const onVisibleDay = vi.fn();
+    draw(loaded(), vi.fn(), {
+      anchor: accountingDate("2026-08-12"),
+      onReturnToToday,
+      onVisibleDay,
+    });
     fireEvent.click(screen.getByRole("button", { name: /Back to today/ }));
-    expect(onReturnToToday).toHaveBeenCalledOnce();
+    expect(onVisibleDay).toHaveBeenCalledWith(TODAY);
+    expect(onReturnToToday, "today is loaded, so nothing is re-read").not.toHaveBeenCalled();
+    expect(screen.queryByRole("button", { name: /Back to today/ })).toBeNull();
   });
 });

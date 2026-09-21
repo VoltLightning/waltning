@@ -39,13 +39,25 @@ export type GeometryEntry = {
   date: string | null;
   /** The first day header draws no gap above it. */
   first?: boolean;
+  /** Where a row sits in its day, which decides its borders and so its height. */
+  place?: "only" | "first" | "middle" | "last";
+  /** The entry's own identity, for a height measured for *it* (`exact` below). */
+  key?: string;
 };
 
 /** One height per kind, measured once each. `firstDay` is the ungapped header. */
 export type EntryHeights = {
   day: number;
   firstDay: number;
-  row: number;
+  /**
+   * **Four rows, because a row's borders depend on where it sits in its day**
+   * — and a single `row` height was out by a point or two on every row, which
+   * is a day of drift inside a couple of screens.
+   */
+  rowOnly: number;
+  rowFirst: number;
+  rowMiddle: number;
+  rowLast: number;
   quiet: number;
   run: number;
 };
@@ -89,7 +101,10 @@ export type ListGeometry = {
 export const ESTIMATED_HEIGHTS: EntryHeights = {
   day: 54,
   firstDay: 40,
-  row: 54,
+  rowOnly: 56,
+  rowFirst: 55,
+  rowMiddle: 55,
+  rowLast: 56,
   quiet: 34,
   run: 44,
 };
@@ -104,12 +119,22 @@ export const ESTIMATED_HEIGHTS: EntryHeights = {
  *
  * `leading` is the content's own top padding, so the first day's top is where
  * it actually is rather than zero.
+ *
+ * `exact` is the height of each entry that has actually been laid out, by key.
+ * **The kind's height is a fallback, not the truth**: a transfer draws two
+ * accounts and a foreign row draws its rate, so rows of one kind are not all
+ * one height — and a table that said they were put every day below an odd row
+ * out by the difference, which the e2e suite found 2,500pt down as the ring on
+ * the 1st over a list on the 2nd. A cell that has been on screen has been
+ * measured; only cells nobody has scrolled to yet are estimated, and by the
+ * time anyone does, they are not.
  */
 export function listGeometry(
   entries: readonly GeometryEntry[],
   heights: EntryHeights,
   cellOf: (date: string) => number,
   leading = 0,
+  exact?: ReadonlyMap<string, number>,
 ): ListGeometry {
   const tops: number[] = [];
   const marks: number[] = [];
@@ -117,8 +142,17 @@ export function listGeometry(
   let at = leading;
 
   for (const entry of entries) {
+    const measured = entry.key === undefined ? undefined : exact?.get(entry.key);
     if (entry.kind === "row") {
-      at += heights.row;
+      at +=
+        measured ??
+        (entry.place === "only"
+          ? heights.rowOnly
+          : entry.place === "first"
+            ? heights.rowFirst
+            : entry.place === "last"
+              ? heights.rowLast
+              : heights.rowMiddle);
       continue;
     }
     if (entry.date !== null) {
@@ -127,13 +161,14 @@ export function listGeometry(
       dates.push(entry.date);
     }
     at +=
-      entry.kind === "quiet"
+      measured ??
+      (entry.kind === "quiet"
         ? heights.quiet
         : entry.kind === "run"
           ? heights.run
           : entry.first === true
             ? heights.firstDay
-            : heights.day;
+            : heights.day);
   }
 
   /*
@@ -212,4 +247,29 @@ export function dayAt(
     if (offset < to) return dates[i] ?? null;
   }
   return dates[count - 1] ?? null;
+}
+
+/**
+ * Which block a day lives in — its own, or the collapsed run that swallowed it.
+ *
+ * `dates` runs newest-first and names each block by its *newer* end, so the
+ * block holding a day is the last one that starts on or after it. A tap on the
+ * 9th, where the 7th to the 11th are one *nothing recorded* row, goes to that
+ * row — which is where the 9th is — rather than being told the day is not in
+ * the list and paying for a reload of rows that are already on screen.
+ *
+ * `-1` for a day outside what is loaded, in either direction: that is a jump.
+ */
+export function blockOf(date: string, dates: readonly string[]): number {
+  const newest = dates[0];
+  const oldest = dates.at(-1);
+  if (newest === undefined || oldest === undefined) return -1;
+  if (date > newest || date < oldest) return -1;
+  let at = -1;
+  for (let i = 0; i < dates.length; i += 1) {
+    const block = dates[i];
+    if (block === undefined || block < date) break;
+    at = i;
+  }
+  return at;
 }

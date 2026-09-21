@@ -34,6 +34,7 @@
  * scroller's content, `block` on a non-scrolling child that ends the panel.
  */
 
+import { useMemo } from "react";
 import { useSafeArea } from "../primitives/safe-area";
 import { gutter } from "../tokens.ts";
 import { useFloatingClearance } from "./atoms/floating-clearance";
@@ -90,12 +91,22 @@ export function useGroundInset({ clearBottom = true }: GroundInsetOptions = {}):
   const insets = useSafeArea();
   const floatClearance = useFloatingClearance();
 
-  const edges = {
-    paddingLeft: gutter + insets.left,
-    paddingRight: gutter + insets.right,
-  };
   const bottom = clearBottom ? insets.bottom + floatClearance : 0;
-  const withBottom = { ...edges, paddingBottom: gutter + bottom };
 
-  return { gutter: edges, content: withBottom, block: withBottom };
+  /**
+   * **Memoised on the four numbers it is made of.** Built fresh on every
+   * render, these objects were a new `contentContainerStyle` for every list
+   * that used them — so a `memo`'d list re-rendered whenever its parent did,
+   * every cell with it, however stable the rest of its props were. The render
+   * probe found it as the one prop of S04's list that changed on every settle.
+   * A style is a value; it should have the identity of one.
+   */
+  return useMemo(() => {
+    const edges = {
+      paddingLeft: gutter + insets.left,
+      paddingRight: gutter + insets.right,
+    };
+    const withBottom = { ...edges, paddingBottom: gutter + bottom };
+    return { gutter: edges, content: withBottom, block: withBottom };
+  }, [insets.left, insets.right, bottom]);
 }

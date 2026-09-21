@@ -23,15 +23,15 @@ import {
 import { advance, justSettled, type Settling, UNREAD } from "./scroll-settle.ts";
 
 /**
- * @param active Whether this scroller is the one on screen. **Not optional in
- *   practice**: the offset it watches may be shared by several pages that are
- *   all mounted at once, and a settle reported for someone else's gesture is
- *   read through this caller's geometry and means something else entirely.
+ * @param active Whether this scroller is the one on screen. **A shared value,
+ *   not a boolean prop**: it changes on every page swipe, and as a prop it
+ *   re-rendered the whole page that owns the list — every mounted cell with
+ *   it, the render probe counted — to flip a flag only this worklet reads.
  */
 export function useScrollSettle(
   offset: SharedValue<number>,
   onSettle: (at: number) => void,
-  active = true,
+  active?: SharedValue<boolean>,
 ): void {
   const state = useSharedValue<Settling>(UNREAD);
   const report = useCallback((at: number) => onSettle(at), [onSettle]);
@@ -50,7 +50,7 @@ export function useScrollSettle(
   const watch = useCallback(
     (frame: FrameInfo) => {
       "worklet";
-      if (!active) {
+      if (active !== undefined && !active.value) {
         // **Forgotten, not merely skipped.** Returning early left the last
         // offset standing, so the first active frame after a page change
         // compared it against whatever the offset is now and called that a

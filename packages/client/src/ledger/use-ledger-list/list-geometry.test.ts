@@ -1,7 +1,24 @@
 import { describe, expect, it } from "vitest";
-import { dayAt, ESTIMATED_HEIGHTS, type GeometryEntry, listGeometry } from "./list-geometry.ts";
+import {
+  blockOf,
+  dayAt,
+  ESTIMATED_HEIGHTS,
+  type GeometryEntry,
+  listGeometry,
+} from "./list-geometry.ts";
 
-const H = { day: 50, firstDay: 40, row: 54, quiet: 30, run: 44 };
+// Four row heights, deliberately all different: a rule that read the wrong
+// one for a place would land on a number no other combination produces.
+const H = {
+  day: 50,
+  firstDay: 40,
+  rowOnly: 58,
+  rowFirst: 57,
+  rowMiddle: 54,
+  rowLast: 56,
+  quiet: 30,
+  run: 44,
+};
 
 /** The strip, earliest-first, as a lookup from date to cell. */
 function stripOf(dates: readonly string[]): (date: string) => number {
@@ -16,7 +33,11 @@ function stripOf(dates: readonly string[]): (date: string) => number {
 }
 
 const day = (date: string, first = false): GeometryEntry => ({ kind: "day", date, first });
-const row = (): GeometryEntry => ({ kind: "row", date: null });
+const row = (place: GeometryEntry["place"] = "middle"): GeometryEntry => ({
+  kind: "row",
+  date: null,
+  place,
+});
 
 describe("listGeometry", () => {
   it("puts each day block where the entries above it end", () => {
@@ -24,7 +45,7 @@ describe("listGeometry", () => {
     const entries = [day("2026-08-14", true), row(), row(), day("2026-08-13"), row()];
     const { tops } = listGeometry(entries, H, stripOf(["2026-08-13", "2026-08-14"]), 8);
     expect(tops[0]).toBe(8);
-    expect(tops[1]).toBe(8 + H.firstDay + 2 * H.row);
+    expect(tops[1]).toBe(8 + H.firstDay + 2 * H.rowMiddle);
   });
 
   it("reads the strip's order out of cellOf, not out of the index", () => {
@@ -77,7 +98,7 @@ describe("listGeometry", () => {
     // sits there for the whole of it.
     const entries = [day("2026-08-14", true), row(), day("2026-08-13"), row(), row()];
     const { tops, marks } = listGeometry(entries, H, stripOf(["2026-08-13", "2026-08-14"]));
-    expect(tops.at(-1)).toBe(H.firstDay + H.row + H.day + 2 * H.row);
+    expect(tops.at(-1)).toBe(H.firstDay + H.rowMiddle + H.day + 2 * H.rowMiddle);
     // One cell further along, in the direction the marks were already going.
     expect(marks.at(-1)).toBe(-1);
   });
@@ -199,5 +220,70 @@ describe("the sentinel's direction", () => {
     for (let i = 1; i < marks.length; i += 1) {
       expect(marks[i]).toBeLessThanOrEqual(marks[i - 1] ?? 0);
     }
+  });
+});
+
+describe("blockOf", () => {
+  // Newest first; the 11th names a run that swallowed the 11th down to the 7th.
+  const dates = ["2026-08-14", "2026-08-13", "2026-08-11", "2026-08-06"];
+
+  it("finds a day's own block", () => {
+    expect(blockOf("2026-08-14", dates)).toBe(0);
+    expect(blockOf("2026-08-06", dates)).toBe(3);
+  });
+
+  it("finds the collapsed run a day was swallowed by", () => {
+    // A tap on the 9th goes to the run's row — where the 9th *is* — rather
+    // than being called "not in the list" and paying for a reload.
+    expect(blockOf("2026-08-09", dates)).toBe(2);
+    expect(blockOf("2026-08-07", dates)).toBe(2);
+    expect(blockOf("2026-08-12", dates)).toBe(1);
+  });
+
+  it("says a day outside what is loaded is a jump", () => {
+    expect(blockOf("2026-08-15", dates)).toBe(-1);
+    expect(blockOf("2026-08-05", dates)).toBe(-1);
+    expect(blockOf("2026-08-14", [])).toBe(-1);
+  });
+});
+
+describe("a row's height depends on where it sits in its day", () => {
+  it("sums each place's own height", () => {
+    // The first row carries the card's top edge, the last its bottom, the ones
+    // between a hairline, an only child both. Summed as one `row` height every
+    // position below was out by a point or two *per row* — a day of drift in a
+    // couple of screens, found as the ring on the 1st over a list on the 2nd.
+    const entries: readonly GeometryEntry[] = [
+      day("2026-08-14", true),
+      row("first"),
+      row("middle"),
+      row("last"),
+      day("2026-08-13"),
+      row("only"),
+      day("2026-08-12"),
+    ];
+    const strip = stripOf(["2026-08-12", "2026-08-13", "2026-08-14"]);
+    const { tops } = listGeometry(entries, H, strip);
+    expect(tops[1]).toBe(H.firstDay + H.rowFirst + H.rowMiddle + H.rowLast);
+    expect(tops[2]).toBe((tops[1] ?? 0) + H.day + H.rowOnly);
+  });
+});
+
+describe("an entry that is not its kind's height", () => {
+  it("is summed at the height it was measured at", () => {
+    // A transfer draws two accounts and a foreign row its rate, so rows of one
+    // kind are not all one height — and every day below an odd row was out by
+    // the difference. The kind's height is the fallback for a cell nobody has
+    // scrolled to yet, never the truth about one that has been on screen.
+    const entries: readonly GeometryEntry[] = [
+      day("2026-08-14", true),
+      { kind: "row", date: null, place: "only", key: "transfer-1" },
+      day("2026-08-13"),
+    ];
+    const strip = stripOf(["2026-08-13", "2026-08-14"]);
+    const usual = listGeometry(entries, H, strip);
+    const exact = listGeometry(entries, H, strip, 0, new Map([["transfer-1", 92]]));
+    expect(usual.tops[1]).toBe(H.firstDay + H.rowOnly);
+    expect(exact.tops[1]).toBe(H.firstDay + 92);
   });
 });

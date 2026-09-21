@@ -4,18 +4,18 @@ import { listStartGate } from "@waltning/client/ledger/list-start-gate";
 import { useLedgerList } from "@waltning/client/ledger/use-ledger-list";
 import { reanchors } from "@waltning/client/ledger/use-ledger-list/anchor-echo";
 import {
+  blockOf,
   dayAt,
   type EntryHeights,
   ESTIMATED_HEIGHTS,
   type GeometryEntry,
   listGeometry,
 } from "@waltning/client/ledger/use-ledger-list/list-geometry";
-import { ribbonDays, toLedgerItems } from "@waltning/client/transactions/ledger-days";
-import { type AccountingDate, accountingDate } from "@waltning/core/date";
+import { RIBBON_REACH, ribbonDays, toLedgerItems } from "@waltning/client/transactions/ledger-days";
+import { type AccountingDate, accountingDate, daysBetween } from "@waltning/core/date";
 import type { CurrencyCode } from "@waltning/core/money";
 import { dayLabel, dayRangeLabel, weekdayInitial } from "@waltning/ui/i18n/locales";
 import { useLocale, useT } from "@waltning/ui/i18n/provider";
-import { pageScrollProps } from "@waltning/ui/primitives/nested-scroll";
 import { useScrollSettle } from "@waltning/ui/primitives/use-scroll-settle";
 import { GroundPanel } from "@waltning/ui/shell/card";
 import { useGroundInset } from "@waltning/ui/shell/ground-inset";
@@ -36,13 +36,11 @@ import {
   dateOfEntry,
   type ListEntry,
 } from "@waltning/ui/transactions/molecules/list-entry/entry";
-import {
-  ListEntryCell,
-  type ListEntryHandlers,
-} from "@waltning/ui/transactions/molecules/list-entry/list-entry";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { ListEntryHandlers } from "@waltning/ui/transactions/molecules/list-entry/list-entry";
+import { LedgerScroller } from "@waltning/ui/transactions/organisms/ledger-scroller/ledger-scroller";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { type FlatList, Text, View, type ViewToken } from "react-native";
-import Animated, {
+import {
   type SharedValue,
   useAnimatedScrollHandler,
   useSharedValue,
@@ -142,8 +140,11 @@ export type HomeListPageProps = {
    * *List's* day positions and wrote whatever day that happened to land on —
    * a gesture that is not a selection at all silently re-dating the whole
    * screen, which is the exact class of defect this page was rebuilt to end.
+   *
+   * **A shared value, because only a worklet reads it.** As a boolean prop it
+   * re-rendered this page and every mounted cell on each swipe between pages.
    */
-  active: boolean;
+  active: SharedValue<boolean>;
   /**
    * What stands in place of the list when there is nothing in it (§6, *Empty ·
    * no transactions*).
@@ -157,7 +158,9 @@ export type HomeListPageProps = {
   empty: React.ReactNode;
 };
 
-export function HomeListPage({
+const EMPTY = { tops: [], marks: [], dates: [] } as const;
+
+function HomeListPageView({
   ledger,
   anchor,
   onVisibleDay,
@@ -224,17 +227,49 @@ export function HomeListPage({
     // above it saying today was quiet.
     () =>
       settled && rows.length > 0
-        ? toLedgerItems(rows, pivotCurrency, { filtered: query !== null, anchor })
+        ? // **`centred`, not `anchor`.** The list is *built around* `centred`,
+          // which moves only on a real jump; `anchor` also moves every time a
+          // scroll settles. Keyed on the anchor, every stop rebuilt every
+          // entry as a fresh object, which failed every cell's `memo` — the
+          // render probe counted ~2,000 re-renders per settle, every cell in
+          // the list about five times over.
+          toLedgerItems(rows, pivotCurrency, { filtered: query !== null, anchor: centred })
         : [],
-    [rows, settled, pivotCurrency, query, anchor],
+    [rows, settled, pivotCurrency, query, centred],
   );
+
+  /**
+   * **Where the strip's window is centred — coarser than the anchor, on
+   * purpose.** The strip draws `RIBBON_REACH` days either side of a centre, so
+   * the centre has to follow the reader eventually; but following *every*
+   * settle rebuilt every cell of the strip each time the list stopped. It
+   * moves only once the anchor has drifted most of the way to the window's
+   * edge, which is once in a long scroll rather than once per stop.
+   */
+  /**
+   * **The day this list is showing — held here, not in the route.**
+   *
+   * A scroll settling, a tap on a loaded day, the pill: each moves *this* and
+   * tells the screen, which only notes it (`use-pager-route.ts`). Writing the
+   * route instead re-rendered the whole navigation tree per stop. The route's
+   * `anchor` still wins whenever it moves, because that is a deliberate act
+   * from somewhere else.
+   */
+  const [shown, setShown] = useState<AccountingDate>(anchor);
+  useEffect(() => setShown(anchor), [anchor]);
+
+  const [windowCentre, setWindowCentre] = useState(anchor);
+  useEffect(() => {
+    const drift = Math.abs(daysBetween(windowCentre, shown));
+    if (drift > RIBBON_REACH / 2) setWindowCentre(shown);
+  }, [shown, windowCentre]);
 
   const days = useMemo<readonly RibbonDay[]>(
     () =>
       // The strip gets the anchor in its own right, so the day this page is
       // named for has a cell from the first frame and over an empty ledger —
       // the one cell an empty List has.
-      ribbonDays(items, { filtered: query !== null, anchor, today }).map((day) => ({
+      ribbonDays(items, { filtered: query !== null, anchor: windowCentre, today }).map((day) => ({
         date: day.date,
         day: Number(day.date.slice(8, 10)),
         weekday: weekdayInitial(day.date, locale),
@@ -260,7 +295,7 @@ export function HomeListPage({
                   count: day.entries,
                 }),
       })),
-    [items, locale, query, t, today, anchor],
+    [items, locale, query, t, today, windowCentre],
   );
 
   const entries = useMemo<readonly ListEntry[]>(() => {
@@ -373,15 +408,46 @@ export function HomeListPage({
    * is a lie the linter was right to call out.
    */
   const [heights, setHeights] = useState<EntryHeights>(ESTIMATED_HEIGHTS);
-  const noteHeight = useCallback((key: keyof EntryHeights, height: number) => {
-    const found = Math.round(height);
+  /**
+   * Heights of entries that are **not** their kind's height — a transfer draws
+   * two accounts, a foreign row its rate — by entry key.
+   *
+   * A ref plus a counter, and the counter only moves for an entry that really
+   * is odd: the ordinary row, which is nearly all of them, matches its kind
+   * and costs nothing. `listGeometry` reads this before it reads the table.
+   */
+  const odd = useRef(new Map<string, number>());
+  const [oddSeen, setOddSeen] = useState(0);
+  const kindHeights = useRef(heights);
+  kindHeights.current = heights;
+  const measuredKinds = useRef(new Set<keyof EntryHeights>());
+
+  const noteHeight = useCallback((key: keyof EntryHeights, height: number, entry: string) => {
+    // **To a hundredth, not to a point.** A hairline is a third of a point on
+    // a 3x phone, and rounding each row threw that away per row — a hundred
+    // points over three hundred rows, which is a day on the strip. A hundredth
+    // is only there to stop float noise reading as a new height.
+    const found = Math.round(height * 100) / 100;
     // **Written as *not greater than zero*, because `NaN <= 0` is `false`.**
-    // A measurement that arrives non-finite would otherwise be stored, and a
-    // `NaN` in the height table makes every comparison in `fracFor` false — so
-    // the strip pins on its oldest cell and every settle reports the oldest
-    // day, with nothing thrown and no `NaN` anywhere in the output.
     if (!(found > 0)) return;
-    setHeights((seen) => (seen[key] === found ? seen : { ...seen, [key]: found }));
+    if (!measuredKinds.current.has(key)) {
+      // The first of its kind sets the kind's height.
+      measuredKinds.current.add(key);
+      setHeights((seen) => (seen[key] === found ? seen : { ...seen, [key]: found }));
+      return;
+    }
+    const usual = kindHeights.current[key];
+    const was = odd.current.get(entry);
+    if (Math.abs(found - usual) < 0.02) {
+      if (was !== undefined) {
+        odd.current.delete(entry);
+        setOddSeen((seen) => seen + 1);
+      }
+      return;
+    }
+    if (was === found) return;
+    odd.current.set(entry, found);
+    setOddSeen((seen) => seen + 1);
   }, []);
 
   const shape = useMemo<readonly GeometryEntry[]>(
@@ -390,6 +456,8 @@ export function HomeListPage({
         kind: entry.kind,
         date: dateOfEntry(entry),
         ...(entry.kind === "day" ? { first: entry.first } : {}),
+        ...(entry.kind === "row" ? { place: entry.place } : {}),
+        key: entry.key,
       })),
     [entries],
   );
@@ -413,7 +481,12 @@ export function HomeListPage({
     [listY, scrollY],
   );
 
-  const geometry = useMemo(() => listGeometry(shape, heights, cellOf), [shape, heights, cellOf]);
+  const geometry = useMemo(
+    // `oddSeen` is what says the map changed; the map itself is a ref so that
+    // an ordinary row being measured re-renders nothing.
+    () => (oddSeen >= 0 ? listGeometry(shape, heights, cellOf, 0, odd.current) : EMPTY),
+    [shape, heights, cellOf, oddSeen],
+  );
   /**
    * **One value, not two arrays.** They were written as two assignments and
    * read together on the UI thread every frame, so a frame landing between the
@@ -453,6 +526,7 @@ export function HomeListPage({
       const landed = dayAt(at, geometry.tops, geometry.dates);
       if (landed === null || landed === reported.current) return;
       reported.current = landed;
+      setShown(accountingDate(landed));
       visibleDayRef.current?.(accountingDate(landed));
     },
     [geometry],
@@ -470,46 +544,44 @@ export function HomeListPage({
    * was reported, not the load.
    */
   /**
-   * **Back to today, at the price the distance actually warrants** (S04 §6).
+   * **Go to a day that is already in the list — by offset, and quietly.**
    *
-   * The pill used to jump unconditionally: it set the anchor, which re-keyed
-   * the list, discarded both halves and paid a synchronous replica read on the
-   * press frame — a visible stall, on the one control whose whole job is
-   * getting you out of somewhere. Today is usually still loaded, because the
-   * reader scrolled away from it rather than jumping, and then this is the
-   * same cheap scroll a tap on a cell is.
+   * By *offset* because `scrollToIndex` needs every cell between here and
+   * there laid out, and a virtualised list has not laid them out: it failed,
+   * fell back to an average row height, landed a day or two off — and the
+   * settle then reported *that* day, so a tap on the 16th selected the 14th.
+   * The geometry already knows where each day's block starts.
+   *
+   * *Quietly* because a day that is on the list is not a jump: nothing is
+   * re-read and the route is not written, so a tap costs a scroll rather than
+   * four commits of the whole navigation tree. `false` when the day is not in
+   * the list, and then the caller jumps.
    */
-  const returnToToday = useCallback(() => {
-    // **The screen is told either way.** Telling it only on the expensive path
-    // was the defect: the cheap path set `reported.current`, which is exactly
-    // what makes the settle that follows decline to report — so nothing ever
-    // wrote the date, the anchor stayed where it was, and the pill, which is
-    // drawn on `anchor !== today`, did not dismiss itself. A control whose
-    // whole job is getting you out of somewhere, visibly not doing it.
-    onReturnToToday();
-    const index = entries.findIndex((entry) => dateOfEntry(entry) === today);
-    if (index < 0) return;
-    // The rows are already there, so this is the reader moving rather than the
-    // ledger being re-read. `reported` stops the write coming back as a jump
-    // (`anchor-echo.ts`); it is not what decides whether to write.
-    reported.current = today;
-    list.current?.scrollToIndex({ index, animated: true, viewPosition: 0 });
-  }, [entries, today, onReturnToToday]);
+  const goTo = useCallback(
+    (date: string): boolean => {
+      const index = blockOf(date, geometry.dates);
+      const top = index < 0 ? undefined : geometry.tops[index];
+      if (top === undefined) return false;
+      reported.current = date;
+      setShown(accountingDate(date));
+      visibleDayRef.current?.(accountingDate(date));
+      list.current?.scrollToOffset({ offset: top, animated: true });
+      return true;
+    },
+    [geometry],
+  );
 
+  /** `TodayPill`: a scroll when today is loaded, a jump home when it is not. */
+  const returnToToday = useCallback(() => {
+    if (!goTo(today)) onReturnToToday();
+  }, [goTo, today, onReturnToToday]);
+
+  /** A tap on the strip, the same way (S04 §7). */
   const pickDay = useCallback(
     (date: string) => {
-      // **Always, not only on the jump.** A tap is a selection whichever way
-      // it is served, and the four pages share one date — so a tap that only
-      // scrolled left the ring on one cell and `current` on another, which is
-      // the two-sources-of-truth this component's own header forbids, and left
-      // Calendar, Summary and Months on the day before it.
-      onPickDay(date);
-      const index = entries.findIndex((entry) => dateOfEntry(entry) === date);
-      if (index < 0) return;
-      reported.current = date;
-      list.current?.scrollToIndex({ index, animated: true, viewPosition: 0 });
+      if (!goTo(date)) onPickDay(date);
     },
-    [entries, onPickDay],
+    [goTo, onPickDay],
   );
 
   /**
@@ -523,20 +595,6 @@ export function HomeListPage({
     () => ({ onOpenTransaction, onCategorize, onPickDay }),
     [onOpenTransaction, onCategorize, onPickDay],
   );
-  const renderItem = useCallback(
-    ({ item }: { item: ListEntry }) => (
-      <ListEntryCell
-        entry={item}
-        handlers={handlers}
-        currency={pivotCurrency}
-        decimals={pivotDecimals}
-        onMeasure={noteHeight}
-      />
-    ),
-    [handlers, pivotCurrency, pivotDecimals, noteHeight],
-  );
-
-  const keyExtractor = useCallback((entry: ListEntry) => entry.key, []);
 
   /**
    * **The list opens on the anchor, wherever the anchor's neighbourhood put
@@ -681,7 +739,7 @@ export function HomeListPage({
     <GroundPanel scroll="own">
       <DayRibbon
         days={days}
-        current={anchor}
+        current={shown}
         scrollY={listY}
         placement={placement}
         onPickDay={pickDay}
@@ -702,38 +760,20 @@ export function HomeListPage({
         resolves against the list's box instead of the panel's.
       */}
       <View style={styles.floatBox}>
-        <Animated.FlatList
-          ref={list}
-          onScrollToIndexFailed={settleScroll}
-          data={entries}
-          renderItem={renderItem}
-          keyExtractor={keyExtractor}
-          ListEmptyComponent={settled ? emptyElement : null}
-          // So the empty state has the page to sit in rather than a strip at
-          // the top of one: with no rows the content is shorter than the
-          // scroller.
-          contentContainerStyle={content}
-          onEndReached={handleEndReached}
-          onEndReachedThreshold={END_REACHED_THRESHOLD}
-          onStartReached={handleStartReached}
-          onStartReachedThreshold={END_REACHED_THRESHOLD}
-          // What says the reader has moved — `handleStartReached`'s own doc has
-          // the whole argument for why this list watches viewability at all.
-          onViewableItemsChanged={notedScroll.current}
-          viewabilityConfig={AT_THE_TOP}
-          // **Without this the list jumps.** A newer page is *prepended*, so
-          // everything below it moves down by the height of what arrived and
-          // the row the reader was looking at leaves the screen. This pins the
-          // first visible item and lets the content grow above it instead —
-          // which is the whole difference between paging forward and being
-          // thrown.
-          maintainVisibleContentPosition={KEEP_POSITION}
+        <LedgerScroller
+          listRef={list}
+          entries={entries}
+          handlers={handlers}
+          currency={pivotCurrency}
+          decimals={pivotDecimals}
+          onMeasure={noteHeight}
+          empty={settled ? emptyElement : null}
+          contentStyle={content}
           onScroll={handleScroll}
-          // 16ms: the header interpolates from this, and the default reports
-          // once per gesture — a header that jumps when the finger lifts.
-          scrollEventThrottle={16}
-          // The page's own vertical scroller, inside the pager's horizontal one.
-          {...pageScrollProps(styles.list)}
+          onEndReached={handleEndReached}
+          onStartReached={handleStartReached}
+          onViewableItemsChanged={notedScroll.current}
+          onScrollToIndexFailed={settleScroll}
         />
         {/*
           **After the list, so it paints over it**, and only when the anchor has
@@ -741,11 +781,11 @@ export function HomeListPage({
           control that does nothing, which is how a reader learns to stop
           believing it (§6).
         */}
-        {anchor === today ? null : (
+        {shown === today ? null : (
           <TodayPill
             label={t("shell.today")}
             accessibilityLabel={t("transactions.backToToday", {
-              date: dayLabel(anchor, locale),
+              date: dayLabel(shown, locale),
             })}
             onPress={returnToToday}
           />
@@ -756,36 +796,15 @@ export function HomeListPage({
 }
 
 /**
- * Six tenths of a screen, not the default tenth: the read is synchronous
- * SQLite, so a page arrives within a frame and asking early costs nothing —
- * where asking late leaves the reader at the end of the list with the next
- * page still being read.
+ * **Memoised, because the screen above re-renders for reasons this page does
+ * not care about** — a tab press, a search keystroke, another page's state.
+ * Every prop it takes is stable or genuinely its own, so the memo holds, and
+ * the render probe pins that it does (`tools/e2e/specs/renders.spec.ts`).
  */
-const END_REACHED_THRESHOLD = 0.6;
-
-/**
- * Keep the row the reader is on where it is when a page arrives above it.
- *
- * `minIndexForVisible: 1` rather than `0`: index 0 is the topmost rendered
- * item, and anchoring to it is what makes a list refuse to scroll into new
- * content at all.
- */
-const KEEP_POSITION = { minIndexForVisible: 1 } as const;
-
-/**
- * Viewability, as this list uses it: is the very first item on screen at all?
- *
- * One pixel is the threshold because the question is binary — the reader is at
- * the top of the list or they have left it — and a percentage would make a tall
- * first row (a day header plus its first entry) answer *no* while most of it is
- * still visible. Frozen at module scope: `FlatList` refuses a config that
- * changes identity between renders.
- */
-const AT_THE_TOP = { viewAreaCoveragePercentThreshold: 0 } as const;
+export const HomeListPage = memo(HomeListPageView);
 
 const useStyles = makeStyles((theme) => ({
   root: { flex: 1 },
-  list: { flex: 1 },
   // The box `TodayPill` resolves its `position: absolute` against, and the
   // reason it is a box at all — see the JSX. Its own style rather than a second
   // use of `list`: the two happen to want the same one rule and are not the
