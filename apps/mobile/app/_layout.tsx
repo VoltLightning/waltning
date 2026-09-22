@@ -320,7 +320,6 @@ function AppStack() {
       <Stack.Screen name="transfer" options={{ title: t("routes.transfer") }} />
       <Stack.Screen name="account/new" options={{ title: t("routes.createAccount") }} />
       <Stack.Screen name="transaction/[id]" options={{ title: t("routes.transaction") }} />
-      <Stack.Screen name="accounts/index" options={{ title: t("routes.accounts") }} />
       <Stack.Screen name="accounts/[id]" options={{ title: t("routes.editAccount") }} />
       <Stack.Screen name="settings/categories" options={{ title: t("routes.categories") }} />
       <Stack.Screen name="settings/currencies" options={{ title: t("routes.currencies") }} />
