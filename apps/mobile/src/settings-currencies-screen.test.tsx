@@ -238,6 +238,21 @@ it("archiving a referenced currency is refused with the executor's reason, on a 
   expect(screen.getByText("PLN is still referenced by an account.")).toBeDefined();
 });
 
+/**
+ * **Changing the pivot is inside its card, behind its own tap** (S17 §3): the
+ * target and the button appear only once *Change the pivot…* is pressed, and
+ * the confirmation still follows. Pressed again once open, it is already gone.
+ */
+function openPivotChange() {
+  const start = screen.queryByText("Change the pivot…");
+  if (start !== null) fireEvent.click(start);
+}
+
+function pressChangePivot() {
+  openPivotChange();
+  fireEvent.click(screen.getByText("Change pivot"));
+}
+
 it("adding a currency writes through add_currency and closes the sheet", () => {
   const addCurrency = vi.fn(() => ({ code: "EUR" }));
   withLedger({ addCurrency });
@@ -256,7 +271,7 @@ it("changing the pivot writes the chosen target, never the current pivot (C1)", 
   // `Select` defaults to it, so no explicit choice is needed for one candidate.
   const changePivot = vi.fn(() => ({ code: "PLN", droppedDates: 0 }));
   withLedger({ changePivot });
-  fireEvent.click(screen.getByText("Change pivot"));
+  pressChangePivot();
   expect(changePivot).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole("button", { name: "Yes, change it" }));
   expect(changePivot).toHaveBeenCalledWith({ code: "PLN" }, expect.anything());
@@ -293,9 +308,10 @@ it("M7 — the pivot target select recovers after a successful change", () => {
 
   // Explicitly choose EUR — the bug is in the state this sets, not the
   // Select's own default.
+  openPivotChange();
   fireEvent.click(screen.getByRole("button", { name: /New pivot/ }));
   fireEvent.click(screen.getByRole("radio", { name: "EUR" }));
-  fireEvent.click(screen.getByText("Change pivot"));
+  pressChangePivot();
   fireEvent.click(screen.getByRole("button", { name: "Yes, change it" }));
   expect(changePivot).toHaveBeenCalledWith({ code: "EUR" }, expect.anything());
 
@@ -303,7 +319,7 @@ it("M7 — the pivot target select recovers after a successful change", () => {
   // select must show one of them, and a second press must not resend EUR.
   changePivot.mockClear();
   expect(screen.queryByRole("button", { name: /New pivot: EUR/ })).toBeNull();
-  fireEvent.click(screen.getByText("Change pivot"));
+  pressChangePivot();
   fireEvent.click(screen.getByRole("button", { name: "Yes, change it" }));
   expect(changePivot).not.toHaveBeenCalledWith({ code: "EUR" }, expect.anything());
 });
@@ -315,7 +331,7 @@ it("M7 — the pivot target select recovers after a successful change", () => {
 it("M2 — a pivot change that dropped dates says how many, in a toast", () => {
   const changePivot = vi.fn(() => ({ code: "PLN", droppedDates: 27 }));
   withLedger({ changePivot });
-  fireEvent.click(screen.getByText("Change pivot"));
+  pressChangePivot();
   fireEvent.click(screen.getByRole("button", { name: "Yes, change it" }));
   expect(
     screen.getByText("Pivot changed · 27 dates had no rate to rebase and were dropped"),
@@ -325,7 +341,7 @@ it("M2 — a pivot change that dropped dates says how many, in a toast", () => {
 it("M2 — a pivot change that dropped nothing says nothing", () => {
   const changePivot = vi.fn(() => ({ code: "PLN", droppedDates: 0 }));
   withLedger({ changePivot });
-  fireEvent.click(screen.getByText("Change pivot"));
+  pressChangePivot();
   fireEvent.click(screen.getByRole("button", { name: "Yes, change it" }));
   expect(screen.queryByText(/had no rate to rebase/)).toBeNull();
 });
@@ -335,7 +351,7 @@ it("maps the executor's two refusals to their own texts, never one fallback (C1)
     throw new Error("change_pivot: PLN is already the pivot");
   });
   withLedger({ changePivot: alreadyPivot });
-  fireEvent.click(screen.getByText("Change pivot"));
+  pressChangePivot();
   fireEvent.click(screen.getByRole("button", { name: "Yes, change it" }));
   expect(screen.getByText("That currency is already the pivot.")).toBeDefined();
 });
@@ -348,14 +364,14 @@ it("states the transaction-count refusal with its own text (C1)", () => {
     );
   });
   withLedger({ changePivot: refused });
-  fireEvent.click(screen.getByText("Change pivot"));
+  pressChangePivot();
   fireEvent.click(screen.getByRole("button", { name: "Yes, change it" }));
   expect(screen.getByText("The pivot can't change while a transaction exists.")).toBeDefined();
 });
 
 it("the pivot confirmation states the refusal before offering, not after", () => {
   withLedger();
-  fireEvent.click(screen.getByText("Change pivot"));
+  pressChangePivot();
   expect(screen.getByText(/Refused once any transaction exists/)).toBeDefined();
 });
 
@@ -479,4 +495,17 @@ it("R2 L9 — the accessible name drops Pinned once the Toggle below states it",
   expect(open.getAttribute("aria-label")).not.toContain("Pinned");
   // The Toggle is what states it now.
   expect(screen.getByLabelText("Pinned")).toBeDefined();
+});
+
+/**
+ * **The pivot first, as its own card, and the rest by where they show**
+ * (S17 §3). What the pivot means is said before anything can change it, and
+ * the change is not on screen until asked for.
+ */
+it("leads with the pivot's card and keeps its change behind a tap", () => {
+  withLedger({});
+  expect(screen.getByText("The one everything is measured in")).toBeDefined();
+  expect(screen.queryByText("Change pivot")).toBeNull();
+  fireEvent.click(screen.getByText("Change the pivot…"));
+  expect(screen.getByText("Change pivot")).toBeDefined();
 });

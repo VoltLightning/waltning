@@ -815,6 +815,13 @@ export const pl: Messages = {
     symbolAfter: "Po kwocie",
     decimals: "Miejsca dziesiętne",
     pivotLabel: "Waluta bazowa: {{code}}",
+    pivotKicker: "Waluta, w której liczone jest wszystko",
+    pivotName: "{{name}} · waluta bazowa",
+    pivotExplained:
+      "Każda kwota w aplikacji jest liczona w tej walucie. Zmiana przelicza cały rejestr, więc ustawia się ją raz.",
+    changePivotStart: "Zmień walutę bazową…",
+    groupShown: "W przełączniku nagłówka",
+    groupHeld: "Posiadane, poza przełącznikiem",
     changePivot: "Zmień walutę bazową",
     pivotConfirmTitle: "Zmienić walutę bazową?",
     pivotConfirmBody:
