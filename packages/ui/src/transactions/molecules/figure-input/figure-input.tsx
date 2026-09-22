@@ -103,7 +103,18 @@ export function FigureInput({
         >
           {empty ? "0" : value}
         </Text>
-        {focused ? <View style={styles.caret} /> : null}
+        {focused ? (
+          <View
+            style={[
+              styles.caret,
+              step === "displayHero"
+                ? styles.caretHero
+                : step === "displayOne"
+                  ? styles.caretOne
+                  : styles.caretTwo,
+            ]}
+          />
+        ) : null}
         {affix}
       </View>
       <SheetAwareTextInput
@@ -142,6 +153,16 @@ const DRAWN = {
   "aria-hidden": true,
 } as const;
 
+/**
+ * How tall a figure's digits stand, as a share of its size: lining numerals
+ * reach the cap height, which in the display face is 0.7 of the em.
+ */
+const CAP_EM = 0.7;
+
+function capOf(step: "displayHero" | "displayOne" | "displayTwo"): number {
+  return Math.round(text.display(step).fontSize * CAP_EM);
+}
+
 /** Above iOS's hit-testing floor of `0.01`; see `input` below. */
 const TOUCHABLE_AND_UNSEEN = 0.02;
 
@@ -161,14 +182,24 @@ const useStyles = makeStyles((theme) => ({
   // `textMuted`, never `textFaint`: a placeholder is read.
   placeholder: { color: theme.textMuted },
   // After the last digit: where the next key lands.
+  /*
+    After the last digit: where the next key lands. **On the baseline, not in
+    the middle of the row.** A view's baseline is its bottom edge, so in a
+    baseline row this bar stands on the line the digits stand on and is as
+    tall as they are. Centred instead, it followed the row's box — and on iOS
+    that box carries the line's space under the glyphs, so the bar hung below
+    the figure it belongs to.
+  */
   caret: {
-    alignSelf: "center",
+    alignSelf: "baseline",
     width: 2,
-    height: "70%",
     marginLeft: -space.sm,
     borderRadius: radius.xs,
     backgroundColor: theme.focusRing,
   },
+  caretHero: { height: capOf("displayHero") },
+  caretOne: { height: capOf("displayOne") },
+  caretTwo: { height: capOf("displayTwo") },
   /*
     Over the whole row, so a tap anywhere on the figure focuses it — and
     invisible: `opacity` rather than a transparent colour, because a transparent
