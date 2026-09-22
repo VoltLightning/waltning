@@ -21,6 +21,7 @@
  */
 
 import { act, render, screen } from "@testing-library/react";
+import { toMoney } from "@waltning/core/money";
 import { useCallback, useState } from "react";
 import { Pressable, Text } from "react-native";
 import { expect, it, vi } from "vitest";
@@ -111,4 +112,59 @@ it("redraws every cell once the handler is created inside the parent", () => {
   });
 
   expect(labelFor.mock.calls.length).toBeGreaterThan(drawn);
+});
+
+/**
+ * **A calendar is read for amounts** (S04, *Calendar*): a day holding one
+ * currency draws its net in whole units, signed, where the strip draws a dot;
+ * a day with two currencies has no single figure and keeps its mark.
+ */
+it("draws a day's net in its cell, and the mark where there is no single figure", () => {
+  const weeks: readonly GridWeek[] = [
+    [
+      {
+        date: "2026-09-01",
+        day: 1,
+        activity: "some",
+        direction: "out",
+        ahead: false,
+        net: toMoney("-86.40"),
+        currency: "PLN",
+      },
+      {
+        date: "2026-09-02",
+        day: 2,
+        activity: "heavy",
+        direction: "in",
+        ahead: false,
+        net: toMoney("7850"),
+        currency: "PLN",
+      },
+      {
+        date: "2026-09-03",
+        day: 3,
+        activity: "some",
+        direction: "out",
+        ahead: false,
+        net: null,
+        currency: null,
+      },
+    ],
+  ];
+  render(
+    <ThemeProvider theme={light}>
+      <MonthGrid
+        weeks={weeks}
+        headings={HEADINGS}
+        current="2026-09-01"
+        today="2026-09-09"
+        labelFor={String}
+        onPickDay={onPickDay}
+      />
+    </ThemeProvider>,
+  );
+  expect(screen.getByText(/^-86$|^−86$/)).toBeDefined();
+  expect(screen.getByText(/^\+7\s850$/)).toBeDefined();
+  // No figure for the two-currency day; nothing names a currency in a cell.
+  expect(screen.queryByText("PLN")).toBeNull();
 });
