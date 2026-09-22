@@ -41,8 +41,22 @@ export function toolSchemaFor<Ctx>(op: AnyOperation<Ctx>): ToolSchema {
   };
 }
 
+/**
+ * Every operation the agent may call — §11.0's `agentVisible`, which was
+ * declared in `operations.md` and honoured nowhere.
+ *
+ * **Absent means visible.** A new operation is a tool unless its author says
+ * otherwise; the filter exists for the three S33 operations that configure
+ * the agent itself, and an agent that can swap its own model or widen its own
+ * permissions is not a capability anybody asked for.
+ *
+ * The router derives from the same registry and **does not** apply this: a
+ * person configuring the agent through the app is exactly who those
+ * operations are for. `from-registry.ts` says the same thing from its side.
+ */
 export function toolSchemas<Ctx>(registry: Registry<Ctx>): ToolSchema[] {
   return Object.values(registry)
+    .filter((op) => op.agentVisible !== false)
     .map((op) => toolSchemaFor(op))
     .sort((a, b) => a.name.localeCompare(b.name));
 }

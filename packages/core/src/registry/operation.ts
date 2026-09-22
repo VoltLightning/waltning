@@ -72,6 +72,22 @@ export type Operation<
   autoEligible: boolean;
 
   /**
+   * Whether `toolSchemas()` generates a tool for it (`operations.md` §11.0).
+   *
+   * **Defaults to `true`, and the exception is written at the declaration.**
+   * Its whole intended population is S33: the operations that configure the
+   * agent itself — `set_assist_model`, `set_assist_enabled`,
+   * `set_all_assists_enabled`. An agent able to widen its own permissions or
+   * swap its own model is not a capability anybody asked for, and every
+   * `false` beyond those three needs an argument in §11.0 rather than a
+   * judgement at a call site.
+   *
+   * Absent means visible: a new operation is a tool unless its author says
+   * otherwise, which keeps "one registry, two consumers" true by default.
+   */
+  agentVisible?: boolean | undefined;
+
+  /**
    * Whether this may enter a device outbox. False for anything needing server
    * state the device cannot have — `run_import`, `close_period`,
    * `rerate_transactions`, `materialize_occurrence`, every migration op.
