@@ -63,6 +63,41 @@ describe("the registry is the single source", () => {
       .sort();
 
     expect(fromRouter).toEqual(names(registry));
+    // Nothing in the registry hides from the agent today — §11.0's whole
+    // intended population is S33, which does not exist yet — so the two sides
+    // are still identical, and the test below is what keeps that honest.
+    expect(fromTools).toEqual(names(registry));
+  });
+
+  /**
+   * §11.0's one sanctioned divergence: an operation that **configures the
+   * agent** is reachable by a person and not by the agent. Declared before
+   * S33 exists, because a gate added alongside the thing it gates is a gate
+   * nobody ever saw empty.
+   */
+  it("keeps an agentVisible: false operation out of the tools and in the router", () => {
+    const configuresTheAgent = defineOperation({
+      name: "set_assist_model",
+      kind: "write",
+      autoEligible: false,
+      offlineEligible: false,
+      opVersion: 1,
+      agentVisible: false,
+      description: "S33 — which model an assist runs on. A person's call, never the agent's.",
+      audit: { entity: "settings", action: "set_assist_model", entityId: () => "assist" },
+      input: z.object({}),
+      handler: async () => ({}),
+    });
+
+    const withConfig = { ...registry, [configuresTheAgent.name]: configuresTheAgent };
+    const fromRouter = routerProcedures(routerFromRegistry(withConfig));
+    const fromTools = toolSchemas(withConfig).map((t) => t.name);
+
+    expect(fromRouter, "a person configures the agent through the app").toContain(
+      "set_assist_model",
+    );
+    expect(fromTools, "and the agent does not configure itself").not.toContain("set_assist_model");
+    // Everything else still reaches both — the filter is one operation wide.
     expect(fromTools).toEqual(names(registry));
   });
 
