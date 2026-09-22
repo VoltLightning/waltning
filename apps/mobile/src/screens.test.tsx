@@ -1183,10 +1183,24 @@ describe("CategoriesScreen", () => {
    * §6 said *"Empty — n/a, the taxonomy is seeded"*, and a phone-alone ledger
    * seeds nothing: this was a search field and a toggle over a blank page.
    */
+  /**
+   * S19 §3 — the screen says what it holds before anything else, and the
+   * figures beside each row are dated by the card that holds them. The page
+   * line used to restate the title in other words.
+   */
+  it("states how many categories are in use and archived, and dates the figures", () => {
+    withLedger(<CategoriesScreen />, fakeController({ categories: tree, categoryUsage: usage }));
+
+    expect(screen.getByText(/in use · 0 archived/)).toBeDefined();
+    expect(screen.getByText(/^Where money went in /)).toBeDefined();
+  });
+
   it("offers an empty state and a way to create the first category", () => {
     withLedger(<CategoriesScreen />, fakeController());
 
     expect(screen.getByText("No categories yet")).toBeDefined();
+    // The empty state offers the whole sentence; the card's header, which
+    // carries the short one, does not exist until there is a card.
     fireEvent.click(screen.getByRole("button", { name: "New category" }));
     fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Food" } });
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
@@ -1208,7 +1222,7 @@ describe("CategoriesScreen", () => {
   it("keeps Uncategorized apart when a new root leaf sorts ahead of it", () => {
     withLedger(<CategoriesScreen />, fakeController({ categories: tree, categoryUsage: usage }));
 
-    fireEvent.click(screen.getByRole("button", { name: "New category" }));
+    fireEvent.click(screen.getByRole("button", { name: "New" }));
     fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Snacks" } });
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
@@ -1227,7 +1241,7 @@ describe("CategoriesScreen", () => {
   it("creates a leaf under a chosen group, from the persistent action", () => {
     withLedger(<CategoriesScreen />, fakeController({ categories: tree, categoryUsage: usage }));
 
-    fireEvent.click(screen.getByRole("button", { name: "New category" }));
+    fireEvent.click(screen.getByRole("button", { name: "New" }));
     fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Bakery" } });
     fireEvent.click(screen.getByRole("button", { name: "Group" }));
     fireEvent.click(screen.getByRole("radio", { name: "Food" }));
@@ -1240,7 +1254,7 @@ describe("CategoriesScreen", () => {
   it("shows a create refusal inline, without closing the sheet", () => {
     withLedger(<CategoriesScreen />, fakeController({ categories: tree, categoryUsage: usage }));
 
-    fireEvent.click(screen.getByRole("button", { name: "New category" }));
+    fireEvent.click(screen.getByRole("button", { name: "New" }));
     fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Uncategorized" } });
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
@@ -1274,8 +1288,10 @@ describe("CategoriesScreen", () => {
     );
 
     expect(screen.queryByText("Old subscriptions")).toBeNull();
-    fireEvent.click(screen.getByRole("switch", { name: "Show archived" }));
+    // The row says what archiving did, and how many are in it (S19 §3).
+    fireEvent.click(screen.getByRole("button", { name: "Archived · 1" }));
     expect(screen.getByText("Old subscriptions")).toBeDefined();
+    expect(screen.getByText("Kept on old entries, never offered again")).toBeDefined();
   });
 
   it("renames a category end to end, through the actions sheet", () => {
@@ -1324,9 +1340,10 @@ describe("CategoriesScreen", () => {
     // No `restore_category` operation exists — a plain Toast, never `UndoToast`.
     expect(screen.queryByRole("button", { name: "Undo" })).toBeNull();
 
-    fireEvent.click(screen.getByRole("switch", { name: "Show archived" }));
+    fireEvent.click(screen.getByRole("button", { name: "Archived · 1" }));
     expect(screen.getByText("Eating out")).toBeDefined();
-    expect(screen.getByText("Archived")).toBeDefined();
+    // Two now: the section's own heading, and the tag on the row it revealed.
+    expect(screen.getAllByText("Archived")).toHaveLength(2);
   });
 
   it("opens the merge sheet pre-seeded from a collision, and confirms the merge", () => {

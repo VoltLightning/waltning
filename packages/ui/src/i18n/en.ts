@@ -928,6 +928,9 @@ export const en = {
     emptyBody: "Create the first one, and every capture can be filed under it.",
     /** `Tag` variants over a leaf — usage count, archived, unused. */
     archived: "Archived",
+    subtitle: "{{inUse}} in use · {{archived}} archived",
+    spentIn: "Where money went in {{month}}",
+    archivedWhat: "Kept on old entries, never offered again",
     unused: "Unused",
     usageOne: "{{count}} transaction",
     usageMany: "{{count}} transactions",
