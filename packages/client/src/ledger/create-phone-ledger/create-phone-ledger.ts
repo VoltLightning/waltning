@@ -56,10 +56,12 @@ import {
   type ReconcileAccountInput,
   type RecordDistinctCounterpartiesInput,
   type RenameCategoryInput,
+  type ReorderAccountsInput,
   type ReparentCategoryInput,
   reconcileAccountInput,
   recordDistinctCounterpartiesInput,
   renameCategoryInput,
+  reorderAccountsInput,
   reparentCategoryInput,
   type SetManualRateInput,
   type SetPinnedInput,
@@ -827,6 +829,8 @@ export type PhoneLedgerPort = {
   setTransactionLines: (input: SetTransactionLinesInput, capture: PhoneCapture) => void;
   updateAccount: (input: UpdateAccountInput, capture: PhoneCapture) => void;
   archiveAccount: (input: ArchiveAccountInput, capture: PhoneCapture) => void;
+  /** S16 §3 — the whole ordered list, `sort` becoming each id's position. */
+  reorderAccounts: (input: ReorderAccountsInput, capture: PhoneCapture) => void;
   reconcileAccount: (input: ReconcileAccountInput, capture: PhoneCapture) => void;
   createGroup: (input: CreateGroupInput, capture: PhoneCapture) => void;
   /* ── E3 · FX ──────────────────────────────────────────────────────────── */
@@ -1650,6 +1654,14 @@ export type PhoneLedgerController = {
   archiveAccount: (
     draft: ArchiveAccountDraft,
   ) => { id: Id<"accounts"> } | { fieldErrors: readonly FieldError[] };
+  /**
+   * S16 §3's reordering, behind *Edit*. The **whole** list every time: a
+   * partial one would leave the rows it omits holding stale positions, which
+   * is how two accounts end up claiming the same place.
+   */
+  reorderAccounts: (
+    ids: readonly string[],
+  ) => { ids: readonly string[] } | { fieldErrors: readonly FieldError[] };
   reconcileAccount: (
     draft: ReconcileAccountDraft,
   ) => { id: Id<"transactions"> } | { fieldErrors: readonly FieldError[] };
@@ -2601,6 +2613,50 @@ export function createPhoneLedger(
         emitClientDiagnostic(diagnostics, {
           scope: "client_action",
           action: "archive_account",
+          phase: "failure",
+          error: clientFailure(error),
+        });
+        throw error;
+      }
+    },
+    reorderAccounts: (ids) => {
+      emitClientDiagnostic(diagnostics, {
+        scope: "client_action",
+        action: "reorder_accounts",
+        phase: "start",
+      });
+      try {
+        const capture = runtime.capture();
+        const parsed = reorderAccountsInput.safeParse({ ids });
+        if (!parsed.success) {
+          return finish(
+            diagnostics,
+            { scope: "client_action", action: "reorder_accounts" },
+            { fieldErrors: fieldErrorsFromZod(parsed.error) ?? [] },
+          );
+        }
+        try {
+          port.reorderAccounts(parsed.data, capture);
+        } catch (refusal) {
+          if (!(refusal instanceof Error)) throw refusal;
+          const fieldError = accountWriteRefusal(refusal);
+          if (!fieldError) throw refusal;
+          return finish(
+            diagnostics,
+            { scope: "client_action", action: "reorder_accounts" },
+            { fieldErrors: [fieldError] },
+          );
+        }
+        refresh();
+        return finish(
+          diagnostics,
+          { scope: "client_action", action: "reorder_accounts" },
+          { ids: parsed.data.ids },
+        );
+      } catch (error) {
+        emitClientDiagnostic(diagnostics, {
+          scope: "client_action",
+          action: "reorder_accounts",
           phase: "failure",
           error: clientFailure(error),
         });

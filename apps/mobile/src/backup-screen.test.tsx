@@ -30,7 +30,18 @@ const copied: string[] = [];
 
 let clipboardTakesIt = true;
 
+/** The day a backup was taken is kept on the device; here it is a spy. */
+const takenDays: string[] = [];
+
 vi.mock("./platform", () => ({
+  lastBackup: {
+    set: async (value: string) => {
+      takenDays.push(value);
+    },
+    getSnapshot: () => ({ value: null, hydrated: true }),
+    subscribe: () => () => {},
+    hydrate: async () => {},
+  },
   backupPort: {
     random: (length: number) => new Uint8Array(randomBytes(length)),
     hand: async (name: string, bytes: Uint8Array) => {
@@ -176,4 +187,20 @@ it("names the unsent captures, which nothing else holds", async () => {
   draw();
   fireEvent.click(screen.getByRole("button", { name: "Back up" }));
   await waitFor(() => expect(screen.getByText("1 capture")).toBeTruthy());
+});
+
+/**
+ * S30's *Back up* row was the one row with no value, because nothing
+ * recorded that a backup had ever happened. The day is the phone's own, not
+ * the ledger's: restoring another device's document must not import a claim
+ * that this phone was backed up.
+ */
+it("records the day it was taken, once, when the document exists", async () => {
+  takenDays.length = 0;
+  draw();
+  fireEvent.click(screen.getByRole("button", { name: "Back up" }));
+
+  await waitFor(() => expect(handed).toHaveLength(1));
+  await waitFor(() => expect(takenDays).toHaveLength(1));
+  expect(takenDays[0]).toMatch(/^\d{4}-\d{2}-\d{2}$/);
 });

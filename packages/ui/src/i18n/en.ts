@@ -200,6 +200,8 @@ export const en = {
     archivedShow: "Archived",
     archivedCount: "Archived ({{count}})",
     archive: "Archive",
+    moveUp: "Move {{name}} up",
+    moveDown: "Move {{name}} down",
     archivedToast: "Account archived.",
     reconcile: "Reconcile…",
     reconcileTitle: "Reconcile",
@@ -1273,6 +1275,7 @@ export const en = {
     categoriesValue_many: "{{count}} in use",
     categoriesValue_other: "{{count}} in use",
     ratesCurrent: "Every quote is today's",
+    backupTaken: "Last taken {{date}}",
     ratesOldest_one: "Oldest quote {{count}} day old",
     ratesOldest_few: "Oldest quote {{count}} days old",
     ratesOldest_many: "Oldest quote {{count}} days old",
@@ -1562,7 +1565,7 @@ export const en = {
     rangeYear: "Year",
     rangeFrom: "From",
     rangeTo: "To",
-    setRange: "Set a range",
+    setRange: "Set a rate by hand",
     clearManual: "Clear manual",
     /**
      * *Clear manual* removes every hand-set rate across whatever range is

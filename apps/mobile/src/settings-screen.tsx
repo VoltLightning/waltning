@@ -24,6 +24,7 @@ import { useLedgerController } from "@waltning/client/ledger/use-ledger-controll
 import { usePhoneLedger } from "@waltning/client/ledger/use-phone-ledger";
 import { daysBetween, todayIn } from "@waltning/core/date";
 import {
+  dayLabel,
   isLocale,
   LANGUAGE_NAMES,
   type LanguagePreference,
@@ -31,7 +32,7 @@ import {
   type Locale,
   resolveLocale,
 } from "@waltning/ui/i18n/locales";
-import { useT } from "@waltning/ui/i18n/provider";
+import { useLocale, useT } from "@waltning/ui/i18n/provider";
 import { BottomSheet } from "@waltning/ui/primitives/bottom-sheet";
 import { RadioGroup, type RadioOption } from "@waltning/ui/primitives/radio";
 import {
@@ -47,7 +48,13 @@ import { radius, space } from "@waltning/ui/tokens";
 import { router } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
 import { Text, useColorScheme, View } from "react-native";
-import { appearance, DEVICE_LOCALES, language, PREVIEW_RESET_ENABLED } from "./platform";
+import {
+  appearance,
+  DEVICE_LOCALES,
+  language,
+  lastBackup,
+  PREVIEW_RESET_ENABLED,
+} from "./platform";
 
 /**
  * Every destination, keyed by its own `routes.*` label — so the menu's order
@@ -125,6 +132,7 @@ const DEVELOPER_GROUP = [{ id: "developer", glyph: "developer" }] as const satis
 
 export default function Settings() {
   const t = useT();
+  const locale = useLocale();
   const styles = useStyles();
   const ledger = useLedgerController();
   const snapshot = usePhoneLedger(ledger);
@@ -134,6 +142,8 @@ export default function Settings() {
     systemScheme === "light" || systemScheme === "dark" ? systemScheme : null,
   );
   const chosenLanguage = useDevicePreference(language).value ?? "system";
+  /** The day the last backup was taken, kept on this phone (`backup-screen.tsx`). */
+  const backupTaken = useDevicePreference(lastBackup).value;
   const [sheet, setSheet] = useState<Choice | null>(null);
   const [appearanceFailed, setAppearanceFailed] = useState(false);
 
@@ -175,6 +185,9 @@ export default function Settings() {
       ...(currencies > 0
         ? { currencies: t("settings.currenciesValue", { count: currencies }) }
         : {}),
+      ...(backupTaken === null
+        ? {}
+        : { backup: t("settings.backupTaken", { date: dayLabel(backupTaken, locale) }) }),
       ...(oldest === null
         ? {}
         : {
@@ -193,6 +206,8 @@ export default function Settings() {
     shown.theme,
     shown.preference,
     chosenLanguage,
+    backupTaken,
+    locale,
   ]);
 
   /**

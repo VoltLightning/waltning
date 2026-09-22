@@ -85,6 +85,7 @@ export function basePort(overrides: Partial<PhoneLedgerPort> = {}): PhoneLedgerP
     readCrossRate: () => null,
     readCoverage: () => [],
     readCurrencyUsage: () => new Map(),
+    reorderAccounts: () => {},
     listFxRates: () => [],
     addCurrency: () => undefined,
     archiveCurrency: () => undefined,

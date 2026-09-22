@@ -571,13 +571,21 @@ export default function SettingsRatesScreen({
 
   const footer = (
     <View style={styles.footerBlock}>
-      <View style={styles.actionsRow}>
-        <Button
-          label={t("fx.setRange")}
-          onPress={handleOpenRangeEditor}
-          variant="secondary"
-          disabled={quote === null || range === null}
-        />
+      {/*
+        **One affirmative action, and it is the one anybody comes here for.**
+        S18 draws *Set a rate by hand* full width; *Clear manual* is the
+        undo of a thing already done and rides beneath it as a ghost. Two
+        controls of equal weight made the reader choose between them before
+        knowing what either did.
+      */}
+      <Button
+        label={t("fx.setRange")}
+        onPress={handleOpenRangeEditor}
+        variant="primary"
+        size="lg"
+        disabled={quote === null || range === null}
+      />
+      <View style={styles.clearRow}>
         <Button
           label={t("fx.clearManual")}
           onPress={handleOpenClearConfirm}
@@ -724,6 +732,8 @@ const useStyles = makeStyles((theme) => ({
   headerBlock: { gap: space.x4, marginBottom: space.x4 },
   footerBlock: { gap: space.x4, marginTop: space.x4 },
   presetRow: { flexDirection: "row", flexWrap: "wrap", gap: space.sm },
+  /** Sized to its own label: a `Button` fills its column, and a ghost bar is a filled band. */
+  clearRow: { flexDirection: "row" },
   tiles: { flexDirection: "row", gap: space.sm },
   tile: {
     flex: 1,

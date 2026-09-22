@@ -17,6 +17,7 @@
  */
 
 import { useLedgerBackup } from "@waltning/client/backup/use-ledger-backup";
+import { deviceRuntime } from "@waltning/client/ledger/device-runtime";
 import { useLedgerController } from "@waltning/client/ledger/use-ledger-controller";
 import { BackupCard } from "@waltning/ui/backup/backup-card";
 import { useT } from "@waltning/ui/i18n/provider";
@@ -24,10 +25,10 @@ import { Button } from "@waltning/ui/primitives/button";
 import { ErrorState } from "@waltning/ui/states/error-state";
 import { text } from "@waltning/ui/theme/fonts";
 import { makeStyles } from "@waltning/ui/theme/styles";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Text } from "react-native";
 import { mobileDiagnostics } from "./diagnostics.ts";
-import { backupPort } from "./platform";
+import { backupPort, lastBackup } from "./platform";
 import { PushedPage } from "./pushed-page";
 
 /**
@@ -58,6 +59,19 @@ export default function Backup() {
       () => setCopied("refused"),
     );
   }, []);
+
+  /**
+   * **The day it was taken, kept on this phone.** S30's *Back up* row was the
+   * one row with no value, because nothing recorded that a backup ever
+   * happened. Written when the document exists and the platform has been
+   * handed it — `confirmed` is about *where* it went, which the row does not
+   * claim.
+   */
+  const taken = state.kind === "done" ? state.filename : null;
+  useEffect(() => {
+    if (taken === null) return;
+    void lastBackup.set(deviceRuntime().capture().date);
+  }, [taken]);
 
   const handleDone = useCallback(() => {
     setCopied(undefined);

@@ -113,6 +113,14 @@ export default function Accounts() {
     setToastToken((token) => token + 1);
   }
 
+  /** S16 §3 — the whole ordered list, straight through to `reorder_accounts`. */
+  const handleReorder = useCallback(
+    (ids: readonly string[]) => {
+      ledger.reorderAccounts(ids);
+    },
+    [ledger],
+  );
+
   const handleSelectAccount = useCallback((id: string) => {
     router.push(`/accounts/${id}`);
   }, []);
@@ -142,6 +150,7 @@ export default function Accounts() {
         onSelectAccount={handleSelectAccount}
         onLoadArchived={handleLoadArchived}
         onCreateAccount={handleCreateAccount}
+        onReorder={handleReorder}
         onTransferFrom={handleTransferFrom}
       />
       {toast === null ? null : (

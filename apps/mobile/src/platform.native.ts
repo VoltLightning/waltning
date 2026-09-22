@@ -14,6 +14,7 @@ import {
 } from "@waltning/client/security/app-lock";
 import { createLastCapturePreference } from "@waltning/client/transactions/last-capture";
 import { pivotCurrency } from "@waltning/core/currencies";
+import { type AccountingDate, accountingDate, isAccountingDate } from "@waltning/core/date";
 import type { CurrencyCode } from "@waltning/core/money";
 import { type LanguagePreference, parseLanguagePreference } from "@waltning/ui/i18n/locales";
 import {
@@ -38,6 +39,30 @@ export const appearance = createAppearance(
   {
     get: () => AsyncStorage.getItem(APPEARANCE_KEY),
     set: (preference) => AsyncStorage.setItem(APPEARANCE_KEY, preference),
+  },
+  mobileDiagnostics,
+);
+
+const LAST_BACKUP_KEY = "waltning.lastBackup";
+
+/**
+ * The day the last backup was taken — S30's *Back up* row, the one row
+ * `settings.*Value` left without a value.
+ *
+ * **A device preference, not a ledger row.** A backup is something this
+ * phone did, not something the ledger holds: restoring a document from
+ * another device must not import a claim that *this* phone was backed up.
+ * Stored as the bare accounting date the row renders (§7.0a), because a
+ * timestamp would be a clock reading nobody asked for.
+ */
+export const lastBackup = createDevicePreference<AccountingDate>(
+  {
+    get: () => AsyncStorage.getItem(LAST_BACKUP_KEY),
+    set: (value) => AsyncStorage.setItem(LAST_BACKUP_KEY, value),
+  },
+  {
+    parse: (raw) => (isAccountingDate(raw) ? accountingDate(raw) : null),
+    serialize: (value) => value,
   },
   mobileDiagnostics,
 );

@@ -38,7 +38,7 @@ import { SearchField } from "../../../primitives/atoms/search-field/search-field
 import { useInteraction } from "../../../primitives/interaction.ts";
 import { usePressScale } from "../../../primitives/press-scale.ts";
 import { Card } from "../../../shell/molecules/card/card";
-import { ArrowsLeftRightIcon } from "../../../shell/phosphor";
+import { ArrowsLeftRightIcon, CaretLeftIcon } from "../../../shell/phosphor";
 import { EmptyState } from "../../../states/organisms/empty-state/empty-state";
 import { text } from "../../../theme/fonts.ts";
 import { useTheme } from "../../../theme/provider";
@@ -100,6 +100,17 @@ export type AccountRegisterProps = {
    * `primitives/select.tsx`'s own doc names for `MultiSelect`'s token ×.
    */
   onTransferFrom?: (id: string) => void;
+  /**
+   * S16 §3's reordering, **behind *Edit***: the handles are not the first
+   * thing you see, because a register is read far more often than it is
+   * arranged. Absent means no *Edit* at all — a screen that cannot write the
+   * order must not offer to change it.
+   *
+   * The **whole** list, in the order it should now hold: `reorder_accounts`
+   * sets `sort` by position, and a partial list leaves the rows it omits
+   * claiming positions that have moved under them.
+   */
+  onReorder?: (ids: readonly string[]) => void;
 };
 
 /** `bank · cash · card · clearing · loan_receivable · loan_payable · investment · deposit · other`. */
@@ -139,11 +150,14 @@ export function AccountRegister({
   onLoadArchived,
   onCreateAccount,
   onTransferFrom,
+  onReorder,
 }: AccountRegisterProps) {
   const t = useT();
   const styles = useStyles();
   const [query, setQuery] = useState("");
   const [archivedOpen, setArchivedOpen] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const handleToggleEditing = useCallback(() => setEditing((on) => !on), []);
 
   const handleClear = useCallback(() => setQuery(""), []);
   const handleToggleArchived = useCallback(() => {
@@ -162,6 +176,37 @@ export function AccountRegister({
   const filteredArchived = useMemo(
     () => archivedAccounts.filter((row) => matches(row, needle)),
     [archivedAccounts, needle],
+  );
+
+  /**
+   * A move swaps a row with its neighbour **inside its own kind group**,
+   * which is the order on screen: the groups themselves are `KIND_ORDER`'s
+   * and are not a person's to rearrange. What goes to the executor is every
+   * id the register holds, in the order it now draws them — own rows first,
+   * then shared, then archived — because `sort` is one sequence over the
+   * whole table.
+   */
+  const handleMove = useCallback(
+    (id: string, by: 1 | -1) => {
+      if (onReorder === undefined) return;
+      const ownIds = own.map((row) => row.id);
+      const at = ownIds.indexOf(id);
+      const to = at + by;
+      // **A move is offered only inside a group**, and that is enforced where
+      // it can be seen: the first and last rows of each group have no control
+      // to press (`first`/`lastInGroup`). A second check here would be a rule
+      // with no way to reach it, which is a rule nothing can test.
+      if (at < 0 || to < 0 || to >= ownIds.length) return;
+      const next = [...ownIds];
+      next[at] = ownIds[to] as string;
+      next[to] = ownIds[at] as string;
+      onReorder([
+        ...next,
+        ...shared.map((row) => row.id),
+        ...archivedAccounts.map((row) => row.id),
+      ]);
+    },
+    [onReorder, own, shared, archivedAccounts],
   );
 
   const groups = useMemo(
@@ -222,6 +267,7 @@ export function AccountRegister({
           rows={group.rows}
           onSelectAccount={onSelectAccount}
           {...(onTransferFrom ? { onTransferFrom } : {})}
+          {...(editing && onReorder ? { onMove: handleMove } : {})}
         />
       ))}
 
@@ -236,8 +282,20 @@ export function AccountRegister({
         offered only by the empty state before, so a ledger with one account
         had no way to open its second.
       */}
-      <View style={styles.inline}>
+      <View style={styles.actions}>
         <Button label={t("accounts.add")} onPress={onCreateAccount} variant="primary" />
+        {/*
+          Offered only where the order can be written, and never while a
+          search is narrowing the list: a filtered register cannot state a
+          whole order, and the operation takes nothing less.
+        */}
+        {onReorder === undefined || query !== "" ? null : (
+          <Button
+            label={t(editing ? "common.save" : "common.edit")}
+            onPress={handleToggleEditing}
+            variant="ghost"
+          />
+        )}
       </View>
 
       <ArchivedToggle
@@ -255,9 +313,22 @@ type KindGroupProps = {
   rows: readonly AccountRegisterAccount[];
   onSelectAccount: (id: string) => void;
   onTransferFrom?: (id: string) => void;
+  /**
+   * S16 §3's reordering, **behind *Edit***: the handles are not the first
+   * thing you see, because a register is read far more often than it is
+   * arranged. Absent means no *Edit* at all — a screen that cannot write the
+   * order must not offer to change it.
+   *
+   * The **whole** list, in the order it should now hold: `reorder_accounts`
+   * sets `sort` by position, and a partial list leaves the rows it omits
+   * claiming positions that have moved under them.
+   */
+  onReorder?: (ids: readonly string[]) => void;
+  /** Present only while *Edit* is on — see `AccountRegisterProps.onReorder`. */
+  onMove?: (id: string, by: 1 | -1) => void;
 };
 
-function KindGroup({ label, rows, onSelectAccount, onTransferFrom }: KindGroupProps) {
+function KindGroup({ label, rows, onSelectAccount, onTransferFrom, onMove }: KindGroupProps) {
   const styles = useStyles();
   const subtotals = subtotalsOf(rows);
 
@@ -284,6 +355,9 @@ function KindGroup({ label, rows, onSelectAccount, onTransferFrom }: KindGroupPr
           last={index === rows.length - 1}
           onSelect={onSelectAccount}
           {...(onTransferFrom ? { onTransferFrom } : {})}
+          {...(onMove
+            ? { onMove, first: index === 0, lastInGroup: index === rows.length - 1 }
+            : {})}
         />
       ))}
     </Card>
@@ -296,9 +370,21 @@ type AccountRegisterRowProps = {
   last: boolean;
   onSelect: (id: string) => void;
   onTransferFrom?: (id: string) => void;
+  /** Present only while *Edit* is on; the ends of a group are refused rather than hidden. */
+  onMove?: (id: string, by: 1 | -1) => void;
+  first?: boolean;
+  lastInGroup?: boolean;
 };
 
-function AccountRegisterRow({ account, last, onSelect, onTransferFrom }: AccountRegisterRowProps) {
+function AccountRegisterRow({
+  account,
+  last,
+  onSelect,
+  onTransferFrom,
+  onMove,
+  first = false,
+  lastInGroup = false,
+}: AccountRegisterRowProps) {
   const t = useT();
   const styles = useStyles();
   const handlePress = useCallback(() => onSelect(account.id), [account.id, onSelect]);
@@ -325,6 +411,32 @@ function AccountRegisterRow({ account, last, onSelect, onTransferFrom }: Account
     />
   );
 
+  // While *Edit* is on the row's own action gives way to the move controls:
+  // three targets on one 390pt row is a row nobody can hit the right part of.
+  if (onMove) {
+    return (
+      <View style={styles.rowWithAction}>
+        <View style={styles.rowMain}>{row}</View>
+        <View style={styles.moves}>
+          <MoveButton
+            id={account.id}
+            by={-1}
+            label={t("accounts.moveUp", { name: account.name })}
+            disabled={first}
+            onMove={onMove}
+          />
+          <MoveButton
+            id={account.id}
+            by={1}
+            label={t("accounts.moveDown", { name: account.name })}
+            disabled={lastInGroup}
+            onMove={onMove}
+          />
+        </View>
+      </View>
+    );
+  }
+
   if (!onTransferFrom) return row;
 
   return (
@@ -336,6 +448,41 @@ function AccountRegisterRow({ account, last, onSelect, onTransferFrom }: Account
     </View>
   );
 }
+
+/** One move, as a named component: `IconButton` takes no argument on press. */
+function MoveButton({
+  id,
+  by,
+  label,
+  disabled,
+  onMove,
+}: {
+  id: string;
+  by: 1 | -1;
+  label: string;
+  disabled: boolean;
+  onMove: (id: string, by: 1 | -1) => void;
+}) {
+  const theme = useTheme();
+  const handlePress = useCallback(() => onMove(id, by), [id, by, onMove]);
+  return (
+    <IconButton label={label} onPress={handlePress} disabled={disabled}>
+      <CaretIcon up={by === -1} color={disabled ? theme.textFaint : theme.textMuted} />
+    </IconButton>
+  );
+}
+
+/** The register's own caret — `CaretLeftIcon` rotated, so one shape serves both. */
+function CaretIcon({ up, color }: { up: boolean; color: string }) {
+  return (
+    <View style={up ? CARET_UP : CARET_DOWN}>
+      <CaretLeftIcon size={16} color={color} />
+    </View>
+  );
+}
+
+const CARET_UP = { transform: [{ rotate: "90deg" }] } as const;
+const CARET_DOWN = { transform: [{ rotate: "-90deg" }] } as const;
 
 /**
  * The transfer glyph — two arrows, opposed, the one S31 and a transfer row draw.
@@ -460,6 +607,9 @@ const useStyles = makeStyles((theme) => ({
   },
   /** A control that must not stretch to the ground's own width. */
   inline: { alignSelf: "flex-start" },
+  actions: { flexDirection: "row", alignItems: "center", gap: space.x3 },
+  /** The two move controls, beside the row rather than inside it (nested-interactive). */
+  moves: { flexDirection: "row", alignItems: "center", gap: space.xs },
   rowWithAction: { flexDirection: "row", alignItems: "center", gap: space.sm },
   rowMain: { flex: 1 },
 }));

@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 
 const router = {
@@ -26,7 +26,7 @@ import { accountingDate, addDays } from "@waltning/core/date";
 import { id } from "@waltning/core/id";
 import { currencyCode, toMoney } from "@waltning/core/money";
 
-import { appearance, language } from "./platform";
+import { appearance, language, lastBackup } from "./platform";
 import Settings from "./settings-screen";
 
 afterEach(async () => {
@@ -229,4 +229,20 @@ it("follows the phone again once that is chosen", () => {
   fireEvent.click(screen.getByRole("radio", { name: "Deutsch" }));
   fireEvent.click(screen.getByRole("radio", { name: /Match the phone/ }));
   expect(language.getSnapshot().value).toBe("system");
+});
+
+/**
+ * S30 — every row states the one fact that sends you into it, and *Back up*
+ * was the row still stating nothing. The day is the phone's own: a restored
+ * document must not bring another device's claim with it.
+ */
+it("says when the last backup was taken, once one has been", async () => {
+  withLedger();
+  expect(screen.queryByText(/^Last taken/)).toBeNull();
+
+  await lastBackup.set(accountingDate("2026-09-01"));
+  cleanup();
+  withLedger();
+  expect(screen.getByText("Last taken September 1, 2026")).toBeDefined();
+  await lastBackup.set(accountingDate("2026-09-22"));
 });
