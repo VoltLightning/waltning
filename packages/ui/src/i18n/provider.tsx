@@ -41,6 +41,9 @@ declare module "i18next" {
 const resources = {
   en: { translation: catalogues.en },
   pl: { translation: catalogues.pl },
+  de: { translation: catalogues.de },
+  ru: { translation: catalogues.ru },
+  be: { translation: catalogues.be },
 };
 
 function configure(instance: I18nInstance, locale: Locale): I18nInstance {

@@ -184,10 +184,31 @@ The shape:
 
 | Piece | Where | Why there |
 |---|---|---|
-| The catalogues | `ui/i18n/en.ts`, `ui/i18n/pl.ts` | TypeScript, not JSON — **the English file is the type**, so a language missing a key does not compile and one inventing a key does not either |
+| The catalogues | `ui/i18n/<code>.ts` — `en`, `pl`, `de`, `ru`, `be` | TypeScript, not JSON — **the English file is the type**, so a language missing a key does not compile and one inventing a key does not either |
 | The language choice | `ui/i18n/locales.ts` | Pure functions over strings: which language a device gets, and how a figure is punctuated in it. No React, no i18next, so both are testable without mounting anything |
 | The provider and `useT` | `ui/i18n/provider.tsx` | A language is a value, not a module constant — the same call `theme/provider.tsx` makes |
 | The device's languages | `apps/<surface>/src/platform.ts` | A platform read. `expo-localization` on the phone, `navigator.languages` in the browser |
+
+**Five languages ship: English, Polish, German, Russian and Belarusian.** The
+device's own order picks one (`resolveLocale`), and English is the fallback for
+anything else. Every language but English writes a comma for the decimal mark
+(`design-system/04` §4.1), and every language but English starts its week on
+Monday.
+
+**Three of them decline four ways, and not alike.** Polish, Russian and
+Belarusian each have `one`, `few`, `many` and `other`, but 21 is `one` in
+Russian and Belarusian and `many` in Polish — so each catalogue writes out all
+four forms of every counted key in its own grammar, and German, which has
+English's two, repeats `other` for the forms it never asks for. On the phone
+those rules come from the `@formatjs` polyfill, which knows **only the languages
+whose data `polyfills.ts` imports**; a shipped language without its data does
+not throw, it declines as English. `polyfills.test.ts` removes the runtime's own
+`PluralRules` and asserts every shipped language resolves to itself.
+
+**A pair the caller picks puts the count last.** A `…One`/`…Many` pair chooses
+between 1 and not-1 in code, which cannot decline a Slavic noun, so the Russian
+and Belarusian `Many` form is written as `Операций: {{count}}` — a label and a
+figure, correct for every number.
 
 **`i18n` is foundation, beside `fx` and `theme`.** A language is not a domain:
 every module that shows a word depends on it, and nothing in it may depend on a
