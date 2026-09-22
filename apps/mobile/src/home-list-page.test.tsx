@@ -492,11 +492,18 @@ describe("every entry says which day it is on", () => {
         first: true,
       }),
     ).toBe("2026-05-25");
-    expect(dateOfEntry({ key: "q", kind: "quiet", date: "2026-05-24", label: "24 May" })).toBe(
-      "2026-05-24",
-    );
     expect(
-      dateOfEntry({ key: "u", kind: "run", label: "3 quiet days", days: 3, from: "2026-05-23" }),
+      dateOfEntry({ key: "q", kind: "quiet", date: "2026-05-24", label: "24 May", ahead: false }),
+    ).toBe("2026-05-24");
+    expect(
+      dateOfEntry({
+        key: "u",
+        kind: "run",
+        label: "3 quiet days",
+        days: 3,
+        from: "2026-05-23",
+        ahead: false,
+      }),
     ).toBe("2026-05-23");
   });
 
@@ -504,8 +511,8 @@ describe("every entry says which day it is on", () => {
   it("returns a string or null, never undefined", () => {
     for (const entry of [
       { key: "r", kind: "row", row, place: "only" as DayRowPlace },
-      { key: "q", kind: "quiet", date: "2026-05-24", label: "24 May" },
-      { key: "u", kind: "run", label: "3 quiet days", days: 3, from: "2026-05-23" },
+      { key: "q", kind: "quiet", date: "2026-05-24", label: "24 May", ahead: false },
+      { key: "u", kind: "run", label: "3 quiet days", days: 3, from: "2026-05-23", ahead: false },
     ] as const) {
       expect(dateOfEntry(entry), entry.kind).not.toBeUndefined();
     }
@@ -560,20 +567,36 @@ describe("a day that is already on screen", () => {
   });
 
   /**
-   * **Today inside a collapsed run is not today on screen.** A list led past
-   * today — the strip left on the 18th — draws the 14th to the 17th as one
-   * *nothing recorded* row, named by its newer end. Scrolling to that row put
-   * the ring on the 17th, the settle reported the 17th, and the pill stayed
-   * up over a list that was never going to reach today. Found on a device.
+   * **After today it is *not yet*, not *nothing recorded*** (S04 §6). The same
+   * list led past today reads three days that have not happened as not yet,
+   * and today on its own line as the quiet day it is.
    */
-  it("jumps home when today is swallowed by a run", () => {
+  it("names the days after today as not yet", () => {
+    draw(ledgerWith([row("2026-08-13", 2, "-20.00")]), vi.fn(), {
+      anchor: accountingDate("2026-08-18"),
+    });
+    expect(screen.getByText("3 days · not yet")).toBeTruthy();
+    expect(screen.queryByText(/nothing recorded/)).toBeNull();
+    expect(screen.getByText("August 14, 2026")).toBeTruthy();
+  });
+
+  /**
+   * **A list led past today still has today on it, as a day.** The strip left
+   * on the 18th used to draw the 14th to the 17th as one *nothing recorded*
+   * row named by its newer end: the pill scrolled there, the ring landed on
+   * the 17th and the pill stayed up. Split at today, the 14th is its own line
+   * and the pill goes to it without re-reading anything.
+   */
+  it("takes the pill to today's own line on a list led past it", () => {
     const onReturnToToday = vi.fn();
+    const onVisibleDay = vi.fn();
     draw(ledgerWith([row("2026-08-13", 2, "-20.00")]), vi.fn(), {
       anchor: accountingDate("2026-08-18"),
       onReturnToToday,
+      onVisibleDay,
     });
-    expect(screen.getByText(/August 14\s–\s17, 2026/)).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: /Back to today/ }));
-    expect(onReturnToToday).toHaveBeenCalledTimes(1);
+    expect(onVisibleDay).toHaveBeenCalledWith(TODAY);
+    expect(onReturnToToday, "today is on the list, so nothing is re-read").not.toHaveBeenCalled();
   });
 });

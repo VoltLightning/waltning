@@ -60,8 +60,13 @@ export type DayTotal =
 
 export type LedgerItem<Row extends LedgerDayRow> =
   | { kind: "day"; date: AccountingDate; rows: readonly Row[]; total: DayTotal }
-  /** One quiet day. `from` and `to` are the same date. */
-  | { kind: "quiet"; from: AccountingDate; to: AccountingDate; days: number };
+  /**
+   * Days with no rows, `from` the newer end. **`ahead` when every one of them
+   * is after today** — not quiet but *not yet*: a day that has not happened
+   * has had nothing recorded on it by definition, and saying so is a claim
+   * about the ledger that is only true of the past (S04 §6).
+   */
+  | { kind: "quiet"; from: AccountingDate; to: AccountingDate; days: number; ahead: boolean };
 
 /**
  * Money on a row is in the row's own currency; a day total is one figure, so
@@ -133,18 +138,13 @@ export type LedgerItemOptions = {
    */
   filtered?: boolean;
   /**
-   * Today, where the caller wants the strip to run past it (S04 §4).
+   * Today — **the line between a quiet day and one that has not come yet.**
    *
-   * **Past today, never past the last loaded day.** The two are the same thing
-   * on a cold open and nothing like it after a jump: a strip anchored in 2021
-   * that drew sixteen quiet cells off its right-hand end would be claiming the
-   * ledger stops there, when what is past it is a year of rows this page has
-   * not read. So the run is only extended when it already reaches today —
-   * which is exactly when the cells past it really are days nothing can have
-   * happened on yet.
-   *
-   * Absent leaves the run ending where the rows do, which is what every caller
-   * that is not the List page's strip wants.
+   * A run of empty days that crosses it is two runs: up to today it is
+   * *nothing recorded*, after it *not yet*. A list led past today (the strip
+   * left on next Saturday) drew *4 days · nothing recorded* over three days
+   * that had not happened and the one that had. Absent, no day is ahead,
+   * which is right for every list that ends at or before today.
    */
   today?: AccountingDate;
   /**
@@ -189,10 +189,39 @@ export function toLedgerItems<Row extends LedgerDayRow>(
     days.splice(at === -1 ? days.length : at, 0, { date: anchor, rows: [] });
   }
 
+  const today = options.today;
   const items: LedgerItem<Row>[] = [];
+  /** Empty days from `from` back to `to`, split where today falls inside them. */
+  const pushQuiet = (from: AccountingDate, to: AccountingDate) => {
+    if (today !== undefined && to <= today && from > today) {
+      const firstAhead = addDays(today, 1);
+      items.push({
+        kind: "quiet",
+        from,
+        to: firstAhead,
+        days: daysBetween(firstAhead, from) + 1,
+        ahead: true,
+      });
+      items.push({
+        kind: "quiet",
+        from: today,
+        to,
+        days: daysBetween(to, today) + 1,
+        ahead: false,
+      });
+      return;
+    }
+    items.push({
+      kind: "quiet",
+      from,
+      to,
+      days: daysBetween(to, from) + 1,
+      ahead: today !== undefined && to > today,
+    });
+  };
   days.forEach((day, index) => {
     if (day.rows.length === 0) {
-      items.push({ kind: "quiet", from: day.date, to: day.date, days: 1 });
+      pushQuiet(day.date, day.date);
     } else {
       items.push({
         kind: "day",
@@ -213,12 +242,7 @@ export function toLedgerItems<Row extends LedgerDayRow>(
     // with no quiet days in it.
     const gap = daysBetween(next.date, day.date) - 1;
     if (gap <= 0) return;
-    items.push({
-      kind: "quiet",
-      from: addDays(day.date, -1),
-      to: addDays(next.date, 1),
-      days: gap,
-    });
+    pushQuiet(addDays(day.date, -1), addDays(next.date, 1));
   });
   return items;
 }
