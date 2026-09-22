@@ -126,6 +126,7 @@ describe("toLedgerItems", () => {
       from: "2026-08-13",
       to: "2026-08-13",
       days: 1,
+      ahead: false,
     });
   });
 
@@ -137,6 +138,7 @@ describe("toLedgerItems", () => {
       from: "2026-08-27",
       to: "2026-08-03",
       days: 25,
+      ahead: false,
     });
   });
 
@@ -154,7 +156,13 @@ describe("toLedgerItems", () => {
 
   it("spans a month boundary", () => {
     const items = toLedgerItems([row("2026-09-02", "-10"), row("2026-08-30", "-10")], PLN);
-    expect(items[1]).toEqual({ kind: "quiet", from: "2026-09-01", to: "2026-08-31", days: 2 });
+    expect(items[1]).toEqual({
+      kind: "quiet",
+      from: "2026-09-01",
+      to: "2026-08-31",
+      days: 2,
+      ahead: false,
+    });
   });
 
   it("returns nothing for no rows", () => {
@@ -316,9 +324,15 @@ describe("the anchor", () => {
   it("is drawn as a quiet day when nothing is on it, past the newest row", () => {
     const items = toLedgerItems([row("2026-09-09", "-10")], PLN, { anchor });
     expect(kinds(items)).toEqual(["quiet", "quiet", "day"]);
-    expect(items[0]).toEqual({ kind: "quiet", from: anchor, to: anchor, days: 1 });
+    expect(items[0]).toEqual({ kind: "quiet", from: anchor, to: anchor, days: 1, ahead: false });
     // The day between is known quiet: the older half was read from the anchor.
-    expect(items[1]).toEqual({ kind: "quiet", from: "2026-09-10", to: "2026-09-10", days: 1 });
+    expect(items[1]).toEqual({
+      kind: "quiet",
+      from: "2026-09-10",
+      to: "2026-09-10",
+      days: 1,
+      ahead: false,
+    });
   });
 
   it("is drawn as a quiet day past the oldest row, after a jump behind everything", () => {
@@ -332,7 +346,13 @@ describe("the anchor", () => {
       to: "2026-09-07",
       days: 2,
     });
-    expect(items[2]).toEqual({ kind: "quiet", from: "2026-09-06", to: "2026-09-06", days: 1 });
+    expect(items[2]).toEqual({
+      kind: "quiet",
+      from: "2026-09-06",
+      to: "2026-09-06",
+      days: 1,
+      ahead: false,
+    });
   });
 
   it("splits a quiet run so the anchor is its own line inside it", () => {
@@ -340,7 +360,13 @@ describe("the anchor", () => {
       anchor: accountingDate("2026-09-08"),
     });
     expect(kinds(items)).toEqual(["day", "quiet", "quiet", "quiet", "day"]);
-    expect(items[2]).toEqual({ kind: "quiet", from: "2026-09-08", to: "2026-09-08", days: 1 });
+    expect(items[2]).toEqual({
+      kind: "quiet",
+      from: "2026-09-08",
+      to: "2026-09-08",
+      days: 1,
+      ahead: false,
+    });
   });
 
   it("is nothing extra when a row already sits on it", () => {
@@ -438,5 +464,39 @@ describe("the strip's run", () => {
 
   it("says a day before the origin has no cell", () => {
     expect(ribbonCell(accountingDate("1999-01-01"), ribbonRun(today))).toBe(-1);
+  });
+});
+
+/**
+ * **A day that has not happened is not a quiet day** (S04 §6). A list led past
+ * today drew *4 days · nothing recorded* over three days that had not come
+ * yet and the one that had: the run is split at today, and the part after it
+ * is `ahead`.
+ */
+describe("days after today", () => {
+  const today = accountingDate("2026-09-22");
+
+  it("splits a quiet run that crosses today, and marks the part after it", () => {
+    const items = toLedgerItems([row("2026-09-21", "-10")], PLN, {
+      anchor: accountingDate("2026-09-26"),
+      today,
+    });
+    expect(items.filter((item) => item.kind === "quiet")).toEqual([
+      { kind: "quiet", from: "2026-09-26", to: "2026-09-26", days: 1, ahead: true },
+      { kind: "quiet", from: "2026-09-25", to: "2026-09-23", days: 3, ahead: true },
+      { kind: "quiet", from: "2026-09-22", to: "2026-09-22", days: 1, ahead: false },
+    ]);
+  });
+
+  it("marks nothing ahead when the list ends at today", () => {
+    const items = toLedgerItems([row("2026-09-19", "-10")], PLN, { anchor: today, today });
+    expect(items.some((item) => item.kind === "quiet" && item.ahead)).toBe(false);
+  });
+
+  it("marks nothing ahead without a today to measure by", () => {
+    const items = toLedgerItems([row("2026-09-21", "-10")], PLN, {
+      anchor: accountingDate("2026-09-26"),
+    });
+    expect(items.some((item) => item.kind === "quiet" && item.ahead)).toBe(false);
   });
 });

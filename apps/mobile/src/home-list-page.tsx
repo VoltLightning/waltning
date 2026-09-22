@@ -243,9 +243,14 @@ function HomeListPageView({
           // entry as a fresh object, which failed every cell's `memo` — the
           // render probe counted ~2,000 re-renders per settle, every cell in
           // the list about five times over.
-          toLedgerItems(rows, pivotCurrency, { filtered: query !== null, anchor: centred })
+          toLedgerItems(rows, pivotCurrency, {
+            filtered: query !== null,
+            anchor: centred,
+            // The line between *nothing recorded* and *not yet* (S04 §6).
+            today,
+          })
         : [],
-    [rows, settled, pivotCurrency, query, centred],
+    [rows, settled, pivotCurrency, query, centred, today],
   );
 
   /**
@@ -356,6 +361,7 @@ function HomeListPageView({
                 kind: "quiet",
                 date: item.from,
                 label: dayLabel(item.from, locale),
+                ahead: item.ahead,
               }
             : {
                 key: `run-${item.from}`,
@@ -368,6 +374,7 @@ function HomeListPageView({
                 label: dayRangeLabel(item.to, item.from, locale),
                 days: item.days,
                 from: item.from,
+                ahead: item.ahead,
               },
         );
         continue;

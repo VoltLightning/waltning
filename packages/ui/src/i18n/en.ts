@@ -246,6 +246,8 @@ export const en = {
     ribbonDayMatched: "{{date}}, matched",
     /** One quiet day in the list — the line beside its date. */
     nothingThatDay: "nothing",
+    /** A day after today, with nothing on it — it has not happened (S04 §6). */
+    notYet: "not yet",
     /**
      * §7's count on a Months row while the screen is searching. Two flat forms
      * — the resolver picks; `resultsOne` explains why they are not one key.
@@ -266,6 +268,8 @@ export const en = {
     /** A collapsed run of quiet days. Two flat forms, as `resultsOne` explains. */
     quietRunOne: "{{count}} day · nothing recorded",
     quietRunMany: "{{count}} days · nothing recorded",
+    aheadRunOne: "{{count}} day · not yet",
+    aheadRunMany: "{{count}} days · not yet",
     /**
      * **Searching, and nothing the list has read matches.** Not *nothing
      * matches*: the list holds the rows around its anchor, and the field above

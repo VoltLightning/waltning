@@ -31,8 +31,9 @@ export type DayTotal =
 export type ListEntry =
   | { key: string; kind: "day"; date: string; label: string; total: DayTotal; first: boolean }
   | { key: string; kind: "row"; row: Row; place: DayRowPlaceName }
-  | { key: string; kind: "quiet"; date: string; label: string }
-  | { key: string; kind: "run"; label: string; days: number; from: string };
+  /** `ahead`: after today — *not yet* rather than *nothing* (S04 §6). */
+  | { key: string; kind: "quiet"; date: string; label: string; ahead: boolean }
+  | { key: string; kind: "run"; label: string; days: number; from: string; ahead: boolean };
 
 /** Where a row sits in its day, which is what decides its corners. */
 export type DayRowPlaceName = "only" | "first" | "middle" | "last";

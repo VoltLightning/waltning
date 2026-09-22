@@ -101,7 +101,12 @@ function body(
         </DayRowSurface>
       );
     case "quiet":
-      return <QuietDay label={entry.label} emptyLabel={t("transactions.nothingThatDay")} />;
+      return (
+        <QuietDay
+          label={entry.label}
+          emptyLabel={t(entry.ahead ? "transactions.notYet" : "transactions.nothingThatDay")}
+        />
+      );
     case "run":
       return <QuietRunItem entry={entry} />;
     default:
@@ -156,17 +161,21 @@ function ListRowView({ row, handlers }: { row: Row; handlers: ListEntryHandlers 
 
 const ListRow = memo(ListRowView);
 
-/** A collapsed run: the span and how long it is, on one quiet line. */
-function QuietRunItem({ entry }: { entry: { label: string; days: number } }) {
+/**
+ * A collapsed run: the span and how long it is, on one quiet line — *nothing
+ * recorded* in the past, *not yet* after today.
+ */
+function QuietRunItem({ entry }: { entry: { label: string; days: number; ahead: boolean } }) {
   const t = useT();
-  return (
-    <QuietRun
-      label={entry.label}
-      summary={t(entry.days === 1 ? "transactions.quietRunOne" : "transactions.quietRunMany", {
-        count: entry.days,
-      })}
-    />
-  );
+  const one = entry.days === 1;
+  const key = entry.ahead
+    ? one
+      ? "transactions.aheadRunOne"
+      : "transactions.aheadRunMany"
+    : one
+      ? "transactions.quietRunOne"
+      : "transactions.quietRunMany";
+  return <QuietRun label={entry.label} summary={t(key, { count: entry.days })} />;
 }
 
 /**

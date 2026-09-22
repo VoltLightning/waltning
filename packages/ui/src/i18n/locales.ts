@@ -106,10 +106,17 @@ export function dayLabel(date: AccountingDate, locale: Locale): string {
  * go.** English collapses to `September 7 – 8, 2026` and Polish to
  * `7–8 września 2026` — the day-only half leads in one and trails in the
  * other — so a hand-rolled collapse would be a month-name table by another
- * name, which `monthShort` above already refuses for the same reason. Where a
- * runtime has no `formatRange` (Hermes's `Intl` is built per platform and
- * ships a subset), both dates are named in full: longer, never wrong, and the
- * behaviour this row already had.
+ * name, which `monthShort` above already refuses for the same reason.
+ *
+ * **Where a runtime has no `formatRange`, the collapse is built from parts.**
+ * Hermes's `Intl` is built per platform and ships a subset, and on a phone the
+ * fallback — both dates in full — was *September 22, 2026 – September 25,
+ * 2026*, cut off at 390pt: the one place this row is read. `formatToParts`
+ * says which piece is the day, the month and the year in the language's own
+ * order, so what the two ends share can be dropped without knowing the
+ * language: in one month, the earlier end up to its day and the later from its
+ * day; in one year, the earlier without its year. Only a runtime with neither
+ * names both dates in full.
  *
  * The same `timeZone: "UTC"` and rebuild through `Date.UTC` as `dayLabel`: a
  * bare accounting date re-read in a negative offset names the day before.
@@ -129,12 +136,49 @@ export function dayRangeLabel(a: AccountingDate, b: AccountingDate, locale: Loca
     year: "numeric",
     timeZone: "UTC",
   });
-  if (typeof format.formatRange !== "function") {
-    // The thin spaces `formatRange` itself sets around the dash, so the two
-    // branches punctuate a range the same way.
-    return `${dayLabel(earlier, locale)} – ${dayLabel(later, locale)}`;
+  if (typeof format.formatRange === "function") {
+    return format.formatRange(utcOf(earlier), utcOf(later));
   }
-  return format.formatRange(utcOf(earlier), utcOf(later));
+  if (typeof format.formatToParts === "function") {
+    return rangeFromParts(format, earlier, later);
+  }
+  return `${dayLabel(earlier, locale)}${RANGE_DASH}${dayLabel(later, locale)}`;
+}
+
+/** The thin spaces `formatRange` sets around its dash, so every branch punctuates alike. */
+const RANGE_DASH = " – ";
+
+/**
+ * `formatRange`'s collapse, from `formatToParts`. Exported for the test that
+ * runs it where `formatRange` exists, which is every test runner.
+ */
+export function rangeFromParts(
+  format: Intl.DateTimeFormat,
+  earlier: AccountingDate,
+  later: AccountingDate,
+): string {
+  const from = format.formatToParts(utcOf(earlier));
+  const to = format.formatToParts(utcOf(later));
+  const join = (parts: readonly Intl.DateTimeFormatPart[]) =>
+    parts.map((part) => part.value).join("");
+  if (earlier.slice(0, 4) !== later.slice(0, 4)) return join(from) + RANGE_DASH + join(to);
+  if (earlier.slice(0, 7) === later.slice(0, 7)) {
+    const fromDay = from.findIndex((part) => part.type === "day");
+    const toDay = to.findIndex((part) => part.type === "day");
+    return join(from.slice(0, fromDay + 1)) + RANGE_DASH + join(to.slice(toDay));
+  }
+  return join(withoutYear(from)) + RANGE_DASH + join(to);
+}
+
+/** A date's parts with its year, and the separator that led to it, taken out. */
+function withoutYear(parts: readonly Intl.DateTimeFormatPart[]): Intl.DateTimeFormatPart[] {
+  const at = parts.findIndex((part) => part.type === "year");
+  if (at < 0) return [...parts];
+  // The literal beside the year goes with it: the one before when the year
+  // ends the date (`September 28, 2026`), the one after when it leads.
+  const cut = at > 0 && parts[at - 1]?.type === "literal" ? at - 1 : at;
+  const end = cut === at && parts[at + 1]?.type === "literal" ? at + 2 : at + 1;
+  return [...parts.slice(0, cut), ...parts.slice(end)];
 }
 
 function utcOf(date: AccountingDate): Date {
