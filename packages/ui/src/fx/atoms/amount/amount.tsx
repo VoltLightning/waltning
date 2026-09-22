@@ -23,6 +23,7 @@ import { useLocale } from "../../../i18n/provider";
 import { text, textCap } from "../../../theme/fonts.ts";
 import { makeStyles } from "../../../theme/styles.ts";
 import { type TypeStep, tabularNums } from "../../../tokens.ts";
+import { useCurrencyMark } from "../../currency-marks";
 
 /**
  * **These names do not order, and it has cost twice.** `medium` is 38 and
@@ -144,6 +145,8 @@ export function Amount({
   // renders correctly with no provider rather than throwing.
   const figure = money.forDisplay(value, decimals, decimalMark(useLocale()));
   const prefix = signed && !negative && !money.isZero(value) ? "+" : "";
+  // The pivot's symbol, every other currency's code (`04` §4.1).
+  const mark = useCurrencyMark(currency);
 
   const styles = useStyles();
 
@@ -183,7 +186,7 @@ export function Amount({
       {prefix}
       {figure}
       {bare ? null : (
-        <Text style={[styles.currency, onShell ? styles.shellCurrency : null]}> {currency}</Text>
+        <Text style={[styles.currency, onShell ? styles.shellCurrency : null]}> {mark}</Text>
       )}
     </Text>
   );

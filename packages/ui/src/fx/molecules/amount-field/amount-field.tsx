@@ -34,6 +34,7 @@ import { inputStep, text, textCap } from "../../../theme/fonts.ts";
 import { useInputHeight } from "../../../theme/input-height.ts";
 import { makeStyles } from "../../../theme/styles.ts";
 import { radius, space, tabularNums } from "../../../tokens.ts";
+import { CurrencyMark } from "../../currency-marks";
 
 export type AmountFieldFieldProps = {
   variant?: "field";
@@ -169,7 +170,11 @@ function HeroAmountField({
         <Text maxFontSizeMultiplier={textCap("displayHero")} style={styles.heroValue}>
           {display}
         </Text>
-        {currency === undefined ? null : <Text style={styles.heroAffix}>{currency}</Text>}
+        {currency === undefined ? null : (
+          <Text style={styles.heroAffix}>
+            <CurrencyMark code={currency} />
+          </Text>
+        )}
       </View>
     );
   }
@@ -194,7 +199,11 @@ function HeroAmountField({
         <Text maxFontSizeMultiplier={textCap("displayHero")} style={styles.heroValue}>
           {display}
         </Text>
-        {currency === undefined ? null : <Text style={styles.heroAffix}>{currency}</Text>}
+        {currency === undefined ? null : (
+          <Text style={styles.heroAffix}>
+            <CurrencyMark code={currency} />
+          </Text>
+        )}
       </View>
     </PressableScaled>
   );
@@ -247,7 +256,11 @@ function EditableAmountField({
           onBlur={handleBlur}
           style={[styles.input, inputHeight]}
         />
-        {currency === undefined ? null : <Text style={styles.affix}>{currency}</Text>}
+        {currency === undefined ? null : (
+          <Text style={styles.affix}>
+            <CurrencyMark code={currency} />
+          </Text>
+        )}
       </View>
       {error ? <Text style={styles.error}>{error}</Text> : null}
     </View>

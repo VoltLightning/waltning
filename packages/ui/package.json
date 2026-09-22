@@ -41,6 +41,7 @@
     "./dashboard/spend-by-category-widget": "./src/dashboard/organisms/spend-by-category-widget/spend-by-category-widget.tsx",
     "./dashboard/spend-rows": "./src/dashboard/molecules/spend-rows/spend-rows.tsx",
     "./dashboard/widget-card": "./src/dashboard/molecules/widget-card/widget-card.tsx",
+    "./fx/currency-marks": "./src/fx/currency-marks.tsx",
     "./fx/amount": "./src/fx/atoms/amount/amount.tsx",
     "./fx/amount-field": "./src/fx/molecules/amount-field/amount-field.tsx",
     "./fx/coverage-status": "./src/fx/molecules/coverage-status/coverage-status.tsx",

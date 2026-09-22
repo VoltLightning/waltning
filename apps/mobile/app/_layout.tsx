@@ -14,8 +14,11 @@
 import "../src/polyfills.ts";
 import { useAppearance } from "@waltning/client/appearance/use-appearance";
 import { LedgerProvider } from "@waltning/client/ledger/ledger-provider";
+import { useLedgerController } from "@waltning/client/ledger/use-ledger-controller";
+import { usePhoneLedger } from "@waltning/client/ledger/use-phone-ledger";
 import { usePhoneLedgerStartup } from "@waltning/client/ledger/use-phone-ledger-startup";
 import { describeDiagnosticError } from "@waltning/core/diagnostics";
+import { CurrencyMarksProvider } from "@waltning/ui/fx/currency-marks";
 import { resolveLocale } from "@waltning/ui/i18n/locales";
 import { I18nProvider, useT } from "@waltning/ui/i18n/provider";
 import { HapticsProvider } from "@waltning/ui/primitives/haptics";
@@ -24,6 +27,7 @@ import { ThemeProvider, useTheme, useThemeName } from "@waltning/ui/theme/provid
 import { makeStyles } from "@waltning/ui/theme/styles";
 import { useFonts } from "expo-font";
 import { Stack } from "expo-router";
+import type { ReactNode } from "react";
 import { useEffect } from "react";
 import { useColorScheme, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
@@ -205,9 +209,11 @@ export default function RootLayout() {
                   // gate's to say. A failure screen needs no gate — it shows
                   // nothing the ledger holds.
                   <LedgerProvider controller={startup.controller}>
-                    <LockGate lock={appLock}>
-                      <AppShell />
-                    </LockGate>
+                    <LedgerCurrencyMarks>
+                      <LockGate lock={appLock}>
+                        <AppShell />
+                      </LockGate>
+                    </LedgerCurrencyMarks>
                   </LedgerProvider>
                 ) : (
                   <StartupFailed
@@ -355,6 +361,22 @@ function AppStack() {
 function StartupBlank() {
   const styles = useStyles();
   return <View style={styles.blank} />;
+}
+
+/**
+ * The pivot, handed to every `<Amount>` — `@waltning/ui`'s
+ * `CurrencyMarksProvider` fed from the ledger it cannot import, so a figure in
+ * the pivot draws its symbol and every other currency its code (`04` §4.1).
+ * Under `LedgerProvider`, once, so a pivot change repaints every mark.
+ */
+function LedgerCurrencyMarks({ children }: { children: ReactNode }) {
+  const snapshot = usePhoneLedger(useLedgerController());
+  const pivot = snapshot.currencies.find((currency) => currency.isPivot);
+  return (
+    <CurrencyMarksProvider pivot={pivot?.code} symbol={pivot?.symbol}>
+      {children}
+    </CurrencyMarksProvider>
+  );
 }
 
 /**

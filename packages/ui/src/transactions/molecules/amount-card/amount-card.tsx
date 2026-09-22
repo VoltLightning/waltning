@@ -27,6 +27,7 @@
 
 import { useCallback, useMemo, useState } from "react";
 import { Text, View } from "react-native";
+import { CurrencyMark } from "../../../fx/currency-marks";
 import { decimalMark } from "../../../i18n/locales";
 import { useLocale, useT } from "../../../i18n/provider";
 import { focusBorder } from "../../../theme/focus.ts";
@@ -106,7 +107,7 @@ export function AmountCard({
         affix={
           currency === undefined ? undefined : (
             <Text maxFontSizeMultiplier={textCap("displayHero")} style={styles.affix}>
-              {currency}
+              <CurrencyMark code={currency} />
             </Text>
           )
         }
