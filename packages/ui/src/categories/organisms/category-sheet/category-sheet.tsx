@@ -114,6 +114,18 @@ export type CategorySheetProps = {
   usage?: Readonly<Record<string, number>>;
   /** D2's own proposal, already computed by the caller — this sheet never proposes on its own. */
   proposal?: CategoryProposal;
+  /**
+   * The payee the draft names, when it names one — the suggestion then says
+   * why it is there: *Because you are at Café A*.
+   */
+  payee?: string;
+  /**
+   * The categories used last, newest first (`recentCategories`) — drawn as
+   * *You used these last* over the grid. **The grid itself never moves** (§9.1):
+   * this is a section above it, of a height that stops changing once it holds
+   * `RECENT_CATEGORIES`, so every leaf below stays where a thumb left it.
+   */
+  recent?: readonly string[];
   onPick: (categoryId: string) => void;
   /**
    * Present only where creating in place is offered. `create_category` here
@@ -177,6 +189,8 @@ export function CategorySheet({
   tree,
   usage,
   proposal,
+  payee,
+  recent,
   onPick,
   onCreate,
   onDismiss,
@@ -287,6 +301,14 @@ export function CategorySheet({
     proposal && !searching
       ? ordinaryLeaves.find((leaf) => leaf.id === proposal.categoryId)
       : undefined;
+  // Only over the whole grid: a group or a search is already a narrower answer.
+  const recentLeaves = useMemo(
+    () =>
+      searching || groupId !== null || recent === undefined
+        ? []
+        : recent.flatMap((id) => ordinaryLeaves.find((leaf) => leaf.id === id) ?? []),
+    [searching, groupId, recent, ordinaryLeaves],
+  );
 
   const emptyBody = t("categories.noMatchBody", { query: query.trim() });
   /**
@@ -381,6 +403,7 @@ export function CategorySheet({
         <ProposalRow
           leaf={proposedLeaf}
           confidence={proposal?.confidence ?? 0}
+          {...(payee === undefined || payee.trim() === "" ? {} : { payee: payee.trim() })}
           onPick={handlePick}
         />
       ) : null}
@@ -422,21 +445,44 @@ export function CategorySheet({
             <Text style={styles.noMatches}>{t("common.noMatches")}</Text>
           )
         ) : (
-          <View
-            accessibilityRole="radiogroup"
-            accessibilityLabel={t("transactions.category")}
-            style={styles.grid}
-          >
-            {visibleLeaves.map((leaf) => (
-              <LeafCell
-                key={leaf.id}
-                leaf={leaf}
-                count={usage?.[leaf.id]}
-                selected={leaf.id === highlighted}
-                onPress={handlePick}
-              />
-            ))}
-          </View>
+          <>
+            {recentLeaves.length === 0 ? null : (
+              <View style={styles.recent}>
+                <Text style={styles.sectionKicker}>{t("categories.recentTitle")}</Text>
+                <View
+                  accessibilityRole="radiogroup"
+                  accessibilityLabel={t("categories.recentTitle")}
+                  style={styles.grid}
+                >
+                  {recentLeaves.map((leaf) => (
+                    <LeafCell
+                      key={leaf.id}
+                      leaf={leaf}
+                      count={usage?.[leaf.id]}
+                      selected={leaf.id === highlighted}
+                      onPress={handlePick}
+                    />
+                  ))}
+                </View>
+                <Text style={styles.sectionKicker}>{t("categories.allTitle")}</Text>
+              </View>
+            )}
+            <View
+              accessibilityRole="radiogroup"
+              accessibilityLabel={t("transactions.category")}
+              style={styles.grid}
+            >
+              {visibleLeaves.map((leaf) => (
+                <LeafCell
+                  key={leaf.id}
+                  leaf={leaf}
+                  count={usage?.[leaf.id]}
+                  selected={leaf.id === highlighted}
+                  onPress={handlePick}
+                />
+              ))}
+            </View>
+          </>
         )}
         {uncategorized ? (
           <UncategorizedRow
@@ -489,6 +535,8 @@ export function CategorySheet({
 type ProposalRowProps = {
   leaf: CategoryTreeNode;
   confidence: number;
+  /** Where the suggestion comes from, when the draft says. */
+  payee?: string;
   onPick: (categoryId: string) => void;
 };
 
@@ -500,7 +548,7 @@ type ProposalRowProps = {
  * `RadioGroup`'s dot). Amber on a 93% match would teach "amber usually means
  * fine", which is the one thing P4 cannot afford to mean.
  */
-function ProposalRow({ leaf, confidence, onPick }: ProposalRowProps) {
+function ProposalRow({ leaf, confidence, payee, onPick }: ProposalRowProps) {
   const t = useT();
   const styles = useStyles();
   const confident = confidence >= PROPOSAL_DISPLAY_THRESHOLD;
@@ -528,7 +576,7 @@ function ProposalRow({ leaf, confidence, onPick }: ProposalRowProps) {
         ]}
       >
         <Text style={[styles.proposalKicker, confident ? styles.proposalKickerConfident : null]}>
-          {t("categories.suggested")}
+          {payee === undefined ? t("categories.suggested") : t("categories.becauseAt", { payee })}
         </Text>
         <View style={styles.proposalBody}>
           <Text style={styles.proposalName}>{leaf.name}</Text>
@@ -804,6 +852,13 @@ function CreateRow({
 }
 
 const useStyles = makeStyles((theme) => ({
+  /** *You used these last* and the *All* line under it — the grid's own rhythm. */
+  recent: { gap: space.md },
+  sectionKicker: {
+    color: theme.textMuted,
+    ...text.ui("kicker"),
+    textTransform: "uppercase",
+  },
   chipRow: { flexGrow: 0 },
   // Eight rows of leaves before the sheet scrolls internally — the same
   // "cap it at a token multiple" shape `select.tsx`'s `panelScroll` uses.
