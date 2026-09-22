@@ -676,7 +676,7 @@ export const ru: Messages = {
   developer: {
     subtitle: "Данные для просмотра",
     lede: "Выдуманные счета и два года операций, записанные прямо на это устройство. Сервер здесь не участвует.",
-    loaded: "Строк: {{transactions}} · счетов: {{accounts}}",
+    loaded: "Строк: {{transactions}} · счетов: {{accounts}} · людей: {{people}}",
     refused: " · отклонено: {{count}}",
   },
   routes: {

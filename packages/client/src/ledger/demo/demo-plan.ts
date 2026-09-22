@@ -263,6 +263,108 @@ export const DEMO_PATTERNS: readonly DemoPattern[] = [
   },
 ];
 
+/**
+ * The three people and companies money moves between, and the three states
+ * S14 sorts them into: **one who owes you, one you owe, and one settled.**
+ *
+ * A demo with no counterparties leaves Debt drawing its empty state and S15
+ * unreachable, so the whole debt half of the app could not be looked at —
+ * which is how it stayed uncompared against its own drawing for months.
+ *
+ * Invented, like every account and employer here (the merchants are the only
+ * real names, and `demo-plan`'s header says why).
+ */
+export type DemoCounterparty = {
+  /** Referenced by `DEMO_DEBTS`, never shown. */
+  ref: string;
+  name: string;
+  kind: "person" | "company";
+  settlementCurrency: string | null;
+};
+
+export const DEMO_COUNTERPARTIES: readonly DemoCounterparty[] = [
+  { ref: "owing", name: "Marta", kind: "person", settlementCurrency: null },
+  { ref: "owed", name: "Piotr", kind: "person", settlementCurrency: null },
+  { ref: "settled", name: "Studio B", kind: "company", settlementCurrency: null },
+];
+
+/**
+ * A debt row, dated by how many days back from today it sits.
+ *
+ * `role: "debt"` is the only role that moves a balance (§6.6); the
+ * contribution is here so S15's history shows the row kinds it has to tell
+ * apart, and it is deliberately on the person who is otherwise settled.
+ */
+export type DemoDebt = {
+  counterparty: string;
+  role: "debt" | "contribution";
+  account: string;
+  category: string;
+  payee: string;
+  type: "income" | "expense";
+  amount: string;
+  daysAgo: number;
+  /** Settled in full, by a settlement written straight after it. */
+  settle?: boolean;
+};
+
+export const DEMO_DEBTS: readonly DemoDebt[] = [
+  // They owe you: you paid, on their behalf.
+  {
+    counterparty: "owing",
+    role: "debt",
+    account: "bank-a",
+    category: "Eating out",
+    payee: "Dinner · split",
+    type: "expense",
+    amount: "240.00",
+    daysAgo: 12,
+  },
+  {
+    counterparty: "owing",
+    role: "debt",
+    account: "card-a",
+    category: "Taxi",
+    payee: "Train tickets",
+    type: "expense",
+    amount: "96.50",
+    daysAgo: 4,
+  },
+  // You owe them: they paid you, and it is not yours to keep.
+  {
+    counterparty: "owed",
+    role: "debt",
+    account: "bank-a",
+    category: "Services",
+    payee: "Deposit forwarded",
+    type: "income",
+    amount: "1400.00",
+    daysAgo: 21,
+  },
+  // Settled: the debt, then the settlement that clears it.
+  {
+    counterparty: "settled",
+    role: "debt",
+    account: "bank-a",
+    category: "Software & tools",
+    payee: "Studio B · invoice",
+    type: "expense",
+    amount: "600.00",
+    daysAgo: 45,
+    settle: true,
+  },
+  {
+    counterparty: "settled",
+    role: "contribution",
+    account: "cash",
+    category: "Eating out",
+    payee: "Studio B · lunch",
+    type: "expense",
+    amount: "58.00",
+    daysAgo: 30,
+  },
+];
+
 /** One row of the plan — a transaction to create, by name rather than by id. */
 export type DemoTransaction = {
   account: string;

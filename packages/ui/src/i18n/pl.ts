@@ -716,7 +716,7 @@ export const pl: Messages = {
   developer: {
     subtitle: "Dane do oglądania",
     lede: "Wymyślone konta i dwa lata transakcji, zapisane wprost na tym urządzeniu. Nic tutaj nie dotyka serwera.",
-    loaded: "{{transactions}} wierszy · {{accounts}} kont",
+    loaded: "{{transactions}} wierszy · {{accounts}} kont · {{people}} osób",
     refused: " · {{count}} odrzucono",
   },
   routes: {

@@ -1315,7 +1315,7 @@ export const en = {
   developer: {
     subtitle: "Data for looking at",
     lede: "Invented accounts and two years of transactions, written straight into this device. Nothing here touches a server.",
-    loaded: "{{transactions}} rows · {{accounts}} accounts",
+    loaded: "{{transactions}} rows · {{accounts}} accounts · {{people}} people",
     refused: " · {{count}} refused",
   },
   routes: {

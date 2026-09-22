@@ -96,3 +96,26 @@ describe("CounterpartyRow", () => {
     expect(onPress).toHaveBeenCalledOnce();
   });
 });
+
+/**
+ * The name is the row's subject and it rendered as `M…` on a 390pt phone:
+ * the identity column is `flex: 1` over a zero basis, so an inline figure and
+ * its conversion took the width first. Stacked, the figure is one column
+ * wide (S12 draws one figure per row).
+ */
+it("stacks a converted figure, so the name keeps its width", () => {
+  render(
+    <CounterpartyRow
+      name="Marta Kowalczyk-Nowakowska"
+      kind="person"
+      settlement={{ currency: "PLN", value: toMoney("656.88"), decimals: 2 }}
+      balances={[]}
+      display={{ currency: "USD", rate: pivotPerUnit("0.2469"), decimals: 2 }}
+      onPress={vi.fn()}
+    />,
+  );
+  // Both figures are there, and each is on its own line rather than one row.
+  expect(screen.getByText("656.88")).toBeDefined();
+  expect(screen.getByText("162.18"), "the converted figure, on its own line").toBeDefined();
+  expect(screen.getByRole("button", { name: "Marta Kowalczyk-Nowakowska" })).toBeDefined();
+});

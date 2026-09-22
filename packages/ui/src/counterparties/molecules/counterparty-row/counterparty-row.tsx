@@ -143,6 +143,15 @@ export function CounterpartyRow({
           {settlement.value === null ? (
             balances.map((line) => <StackedBalanceLine key={line.currency} line={line} />)
           ) : display ? (
+            /*
+              **Stacked, not inline — S16's own reasoning, and the same
+              defect.** Inline, the figure and its conversion took a third of
+              a 390pt row and the name beside it rendered as `M…`: the
+              identity column is `flex: 1` over a zero basis, so it gets only
+              what the figure leaves. S12 draws one figure per row; stacking
+              the basis under it keeps that shape and gives the name its
+              width back.
+            */
             <FxAmount
               value={settlement.value}
               currency={settlement.currency}
@@ -150,6 +159,7 @@ export function CounterpartyRow({
               displayCurrency={display.currency}
               decimals={settlement.decimals ?? 2}
               displayDecimals={display.decimals ?? 2}
+              stacked
             />
           ) : (
             <Amount

@@ -2,7 +2,14 @@ import { accountingDate, addDays, daysBetween } from "@waltning/core/date";
 import * as money from "@waltning/core/money";
 import { describe, expect, it, vi } from "vitest";
 import type { CreateCategoryDraft } from "../create-phone-ledger/create-phone-ledger.ts";
-import { DEMO_ACCOUNTS, DEMO_CATEGORIES, demoRates, demoTransactions } from "./demo-plan.ts";
+import {
+  DEMO_ACCOUNTS,
+  DEMO_CATEGORIES,
+  DEMO_COUNTERPARTIES,
+  DEMO_DEBTS,
+  demoRates,
+  demoTransactions,
+} from "./demo-plan.ts";
 import { type DemoTarget, loadDemo, rateWindows } from "./load-demo.ts";
 
 const TODAY = "2026-09-18";
@@ -17,6 +24,8 @@ function target(overrides: Partial<DemoTarget> = {}): DemoTarget {
     createAccount: vi.fn(() => ({ id: id() })),
     createCategory: vi.fn(() => ({ id: id() })),
     createTransaction: vi.fn(() => ({ id: id() })),
+    createCounterparty: vi.fn(() => ({ id: id() })),
+    settleDebt: vi.fn(() => ({ id: id() })),
     convertCategory: vi.fn(() => ({ id: id() })),
     setManualRate: vi.fn(() => ({ written: 1 })),
     existingCategories: [],
@@ -69,7 +78,8 @@ describe("loading it", () => {
 
     expect(outcome.accounts).toBe(DEMO_ACCOUNTS.length);
     expect(outcome.categories).toBe(DEMO_CATEGORIES.length);
-    expect(outcome.transactions).toBe(demoTransactions(TODAY, 3).length);
+    // The patterns, plus one row per debt and the settlement that clears one.
+    expect(outcome.transactions).toBe(demoTransactions(TODAY, 3).length + DEMO_DEBTS.length + 1);
     expect(outcome.refused, "a healthy run refuses nothing").toBe(0);
   });
 
@@ -110,7 +120,9 @@ describe("loading it", () => {
     const outcome = loadDemo(t, TODAY, 1);
 
     expect(outcome.refused, "the one refusal is reported").toBe(1);
-    expect(outcome.transactions, "and the rest still landed").toBe(calls - 1);
+    expect(outcome.transactions, "and the rest still landed").toBe(
+      calls - 1 + vi.mocked(t.settleDebt).mock.calls.length,
+    );
   });
 
   it("refuses a leaf whose group was refused rather than rooting it", () => {
@@ -354,5 +366,64 @@ describe("demoRates", () => {
   it("asks for nothing when the pivot is a currency the plan does not price", () => {
     // Inventing a rate would be a ledger whose figures mean nothing.
     expect(demoRates("JPY")).toEqual([]);
+  });
+});
+
+/**
+ * S14 sorts people into three states and the demo had none of them: Debt drew
+ * its empty state and S15 could not be reached at all, which is how the debt
+ * half of the app went uncompared against its own drawing.
+ */
+describe("the people money moves between", () => {
+  it("creates each one, and a debt row for each", () => {
+    const t = target();
+    const outcome = loadDemo(t, TODAY, 1);
+
+    expect(outcome.counterparties).toBe(DEMO_COUNTERPARTIES.length);
+    expect(outcome.refused).toBe(0);
+    const withCounterparty = vi
+      .mocked(t.createTransaction)
+      .mock.calls.filter(([draft]) => draft.counterpartyId !== null);
+    expect(withCounterparty).toHaveLength(DEMO_DEBTS.length);
+    expect(withCounterparty.every(([draft]) => draft.counterpartyRole !== null)).toBe(true);
+  });
+
+  /** One of the three is settled, which is a settlement written after its debt. */
+  it("settles exactly one of them, in full and after the debt it clears", () => {
+    const t = target();
+    loadDemo(t, TODAY, 1);
+
+    const settlements = vi.mocked(t.settleDebt).mock.calls;
+    expect(settlements).toHaveLength(1);
+    const settlement = settlements[0]?.[0];
+    const debt = DEMO_DEBTS.find((row) => row.settle === true);
+    expect(settlement?.dischargesAmount).toBe(debt?.amount);
+    // `settle_debt` refuses an account holding another currency, and the
+    // device's pivot is usually not the account's own.
+    expect(settlement?.currency).toBe(
+      DEMO_ACCOUNTS.find((account) => account.ref === debt?.account)?.currency,
+    );
+    expect(settlement?.currency).not.toBe("USD");
+    expect(
+      daysBetween(
+        accountingDate(addDays(accountingDate(TODAY), -(debt?.daysAgo ?? 0))),
+        accountingDate(settlement?.date ?? TODAY),
+      ),
+      "the settlement lands after the debt, never on the same day",
+    ).toBeGreaterThan(0);
+  });
+
+  /** Both sides exist, so Debt has something in each of its segments. */
+  it("leaves one who owes you and one you owe", () => {
+    const owing = DEMO_DEBTS.filter((row) => row.counterparty === "owing");
+    const owed = DEMO_DEBTS.filter((row) => row.counterparty === "owed");
+    expect(
+      owing.every((row) => row.type === "expense"),
+      "you paid on their behalf",
+    ).toBe(true);
+    expect(
+      owed.every((row) => row.type === "income"),
+      "they paid you",
+    ).toBe(true);
   });
 });
