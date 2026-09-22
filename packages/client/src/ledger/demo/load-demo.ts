@@ -25,11 +25,15 @@ import type {
   ConvertCategoryDraft,
   CreateAccountDraft,
   CreateCategoryDraft,
+  CreateCounterpartyDraft,
   QuickAddDraft,
+  SettleDebtDraft,
 } from "../create-phone-ledger/create-phone-ledger.ts";
 import {
   DEMO_ACCOUNTS,
   DEMO_CATEGORIES,
+  DEMO_COUNTERPARTIES,
+  DEMO_DEBTS,
   DEMO_MONTHS,
   demoRates,
   demoSpan,
@@ -54,6 +58,15 @@ export type DemoTarget = {
   createTransaction: (
     draft: QuickAddDraft,
   ) => { id: string; deferred?: boolean } | { fieldErrors: readonly FieldError[] };
+  /** S14's subject — the people and companies money moves between (§6.6). */
+  createCounterparty: (
+    draft: CreateCounterpartyDraft,
+  ) => { id: string } | { fieldErrors: readonly FieldError[] };
+  /**
+   * The settlement that clears one of them. Returns a residual rather than an
+   * id alone, and this loader wants neither — only that it was accepted.
+   */
+  settleDebt: (draft: SettleDebtDraft) => { id: string } | { fieldErrors: readonly FieldError[] };
   /**
    * **The only way to make a group.** `create_category` always writes a leaf
    * — it never sets `isLeaf: false` — so a group is a leaf that has been
@@ -102,6 +115,8 @@ export type DemoOutcome = {
   accounts: number;
   categories: number;
   transactions: number;
+  /** People and companies, and the debt rows attached to them. */
+  counterparties: number;
   /** Rows the executors refused. Zero on a healthy run. */
   refused: number;
 };
@@ -166,6 +181,7 @@ export function loadDemo(
     accounts: 0,
     categories: 0,
     transactions: 0,
+    counterparties: 0,
     refused: 0,
   };
 
@@ -285,6 +301,86 @@ export function loadDemo(
       }),
     );
     if (id === null) outcome.refused += 1;
+    else outcome.transactions += 1;
+  }
+
+  // ── counterparties, and the debts that give them a balance ────────────
+  // Last, because a debt row is an ordinary transaction with a counterparty
+  // on it: it needs the accounts, the categories and the rates already in.
+  const counterpartyIds = new Map<string, string>();
+  for (const counterparty of DEMO_COUNTERPARTIES) {
+    const id = accepted(() =>
+      target.createCounterparty({
+        name: counterparty.name,
+        kind: counterparty.kind,
+        settlementCurrency: counterparty.settlementCurrency,
+        contact: null,
+        note: "",
+      }),
+    );
+    if (id === null) {
+      outcome.refused += 1;
+      continue;
+    }
+    counterpartyIds.set(counterparty.ref, id);
+    outcome.counterparties += 1;
+  }
+
+  for (const debt of DEMO_DEBTS) {
+    const counterpartyId = counterpartyIds.get(debt.counterparty);
+    const accountId = accountIds.get(debt.account);
+    if (counterpartyId === undefined || accountId === undefined) {
+      outcome.refused += 1;
+      continue;
+    }
+    const date = addDays(accountingDate(today), -debt.daysAgo);
+    const id = accepted(() =>
+      target.createTransaction({
+        type: debt.type,
+        amount: debt.amount,
+        accountId,
+        categoryId: categoryIds.get(debt.category) ?? null,
+        date,
+        payee: debt.payee,
+        note: "",
+        isBusiness: false,
+        counterpartyId,
+        counterpartyRole: debt.role,
+      }),
+    );
+    if (id === null) {
+      outcome.refused += 1;
+      continue;
+    }
+    outcome.transactions += 1;
+    if (debt.settle !== true) continue;
+
+    // Settled in full and dated after the debt, so S14 sorts this one into
+    // *settled* rather than leaving a third open balance.
+    //
+    // **In the account's own currency, never the pivot.** `settle_debt`
+    // refuses an account that holds something else — the balance being
+    // discharged is in the currency it was created in, and the demo's pivot
+    // is whatever the device bootstrapped, which is usually neither.
+    const currency = DEMO_ACCOUNTS.find((account) => account.ref === debt.account)?.currency;
+    if (currency === undefined) {
+      outcome.refused += 1;
+      continue;
+    }
+    const settled = accepted(() =>
+      target.settleDebt({
+        counterpartyId,
+        accountId,
+        date: addDays(accountingDate(date), 7),
+        amount: debt.amount,
+        currency,
+        dischargesCurrency: currency,
+        dischargesAmount: debt.amount,
+        note: "",
+        categoryId: null,
+      }),
+    );
+    if (settled === null) outcome.refused += 1;
     else outcome.transactions += 1;
   }
 

@@ -47,6 +47,8 @@ export default function Developer() {
         createCategory: ledger.createCategory,
         createTransaction: ledger.createTransaction,
         convertCategory: ledger.convertCategory,
+        createCounterparty: ledger.createCounterparty,
+        settleDebt: ledger.settleDebt,
         setManualRate: ledger.setManualRate,
         existingCategories: snapshot.categories,
         // The device's own pivot, not the plan's guess at one: every rate is
@@ -60,6 +62,7 @@ export default function Developer() {
       t("developer.loaded", {
         transactions: outcome.transactions,
         accounts: outcome.accounts,
+        people: outcome.counterparties,
       }) + (outcome.refused > 0 ? t("developer.refused", { count: outcome.refused }) : ""),
     );
   }, [ledger, snapshot.categories, snapshot.currencies, t]);
