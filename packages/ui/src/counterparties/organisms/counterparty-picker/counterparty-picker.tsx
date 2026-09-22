@@ -13,14 +13,13 @@
 
 import { fold } from "@waltning/core/capture/names";
 import { useCallback, useMemo, useState } from "react";
-import { Pressable, ScrollView, Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
 import Animated from "react-native-reanimated";
 import { useT } from "../../../i18n/provider";
 import { Button } from "../../../primitives/atoms/button/button";
 import { SearchField } from "../../../primitives/atoms/search-field/search-field";
 import { useInteraction } from "../../../primitives/interaction.ts";
 import { monogramFor } from "../../../primitives/monogram.ts";
-import { nestedScrollProps } from "../../../primitives/nested-scroll.ts";
 import { BottomSheet } from "../../../primitives/organisms/bottom-sheet/bottom-sheet";
 import { usePressScale } from "../../../primitives/press-scale.ts";
 import { text } from "../../../theme/fonts.ts";
@@ -91,15 +90,23 @@ export function CounterpartyPicker({
       visible={visible}
       title={t("counterparties.pickerTitle")}
       onDismiss={handleDismiss}
+      steady
+      pinned={
+        <SearchField
+          value={query}
+          onChangeText={setQuery}
+          placeholder={t("counterparties.pickerSearchPlaceholder")}
+          onClear={handleClear}
+          {...(searching ? { resultCount: visibleList.length } : {})}
+        />
+      }
+      // In the footer, so a long list never scrolls the way out of it away.
+      footer={
+        <Button label={t("counterparties.pickerNew")} onPress={onCreateNew} variant="secondary" />
+      }
     >
-      <SearchField
-        value={query}
-        onChangeText={setQuery}
-        placeholder={t("counterparties.pickerSearchPlaceholder")}
-        onClear={handleClear}
-        {...(searching ? { resultCount: visibleList.length } : {})}
-      />
-      <ScrollView testID="counterparty-picker-scroll" {...nestedScrollProps(styles.scroll)}>
+      {/* The sheet's body scrolls this — see `BottomSheet`'s header. */}
+      <View testID="counterparty-picker-list">
         {recent.length === 0 ? null : (
           <View style={styles.section}>
             <Text style={styles.sectionLabel}>{t("counterparties.pickerRecent")}</Text>
@@ -115,8 +122,7 @@ export function CounterpartyPicker({
             visibleList.map((cp) => <PickerRow key={cp.id} counterparty={cp} onPick={handlePick} />)
           )}
         </View>
-      </ScrollView>
-      <Button label={t("counterparties.pickerNew")} onPress={onCreateNew} variant="secondary" />
+      </View>
     </BottomSheet>
   );
 }
@@ -176,7 +182,6 @@ function PickerRow({ counterparty, onPick }: PickerRowProps) {
 }
 
 const useStyles = makeStyles((theme) => ({
-  scroll: { maxHeight: touchTarget.min * 6 },
   section: { gap: space.xs },
   sectionLabel: { color: theme.textMuted, ...text.ui("kicker"), paddingTop: space.md },
   noMatches: { color: theme.textMuted, ...text.ui("body"), padding: space.x3 },

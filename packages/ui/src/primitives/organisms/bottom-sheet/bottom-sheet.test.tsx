@@ -1,6 +1,8 @@
 /** @vitest-environment jsdom */
 
-import { act, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
+import { useState } from "react";
+import { TextInput } from "react-native";
 import { beforeEach, expect, it, vi } from "vitest";
 import { expectContainsOverscroll } from "../../../primitives/nested-scroll.test-support.ts";
 import type { SafeAreaInsets } from "../../../primitives/safe-area";
@@ -162,7 +164,7 @@ it("yields to a top inset larger than the design offset", () => {
   // **On the scrolling content, not on the sheet.** The clearance has to land
   // on the thing that moves: padding on the sheet itself leaves a gap the body
   // scrolls straight past, with the last row still ending at the device edge.
-  const content = screen.getByTestId("bottom-sheet-body").firstElementChild as HTMLElement;
+  const content = screen.getByTestId("bottom-sheet-content");
   expect(getComputedStyle(content).paddingBottom).toBe(`${22 + 34}px`);
 });
 
@@ -196,12 +198,15 @@ it("makes room for the lift out from under the keyboard", () => {
     </UnderTheTabShell>,
   );
 
-  // `KeyboardAvoidingView` does the lifting; the cap is what stops the lift
-  // pushing the sheet's head off the top of the window.
-  expect(lastMaxDynamicContentSize()).toBe(793 - 170 - 336);
+  // The library does the lifting; the cap is what stops the lift pushing the
+  // sheet's head off the top of the window. **Typed into, the sheet may rise
+  // to the status bar** — the 170 is for a sheet being looked at.
+  expect(lastMaxDynamicContentSize()).toBe(793 - (59 + 22) - 336);
   // The home indicator is behind the keyboard; clearing it there is twice.
-  const content = screen.getByTestId("bottom-sheet-body").firstElementChild as HTMLElement;
-  expect(getComputedStyle(content).paddingBottom).toBe("22px");
+  // With a footer it is the footer that sits at the sheet's end, so the
+  // clearance is its; the body only makes room for the footer.
+  const footer = screen.getByText("Settle now").parentElement as HTMLElement;
+  expect(getComputedStyle(footer).paddingBottom).toBe("22px");
 });
 
 /**
@@ -251,7 +256,7 @@ it("ignores a layer that has re-provided the tab bar's height", () => {
 
   // 22 + the device's 34 — not 22 + the bar's 90. On the scrolling content,
   // where the clearance now rides.
-  const content = screen.getByTestId("bottom-sheet-body").firstElementChild as HTMLElement;
+  const content = screen.getByTestId("bottom-sheet-content");
   expect(getComputedStyle(content).paddingBottom).toBe("56px");
 });
 
@@ -280,4 +285,32 @@ it("puts no horizontal padding on the sheet itself", () => {
     expect(getComputedStyle(body)[side], `body ${side}`).toBe("0px");
   }
   view.unmount();
+});
+
+/**
+ * **A pinned field keeps its focus while it is typed into.** The library
+ * renders the handle as a component, and a handle that was a new function per
+ * render was a new component per keystroke: the search remounted and lost
+ * focus after the first letter.
+ */
+it("keeps a pinned field mounted across the renders its typing causes", () => {
+  function Typed() {
+    const [query, setQuery] = useState("");
+    return (
+      <BottomSheet
+        visible
+        title="Category"
+        onDismiss={vi.fn()}
+        pinned={<TextInput accessibilityLabel="Search" value={query} onChangeText={setQuery} />}
+      >
+        <span>rows</span>
+      </BottomSheet>
+    );
+  }
+  render(<Typed />);
+  const first = screen.getByLabelText("Search");
+  fireEvent.change(first, { target: { value: "S" } });
+  fireEvent.change(screen.getByLabelText("Search"), { target: { value: "Sn" } });
+  expect(screen.getByLabelText("Search")).toBe(first);
+  expect((first as HTMLInputElement).value).toBe("Sn");
 });

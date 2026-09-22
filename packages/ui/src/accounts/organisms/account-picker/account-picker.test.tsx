@@ -3,7 +3,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { toMoney } from "@waltning/core/money";
 import { expect, it, vi } from "vitest";
-import { expectContainsOverscroll } from "../../../primitives/nested-scroll.test-support.ts";
+import { expectScrolledByTheSheet } from "../../../primitives/nested-scroll.test-support.ts";
 import {
   AccountPicker,
   type AccountPickerAccount,
@@ -120,10 +120,10 @@ it("groups accounts under their own group header, then kind, ungrouped last unde
   ]);
 });
 
-/** The list contains its own overscroll, so scrolling it does not move the screen behind it. */
-it("contains its own overscroll", () => {
+/** The sheet scrolls the list; the search stays put above it. */
+it("is scrolled by the sheet, with the search pinned above it", () => {
   renderPicker();
-  expectContainsOverscroll("account-picker-scroll");
+  expectScrolledByTheSheet("account-picker-list");
 });
 
 it("never offers an archived account", () => {

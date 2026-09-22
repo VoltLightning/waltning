@@ -285,7 +285,7 @@ describe("TabsShell", () => {
     // clearance rides the scrolling content (`bottom-sheet.tsx`), not the
     // sheet, so that the last row clears the indicator rather than a gap the
     // body scrolls past.
-    const content = screen.getByTestId("bottom-sheet-body").firstElementChild as HTMLElement;
+    const content = screen.getByTestId("bottom-sheet-content");
     expect(getComputedStyle(content).paddingBottom).toBe("56px");
   });
 

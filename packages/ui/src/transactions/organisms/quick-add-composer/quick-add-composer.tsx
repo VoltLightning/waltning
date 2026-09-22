@@ -616,7 +616,9 @@ export function QuickAddComposer({
         title={t("transactions.payee")}
         onDismiss={closeSheet}
       >
+        {/* A sheet with one field is opened to type into it. */}
         <TextField
+          autoFocus
           label={t("transactions.payee")}
           value={payee}
           onChangeText={onPayeeChange}

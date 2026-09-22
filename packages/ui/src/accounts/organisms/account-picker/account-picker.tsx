@@ -46,7 +46,7 @@ import { fold } from "@waltning/core/capture/names";
 import type { Money } from "@waltning/core/money";
 import { ACCOUNT_KIND, type AccountKind } from "@waltning/core/registry/inputs";
 import { useCallback, useMemo, useState } from "react";
-import { Pressable, ScrollView, Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
 import Animated from "react-native-reanimated";
 import { Amount } from "../../../fx/atoms/amount/amount";
 import { useT } from "../../../i18n/provider";
@@ -55,7 +55,6 @@ import { SearchField } from "../../../primitives/atoms/search-field/search-field
 import { Tag } from "../../../primitives/atoms/tag";
 import { useInteraction } from "../../../primitives/interaction.ts";
 import { type HueName, hueNamed } from "../../../primitives/monogram.ts";
-import { nestedScrollProps } from "../../../primitives/nested-scroll.ts";
 import { BottomSheet } from "../../../primitives/organisms/bottom-sheet/bottom-sheet";
 import { usePressScale } from "../../../primitives/press-scale.ts";
 import { CreditCardIcon, CurrencyCircleDollarIcon, HouseIcon } from "../../../shell/phosphor";
@@ -199,27 +198,43 @@ export function AccountPicker({
   );
 
   const hasAny = matches.length > 0;
+  const searchable = live.length > SEARCH_THRESHOLD;
 
   return (
-    <BottomSheet visible={visible} title={t("transactions.account")} onDismiss={handleDismiss}>
-      {live.length > SEARCH_THRESHOLD ? (
-        <SearchField
-          value={query}
-          onChangeText={setQuery}
-          placeholder={t("accounts.search", { count: live.length })}
-        />
-      ) : null}
+    <BottomSheet
+      visible={visible}
+      title={t("transactions.account")}
+      onDismiss={handleDismiss}
+      steady
+      // The sheet's own footer, so a long list never scrolls the way out away.
+      {...(sections.length === 0
+        ? {}
+        : {
+            footer: (
+              <Button label={t("accounts.create")} onPress={onCreateAccount} variant="secondary" />
+            ),
+          })}
+      {...(searchable
+        ? {
+            pinned: (
+              <SearchField
+                value={query}
+                onChangeText={setQuery}
+                placeholder={t("accounts.search", { count: live.length })}
+              />
+            ),
+          }
+        : {})}
+    >
       {/*
-        The declaration belongs on *this* list — the bounded one
-        (`styles.scroll`'s own `maxHeight`) — never on the sheet body around
-        it, which is what has to keep moving. And it is load-bearing, not a
-        contract for later: `BottomSheet`'s body is a `ScrollView`
-        (`bottom-sheet.test.tsx` asserts its `overflow-y`), so on Android this
-        list is a nested-scrolling child of a real scroller, and on the web the
-        containment is what stops the sheet sliding when this list reaches its
-        end.
+        **The sheet's body is the list's scroller.** This used to be a
+        `ScrollView` of its own, capped at nine rows inside the body: on iOS
+        the sheet took every drag that started on it, and with the keyboard up
+        the sheet was shorter than nine rows — the accounts past the fold could
+        not be reached. The search is `pinned`, so it stays put while this
+        moves.
       */}
-      <ScrollView testID="account-picker-scroll" {...nestedScrollProps(styles.scroll)}>
+      <View testID="account-picker-list">
         {recent === undefined ? null : (
           <View style={styles.section}>
             <Text style={styles.sectionLabel}>{t("accounts.recent")}</Text>
@@ -295,12 +310,7 @@ export function AccountPicker({
             primaryAction={{ label: t("accounts.create"), onPress: onCreateAccount }}
           />
         )}
-      </ScrollView>
-      {sections.length === 0 ? null : (
-        <View style={styles.footer}>
-          <Button label={t("accounts.create")} onPress={onCreateAccount} variant="secondary" />
-        </View>
-      )}
+      </View>
     </BottomSheet>
   );
 }
@@ -406,7 +416,6 @@ function AccountTile({ account, selected, machineFilled, caption, onPick }: Acco
 }
 
 const useStyles = makeStyles((theme) => ({
-  scroll: { maxHeight: touchTarget.min * 9 },
   section: { gap: space.md },
   sectionLabel: {
     color: theme.textMuted,
@@ -468,10 +477,5 @@ const useStyles = makeStyles((theme) => ({
     borderBottomWidth: 2,
     borderColor: theme.accentText,
     transform: [{ rotate: "-45deg" }],
-  },
-  footer: {
-    borderTopWidth: 1,
-    borderTopColor: theme.border,
-    paddingTop: space.x3,
   },
 }));

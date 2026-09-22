@@ -529,7 +529,9 @@ export function TransferComposer({
         title={t("transactions.fee")}
         onDismiss={closeSheet}
       >
+        {/* A sheet with one field is opened to type into it. */}
         <TextField
+          autoFocus
           label={t("transactions.fee")}
           value={fee}
           onChangeText={onFeeChange}
@@ -566,6 +568,7 @@ export function TransferComposer({
       </BottomSheet>
       <BottomSheet visible={openSheet === "note"} title={t("common.note")} onDismiss={closeSheet}>
         <TextField
+          autoFocus
           label={t("common.note")}
           value={note}
           onChangeText={onNoteChange}

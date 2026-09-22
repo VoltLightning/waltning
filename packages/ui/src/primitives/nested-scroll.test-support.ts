@@ -39,3 +39,19 @@ export function expectContainsOverscroll(
     expect(style.getPropertyValue("overscroll-behavior-y")).not.toBe("contain");
   }
 }
+
+/**
+ * **A list in a sheet is scrolled by the sheet** (`BottomSheet`'s header):
+ * inside the body, and with nothing between the two that scrolls on its own.
+ * A nested vertical scroller took no touch on iOS, and one capped at nine rows
+ * left the rest of a list unreachable under the keyboard.
+ */
+export function expectScrolledByTheSheet(list: string): void {
+  const body = screen.getByTestId("bottom-sheet-body");
+  const node = screen.getByTestId(list);
+  expect(body.contains(node), `${list} is in the sheet's body`).toBe(true);
+  for (let at: HTMLElement | null = node; at !== null && at !== body; at = at.parentElement) {
+    const overflow = getComputedStyle(at).getPropertyValue("overflow-y");
+    expect(overflow === "auto" || overflow === "scroll", `${list} scrolls on its own`).toBe(false);
+  }
+}
