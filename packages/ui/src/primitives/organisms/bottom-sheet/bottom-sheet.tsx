@@ -225,18 +225,37 @@ export function BottomSheet({
     (event: LayoutChangeEvent) => setFooterHeight(event.nativeEvent.layout.height),
     [],
   );
-  // The tallest the body has been since it opened — `steady`'s floor.
+  /*
+    **`steady`'s floor is the whole sheet, not the body.** A picker that hides
+    its filter chips while it is searched loses the pinned row's height from
+    the handle, and holding only the body let the sheet drop by exactly that.
+    So the tallest *handle plus content* is remembered, and the body is given
+    whatever of it the handle no longer takes. The content is measured on its
+    own box, not the scroller's content size, which already includes the floor.
+  */
+  const [handleHeight, setHandleHeight] = useState(0);
+  const [contentHeight, setContentHeight] = useState(0);
   const [tallest, setTallest] = useState(0);
-  useEffect(() => {
-    if (!visible) setTallest(0);
-  }, [visible]);
-  const growTo = useCallback(
-    (_width: number, height: number) => setTallest((was) => (height > was ? height : was)),
+  const measureHandle = useCallback(
+    (event: LayoutChangeEvent) => setHandleHeight(event.nativeEvent.layout.height),
     [],
   );
+  const measureContent = useCallback(
+    (event: LayoutChangeEvent) => setContentHeight(event.nativeEvent.layout.height),
+    [],
+  );
+  useEffect(() => {
+    if (!visible) {
+      setTallest(0);
+      return;
+    }
+    if (handleHeight <= 0 || contentHeight <= 0) return;
+    const whole = handleHeight + contentHeight;
+    setTallest((was) => (whole > was ? whole : was));
+  }, [visible, handleHeight, contentHeight]);
   const holdHeight = useMemo(
-    () => (steady && tallest > 0 ? { minHeight: tallest } : null),
-    [steady, tallest],
+    () => (steady && tallest > handleHeight ? { minHeight: tallest - handleHeight } : null),
+    [steady, tallest, handleHeight],
   );
   const handleFocus = useCallback(() => setBackdropFocused(true), []);
   const handleBlur = useCallback(() => setBackdropFocused(false), []);
@@ -275,8 +294,18 @@ export function BottomSheet({
   );
 
   const parts = useMemo<SheetParts>(
-    () => ({ title, onDismiss, pinned, footer, clearBottom, handleRef, footerRef, measureFooter }),
-    [title, onDismiss, pinned, footer, clearBottom, measureFooter],
+    () => ({
+      title,
+      onDismiss,
+      pinned,
+      footer,
+      clearBottom,
+      handleRef,
+      footerRef,
+      measureFooter,
+      measureHandle,
+    }),
+    [title, onDismiss, pinned, footer, clearBottom, measureFooter, measureHandle],
   );
 
   if (!visible) return null;
@@ -353,7 +382,6 @@ export function BottomSheet({
                   style={containOverscroll}
                   contentContainerStyle={holdHeight}
                   onLayout={measureBody}
-                  onContentSizeChange={growTo}
                   keyboardShouldPersistTaps="handled"
                   showsVerticalScrollIndicator={false}
                 >
@@ -367,6 +395,7 @@ export function BottomSheet({
                     ref={contentRef}
                     testID="bottom-sheet-content"
                     collapsable={false}
+                    onLayout={measureContent}
                     style={[styles.bodyContent, clearBottom, underFooter]}
                   >
                     {children}
@@ -399,6 +428,7 @@ type SheetParts = {
   handleRef: RefObject<View | null>;
   footerRef: RefObject<View | null>;
   measureFooter: (event: LayoutChangeEvent) => void;
+  measureHandle: (event: LayoutChangeEvent) => void;
 };
 
 const SheetPartsContext = createContext<SheetParts | null>(null);
@@ -412,6 +442,7 @@ function SheetHandle() {
   return (
     <View
       ref={parts.handleRef}
+      onLayout={parts.measureHandle}
       testID="bottom-sheet"
       accessibilityViewIsModal
       style={styles.handleArea}
