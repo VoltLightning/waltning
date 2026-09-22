@@ -72,6 +72,12 @@ export type AmountProps = {
   kind?: AmountKind;
   /** Force a leading `+` on positives. Off by default; ledgers rarely want it. */
   signed?: boolean;
+  /**
+   * **The figure without its currency** — for a cell too small to carry one,
+   * where the currency is the whole grid's and said once around it: a
+   * calendar's day. Never where a reader could meet the figure alone.
+   */
+  bare?: boolean;
 };
 
 /**
@@ -127,6 +133,7 @@ export function Amount({
   emphasis = "default",
   kind = "auto",
   signed = false,
+  bare = false,
 }: AmountProps) {
   // `cmp` rather than inspecting the string: `-0.00000000` is not a negative
   // balance, and `startsWith("-")` says it is — showing a cleared account in
@@ -175,7 +182,9 @@ export function Amount({
     >
       {prefix}
       {figure}
-      <Text style={[styles.currency, onShell ? styles.shellCurrency : null]}> {currency}</Text>
+      {bare ? null : (
+        <Text style={[styles.currency, onShell ? styles.shellCurrency : null]}> {currency}</Text>
+      )}
     </Text>
   );
 }

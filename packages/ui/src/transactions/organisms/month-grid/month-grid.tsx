@@ -7,6 +7,12 @@
  * restated here. A grid that drew its own marks would be a second answer to
  * the same question, and the two would drift the first time either changed.
  *
+ * **The figure, not the mark, where a day has one** (S04, *Calendar*). A
+ * calendar is read for amounts — *what did the 14th cost* — so a day holding
+ * one currency draws its net in whole units where the strip draws a dot, and a
+ * heavy day is warmer too. A day with two currencies keeps the mark: it has no
+ * single figure.
+ *
  * **The weekday is a column heading, once.** It is the same word for every
  * cell in the column, and thirty repetitions of it is what the ribbon needs
  * (its days are not in columns) and a grid does not.
@@ -16,7 +22,8 @@
  * 1st belong to another month, and this grid does not draw that month.
  */
 
-import { memo, useCallback } from "react";
+import type * as money from "@waltning/core/money";
+import { memo, useCallback, useMemo } from "react";
 import { Text, View } from "react-native";
 import { text } from "../../../theme/fonts.ts";
 import { makeStyles } from "../../../theme/styles.ts";
@@ -43,6 +50,9 @@ export type GridDay = {
   direction: DayDirection;
   /** After today — reachable, and drawn quieter. */
   ahead: boolean;
+  /** The day's net, `null` where more than one currency was on it (`monthGrid`). */
+  net?: money.Money | null;
+  currency?: string | null;
 };
 
 /**
@@ -85,6 +95,8 @@ function GridCell({
   activity,
   direction,
   ahead,
+  net,
+  currency,
   current,
   today,
   label,
@@ -97,6 +109,13 @@ function GridCell({
   matches: number | undefined;
   onPickDay: (date: string) => void;
 }) {
+  const figure = useMemo(
+    () =>
+      activity === "none" || activity === "unread" || net === null || net === undefined || !currency
+        ? undefined
+        : { net, currency },
+    [activity, net, currency],
+  );
   const press = useCallback(() => onPickDay(date), [onPickDay, date]);
   return (
     <DayCell
@@ -107,6 +126,7 @@ function GridCell({
       current={current}
       today={today}
       {...(matches === undefined ? {} : { matches })}
+      figure={figure}
       accessibilityLabel={label}
       onPress={press}
     />
@@ -165,6 +185,8 @@ function MonthGridView({
                   activity={cell.activity}
                   direction={cell.direction}
                   ahead={cell.ahead}
+                  net={cell.net ?? null}
+                  currency={cell.currency ?? null}
                   current={cell.date === current}
                   today={cell.date === today}
                   label={labelFor(cell.date)}

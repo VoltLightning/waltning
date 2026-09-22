@@ -9,6 +9,7 @@
  */
 
 import type { Meta, StoryObj } from "@storybook/react-native-web-vite";
+import { toMoney } from "@waltning/core/money";
 import type { GridWeek } from "./month-grid";
 import { MonthGrid } from "./month-grid";
 
@@ -109,6 +110,33 @@ type Story = StoryObj<typeof meta>;
  * larger than an ordinary one.
  */
 export const PartWayThrough: Story = {};
+
+/** What each day's figure is, for `WithFigures` — the net `monthGrid` hands over. */
+const NETS: Readonly<Record<string, string>> = {
+  "2026-09-01": "-86.40",
+  "2026-09-03": "-2976.10",
+  "2026-09-04": "-17.00",
+  "2026-09-06": "-23.50",
+  "2026-09-08": "-7.20",
+  "2026-09-09": "7850.00",
+};
+
+/**
+ * **The calendar with its amounts** (S04, *Calendar*). Every day that moved
+ * draws its net, signed and in whole units, where the strip draws a dot; the
+ * heavy days are warmer. No cell names a currency — the month's is the grid's.
+ */
+export const WithFigures: Story = {
+  args: {
+    weeks: SEPTEMBER.map((week) =>
+      week.map((cell) =>
+        "blank" in cell || NETS[cell.date] === undefined
+          ? cell
+          : { ...cell, net: toMoney(NETS[cell.date] ?? "0"), currency: "PLN" },
+      ),
+    ),
+  },
+};
 
 /**
  * **A month before the ledger existed.** Every day is drawn and none is

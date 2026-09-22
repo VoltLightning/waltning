@@ -17,9 +17,11 @@
  * stops working silently the moment a parent hands down a fresh object.
  */
 
+import type * as money from "@waltning/core/money";
 import { memo } from "react";
 import { Pressable, Text, View } from "react-native";
 import Animated from "react-native-reanimated";
+import { Amount } from "../../../fx/atoms/amount/amount";
 import { useInteraction } from "../../../primitives/interaction.ts";
 import { usePressScale } from "../../../primitives/press-scale.ts";
 import { text } from "../../../theme/fonts.ts";
@@ -91,6 +93,13 @@ export type DayCellProps = {
    * nothing thirty times.
    */
   matches?: number | undefined;
+  /**
+   * **The day's net, drawn in place of its mark** — the calendar's cells,
+   * never the strip's (S04, *Calendar*): a calendar is read for amounts and a
+   * strip for rhythm. Whole units, no currency — the grid's is the month's.
+   * Absent where the day held more than one currency, and the mark stands.
+   */
+  figure?: { net: money.Money; currency: string } | undefined;
   /** The full date and what happened, for a reader who cannot see the number. */
   accessibilityLabel: string;
   onPress: () => void;
@@ -105,6 +114,7 @@ function DayCellView({
   today = false,
   ahead = false,
   matches,
+  figure,
   accessibilityLabel,
   onPress,
 }: DayCellProps) {
@@ -119,7 +129,15 @@ function DayCellView({
    * immediately, whatever the list is doing.
    */
   const press = usePressScale();
-  const fill = today ? styles.today : current ? styles.current : styles.plain;
+  // A heavy day, drawn with its figure, is warmer too — the figure says how
+  // much and the fill says *compared with the rest of the month*.
+  const fill = today
+    ? styles.today
+    : current
+      ? styles.current
+      : figure !== undefined && activity === "heavy"
+        ? styles.heavy
+        : styles.plain;
   // A day still ahead is quieter in ink, not in opacity. `opacity: 0.48` over
   // the whole cell put the number at 2.7:1 on the ground where 4.5 is
   // required — invisible in a ribbon holding two future days and impossible to
@@ -155,7 +173,20 @@ function DayCellView({
       >
         {weekday === undefined ? null : <Text style={sub}>{weekday}</Text>}
         <Text style={ink}>{day}</Text>
-        {matches === undefined ? (
+        {matches === undefined && figure !== undefined ? (
+          <View style={styles.figureBox}>
+            <Amount
+              value={figure.net}
+              currency={figure.currency}
+              decimals={0}
+              size="caption"
+              kind="net"
+              signed
+              {...(today ? { emphasis: "shell" as const } : {})}
+              bare
+            />
+          </View>
+        ) : matches === undefined ? (
           <View style={[styles.mark, ...markStyle(styles, activity, direction, today)]} />
         ) : matches === 0 ? (
           // **A quiet mark's own box, drawn in nothing.** `styles.mark` alone is
@@ -220,6 +251,9 @@ const useStyles = makeStyles((theme) => ({
   cellBare: { width: "100%", height: 46, gap: space.xs },
   plain: { backgroundColor: "transparent" },
   current: { backgroundColor: theme.accentFill },
+  heavy: { backgroundColor: theme.subtleFill },
+  /** The figure's own line, the height the mark and a count take. */
+  figureBox: { height: COUNT_BOX, justifyContent: "center" },
   today: { backgroundColor: theme.accent },
 
   // §2.6: never removed, never a colour change alone — a colour-only focus
