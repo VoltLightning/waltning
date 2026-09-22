@@ -60,6 +60,9 @@ export const ru: Messages = {
     edit: "Изменить",
     approve: "Принять",
     decline: "Отклонить",
+    formIncomplete: "Форма заполнена не до конца — проверьте отмеченные поля.",
+    required: "Обязательное поле",
+    chooseOne: "Выберите вариант",
   },
   accounts: {
     noneTitle: "Счетов пока нет",
@@ -267,6 +270,7 @@ export const ru: Messages = {
     lineDescription: "Описание",
     newLine: "Новая строка",
     total: "Итого",
+    linesUnbalanced: "Сумма позиций должна совпадать с суммой операции.",
     notFound: "Этой операции больше нет.",
     transfer: "Перевод",
     realized: "Фактический",

@@ -27,18 +27,21 @@ it("saves the chosen group", () => {
   expect(onSave).toHaveBeenCalledWith("household");
 });
 
-it("disables Save until a group is chosen", () => {
+it("asks for a group when Save is pressed without one", () => {
+  const onSave = vi.fn();
   render(
     <MoveCategorySheet
       visible
       categoryName="Groceries"
       groups={GROUPS}
-      onSave={vi.fn()}
+      onSave={onSave}
       onDismiss={vi.fn()}
     />,
   );
 
-  expect(screen.getByRole("button", { name: "Save" }).getAttribute("aria-disabled")).toBe("true");
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
+  expect(onSave).not.toHaveBeenCalled();
+  expect(screen.getByText("Choose one")).toBeDefined();
 });
 
 it("shows a cross-kind or cycle refusal inline", () => {

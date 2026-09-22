@@ -24,6 +24,7 @@ import { accountingDate } from "@waltning/core/date";
 import { id } from "@waltning/core/id";
 import { currencyCode, toMoney } from "@waltning/core/money";
 import { weekdayLabel } from "@waltning/ui/i18n/locales";
+import { FormAlertHost } from "@waltning/ui/primitives/form-alert-host";
 import { Alert } from "react-native";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -129,10 +130,22 @@ function fakeController(
   });
 }
 
+/**
+ * Save is pressable whatever the draft holds; pressed on one that is not
+ * ready, it raises the alert and saves nothing.
+ */
+function expectSaveRefused() {
+  fireEvent.click(screen.getByRole("button", { name: "Save expense" }));
+  expect(screen.getByText("The form isn't complete — check the highlighted fields.")).toBeDefined();
+}
+
 function withLedger(overrides: Parameters<typeof fakeController>[0] = {}) {
   return render(
     <LedgerProvider controller={fakeController(overrides)}>
-      <QuickAdd />
+      {/* The root layout's own host, so a refused Save's alert is drawn. */}
+      <FormAlertHost>
+        <QuickAdd />
+      </FormAlertHost>
     </LedgerProvider>,
   );
 }
@@ -172,12 +185,12 @@ beforeEach(() => {
 });
 
 describe("QuickAdd — the phone path (Dock + QuickAddComposer)", () => {
-  it("disables Save until an amount and an account are both present (S05 §9.2)", () => {
+  it("refuses Save until an amount and an account are both present (S05 §9.2)", () => {
     withLedger();
-    expect(screen.getByRole("button", { name: "Save expense" })).toHaveProperty("disabled", true);
+    expectSaveRefused();
 
     typeAmount("48.90");
-    expect(screen.getByRole("button", { name: "Save expense" })).toHaveProperty("disabled", true);
+    expectSaveRefused();
 
     pickCashAccount();
     expect(screen.getByRole("button", { name: "Save expense" })).toHaveProperty("disabled", false);
@@ -188,12 +201,12 @@ describe("QuickAdd — the phone path (Dock + QuickAddComposer)", () => {
    * after it, so an account chip alone was enough to enable Save on an amount
    * that was never finished.
    */
-  it("keeps Save disabled on a trailing separator with nothing typed after it (M1)", () => {
+  it("refuses Save on a trailing separator with nothing typed after it (M1)", () => {
     withLedger();
 
     typeAmount("48.");
     pickCashAccount();
-    expect(screen.getByRole("button", { name: "Save expense" })).toHaveProperty("disabled", true);
+    expectSaveRefused();
 
     typeAmount("48.90");
     expect(screen.getByRole("button", { name: "Save expense" })).toHaveProperty("disabled", false);
@@ -250,7 +263,7 @@ describe("QuickAdd — the phone path (Dock + QuickAddComposer)", () => {
    * read errors before this fix. Save must not let the draft reach the write
    * at all while the role is unresolved, not only render the refusal after.
    */
-  it("disables Save while a counterparty is picked with no role yet (SPEC.md §6.6)", () => {
+  it("refuses Save while a counterparty is picked with no role yet (SPEC.md §6.6)", () => {
     const createTransaction = vi.fn();
     withLedger({ createTransaction, counterparties: () => [COUNTERPARTY] });
 
@@ -263,7 +276,7 @@ describe("QuickAdd — the phone path (Dock + QuickAddComposer)", () => {
     fireEvent.click(screen.getByRole("button", { name: "Counterparty" }));
     fireEvent.click(screen.getByRole("radio", { name: "Corner Café" }));
 
-    expect(screen.getByRole("button", { name: "Save expense" })).toHaveProperty("disabled", true);
+    expectSaveRefused();
     expect(screen.getByText("Corner Café · role?")).toBeDefined();
     expect(createTransaction).not.toHaveBeenCalled();
   });
@@ -274,7 +287,7 @@ describe("QuickAdd — the phone path (Dock + QuickAddComposer)", () => {
    * picked; this composer used to let Save be tapped and only bounce
    * afterwards.
    */
-  it("disables Save and shows the needsRate caption the moment an uncapturable account is picked (SPEC.md §14.6)", () => {
+  it("refuses Save and shows the needsRate caption the moment an uncapturable account is picked (SPEC.md §14.6)", () => {
     const createTransaction = vi.fn();
     withLedger({ createTransaction, capturable: false });
 
@@ -284,7 +297,7 @@ describe("QuickAdd — the phone path (Dock + QuickAddComposer)", () => {
     expect(
       screen.getByText("PLN needs an exchange rate before a transaction can be recorded in it."),
     ).toBeDefined();
-    expect(screen.getByRole("button", { name: "Save expense" })).toHaveProperty("disabled", true);
+    expectSaveRefused();
     // The typed amount stays put — nothing here empties the draft.
     expect(screen.getByLabelText("How much?")).toHaveProperty("value", "48.90");
     expect(createTransaction).not.toHaveBeenCalled();

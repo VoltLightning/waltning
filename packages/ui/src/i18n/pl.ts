@@ -68,6 +68,9 @@ export const pl: Messages = {
     edit: "Edytuj",
     approve: "Zatwierdź",
     decline: "Odrzuć",
+    formIncomplete: "Formularz nie jest kompletny — sprawdź zaznaczone pola.",
+    required: "Wymagane",
+    chooseOne: "Wybierz jedną opcję",
   },
   accounts: {
     noneTitle: "Nie ma jeszcze kont",
@@ -280,6 +283,7 @@ export const pl: Messages = {
     lineDescription: "Opis",
     newLine: "Nowa pozycja",
     total: "Razem",
+    linesUnbalanced: "Pozycje muszą sumować się do kwoty transakcji.",
     notFound: "Ta transakcja już nie istnieje.",
     transfer: "Przelew",
     realized: "Zrealizowany",

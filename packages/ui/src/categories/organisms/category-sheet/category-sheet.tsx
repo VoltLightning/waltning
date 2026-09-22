@@ -58,11 +58,13 @@ import { Button } from "../../../primitives/atoms/button/button";
 import { PressableScaled } from "../../../primitives/atoms/pressable-scaled/pressable-scaled";
 import { Tag } from "../../../primitives/atoms/tag";
 import { TextField } from "../../../primitives/atoms/text-field/text-field";
+import { FieldAnchor } from "../../../primitives/field-anchor";
 import { useInteraction } from "../../../primitives/interaction.ts";
 import { categoryTintFor } from "../../../primitives/monogram.ts";
 import { horizontalScrollProps } from "../../../primitives/nested-scroll.ts";
 import { BottomSheet } from "../../../primitives/organisms/bottom-sheet/bottom-sheet";
 import { usePressScale } from "../../../primitives/press-scale.ts";
+import { useSubmitCheck } from "../../../primitives/use-submit-check.ts";
 import { EmptyState } from "../../../states/organisms/empty-state/empty-state";
 import { focusBorder } from "../../../theme/focus.ts";
 import { text, textCap } from "../../../theme/fonts.ts";
@@ -797,7 +799,14 @@ function CreateRow({
   // A top-level category is a real answer where no group exists (R1, and
   // `create_category`'s own nullable `parentId`); where groups do exist, the
   // capture sheet still asks which one — §6's own rule for creating here.
-  const canSave = name.trim() !== "" && (groupId !== null || groups.length === 0);
+  // Drawn order: the group chooser, then the name.
+  const check = useSubmitCheck({
+    group: !groupLocked && groupId === null && groups.length > 0 && t("common.chooseOne"),
+    name: name.trim() === "" && t("common.required"),
+  });
+  const handleSave = useCallback(() => check.submit(onSave), [check, onSave]);
+  const groupError = check.errorFor("group");
+  const nameError = check.errorFor("name") ?? error;
   return (
     <View style={styles.createRow}>
       {groupLocked ? null : (
@@ -813,7 +822,7 @@ function CreateRow({
           {groups.length === 0 ? (
             <Text style={styles.noGroups}>{t("categories.noGroupsYet")}</Text>
           ) : (
-            <>
+            <FieldAnchor check={check} field="group" style={styles.createRow}>
               <Text style={styles.label}>{t("categories.chooseGroup")}</Text>
               <ScrollView
                 horizontal
@@ -831,27 +840,33 @@ function CreateRow({
                   />
                 ))}
               </ScrollView>
-            </>
+              {groupError === undefined ? null : (
+                <Text style={styles.fieldError}>{groupError}</Text>
+              )}
+            </FieldAnchor>
           )}
         </>
       )}
       {groupLocked && lockedGroup ? <Text style={styles.label}>{lockedGroup.name}</Text> : null}
-      <TextField
-        label={t("common.name")}
-        value={name}
-        onChangeText={onNameChange}
-        {...(error === undefined ? {} : { error })}
-        autoFocus
-      />
+      <FieldAnchor check={check} field="name">
+        <TextField
+          label={t("common.name")}
+          value={name}
+          onChangeText={onNameChange}
+          {...(nameError === undefined ? {} : { error: nameError })}
+          autoFocus
+        />
+      </FieldAnchor>
       <View style={styles.createActions}>
         <Button label={t("common.cancel")} onPress={onCancel} variant="ghost" />
-        <Button label={t("common.save")} onPress={onSave} variant="primary" disabled={!canSave} />
+        <Button label={t("common.save")} onPress={handleSave} variant="primary" />
       </View>
     </View>
   );
 }
 
 const useStyles = makeStyles((theme) => ({
+  fieldError: { color: theme.dangerText, ...text.ui("caption") },
   /** *You used these last* and the *All* line under it — the grid's own rhythm. */
   recent: { gap: space.md },
   sectionKicker: {

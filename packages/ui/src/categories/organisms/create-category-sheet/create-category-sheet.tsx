@@ -26,7 +26,9 @@ import { Button } from "../../../primitives/atoms/button/button";
 import { RadioGroup } from "../../../primitives/atoms/radio/radio";
 import { Select, type SelectOption } from "../../../primitives/atoms/select/select";
 import { TextField } from "../../../primitives/atoms/text-field/text-field";
+import { FieldAnchor } from "../../../primitives/field-anchor";
 import { BottomSheet } from "../../../primitives/organisms/bottom-sheet/bottom-sheet";
+import { useSubmitCheck } from "../../../primitives/use-submit-check.ts";
 import { text } from "../../../theme/fonts.ts";
 import { makeStyles } from "../../../theme/styles.ts";
 import { space } from "../../../tokens.ts";
@@ -61,6 +63,8 @@ export function CreateCategorySheet({
   const [name, setName] = useState("");
   const [kind, setKind] = useState<"income" | "expense">("expense");
   const [parentId, setParentId] = useState<string | null>(null);
+  const check = useSubmitCheck({ name: name.trim() === "" && t("common.required") });
+  const resetCheck = check.reset;
 
   // Re-seeds on every open — one instance is reused across every create, and
   // a `useState` initializer alone would keep the last attempt's draft.
@@ -69,8 +73,9 @@ export function CreateCategorySheet({
       setName("");
       setKind("expense");
       setParentId(null);
+      resetCheck();
     }
-  }, [visible]);
+  }, [visible, resetCheck]);
 
   const kindOptions = useMemo(
     (): readonly [
@@ -99,24 +104,28 @@ export function CreateCategorySheet({
   }, []);
 
   const trimmed = name.trim();
-  const handleSave = useCallback(
+  const save = useCallback(
     () => onSave({ name: trimmed, kind, parentId }),
     [kind, onSave, parentId, trimmed],
   );
+  const handleSave = useCallback(() => check.submit(save), [check, save]);
+  const nameError = check.errorFor("name") ?? error;
 
   if (!visible) return null;
 
   return (
     <BottomSheet visible={visible} title={t("categories.newCategory")} onDismiss={onDismiss}>
       <View style={styles.body}>
-        <TextField
-          label={t("common.name")}
-          value={name}
-          onChangeText={setName}
-          maxLength={120}
-          {...(error === undefined ? {} : { error })}
-          autoFocus
-        />
+        <FieldAnchor check={check} field="name">
+          <TextField
+            label={t("common.name")}
+            value={name}
+            onChangeText={setName}
+            maxLength={120}
+            {...(nameError === undefined ? {} : { error: nameError })}
+            autoFocus
+          />
+        </FieldAnchor>
         <RadioGroup
           label={t("categories.kind")}
           options={kindOptions}
@@ -143,12 +152,7 @@ export function CreateCategorySheet({
             searchable
           />
         )}
-        <Button
-          label={t("common.save")}
-          onPress={handleSave}
-          variant="primary"
-          disabled={trimmed === ""}
-        />
+        <Button label={t("common.save")} onPress={handleSave} variant="primary" />
       </View>
     </BottomSheet>
   );

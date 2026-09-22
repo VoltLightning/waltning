@@ -30,8 +30,10 @@ import { useT } from "../../../i18n/provider";
 import { Button } from "../../../primitives/atoms/button/button";
 import { DateField } from "../../../primitives/atoms/date-field/date-field";
 import { TextField } from "../../../primitives/atoms/text-field/text-field";
+import { FieldAnchor } from "../../../primitives/field-anchor";
 import type { FieldErrorMap } from "../../../primitives/field-errors.ts";
 import { BottomSheet } from "../../../primitives/organisms/bottom-sheet/bottom-sheet";
+import { useSubmitCheck } from "../../../primitives/use-submit-check.ts";
 import { text } from "../../../theme/fonts.ts";
 import { makeStyles } from "../../../theme/styles.ts";
 import { space } from "../../../tokens.ts";
@@ -90,10 +92,16 @@ export function ReconcileSheet({
         ? "spend"
         : "income";
 
-  const handleSave = useCallback(() => {
+  const check = useSubmitCheck({
+    observed: observed === null && t("common.required"),
+    asOf: dateInvalid && t("accounts.openingDateInvalid"),
+  });
+  const save = useCallback(() => {
     if (observed === null) return;
     onSave({ observedBalance: observed, asOf, note });
   }, [asOf, note, observed, onSave]);
+  const handleSave = useCallback(() => check.submit(save), [check, save]);
+  const observedShown = check.errorFor("observed") ?? observedError;
 
   return (
     <BottomSheet visible={visible} title={t("accounts.reconcileTitle")} onDismiss={onDismiss}>
@@ -115,12 +123,14 @@ export function ReconcileSheet({
           <Amount value={computedBalance} currency={currency} decimals={decimals} size="small" />
         </View>
 
-        <AmountField
-          label={t("accounts.observed")}
-          onChange={setObserved}
-          currency={currency}
-          {...(observedError === undefined ? {} : { error: observedError })}
-        />
+        <FieldAnchor check={check} field="observed">
+          <AmountField
+            label={t("accounts.observed")}
+            onChange={setObserved}
+            currency={currency}
+            {...(observedShown === undefined ? {} : { error: observedShown })}
+          />
+        </FieldAnchor>
 
         <View style={styles.row}>
           <Text style={styles.label}>{t("accounts.difference")}</Text>
@@ -138,13 +148,15 @@ export function ReconcileSheet({
           )}
         </View>
 
-        <DateField
-          label={t("accounts.asOf")}
-          value={asOf}
-          onChange={onAsOfChange}
-          today={today}
-          {...(dateInvalid ? { error: t("accounts.openingDateInvalid") } : {})}
-        />
+        <FieldAnchor check={check} field="asOf">
+          <DateField
+            label={t("accounts.asOf")}
+            value={asOf}
+            onChange={onAsOfChange}
+            today={today}
+            {...(dateInvalid ? { error: t("accounts.openingDateInvalid") } : {})}
+          />
+        </FieldAnchor>
 
         <TextField
           label={t("common.note")}
@@ -156,12 +168,7 @@ export function ReconcileSheet({
 
         <View style={styles.actions}>
           <Button label={t("common.cancel")} onPress={onDismiss} variant="ghost" />
-          <Button
-            label={t("common.save")}
-            onPress={handleSave}
-            disabled={observed === null || dateInvalid}
-            variant="primary"
-          />
+          <Button label={t("common.save")} onPress={handleSave} variant="primary" />
         </View>
       </View>
     </BottomSheet>

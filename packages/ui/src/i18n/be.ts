@@ -58,6 +58,9 @@ export const be: Messages = {
     edit: "Змяніць",
     approve: "Прыняць",
     decline: "Адхіліць",
+    formIncomplete: "Форма запоўнена не да канца — праверце пазначаныя палі.",
+    required: "Абавязковае поле",
+    chooseOne: "Выберыце варыянт",
   },
   accounts: {
     noneTitle: "Рахункаў пакуль няма",
@@ -265,6 +268,7 @@ export const be: Messages = {
     lineDescription: "Апісанне",
     newLine: "Новы радок",
     total: "Разам",
+    linesUnbalanced: "Сума пазіцый павінна супадаць з сумай аперацыі.",
     notFound: "Гэтай аперацыі больш няма.",
     transfer: "Перавод",
     realized: "Фактычны",

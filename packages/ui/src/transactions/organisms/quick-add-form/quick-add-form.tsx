@@ -16,7 +16,9 @@ import {
 import { Select } from "../../../primitives/atoms/select/select";
 import { TextField } from "../../../primitives/atoms/text-field/text-field";
 import { Toggle } from "../../../primitives/atoms/toggle/toggle";
+import { FieldAnchor } from "../../../primitives/field-anchor";
 import type { FieldErrorMap } from "../../../primitives/field-errors.ts";
+import { useSubmitCheck } from "../../../primitives/use-submit-check.ts";
 import { text } from "../../../theme/fonts.ts";
 import { makeStyles } from "../../../theme/styles.ts";
 import { space } from "../../../tokens.ts";
@@ -190,7 +192,15 @@ export function QuickAddForm({
   const handleRoleChange = useCallback((next: string) => {
     setCounterpartyRole(isCounterpartyRole(next) ? next : null);
   }, []);
-  const handleSave = useCallback(() => {
+  // Drawn order: the figure, the account, then the date under *More*.
+  const check = useSubmitCheck({
+    amount: !positive && t("common.required"),
+    account: !accountId
+      ? t("common.chooseOne")
+      : blocked && t("transactions.needsRate", { currency: selected.currency }),
+    date: !dateValid && t("transactions.invalidDate"),
+  });
+  const save = useCallback(() => {
     if (!accountId || blocked || !positive || !dateValid) return;
     onSave({
       type,
@@ -218,7 +228,13 @@ export function QuickAddForm({
     positive,
     type,
   ]);
-  const accountError = fieldErrors?.byField["accountId"]?.[0];
+  const handleSave = useCallback(() => {
+    // The date lives under *More*: open it, so the field scrolled to is drawn.
+    if (!dateValid) setMoreOpen(true);
+    check.submit(save);
+  }, [check, dateValid, save]);
+  const accountError = check.errorFor("account") ?? fieldErrors?.byField["accountId"]?.[0];
+  const amountError = check.errorFor("amount") ?? fieldErrors?.byField["amountOriginal"]?.[0];
   const categoryError = fieldErrors?.byField["categoryId"]?.[0];
 
   const counterpartyOptions = counterparties.map((counterparty) => ({
@@ -256,29 +272,33 @@ export function QuickAddForm({
       {/* No account chosen yet, so no currency is known — and a placeholder
           currency here would be a figure labelled in something the money is
           not. The field carries the label alone until one is picked. */}
-      <AmountField
-        label={t("transactions.amount")}
-        {...(selected ? { currency: selected.currency } : {})}
-        initial={initialAmount}
-        onChange={handleAmountChange}
-        error={fieldErrors?.byField["amountOriginal"]?.[0]}
-      />
-      <Chip
-        placeholder={t("transactions.account")}
-        value={selected?.name}
-        onPress={handleOpenAccountPicker}
-        machineFilled={false}
-      />
-      {/* Under the picker, not under Save: the reason belongs to the choice
+      <FieldAnchor check={check} field="amount">
+        <AmountField
+          label={t("transactions.amount")}
+          {...(selected ? { currency: selected.currency } : {})}
+          initial={initialAmount}
+          onChange={handleAmountChange}
+          error={amountError}
+        />
+      </FieldAnchor>
+      <FieldAnchor check={check} field="account" style={styles.root}>
+        <Chip
+          placeholder={t("transactions.account")}
+          value={selected?.name}
+          onPress={handleOpenAccountPicker}
+          machineFilled={false}
+        />
+        {/* Under the picker, not under Save: the reason belongs to the choice
           that caused it, and Save being dim is the consequence rather than the
           thing to explain. */}
-      {blocked ? (
-        <Text style={styles.blocked}>
-          {t("transactions.needsRate", { currency: selected.currency })}
-        </Text>
-      ) : accountError === undefined ? null : (
-        <Text style={styles.fieldError}>{accountError}</Text>
-      )}
+        {blocked ? (
+          <Text style={styles.blocked}>
+            {t("transactions.needsRate", { currency: selected.currency })}
+          </Text>
+        ) : accountError === undefined ? null : (
+          <Text style={styles.fieldError}>{accountError}</Text>
+        )}
+      </FieldAnchor>
 
       <SegmentControl segments={typeSegments} value={type} onChange={handleTypeChange} />
       <Chip
@@ -292,13 +312,15 @@ export function QuickAddForm({
 
       {moreOpen ? (
         <View style={styles.more}>
-          <DateField
-            label={t("transactions.date")}
-            value={date}
-            onChange={handleDateChange}
-            today={today}
-            {...(dateValid ? {} : { error: t("transactions.invalidDate") })}
-          />
+          <FieldAnchor check={check} field="date">
+            <DateField
+              label={t("transactions.date")}
+              value={date}
+              onChange={handleDateChange}
+              today={today}
+              {...(dateValid ? {} : { error: t("transactions.invalidDate") })}
+            />
+          </FieldAnchor>
           <TextField
             label={t("common.note")}
             value={note}
@@ -336,12 +358,7 @@ export function QuickAddForm({
 
       <View style={styles.actions}>
         <Button label={t("common.cancel")} onPress={onCancel} variant="ghost" />
-        <Button
-          label={t("common.save")}
-          onPress={handleSave}
-          disabled={!positive || !accountId || blocked || !dateValid}
-          variant="primary"
-        />
+        <Button label={t("common.save")} onPress={handleSave} variant="primary" />
       </View>
     </View>
   );

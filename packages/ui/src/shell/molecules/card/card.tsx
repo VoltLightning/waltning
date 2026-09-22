@@ -105,6 +105,7 @@ import { useRef } from "react";
 import { Text, View } from "react-native";
 import Animated, { type useAnimatedScrollHandler } from "react-native-reanimated";
 import { Tag } from "../../../primitives/atoms/tag";
+import { FieldRevealProvider } from "../../../primitives/field-reveal";
 import {
   CONTENT_TOP_MARK_PROPS,
   KEYBOARD_SCROLL_PROPS,
@@ -248,7 +249,10 @@ export function GroundPanel({
         ref={scroller}
       >
         <View ref={contentTop} {...CONTENT_TOP_MARK_PROPS} />
-        {children}
+        {/* A refused submit on this page scrolls here to its first broken field. */}
+        <FieldRevealProvider scroller={scroller} contentTop={contentTop}>
+          {children}
+        </FieldRevealProvider>
       </Animated.ScrollView>
     </View>
   );

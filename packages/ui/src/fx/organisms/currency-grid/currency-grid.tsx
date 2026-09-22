@@ -40,9 +40,8 @@ export type CurrencyGridItem = { code: CurrencyCode; name: string; symbol: strin
 export type CurrencyGridProps = {
   /**
    * Every currency the form offers. Empty renders nothing — `create-account-form.tsx`
-   * has no dedicated message for that state today either; `currency` stays
-   * `null` and Save stays disabled, silently. A real empty state is a
-   * follow-up, not invented here.
+   * has no dedicated message for that state; `currency` stays `null`, and
+   * Save pressed says *Choose one* under a grid with nothing in it.
    */
   currencies: readonly CurrencyGridItem[];
   /** The current pick, or `null` before one is made. */

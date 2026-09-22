@@ -51,6 +51,8 @@ import { Text, View } from "react-native";
 import { useLocale, useT } from "../../../i18n/provider";
 import { Button } from "../../../primitives/atoms/button/button";
 import { RateField } from "../../../primitives/atoms/rate-field/rate-field";
+import { FieldAnchor } from "../../../primitives/field-anchor";
+import { useSubmitCheck } from "../../../primitives/use-submit-check.ts";
 import { text } from "../../../theme/fonts.ts";
 import { makeStyles } from "../../../theme/styles.ts";
 import { space } from "../../../tokens.ts";
@@ -124,7 +126,7 @@ export function RateEditor({
     return { totalDays, absent, carried, manual, synced };
   }, [from, to, existingRows]);
 
-  const handlePress = useCallback(() => {
+  const press = useCallback(() => {
     if (counts.manual > 0 && !confirming) {
       setConfirming(true);
       return;
@@ -138,17 +140,27 @@ export function RateEditor({
   // the contract behind `onSubmit` deserves the same refusal here that a
   // typed zero gets in the field (`fx.ratePositive`'s own reasoning).
   const rangeTooLong = counts.totalDays > MAX_RANGE_DAYS;
-  const canSubmit =
-    rate !== "" && !disabled && !rangeTooLong && money.cmp(money.toMoney(rate), money.ZERO) > 0;
+  const check = useSubmitCheck({
+    rate:
+      rate === ""
+        ? t("common.required")
+        : money.cmp(money.toMoney(rate), money.ZERO) <= 0 && t("fx.ratePositive"),
+    range: rangeTooLong && t("fx.rateEditorRangeTooLong", { max: String(MAX_RANGE_DAYS) }),
+  });
+  const handlePress = useCallback(() => check.submit(press), [check, press]);
+  const rateError = check.errorFor("rate");
 
   return (
     <View style={styles.root}>
-      <RateField
-        label={t("fx.rateEditorRateLabel", { quote, base })}
-        value={rate}
-        editable
-        onChange={onRateChange}
-      />
+      <FieldAnchor check={check} field="rate">
+        <RateField
+          label={t("fx.rateEditorRateLabel", { quote, base })}
+          value={rate}
+          editable
+          onChange={onRateChange}
+          {...(rateError === undefined ? {} : { error: rateError })}
+        />
+      </FieldAnchor>
 
       <View style={styles.summary}>
         <Text style={styles.summaryLine}>
@@ -165,11 +177,14 @@ export function RateEditor({
 
       {error === undefined ? null : <Text style={styles.warning}>{error}</Text>}
 
-      {rangeTooLong ? (
-        <Text style={styles.warning}>
-          {t("fx.rateEditorRangeTooLong", { max: String(MAX_RANGE_DAYS) })}
-        </Text>
-      ) : null}
+      {/* Said from the start: the range was chosen before this opened. */}
+      <FieldAnchor check={check} field="range">
+        {rangeTooLong ? (
+          <Text style={styles.warning}>
+            {t("fx.rateEditorRangeTooLong", { max: String(MAX_RANGE_DAYS) })}
+          </Text>
+        ) : null}
+      </FieldAnchor>
 
       {confirming ? (
         <Text style={styles.warning}>
@@ -189,7 +204,7 @@ export function RateEditor({
         <Button
           label={confirming ? t("fx.rateEditorConfirmSubmit") : t("fx.rateEditorSubmit")}
           onPress={handlePress}
-          disabled={!canSubmit}
+          disabled={disabled}
           variant="primary"
         />
       </View>

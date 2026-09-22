@@ -45,7 +45,9 @@ import { RadioGroup } from "../../../primitives/atoms/radio/radio";
 import { Select } from "../../../primitives/atoms/select/select";
 import { TextField } from "../../../primitives/atoms/text-field/text-field";
 import { Toggle } from "../../../primitives/atoms/toggle/toggle";
+import { FieldAnchor } from "../../../primitives/field-anchor";
 import type { FieldErrorMap } from "../../../primitives/field-errors.ts";
+import { useSubmitCheck } from "../../../primitives/use-submit-check.ts";
 import { text } from "../../../theme/fonts.ts";
 import { makeStyles } from "../../../theme/styles.ts";
 import { space } from "../../../tokens.ts";
@@ -241,7 +243,10 @@ export function AccountEditor({
     [],
   );
   const handleStartCreatingGroup = useCallback(() => setCreatingGroup(true), []);
-  const handleConfirmNewGroup = useCallback(() => {
+  const groupCheck = useSubmitCheck({
+    groupName: newGroupName.trim() === "" && t("common.required"),
+  });
+  const confirmNewGroup = useCallback(() => {
     const trimmedGroupName = newGroupName.trim();
     if (!trimmedGroupName) return;
     const id = onCreateGroup(trimmedGroupName);
@@ -250,14 +255,26 @@ export function AccountEditor({
     setCreatingGroup(false);
     setNewGroupName("");
   }, [newGroupName, onCreateGroup]);
+  const handleConfirmNewGroup = useCallback(
+    () => groupCheck.submit(confirmNewGroup),
+    [groupCheck, confirmNewGroup],
+  );
 
+  // **Nothing changed stays disabled** — that is not a mistake to point at,
+  // and a Save that saves nothing has nothing to say.
   const patchEmpty = Object.keys(patch).length === 0;
-  const handleSave = useCallback(() => {
+  const check = useSubmitCheck({
+    name: trimmed === "" && t("common.required"),
+    openingDate: dateInvalid && t("accounts.openingDateInvalid"),
+  });
+  const save = useCallback(() => {
     if (!trimmed || dateInvalid || patchEmpty) return;
     onSave(patch);
   }, [dateInvalid, onSave, patch, patchEmpty, trimmed]);
+  const handleSave = useCallback(() => check.submit(save), [check, save]);
+  const groupNameError = groupCheck.errorFor("groupName");
 
-  const nameError = fieldErrors?.byField["name"]?.[0];
+  const nameError = check.errorFor("name") ?? fieldErrors?.byField["name"]?.[0];
   // `update_account`'s scale refusal ("PLN holds 2 decimal places — this
   // amount has more") is about this field and nothing else; under *Could not
   // save* it read as a defect of the form.
@@ -276,13 +293,15 @@ export function AccountEditor({
         </View>
       ) : null}
 
-      <TextField
-        label={t("common.name")}
-        value={name}
-        onChangeText={setName}
-        maxLength={120}
-        {...(nameError === undefined ? {} : { error: nameError })}
-      />
+      <FieldAnchor check={check} field="name">
+        <TextField
+          label={t("common.name")}
+          value={name}
+          onChangeText={setName}
+          maxLength={120}
+          {...(nameError === undefined ? {} : { error: nameError })}
+        />
+      </FieldAnchor>
 
       <View style={styles.currencyRow}>
         <Text style={styles.label}>{t("accounts.currency")}</Text>
@@ -324,14 +343,16 @@ export function AccountEditor({
         currency={account.currency}
         {...(openingBalanceError === undefined ? {} : { error: openingBalanceError })}
       />
-      <DateField
-        label={t("accounts.openingDate")}
-        value={openingDateText}
-        onChange={setOpeningDateText}
-        today={today}
-        hint={t("accounts.openingDateHint")}
-        {...(dateInvalid ? { error: t("accounts.openingDateInvalid") } : {})}
-      />
+      <FieldAnchor check={check} field="openingDate">
+        <DateField
+          label={t("accounts.openingDate")}
+          value={openingDateText}
+          onChange={setOpeningDateText}
+          today={today}
+          hint={t("accounts.openingDateHint")}
+          {...(dateInvalid ? { error: t("accounts.openingDateInvalid") } : {})}
+        />
+      </FieldAnchor>
       <TextField
         label={t("common.memo")}
         value={memo}
@@ -349,16 +370,18 @@ export function AccountEditor({
         />
         {creatingGroup ? (
           <View style={styles.newGroupRow}>
-            <TextField
-              label={t("common.name")}
-              value={newGroupName}
-              onChangeText={setNewGroupName}
-              maxLength={120}
-            />
+            <FieldAnchor check={groupCheck} field="groupName">
+              <TextField
+                label={t("common.name")}
+                value={newGroupName}
+                onChangeText={setNewGroupName}
+                maxLength={120}
+                {...(groupNameError === undefined ? {} : { error: groupNameError })}
+              />
+            </FieldAnchor>
             <Button
               label={t("accounts.addGroup")}
               onPress={handleConfirmNewGroup}
-              disabled={!newGroupName.trim()}
               variant="secondary"
             />
           </View>
@@ -385,7 +408,7 @@ export function AccountEditor({
         <Button
           label={t("common.save")}
           onPress={handleSave}
-          disabled={!trimmed || dateInvalid || patchEmpty}
+          disabled={patchEmpty}
           variant="primary"
         />
       </View>

@@ -207,11 +207,12 @@ describe("J16 — move money", () => {
     expect(screen.getByLabelText("Destination amount")).toHaveProperty("value", "25.00");
 
     // §9.1 — a fee with more separators than one is unparsable outright;
-    // Save is correctly disabled and the field states so (not R4 H1-r4 —
-    // see the file header).
+    // the field states so, and Move money pressed refuses rather than moving
+    // (not R4 H1-r4 — see the file header).
     typeFee("1,234.56");
-    expect(screen.getByRole("button", { name: "Move money" })).toHaveProperty("disabled", true);
     expect(screen.getByText("Enter a number, or leave it blank.")).toBeDefined();
+    fireEvent.click(screen.getByRole("button", { name: "Move money" }));
+    expect(screen.getByRole("button", { name: "Move money" })).toBeDefined();
 
     // R4 H1-r4 — a fee that parses cleanly but carries more decimal places
     // than the source account's own currency (PLN, 2dp) is not refused.
@@ -230,7 +231,6 @@ describe("J16 — move money", () => {
     // simply unparsable, same as any other malformed fee.
     typeFee("");
     typeFee("a");
-    expect(screen.getByRole("button", { name: "Move money" })).toHaveProperty("disabled", true);
     expect(screen.getByText("Enter a number, or leave it blank.")).toBeDefined();
 
     // A clean, valid transfer.

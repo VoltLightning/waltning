@@ -103,6 +103,9 @@ export const en = {
     /** `05` §5.3's own pair — the desk table's batch-categorise confirm reuses them (DESK3). */
     approve: "Approve",
     decline: "Decline",
+    formIncomplete: "The form isn't complete — check the highlighted fields.",
+    required: "Required",
+    chooseOne: "Choose one",
   },
   accounts: {
     /**
@@ -563,6 +566,7 @@ export const en = {
     /** A line's own row, before it has a description — distinct from the `lineDescription` field label its editor opens with. */
     newLine: "New line",
     total: "Total",
+    linesUnbalanced: "The lines must add up to the transaction's total.",
     /** §6.9: every read path filters `deleted_at` — a soft-deleted row answers this, not a crash. */
     notFound: "This transaction no longer exists.",
     /* ── E5 · S14 settle sheet and S31 transfer ─────────────────────────── */

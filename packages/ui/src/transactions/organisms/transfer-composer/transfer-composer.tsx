@@ -31,7 +31,7 @@
 
 import { accountingDate, isAccountingDate } from "@waltning/core/date";
 import * as money from "@waltning/core/money";
-import { useCallback, useState } from "react";
+import { type ReactNode, useCallback, useState } from "react";
 import { Text, View } from "react-native";
 import { Amount } from "../../../fx/atoms/amount/amount";
 import { CurrencyMark } from "../../../fx/currency-marks";
@@ -43,10 +43,12 @@ import { DateField } from "../../../primitives/atoms/date-field/date-field";
 import { IconButton } from "../../../primitives/atoms/icon-button/icon-button";
 import { Tag } from "../../../primitives/atoms/tag";
 import { TextField } from "../../../primitives/atoms/text-field/text-field";
+import { FieldAnchor } from "../../../primitives/field-anchor";
 import type { FieldErrorMap } from "../../../primitives/field-errors.ts";
 import { DatePicker } from "../../../primitives/molecules/date-picker/date-picker";
 import { BottomSheet } from "../../../primitives/organisms/bottom-sheet/bottom-sheet";
 import { useBreakpoint } from "../../../primitives/use-breakpoint.ts";
+import type { SubmitCheck } from "../../../primitives/use-submit-check.ts";
 import { ArrowsLeftRightIcon } from "../../../shell/phosphor";
 import { Banner } from "../../../states/molecules/banner/banner";
 import { text } from "../../../theme/fonts.ts";
@@ -118,6 +120,11 @@ export type TransferComposerProps = {
 
   fieldErrors?: FieldErrorMap;
   /**
+   * The screen's `useSubmitCheck` over what a transfer cannot be saved
+   * without — this component draws those fields, so it holds the anchors.
+   */
+  check?: SubmitCheck<TransferCheckField>;
+  /**
    * §14.6's way out, the same one `QuickAddComposer` carries: one refusal,
    * one treatment. The screen owns the route (`architecture/11` — this
    * package names no router), so a caller with nowhere to send a person
@@ -127,6 +134,27 @@ export type TransferComposerProps = {
 };
 
 type OpenSheet = "fee" | "date" | "note" | null;
+
+/** The fields a transfer cannot be saved without, in drawn order. */
+export type TransferCheckField = "amount" | "from" | "to" | "fee" | "toAmount";
+
+/** A `FieldAnchor` when the screen passed a check, the field alone when it did not. */
+function Anchored({
+  check,
+  field,
+  children,
+}: {
+  check: SubmitCheck<TransferCheckField> | undefined;
+  field: TransferCheckField;
+  children: ReactNode;
+}) {
+  if (check === undefined) return <>{children}</>;
+  return (
+    <FieldAnchor check={check} field={field}>
+      {children}
+    </FieldAnchor>
+  );
+}
 
 export function TransferComposer({
   accounts,
@@ -148,6 +176,7 @@ export function TransferComposer({
   note,
   onNoteChange,
   fieldErrors,
+  check,
   onSetRate,
 }: TransferComposerProps) {
   const t = useT();
@@ -244,9 +273,9 @@ export function TransferComposer({
 
   const feeError =
     fieldErrors?.byField["fee"]?.[0] ?? (feeUnparsable ? t("transactions.feeInvalid") : undefined);
-  const toAccountError = fieldErrors?.byField["toAccountId"]?.[0];
-  const amountError = fieldErrors?.byField["amountOriginal"]?.[0];
-  const toAmountError = fieldErrors?.byField["toAmount"]?.[0];
+  const toAccountError = check?.errorFor("to") ?? fieldErrors?.byField["toAccountId"]?.[0];
+  const amountError = check?.errorFor("amount") ?? fieldErrors?.byField["amountOriginal"]?.[0];
+  const toAmountError = check?.errorFor("toAmount") ?? fieldErrors?.byField["toAmount"]?.[0];
   const dateError = fieldErrors?.byField["date"]?.[0];
   // §14.6 — declined before the write, with the currency named: the
   // controller refuses `create_transaction` on `accountId` (the *from* leg)
@@ -260,7 +289,10 @@ export function TransferComposer({
   // L2 — the controller's own refusal carries the same `needsRate` sentence
   // the banner states; one fact, stated once, on the half that carries the
   // way out.
-  const accountIdError = rawAccountIdError === fromNeedsRate ? undefined : rawAccountIdError;
+  const checkedFrom = check?.errorFor("from");
+  const accountIdError =
+    (checkedFrom === fromNeedsRate ? undefined : checkedFrom) ??
+    (rawAccountIdError === fromNeedsRate ? undefined : rawAccountIdError);
   const setRateAction =
     onSetRate === undefined || from === undefined
       ? undefined
@@ -325,82 +357,91 @@ export function TransferComposer({
             </View>
           </IconButton>
         </View>
-        <View style={[styles.figure, focused === "amount" ? styles.figureFocused : null]}>
-          <FigureInput
-            label={t("transactions.amount")}
-            value={amountRaw.replace(",", mark)}
-            onChangeText={handleAmountText}
-            step="displayOne"
-            maxLength={AMOUNT_INTEGER_DIGITS + 1 + (from?.decimals ?? 2)}
-            affix={
-              from === undefined ? undefined : (
-                <Text style={styles.affix}>
-                  <CurrencyMark code={from.currency} />
-                </Text>
-              )
-            }
-            focused={focused === "amount"}
-            onFocus={handleAmountFocus}
-            onBlur={handleBlur}
-          />
-        </View>
-        {amountError === undefined ? null : <Text style={styles.fieldError}>{amountError}</Text>}
+        <Anchored check={check} field="amount">
+          <View style={[styles.figure, focused === "amount" ? styles.figureFocused : null]}>
+            <FigureInput
+              label={t("transactions.amount")}
+              value={amountRaw.replace(",", mark)}
+              onChangeText={handleAmountText}
+              step="displayOne"
+              maxLength={AMOUNT_INTEGER_DIGITS + 1 + (from?.decimals ?? 2)}
+              affix={
+                from === undefined ? undefined : (
+                  <Text style={styles.affix}>
+                    <CurrencyMark code={from.currency} />
+                  </Text>
+                )
+              }
+              focused={focused === "amount"}
+              onFocus={handleAmountFocus}
+              onBlur={handleBlur}
+            />
+          </View>
+          {amountError === undefined ? null : <Text style={styles.fieldError}>{amountError}</Text>}
+        </Anchored>
         {/* A same-currency pair has no *Arrives* card, so a refusal on the
             destination leg — one figure, two columns — is stated here. */}
         {sameCurrency && toAmountError !== undefined ? (
           <Text style={styles.fieldError}>{toAmountError}</Text>
         ) : null}
         <ComposerRows>
-          <ComposerRow
-            first
-            label={t("transactions.from")}
-            value={from?.name}
-            placeholder={t("transactions.account")}
-            onPress={onOpenFromAccountPicker}
-            error={accountIdError}
-            {...(from?.balance === undefined
-              ? {}
-              : {
-                  trailing: (
-                    <Amount
-                      value={from.balance}
-                      currency={from.currency}
-                      decimals={from.decimals}
-                      size="compact"
-                      emphasis="muted"
-                    />
-                  ),
-                })}
-          />
-          <ComposerRow
-            label={t("transactions.to")}
-            value={to?.name}
-            placeholder={t("transactions.account")}
-            onPress={onOpenToAccountPicker}
-            error={
-              toAccountError ?? (sameAccount ? t("transactions.sameAccountRefused") : undefined)
-            }
-            {...(to?.balance === undefined
-              ? {}
-              : {
-                  trailing: (
-                    <Amount
-                      value={to.balance}
-                      currency={to.currency}
-                      decimals={to.decimals}
-                      size="compact"
-                      emphasis="muted"
-                    />
-                  ),
-                })}
-          />
-          <ComposerRow
-            label={t("transactions.moreDetails")}
-            value={moreSummary === "" ? undefined : moreSummary}
-            placeholder={t("transactions.moreDetailsTransferHint")}
-            onPress={handleToggleMore}
-            error={moreShown ? undefined : moreError}
-          />
+          <Anchored check={check} field="from">
+            <ComposerRow
+              first
+              label={t("transactions.from")}
+              value={from?.name}
+              placeholder={t("transactions.account")}
+              onPress={onOpenFromAccountPicker}
+              error={accountIdError}
+              {...(from?.balance === undefined
+                ? {}
+                : {
+                    trailing: (
+                      <Amount
+                        value={from.balance}
+                        currency={from.currency}
+                        decimals={from.decimals}
+                        size="compact"
+                        emphasis="muted"
+                      />
+                    ),
+                  })}
+            />
+          </Anchored>
+          <Anchored check={check} field="to">
+            <ComposerRow
+              label={t("transactions.to")}
+              value={to?.name}
+              placeholder={t("transactions.account")}
+              onPress={onOpenToAccountPicker}
+              error={
+                toAccountError ?? (sameAccount ? t("transactions.sameAccountRefused") : undefined)
+              }
+              {...(to?.balance === undefined
+                ? {}
+                : {
+                    trailing: (
+                      <Amount
+                        value={to.balance}
+                        currency={to.currency}
+                        decimals={to.decimals}
+                        size="compact"
+                        emphasis="muted"
+                      />
+                    ),
+                  })}
+            />
+          </Anchored>
+          {/* The fee is folded under here, so its check scrolls to this row. */}
+          <Anchored check={check} field="fee">
+            <ComposerRow
+              label={t("transactions.moreDetails")}
+              value={moreSummary === "" ? undefined : moreSummary}
+              placeholder={t("transactions.moreDetailsTransferHint")}
+              onPress={handleToggleMore}
+              error={moreShown ? undefined : moreError}
+            />
+          </Anchored>
           {moreShown ? (
             <>
               <ComposerRow
@@ -453,26 +494,28 @@ export function TransferComposer({
               </View>
             )}
           </View>
-          <View style={[styles.figure, focused === "toAmount" ? styles.figureFocused : null]}>
-            <FigureInput
-              label={t("transactions.destinationAmount")}
-              value={toAmountRaw.replace(",", mark)}
-              onChangeText={handleToAmountText}
-              step="displayTwo"
-              maxLength={AMOUNT_INTEGER_DIGITS + 1 + to.decimals}
-              affix={
-                <Text style={styles.affixSmall}>
-                  <CurrencyMark code={to.currency} />
-                </Text>
-              }
-              focused={focused === "toAmount"}
-              onFocus={handleToAmountFocus}
-              onBlur={handleBlur}
-            />
-          </View>
-          {toAmountError === undefined ? null : (
-            <Text style={styles.fieldError}>{toAmountError}</Text>
-          )}
+          <Anchored check={check} field="toAmount">
+            <View style={[styles.figure, focused === "toAmount" ? styles.figureFocused : null]}>
+              <FigureInput
+                label={t("transactions.destinationAmount")}
+                value={toAmountRaw.replace(",", mark)}
+                onChangeText={handleToAmountText}
+                step="displayTwo"
+                maxLength={AMOUNT_INTEGER_DIGITS + 1 + to.decimals}
+                affix={
+                  <Text style={styles.affixSmall}>
+                    <CurrencyMark code={to.currency} />
+                  </Text>
+                }
+                focused={focused === "toAmount"}
+                onFocus={handleToAmountFocus}
+                onBlur={handleBlur}
+              />
+            </View>
+            {toAmountError === undefined ? null : (
+              <Text style={styles.fieldError}>{toAmountError}</Text>
+            )}
+          </Anchored>
           {rateShown === undefined && total === undefined ? null : (
             <View style={styles.tiles}>
               {rateShown === undefined || from === undefined ? null : (

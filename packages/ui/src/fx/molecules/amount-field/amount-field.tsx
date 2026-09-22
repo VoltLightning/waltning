@@ -122,8 +122,8 @@ export function parseAmount(input: string): string | null {
   if (normalized.endsWith(".")) return null;
   // M1 — `zMoney`'s own refine (`dec(v).abs().lt("1000000000000")`): at most
   // twelve integer digits. Past that the schema would refuse the write
-  // anyway; catching it here keeps Save disabled instead of enabled on a
-  // figure the account never held.
+  // anyway; catching it here makes Save refuse a figure the account never
+  // held, rather than attempt it.
   //
   // L — counted by *significance*, not by character: `zMoney`'s refine
   // compares the numeric value, so "0000000000001" (thirteen characters, one

@@ -59,6 +59,9 @@ export const de: Messages = {
     edit: "Bearbeiten",
     approve: "Freigeben",
     decline: "Ablehnen",
+    formIncomplete: "Das Formular ist nicht vollständig — prüfen Sie die markierten Felder.",
+    required: "Pflichtfeld",
+    chooseOne: "Bitte auswählen",
   },
   accounts: {
     noneTitle: "Noch keine Konten",
@@ -271,6 +274,7 @@ export const de: Messages = {
     lineDescription: "Beschreibung",
     newLine: "Neue Zeile",
     total: "Summe",
+    linesUnbalanced: "Die Positionen müssen den Betrag der Buchung ergeben.",
     notFound: "Diese Buchung gibt es nicht mehr.",
     transfer: "Umbuchung",
     realized: "Realisiert",

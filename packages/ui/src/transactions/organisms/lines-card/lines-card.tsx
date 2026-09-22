@@ -15,10 +15,11 @@
  * that shape: one draft array, one `Save`, rather than a save-per-row that
  * would imply an update path the executor does not have.
  *
- * **`Save` disables on an unbalanced sum too, not only on no change.** The
- * executor refuses the same mismatch (§10.3) and that refusal is still the
- * guarantee — this is the earlier, cheaper no, so a person is not offered a
- * button whose only possible outcome is a failed write.
+ * **`Save` refuses an unbalanced sum before the write, and says so on the
+ * total.** The executor refuses the same mismatch (§10.3) and that refusal is
+ * still the guarantee — this is the earlier, cheaper no. Pressing it names the
+ * total rather than dimming the button (`use-submit-check.ts`); `Save` stays
+ * disabled only while nothing has changed, which is not a mistake to point at.
  *
  * **A line's category is shown, never assigned, this pass.** `readTransaction`
  * carries `categoryId`/`categoryName` per line and this card passes an
@@ -46,9 +47,11 @@ import { useT } from "../../../i18n/provider";
 import { Button } from "../../../primitives/atoms/button/button";
 import { TextField } from "../../../primitives/atoms/text-field/text-field";
 import { useDisclosureMotion } from "../../../primitives/disclosure-motion.ts";
+import { FieldAnchor } from "../../../primitives/field-anchor";
 import type { FieldErrorMap } from "../../../primitives/field-errors.ts";
 import { useInteraction } from "../../../primitives/interaction.ts";
 import { usePressScale } from "../../../primitives/press-scale.ts";
+import { useSubmitCheck } from "../../../primitives/use-submit-check.ts";
 import { text } from "../../../theme/fonts.ts";
 import { makeStyles } from "../../../theme/styles.ts";
 import { focus, hairline, space, touchTarget } from "../../../tokens.ts";
@@ -138,7 +141,8 @@ export function LinesCard({
     });
   }, [draft, lines]);
 
-  const handleSave = useCallback(() => {
+  const check = useSubmitCheck({ total: !balanced && t("transactions.linesUnbalanced") });
+  const save = useCallback(() => {
     if (!changed || !balanced || saving) return;
     onSave(
       draft.map((line) => ({
@@ -149,6 +153,8 @@ export function LinesCard({
       })),
     );
   }, [balanced, changed, draft, onSave, saving]);
+  const handleSave = useCallback(() => check.submit(save), [check, save]);
+  const totalError = check.errorFor("total");
 
   const formLevelErrors = fieldErrors?.formLevel ?? [];
 
@@ -178,15 +184,20 @@ export function LinesCard({
       ))}
 
       {draft.length > 0 ? (
-        <View style={styles.totalRow}>
-          <Text style={styles.totalLabel}>{t("transactions.total")}</Text>
-          <View style={styles.totalValue}>
-            <Amount value={sum} currency={currency} decimals={decimals} size="small" />
-            <Text style={balanced ? styles.balanced : styles.unbalanced}>
-              {balanced ? "✓" : "≠"}
-            </Text>
+        <FieldAnchor check={check} field="total">
+          <View style={styles.totalRow}>
+            <Text style={styles.totalLabel}>{t("transactions.total")}</Text>
+            <View style={styles.totalValue}>
+              <Amount value={sum} currency={currency} decimals={decimals} size="small" />
+              <Text style={balanced ? styles.balanced : styles.unbalanced}>
+                {balanced ? "✓" : "≠"}
+              </Text>
+            </View>
           </View>
-        </View>
+          {totalError === undefined ? null : (
+            <Text style={styles.unbalancedMessage}>{totalError}</Text>
+          )}
+        </FieldAnchor>
       ) : null}
 
       <View style={styles.actions}>
@@ -198,7 +209,7 @@ export function LinesCard({
           <Button
             label={t("common.save")}
             onPress={handleSave}
-            disabled={!changed || !balanced}
+            disabled={!changed}
             loading={saving}
             variant="primary"
           />
@@ -372,6 +383,7 @@ const useStyles = makeStyles((theme) => ({
   totalValue: { flexDirection: "row", alignItems: "center", gap: space.sm },
   balanced: { color: theme.income, ...text.ui("body", 600) },
   unbalanced: { color: theme.dangerText, ...text.ui("body", 600) },
+  unbalancedMessage: { color: theme.dangerText, ...text.ui("caption") },
   formLevel: { gap: space.xs },
   formLevelMessage: { color: theme.dangerText, ...text.ui("caption") },
   actions: {
