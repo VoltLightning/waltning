@@ -778,6 +778,13 @@ export const ru: Messages = {
     currencyArchiveRefused: "Не удалось отправить валюту в архив.",
     currencyWriteFailed: "Не сохранилось.",
     currencyDetail: "{{symbol}} · знаков: {{decimals}}",
+    currencyHolds_one: "{{count}} строка",
+    currencyHolds_few: "{{count}} строки",
+    currencyHolds_many: "{{count}} строк",
+    currencyHolds_other: "{{count}} строки",
+    removableTitle: "На них пока ничто не ссылается",
+    removableBody:
+      "У {{codes}} нет ни строк, ни курсов. Валюту без того и другого можно удалить без последствий; ту, где есть строки, — только скрыть.",
     editCurrency: "Изменить {{code}}",
     symbolPosition: "Положение символа",
     symbolBefore: "Перед суммой",

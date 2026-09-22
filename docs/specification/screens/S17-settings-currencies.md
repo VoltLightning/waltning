@@ -28,10 +28,17 @@ preselected (`?quote=<code>`) — the place a coverage line saying *"no rates ye
 ### Both surfaces
 
 **A list of compact rows, one open at a time.** Each row states code, name,
-symbol · decimals, its coverage, and *Pinned* when it is; tapping the row
+**what it holds**, its coverage, and *Pinned* when it is; tapping the row
 expands that one row's controls **in place** — the pinned toggle, the rate
 source, and the row's own actions (*Exchange rates*, *Edit*, *Archive*). Symbol
 and decimals stay behind the row's own detail sheet (§9.2).
+
+**What it holds, not what it looks like.** The row states a count — *13 rows*,
+*0 rows* — of the transactions and accounts denominated in it, and nothing
+points at a currency showing zero. That is the fact the screen's own decisions
+turn on (§6: rows make a currency hideable, nothing makes it removable), where
+`zł · 2dp` was the currency's *formatting*, changeable two taps in and read by
+nobody.
 
 Every row holding its whole editor open was some 200 px each, which made a
 six-currency screen three screens tall and unscannable; a list of six things is
@@ -81,6 +88,13 @@ Web adds columns rather than regions; the list is short and does not need two.
 | Error | Add failed → the backfill states which ranges it could not fetch, **per currency**, rather than reporting success |
 | Offline | Read-only; changes queue |
 | Gated | Archive refused while any account or transaction references it |
+
+**A currency nothing points at says so, once, under the list.** With neither
+rows nor rates it can be removed outright; with rows it can only be hidden —
+the one decision this screen asks anyone to make about a currency they stopped
+using, and it is stated rather than left to be inferred from two quiet columns.
+**The pivot is never named there**: it is removable by no route, whatever it
+holds.
 
 ## 7. Interaction
 

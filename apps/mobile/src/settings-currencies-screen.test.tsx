@@ -67,9 +67,11 @@ function fakeController(overrides: {
   changePivot?: PhoneLedgerPort["changePivot"];
   updateCurrency?: PhoneLedgerPort["updateCurrency"];
   readCoverage?: PhoneLedgerPort["readCoverage"];
+  readCurrencyUsage?: PhoneLedgerPort["readCurrencyUsage"];
 }) {
   const port = basePort({
     listCurrencySettings: overrides.listCurrencySettings ?? (() => [PLN_ROW, USD_ROW]),
+    ...(overrides.readCurrencyUsage ? { readCurrencyUsage: overrides.readCurrencyUsage } : {}),
     readCoverage:
       overrides.readCoverage ??
       (() => [
@@ -174,7 +176,7 @@ it("the list card carries no title of its own — the page header has that word"
  */
 it("a row is compact until tapped, then expands its own controls in place", () => {
   withLedger();
-  expect(screen.getByText("zł · 2dp")).toBeDefined();
+  expect(screen.getByText("0 rows")).toBeDefined();
   expect(screen.queryByLabelText("Pinned")).toBeNull();
   expect(screen.queryByText("Archive")).toBeNull();
 
@@ -375,9 +377,16 @@ it("the pivot confirmation states the refusal before offering, not after", () =>
   expect(screen.getByText(/Refused once any transaction exists/)).toBeDefined();
 });
 
-it("a row states its own symbol and decimals", () => {
-  withLedger();
-  expect(screen.getByText("zł · 2dp")).toBeDefined();
+/**
+ * §6 — the row used to state the currency's *formatting* (`zł · 2dp`), which
+ * this screen can already change two taps in. What it says now is what the
+ * screen's own decisions turn on: how much points at it.
+ */
+it("a row states what the currency holds", () => {
+  withLedger({
+    readCurrencyUsage: () => new Map([[PLN, { transactions: 12, accounts: 1 }]]),
+  });
+  expect(screen.getByText("13 rows")).toBeDefined();
 });
 
 it("editing a row's symbol and decimals writes through update_currency", () => {
@@ -460,7 +469,7 @@ it("R1 M5 — the row's accessible name carries everything the row shows", () =>
   const row = screen.getByRole("button", { name: /^PLN · / });
   const name = row.getAttribute("aria-label") ?? "";
   expect(name).toContain("Polish Złoty");
-  expect(name).toContain("zł · 2dp");
+  expect(name).toContain("0 rows");
   expect(name).toContain("23% · last quote 2022-03-11");
   // PLN_ROW is pinned.
   expect(name).toContain("Pinned");
@@ -508,4 +517,36 @@ it("leads with the pivot's card and keeps its change behind a tap", () => {
   expect(screen.queryByText("Change pivot")).toBeNull();
   fireEvent.click(screen.getByText("Change the pivot…"));
   expect(screen.getByText("Change pivot")).toBeDefined();
+});
+
+/**
+ * §6 — the only decision this screen asks anyone to make about a currency
+ * they stopped using, and it was never stated: with neither rows nor rates a
+ * currency can be removed outright, with rows it can only be hidden.
+ */
+it("names the currencies nothing points at, and says what that makes possible", () => {
+  const SEK = currencyCode("SEK");
+  withLedger({
+    listCurrencySettings: () => [
+      PLN_ROW,
+      USD_ROW,
+      { ...PLN_ROW, code: SEK, name: "Swedish krona", pinned: false, rateSource: null },
+    ],
+    readCoverage: () => [],
+    readCurrencyUsage: () => new Map([[PLN, { transactions: 12, accounts: 1 }]]),
+  });
+  const banner = screen.getByText(/can be removed without touching anything/);
+  expect(banner.textContent).toContain("SEK");
+  // PLN holds rows, so it is hideable and never named here.
+  expect(banner.textContent).not.toContain("PLN");
+});
+
+/** The pivot is removable by no route, whatever it holds. */
+it("never offers the pivot as removable", () => {
+  withLedger({
+    listCurrencySettings: () => [{ ...USD_ROW, isPivot: true }],
+    readCoverage: () => [],
+    readCurrencyUsage: () => new Map(),
+  });
+  expect(screen.queryByText(/can be removed without touching anything/)).toBeNull();
 });

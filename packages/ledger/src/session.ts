@@ -132,6 +132,7 @@ import {
 import { type LocalCurrency, readCurrencies } from "./currencies/read-currencies.ts";
 // ── end E2 block ─────────────────────────────────────────────────────────
 import { readCurrencySettings } from "./currencies/read-currency-settings.ts";
+import { type LocalCurrencyUsage, readCurrencyUsage } from "./currencies/read-currency-usage.ts";
 import {
   type LocalCoverage,
   type LocalCrossRate,
@@ -242,6 +243,8 @@ export type LocalCapturableCategory = {
 export type LocalLedgerSession = {
   listAccounts: (options?: { includeArchived?: boolean }) => readonly LocalAccountSummary[];
   listCurrencies: () => readonly LocalCurrency[];
+  /** S17 §6 — what each currency holds, and so whether it can be removed at all. */
+  readCurrencyUsage: () => ReadonlyMap<CurrencyCode, LocalCurrencyUsage>;
   /** S17's whole list — every column a settings row needs, `readCurrencySettings`'s answer. */
   listCurrencySettings: (options?: { includeArchived?: boolean }) => readonly LocalCurrencyRow[];
   listGroups: () => readonly LocalGroup[];
@@ -683,6 +686,7 @@ export function createLocalLedgerSession<TRun>(
     listCurrencies: () => readCurrencies(requireOpen().replica.db),
     listCurrencySettings: (settingsOptions) =>
       readCurrencySettings(requireOpen().replica.db, settingsOptions),
+    readCurrencyUsage: () => readCurrencyUsage(requireOpen().replica.db),
     listGroups: () => readGroups(requireOpen().replica.db),
     listRecent: (limit) => readRecent(requireOpen().replica.db, limit),
     listCategories: () =>

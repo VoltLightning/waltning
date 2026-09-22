@@ -49,6 +49,7 @@ import { Select, type SelectOption } from "@waltning/ui/primitives/select";
 import { TextField } from "@waltning/ui/primitives/text-field";
 import { Card } from "@waltning/ui/shell/card";
 import { ConfirmDialog } from "@waltning/ui/shell/confirm-dialog";
+import { Banner } from "@waltning/ui/states/banner";
 import { Toast } from "@waltning/ui/states/toast";
 import { text } from "@waltning/ui/theme/fonts";
 import { makeStyles } from "@waltning/ui/theme/styles";
@@ -61,6 +62,9 @@ import { PushedPage } from "./pushed-page";
 type Draft = { code: string; name: string; symbol: string };
 
 const EMPTY_DRAFT: Draft = { code: "", name: "", symbol: "" };
+
+/** A currency nothing points at — distinct from "not read yet", which draws no count. */
+const EMPTY_USAGE = { transactions: 0, accounts: 0 } as const;
 
 type EditDraft = {
   code: string;
@@ -79,6 +83,8 @@ export default function SettingsCurrenciesScreen() {
   const today = deviceRuntime().capture().date;
   const rows = ledger.listCurrencySettings();
   const coverage = ledger.readCoverage(today);
+  /** §6's decision variable: rows and accounts held, per currency. */
+  const usage = ledger.readCurrencyUsage();
   const coverageByCode = useMemo(
     () =>
       new Map<string, CurrencyRowCoverage>(
@@ -125,6 +131,26 @@ export default function SettingsCurrenciesScreen() {
   const handleToggleExpanded = useCallback(
     (code: string) => setExpandedCode((prev) => (prev === code ? null : code)),
     [],
+  );
+
+  /**
+   * §6 — a currency with neither rows nor rates can be removed outright,
+   * where one with rows can only be hidden. Named here rather than left for
+   * a reader to work out from two quiet columns, because it is the only
+   * decision this screen asks anyone to make about a currency they stopped
+   * using. The pivot is never in the list: it is removable by no route.
+   */
+  const removable = useMemo(
+    () =>
+      rows
+        .filter((row) => {
+          if (row.isPivot) return false;
+          const held = usage.get(row.code);
+          if (held !== undefined && held.transactions + held.accounts > 0) return false;
+          return (coverageByCode.get(row.code)?.days ?? 0) === 0;
+        })
+        .map((row) => row.code),
+    [rows, usage, coverageByCode],
   );
 
   const pivotRow = rows.find((row) => row.isPivot);
@@ -351,6 +377,7 @@ export default function SettingsCurrenciesScreen() {
                 key={row.code}
                 row={row}
                 coverage={coverageByCode.get(row.code)}
+                usage={usage.get(row.code) ?? EMPTY_USAGE}
                 expanded={expandedCode === row.code}
                 onToggleExpanded={handleToggleExpanded}
                 onTogglePinned={handleTogglePinned}
@@ -372,6 +399,7 @@ export default function SettingsCurrenciesScreen() {
                 key={row.code}
                 row={row}
                 coverage={coverageByCode.get(row.code)}
+                usage={usage.get(row.code) ?? EMPTY_USAGE}
                 expanded={expandedCode === row.code}
                 onToggleExpanded={handleToggleExpanded}
                 onTogglePinned={handleTogglePinned}
@@ -384,6 +412,13 @@ export default function SettingsCurrenciesScreen() {
           </Card>
         </>
       ) : null}
+
+      {removable.length === 0 ? null : (
+        <Banner
+          tone="warn"
+          message={`${t("fx.removableTitle")} — ${t("fx.removableBody", { codes: removable.join(" · ") })}`}
+        />
+      )}
 
       <Button label={t("fx.addCurrency")} onPress={handleOpenAdd} variant="secondary" size="sm" />
 

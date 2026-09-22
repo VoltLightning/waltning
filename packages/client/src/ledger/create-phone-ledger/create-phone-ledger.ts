@@ -667,6 +667,15 @@ export type PhoneCrossRate = {
   legs: { from: PhoneRate; to: PhoneRate };
 };
 
+/**
+ * S17 §6 — what a currency holds, and so whether it can be removed at all.
+ * Structural, like every other row this port carries.
+ */
+export type PhoneCurrencyUsage = {
+  transactions: number;
+  accounts: number;
+};
+
 /** S17 §8's coverage figure, per currency — `readCoverage`'s answer. */
 export type PhoneCoverage = {
   code: CurrencyCode;
@@ -706,6 +715,8 @@ export type PhoneLedgerPort = {
   listCurrencySettings: (options?: {
     includeArchived?: boolean;
   }) => readonly PhoneCurrencySettings[];
+  /** S17 §6, on demand — the rows and accounts each currency holds. */
+  readCurrencyUsage: () => ReadonlyMap<CurrencyCode, PhoneCurrencyUsage>;
   listGroups: () => readonly PhoneGroup[];
   listRecent: (limit: number) => readonly PhoneRecentTransaction[];
   listCategories: () => readonly PhoneCategory[];
@@ -1661,6 +1672,8 @@ export type PhoneLedgerController = {
     includeArchived?: boolean;
   }) => readonly PhoneCurrencySettings[];
   readCoverage: (today: AccountingDate) => readonly PhoneCoverage[];
+  /** S17 §6, on demand — the same "not through the snapshot" call `readCoverage` is. */
+  readCurrencyUsage: () => ReadonlyMap<CurrencyCode, PhoneCurrencyUsage>;
   listFxRates: (range: {
     base: CurrencyCode;
     quote: CurrencyCode;
@@ -3843,6 +3856,7 @@ export function createPhoneLedger(
     readCrossRate: (pair) => port.readCrossRate(pair),
     listCurrencySettings: (options) => port.listCurrencySettings(options),
     readCoverage: (today) => port.readCoverage(today),
+    readCurrencyUsage: () => port.readCurrencyUsage(),
     listFxRates: (range) => port.listFxRates(range),
     addCurrency: (draft) => {
       emitClientDiagnostic(diagnostics, {

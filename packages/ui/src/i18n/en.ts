@@ -1489,6 +1489,13 @@ export const en = {
     currencyWriteFailed: "That didn't save.",
     /** S17 §9.2 — a row's own symbol and decimals, and the sheet that edits them. */
     currencyDetail: "{{symbol}} · {{decimals}}dp",
+    currencyHolds_one: "{{count}} row",
+    currencyHolds_few: "{{count}} rows",
+    currencyHolds_many: "{{count}} rows",
+    currencyHolds_other: "{{count}} rows",
+    removableTitle: "Nothing points at these yet",
+    removableBody:
+      "{{codes}} hold no rows and no rates. A currency with neither can be removed without touching anything; one with rows can only be hidden.",
     editCurrency: "Edit {{code}}",
     symbolPosition: "Symbol position",
     symbolBefore: "Before the figure",
