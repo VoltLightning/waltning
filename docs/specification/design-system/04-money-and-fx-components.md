@@ -76,6 +76,20 @@ what makes them distinguishable (P5).
 `<FxAmount>` **cannot be rendered without a rate.** That is what makes P1 a
 guarantee rather than a convention.
 
+**Inline in a row of figures, stacked in a row of names.** Where the amount is
+the row — a transaction list, a ledger — it reads inline as drawn above. Where a
+name leads — S16's register — it stacks, right-aligned: the balance in its own
+currency, and under it, small and muted, the rate, the converted figure and any
+marker:
+
+```
+  Travel float            62,40 BYN
+  BYN            0,3121 · 19,48 zł [manual]
+```
+
+Inline, the whole figure took a third of a 390pt row and left the account's name
+none of it.
+
 ### 4.3 `<TransferAmount>`
 
 One row, two accounts, two amounts, one derived rate (`SPEC.md` §7.5).

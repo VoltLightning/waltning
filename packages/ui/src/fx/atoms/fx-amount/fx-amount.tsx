@@ -69,6 +69,13 @@ export type FxAmountProps = {
   /** Rate precision. 4dp throughout the design system (§4.7). */
   rateDecimals?: number;
   provenance?: FxProvenance;
+  /**
+   * **Two lines, right-aligned: the balance, and under it the rate and what it
+   * comes to** — S16's register, `62,40 Br` over `0,3121 · 19,48 zł`. Inline,
+   * the whole figure wanted a third of a 390pt row and took the account's
+   * name's room instead; a row names the account first.
+   */
+  stacked?: boolean;
 };
 
 const MARKER: Record<Exclude<FxProvenance["kind"], "synced">, string> = {
@@ -86,6 +93,7 @@ export function FxAmount({
   displayDecimals = 2,
   rateDecimals = 4,
   provenance = { kind: "synced" },
+  stacked = false,
 }: FxAmountProps) {
   // Converted here rather than by the caller, and this is the point of the
   // component: the figure and the rate that produced it cannot come from
@@ -93,6 +101,35 @@ export function FxAmount({
   const converted = money.toPivot(value, rate);
 
   const styles = useStyles();
+
+  const tag =
+    provenance.kind === "synced" ? null : (
+      <Tag variant="warn">
+        {provenance.kind === "stale"
+          ? `${MARKER.stale} ${provenance.ageDays}d`
+          : MARKER[provenance.kind]}
+      </Tag>
+    );
+
+  if (stacked) {
+    return (
+      <View style={styles.stacked}>
+        <Amount value={value} currency={currency} decimals={decimals} />
+        <View style={styles.under}>
+          <Text style={styles.rate}>{money.toMoney(rate, rateDecimals)}</Text>
+          <Text style={styles.separator}>·</Text>
+          <Amount
+            value={converted}
+            currency={displayCurrency}
+            decimals={displayDecimals}
+            size="small"
+            emphasis="muted"
+          />
+          {tag}
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.row}>
@@ -116,6 +153,8 @@ export function FxAmount({
 
 const useStyles = makeStyles((theme) => ({
   row: { flexDirection: "row", alignItems: "center", gap: space.sm, flexWrap: "wrap" },
+  stacked: { alignItems: "flex-end", gap: space.xxs },
+  under: { flexDirection: "row", alignItems: "center", gap: space.xs },
   separator: { color: theme.textMuted, ...text.ui("caption") },
   rate: {
     color: theme.textMuted,

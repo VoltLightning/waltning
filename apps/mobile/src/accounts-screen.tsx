@@ -1,11 +1,17 @@
 /**
- * S16 · Accounts — the register. Reached from Today's balances and Settings,
- * never a tab (S04 §2) — a stack screen pushed the same way `account/new` is.
+ * S16 · Accounts — the register, and the bar's second tab (`05-composites`,
+ * `TabBar`). Also reached from Today's net-worth line and from Settings.
  */
 
-import type { PhoneAccount } from "@waltning/client/ledger/create-phone-ledger";
+import type {
+  PhoneAccount,
+  PhoneCurrency,
+  PhoneLedgerController,
+} from "@waltning/client/ledger/create-phone-ledger";
 import { useLedgerController } from "@waltning/client/ledger/use-ledger-controller";
 import { usePhoneLedger } from "@waltning/client/ledger/use-phone-ledger";
+import { type AccountingDate, todayIn } from "@waltning/core/date";
+import * as money from "@waltning/core/money";
 import {
   AccountRegister,
   type AccountRegisterAccount,
@@ -13,7 +19,7 @@ import {
 import { GroundPanel } from "@waltning/ui/shell/card";
 import { Toast } from "@waltning/ui/states/toast";
 import { router, useLocalSearchParams } from "expo-router";
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 
 function handleCreateAccount() {
   router.push({ pathname: "/account/new", params: { returnTo: "accounts" } });
@@ -24,9 +30,41 @@ function handleTransferFrom(id: string) {
   router.push({ pathname: "/transfer", params: { from: id } });
 }
 
-/** The ledger's own row onto the register's — the one place the two field sets meet. */
-function toRegisterAccount(account: PhoneAccount): AccountRegisterAccount {
+/**
+ * The balance in the pivot, for an account held in anything else (S16 §3's
+ * `62,40 Br · 0,3121 → 19,48 zł`), from the rate for today — carried forward,
+ * or set by hand, and saying which. `undefined` where there is no rate at all:
+ * no figure is better than a guessed one.
+ */
+function conversionOf(
+  ledger: PhoneLedgerController,
+  account: PhoneAccount,
+  pivot: PhoneCurrency | undefined,
+  today: AccountingDate,
+): AccountRegisterAccount["conversion"] {
+  if (pivot === undefined || account.currency === pivot.code) return undefined;
+  const held = ledger.readRate({ base: pivot.code, quote: account.currency, date: today });
+  if (held === null) return undefined;
   return {
+    rate: money.reciprocal(held.rate),
+    displayCurrency: pivot.symbol ?? pivot.code,
+    displayDecimals: pivot.decimals,
+    provenance:
+      held.source === "manual"
+        ? { kind: "override" }
+        : held.carriedDays > 0
+          ? { kind: "estimated" }
+          : { kind: "synced" },
+  };
+}
+
+/** The ledger's own row onto the register's — the one place the two field sets meet. */
+function toRegisterAccount(
+  account: PhoneAccount,
+  conversion: AccountRegisterAccount["conversion"],
+): AccountRegisterAccount {
+  return {
+    ...(conversion === undefined ? {} : { conversion }),
     id: account.id,
     name: account.name,
     kind: account.kind,
@@ -42,6 +80,19 @@ function toRegisterAccount(account: PhoneAccount): AccountRegisterAccount {
 export default function Accounts() {
   const ledger = useLedgerController();
   const snapshot = usePhoneLedger(ledger);
+  const pivot = snapshot.currencies.find((currency) => currency.isPivot);
+  const today = todayIn(Intl.DateTimeFormat().resolvedOptions().timeZone);
+  const accounts = useMemo(
+    () =>
+      snapshot.accounts.map((account) =>
+        toRegisterAccount(account, conversionOf(ledger, account, pivot, today)),
+      ),
+    [snapshot.accounts, ledger, pivot, today],
+  );
+  const archivedAccounts = useMemo(
+    () => snapshot.archivedAccounts.map((account) => toRegisterAccount(account, undefined)),
+    [snapshot.archivedAccounts],
+  );
   // `archive_account` has no undo (the shared wave-3 plan says why — no
   // `restore_*` operation exists), so this is a plain `Toast`, not `UndoToast`.
   // The screen can stay mounted across two archives in a row
@@ -85,8 +136,8 @@ export default function Accounts() {
     // is nowhere to go back to.
     <GroundPanel>
       <AccountRegister
-        accounts={snapshot.accounts.map(toRegisterAccount)}
-        archivedAccounts={snapshot.archivedAccounts.map(toRegisterAccount)}
+        accounts={accounts}
+        archivedAccounts={archivedAccounts}
         archivedLoaded={archivedLoaded}
         onSelectAccount={handleSelectAccount}
         onLoadArchived={handleLoadArchived}

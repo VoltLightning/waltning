@@ -13,7 +13,7 @@ import { LedgerProvider } from "@waltning/client/ledger/ledger-provider";
 import { basePort } from "@waltning/client/ledger/test-port";
 import { accountingDate } from "@waltning/core/date";
 import { id } from "@waltning/core/id";
-import { currencyCode, toMoney } from "@waltning/core/money";
+import { currencyCode, toMoney, unitsPerPivot } from "@waltning/core/money";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const router = {
@@ -40,7 +40,7 @@ type Row = {
   id: string;
   name: string;
   kind: "bank" | "cash" | "clearing" | "deposit";
-  currency: typeof PLN;
+  currency: typeof PLN | typeof USD;
   ownership: "own" | "shared";
   isBusiness: boolean;
   balance: string;
@@ -79,6 +79,15 @@ function fakeController(rows: readonly Row[]) {
       },
       { code: USD, name: "US dollar", symbol: "$", decimals: 2, capturable: true, isPivot: false },
     ],
+    // 3,80 zł to the dollar: USD per PLN, the direction `readRate` answers in.
+    readRate: ({ quote }) => ({
+      // The pivot against itself is 1, as the real read answers — so a screen
+      // that forgot to skip the pivot would draw `1.0000` and fail below.
+      rate: unitsPerPivot(quote === USD ? "0.263157894737" : "1"),
+      source: "nbp",
+      asOf: accountingDate("2026-09-03"),
+      carriedDays: 0,
+    }),
   });
   return createPhoneLedger(port, {
     capture: () => ({
@@ -259,5 +268,37 @@ describe("Accounts", () => {
     );
 
     expect(screen.getByRole("alert").textContent).toContain("Account archived.");
+  });
+
+  /**
+   * **A balance held in anything but the pivot says what it comes to** (S16
+   * §3): the balance, and under it the rate and the pivot figure, in the
+   * pivot's own symbol. The pivot's own accounts draw no conversion.
+   */
+  it("draws the converted figure under a foreign balance, and none under the pivot's", () => {
+    withLedger([
+      {
+        id: "a1",
+        name: "Travel float",
+        kind: "cash",
+        currency: USD,
+        ownership: "own",
+        isBusiness: false,
+        balance: "100",
+      },
+      {
+        id: "a2",
+        name: "Everyday",
+        kind: "bank",
+        currency: PLN,
+        ownership: "own",
+        isBusiness: false,
+        balance: "50",
+      },
+    ]);
+    expect(screen.getByText("3.8000")).toBeDefined();
+    // One rate on the screen — the dollar account's; the złoty one has none.
+    expect(screen.getAllByText(/^\d+\.\d{4}$/)).toHaveLength(1);
+    expect(screen.getByText(/380[.,]00/)).toBeDefined();
   });
 });
