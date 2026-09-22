@@ -36,13 +36,18 @@ function StillRibbon({
   at,
   days,
   current,
+  listless = false,
 }: {
   at: number;
   days: readonly RibbonDay[];
   current: string | null;
+  /** A list with nothing on it: no geometry ever arrives. */
+  listless?: boolean;
 }) {
   const scrollY = useSharedValue(0);
-  const placement = useSharedValue<StripPlacement>({ tops: [0], marks: [at] });
+  const placement = useSharedValue<StripPlacement>(
+    listless ? { tops: [], marks: [] } : { tops: [0], marks: [at] },
+  );
   const dayAt = useCallback((cell: number) => days[cell] ?? days[0] ?? BLANK, [days]);
   return (
     <DayRibbon
@@ -164,6 +169,16 @@ export const Quiet: Story = {
       direction: "flat" as const,
     })),
   },
+};
+
+/**
+ * **A ledger with nothing in it, opened on today.** The list has no days and
+ * so no geometry; the strip must stay on the day it opened on, mid-month,
+ * rather than take *no days* for *the first day* and land on the run's origin.
+ * Photographed because that is what it did.
+ */
+export const NothingCapturedYet: Story = {
+  args: { days: LONG_RUN, current: "2026-09-15", at: 14, listless: true },
 };
 
 /**
