@@ -110,14 +110,16 @@ it("flips to over-settlement rather than clamping at zero, and says which way in
  * empty): the Discharges section states that plainly, and Settle stays
  * disabled rather than an empty section with a hidden currency armed.
  */
-it("shows nothing to settle and disables Settle when every balance is dust", () => {
+it("shows nothing to settle and refuses Settle when every balance is dust", () => {
   renderSheet({
     balances: [{ currency: "PLN", balance: toMoney("0.004"), decimals: 2 }],
     dischargesCurrency: null,
   });
   expect(screen.getByText("Nothing to settle.")).toBeDefined();
   expect(screen.queryByRole("radiogroup")).toBeNull();
-  expect(screen.getByRole("button", { name: "Settle" })).toHaveProperty("disabled", true);
+  // Pressable; pressed, it refuses and says so rather than settling.
+  fireEvent.click(screen.getByRole("button", { name: "Settle" }));
+  expect(screen.getByText("The form isn't complete — check the highlighted fields.")).toBeDefined();
 });
 
 /**
@@ -127,7 +129,7 @@ it("shows nothing to settle and disables Settle when every balance is dust", () 
  * disable Settle even while a different currency (GBP) remains genuinely
  * open — `openBalances.length === 0` alone missed exactly this case.
  */
-it("disables Settle when the picked currency is dust, even with another balance still open (L1)", () => {
+it("refuses Settle when the picked currency is dust, even with another balance still open (L1)", () => {
   renderSheet({
     balances: [
       { currency: "PLN", balance: toMoney("0.004"), decimals: 2 },
@@ -135,7 +137,9 @@ it("disables Settle when the picked currency is dust, even with another balance 
     ],
     dischargesCurrency: "PLN",
   });
-  expect(screen.getByRole("button", { name: "Settle" })).toHaveProperty("disabled", true);
+  // Pressable; pressed, it refuses and says so rather than settling.
+  fireEvent.click(screen.getByRole("button", { name: "Settle" }));
+  expect(screen.getByText("The form isn't complete — check the highlighted fields.")).toBeDefined();
 });
 
 it("marks the result an estimate and stamps it once the snapshot is older than the session", () => {
@@ -149,9 +153,11 @@ it("has no reference line when nothing is held (offline, no rate)", () => {
   expect(screen.queryByText(/^reference/)).toBeNull();
 });
 
-it("disables Settle until an account and a discharge currency are both picked", () => {
+it("refuses Settle until an account and a discharge currency are both picked", () => {
   renderSheet({ accountId: null });
-  expect(screen.getByRole("button", { name: "Settle" })).toHaveProperty("disabled", true);
+  // Pressable; pressed, it refuses and says so rather than settling.
+  fireEvent.click(screen.getByRole("button", { name: "Settle" }));
+  expect(screen.getByText("The form isn't complete — check the highlighted fields.")).toBeDefined();
 });
 
 /**
@@ -161,14 +167,16 @@ it("disables Settle until an account and a discharge currency are both picked", 
  * proactively — muted caption, disabled Settle — rather than letting a tap
  * reach the controller only to bounce.
  */
-it("shows the needsRate caption under the account chip and disables Settle when it can't be captured (C1)", () => {
+it("shows the needsRate caption under the account chip and refuses Settle when it can't be captured (C1)", () => {
   renderSheet({
     accounts: [{ id: "acc-cash-pln", name: "Cash · PLN", currency: "PLN", capturable: false }],
   });
   expect(
     screen.getByText("PLN needs an exchange rate before a transaction can be recorded in it."),
   ).toBeDefined();
-  expect(screen.getByRole("button", { name: "Settle" })).toHaveProperty("disabled", true);
+  // Pressable; pressed, it refuses and says so rather than settling.
+  fireEvent.click(screen.getByRole("button", { name: "Settle" }));
+  expect(screen.getByText("The form isn't complete — check the highlighted fields.")).toBeDefined();
 });
 
 it("calls onSettle on the primary action", () => {

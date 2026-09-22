@@ -17,6 +17,7 @@ import { basePort } from "@waltning/client/ledger/test-port";
 import { accountingDate, addDays, todayIn } from "@waltning/core/date";
 import { id } from "@waltning/core/id";
 import { crossRate, currencyCode, toMoney, unitsPerPivot } from "@waltning/core/money";
+import { FormAlertHost } from "@waltning/ui/primitives/form-alert-host";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const router = {
@@ -183,10 +184,22 @@ function fakeController(
   });
 }
 
+/**
+ * The button is pressable whatever the draft holds; pressed on one that is
+ * not ready, it raises the alert and moves nothing.
+ */
+function expectMoveRefused() {
+  fireEvent.click(screen.getByRole("button", { name: "Move money" }));
+  expect(screen.getByText("The form isn't complete — check the highlighted fields.")).toBeDefined();
+}
+
 function withLedger(overrides: Parameters<typeof fakeController>[0] = {}) {
   return render(
     <LedgerProvider controller={fakeController(overrides)}>
-      <Transfer />
+      {/* The root layout's own host, so a refused press's alert is drawn. */}
+      <FormAlertHost>
+        <Transfer />
+      </FormAlertHost>
     </LedgerProvider>,
   );
 }
@@ -244,7 +257,7 @@ describe("Transfer — the phone path", () => {
     pickTo("Household · USD");
 
     expect(screen.getByText("A transfer needs two different accounts.")).toBeDefined();
-    expect(screen.getByRole("button", { name: "Move money" })).toHaveProperty("disabled", true);
+    expectMoveRefused();
   });
 
   /**
@@ -297,7 +310,7 @@ describe("Transfer — the phone path", () => {
    * provenance behind it any more, still saveable. Today holds a rate for
    * this pair; Yesterday, in this fixture, holds none.
    */
-  it("clears the destination and disables Save when the chosen date has no rate (H1)", () => {
+  it("clears the destination and refuses Save when the chosen date has no rate (H1)", () => {
     // `transfer-screen.tsx`'s own `today` comes from `deviceRuntime()`'s real
     // clock, not from this fixture's `capture` (that one only stamps an
     // outbox entry at save time) — so "today" and "yesterday" here must be
@@ -343,7 +356,7 @@ describe("Transfer — the phone path", () => {
     // survive the date change, and Save must refuse a cross-currency write
     // with nothing behind its destination figure.
     expect(screen.getByLabelText("Destination amount")).not.toHaveProperty("value", "571.50");
-    expect(screen.getByRole("button", { name: "Move money" })).toHaveProperty("disabled", true);
+    expectMoveRefused();
   });
 
   /**
@@ -352,7 +365,7 @@ describe("Transfer — the phone path", () => {
    * caption. `parseAmount` is the boundary now, and Save must reflect that
    * the fee has not (yet) resolved to a number.
    */
-  it("shows a caption and disables Save for an unparsable fee, without throwing (C2)", () => {
+  it("shows a caption and refuses Save for an unparsable fee, without throwing (C2)", () => {
     withLedger();
     pickFrom("Household · USD");
     pickTo("Cash · PLN");
@@ -364,7 +377,7 @@ describe("Transfer — the phone path", () => {
     ).not.toThrow();
 
     expect(screen.getByText("Enter a number, or leave it blank.")).toBeDefined();
-    expect(screen.getByRole("button", { name: "Move money" })).toHaveProperty("disabled", true);
+    expectMoveRefused();
   });
 
   /**
@@ -383,7 +396,7 @@ describe("Transfer — the phone path", () => {
     fireEvent.change(screen.getByRole("textbox", { name: "Fee" }), { target: { value: "5," } });
 
     expect(screen.getByText("Enter a number, or leave it blank.")).toBeDefined();
-    expect(screen.getByRole("button", { name: "Move money" })).toHaveProperty("disabled", true);
+    expectMoveRefused();
   });
 
   /**
@@ -487,16 +500,16 @@ describe("Transfer — the phone path", () => {
   });
 
   /**
-   * M4 — closes the source leg: a zero source amount disables Save the same
+   * M4 — closes the source leg: a zero source amount refuses Save the same
    * way a zero destination already does, before the write ever reaches the
    * contract's own refine.
    */
-  it("disables Save for a zero source amount (M4)", () => {
+  it("refuses Save for a zero source amount (M4)", () => {
     withLedger();
     pickFrom("Household · USD");
     pickTo("Cash · PLN");
 
-    expect(screen.getByRole("button", { name: "Move money" })).toHaveProperty("disabled", true);
+    expectMoveRefused();
   });
 
   /**
@@ -524,7 +537,7 @@ describe("Transfer — the phone path", () => {
    * *from* leg) before the write when the account holds no rate (§14.6);
    * Save must not be tappable while that refusal is already knowable.
    */
-  it("disables Save and shows the needsRate caption when the From account can't be captured (SPEC.md §14.6)", () => {
+  it("refuses Save and shows the needsRate caption when the From account can't be captured (SPEC.md §14.6)", () => {
     withLedger({ capturableUsd: false });
     pickFrom("Household · USD");
     pickTo("Cash · PLN");
@@ -532,7 +545,7 @@ describe("Transfer — the phone path", () => {
     expect(
       screen.getByText("USD needs an exchange rate before a transaction can be recorded in it."),
     ).toBeDefined();
-    expect(screen.getByRole("button", { name: "Move money" })).toHaveProperty("disabled", true);
+    expectMoveRefused();
   });
 
   it("collapses to one amount for a same-currency transfer", () => {
@@ -581,7 +594,7 @@ describe("Transfer — the phone path", () => {
    * refuses rather than dropping the field.
    */
   it.each(["abc", "1.2.3", "12.", "1,234.56"])(
-    "disables Save and never drops a malformed fee %s",
+    "refuses Save and never drops a malformed fee %s",
     (feeRaw) => {
       const createTransaction = vi.fn();
       withLedger({ createTransaction });
@@ -592,7 +605,7 @@ describe("Transfer — the phone path", () => {
       openFee();
       fireEvent.change(screen.getByRole("textbox", { name: "Fee" }), { target: { value: feeRaw } });
 
-      expect(screen.getByRole("button", { name: "Move money" })).toHaveProperty("disabled", true);
+      expectMoveRefused();
     },
   );
 

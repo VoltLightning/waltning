@@ -21,6 +21,7 @@ import { describeDiagnosticError } from "@waltning/core/diagnostics";
 import { CurrencyMarksProvider } from "@waltning/ui/fx/currency-marks";
 import { resolveLocale } from "@waltning/ui/i18n/locales";
 import { I18nProvider, useT } from "@waltning/ui/i18n/provider";
+import { FormAlertHost } from "@waltning/ui/primitives/form-alert-host";
 import { HapticsProvider } from "@waltning/ui/primitives/haptics";
 import { StartupFailed } from "@waltning/ui/states/startup-failed";
 import { ThemeProvider, useTheme, useThemeName } from "@waltning/ui/theme/provider";
@@ -211,7 +212,10 @@ export default function RootLayout() {
                   <LedgerProvider controller={startup.controller}>
                     <LedgerCurrencyMarks>
                       <LockGate lock={appLock}>
-                        <AppShell />
+                        {/* A refused submit on any screen raises its alert here. */}
+                        <FormAlertHost>
+                          <AppShell />
+                        </FormAlertHost>
                       </LockGate>
                     </LedgerCurrencyMarks>
                   </LedgerProvider>

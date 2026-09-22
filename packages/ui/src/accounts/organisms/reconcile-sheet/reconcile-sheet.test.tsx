@@ -32,7 +32,8 @@ it("renders nothing while not visible", () => {
   expect(screen.queryByText("Bank A · PLN")).toBeNull();
 });
 
-it("shows the computed balance for the given asOf and starts with Save disabled", () => {
+it("shows the computed balance, and a Save pressed before a figure asks for one", () => {
+  const onSave = vi.fn();
   render(
     <ReconcileSheet
       visible
@@ -43,12 +44,14 @@ it("shows the computed balance for the given asOf and starts with Save disabled"
       onAsOfChange={noop}
       today={TODAY}
       onDismiss={noop}
-      onSave={noop}
+      onSave={onSave}
     />,
   );
   expect(screen.getByText("1 240.50")).toBeDefined();
   expect(screen.getByRole("button", { name: dateFieldName("As of", TODAY, TODAY) })).toBeDefined();
-  expect(screen.getByRole("button", { name: "Save" }).getAttribute("aria-disabled")).toBe("true");
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
+  expect(onSave).not.toHaveBeenCalled();
+  expect(screen.getByText("Required")).toBeDefined();
 });
 
 it("is controlled — moving the date calls onAsOfChange rather than updating itself", () => {

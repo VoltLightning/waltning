@@ -43,20 +43,29 @@ const minimal = {
 };
 
 it("offers every currency the ledger holds and rejects a whitespace-only name", () => {
+  const onSave = vi.fn();
   render(
     <CreateAccountForm
       currencies={currencies}
       today={TODAY}
       groups={[]}
       onCancel={vi.fn()}
-      onSave={vi.fn()}
+      onSave={onSave}
     />,
   );
   expect(screen.getByText(/PLN/)).toBeDefined();
   expect(screen.getByText(/BYN/)).toBeDefined();
   const save = screen.getByRole("button", { name: "Save" });
   fireEvent.change(screen.getByLabelText("Name"), { target: { value: "   " } });
-  expect(save.getAttribute("aria-disabled")).toBe("true");
+  // Pressable, and refusing says why rather than doing nothing.
+  expect(save.getAttribute("aria-disabled")).not.toBe("true");
+  expect(screen.queryByText("Required")).toBeNull();
+  fireEvent.click(save);
+  expect(onSave).not.toHaveBeenCalled();
+  expect(screen.getByText("Required")).toBeDefined();
+  // …and the error clears as the field is fixed.
+  fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Bank A" } });
+  expect(screen.queryByText("Required")).toBeNull();
 });
 
 it("trims the name and saves it with the chosen currency, through the shared defaults", () => {
@@ -116,17 +125,20 @@ it("prevents a name longer than the shared 120-character contract", () => {
  * rebuilt. A dead Save button explains itself; a crash does not.
  */
 it("stays rendered with no currencies, and cannot save", () => {
+  const onSave = vi.fn();
   render(
     <CreateAccountForm
       currencies={[]}
       today={TODAY}
       groups={[]}
       onCancel={vi.fn()}
-      onSave={vi.fn()}
+      onSave={onSave}
     />,
   );
   fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Bank A" } });
-  expect(screen.getByRole("button", { name: "Save" }).getAttribute("aria-disabled")).toBe("true");
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
+  expect(screen.getByText("Choose one")).toBeDefined();
+  expect(onSave).not.toHaveBeenCalled();
 });
 
 /**
@@ -179,13 +191,14 @@ it("switching ownership to shared forces business off and disables the toggle", 
 
 it("an invalid opening date blocks Save with the field error", () => {
   resizeTo(1440);
+  const onSave = vi.fn();
   render(
     <CreateAccountForm
       currencies={currencies}
       today={TODAY}
       groups={groups}
       onCancel={vi.fn()}
-      onSave={vi.fn()}
+      onSave={onSave}
     />,
   );
   fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Bank A" } });
@@ -195,7 +208,8 @@ it("an invalid opening date blocks Save with the field error", () => {
   fireEvent.change(screen.getByLabelText("Opening date"), { target: { value: "not-a-date" } });
 
   expect(screen.getByText("Enter a date as YYYY-MM-DD.")).toBeDefined();
-  expect(screen.getByRole("button", { name: "Save" }).getAttribute("aria-disabled")).toBe("true");
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
+  expect(onSave).not.toHaveBeenCalled();
 });
 
 it("reaches onSave with the whole draft once More details is filled in", () => {

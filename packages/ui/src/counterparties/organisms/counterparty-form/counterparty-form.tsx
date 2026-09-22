@@ -25,7 +25,9 @@ import { Button } from "../../../primitives/atoms/button/button";
 import { SegmentControl } from "../../../primitives/atoms/segment-control/segment-control";
 import { Select } from "../../../primitives/atoms/select/select";
 import { TextField } from "../../../primitives/atoms/text-field/text-field";
+import { FieldAnchor } from "../../../primitives/field-anchor";
 import type { FieldErrorMap } from "../../../primitives/field-errors.ts";
+import { useSubmitCheck } from "../../../primitives/use-submit-check.ts";
 import { MatchWarning } from "../../../states/molecules/match-warning/match-warning";
 import { text } from "../../../theme/fonts.ts";
 import { makeStyles } from "../../../theme/styles.ts";
@@ -117,13 +119,14 @@ export function CounterpartyForm({
   );
 
   const trimmedName = name.trim();
-  const canSave = trimmedName !== "";
-  const handleSave = useCallback(() => {
-    if (!canSave) return;
+  const check = useSubmitCheck({ name: trimmedName === "" && t("common.required") });
+  const save = useCallback(() => {
+    if (trimmedName === "") return;
     onSave({ name: trimmedName, kind, settlementCurrency, contact, note });
-  }, [canSave, contact, kind, note, onSave, settlementCurrency, trimmedName]);
+  }, [contact, kind, note, onSave, settlementCurrency, trimmedName]);
+  const handleSave = useCallback(() => check.submit(save), [check, save]);
 
-  const nameError = fieldErrors?.byField["name"]?.[0];
+  const nameError = check.errorFor("name") ?? fieldErrors?.byField["name"]?.[0];
 
   return (
     <View style={styles.root}>
@@ -137,14 +140,16 @@ export function CounterpartyForm({
         </View>
       ) : null}
 
-      <TextField
-        label={t("common.name")}
-        value={name}
-        onChangeText={setName}
-        onBlur={handleBlurName}
-        maxLength={200}
-        {...(nameError === undefined ? {} : { error: nameError })}
-      />
+      <FieldAnchor check={check} field="name">
+        <TextField
+          label={t("common.name")}
+          value={name}
+          onChangeText={setName}
+          onBlur={handleBlurName}
+          maxLength={200}
+          {...(nameError === undefined ? {} : { error: nameError })}
+        />
+      </FieldAnchor>
 
       {matches.map((candidate) => (
         <CandidateWarning
@@ -177,12 +182,7 @@ export function CounterpartyForm({
 
       <View style={styles.actions}>
         <Button label={t("common.cancel")} onPress={onCancel} variant="ghost" />
-        <Button
-          label={t("common.save")}
-          onPress={handleSave}
-          disabled={!canSave}
-          variant="primary"
-        />
+        <Button label={t("common.save")} onPress={handleSave} variant="primary" />
       </View>
 
       {onArchive ? (

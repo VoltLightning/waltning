@@ -102,17 +102,19 @@ it("L10 — the second confirmation's rate follows the locale's own decimal mark
 // L11 — `setManualRateInput`'s own 366-day cap, restated here so the range
 // is refused before a submit round trip.
 it("L11 — a range past 366 days states the cap and refuses to submit", () => {
+  const onSubmit = vi.fn();
   render(
     <RateEditor
       {...BASE_PROPS}
       from="2025-01-01"
       to="2026-01-02" // 367 days inclusive.
       existingRows={[]}
-      onSubmit={noop}
+      onSubmit={onSubmit}
     />,
   );
   expect(screen.getByText("A manual rate range cannot exceed 366 days.")).toBeDefined();
-  expect(screen.getByRole("button", { name: "Set rate" })).toHaveProperty("disabled", true);
+  fireEvent.click(screen.getByRole("button", { name: "Set rate" }));
+  expect(onSubmit).not.toHaveBeenCalled();
 });
 
 it("L11 — a range of exactly 366 days is allowed", () => {
@@ -146,14 +148,19 @@ it("carried-forward rows count separately from manual and absent", () => {
   expect(screen.getByText("3 days currently absent")).toBeDefined();
 });
 
-it("refuses to submit with no rate typed", () => {
-  render(<RateEditor {...BASE_PROPS} rate="" existingRows={[]} onSubmit={noop} />);
-  expect(screen.getByRole("button", { name: "Set rate" })).toHaveProperty("disabled", true);
+it("refuses to submit with no rate typed, and asks for one", () => {
+  const onSubmit = vi.fn();
+  render(<RateEditor {...BASE_PROPS} rate="" existingRows={[]} onSubmit={onSubmit} />);
+  fireEvent.click(screen.getByRole("button", { name: "Set rate" }));
+  expect(onSubmit).not.toHaveBeenCalled();
+  expect(screen.getByText("Required")).toBeDefined();
 });
 
 it("refuses to submit a rate of 0, even set outside RateField's own guard", () => {
-  render(<RateEditor {...BASE_PROPS} rate="0" existingRows={[]} onSubmit={noop} />);
-  expect(screen.getByRole("button", { name: "Set rate" })).toHaveProperty("disabled", true);
+  const onSubmit = vi.fn();
+  render(<RateEditor {...BASE_PROPS} rate="0" existingRows={[]} onSubmit={onSubmit} />);
+  fireEvent.click(screen.getByRole("button", { name: "Set rate" }));
+  expect(onSubmit).not.toHaveBeenCalled();
 });
 
 it("cancel calls back without submitting", () => {

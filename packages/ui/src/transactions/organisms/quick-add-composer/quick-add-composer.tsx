@@ -34,7 +34,7 @@ import {
 } from "@waltning/core/capture/payee-memory";
 import { accountingDate, isAccountingDate, type TimeOfDay } from "@waltning/core/date";
 import type { CurrencyCode } from "@waltning/core/money";
-import { useCallback, useMemo, useState } from "react";
+import { type ReactNode, useCallback, useMemo, useState } from "react";
 import { Text, View } from "react-native";
 import { dayLabel } from "../../../i18n/locales";
 import { useLocale, useT } from "../../../i18n/provider";
@@ -48,6 +48,7 @@ import {
 import { Select } from "../../../primitives/atoms/select/select";
 import { TextField } from "../../../primitives/atoms/text-field/text-field";
 import { TimeField } from "../../../primitives/atoms/time-field/time-field";
+import { FieldAnchor } from "../../../primitives/field-anchor";
 import type { FieldErrorMap } from "../../../primitives/field-errors.ts";
 import { DatePicker } from "../../../primitives/molecules/date-picker/date-picker";
 import { readTyped } from "../../../primitives/molecules/time-picker/clock.ts";
@@ -56,6 +57,7 @@ import { categoryTintFor } from "../../../primitives/monogram.ts";
 import { BottomSheet } from "../../../primitives/organisms/bottom-sheet/bottom-sheet";
 import { SheetAwareTextInput } from "../../../primitives/sheet-input";
 import { useBreakpoint } from "../../../primitives/use-breakpoint.ts";
+import type { SubmitCheck } from "../../../primitives/use-submit-check.ts";
 import { HouseIcon } from "../../../shell/phosphor";
 import { Banner } from "../../../states/molecules/banner/banner";
 import { focusBorder } from "../../../theme/focus.ts";
@@ -174,7 +176,16 @@ export type QuickAddComposerProps = {
   pace?: string | undefined;
   /** `create_transaction`'s own field paths — same keys `QuickAddForm` resolves. */
   fieldErrors?: FieldErrorMap;
+  /**
+   * The screen's `useSubmitCheck` over the fields Save needs: this component
+   * draws the fields, so it holds the anchors and shows the errors once Save
+   * has been pressed.
+   */
+  check?: SubmitCheck<QuickAddCheckField>;
 };
+
+/** The fields a capture cannot be saved without. */
+export type QuickAddCheckField = "amount" | "account" | "counterpartyRole";
 
 type OpenSheet = "date" | "time" | "scope" | "payee" | "counterparty" | null;
 
@@ -214,6 +225,7 @@ export function QuickAddComposer({
   onCreateCounterparty,
   pace,
   fieldErrors,
+  check,
 }: QuickAddComposerProps) {
   const t = useT();
   const locale = useLocale();
@@ -337,7 +349,7 @@ export function QuickAddComposer({
         ? t("transactions.counterpartyRoleMissing", { name: pickedCounterparty.name })
         : pickedCounterparty.name;
 
-  const amountError = fieldErrors?.byField["amountOriginal"]?.[0];
+  const amountError = check?.errorFor("amount") ?? fieldErrors?.byField["amountOriginal"]?.[0];
   /**
    * L2 — `resolveFieldErrorMessage` maps the controller's own
    * `transactions.needsRate` key onto `byField.accountId`, so a refusal left
@@ -350,7 +362,11 @@ export function QuickAddComposer({
     selectedAccount !== undefined && !selectedAccount.capturable
       ? t("transactions.needsRate", { currency: selectedAccount.currency })
       : undefined;
-  const accountError = rawAccountError === accountNeedsRate ? undefined : rawAccountError;
+  // The banner already says a rateless account; the row says only what it does not.
+  const checkedAccount = check?.errorFor("account");
+  const accountError =
+    (checkedAccount === accountNeedsRate ? undefined : checkedAccount) ??
+    (rawAccountError === accountNeedsRate ? undefined : rawAccountError);
   /**
    * `neutral`, not `warn` — S05 §8's P4: *the estimated-rate marker is the
    * only amber here*. A currency with no rate at all is a capability this
@@ -368,7 +384,8 @@ export function QuickAddComposer({
   const dateError = fieldErrors?.byField["date"]?.[0];
   const timeError = fieldErrors?.byField["timeOfDay"]?.[0];
   const counterpartyError = fieldErrors?.byField["counterpartyId"]?.[0];
-  const counterpartyRoleError = fieldErrors?.byField["counterpartyRole"]?.[0];
+  const counterpartyRoleError =
+    check?.errorFor("counterpartyRole") ?? fieldErrors?.byField["counterpartyRole"]?.[0];
   /** §6.7's mirror (`create-transaction.executor.ts`'s own refusal), named onto the row the scope renders. */
   const scopeError = fieldErrors?.byField["isBusiness"]?.[0];
   const moreError =
@@ -413,31 +430,35 @@ export function QuickAddComposer({
           ))}
         </View>
       ) : null}
-      <AmountCard
-        label={t("transactions.howMuch")}
-        raw={raw}
-        onChangeRaw={onRawChange}
-        decimals={selectedAccount?.decimals ?? 2}
-        // The code: `AmountCard` draws the pivot's symbol or the code (`04` §4.1).
-        currency={selectedAccount?.currency}
-        kind={type}
-        context={pace}
-        error={amountError}
-        autoFocus
-      />
+      <Anchored check={check} field="amount">
+        <AmountCard
+          label={t("transactions.howMuch")}
+          raw={raw}
+          onChangeRaw={onRawChange}
+          decimals={selectedAccount?.decimals ?? 2}
+          // The code: `AmountCard` draws the pivot's symbol or the code (`04` §4.1).
+          currency={selectedAccount?.currency}
+          kind={type}
+          context={pace}
+          error={amountError}
+          autoFocus
+        />
+      </Anchored>
 
       <ComposerRows>
-        <ComposerRow
-          first
-          label={t(type === "income" ? "transactions.intoAccount" : "transactions.fromAccount")}
-          value={selectedAccount?.name}
-          placeholder={t("transactions.chooseAccount")}
-          tile={<HouseIcon size={15} color={theme.accentText} />}
-          tileFill={theme.accentFill}
-          onPress={onOpenAccountPicker}
-          machineFilled={accountMachineFilled && selectedAccount !== undefined}
-          error={accountError}
-        />
+        <Anchored check={check} field="account">
+          <ComposerRow
+            first
+            label={t(type === "income" ? "transactions.intoAccount" : "transactions.fromAccount")}
+            value={selectedAccount?.name}
+            placeholder={t("transactions.chooseAccount")}
+            tile={<HouseIcon size={15} color={theme.accentText} />}
+            tileFill={theme.accentFill}
+            onPress={onOpenAccountPicker}
+            machineFilled={accountMachineFilled && selectedAccount !== undefined}
+            error={accountError}
+          />
+        </Anchored>
         <ComposerRow
           label={t("transactions.category")}
           value={categoryValue}
@@ -448,15 +469,17 @@ export function QuickAddComposer({
           machineFilled={categoryMachineFilled}
           error={categoryError}
         />
-        <ComposerRow
-          label={t("transactions.moreDetails")}
-          value={moreSummary === "" ? undefined : moreSummary}
-          placeholder={t("transactions.moreDetailsHint")}
-          tile={<ComposerTileGlyph glyph="…" ink={theme.textMuted} />}
-          tileFill={theme.subtleFill}
-          onPress={handleToggleMore}
-          error={moreShown ? undefined : moreError}
-        />
+        <Anchored check={check} field="counterpartyRole">
+          <ComposerRow
+            label={t("transactions.moreDetails")}
+            value={moreSummary === "" ? undefined : moreSummary}
+            placeholder={t("transactions.moreDetailsHint")}
+            tile={<ComposerTileGlyph glyph="…" ink={theme.textMuted} />}
+            tileFill={theme.subtleFill}
+            onPress={handleToggleMore}
+            error={moreShown ? undefined : moreError}
+          />
+        </Anchored>
         {moreShown ? (
           <>
             <ComposerRow
@@ -644,6 +667,24 @@ export function QuickAddComposer({
         ) : null}
       </BottomSheet>
     </View>
+  );
+}
+
+/** A `FieldAnchor` when the screen passed a check, the field alone when it did not. */
+function Anchored({
+  check,
+  field,
+  children,
+}: {
+  check: SubmitCheck<QuickAddCheckField> | undefined;
+  field: QuickAddCheckField;
+  children: ReactNode;
+}) {
+  if (check === undefined) return <>{children}</>;
+  return (
+    <FieldAnchor check={check} field={field}>
+      {children}
+    </FieldAnchor>
   );
 }
 

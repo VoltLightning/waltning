@@ -263,7 +263,9 @@ it("asks for a group from + New with none chosen, and blocks Save until one is",
   );
   fireEvent.click(screen.getByRole("button", { name: "New" }));
   fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Parking" } });
-  expect(screen.getByRole("button", { name: "Save" }).getAttribute("aria-disabled")).toBe("true");
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
+  expect(onCreate).not.toHaveBeenCalled();
+  expect(screen.getByText("Choose one")).toBeDefined();
 
   // Two "Transport" chips exist while creating with no group chosen: the
   // sheet's own filter row, and the create row's group chooser beneath it —
@@ -440,7 +442,9 @@ it("still asks for a group when the tree has them", () => {
   );
   fireEvent.click(screen.getByRole("button", { name: "Create a category" }));
   fireEvent.change(screen.getByRole("textbox", { name: "Name" }), { target: { value: "Coffee" } });
-  expect(screen.getByRole("button", { name: "Save" }).getAttribute("aria-disabled")).toBe("true");
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
+  expect(onCreate).not.toHaveBeenCalled();
+  expect(screen.getByText("Choose one")).toBeDefined();
 });
 
 /**

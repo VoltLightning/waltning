@@ -112,7 +112,10 @@ it("reveals date, note, business and counterparty only after More", () => {
 it("saves the resting draft — amount and account, everything else at its default", () => {
   const onSave = vi.fn();
   renderForm({ onSave });
-  expect(screen.getByRole("button", { name: "Save" }).getAttribute("aria-disabled")).toBe("true");
+  // Nothing typed: Save is pressable, and pressed it asks for what is missing.
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
+  expect(onSave).not.toHaveBeenCalled();
+  expect(screen.getByText("Required")).toBeDefined();
   cleanup();
 
   // The account is a controlled prop now — the screen sets it once
@@ -252,12 +255,14 @@ it("carries an edited date through to onSave", () => {
 
 /** A date that is not `YYYY-MM-DD` blocks Save rather than reaching the write malformed. */
 it("blocks Save on a malformed date", () => {
-  renderForm({ accountId: "account-a" });
+  const onSave = vi.fn();
+  renderForm({ accountId: "account-a", onSave });
   fireEvent.click(screen.getByRole("button", { name: "More" }));
   fireEvent.change(screen.getByLabelText("Date"), { target: { value: "15 Jan" } });
   fillAmount();
 
-  expect(screen.getByRole("button", { name: "Save" }).getAttribute("aria-disabled")).toBe("true");
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
+  expect(onSave).not.toHaveBeenCalled();
 });
 
 it("offers no counterparty field when the ledger holds none", () => {
@@ -297,9 +302,7 @@ it("declines a capture into a currency it holds no rate for, and says why", () =
   fillAmount();
 
   expect(screen.getByText(/PLN needs an exchange rate/)).toBeDefined();
-  const save = screen.getByRole("button", { name: "Save" });
-  expect(save.getAttribute("aria-disabled")).toBe("true");
-  fireEvent.click(save);
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
   expect(onSave).not.toHaveBeenCalled();
 });
 

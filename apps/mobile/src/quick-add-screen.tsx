@@ -29,12 +29,14 @@ import { useKeyboardHeight } from "@waltning/ui/primitives/keyboard";
 import { useSafeArea } from "@waltning/ui/primitives/safe-area";
 import { type Segment, SegmentControl } from "@waltning/ui/primitives/segment-control";
 import { useBreakpoint } from "@waltning/ui/primitives/use-breakpoint";
+import { useSubmitCheck } from "@waltning/ui/primitives/use-submit-check";
 import { GroundPanel } from "@waltning/ui/shell/card";
 import { text } from "@waltning/ui/theme/fonts";
 import { makeStyles } from "@waltning/ui/theme/styles";
 import { gutter, space } from "@waltning/ui/tokens";
 import { ComposerHeader } from "@waltning/ui/transactions/composer-header";
 import {
+  type QuickAddCheckField,
   QuickAddComposer,
   type QuickAddComposerAccount,
 } from "@waltning/ui/transactions/quick-add-composer";
@@ -544,20 +546,25 @@ export default function QuickAdd() {
   }, [accountMachineFilled, handleDiscard, t]);
 
   // §6.6, never defaulted: a counterparty picked with no role would reach
-  // `create_transaction`'s own refine and refuse — Save stays disabled here so
-  // the reason is visible on the chip (`counterpartyValue`'s "role?" suffix)
-  // before the person ever taps it, not after.
+  // `create_transaction`'s own refine and refuse — so Save refuses first, and
+  // says so on the row (`counterpartyValue`'s "role?" suffix already asks).
   //
   // §14.6, the same rule: `selectedComposerAccount.capturable === false` is
   // knowable the moment the account chip fills, not only once
-  // `create_transaction` bounces it — `QuickAddForm`'s own `blocked` already
-  // disables the desk fallback's Save this way; this matches it.
-  const composerSaveDisabled =
-    parseAmount(composerAmountRaw) === null ||
-    effectiveAccountId === null ||
-    selectedComposerAccount?.capturable === false ||
-    (composerCounterpartyId !== null && composerCounterpartyRole === null);
-  const handleComposerSave = useCallback(() => {
+  // `create_transaction` bounces it — `QuickAddForm` refuses the same way.
+  // Drawn order. Each is what used to keep Save disabled, now said on the
+  // field it is about when Save is pressed.
+  const composerCheck = useSubmitCheck<QuickAddCheckField>({
+    amount: parseAmount(composerAmountRaw) === null && t("common.required"),
+    account:
+      effectiveAccountId === null
+        ? t("common.chooseOne")
+        : selectedComposerAccount?.capturable === false &&
+          t("transactions.needsRate", { currency: selectedComposerAccount.currency }),
+    counterpartyRole:
+      composerCounterpartyId !== null && composerCounterpartyRole === null && t("common.chooseOne"),
+  });
+  const saveComposer = useCallback(() => {
     const amount = parseAmount(composerAmountRaw);
     if (amount === null || effectiveAccountId === null) return;
     const next: QuickAddDraft = {
@@ -623,6 +630,10 @@ export default function QuickAdd() {
     selectedComposerAccount,
     t,
   ]);
+  const handleComposerSave = useCallback(
+    () => composerCheck.submit(saveComposer),
+    [composerCheck, saveComposer],
+  );
 
   // The footer clears the home indicator itself, the way the band above
   // clears the notch: `GroundPanel` between them clears neither edge.
@@ -813,6 +824,7 @@ export default function QuickAdd() {
             onCounterpartyRoleChange={handleComposerCounterpartyRoleChange}
             onCreateCounterparty={handleComposerCreateCounterparty}
             {...(fieldErrors === undefined ? {} : { fieldErrors })}
+            check={composerCheck}
           />
         </View>
       </GroundPanel>
@@ -828,7 +840,6 @@ export default function QuickAdd() {
             composerType === "expense" ? "transactions.saveExpense" : "transactions.saveIncome",
           )}
           onPress={handleComposerSave}
-          disabled={composerSaveDisabled}
         />
       </View>
       <CategorySheet

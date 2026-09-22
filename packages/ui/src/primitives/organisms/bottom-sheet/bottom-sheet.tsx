@@ -134,6 +134,8 @@ import { text } from "../../../theme/fonts.ts";
 import { makeStyles } from "../../../theme/styles.ts";
 import { focus, radius, space, touchTarget } from "../../../tokens.ts";
 import { Button } from "../../atoms/button/button";
+import { FieldRevealProvider } from "../../field-reveal";
+import { FormAlertHost } from "../../form-alert-host";
 import { dismissKeyboard, useKeyboardHeight } from "../../keyboard.ts";
 import { containOverscroll } from "../../nested-scroll.ts";
 import { useWindowInsets } from "../../safe-area";
@@ -336,16 +338,17 @@ export function BottomSheet({
         iOS presents a modal inside the same window and never needed this.
       */}
       <GestureHandlerRootView style={styles.overlay}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={t("common.dismissSheet", { title })}
-          onPress={handleBackdropPress}
-          onFocus={handleFocus}
-          onBlur={handleBlur}
-          style={[styles.backdrop, backdropFocused ? styles.backdropFocused : null]}
-        />
-        <View style={styles.lift}>
-          {/*
+        <FormAlertHost>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={t("common.dismissSheet", { title })}
+            onPress={handleBackdropPress}
+            onFocus={handleFocus}
+            onBlur={handleBlur}
+            style={[styles.backdrop, backdropFocused ? styles.backdropFocused : null]}
+          />
+          <View style={styles.lift}>
+            {/*
             `enableDynamicSizing` is the library's name for what this component
             already promised — the sheet owns its height — and
             `maxDynamicContentSize` is `sheetBounds`' ceiling handed to it, so
@@ -353,58 +356,61 @@ export function BottomSheet({
             `onClose` fires when the pan gesture finishes the dismissal, which
             is the one thing the caller's `visible` cannot know on its own.
           */}
-          <SheetInputProvider value>
-            <SheetPartsContext.Provider value={parts}>
-              <GorhomBottomSheet
-                enableDynamicSizing
-                maxDynamicContentSize={maxHeight}
-                enablePanDownToClose
-                enableContentPanningGesture={!bodyRolls}
-                // Said, not defaulted: the sheet rides above the keys at the
-                // height it had, and goes back down when they go.
-                // **Vertical is the sheet's; sideways is not.** Without these the
-                // sheet's pan took any drag, and a chip row inside it — the
-                // category groups — could not be scrolled along on iOS.
-                activeOffsetY={PAN_ACTIVE_Y}
-                failOffsetX={PAN_FAIL_X}
-                keyboardBehavior="interactive"
-                keyboardBlurBehavior="restore"
-                onClose={onDismiss}
-                backgroundStyle={styles.sheetBackground}
-                style={styles.sheetShadow}
-                handleComponent={SheetHandle}
-                {...(footer === undefined ? {} : { footerComponent: SheetFooter })}
-              >
-                {/* A direct child, deliberately — see the header. */}
-                <BottomSheetScrollView
-                  ref={scrollerRef}
-                  testID="bottom-sheet-body"
-                  style={containOverscroll}
-                  contentContainerStyle={holdHeight}
-                  onLayout={measureBody}
-                  keyboardShouldPersistTaps="handled"
-                  showsVerticalScrollIndicator={false}
+            <SheetInputProvider value>
+              <SheetPartsContext.Provider value={parts}>
+                <GorhomBottomSheet
+                  enableDynamicSizing
+                  maxDynamicContentSize={maxHeight}
+                  enablePanDownToClose
+                  enableContentPanningGesture={!bodyRolls}
+                  // Said, not defaulted: the sheet rides above the keys at the
+                  // height it had, and goes back down when they go.
+                  // **Vertical is the sheet's; sideways is not.** Without these the
+                  // sheet's pan took any drag, and a chip row inside it — the
+                  // category groups — could not be scrolled along on iOS.
+                  activeOffsetY={PAN_ACTIVE_Y}
+                  failOffsetX={PAN_FAIL_X}
+                  keyboardBehavior="interactive"
+                  keyboardBlurBehavior="restore"
+                  onClose={onDismiss}
+                  backgroundStyle={styles.sheetBackground}
+                  style={styles.sheetShadow}
+                  handleComponent={SheetHandle}
+                  {...(footer === undefined ? {} : { footerComponent: SheetFooter })}
                 >
-                  {/*
+                  {/* A direct child, deliberately — see the header. */}
+                  <BottomSheetScrollView
+                    ref={scrollerRef}
+                    testID="bottom-sheet-body"
+                    style={containOverscroll}
+                    contentContainerStyle={holdHeight}
+                    onLayout={measureBody}
+                    keyboardShouldPersistTaps="handled"
+                    showsVerticalScrollIndicator={false}
+                  >
+                    {/*
                   One box around the content, so a focused field can be asked
                   whether it is in here and the content's top can be measured —
                   and `collapsable={false}`, because Android flattens a view
                   that only wraps and it would measure as its parent.
                 */}
-                  <View
-                    ref={contentRef}
-                    testID="bottom-sheet-content"
-                    collapsable={false}
-                    onLayout={measureContent}
-                    style={[styles.bodyContent, clearBottom, underFooter]}
-                  >
-                    {children}
-                  </View>
-                </BottomSheetScrollView>
-              </GorhomBottomSheet>
-            </SheetPartsContext.Provider>
-          </SheetInputProvider>
-        </View>
+                    <View
+                      ref={contentRef}
+                      testID="bottom-sheet-content"
+                      collapsable={false}
+                      onLayout={measureContent}
+                      style={[styles.bodyContent, clearBottom, underFooter]}
+                    >
+                      <FieldRevealProvider scroller={scrollerRef} contentTop={contentRef}>
+                        {children}
+                      </FieldRevealProvider>
+                    </View>
+                  </BottomSheetScrollView>
+                </GorhomBottomSheet>
+              </SheetPartsContext.Provider>
+            </SheetInputProvider>
+          </View>
+        </FormAlertHost>
       </GestureHandlerRootView>
     </Modal>
   );

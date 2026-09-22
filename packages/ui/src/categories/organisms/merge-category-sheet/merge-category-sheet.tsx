@@ -17,7 +17,9 @@ import { View } from "react-native";
 import { useT } from "../../../i18n/provider";
 import { Button } from "../../../primitives/atoms/button/button";
 import { Select, type SelectOption } from "../../../primitives/atoms/select/select";
+import { FieldAnchor } from "../../../primitives/field-anchor";
 import { BottomSheet } from "../../../primitives/organisms/bottom-sheet/bottom-sheet";
+import { useSubmitCheck } from "../../../primitives/use-submit-check.ts";
 import { ConfirmDialog } from "../../../shell/organisms/confirm-dialog/confirm-dialog";
 import { Banner } from "../../../states/molecules/banner/banner";
 import { makeStyles } from "../../../theme/styles.ts";
@@ -50,12 +52,16 @@ export function MergeCategorySheet({
   const styles = useStyles();
   const [winnerId, setWinnerId] = useState<string | null>(initialWinnerId);
   const [confirming, setConfirming] = useState(false);
+  const check = useSubmitCheck({ winner: winnerId === null && t("common.chooseOne") });
+  const resetCheck = check.reset;
 
   // Re-seeds on every open — one sheet instance reused across every pair,
   // the same reasoning `RenameCategorySheet` re-seeds its field.
   useEffect(() => {
-    if (visible) setWinnerId(initialWinnerId);
-  }, [visible, initialWinnerId]);
+    if (!visible) return;
+    setWinnerId(initialWinnerId);
+    resetCheck();
+  }, [visible, initialWinnerId, resetCheck]);
 
   const options: readonly SelectOption[] = candidates.map((candidate) => ({
     value: candidate.id,
@@ -63,7 +69,9 @@ export function MergeCategorySheet({
   }));
   const winner = candidates.find((candidate) => candidate.id === winnerId) ?? null;
 
-  const handleOpenConfirm = useCallback(() => setConfirming(true), []);
+  const openConfirm = useCallback(() => setConfirming(true), []);
+  const handleOpenConfirm = useCallback(() => check.submit(openConfirm), [check, openConfirm]);
+  const winnerError = check.errorFor("winner");
   const handleCancelConfirm = useCallback(() => setConfirming(false), []);
   const handleConfirm = useCallback(() => {
     if (winnerId === null) return;
@@ -77,23 +85,21 @@ export function MergeCategorySheet({
     <BottomSheet visible={visible} title={t("categories.merge")} onDismiss={onDismiss}>
       <View style={styles.body}>
         {error === undefined ? null : <Banner tone="negative" message={error} />}
-        <Select
-          label={t("categories.mergeWinnerLabel")}
-          placeholder={t("categories.mergeWinnerPlaceholder")}
-          options={options}
-          value={winnerId}
-          onChange={setWinnerId}
-          searchable
-        />
+        <FieldAnchor check={check} field="winner">
+          <Select
+            label={t("categories.mergeWinnerLabel")}
+            placeholder={t("categories.mergeWinnerPlaceholder")}
+            options={options}
+            value={winnerId}
+            onChange={setWinnerId}
+            searchable
+            error={winnerError}
+          />
+        </FieldAnchor>
         {winner === null ? null : (
           <MergePreview loserName={loserName} winnerName={winner.name} counts={counts} />
         )}
-        <Button
-          label={t("categories.merge")}
-          onPress={handleOpenConfirm}
-          variant="primary"
-          disabled={winner === null}
-        />
+        <Button label={t("categories.merge")} onPress={handleOpenConfirm} variant="primary" />
       </View>
       <ConfirmDialog
         visible={confirming && winner !== null}

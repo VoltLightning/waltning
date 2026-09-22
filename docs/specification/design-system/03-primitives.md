@@ -274,3 +274,33 @@ choice.
 `Spinner` · `Skeleton` (matches the shape it replaces, never a grey box) ·
 `ProgressBar` (determinate — uploads, extraction) · `Toast` (transient, with
 Undo where the action is reversible) · `KeyHint` (`J` `K` `A` — keyboard legend).
+
+### 3.10 Submitting a form
+
+**A form's Save is always pressable, and a press on a form that is not ready
+says why.** A greyed Save answers *can I?* and never *why not?* — the reader is
+left to find, unprompted, which field the form objects to, and on a phone that
+field is often scrolled out of view. So a press on a form with a broken field
+does three things at once (`useSubmitCheck`):
+
+1. **Every broken field shows its error**, in the field's own error line and
+   danger ring — from that press on, not before. A form that opens already
+   saying *Required* under empty fields is scolding someone who has not
+   started. The errors clear as the fields are fixed.
+2. **A `FormAlert` drops in at the top of the window**: *The form isn't
+   complete — check the highlighted fields.* Top, because the bottom is where
+   the thumb that pressed Save and the keyboard still are. It names no field:
+   the fields do that themselves. A sheet is its own window, so an alert raised
+   from inside one is drawn inside it, above the sheet, never on the page
+   behind (the reason §4.8 gives for `RateEditor`'s refusals).
+3. **The scroller brings the first broken field into view**, in drawn order —
+   the page's `GroundPanel` or the sheet's body, whichever holds the field. A
+   field folded under *More details* is unfolded first, so what is scrolled to
+   is drawn.
+
+A field's own objection to what is being typed — a date that is not a date, a
+fee that does not parse — still shows immediately; that is the field
+answering, not the form refusing.
+
+**Save stays disabled in exactly two states**, neither of them the reader's
+mistake: a save already in flight, and an edit with nothing changed (S09 §7).

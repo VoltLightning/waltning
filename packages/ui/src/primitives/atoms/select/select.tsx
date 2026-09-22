@@ -100,6 +100,8 @@ export type SelectProps = {
   /** Start disclosed. For a screen whose whole point is this choice. */
   defaultOpen?: boolean;
   disabled?: boolean;
+  /** Why the choice does not stand — drawn under the field, and its ring turns danger. */
+  error?: string | undefined;
 };
 
 export function Select({
@@ -111,6 +113,7 @@ export function Select({
   searchable = false,
   defaultOpen = false,
   disabled,
+  error,
 }: SelectProps) {
   const [open, setOpen] = useState(defaultOpen);
   const [query, setQuery] = useState("");
@@ -141,6 +144,7 @@ export function Select({
       placeholder={placeholder}
       display={selected?.label}
       disabled={disabled === true}
+      error={error}
       open={open}
       onOpenChange={handleOpenChange}
       search={searchable ? { query, onQueryChange: setQuery } : undefined}
@@ -233,6 +237,7 @@ type DisclosureProps = {
   /** What the closed field shows; `undefined` shows the placeholder. */
   display: string | undefined;
   disabled: boolean;
+  error?: string | undefined;
   /** Owned by the caller: `Select` must close it on a pick, so it holds it. */
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -246,6 +251,7 @@ function Disclosure({
   placeholder,
   display,
   disabled,
+  error,
   open,
   onOpenChange,
   search,
@@ -281,6 +287,8 @@ function Disclosure({
           hovered && !disabled && !focused ? styles.fieldHovered : null,
           open ? styles.fieldOpen : null,
           focused ? styles.focused : null,
+          // After focus, so an errored field keeps its danger ring while focused (§3.7).
+          error === undefined ? null : styles.fieldError,
           disabled ? styles.disabled : null,
         ]}
       >
@@ -291,6 +299,7 @@ function Disclosure({
           <View style={styles.chevronMark} />
         </Animated.View>
       </PressableScaled>
+      {error === undefined ? null : <Text style={styles.error}>{error}</Text>}
       <PanelOverlay
         open={open}
         onDismiss={close}
@@ -725,6 +734,8 @@ function OptionRow({ option, selected, role, onSelect }: OptionRowProps) {
 
 const useStyles = makeStyles((theme) => ({
   root: { gap: space.sm },
+  fieldError: { borderColor: theme.dangerBorder, outlineColor: theme.dangerBorder },
+  error: { color: theme.dangerText, ...text.ui("caption") },
   label: { color: theme.textMuted, ...text.ui("kicker") },
   field: {
     minHeight: touchTarget.min,

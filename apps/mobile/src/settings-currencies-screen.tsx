@@ -323,7 +323,6 @@ export default function SettingsCurrenciesScreen() {
                   onPress={handleOpenPivotConfirm}
                   variant="secondary"
                   size="sm"
-                  disabled={selectedPivotTarget === null}
                 />
               </View>
             ) : (

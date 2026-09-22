@@ -30,12 +30,14 @@ import { useT } from "@waltning/ui/i18n/provider";
 import { Button } from "@waltning/ui/primitives/button";
 import { useKeyboardHeight } from "@waltning/ui/primitives/keyboard";
 import { useSafeArea } from "@waltning/ui/primitives/safe-area";
+import { useSubmitCheck } from "@waltning/ui/primitives/use-submit-check";
 import { GroundPanel } from "@waltning/ui/shell/card";
 import { text } from "@waltning/ui/theme/fonts";
 import { makeStyles } from "@waltning/ui/theme/styles";
 import { gutter, space } from "@waltning/ui/tokens";
 import { ComposerHeader } from "@waltning/ui/transactions/composer-header";
 import {
+  type TransferCheckField,
   TransferComposer,
   type TransferComposerAccount,
 } from "@waltning/ui/transactions/transfer-composer";
@@ -418,28 +420,33 @@ export default function Transfer() {
   // only true once a person has actually typed something `parseAmount`
   // cannot read.
   const feeInvalid = parsedFee === null && feeRaw.trim() !== "";
-  // §14.6 — refused before the write on an uncapturable *From* account; Save
-  // stays disabled the same way it already does for every other refusal this
-  // screen can see coming, rather than letting a tap reach the controller
-  // only to bounce.
-  const saveDisabled =
-    parsedAmount === null ||
-    fromAccountId === null ||
-    toAccountId === null ||
-    sameAccount ||
-    parsedToAmount === null ||
-    amountIsZero ||
-    toAmountIsZero ||
-    feeInvalid ||
-    fromAccount?.capturable === false ||
-    // H1 — belt and suspenders alongside the date-reprice effect above,
-    // which already clears `toAmountRaw` (and so `parsedToAmount`) in this
-    // exact state: a cross-currency transfer with no reference rate for the
-    // chosen date and an un-edited destination must never be saveable,
-    // regardless of what `toAmountRaw` currently holds.
-    (crossCurrency && referenceRate === undefined && !toAmountEdited);
-
-  const handleSave = useCallback(() => {
+  // §14.6 — refused before the write on an uncapturable *From* account, the
+  // same way as every other refusal this screen can see coming, rather than
+  // letting a tap reach the controller only to bounce.
+  // Drawn order. Each is what used to keep the button disabled, now said on
+  // the field it is about when it is pressed.
+  const check = useSubmitCheck<TransferCheckField>({
+    amount: (parsedAmount === null || amountIsZero) && t("common.required"),
+    from:
+      fromAccountId === null
+        ? t("common.chooseOne")
+        : fromAccount?.capturable === false &&
+          t("transactions.needsRate", { currency: fromAccount.currency }),
+    to:
+      toAccountId === null
+        ? t("common.chooseOne")
+        : sameAccount && t("transactions.sameAccountRefused"),
+    fee: feeInvalid && t("transactions.feeInvalid"),
+    toAmount:
+      // H1 — a cross-currency transfer with no reference rate for the chosen
+      // date and an un-edited destination is never saveable, whatever
+      // `toAmountRaw` holds; the date-reprice effect above clears it too.
+      (parsedToAmount === null ||
+        toAmountIsZero ||
+        (crossCurrency && referenceRate === undefined && !toAmountEdited)) &&
+      t("common.required"),
+  });
+  const save = useCallback(() => {
     if (parsedAmount === null || fromAccountId === null || toAccountId === null) return;
     if (parsedToAmount === null || toAccount === undefined) return;
     // M4 — closes the source leg the same way `saveDisabled` already does:
@@ -503,6 +510,7 @@ export default function Transfer() {
     ledger,
     t,
   ]);
+  const handleSave = useCallback(() => check.submit(save), [check, save]);
 
   /**
    * §14.6's way out, the same door `quick-add-screen.tsx` opens: S18, scoped
@@ -556,6 +564,7 @@ export default function Transfer() {
           note={note}
           onNoteChange={setNote}
           {...(fieldErrors === undefined ? {} : { fieldErrors })}
+          check={check}
           onSetRate={handleSetRate}
         />
       </GroundPanel>
@@ -567,7 +576,6 @@ export default function Transfer() {
           size="lg"
           label={t("transactions.moveMoney")}
           onPress={handleSave}
-          disabled={saveDisabled}
         />
         <Text style={styles.footerNote}>{t("transactions.transferLinkedNote")}</Text>
       </View>

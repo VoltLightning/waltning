@@ -41,7 +41,9 @@ import { RadioGroup } from "../../../primitives/atoms/radio/radio";
 import { Select } from "../../../primitives/atoms/select/select";
 import { TextField } from "../../../primitives/atoms/text-field/text-field";
 import { Toggle } from "../../../primitives/atoms/toggle/toggle";
+import { FieldAnchor } from "../../../primitives/field-anchor";
 import type { FieldErrorMap } from "../../../primitives/field-errors.ts";
+import { useSubmitCheck } from "../../../primitives/use-submit-check.ts";
 import { text } from "../../../theme/fonts.ts";
 import { makeStyles } from "../../../theme/styles.ts";
 import { space } from "../../../tokens.ts";
@@ -225,7 +227,14 @@ export function CreateAccountForm({
     [],
   );
 
-  const handleSave = useCallback(() => {
+  // Drawn order: the name, the currency, then the date under *More details*.
+  const check = useSubmitCheck({
+    name: trimmed === "" && t("common.required"),
+    currency: currency === null && t("common.chooseOne"),
+    openingDate: dateInvalid && t("accounts.openingDateInvalid"),
+  });
+
+  const save = useCallback(() => {
     if (!currency || dateInvalid) return;
     onSave({
       name: trimmed,
@@ -251,8 +260,14 @@ export function CreateAccountForm({
     ownership,
     trimmed,
   ]);
-  const nameError = fieldErrors?.byField["name"]?.[0];
-  const currencyError = fieldErrors?.byField["currency"]?.[0];
+  const handleSave = useCallback(() => {
+    // The date lives under *More details*: open it, so the field the check
+    // scrolls to is one that is drawn.
+    if (dateInvalid) setExpanded(true);
+    check.submit(save);
+  }, [check, dateInvalid, save]);
+  const nameError = check.errorFor("name") ?? fieldErrors?.byField["name"]?.[0];
+  const currencyError = check.errorFor("currency") ?? fieldErrors?.byField["currency"]?.[0];
   /** `create_account`'s scale refusal is about this field — see `account-editor.tsx`. */
   const openingBalanceError = fieldErrors?.byField["openingBalance"]?.[0];
 
@@ -269,21 +284,27 @@ export function CreateAccountForm({
         </View>
       ) : null}
       {/* 120 is the shared operation contract's cap, stated where it binds. */}
-      <TextField
-        label={t("common.name")}
-        value={name}
-        onChangeText={setName}
-        maxLength={120}
-        {...(nameError === undefined ? {} : { error: nameError })}
-      />
-      <Text style={styles.label}>{t("accounts.currency")}</Text>
-      <CurrencyGrid
-        currencies={currencies}
-        selected={currency}
-        onSelect={setCurrency}
-        label={t("accounts.currency")}
-      />
-      {currencyError === undefined ? null : <Text style={styles.fieldError}>{currencyError}</Text>}
+      <FieldAnchor check={check} field="name">
+        <TextField
+          label={t("common.name")}
+          value={name}
+          onChangeText={setName}
+          maxLength={120}
+          {...(nameError === undefined ? {} : { error: nameError })}
+        />
+      </FieldAnchor>
+      <FieldAnchor check={check} field="currency" style={styles.field}>
+        <Text style={styles.label}>{t("accounts.currency")}</Text>
+        <CurrencyGrid
+          currencies={currencies}
+          selected={currency}
+          onSelect={setCurrency}
+          label={t("accounts.currency")}
+        />
+        {currencyError === undefined ? null : (
+          <Text style={styles.fieldError}>{currencyError}</Text>
+        )}
+      </FieldAnchor>
 
       {needsRate && chosen !== undefined ? (
         <View style={styles.gate} accessibilityRole="alert">
@@ -342,14 +363,16 @@ export function CreateAccountForm({
             {...(currency === null ? {} : { currency })}
             {...(openingBalanceError === undefined ? {} : { error: openingBalanceError })}
           />
-          <DateField
-            label={t("accounts.openingDate")}
-            value={openingDateText}
-            onChange={setOpeningDateText}
-            today={today}
-            hint={t("accounts.openingDateHint")}
-            {...(dateInvalid ? { error: t("accounts.openingDateInvalid") } : {})}
-          />
+          <FieldAnchor check={check} field="openingDate">
+            <DateField
+              label={t("accounts.openingDate")}
+              value={openingDateText}
+              onChange={setOpeningDateText}
+              today={today}
+              hint={t("accounts.openingDateHint")}
+              {...(dateInvalid ? { error: t("accounts.openingDateInvalid") } : {})}
+            />
+          </FieldAnchor>
           <TextField
             label={t("common.memo")}
             value={memo}
@@ -369,12 +392,7 @@ export function CreateAccountForm({
 
       <View style={styles.actions}>
         <Button label={t("common.cancel")} onPress={onCancel} variant="ghost" />
-        <Button
-          label={t("common.save")}
-          onPress={handleSave}
-          disabled={!trimmed || currency === null || dateInvalid}
-          variant="primary"
-        />
+        <Button label={t("common.save")} onPress={handleSave} variant="primary" />
       </View>
     </View>
   );
@@ -382,6 +400,8 @@ export function CreateAccountForm({
 
 const useStyles = makeStyles((theme) => ({
   root: { gap: space.xl },
+  /** A label, its control and its error, kept together as one field. */
+  field: { gap: space.xl },
   label: { color: theme.textMuted, ...text.ui("kicker") },
   fieldError: { color: theme.dangerText, ...text.ui("caption") },
   formLevel: { gap: space.xs },

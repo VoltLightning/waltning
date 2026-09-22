@@ -650,7 +650,7 @@ describe("CounterpartyDetail (S13)", () => {
    * section. Defaulting from the open subset lands on `null` instead, and
    * the sheet states plainly that there is nothing to settle.
    */
-  it("shows nothing to settle and disables Settle when the only balance is dust", () => {
+  it("shows nothing to settle and refuses Settle when the only balance is dust", () => {
     const dustRow: PhoneCounterpartyBalance = { ...NINA_ROW, balance: toMoney("0.004") };
     const controller = controllerOf(
       basePort({
@@ -668,7 +668,11 @@ describe("CounterpartyDetail (S13)", () => {
 
     const sheet = within(screen.getByLabelText("Settling with Nina"));
     expect(sheet.getByText("Nothing to settle.")).toBeDefined();
-    expect(sheet.getByRole("button", { name: "Settle" })).toHaveProperty("disabled", true);
+    // Pressable; pressed, it refuses and says so rather than settling.
+    fireEvent.click(sheet.getByRole("button", { name: "Settle" }));
+    expect(
+      screen.getByText("The form isn't complete — check the highlighted fields."),
+    ).toBeDefined();
   });
 
   /**
@@ -734,7 +738,7 @@ describe("CounterpartyDetail (S13)", () => {
    * picker shows the uncapturable account muted (S05, by design), and the
    * sheet itself declines it — caption under the chip, Settle disabled.
    */
-  it("shows the needsRate caption and disables Settle for an uncapturable account (C1)", () => {
+  it("shows the needsRate caption and refuses Settle for an uncapturable account (C1)", () => {
     const controller = controllerOf(
       basePort({
         listCounterparties: () => [NINA_COUNTERPARTY],
@@ -766,7 +770,11 @@ describe("CounterpartyDetail (S13)", () => {
     expect(
       sheet.getByText("PLN needs an exchange rate before a transaction can be recorded in it."),
     ).toBeDefined();
-    expect(sheet.getByRole("button", { name: "Settle" })).toHaveProperty("disabled", true);
+    // Pressable; pressed, it refuses and says so rather than settling.
+    fireEvent.click(sheet.getByRole("button", { name: "Settle" }));
+    expect(
+      screen.getByText("The form isn't complete — check the highlighted fields."),
+    ).toBeDefined();
   });
 
   /**

@@ -48,25 +48,28 @@ it("Save starts disabled — nothing has changed yet", () => {
 });
 
 /**
- * A change alone does not enable `Save` — the sum has to check out too.
- * `set_transaction_lines` would refuse the write anyway (§10.3), but a
- * button offering an attempt it can only fail is worse than one that stays
- * off until the figure agrees.
+ * A change alone does not save — the sum has to check out too.
+ * `set_transaction_lines` would refuse the write anyway (§10.3); pressed
+ * early, `Save` says why on the total instead of attempting a write it can
+ * only fail.
  */
-it("Save stays disabled while a change leaves the sum unbalanced", () => {
-  render(<LinesCard lines={LINES} total={TOTAL} currency="PLN" onSave={vi.fn()} />);
+it("Save refuses a change that leaves the sum unbalanced, and says so on the total", () => {
+  const onSave = vi.fn();
+  render(<LinesCard lines={LINES} total={TOTAL} currency="PLN" onSave={onSave} />);
 
   fireEvent.click(screen.getByRole("button", { name: "Groceries" }));
   fireEvent.change(screen.getByLabelText("Amount"), { target: { value: "1.00" } });
 
   expect(screen.getByText("≠")).toBeDefined();
-  expect(screen.getByRole("button", { name: "Save" })).toHaveProperty("disabled", true);
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
+  expect(onSave).not.toHaveBeenCalled();
+  expect(screen.getByText("The lines must add up to the transaction's total.")).toBeDefined();
 });
 
 it("+ Add opens a fresh line, and Save sends the whole set with a new id", () => {
   const onSave = vi.fn();
-  // The new line's amount is folded into `total` too — Save now stays off
-  // while the sum is unbalanced, so this fixture has to add up.
+  // The new line's amount is folded into `total` too — Save refuses an
+  // unbalanced sum, so this fixture has to add up.
   render(<LinesCard lines={LINES} total={money.toMoney("52.40")} currency="PLN" onSave={onSave} />);
 
   fireEvent.click(screen.getByRole("button", { name: "+ Add" }));

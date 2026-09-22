@@ -18,7 +18,9 @@ import { View } from "react-native";
 import { useT } from "../../../i18n/provider";
 import { Button } from "../../../primitives/atoms/button/button";
 import { Select, type SelectOption } from "../../../primitives/atoms/select/select";
+import { FieldAnchor } from "../../../primitives/field-anchor";
 import { BottomSheet } from "../../../primitives/organisms/bottom-sheet/bottom-sheet";
+import { useSubmitCheck } from "../../../primitives/use-submit-check.ts";
 import { Banner } from "../../../states/molecules/banner/banner";
 import { makeStyles } from "../../../theme/styles.ts";
 import { space } from "../../../tokens.ts";
@@ -49,7 +51,10 @@ export function MoveCategorySheet({
     label: group.name,
   }));
 
-  const handleSave = useCallback(() => onSave(groupId), [onSave, groupId]);
+  const check = useSubmitCheck({ group: groupId === null && t("common.chooseOne") });
+  const save = useCallback(() => onSave(groupId), [onSave, groupId]);
+  const handleSave = useCallback(() => check.submit(save), [check, save]);
+  const groupError = check.errorFor("group");
 
   if (!visible) return null;
 
@@ -57,20 +62,18 @@ export function MoveCategorySheet({
     <BottomSheet visible={visible} title={t("categories.move")} onDismiss={onDismiss}>
       <View style={styles.body}>
         {error === undefined ? null : <Banner tone="negative" message={error} />}
-        <Select
-          label={`${t("categories.moveTargetLabel")} · ${categoryName}`}
-          placeholder={t("categories.moveTargetPlaceholder")}
-          options={options}
-          value={groupId}
-          onChange={setGroupId}
-          searchable
-        />
-        <Button
-          label={t("common.save")}
-          onPress={handleSave}
-          variant="primary"
-          disabled={groupId === null}
-        />
+        <FieldAnchor check={check} field="group">
+          <Select
+            label={`${t("categories.moveTargetLabel")} · ${categoryName}`}
+            placeholder={t("categories.moveTargetPlaceholder")}
+            options={options}
+            value={groupId}
+            onChange={setGroupId}
+            searchable
+            error={groupError}
+          />
+        </FieldAnchor>
+        <Button label={t("common.save")} onPress={handleSave} variant="primary" />
       </View>
     </BottomSheet>
   );

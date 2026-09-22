@@ -100,7 +100,7 @@ describe("CounterpartyForm", () => {
     expect(onSame).not.toHaveBeenCalled();
   });
 
-  it("disables Save until a name is typed", () => {
+  it("asks for a name when Save is pressed without one", () => {
     render(
       <CounterpartyForm
         initial={INITIAL}
@@ -113,7 +113,8 @@ describe("CounterpartyForm", () => {
         onSave={vi.fn()}
       />,
     );
-    expect(screen.getByRole("button", { name: "Save" })).toHaveProperty("disabled", true);
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(screen.getByText("Required")).toBeDefined();
   });
 
   it("saves the trimmed name and every field", () => {

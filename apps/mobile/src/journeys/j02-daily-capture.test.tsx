@@ -280,7 +280,11 @@ describe("J02 — daily capture, under ten seconds, offline", () => {
     const { tap, count } = script;
     tap("button", "Add");
     tapAmount(script);
-    expect(screen.getByRole("button", { name: "Save expense" })).toHaveProperty("disabled", true);
+    // S05 Q2 — a cold chip is a question, not an answer: Save pressed now
+    // refuses and asks on the chip. Pressed outside the tap script, because
+    // the count is of the taps that capture, not of this probe.
+    fireEvent.click(screen.getByRole("button", { name: "Save expense" }));
+    expect(screen.getByText("Choose one")).toBeDefined();
 
     tap("button", /^From/);
     tap("radio", "Cash · PLN");

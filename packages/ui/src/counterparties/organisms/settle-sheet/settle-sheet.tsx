@@ -45,8 +45,10 @@ import { Chip } from "../../../primitives/atoms/chip/chip";
 import { RadioGroup, type RadioGroupProps } from "../../../primitives/atoms/radio/radio";
 import { RateField } from "../../../primitives/atoms/rate-field/rate-field";
 import { TextField } from "../../../primitives/atoms/text-field/text-field";
+import { FieldAnchor } from "../../../primitives/field-anchor";
 import type { FieldErrorMap } from "../../../primitives/field-errors.ts";
 import { BottomSheet } from "../../../primitives/organisms/bottom-sheet/bottom-sheet";
+import { useSubmitCheck } from "../../../primitives/use-submit-check.ts";
 import { text } from "../../../theme/fonts.ts";
 import { makeStyles } from "../../../theme/styles.ts";
 import { radius, space } from "../../../tokens.ts";
@@ -318,20 +320,28 @@ export function SettleSheet({
     account !== undefined && !account.capturable
       ? t("transactions.needsRate", { currency: account.currency })
       : undefined;
-  const accountCaption = accountNeedsRate ?? accountError;
 
-  const saveDisabled =
-    // L1 — the *picked* currency must itself be open, not merely "something
-    // is": `openBalances.length === 0` passed even when `dischargesCurrency`
-    // named a balance that had since settled (dust) while a different
-    // currency was still open — armed Settle on a discharge that no longer
-    // exists. `.some` over the picked currency catches that stale pick too.
-    !openBalances.some((row) => row.currency === dischargesCurrency) ||
-    dischargesCurrency === null ||
-    accountId === null ||
-    money.isZero(amount) ||
-    money.isZero(dischargesAmount) ||
-    accountNeedsRate !== undefined;
+  // Drawn order. Each is what used to keep Settle disabled, now said on the
+  // field it is about when Settle is pressed.
+  const check = useSubmitCheck({
+    amount: money.isZero(amount) && t("common.required"),
+    discharges:
+      // L1 — the *picked* currency must itself be open, not merely
+      // "something is": a pick that has since settled (dust) while another
+      // currency is still open would discharge a balance that no longer
+      // exists.
+      !openBalances.some((row) => row.currency === dischargesCurrency) &&
+      (openBalances.length === 0 ? t("counterparties.nothingToSettle") : t("common.chooseOne")),
+    dischargesAmount:
+      dischargesCurrency !== null && money.isZero(dischargesAmount) && t("common.required"),
+    account: accountId === null ? t("common.chooseOne") : accountNeedsRate,
+  });
+  const handleSettle = useCallback(() => check.submit(onSettle), [check, onSettle]);
+  const amountShown = check.errorFor("amount") ?? amountError;
+  const dischargesShown = check.errorFor("discharges") ?? dischargesError;
+  const dischargesAmountShown = check.errorFor("dischargesAmount") ?? dischargesAmountError;
+  // The rate refusal is always said; a missing account only once Settle is pressed.
+  const accountShown = accountNeedsRate ?? check.errorFor("account") ?? accountError;
 
   return (
     <BottomSheet
@@ -343,67 +353,75 @@ export function SettleSheet({
         {counterpartyError === undefined ? null : (
           <Text style={styles.fieldError}>{counterpartyError}</Text>
         )}
-        <AmountField
-          variant="hero"
-          label={t("transactions.amount")}
-          {...(account ? { currency: account.currency } : {})}
-          value={amountRaw}
-          onPress={handleActivateAmount}
-          active={activeField === "amount"}
-        />
-        {amountError === undefined ? null : <Text style={styles.fieldError}>{amountError}</Text>}
-
-        <Text style={styles.sectionLabel}>{t("counterparties.discharges")}</Text>
-        {balanceOptions === undefined ? (
-          singleOpenBalance === undefined ? (
-            // M — every balance held is dust at its own currency's scale
-            // (M1's own filter, empty): nothing here for Settle to discharge,
-            // stated plainly rather than an empty section with the button
-            // still armed.
-            <Text style={styles.nothingToSettle}>{t("counterparties.nothingToSettle")}</Text>
-          ) : (
-            <Text style={styles.singleBalance}>
-              {balanceLabel(singleOpenBalance)}
-              {balanceHint === undefined ? "" : ` · ${balanceHint}`}
-            </Text>
-          )
-        ) : (
-          <RadioGroup
-            label={t("counterparties.discharges")}
-            options={balanceOptions}
-            value={dischargesCurrency}
-            onChange={onDischargesCurrencyChange}
-          />
-        )}
-        {dischargesError === undefined ? null : (
-          <Text style={styles.fieldError}>{dischargesError}</Text>
-        )}
-
-        {dischargesCurrency === null ? null : (
+        <FieldAnchor check={check} field="amount" style={styles.field}>
           <AmountField
             variant="hero"
-            label={t("counterparties.discharges")}
-            currency={dischargesCurrency}
-            value={dischargesRaw}
-            onPress={handleActivateDischarges}
-            active={activeField === "discharges"}
+            label={t("transactions.amount")}
+            {...(account ? { currency: account.currency } : {})}
+            value={amountRaw}
+            onPress={handleActivateAmount}
+            active={activeField === "amount"}
           />
-        )}
-        {dischargesAmountError === undefined ? null : (
-          <Text style={styles.fieldError}>{dischargesAmountError}</Text>
-        )}
+          {amountShown === undefined ? null : <Text style={styles.fieldError}>{amountShown}</Text>}
+        </FieldAnchor>
 
-        <Chip
-          placeholder={intoLabel}
-          value={account === undefined ? undefined : accountLabel(account.name, account.currency)}
-          onPress={onOpenAccountPicker}
-          machineFilled={false}
-        />
-        {accountCaption === undefined ? null : (
-          <Text style={accountNeedsRate === undefined ? styles.fieldError : styles.needsRate}>
-            {accountCaption}
-          </Text>
-        )}
+        <FieldAnchor check={check} field="discharges" style={styles.field}>
+          <Text style={styles.sectionLabel}>{t("counterparties.discharges")}</Text>
+          {balanceOptions === undefined ? (
+            singleOpenBalance === undefined ? (
+              // M — every balance held is dust at its own currency's scale
+              // (M1's own filter, empty): nothing here for Settle to discharge,
+              // stated plainly rather than an empty section with the button
+              // still armed.
+              <Text style={styles.nothingToSettle}>{t("counterparties.nothingToSettle")}</Text>
+            ) : (
+              <Text style={styles.singleBalance}>
+                {balanceLabel(singleOpenBalance)}
+                {balanceHint === undefined ? "" : ` · ${balanceHint}`}
+              </Text>
+            )
+          ) : (
+            <RadioGroup
+              label={t("counterparties.discharges")}
+              options={balanceOptions}
+              value={dischargesCurrency}
+              onChange={onDischargesCurrencyChange}
+            />
+          )}
+          {dischargesShown === undefined ? null : (
+            <Text style={styles.fieldError}>{dischargesShown}</Text>
+          )}
+        </FieldAnchor>
+
+        <FieldAnchor check={check} field="dischargesAmount" style={styles.field}>
+          {dischargesCurrency === null ? null : (
+            <AmountField
+              variant="hero"
+              label={t("counterparties.discharges")}
+              currency={dischargesCurrency}
+              value={dischargesRaw}
+              onPress={handleActivateDischarges}
+              active={activeField === "discharges"}
+            />
+          )}
+          {dischargesAmountShown === undefined ? null : (
+            <Text style={styles.fieldError}>{dischargesAmountShown}</Text>
+          )}
+        </FieldAnchor>
+
+        <FieldAnchor check={check} field="account" style={styles.field}>
+          <Chip
+            placeholder={intoLabel}
+            value={account === undefined ? undefined : accountLabel(account.name, account.currency)}
+            onPress={onOpenAccountPicker}
+            machineFilled={false}
+          />
+          {accountShown === undefined ? null : (
+            <Text style={accountShown === accountNeedsRate ? styles.needsRate : styles.fieldError}>
+              {accountShown}
+            </Text>
+          )}
+        </FieldAnchor>
 
         <RateField
           label={t("transactions.realized")}
@@ -496,8 +514,7 @@ export function SettleSheet({
 
         <Button
           label={t("counterparties.settle")}
-          onPress={onSettle}
-          disabled={saveDisabled}
+          onPress={handleSettle}
           variant="primary"
           size="lg"
         />
@@ -508,6 +525,8 @@ export function SettleSheet({
 
 const useStyles = makeStyles((theme) => ({
   body: { gap: space.x3 },
+  /** A control and the line under it, as one field — so the check scrolls to both. */
+  field: { gap: space.x3 },
   fieldError: { color: theme.dangerText, ...text.ui("caption") },
   formLevel: { gap: space.xs },
   formLevelMessage: { color: theme.dangerText, ...text.ui("caption") },
