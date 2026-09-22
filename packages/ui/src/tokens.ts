@@ -332,7 +332,7 @@ export const darkColor = {
 } as const;
 
 /**
- * **The categorical ramp — ten hues a category is recognised by**
+ * **The categorical ramp — nine hues a category is recognised by**
  * (`design-system/02` §2.1).
  *
  * A different kind of palette from `green100…900`. That ramp is *sequential*:
@@ -352,6 +352,11 @@ export const darkColor = {
  * its name or its letter, which is WCAG 1.4.1's actual requirement, and each
  * pair here is held to contrast instead — ink on tint and white on solid at
  * 4.5:1, in both themes (`theme.test.tsx`).
+ *
+ * **No red, and nothing a reader could take for it.** Red is `spend` and
+ * `danger` — a refusal, a loss — and a category drawn in it says *something
+ * is wrong here* about a row where nothing is. So there is no coral, and rose
+ * leans magenta: a pink tile is a category, a red one is an alarm.
  */
 export const categoryRamp = [
   {
@@ -388,11 +393,11 @@ export const categoryRamp = [
   },
   {
     name: "rose",
-    tint: "#f7dee6",
-    ink: "#8c2141",
-    solid: "#cf3462",
-    darkTint: "#471f2b",
-    darkInk: "#ed91ad",
+    tint: "#f4ddea",
+    ink: "#8a2463",
+    solid: "#bf3884",
+    darkTint: "#471f36",
+    darkInk: "#eb8dc2",
   },
   {
     name: "plum",
@@ -425,14 +430,6 @@ export const categoryRamp = [
     solid: "#60738a",
     darkTint: "#2a323c",
     darkInk: "#aabbcf",
-  },
-  {
-    name: "coral",
-    tint: "#f9e2dc",
-    ink: "#983016",
-    solid: "#cc401d",
-    darkTint: "#47271f",
-    darkInk: "#f59b84",
   },
 ] as const;
 
