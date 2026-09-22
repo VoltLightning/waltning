@@ -543,6 +543,17 @@ function StripView({
         return;
       }
       const here = placement.value;
+      /*
+        **A list with no days on it says nothing about where the strip is.**
+        An empty ledger measures nothing, so its geometry never arrives — and
+        read anyway, `markOf` names block 0, which is the first day of the
+        run's decade: on a cold open with nothing captured yet the strip landed
+        on the origin, 1 January 2010, and stayed. With no marks the day it
+        opened on is the day it follows — every frame, not once: the list's
+        own `initialScrollIndex` scroll arrives a beat after the first
+        placement and would otherwise have the last word.
+      */
+      const listless = here.marks.length === 0;
       // **Read at the line the reader is looking at, not at the top edge** —
       // `SEEN_LEAD` below it, the same line `blockAt` names the day by, so the
       // ring in motion and the ring at rest are about the same place.
@@ -553,9 +564,11 @@ function StripView({
       // ticked once on every cold open, and drifted off the day for the 140ms
       // before it landed back on it. Found by the first spec to run this in a
       // browser with frames (`visual/day-ribbon.spec.ts`).
-      const target = listRest.value.moved
-        ? fracFor(scrollY.value + SEEN_LEAD, here.tops, here.marks)
-        : markOf(scrollY.value, here.tops, here.marks);
+      const target = listless
+        ? start
+        : listRest.value.moved
+          ? fracFor(scrollY.value + SEEN_LEAD, here.tops, here.marks)
+          : markOf(scrollY.value, here.tops, here.marks);
       // How fast the day being followed is moving, in cells per second — the one
       // thing `follow` cannot work out for itself, and the thing its damping is
       // decided by. Measured rather than inferred from the gap, because a gap is
@@ -590,7 +603,7 @@ function StripView({
       the ring a day *past* Calendar, having fixed it being a day behind.
       Recomputed while at rest, the land follows the re-index.
     */
-      if (afterRest.still >= SETTLE_MS) {
+      if (afterRest.still >= SETTLE_MS && !listless) {
         const cell = markOf(scrollY.value, here.tops, here.marks);
         const home = offsetWithin(cell, measured, trackWidth(measured, count.value));
         // Sent once per day landed on — and again if it never got there, which
@@ -617,7 +630,9 @@ function StripView({
       // cell — rather than the moving line, or a cold open lands twice.
       const next = placed.value
         ? follow(shown.value, target, speed, step / 1000)
-        : markOf(scrollY.value, here.tops, here.marks);
+        : listless
+          ? start
+          : markOf(scrollY.value, here.tops, here.marks);
 
       // The first placement is a re-seat: it lands in silence.
       if (!placed.value) muted.value = true;
@@ -658,6 +673,7 @@ function StripView({
       sinceTick,
       sinceWrite,
       snapped,
+      start,
       stuck,
       ticked,
       told,
