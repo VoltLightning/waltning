@@ -768,8 +768,9 @@ export default function Today() {
   // `null` and draws no second line — an empty line looks broken.
   /**
    * **Every card carries a figure** (§3), which is what makes the grid a status
-   * board rather than a menu. Debt is not here: it is a tab (`05-composites`,
-   * `TabBar`), and a card for it would be a second door into the same room.
+   * board rather than a menu. Debt is not here: it is a tab of its own
+   * (`05-composites`), and a card for it would be a second door into the same
+   * room.
    *
    * `null` where the ledger genuinely has nothing to say yet — a card with an
    * empty line looks broken, and one with no line has simply not been given a
