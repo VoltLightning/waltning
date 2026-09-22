@@ -566,11 +566,6 @@ export const ru: Messages = {
     transferFromHere: "Перевести отсюда",
   },
   preview: {
-    appearance: "Оформление",
-    system: "Системное",
-    light: "Светлое",
-    dark: "Тёмное",
-    appearanceFailed: "Не удалось сохранить оформление.",
     resetTitle: "Удалить демо-данные",
     resetPrompt: "Удалить все счета и операции с этого телефона?",
     loadDemo: "Загрузить демо-данные",
@@ -641,6 +636,14 @@ export const ru: Messages = {
     onThisPhoneTitle: "Всё хранится на этом телефоне",
     onThisPhoneBody:
       "Ничто его не покидало. Когда добавите компьютер, связать их можно будет здесь.",
+    appearance: "Оформление",
+    language: "Язык",
+    followPhone: "Как в телефоне",
+    followPhoneHint: "Сейчас: {{value}}",
+    followPhoneValue: "Как в телефоне · {{value}}",
+    light: "Светлое",
+    dark: "Тёмное",
+    appearanceFailed: "Не удалось сохранить оформление.",
   },
   restore: {
     title: "Восстановление",

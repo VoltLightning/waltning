@@ -101,7 +101,6 @@
     "./primitives/wheel": "./src/primitives/atoms/wheel/wheel.tsx",
     "./review/pill": "./src/review/atoms/pill/pill.tsx",
     "./settings/settings-menu": "./src/settings/organisms/settings-menu/settings-menu.tsx",
-    "./shell/appearance-icon": "./src/shell/atoms/appearance-icon/appearance-icon.tsx",
     "./shell/atoms/flow-bar/flow-bar": "./src/shell/atoms/flow-bar/flow-bar.tsx",
     "./shell/back-mark": "./src/shell/molecules/page-header/back-mark.tsx",
     "./shell/card": "./src/shell/molecules/card/card.tsx",

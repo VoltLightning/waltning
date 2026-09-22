@@ -52,6 +52,23 @@ backup's time is kept — renders its label alone.
 to look at their money rather than to configure something. The rest are
 reference data, in the order they depend on each other.
 
+**Appearance and Language close the list, as a group of their own** — how this
+phone shows the ledger, as against what the ledger holds. Both are device
+preferences (`design-system/02` §2.9): stored on the phone, never a registry
+operation, never synced. Each opens a sheet of radios rather than a screen,
+because the choice takes effect behind the sheet as it is made and a screen of
+its own would hide the thing being changed; the sheet stays open after a pick
+for the same reason.
+
+- **Appearance** — *Match the phone* · *Light* · *Dark*. The value line says
+  what is in force: *Dark*, or *Match the phone · Light*.
+- **Language** — *Match the phone*, then every shipped language **named in
+  itself**: *English*, *Polski*, *Deutsch*, *Русский*, *Беларуская*. A phone
+  left in a language the reader cannot read is put back by finding their own
+  language's name, not its name in the language they cannot read. Matching
+  the phone takes the device's own order (`architecture/11` §7), and the value
+  line names the result: *Match the phone · English*.
+
 The screen draws no title of its own: a title on the only card on a screen
 names the screen rather than the card, and the screen's name belongs to the
 header above the ground. Rows, not buttons — `design-system/05` §5.1's card of

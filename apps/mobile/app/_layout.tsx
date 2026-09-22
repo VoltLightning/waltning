@@ -13,13 +13,14 @@
 // call time and the first call is a row insert.
 import "../src/polyfills.ts";
 import { useAppearance } from "@waltning/client/appearance/use-appearance";
+import { useDevicePreference } from "@waltning/client/device/use-device-preference";
 import { LedgerProvider } from "@waltning/client/ledger/ledger-provider";
 import { useLedgerController } from "@waltning/client/ledger/use-ledger-controller";
 import { usePhoneLedger } from "@waltning/client/ledger/use-phone-ledger";
 import { usePhoneLedgerStartup } from "@waltning/client/ledger/use-phone-ledger-startup";
 import { describeDiagnosticError } from "@waltning/core/diagnostics";
 import { CurrencyMarksProvider } from "@waltning/ui/fx/currency-marks";
-import { resolveLocale } from "@waltning/ui/i18n/locales";
+import { chooseLocale } from "@waltning/ui/i18n/locales";
 import { I18nProvider, useT } from "@waltning/ui/i18n/provider";
 import { HapticsProvider } from "@waltning/ui/primitives/haptics";
 import { StartupFailed } from "@waltning/ui/states/startup-failed";
@@ -43,6 +44,7 @@ import {
   dayTickHaptic,
   displayCurrency,
   floatPosition,
+  language,
 } from "../src/platform";
 
 export default function RootLayout() {
@@ -52,6 +54,8 @@ export default function RootLayout() {
     appearance,
     systemScheme === "light" || systemScheme === "dark" ? systemScheme : null,
   );
+  // S30's Language row, or the phone's own order when nothing is chosen.
+  const locale = chooseLocale(useDevicePreference(language).value, DEVICE_LOCALES);
 
   // On the device this is constant `true`; in the browser it turns once the
   // SQLite worker can answer a synchronous call — opening before that would
@@ -73,6 +77,7 @@ export default function RootLayout() {
     // moves once the disk answers, which on a phone is before the fonts are.
     void floatPosition.hydrate();
     void displayCurrency.hydrate();
+    void language.hydrate();
   }, []);
 
   useEffect(() => {
@@ -194,7 +199,7 @@ export default function RootLayout() {
             in a form, and `packages/ui` names no haptics library.
           */}
           <HapticsProvider tick={dayTickHaptic}>
-            <I18nProvider locale={resolveLocale(DEVICE_LOCALES)}>
+            <I18nProvider locale={locale}>
               {/* The one place the platform-resolved ledger meets the tree: every
               screen below reads it from context, so a test or a diff preview
               can hand the same screens a different controller. A startup

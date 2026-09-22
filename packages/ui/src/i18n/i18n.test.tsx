@@ -7,7 +7,16 @@ import { createInstance } from "i18next";
 import { describe, expect, it } from "vitest";
 import { Amount } from "../fx/atoms/amount/amount";
 import { en, type Messages } from "./en.ts";
-import { catalogues, decimalMark, LOCALES, monthLabel, resolveLocale } from "./locales.ts";
+import {
+  catalogues,
+  chooseLocale,
+  decimalMark,
+  LANGUAGE_NAMES,
+  LOCALES,
+  monthLabel,
+  parseLanguagePreference,
+  resolveLocale,
+} from "./locales.ts";
 import { I18nProvider } from "./provider";
 
 describe("choosing a language", () => {
@@ -36,6 +45,29 @@ describe("choosing a language", () => {
     expect(resolveLocale(["fr-FR", "ja-JP"])).toBe("en");
     expect(resolveLocale(["fr-FR", "ru-RU", "en-US"])).toBe("ru");
     expect(resolveLocale([])).toBe("en");
+  });
+});
+
+/** S30's Language row: a choice on this device outranks the phone's own order. */
+describe("a language chosen in Settings", () => {
+  it("wins over the phone's own languages", () => {
+    expect(chooseLocale("be", ["de-DE", "en-US"])).toBe("be");
+  });
+
+  it("follows the phone when nothing is chosen, or when that is the choice", () => {
+    expect(chooseLocale(null, ["ru-RU"])).toBe("ru");
+    expect(chooseLocale("system", ["ru-RU"])).toBe("ru");
+  });
+
+  it("reads back only what it could have written", () => {
+    expect(parseLanguagePreference("pl")).toBe("pl");
+    expect(parseLanguagePreference("system")).toBe("system");
+    expect(parseLanguagePreference("fr")).toBeNull();
+    expect(parseLanguagePreference("pl-PL")).toBeNull();
+  });
+
+  it("names every shipped language", () => {
+    expect(Object.keys(LANGUAGE_NAMES).sort()).toEqual([...LOCALES].sort());
   });
 });
 

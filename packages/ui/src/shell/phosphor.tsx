@@ -1,5 +1,5 @@
 /**
- * The six Phosphor duotone glyphs this app draws, as path data.
+ * The Phosphor glyphs this app draws, as path data.
  *
  * **Vendored rather than depended on, and the reason is a number.** §2.8 names
  * Phosphor, and `phosphor-react-native` is the obvious way to get it — but its
@@ -230,6 +230,32 @@ export function ShieldCheckIcon({ size, color }: PhosphorIconProps) {
       <Path
         fill={color}
         d="M208,40H48A16,16,0,0,0,32,56v56c0,52.72,25.52,84.67,46.93,102.19,23.06,18.86,46,25.26,47,25.53a8,8,0,0,0,4.2,0c1-.27,23.91-6.67,47-25.53C198.48,196.67,224,164.72,224,112V56A16,16,0,0,0,208,40Zm0,72c0,37.07-13.66,67.16-40.6,89.42A129.3,129.3,0,0,1,128,223.62a128.25,128.25,0,0,1-38.92-21.81C61.82,179.51,48,149.3,48,112l0-56,160,0ZM82.34,141.66a8,8,0,0,1,11.32-11.32L112,148.69l50.34-50.35a8,8,0,0,1,11.32,11.32l-56,56a8,8,0,0,1-11.32,0Z"
+      />
+    </Svg>
+  );
+}
+
+/**
+ * `CircleHalfIcon`'s outline alone — the Appearance row's tile. The duotone
+ * one above is the Today band's old control; a tile is regular weight.
+ */
+export function CircleHalfRegularIcon({ size, color }: PhosphorIconProps) {
+  return (
+    <Svg width={size} height={size} viewBox={VIEW_BOX}>
+      <Path
+        fill={color}
+        d="M128,24A104,104,0,1,0,232,128,104.11,104.11,0,0,0,128,24Zm8,16.37a86.4,86.4,0,0,1,16,3V212.67a86.4,86.4,0,0,1-16,3Zm32,9.26a87.81,87.81,0,0,1,16,10.54V195.83a87.81,87.81,0,0,1-16,10.54ZM40,128a88.11,88.11,0,0,1,80-87.63V215.63A88.11,88.11,0,0,1,40,128Zm160,50.54V77.46a87.82,87.82,0,0,1,0,101.08Z"
+      />
+    </Svg>
+  );
+}
+
+export function TranslateIcon({ size, color }: PhosphorIconProps) {
+  return (
+    <Svg width={size} height={size} viewBox={VIEW_BOX}>
+      <Path
+        fill={color}
+        d="M247.15,212.42l-56-112a8,8,0,0,0-14.31,0l-21.71,43.43A88,88,0,0,1,108,126.93,103.65,103.65,0,0,0,135.69,64H160a8,8,0,0,0,0-16H104V32a8,8,0,0,0-16,0V48H32a8,8,0,0,0,0,16h87.63A87.76,87.76,0,0,1,96,116.35a87.74,87.74,0,0,1-19-31,8,8,0,1,0-15.08,5.34A103.63,103.63,0,0,0,84,127a87.55,87.55,0,0,1-52,17,8,8,0,0,0,0,16,103.46,103.46,0,0,0,64-22.08,104.18,104.18,0,0,0,51.44,21.31l-26.6,53.19a8,8,0,0,0,14.31,7.16L148.94,192h70.11l13.79,27.58A8,8,0,0,0,240,224a8,8,0,0,0,7.15-11.58ZM156.94,176,184,121.89,211.05,176Z"
       />
     </Svg>
   );

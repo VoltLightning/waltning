@@ -1189,11 +1189,6 @@ export const en = {
     transferFromHere: "Transfer from here",
   },
   preview: {
-    appearance: "Appearance",
-    system: "System",
-    light: "Light",
-    dark: "Dark",
-    appearanceFailed: "Appearance could not be saved.",
     resetTitle: "Delete preview data",
     resetPrompt: "Delete every account and transaction from this phone?",
     loadDemo: "Load demo data",
@@ -1275,6 +1270,14 @@ export const en = {
     onThisPhoneTitle: "Everything is on this phone",
     onThisPhoneBody:
       "Nothing has left it. When you add a machine, this is where you will pair them.",
+    appearance: "Appearance",
+    language: "Language",
+    followPhone: "Match the phone",
+    followPhoneHint: "Currently {{value}}",
+    followPhoneValue: "Match the phone · {{value}}",
+    light: "Light",
+    dark: "Dark",
+    appearanceFailed: "Appearance could not be saved.",
   },
   /** `S30`'s restore — the other half of a backup. */
   restore: {

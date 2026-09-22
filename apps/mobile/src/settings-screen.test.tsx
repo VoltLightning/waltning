@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 
-import { fireEvent, render, screen } from "@testing-library/react";
-import { expect, it, vi } from "vitest";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, expect, it, vi } from "vitest";
 
 const router = {
   push: vi.fn(),
@@ -26,7 +26,13 @@ import { accountingDate, addDays } from "@waltning/core/date";
 import { id } from "@waltning/core/id";
 import { currencyCode, toMoney } from "@waltning/core/money";
 
+import { appearance, language } from "./platform";
 import Settings from "./settings-screen";
+
+afterEach(async () => {
+  await appearance.setPreference("system");
+  await language.set("system");
+});
 
 const PLN = currencyCode("PLN");
 
@@ -97,6 +103,10 @@ it("opens Accounts, and lists it first", () => {
     "Exchange rates",
     "Back up",
     "Restore",
+    // How this phone shows the ledger. Nothing chosen yet, so both follow
+    // the phone — and say what the phone currently is.
+    "AppearanceMatch the phone · Light",
+    "LanguageMatch the phone · English",
     // Last, and in a group of its own — a development affordance never sits
     // among the rows a person uses. Present here because a test runs under
     // `__DEV__`; a production build has no such row at all.
@@ -179,4 +189,43 @@ it("states the categories in use and the oldest quote's age", () => {
   });
   expect(screen.getByText("2 in use")).toBeDefined();
   expect(screen.getByText("Oldest quote 5 days old")).toBeDefined();
+});
+
+/**
+ * S30's Appearance row — the control S04 §4 moved here from Today. The choice
+ * takes effect as it is made and the row says what is now in force.
+ */
+it("sets the appearance from a sheet, and says which one holds", async () => {
+  withLedger();
+  fireEvent.click(screen.getByText("Appearance"));
+  fireEvent.click(screen.getByRole("radio", { name: "Dark" }));
+  // The write is to disk first and the snapshot after, so the row catches up
+  // a tick later.
+  await waitFor(() =>
+    expect(screen.getAllByRole("button").map((row) => row.textContent)).toContain("AppearanceDark"),
+  );
+  expect(appearance.getSnapshot().preference).toBe("dark");
+});
+
+/**
+ * The Language row. Each language is named in itself, so a phone left in one
+ * the reader cannot read can still be put back.
+ */
+it("switches the language, and names every language in itself", () => {
+  withLedger();
+  fireEvent.click(screen.getByText("Language"));
+  for (const name of ["English", "Polski", "Deutsch", "Русский", "Беларуская"]) {
+    expect(screen.getByRole("radio", { name })).toBeTruthy();
+  }
+  fireEvent.click(screen.getByRole("radio", { name: "Deutsch" }));
+  expect(language.getSnapshot().value).toBe("de");
+  expect(screen.getAllByRole("button").map((row) => row.textContent)).toContain("LanguageDeutsch");
+});
+
+it("follows the phone again once that is chosen", () => {
+  withLedger();
+  fireEvent.click(screen.getByText("Language"));
+  fireEvent.click(screen.getByRole("radio", { name: "Deutsch" }));
+  fireEvent.click(screen.getByRole("radio", { name: /Match the phone/ }));
+  expect(language.getSnapshot().value).toBe("system");
 });
