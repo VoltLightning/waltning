@@ -26,15 +26,16 @@
  * `Intl.PluralRules`, so without these the first message that takes a `count`
  * throws on the device and nowhere else.
  *
- * It matters more than an English-only app would suggest: **Polish has four
- * plural categories** where English has two, so the failure this prevents is
+ * It matters more than an English-only app would suggest: **Polish, Russian
+ * and Belarusian have four plural categories** where English has two, so the failure this prevents is
  * not a crash but a sentence that is quietly ungrammatical for the language
  * most of this ledger is written in.
  *
  * `/polyfill` rather than `/polyfill-force` — it installs only where the
  * runtime has none, so the browser and Node keep their own implementations and
  * only Hermes gets ours. The locale data is per-language and must be imported
- * for each: a language with no data resolves as English.
+ * for each shipped language: one with no data resolves as English, so Russian
+ * would read "5 день" and nothing would throw (`polyfills.test.ts`).
  *
  * Order is required. `Locale` is built on `getCanonicalLocales`, and
  * `PluralRules` on both.
@@ -47,6 +48,9 @@ import "@formatjs/intl-locale/polyfill.js";
 import "@formatjs/intl-pluralrules/polyfill.js";
 import "@formatjs/intl-pluralrules/locale-data/en.js";
 import "@formatjs/intl-pluralrules/locale-data/pl.js";
+import "@formatjs/intl-pluralrules/locale-data/de.js";
+import "@formatjs/intl-pluralrules/locale-data/ru.js";
+import "@formatjs/intl-pluralrules/locale-data/be.js";
 import { randomUUID } from "expo-crypto";
 
 const existing = globalThis.crypto as (Crypto & { randomUUID?: () => string }) | undefined;

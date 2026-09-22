@@ -9,20 +9,23 @@
  */
 
 import type { AccountingDate, YearMonth } from "@waltning/core/date";
+import { be } from "./be.ts";
+import { de } from "./de.ts";
 import { en, type Messages } from "./en.ts";
 import { pl } from "./pl.ts";
+import { ru } from "./ru.ts";
 
 /** A language this app ships a complete catalogue for. */
-export type Locale = "en" | "pl";
+export type Locale = "en" | "pl" | "de" | "ru" | "be";
 
 /**
  * **`en` first, and it is the fallback.** Not because English is the important
  * one — the ledger is mostly złoty — but because `en.ts` is the file the type is
  * derived from, so it is the only catalogue that cannot be incomplete.
  */
-export const LOCALES = ["en", "pl"] as const satisfies readonly Locale[];
+export const LOCALES = ["en", "pl", "de", "ru", "be"] as const satisfies readonly Locale[];
 
-export const catalogues: Record<Locale, Messages> = { en, pl };
+export const catalogues: Record<Locale, Messages> = { en, pl, de, ru, be };
 
 /**
  * The decimal mark, **by language**.
@@ -43,7 +46,13 @@ export const catalogues: Record<Locale, Messages> = { en, pl };
  * `NumberFormat` differs between Android and iOS, which is a way for the same
  * ledger to render differently on two phones.
  */
-const DECIMAL_MARK: Record<Locale, "." | ","> = { en: ".", pl: "," };
+const DECIMAL_MARK: Record<Locale, "." | ","> = {
+  en: ".",
+  pl: ",",
+  de: ",",
+  ru: ",",
+  be: ",",
+};
 
 export function decimalMark(locale: Locale): "." | "," {
   return DECIMAL_MARK[locale];
@@ -125,7 +134,7 @@ export function dayRangeLabel(a: AccountingDate, b: AccountingDate, locale: Loca
   // **Ordered here, not asked of the caller.** S04's quiet run holds its span
   // newest-end-first, because the list it sits in runs that way; S10 and the
   // calendar would hand over the other order. A range is read earliest-first in
-  // both languages this app ships, so the two ends are sorted rather than
+  // every language this app ships, so the two ends are sorted rather than
   // trusted — a parameter order nobody can see in the rendered output is a
   // parameter order somebody will get backwards.
   const earlier = a <= b ? a : b;
@@ -192,8 +201,9 @@ function utcOf(date: AccountingDate): Date {
  * **A table, not `Intl.Locale.prototype.weekInfo`.** That API is still
  * unshipped on enough runtimes that reading it would mean a fallback anyway,
  * and a fallback that is wrong half the time is worse than a table naming the
- * two locales this app has. When a third arrives it gets a line here, in the
- * open, rather than a silent guess.
+ * locales this app has. English starts on Sunday; Polish, German, Russian and
+ * Belarusian on Monday. A new language gets its line here, in the open, rather
+ * than a silent guess.
  */
 export function weekStart(locale: Locale): 0 | 1 {
   return locale === "en" ? 0 : 1;

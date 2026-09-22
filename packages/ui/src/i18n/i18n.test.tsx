@@ -7,8 +7,7 @@ import { createInstance } from "i18next";
 import { describe, expect, it } from "vitest";
 import { Amount } from "../fx/atoms/amount/amount";
 import { en, type Messages } from "./en.ts";
-import { decimalMark, LOCALES, monthLabel, resolveLocale } from "./locales.ts";
-import { pl } from "./pl.ts";
+import { catalogues, decimalMark, LOCALES, monthLabel, resolveLocale } from "./locales.ts";
 import { I18nProvider } from "./provider";
 
 describe("choosing a language", () => {
@@ -27,11 +26,15 @@ describe("choosing a language", () => {
   it("matches on the primary subtag, with or without a region", () => {
     expect(resolveLocale(["pl"])).toBe("pl");
     expect(resolveLocale(["PL-pl"])).toBe("pl");
+    expect(resolveLocale(["de-AT"])).toBe("de");
+    expect(resolveLocale(["ru-BY"])).toBe("ru");
+    expect(resolveLocale(["be-BY"])).toBe("be");
   });
 
   /** A device set to a language nobody has translated, and a fresh install. */
   it("falls back to English rather than rendering keys", () => {
-    expect(resolveLocale(["de-DE", "fr-FR"])).toBe("en");
+    expect(resolveLocale(["fr-FR", "ja-JP"])).toBe("en");
+    expect(resolveLocale(["fr-FR", "ru-RU", "en-US"])).toBe("ru");
     expect(resolveLocale([])).toBe("en");
   });
 });
@@ -43,15 +46,17 @@ describe("the catalogues", () => {
    * compiles, and renders as a blank label — the one translation failure that
    * looks like a layout bug.
    */
-  it("translates every English key into a non-empty Polish one", () => {
+  const TRANSLATED = LOCALES.filter((locale) => locale !== "en");
+
+  it.each(TRANSLATED)("translates every English key into a non-empty %s one", (locale) => {
     for (const section of Object.keys(en) as (keyof Messages)[]) {
       const english = en[section] as Record<string, string>;
-      const polish = pl[section] as Record<string, string>;
+      const translated = catalogues[locale][section] as Record<string, string>;
 
-      expect(Object.keys(polish).sort(), `${section} has different keys`).toEqual(
+      expect(Object.keys(translated).sort(), `${section} has different keys`).toEqual(
         Object.keys(english).sort(),
       );
-      for (const [key, value] of Object.entries(polish)) {
+      for (const [key, value] of Object.entries(translated)) {
         expect(value.trim(), `${section}.${key} is blank`).not.toBe("");
       }
     }
@@ -62,21 +67,24 @@ describe("the catalogues", () => {
    * in one language produces a sentence with a hole in it, at runtime, only in
    * that language — and the type cannot see inside the string.
    */
-  it("keeps every interpolation placeholder in every language", () => {
-    const placeholders = (value: string) => (value.match(/{{\w+}}/g) ?? []).sort();
+  it.each(TRANSLATED)("keeps every interpolation placeholder in %s", (locale) => {
+    const placeholders = (value: string) => [...new Set(value.match(/{{\w+}}/g) ?? [])].sort();
 
     for (const section of Object.keys(en) as (keyof Messages)[]) {
       const english = en[section] as Record<string, string>;
-      const polish = pl[section] as Record<string, string>;
+      const translated = catalogues[locale][section] as Record<string, string>;
 
       for (const [key, value] of Object.entries(english)) {
-        expect(placeholders(polish[key] ?? ""), `${section}.${key}`).toEqual(placeholders(value));
+        expect(placeholders(translated[key] ?? ""), `${section}.${key}`).toEqual(
+          placeholders(value),
+        );
       }
     }
   });
 
   it("ships exactly the languages it has catalogues for", () => {
-    expect([...LOCALES].sort()).toEqual(["en", "pl"]);
+    expect([...LOCALES].sort()).toEqual(Object.keys(catalogues).sort());
+    expect([...LOCALES].sort()).toEqual(["be", "de", "en", "pl", "ru"]);
   });
 });
 
@@ -94,6 +102,9 @@ describe("punctuating a figure", () => {
   it("maps each language to its mark", () => {
     expect(decimalMark("en")).toBe(".");
     expect(decimalMark("pl")).toBe(",");
+    expect(decimalMark("de")).toBe(",");
+    expect(decimalMark("ru")).toBe(",");
+    expect(decimalMark("be")).toBe(",");
   });
 
   it("says the month in the reader's language — PeriodHeader's label (C2)", () => {
@@ -172,6 +183,48 @@ describe("plural categories", () => {
     ]);
     expect(instance.services.pluralResolver.getSuffixes("en").sort()).toEqual(["_one", "_other"]);
   });
+
+  /**
+   * Russian and Belarusian have Polish's four categories on a different split —
+   * 21 is `one` there and `many` in Polish — and German has English's two. The
+   * catalogue writes all four suffixes for every language, because its type is
+   * English's shape; German's `few` and `many` are never asked for.
+   */
+  it("splits Russian and Belarusian counts their own way", () => {
+    for (const locale of ["ru", "be"] as const) {
+      const rules = new Intl.PluralRules(locale);
+      expect([1, 3, 5, 21, 22, 25].map((n) => rules.select(n))).toEqual([
+        "one",
+        "few",
+        "many",
+        "one",
+        "few",
+        "many",
+      ]);
+    }
+    expect(new Intl.PluralRules("pl").select(21)).toBe("many");
+    expect(new Intl.PluralRules("de").select(3)).toBe("other");
+  });
+
+  it.each([
+    ["ru", 1, "1 день"],
+    ["ru", 3, "3 дня"],
+    ["ru", 5, "5 дней"],
+    ["ru", 21, "21 день"],
+    ["be", 3, "3 дні"],
+    ["be", 11, "11 дзён"],
+    ["de", 1, "1 Tag"],
+    ["de", 4, "4 Tage"],
+  ] as const)("declines a %s count of %d as “%s”", (locale, count, expected) => {
+    const instance = createInstance();
+    void instance.init({
+      lng: locale,
+      fallbackLng: "en",
+      resources: { [locale]: { translation: catalogues[locale] } },
+      initAsync: false,
+    });
+    expect(instance.t("fx.rateEditorTotalDays", { count })).toBe(expected);
+  });
 });
 
 /**
@@ -236,21 +289,23 @@ describe("counted strings decline", () => {
     );
   }
 
-  it.each([
-    ["en", en],
-    ["pl", pl],
-  ])("%s writes out every form of every counted key", (_name, catalogue) => {
-    const missing: string[] = [];
-    for (const root of countedRoots(catalogue)) {
-      for (const form of FORMS) {
-        if (!has(catalogue, `${root}_${form}`)) missing.push(`${root}_${form}`);
+  it.each(LOCALES.map((locale) => [locale, catalogues[locale]] as const))(
+    "%s writes out every form of every counted key",
+    (_name, catalogue) => {
+      const missing: string[] = [];
+      for (const root of countedRoots(catalogue)) {
+        for (const form of FORMS) {
+          if (!has(catalogue, `${root}_${form}`)) missing.push(`${root}_${form}`);
+        }
       }
-    }
-    expect(missing, "a missing form falls back to the bare key, which is the singular").toEqual([]);
-  });
+      expect(missing, "a missing form falls back to the bare key, which is the singular").toEqual(
+        [],
+      );
+    },
+  );
 
   /** Both catalogues count the same things — a key counted in one and not the other is a bug in one of them. */
-  it("counts the same keys in both languages", () => {
-    expect([...countedRoots(pl)].sort()).toEqual([...countedRoots(en)].sort());
+  it.each(LOCALES)("counts the same keys in %s as in English", (locale) => {
+    expect([...countedRoots(catalogues[locale])].sort()).toEqual([...countedRoots(en)].sort());
   });
 });
