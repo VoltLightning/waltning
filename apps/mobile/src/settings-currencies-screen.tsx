@@ -129,6 +129,11 @@ export default function SettingsCurrenciesScreen() {
 
   const pivotRow = rows.find((row) => row.isPivot);
   const otherRows = rows.filter((row) => !row.isPivot);
+  // S17 §3: what the header's toggle shows, and what is only held.
+  const shownRows = otherRows.filter((row) => row.pinned);
+  const heldRows = otherRows.filter((row) => !row.pinned);
+  const [changingPivot, setChangingPivot] = useState(false);
+  const handleStartPivotChange = useCallback(() => setChangingPivot(true), []);
 
   // C1 — `otherRows` is already non-pivot, non-archived (`listCurrencySettings`'s
   // own default). Defaults to the first candidate so the flow works with one
@@ -290,55 +295,98 @@ export default function SettingsCurrenciesScreen() {
   return (
     <PushedPage title={t("routes.currencies")} subtitle={t("pages.currencies")}>
       {/*
-        The card is the group of currency rows, so with no rows there is no
-        group — and a card holding nothing is chrome claiming a list exists.
-        Only the pivot is set up in that state; *Add currency* is the one
-        thing to do about it, and it is a button, so it sits on the ground
-        either way (`design-system/05` §5.1) — as does the screen's own name,
-        which the navigation header already carries.
+        **The pivot first, as its own card** (S17 §3) — every figure in the app
+        is this currency underneath, so it is the first thing the screen says,
+        and changing it is an action inside that card, behind its own tap and a
+        confirmation, rather than a form at the bottom of a list.
       */}
-      {otherRows.length > 0 ? (
+      {pivotRow ? (
         <Card>
-          {otherRows.map((row) => (
-            <CurrencyRow
-              key={row.code}
-              row={row}
-              coverage={coverageByCode.get(row.code)}
-              expanded={expandedCode === row.code}
-              onToggleExpanded={handleToggleExpanded}
-              onTogglePinned={handleTogglePinned}
-              onChangeSource={handleChangeSource}
-              onArchive={handleArchive}
-              onEdit={handleOpenEdit}
-              onViewRates={handleViewRates}
-            />
-          ))}
+          <View style={styles.pivot}>
+            <Text style={styles.kicker}>{t("fx.pivotKicker")}</Text>
+            <View style={styles.pivotHead}>
+              <Text style={styles.pivotCode}>{pivotRow.code}</Text>
+              <Text style={styles.pivotName}>{t("fx.pivotName", { name: pivotRow.name })}</Text>
+            </View>
+            <Text style={styles.pivotBody}>{t("fx.pivotExplained")}</Text>
+            {otherRows.length === 0 ? null : changingPivot ? (
+              <View style={styles.pivotChange}>
+                <Select
+                  label={t("fx.pivotTarget")}
+                  placeholder={t("fx.pivotTargetPlaceholder")}
+                  options={pivotTargetOptions}
+                  value={selectedPivotTarget}
+                  onChange={handleChangePivotTarget}
+                />
+                <Button
+                  label={t("fx.changePivot")}
+                  onPress={handleOpenPivotConfirm}
+                  variant="secondary"
+                  size="sm"
+                  disabled={selectedPivotTarget === null}
+                />
+              </View>
+            ) : (
+              <Button
+                label={t("fx.changePivotStart")}
+                onPress={handleStartPivotChange}
+                variant="ghost"
+                size="sm"
+              />
+            )}
+          </View>
         </Card>
       ) : null}
 
-      <Button label={t("fx.addCurrency")} onPress={handleOpenAdd} variant="secondary" size="sm" />
-
-      {pivotRow ? (
-        <View style={styles.pivotRow}>
-          <Text style={styles.pivotLabel}>{t("fx.pivotLabel", { code: pivotRow.code })}</Text>
-          {otherRows.length > 0 ? (
-            <Select
-              label={t("fx.pivotTarget")}
-              placeholder={t("fx.pivotTargetPlaceholder")}
-              options={pivotTargetOptions}
-              value={selectedPivotTarget}
-              onChange={handleChangePivotTarget}
-            />
-          ) : null}
-          <Button
-            label={t("fx.changePivot")}
-            onPress={handleOpenPivotConfirm}
-            variant="ghost"
-            size="sm"
-            disabled={selectedPivotTarget === null}
-          />
-        </View>
+      {/*
+        The two groups a held currency is in: shown in the header's toggle
+        (pinned) or only held. Each is a card of rows, titled by the group —
+        a card holding nothing is not drawn.
+      */}
+      {shownRows.length > 0 ? (
+        <>
+          <Text style={styles.kicker}>{t("fx.groupShown")}</Text>
+          <Card>
+            {shownRows.map((row) => (
+              <CurrencyRow
+                key={row.code}
+                row={row}
+                coverage={coverageByCode.get(row.code)}
+                expanded={expandedCode === row.code}
+                onToggleExpanded={handleToggleExpanded}
+                onTogglePinned={handleTogglePinned}
+                onChangeSource={handleChangeSource}
+                onArchive={handleArchive}
+                onEdit={handleOpenEdit}
+                onViewRates={handleViewRates}
+              />
+            ))}
+          </Card>
+        </>
       ) : null}
+      {heldRows.length > 0 ? (
+        <>
+          <Text style={styles.kicker}>{t("fx.groupHeld")}</Text>
+          <Card>
+            {heldRows.map((row) => (
+              <CurrencyRow
+                key={row.code}
+                row={row}
+                coverage={coverageByCode.get(row.code)}
+                expanded={expandedCode === row.code}
+                onToggleExpanded={handleToggleExpanded}
+                onTogglePinned={handleTogglePinned}
+                onChangeSource={handleChangeSource}
+                onArchive={handleArchive}
+                onEdit={handleOpenEdit}
+                onViewRates={handleViewRates}
+              />
+            ))}
+          </Card>
+        </>
+      ) : null}
+
+      <Button label={t("fx.addCurrency")} onPress={handleOpenAdd} variant="secondary" size="sm" />
 
       <BottomSheet visible={addOpen} title={t("fx.addCurrency")} onDismiss={handleCloseAdd}>
         <TextField
@@ -412,11 +460,11 @@ const DECIMALS_OPTIONS: SelectOption[] = Array.from({ length: 9 }, (_, decimals)
 }));
 
 const useStyles = makeStyles((theme) => ({
-  pivotRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingVertical: space.x2,
-  },
-  pivotLabel: { color: theme.textMuted, ...text.ui("bodySm") },
+  kicker: { color: theme.textMuted, ...text.ui("kicker"), textTransform: "uppercase" },
+  pivot: { gap: space.md, paddingVertical: space.sm },
+  pivotHead: { flexDirection: "row", alignItems: "baseline", gap: space.md },
+  pivotCode: { color: theme.text, ...text.display("displayTwo") },
+  pivotName: { color: theme.textMuted, ...text.ui("bodySm") },
+  pivotBody: { color: theme.textMuted, ...text.ui("caption") },
+  pivotChange: { gap: space.md },
 }));

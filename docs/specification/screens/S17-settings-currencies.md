@@ -38,12 +38,18 @@ six-currency screen three screens tall and unscannable; a list of six things is
 exactly what a list is for, and one row open at a time is what makes opening a
 second close the first.
 
-The list of rows is the one grouped-rows **card**. *Add currency*, the pivot
-block and the screen's own name sit on the ground — and the card carries **no
+The rows are grouped-rows **cards**, one per group. *Add currency* and the
+screen's own name sit on the ground — and the card carries **no
 title**: the navigation header already says *Currencies*, and saying it twice,
 40 px apart, is chrome.
 
-Pivot shown **read-only** at the bottom with an advanced change action.
+**The pivot first, as its own card**: *The one everything is measured in*, its
+code and name, and one line on what it means — every figure is this currency
+underneath, and changing it restates the ledger. The change is inside that card,
+behind its own *Change the pivot…* and then the confirmation, never a form left
+open at the bottom of a list. The other currencies follow in two titled cards:
+**In the header toggle** (pinned) and **Held, not in the toggle** — which is the
+one question a reader brings to this screen about any of them.
 
 Web adds columns rather than regions; the list is short and does not need two.
 

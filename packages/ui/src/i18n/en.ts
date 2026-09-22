@@ -1473,6 +1473,13 @@ export const en = {
     symbolAfter: "After the figure",
     decimals: "Decimal places",
     pivotLabel: "Pivot: {{code}}",
+    pivotKicker: "The one everything is measured in",
+    pivotName: "{{name}} · the pivot",
+    pivotExplained:
+      "Every figure in the app is this currency underneath. Changing it restates the whole ledger, so it is set once.",
+    changePivotStart: "Change the pivot…",
+    groupShown: "In the header toggle",
+    groupHeld: "Held, not in the toggle",
     changePivot: "Change pivot",
     pivotConfirmTitle: "Change the pivot currency?",
     pivotConfirmBody:
