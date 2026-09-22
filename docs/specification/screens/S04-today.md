@@ -330,16 +330,12 @@ what the List draws for the same day: today, as its own quiet line. **Never the
 first-run wording**: which emptiness it is, is a count over the whole ledger,
 and a ledger of expected entries has been started.
 
-***Go to* carries only what nothing else does.** Accounts and the agent are
-tabs, so a card for either would be a second door into the same room — and a
-second door is worse than none, because now there are two things to keep
-current.
-
-**Debt is here rather than in the tab bar, and gains by it.** *Between us* is a
-figure you check, not a place you live; as a tab it was a word and an icon, and
-as a card it carries `+1 480,00 zł · 3 people`. Every card carries a figure, so
-the grid reads as status rather than as a menu — which is the whole reason a
-low-frequency destination is better off in it.
+***Go to* carries only what nothing else does.** Accounts and Debt are tabs
+(`05-composites`, `TabBar`), so a card for either would be a second door into
+the same room — and a second door is worse than none, because now there are
+two things to keep current. Every card carries a figure, so the grid reads as
+status rather than as a menu. When the agent takes Debt's tab, Debt comes back
+here with its figure — `+1 480,00 zł · 3 people`.
 
 #### List
 
@@ -353,9 +349,13 @@ page.
 
 #### Calendar
 
-The month's shape as a grid of days, each carrying the same activity mark
-`DayRibbon` uses, with the tapped day's entries open beneath it. **This is
-S11's phone layout, restored.**
+The month's shape as a grid of days, **each carrying its own net figure**,
+shaded warmer the heavier the day (`design-system/06`, `CalendarMonth`), days
+still to come outlined with what is expected, and the tapped day's entries open
+beneath it. **This is S11's phone layout, restored.** **Figures, not the strip's
+dots:** a calendar is read for amounts — *what did the 14th cost* — and the
+strip is read for rhythm, where a dot per day is the whole message. One mark
+vocabulary serving both left the calendar a second, larger strip.
 
 **The blank half of the page is three states, and says which** (`design-system/08`
 §8.1). Under the grid sits the tapped day's entries, and where there were none
@@ -538,7 +538,7 @@ happened*.
 | `Banner(warn)` | Unsettled clearing — rendered **only when non-zero**, with one action |
 | `TodayPill` | Floats over the list when the list's **anchor** is not today — which is what a jump moves, and a jump is what §6 says this exists for. Deliberately not *scrolled away from today*: paging backwards walks day by day and can be walked back, where a jump loaded a neighbourhood with nothing between it and here. The only way back from a jump (§6). Top-centre **of the list**, not of the page: the add button owns the bottom corners and settles against either side edge at any height (`02-tokens` §2.9), and `DayRibbon` owns the band above the list — a pill resolved against the whole page lands on the strip's first cells, which are both data and 44pt targets. A floating control over an infinite list covers something; it covers a sliver of content the reader can scroll, never chrome they cannot. Its edge says *above the page*, not `shadow-float`, which §2.5 keeps for the add button and the toast — the things above the whole screen rather than above one list |
 | `FilterChip` | The carried filter, pinned under `PageTabs`: what it is, and an `✕` that clears it. One chip — this screen receives a filter, it does not compose them. Composing is `FilterBar`, and it is S10's, on the desk |
-| `TabBar` | 4 tabs, all ≥44px — Home · Accounts · **Agent** · Settings. **No Ledger tab**: this screen is the ledger, so one would lead where you already are. **No Debt tab**: it is a figure you check, not a place you live, and it reads better in *Go to* where it can carry one. `+` is not a tab, though it may come to rest between Accounts and Agent (`02-tokens` §2.9) |
+| `TabBar` | 4 tabs, all ≥44px — Home · Accounts · **Debt** · Settings, the third slot the agent's once S03 exists (`05-composites`). **No Ledger tab**: this screen is the ledger, so one would lead where you already are — search is this screen's header search, and the table is the desk's (S10). `+` is not a tab, though it may come to rest between Accounts and Debt (`02-tokens` §2.9) |
 | `FloatingAdd` | The `+`, above everything, wherever it was last put (`02-tokens` §2.9) |
 | `EmptyState(first-run)` | No accounts — offers create; the import path is S29's and arrives with it. No transactions — §6 |
 | `AppearanceButton` · `BottomSheet(appearance)` | Moved to S30 · Settings. The header has one action, and it is the picker |

@@ -19,11 +19,18 @@ document, while the sketch above has said `1 234,56` throughout.
 
 **The group separator is fixed and the decimal mark follows the language.**
 
-The separator is **U+00A0, a no-break space**, in every language. The app
-renders a trailing ISO code rather than a symbol, and `screens/S17` records that
-symbol placement is a locale question nobody has answered; a comma group with a
-dot decimal is ambiguous in *both* the conventions this product will meet, and a
-space group is ambiguous in neither. No-break rather than thin, because a thin
+The separator is **U+00A0, a no-break space**, in every language; a comma
+group with a dot decimal is ambiguous in *both* the conventions this product
+will meet, and a space group is ambiguous in neither.
+
+**After the figure: the pivot's symbol, every other currency's code.**
+`1 240,50 zł`, but `62,40 BYN` and `115,96 EUR`. The pivot is the currency
+nearly every figure is in, so its symbol is the one a reader knows without
+reading; a foreign balance is rarer and is exactly where a symbol misleads —
+`Br`, `₾` and `zł` are three unfamiliar marks to someone who holds all three,
+and `$` does not say which dollar. The code is unambiguous and costs two
+letters. Trailing in both cases, whatever the locale does with a symbol, so a
+column of amounts ends on one edge. No-break rather than thin, because a thin
 space is not in every fallback face and a plain one would let a figure wrap in
 the middle of itself.
 

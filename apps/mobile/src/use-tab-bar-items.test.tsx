@@ -11,14 +11,16 @@ import { describe, expect, it, vi } from "vitest";
 
 const switchTab = {
   today: vi.fn(),
+  accounts: vi.fn(),
   ledger: vi.fn(),
   debt: vi.fn(),
   settings: vi.fn(),
 };
-let focused: "today" | "ledger" | "debt" | "settings" = "today";
+type Tab = "today" | "accounts" | "ledger" | "debt" | "settings";
+let focused: Tab = "today";
 
 vi.mock("expo-router/ui", () => ({
-  useTabTrigger: ({ name }: { name: "today" | "ledger" | "debt" | "settings" }) => ({
+  useTabTrigger: ({ name }: { name: Tab }) => ({
     trigger: { isFocused: name === focused },
     switchTab: switchTab[name],
   }),
@@ -28,16 +30,35 @@ const { useTabBarItems } = await import("./use-tab-bar-items");
 
 describe("useTabBarItems", () => {
   it("marks exactly the focused tab active, in a fixed order", () => {
-    focused = "ledger";
+    focused = "accounts";
     const { result } = renderHook(() => useTabBarItems());
 
     expect(result.current.items.map((i) => i.name)).toEqual([
       "today",
-      "ledger",
+      "accounts",
       "debt",
       "settings",
     ]);
     expect(result.current.items.map((i) => i.active)).toEqual([false, true, false, false]);
+  });
+
+  /**
+   * **The Ledger is S04 on the phone** (`05-composites`, `TabBar`): a tab for
+   * it led to the screen you were already on. The desk's band keeps it, after
+   * Accounts, because the desk has a nav bar rather than four thumb targets.
+   */
+  it("keeps the Ledger off the phone's bar and on the desk's band", () => {
+    focused = "ledger";
+    const { result } = renderHook(() => useTabBarItems());
+    expect(result.current.items.map((i) => i.name)).not.toContain("ledger");
+    expect(result.current.deskItems.map((i) => i.name)).toEqual([
+      "today",
+      "accounts",
+      "ledger",
+      "debt",
+      "settings",
+    ]);
+    expect(result.current.deskItems.find((i) => i.active)?.name).toBe("ledger");
   });
 
   it("dispatches onSelect to the named tab's own switchTab", () => {
@@ -56,7 +77,7 @@ describe("useTabBarItems", () => {
       return <>{items.map((item) => item.label).join(" · ")}</>;
     }
     render(<Probe />);
-    expect(screen.getByText("Today · Ledger · Debt · Settings")).toBeDefined();
+    expect(screen.getByText("Home · Accounts · Debt · Settings")).toBeDefined();
   });
 
   /**
