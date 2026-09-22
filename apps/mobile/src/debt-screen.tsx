@@ -25,6 +25,8 @@ import {
   makeRateOf,
   resolveCounterpartyFigures,
 } from "@waltning/client/counterparties/counterparty-figures";
+import { debtHero } from "@waltning/client/counterparties/debt-hero";
+import { debtTotalLines } from "@waltning/client/counterparties/debt-totals";
 import { clientFailure, emitClientDiagnostic } from "@waltning/client/diagnostics";
 import { deviceRuntime } from "@waltning/client/ledger/device-runtime";
 import { useLedgerController } from "@waltning/client/ledger/use-ledger-controller";
@@ -36,6 +38,7 @@ import { Amount } from "@waltning/ui/fx/amount";
 import { useT } from "@waltning/ui/i18n/provider";
 import { type Segment, SegmentControl } from "@waltning/ui/primitives/segment-control";
 import { Card, GroundPanel } from "@waltning/ui/shell/card";
+import { MonthSummary } from "@waltning/ui/shell/month-summary";
 import { UnsettledBanner } from "@waltning/ui/shell/unsettled-banner";
 import { EmptyState } from "@waltning/ui/states/empty-state";
 import { ErrorState } from "@waltning/ui/states/error-state";
@@ -180,6 +183,37 @@ export default function Debt() {
     }));
   }, [balances, ledger.readRate, pivot, snapshot.currencies, today]);
 
+  /**
+   * S12 §3's hero — S04's own card, holding debt's subtraction: the track is
+   * what you lent, the fill is what you owe, and the gap between them is what
+   * comes back to you. The arithmetic is `debtHero`'s, in `packages/client`,
+   * where money arithmetic lives (`architecture/11`).
+   *
+   * **In the pivot, and only when every line can reach it.** A figure folded
+   * from balances the replica holds no rate for would be a total with a hole
+   * in it, which is the one thing a headline must not be (P1) — so an
+   * incomplete fold draws no hero at all and the per-currency card below,
+   * which states each currency on its own terms, carries the screen.
+   */
+  const hero = useMemo(() => {
+    if (!pivot) return null;
+    const rateOf = makeRateOf(ledger.readRate, pivot, today);
+    const lines = groupByCounterparty(balances).flatMap((group) => group.balances);
+    const decimals = snapshot.currencies.find((currency) => currency.code === pivot)?.decimals ?? 2;
+    return debtHero(lines, pivot, rateOf, decimals);
+  }, [balances, ledger.readRate, pivot, snapshot.currencies, today]);
+
+  /*
+    The lines the card draws, zero halves already dropped — *you owe · EUR
+    0,00* under a currency only owed the other way is a label with nothing
+    under it. `debtTotalLines` owns that rule and the grouping, so both are
+    testable without mounting a screen.
+  */
+  const totalLines = useMemo(
+    () => (directionTotalsResult.ok ? debtTotalLines(directionTotalsResult.rows) : []),
+    [directionTotalsResult],
+  );
+
   const visibleRows = useMemo(() => {
     const filtered = rows.filter((row) => matchesDirectionSegment(row, segment));
     // S12 §3's own mock: one list, sorted by name — kind is never a sort
@@ -317,6 +351,27 @@ export default function Debt() {
     <GroundPanel>
       <View style={styles.root}>
         {unsettledBanner}
+        {hero === null ? null : (
+          <MonthSummary
+            net={hero.net}
+            inflow={hero.lent}
+            spend={hero.owed}
+            currency={hero.currency}
+            decimals={hero.decimals}
+            signed={false}
+            labels={{
+              // P5 — direction in a word, never by sign alone. A net that
+              // points the other way is not *comes back to you · −183,49*;
+              // it is a debt, and it says so.
+              net:
+                hero.direction === "you-owe"
+                  ? t("counterparties.owedNet")
+                  : t("counterparties.comesBack"),
+              inflow: t("counterparties.youLent"),
+              spend: t("counterparties.youOweLabel"),
+            }}
+          />
+        )}
         <SegmentControl segments={segments} value={segment} onChange={handleSegmentChange} />
         {/*
           The card is the group of direction totals, so with no totals there
@@ -324,34 +379,23 @@ export default function Debt() {
           an empty card would be chrome around nothing. The rows below say
           what the state is; this block only ever states figures.
         */}
-        {directionTotalsResult.rows.length === 0 ? null : (
+        {totalLines.length === 0 ? null : (
           <Card>
             <View style={styles.totals} testID="debt-direction-totals">
-              {directionTotalsResult.rows.map((total) => (
-                <View key={total.currency} style={styles.totalRow}>
+              {totalLines.map((line) => (
+                <View key={line.key} style={styles.totalRow}>
                   <Text style={styles.totalLabel}>
-                    {t("counterparties.theyOweTotal")} · {total.currency}
+                    {line.direction === "they-owe"
+                      ? t("counterparties.theyOweTotal")
+                      : t("counterparties.youOweTotal")}{" "}
+                    · {line.currency}
                   </Text>
                   <Amount
-                    value={total.theyOwe}
-                    currency={total.currency}
-                    decimals={total.decimals}
+                    value={line.value}
+                    currency={line.currency}
+                    decimals={line.decimals}
                     size="small"
-                    kind="income"
-                  />
-                </View>
-              ))}
-              {directionTotalsResult.rows.map((total) => (
-                <View key={`${total.currency}-you`} style={styles.totalRow}>
-                  <Text style={styles.totalLabel}>
-                    {t("counterparties.youOweTotal")} · {total.currency}
-                  </Text>
-                  <Amount
-                    value={total.youOwe}
-                    currency={total.currency}
-                    decimals={total.decimals}
-                    size="small"
-                    kind="spend"
+                    kind={line.direction === "they-owe" ? "income" : "spend"}
                   />
                 </View>
               ))}

@@ -37,12 +37,20 @@ transaction that needs allocating.
   │   dinner · 6 Aug      [ Allocate ]│
   └───────────────────────────────────┘
 
+  ┌───────────────────────────────────┐
+  │ comes back to you                 │   ← the hero: S04's card
+  │ 920,20 zł                         │
+  │ ▓▓▓▓▓▓▓▓▓▓▓▓░░░░░░░░              │
+  │ you lent 1 240,60   you owe 320,40│
+  └───────────────────────────────────┘
+
   [ All ]  [ They owe ]  [ You owe ]
 
   ┌───────────────────────────────────┐
-  │ they owe you      +1 240,60 zł    │
-  │ you owe             −320,40 zł    │
-  └───────────────────────────────────┘
+  │ they owe you · PLN    +1 240,60 zł│
+  │ they owe you · EUR       +74,44 € │
+  │ you owe · PLN           −320,40 zł│
+  └───────────────────────────────────┘   ← no EUR line: nothing owed in it
 
   ┌─────────────────────────────────────┐
   │ (A)  Nina              owes you     │
@@ -59,10 +67,31 @@ transaction that needs allocating.
 ```
 
 **Direction is stated in words, never by sign alone** (P5). `+840` and `−120` on
-one screen mean opposite things and are too easy to misread.
+one screen mean opposite things and are too easy to misread. **The hero obeys
+this too**: its leading figure is a magnitude and the label above it carries the
+direction — *comes back to you* when more is out with people than is yours to
+give back, *you owe, on balance* when it is the other way. A hero reading
+*comes back to you · −183,49* is this rule broken on the screen it was written
+for. Exactly settled points forward: nothing comes back and nothing is owed,
+and naming a debt of `0,00` would invent one.
 
-The direction-totals block is a card of grouped rows — one *they owe you* and
-one *you owe* line per currency, which is a group, not a single hero figure.
+**The hero folds into the pivot, and draws nothing when it cannot.** Every
+balance is converted at the rate the replica holds for it; a figure folded from
+lines one of those rates is missing for would be a headline with a hole in it,
+which is the one thing a headline must not be (P1). So an incomplete fold draws
+no hero at all, and the per-currency card below — which states each currency on
+its own terms and needs no rate — carries the screen on its own. The same
+happens when nothing is owed in either direction: there is no subtraction to
+state.
+
+The direction-totals block is a card of grouped rows — a *they owe you* and a
+*you owe* line per currency, which is a group, not a single hero figure.
+**A direction with nothing in it is not a line.** A currency owed one way only
+carries a zero the other way, and *you owe · EUR 0,00* is a label with nothing
+under it; the same rule that drops a currency settled in both directions drops
+the settled half of a currency owed in one. The lines read as two blocks —
+every *they owe you* first, then every *you owe* — because that is how the
+question is asked: what is out with people, and what is mine to give back.
 The segment control and the counterparty rows stay on the ground. **The card
 renders only when there is at least one direction total**; with nothing owed in
 either direction there is no group to draw, and an empty card is chrome around
@@ -86,7 +115,8 @@ person, which is the whole reason the old account model failed.
 
 | Component | Notes |
 |---|---|
-| `Card` | Wraps the direction-totals block — grouped rows (they-owe / you-owe per currency), not a hero figure. Rendered only when a direction total exists |
+| `MonthSummary` | The hero, above the segments — S04's own card with debt's three figures in it, taking its labels as a prop (*comes back to you* · *you lent* · *you owe*). Not a second component: a bar whose track is one figure and whose fill is another is the same shape whichever subtraction it holds |
+| `Card` | Wraps the direction-totals block — grouped rows (they-owe / you-owe per currency), not a hero figure. Rendered only when a direction total exists, and a settled half draws no line |
 | `CounterpartyRow` | Monogram on a ramp tint, derived deterministically from the name (Q10) |
 | `DebtDirectionTag` | `owes you` / `you owe` — text, not colour |
 | `AgeingBar` | **Companies only** (O15). A 60-days-overdue badge on a friend's share of dinner is absurd |

@@ -770,6 +770,10 @@ export const en = {
     /** The two direction totals — §6.6, never summed across people. */
     theyOweTotal: "they owe you",
     youOweTotal: "you owe",
+    comesBack: "Comes back to you",
+    youLent: "You lent",
+    youOweLabel: "You owe",
+    owedNet: "You owe, on balance",
     unallocated: "{{amount}} {{currency}} unallocated",
     unallocatedNamed: "{{amount}} {{currency}} unallocated · {{payee}} · {{date}}",
     allocate: "Allocate",

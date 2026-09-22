@@ -224,6 +224,112 @@ describe("Debt (S12)", () => {
   });
 
   /**
+   * S12 §3 — the hero is S04's own card holding debt's subtraction: the
+   * track is what you lent, the fill is what you owe, and the gap between
+   * them is what comes back to you.
+   */
+  it("opens with what comes back to you, over what was lent and what is owed", () => {
+    const controller = controllerOf(
+      basePort({
+        listCounterparties: () => [NINA_COUNTERPARTY],
+        listCounterpartyBalances: () => [
+          NINA_ROW,
+          { ...NINA_ROW, counterpartyId: MAREK, name: "Marek", balance: toMoney("-240.00000000") },
+        ],
+      }),
+    );
+    render(
+      <LedgerProvider controller={controller}>
+        <Debt />
+      </LedgerProvider>,
+    );
+
+    expect(screen.getByText("Comes back to you")).toBeDefined();
+    expect(screen.getByText("You lent")).toBeDefined();
+    // Twice now: the segment that filters to them, and the hero's own pair.
+    expect(screen.getAllByText("You owe")).toHaveLength(2);
+    // 840 lent less 240 owed — the hero states the gap, signed.
+    expect(screen.getByText(/600[.,]00/)).toBeDefined();
+  });
+
+  /**
+   * P1 — a headline folded from lines the replica holds no rate for would be
+   * a total with a hole in it. The per-currency card below states each
+   * currency on its own terms and carries the screen instead.
+   */
+  it("draws no hero when a held currency has no rate to fold through", () => {
+    const controller = controllerOf(
+      basePort({
+        listCounterparties: () => [NINA_COUNTERPARTY],
+        listCounterpartyBalances: () => [
+          NINA_ROW,
+          { ...NINA_ROW, currency: EUR, balance: toMoney("74.44000000") },
+        ],
+        readRate: () => null,
+      }),
+    );
+    render(
+      <LedgerProvider controller={controller}>
+        <Debt />
+      </LedgerProvider>,
+    );
+
+    expect(screen.queryByText("Comes back to you")).toBeNull();
+    expect(screen.getByTestId("debt-direction-totals")).toBeDefined();
+  });
+
+  /**
+   * S12 §3 — *"direction is stated in words, never by sign alone"* (P5). A net
+   * pointing the other way is not *comes back to you · −183,49*; it is a debt,
+   * and the label is what says so.
+   */
+  it("names the debt when more is owed than lent, instead of a minus sign", () => {
+    const controller = controllerOf(
+      basePort({
+        listCounterparties: () => [NINA_COUNTERPARTY],
+        listCounterpartyBalances: () => [
+          { ...NINA_ROW, balance: toMoney("120.00000000") },
+          { ...NINA_ROW, counterpartyId: MAREK, name: "Marek", balance: toMoney("-320.00000000") },
+        ],
+      }),
+    );
+    render(
+      <LedgerProvider controller={controller}>
+        <Debt />
+      </LedgerProvider>,
+    );
+
+    expect(screen.getByText("You owe, on balance")).toBeDefined();
+    expect(screen.queryByText("Comes back to you")).toBeNull();
+    // The magnitude, unsigned — 320 owed less 120 lent.
+    expect(screen.getByText(/^200[.,]00$/)).toBeDefined();
+  });
+
+  /**
+   * A currency owed in one direction only still carried a `0` in the other,
+   * and *you owe · EUR 0,00* is a label with nothing under it.
+   */
+  it("draws no line for the empty half of a currency", () => {
+    const controller = controllerOf(
+      basePort({
+        listCounterparties: () => [NINA_COUNTERPARTY],
+        listCounterpartyBalances: () => [
+          NINA_ROW,
+          { ...NINA_ROW, currency: EUR, balance: toMoney("74.44000000") },
+        ],
+      }),
+    );
+    render(
+      <LedgerProvider controller={controller}>
+        <Debt />
+      </LedgerProvider>,
+    );
+
+    expect(screen.getByText(/they owe you · EUR/)).toBeDefined();
+    expect(screen.queryByText(/you owe · EUR/)).toBeNull();
+  });
+
+  /**
    * `05-composites` §5.1 — the card groups the direction totals, so with no
    * totals there is no group and no card. Everything settled (or nothing owed
    * yet) used to render the card's chrome around nothing at all.
