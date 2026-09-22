@@ -155,6 +155,10 @@ const DETAIL: NonNullable<FakeDetail> = {
   accountName: "Cash · PLN",
   categoryId: null,
   categoryName: null,
+  counterpartyId: null,
+  counterpartyName: null,
+  counterpartyRole: null,
+  isCapital: false,
   brandKey: null,
   amount: toMoney("-48.90"),
   currency: PLN,
@@ -233,6 +237,48 @@ describe("TransactionDetail", () => {
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
     expect(screen.getByRole("button", { name: "Account: Bank A · PLN" })).toBeDefined();
+  });
+
+  /**
+   * §6.6 — the person a row is about, and what they are to it. Both were
+   * held back while nothing read them; `update_transaction`'s patch carried
+   * them all along.
+   */
+  it("attaches a counterparty and its role, and both read back", () => {
+    withLedger(
+      <TransactionDetail />,
+      fakeController(DETAIL, {
+        listCounterparties: () => [
+          {
+            id: id<"counterparties">("99999999-9999-4999-8999-999999999999"),
+            name: "Nina",
+            kind: "person" as const,
+            settlementCurrency: null,
+            contact: null,
+            note: "",
+            archived: false,
+            version: 1,
+          },
+        ],
+      }),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Counterparty" }));
+    fireEvent.click(screen.getByRole("button", { name: "Nina" }));
+    expect(screen.getByRole("button", { name: "Counterparty: Nina" })).toBeDefined();
+
+    fireEvent.click(screen.getByRole("button", { name: "Role" }));
+    fireEvent.click(screen.getByRole("radio", { name: "Debt — expected back" }));
+    expect(screen.getByRole("button", { name: "Role: Debt — expected back" })).toBeDefined();
+  });
+
+  /** §6.8's one-off, whose only producer is this screen. */
+  it("offers the one-off flag, off until it is set here", () => {
+    withLedger(<TransactionDetail />);
+    const toggle = screen.getByRole("switch", { name: "One-off" });
+    expect(toggle.getAttribute("aria-checked")).toBe("false");
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute("aria-checked")).toBe("true");
   });
 
   it("Delete removes the row and returns to Today with a toast", () => {

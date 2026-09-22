@@ -31,6 +31,7 @@ back to the caller on save or cancel.
 Scrolling column, ordered by how often each region is the reason you came.
 
 ```
+  Went out                          ← the direction, in words (P5)
   48,90 zł                          ← display-hero
   Cash · PLN
 
@@ -42,9 +43,11 @@ Scrolling column, ordered by how often each region is the reason you came.
   │ Date          6 Aug 2026              │
   │ Account       Cash · PLN              │
   │ Scope         Mine            [BIZ]   │
-  │ Counterparty  Nina · they owe me      │
+  │ Counterparty  Nina                    │
+  │ Role          Debt — expected back    │
   │ Payee         Corner Café             │
   │ Note          —                       │
+  │ One-off                        [ ○ ]  │
   └───────────────────────────────────────┘
 
   ┌ receipt ──────────────────────────────┐
@@ -69,6 +72,16 @@ Scrolling column, ordered by how often each region is the reason you came.
   │ and 11 earlier changes            ∨   │
   └───────────────────────────────────────┘
 ```
+
+**The direction is a word above the figure.** *Went out* · *Came in* — P5
+again: a sign and a colour are two ways of saying the same thing to a reader
+who can see both. A transfer says neither, because naming one side of a move
+between two of your own accounts would be picking a side.
+
+**The role is its own row, and it appears only once a counterparty does.** A
+role with nobody to hold it is not a state the ledger has (§6.6), and a control
+offering one would invent it. Clearing the counterparty clears the role with
+them.
 
 **The FX basis is fully expanded here and nowhere else.** Lists show
 `local · rate · display`; this screen adds the source, the date the rate is for,
@@ -111,11 +124,12 @@ readable receipt, which is the one thing a phone genuinely cannot give you.
 | The rate and its provenance | `attach_receipt` |
 | **Count of rows sharing this date and pair** | `set_manual_rate(pair, date)` — the day-wide fix |
 
-**This screen is where `is_capital` is set, and nothing said so.** §6.8 defines
-one-off capital events, S10 splits its running total when one is in range, and
-S25 excludes them from every comparison — three consumers and no producer. It is
-a toggle in the detail sheet, off by default, labelled *one-off — exclude from
-comparisons*.
+**This screen is where `is_capital` is set**, as the *One-off* toggle at the
+foot of the fields card. §6.8 defines one-off capital events, S10 splits its
+running total when one is in range, and S25 excludes them from every comparison
+— three consumers, and this is the producer. Off by default, and its hint says
+what turning it on means: *exclude from comparisons — a move, a car, a deposit
+returned*.
 
 It is deliberately **not** on the capture sheet. You rarely know at the till that
 a purchase is the kind that would distort a trend, and S05's budget is ten

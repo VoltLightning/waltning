@@ -32,6 +32,7 @@ import {
   type ClearManualRateInput,
   type ConvertLeafGroupInput,
   type CounterpartyKind,
+  type CounterpartyRole,
   type CreateAccountInput,
   type CreateCategoryInput,
   type CreateCounterpartyInput,
@@ -574,6 +575,12 @@ export type PhoneTransactionDetail = {
   accountName: string;
   categoryId: Id<"categories"> | null;
   categoryName: string | null;
+  /** §6.6 — S09 is where a capture's missing role is corrected. */
+  counterpartyId: Id<"counterparties"> | null;
+  counterpartyName: string | null;
+  counterpartyRole: CounterpartyRole | null;
+  /** §6.8's one-off, excluded from every comparison. S09 is its only producer. */
+  isCapital: boolean;
   /** `SPEC.md` §14.4b — mirrors `@waltning/ledger`'s `LocalTransactionDetail.brandKey` field-for-field. */
   brandKey: string | null;
   /** Already signed, the `"from"` leg — same rule as `PhoneRecentTransaction`. */

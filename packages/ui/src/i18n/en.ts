@@ -393,6 +393,9 @@ export const en = {
      */
     badDate: "That date isn't a real calendar day.",
     business: "Business",
+    capital: "One-off",
+    capitalHint: "Exclude from comparisons — a move, a car, a deposit returned.",
+    chooseRole: "Which?",
     counterparty: "Counterparty",
     noCounterparty: "No counterparty",
     role: "Role",
@@ -560,12 +563,12 @@ export const en = {
     /** The `Toast` `deleteTransaction` leaves behind — no undo, see the shared plan. */
     deleted: "Transaction deleted.",
     /** S09's optional breakdown card (§10.3). */
-    lines: "Breakdown",
+    lines: "What it was made of",
     addLine: "+ Add",
     lineDescription: "Description",
     /** A line's own row, before it has a description — distinct from the `lineDescription` field label its editor opens with. */
     newLine: "New line",
-    total: "Total",
+    total: "Adds up to",
     linesUnbalanced: "The lines must add up to the transaction's total.",
     /** §6.9: every read path filters `deleted_at` — a soft-deleted row answers this, not a crash. */
     notFound: "This transaction no longer exists.",

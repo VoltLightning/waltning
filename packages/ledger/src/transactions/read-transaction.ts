@@ -23,12 +23,13 @@ import type { AccountingDate } from "@waltning/core/date";
 import type { Id } from "@waltning/core/id";
 import type { CurrencyCode, Money } from "@waltning/core/money";
 import * as money from "@waltning/core/money";
-import type { TxnType } from "@waltning/schema/enums";
+import type { CounterpartyRole, TxnType } from "@waltning/schema/enums";
 import { and, asc, eq, isNull } from "drizzle-orm";
 import type { ReplicaDb } from "../open.ts";
 import { ledgerSchema } from "../schema-map.ts";
 
-const { accounts, categories, currencies, transactionLines, transactions } = ledgerSchema;
+const { accounts, categories, counterparties, currencies, transactionLines, transactions } =
+  ledgerSchema;
 
 export type LocalTransactionLine = {
   id: Id<"transactionLines">;
@@ -50,6 +51,16 @@ export type LocalTransactionDetail = {
   accountName: string;
   categoryId: Id<"categories"> | null;
   categoryName: string | null;
+  /**
+   * §6.6's other side of a row. Read here because S09 is where a capture's
+   * missing role is corrected — and a role with no counterparty, or the
+   * reverse, is what the detail screen exists to make visible.
+   */
+  counterpartyId: Id<"counterparties"> | null;
+  counterpartyName: string | null;
+  counterpartyRole: CounterpartyRole | null;
+  /** §6.8 — a one-off, excluded from every comparison. S09 is its only producer. */
+  isCapital: boolean;
   /** `SPEC.md` §14.4b — see `readRecent`'s identical field. */
   brandKey: string | null;
   /** Already signed, `money.signed` on the `"from"` leg — same rule as `readRecent`. */
@@ -82,6 +93,10 @@ export function readTransaction<TRun, TSchema extends typeof ledgerSchema>(
       accountName: accounts.name,
       categoryId: transactions.categoryId,
       categoryName: categories.name,
+      counterpartyId: transactions.counterpartyId,
+      counterpartyName: counterparties.name,
+      counterpartyRole: transactions.counterpartyRole,
+      isCapital: transactions.isCapital,
       brandKey: transactions.brandKey,
       amountOriginal: transactions.amountOriginal,
       toAmount: transactions.toAmount,
@@ -93,6 +108,7 @@ export function readTransaction<TRun, TSchema extends typeof ledgerSchema>(
     .innerJoin(accounts, eq(transactions.accountId, accounts.id))
     .innerJoin(currencies, eq(transactions.currency, currencies.code))
     .leftJoin(categories, eq(transactions.categoryId, categories.id))
+    .leftJoin(counterparties, eq(transactions.counterpartyId, counterparties.id))
     .where(and(eq(transactions.id, id), isNull(transactions.deletedAt)))
     .get();
 

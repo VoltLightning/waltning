@@ -13,7 +13,8 @@ import { ledgerSchema } from "../schema-map.ts";
 import { type ScratchStores, scratchStores } from "../test/stores.ts";
 import { readTransaction } from "./read-transaction.ts";
 
-const { accounts, categories, currencies, transactionLines, transactions } = ledgerSchema;
+const { accounts, categories, counterparties, currencies, transactionLines, transactions } =
+  ledgerSchema;
 
 const USD = currencyCode("USD");
 const ACCOUNT = id<"accounts">("11111111-1111-4111-8111-111111111111");
@@ -23,6 +24,7 @@ const TXN = id<"transactions">("44444444-4444-4444-8444-444444444444");
 const OTHER_TXN = id<"transactions">("55555555-5555-4555-8555-555555555555");
 const DELETED_TXN = id<"transactions">("66666666-6666-4666-8666-666666666666");
 const NO_CATEGORY_TXN = id<"transactions">("77777777-7777-4777-8777-777777777777");
+const PERSON = id<"counterparties">("88888888-8888-4888-8888-888888888888");
 
 let stores: ScratchStores;
 
@@ -40,6 +42,8 @@ beforeEach(() => {
     ])
     .run();
 
+  db.insert(counterparties).values({ id: PERSON, name: "Nina", kind: "person" }).run();
+
   db.insert(transactions)
     .values([
       {
@@ -54,6 +58,9 @@ beforeEach(() => {
         payee: "Café A",
         note: "Meeting",
         isBusiness: true,
+        counterpartyId: PERSON,
+        counterpartyRole: "debt" as const,
+        isCapital: true,
         version: 3,
       },
       {
@@ -118,6 +125,10 @@ describe("readTransaction", () => {
       accountName: "Wallet · USD",
       categoryId: CATEGORY,
       categoryName: "Food",
+      counterpartyId: PERSON,
+      counterpartyName: "Nina",
+      counterpartyRole: "debt",
+      isCapital: true,
       amount: "-48.90000000",
       currency: USD,
       decimals: 2,
@@ -136,9 +147,21 @@ describe("readTransaction", () => {
     expect(result?.lines[0]).toMatchObject({ categoryId: null, categoryName: null });
   });
 
-  it("carries a null category through rather than a name for the uncategorised row", () => {
+  /**
+   * S09 offers both, so both have to be readable — and the ordinary row has
+   * neither. A left join is what keeps a row with no counterparty a row.
+   */
+  it("carries a null category and a null counterparty through, and is_capital false", () => {
     const result = readTransaction(stores.ledger.replica.db, NO_CATEGORY_TXN);
-    expect(result).toMatchObject({ categoryId: null, categoryName: null, amount: "10.00000000" });
+    expect(result).toMatchObject({
+      categoryId: null,
+      categoryName: null,
+      counterpartyId: null,
+      counterpartyName: null,
+      counterpartyRole: null,
+      isCapital: false,
+      amount: "10.00000000",
+    });
     expect(result?.lines).toEqual([]);
   });
 

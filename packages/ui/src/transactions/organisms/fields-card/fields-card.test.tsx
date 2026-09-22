@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 
-import { fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { expect, it, vi } from "vitest";
 import { FieldsCard, type TransactionFields } from "./fields-card";
 
@@ -29,15 +29,19 @@ const FIELDS: TransactionFields = {
   date: "2026-08-06",
   accountId: "account-a",
   categoryId: "cat-eating-out",
+  counterpartyId: null,
+  counterpartyRole: null,
   payee: "Café A",
   note: "",
   isBusiness: false,
+  isCapital: false,
 };
 
 function renderCard(overrides: Partial<Parameters<typeof FieldsCard>[0]> = {}) {
   const onSave = vi.fn();
   const onOpenCategoryPicker = vi.fn();
   const onOpenAccountPicker = vi.fn();
+  const onOpenCounterpartyPicker = vi.fn();
   render(
     <FieldsCard
       fields={FIELDS}
@@ -48,11 +52,14 @@ function renderCard(overrides: Partial<Parameters<typeof FieldsCard>[0]> = {}) {
       categoryId="cat-eating-out"
       categoryName="Eating out"
       onOpenCategoryPicker={onOpenCategoryPicker}
+      counterpartyId={null}
+      counterpartyName={null}
+      onOpenCounterpartyPicker={onOpenCounterpartyPicker}
       onSave={onSave}
       {...overrides}
     />,
   );
-  return { onSave, onOpenCategoryPicker, onOpenAccountPicker };
+  return { onSave, onOpenCategoryPicker, onOpenAccountPicker, onOpenCounterpartyPicker };
 }
 
 it("shows every field's current value as a row — label left, value right", () => {
@@ -121,4 +128,53 @@ it("shows a form-level refusal — a stale version names no single field", () =>
     fieldErrors: { byField: {}, formLevel: ["This transaction changed elsewhere."] },
   });
   expect(screen.getByRole("alert").textContent).toContain("This transaction changed elsewhere.");
+});
+
+/** §6.6 — the counterparty escapes to the screen's picker, like category and account. */
+it("opens the counterparty picker through the screen's own callback", () => {
+  const { onOpenCounterpartyPicker } = renderCard();
+  fireEvent.click(screen.getByRole("button", { name: "Counterparty" }));
+  expect(onOpenCounterpartyPicker).toHaveBeenCalledTimes(1);
+});
+
+/**
+ * A role with nobody to hold it is not a state the ledger has, so the row
+ * does not exist until a counterparty does.
+ */
+it("offers the role only once a counterparty is set", () => {
+  renderCard();
+  expect(screen.queryByRole("button", { name: /^Role/ })).toBeNull();
+
+  cleanup();
+  renderCard({ counterpartyId: "cp-nina", counterpartyName: "Nina" });
+  expect(screen.getByRole("button", { name: "Role" })).toBeDefined();
+});
+
+it("carries a counterparty and the role picked for them in one patch", () => {
+  const { onSave } = renderCard({ counterpartyId: "cp-nina", counterpartyName: "Nina" });
+  fireEvent.click(screen.getByRole("button", { name: "Role" }));
+  fireEvent.click(screen.getByRole("radio", { name: "Debt — expected back" }));
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
+  expect(onSave).toHaveBeenCalledWith({ counterpartyId: "cp-nina", counterpartyRole: "debt" });
+});
+
+/** Clearing the person clears the role with them — a role belongs to someone. */
+it("drops the role when the counterparty is cleared", () => {
+  const { onSave } = renderCard({
+    fields: { ...FIELDS, counterpartyId: "cp-nina", counterpartyRole: "debt" },
+    counterpartyId: null,
+    counterpartyName: null,
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
+  expect(onSave).toHaveBeenCalledWith({ counterpartyId: null, counterpartyRole: null });
+});
+
+/** §6.8 — this screen is the flag's only producer, and it moves no balance. */
+it("sends the one-off flag, which is off until it is turned on here", () => {
+  const { onSave } = renderCard();
+  const toggle = screen.getByRole("switch", { name: "One-off" });
+  expect(toggle.getAttribute("aria-checked")).toBe("false");
+  fireEvent.click(toggle);
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
+  expect(onSave).toHaveBeenCalledWith({ isCapital: true });
 });
