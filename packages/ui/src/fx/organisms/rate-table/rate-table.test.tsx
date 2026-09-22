@@ -41,6 +41,33 @@ it("renders a gap for a date with no held rate", () => {
   expect(screen.getAllByText("No rate held")).toHaveLength(1);
 });
 
+/**
+ * **What is held, not a calendar of absence** (S18 §3). Ten days with nothing
+ * held are one row naming the span; each held day is still its own row; and
+ * the gap stays on screen (§8), never hidden.
+ */
+it("collapses a run of days with nothing held into one row that says how long", () => {
+  render(
+    <RateTable
+      contentInset={INSET}
+      pair={pair({
+        to: "2026-08-12",
+        rows: [
+          { date: "2026-08-01", rate: "3.7556", source: "nbp" },
+          { date: "2026-08-12", rate: "3.7601", source: "nbp" },
+        ],
+      })}
+    />,
+  );
+  expect(screen.getByText("10 days · no rate held")).toBeDefined();
+  expect(screen.queryByText("No rate held")).toBeNull();
+  expect(
+    screen.getByRole("button", { name: "2026-08-02 to 2026-08-11 — no rate held" }),
+  ).toBeDefined();
+  expect(screen.getByText("2026-08-01")).toBeDefined();
+  expect(screen.getByText("2026-08-12")).toBeDefined();
+});
+
 it("marks a manual row amber, distinct from a synced one, with a translated label", () => {
   render(
     <RateTable

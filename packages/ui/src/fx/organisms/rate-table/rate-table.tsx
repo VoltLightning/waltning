@@ -108,6 +108,13 @@ type RenderRow = {
   rate: string | null;
   source: string | null;
   carriedDays: number | null | undefined;
+  /**
+   * The last day of a run of days with no rate, when this row stands for
+   * more than one (S18 §3). A table of *No rate held* a line per day was a
+   * calendar of absence; a run is one line that still shows the gap.
+   */
+  through?: string;
+  days?: number;
 };
 
 function keyExtractor(row: RenderRow): string {
@@ -168,11 +175,19 @@ export function RateTable({ pair, header, footer, contentInset }: RateTableProps
     for (let n = 0; n <= span; n += 1) {
       const date = addDays(fromDate, n);
       const held = byDate.get(date);
-      out.push(
-        held
-          ? { date, rate: held.rate, source: held.source, carriedDays: held.carriedDays }
-          : { date, rate: null, source: null, carriedDays: undefined },
-      );
+      if (held) {
+        out.push({ date, rate: held.rate, source: held.source, carriedDays: held.carriedDays });
+        continue;
+      }
+      // Consecutive days with nothing held are one row: the gap stays on
+      // screen (§8's rule), without a line per empty day.
+      const last = out.at(-1);
+      if (last !== undefined && last.rate === null) {
+        last.through = date;
+        last.days = (last.days ?? 1) + 1;
+      } else {
+        out.push({ date, rate: null, source: null, carriedDays: undefined });
+      }
     }
     return out;
   }, [pair]);
@@ -275,15 +290,25 @@ function RateTableRowView({
     <PressableScaled
       accessibilityRole="button"
       accessibilityLabel={
-        row.rate === null ? t("fx.rateTableGapLabel", { date: row.date }) : row.date
+        row.rate === null
+          ? row.through === undefined
+            ? t("fx.rateTableGapLabel", { date: row.date })
+            : t("fx.rateTableGapRunLabel", { from: row.date, to: row.through })
+          : row.date
       }
       onPress={handlePress}
       {...handlers}
       style={[styles.row, focused ? styles.rowFocused : null]}
     >
-      <Text style={styles.date}>{row.date}</Text>
+      <Text style={styles.date}>
+        {row.through === undefined ? row.date : `${row.date}\u2009–\n${row.through}`}
+      </Text>
       {row.rate === null ? (
-        <Text style={styles.gap}>{t("fx.rateTableGap")}</Text>
+        <Text style={styles.gap}>
+          {row.days === undefined
+            ? t("fx.rateTableGap")
+            : t("fx.rateTableGapRun", { count: row.days })}
+        </Text>
       ) : (
         <>
           <Text style={styles.rate}>{formatRate(row.rate, locale)}</Text>

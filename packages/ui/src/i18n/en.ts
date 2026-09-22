@@ -1388,6 +1388,9 @@ export const en = {
     /** `RateTable` — `04` §4.7. */
     rateTableGap: "No rate held",
     rateTableGapLabel: "{{date}} — no rate held",
+    /** A run of days with nothing held — one row, never one per day (S18 §3). */
+    rateTableGapRun: "{{count}} days · no rate held",
+    rateTableGapRunLabel: "{{from}} to {{to}} — no rate held",
     rateTableEmptyRange: "The range must not end before it starts.",
     /** The column header — states which way `rate` reads, same rule as `RateEditor`'s title. */
     rateTableDateHeader: "Date",
