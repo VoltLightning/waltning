@@ -38,11 +38,13 @@ import { SearchField } from "../../../primitives/atoms/search-field/search-field
 import { useInteraction } from "../../../primitives/interaction.ts";
 import { usePressScale } from "../../../primitives/press-scale.ts";
 import { Card } from "../../../shell/molecules/card/card";
+import { ArrowsLeftRightIcon } from "../../../shell/phosphor";
 import { EmptyState } from "../../../states/organisms/empty-state/empty-state";
 import { text } from "../../../theme/fonts.ts";
+import { useTheme } from "../../../theme/provider";
 import { makeStyles } from "../../../theme/styles.ts";
-import { focus, radius, space, touchTarget } from "../../../tokens.ts";
-import { BalanceRow } from "../../molecules/balance-row/balance-row";
+import { focus, space, touchTarget } from "../../../tokens.ts";
+import { BalanceRow, type BalanceRowProps } from "../../molecules/balance-row/balance-row";
 import { SharedGroup, type SharedGroupAccount } from "../../molecules/shared-group/shared-group";
 import { subtotalsOf } from "../../subtotals.ts";
 
@@ -57,6 +59,13 @@ export type AccountRegisterAccount = {
   isBusiness: boolean;
   /** The last balance a reconciliation recorded (S16 §5) — `null` before the first one. */
   expectedBalance: money.Money | null;
+  /**
+   * The balance in the pivot, for an account held in anything else — S16's
+   * `62,40 Br · 0,3121 → 19,48 zł`. Absent for the pivot's own accounts, and
+   * for a currency with no rate yet: no conversion is drawn rather than a
+   * guessed one.
+   */
+  conversion?: BalanceRowProps["conversion"];
 };
 
 export type AccountRegisterProps = {
@@ -301,7 +310,10 @@ function AccountRegisterRow({ account, last, onSelect, onTransferFrom }: Account
   const row = (
     <BalanceRow
       account={account.name}
-      kind={t(`accounts.${KIND_LABEL_KEY[account.kind]}`)}
+      // The currency, not the kind: the card's title already names the kind,
+      // and a row reading *Bank A · Bank* under *Bank* said it twice.
+      kind={account.currency}
+      {...(account.conversion === undefined ? {} : { conversion: account.conversion })}
       balance={account.balance}
       currency={account.currency}
       {...(account.decimals === undefined ? {} : { decimals: account.decimals })}
@@ -325,15 +337,14 @@ function AccountRegisterRow({ account, last, onSelect, onTransferFrom }: Account
   );
 }
 
-/** The drawn transfer glyph — two arrows, opposed (`TransferComposer`'s own `SwapArrow`, matched rather than shared: one more use, still under the third). */
+/**
+ * The transfer glyph — two arrows, opposed, the one S31 and a transfer row draw.
+ * It was two bars drawn from views, which at 20pt read as a drag handle: the
+ * register looked reorderable and was not.
+ */
 function TransferGlyph() {
-  const styles = useStyles();
-  return (
-    <View style={styles.transferGlyph}>
-      <View style={[styles.transferGlyphBar, styles.transferGlyphBarTop]} />
-      <View style={[styles.transferGlyphBar, styles.transferGlyphBarBottom]} />
-    </View>
-  );
+  const theme = useTheme();
+  return <ArrowsLeftRightIcon size={18} color={theme.textMuted} />;
 }
 
 type ArchivedToggleProps = {
@@ -451,8 +462,4 @@ const useStyles = makeStyles((theme) => ({
   inline: { alignSelf: "flex-start" },
   rowWithAction: { flexDirection: "row", alignItems: "center", gap: space.sm },
   rowMain: { flex: 1 },
-  transferGlyph: { width: 20, height: 20, alignItems: "center", justifyContent: "center" },
-  transferGlyphBar: { position: "absolute", width: 14, height: 2, backgroundColor: theme.text },
-  transferGlyphBarTop: { top: 5, borderRadius: radius.xs },
-  transferGlyphBarBottom: { bottom: 5, borderRadius: radius.xs },
 }));

@@ -115,6 +115,7 @@ export function BalanceRow({
           displayCurrency={conversion.displayCurrency}
           displayDecimals={conversion.displayDecimals ?? 2}
           provenance={conversion.provenance ?? { kind: "synced" }}
+          stacked
         />
       ) : (
         <Amount value={balance} currency={currency} decimals={decimals} />
