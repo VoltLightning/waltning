@@ -195,7 +195,8 @@ it("R2 M1 — a backdated link moves the range onto its own day", () => {
   // only its first ten rows, and the widened range opens on this one. The
   // fixture holds no rate for it, so it is a gap row — the date cell is the
   // thing to look for, not a rate.)
-  expect(screen.getByText(linked)).toBeDefined();
+  // The linked day opens the table — a run of days with nothing held starts on it.
+  expect(screen.getByText(new RegExp(`^${linked}`))).toBeDefined();
 });
 
 it("R2 M1 — with no link, the range is the plain 30-day window", () => {
@@ -611,6 +612,6 @@ it("R4 L2 — a link a thousand years back still opens on its day, in a 30-day w
   // The editor is open on the linked day itself, not on the window's end.
   expect(screen.getByText("Set PLN per USD, 1000-01-01 … 1000-01-01")).toBeDefined();
   // And the table drew that window: its first and last rows, and nothing past.
-  expect(screen.getByText("1000-01-01")).toBeDefined();
+  expect(screen.getByText(/^1000-01-01/)).toBeDefined();
   expect(screen.queryByText("1000-01-31")).toBeNull();
 });

@@ -751,6 +751,8 @@ export const pl: Messages = {
     ratePositive: "Kurs musi być liczbą dodatnią.",
     rateTableGap: "Brak kursu",
     rateTableGapLabel: "{{date}} — brak kursu",
+    rateTableGapRun: "{{count}} dni · brak kursu",
+    rateTableGapRunLabel: "{{from}} do {{to}} — brak kursu",
     rateTableEmptyRange: "Zakres nie może kończyć się przed rozpoczęciem.",
     rateTableDateHeader: "Data",
     rateTableRateHeader: "{{quote}} za {{base}}",

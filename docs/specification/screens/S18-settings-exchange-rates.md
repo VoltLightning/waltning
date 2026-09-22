@@ -75,6 +75,14 @@ Pair selector and date range above a `RateTable`. `SyncLog` beneath, carrying
 **coverage per currency** rather than only events. Web places them side by side;
 mobile stacks.
 
+**The table lists what is held, and a gap is one row.** Every day with a rate
+is its own row, with its source; a run of days with nothing held is a single
+row naming its span and length — *2026-08-24 – 2026-09-22 · 30 days · no rate
+held* — never a line per empty day. A month of *No rate held*, one per line, was
+a calendar of absence that pushed the coverage card off the screen; the run is
+still on screen, so the gap is shown rather than hidden (§8), and tapping it
+seeds the editor with its first day.
+
 **`RateTable` is the page's one scroller, and everything else rides in it.**
 The table is virtualized, and a virtualized list inside a page `ScrollView` is
 one scroller too many — so the pair select, presets, range control and hint are
