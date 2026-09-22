@@ -121,7 +121,20 @@ export default function Accounts() {
     [ledger],
   );
 
+  /**
+   * S16 §2 — **tapping an account is a filter, not a screen.** The register
+   * answers *what exists and what is in it*; *what happened in it* is the
+   * ledger with one clause added, and Home is that list. A third list of the
+   * same rows, reachable only from here, would be S10's phone layout invented
+   * twice.
+   *
+   * The editor is where the rest of the row's management already is: behind
+   * *Edit*, beside the move controls (§7).
+   */
   const handleSelectAccount = useCallback((id: string) => {
+    router.push({ pathname: "/", params: { account: id } });
+  }, []);
+  const handleEditAccount = useCallback((id: string) => {
     router.push(`/accounts/${id}`);
   }, []);
   /**
@@ -151,6 +164,7 @@ export default function Accounts() {
         onLoadArchived={handleLoadArchived}
         onCreateAccount={handleCreateAccount}
         onReorder={handleReorder}
+        onEditAccount={handleEditAccount}
         onTransferFrom={handleTransferFrom}
       />
       {toast === null ? null : (

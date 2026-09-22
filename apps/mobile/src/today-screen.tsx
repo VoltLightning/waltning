@@ -199,7 +199,26 @@ export default function Today() {
     [t],
   );
   const snapshot = usePhoneLedger(ledger);
-  const { message, nonce } = useLocalSearchParams<{ message?: string; nonce?: string }>();
+  const { message, nonce, account } = useLocalSearchParams<{
+    message?: string;
+    nonce?: string;
+    /** S16 §2 — *tapping an account is a filter, not a screen*. */
+    account?: string;
+  }>();
+  /**
+   * The filter the register handed over, and the name to say it by. A code
+   * naming no account this ledger holds filters nothing: a link is whatever
+   * was in it, and a list silently empty is worse than one unfiltered.
+   */
+  const filteredAccount = useMemo(
+    () =>
+      typeof account === "string" ? snapshot.accounts.find((row) => row.id === account) : undefined,
+    [account, snapshot.accounts],
+  );
+  const clearAccountFilter = useCallback(() => {
+    router.setParams({ account: undefined });
+  }, []);
+
   // A route param, not local state — but the screen can stay mounted across
   // two pushes that both carry the same `message` (delete two transactions
   // in a row from S09), and the router hands back a *new* params object
@@ -258,6 +277,18 @@ export default function Today() {
   const gatewayInk = useTheme().accentText;
   const sectionStyles = useSectionStyles();
   const pager = usePagerRoute(today);
+
+  /**
+   * **A filter arrives on the page that honours it.** The List page is the
+   * one narrowed by an account; Summary totals the whole month and Calendar
+   * draws every day of it, so a chip over those would claim a narrowing that
+   * is not there. The register hands over an account, and the screen goes to
+   * the list showing it.
+   */
+  const showPage = pager.showPage;
+  useEffect(() => {
+    if (filteredAccount !== undefined) showPage("list");
+  }, [filteredAccount, showPage]);
   // `DayRibbon` hands back the date it drew; this is where a bare string
   // becomes an `AccountingDate`, and the only place it needs to.
   /**
@@ -1439,6 +1470,7 @@ export default function Today() {
           onCategorize={handleCategorize}
           onReturnToToday={returnToToday}
           query={pager.state.query}
+          accountId={filteredAccount?.id ?? null}
           scrollY={scrollY}
           onTick={dayTickHaptic}
           active={listActive}
@@ -1460,6 +1492,7 @@ export default function Today() {
       scrollY,
       listActive,
       listEmpty,
+      filteredAccount?.id,
     ],
   );
   const calendarNode = useMemo(
@@ -1569,6 +1602,14 @@ export default function Today() {
           because a picker's affordance disappearing exactly where a reader
           wants it is the failure this label was first written to avoid.
         */
+        {...(filteredAccount === undefined || pager.state.page !== "list"
+          ? {}
+          : {
+              filter: {
+                label: t("transactions.accountFilterFrom", { account: filteredAccount.name }),
+                onClear: clearAccountFilter,
+              },
+            })}
         periodLabel={
           pager.state.page === "months"
             ? String(shownYear)

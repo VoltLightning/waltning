@@ -221,7 +221,12 @@ describe("Accounts", () => {
     expect(screen.getByText("Old · PLN")).toBeDefined();
   });
 
-  it("tapping a row pushes /accounts/{id}", () => {
+  /**
+   * S16 §2 — tapping an account is a filter, not a screen: it opens Home
+   * narrowed to that account. The editor is management and lives behind
+   * *Edit*, where the move controls are.
+   */
+  it("tapping a row opens Home filtered to that account, and Edit opens the editor", () => {
     withLedger([
       {
         id: "acc-1",
@@ -233,6 +238,10 @@ describe("Accounts", () => {
         balance: "100",
       },
     ]);
+    fireEvent.click(screen.getByRole("button", { name: "Bank A · PLN" }));
+    expect(router.push).toHaveBeenCalledWith({ pathname: "/", params: { account: "acc-1" } });
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
     fireEvent.click(screen.getByRole("button", { name: "Bank A · PLN" }));
     expect(router.push).toHaveBeenCalledWith("/accounts/acc-1");
   });

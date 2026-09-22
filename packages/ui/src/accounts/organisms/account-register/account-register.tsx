@@ -111,6 +111,12 @@ export type AccountRegisterProps = {
    * claiming positions that have moved under them.
    */
   onReorder?: (ids: readonly string[]) => void;
+  /**
+   * The editor, which is management and so lives behind *Edit* with the move
+   * controls (S16 §7). Outside *Edit* a tap is the filter §2 describes, and
+   * the two must not be the same gesture: one browses, one rewrites.
+   */
+  onEditAccount?: (id: string) => void;
 };
 
 /** `bank · cash · card · clearing · loan_receivable · loan_payable · investment · deposit · other`. */
@@ -151,6 +157,7 @@ export function AccountRegister({
   onCreateAccount,
   onTransferFrom,
   onReorder,
+  onEditAccount,
 }: AccountRegisterProps) {
   const t = useT();
   const styles = useStyles();
@@ -268,6 +275,7 @@ export function AccountRegister({
           onSelectAccount={onSelectAccount}
           {...(onTransferFrom ? { onTransferFrom } : {})}
           {...(editing && onReorder ? { onMove: handleMove } : {})}
+          {...(editing && onEditAccount ? { onEditAccount } : {})}
         />
       ))}
 
@@ -326,9 +334,17 @@ type KindGroupProps = {
   onReorder?: (ids: readonly string[]) => void;
   /** Present only while *Edit* is on — see `AccountRegisterProps.onReorder`. */
   onMove?: (id: string, by: 1 | -1) => void;
+  onEditAccount?: (id: string) => void;
 };
 
-function KindGroup({ label, rows, onSelectAccount, onTransferFrom, onMove }: KindGroupProps) {
+function KindGroup({
+  label,
+  rows,
+  onSelectAccount,
+  onTransferFrom,
+  onMove,
+  onEditAccount,
+}: KindGroupProps) {
   const styles = useStyles();
   const subtotals = subtotalsOf(rows);
 
@@ -358,6 +374,7 @@ function KindGroup({ label, rows, onSelectAccount, onTransferFrom, onMove }: Kin
           {...(onMove
             ? { onMove, first: index === 0, lastInGroup: index === rows.length - 1 }
             : {})}
+          {...(onEditAccount ? { onEditAccount } : {})}
         />
       ))}
     </Card>
@@ -374,6 +391,7 @@ type AccountRegisterRowProps = {
   onMove?: (id: string, by: 1 | -1) => void;
   first?: boolean;
   lastInGroup?: boolean;
+  onEditAccount?: (id: string) => void;
 };
 
 function AccountRegisterRow({
@@ -384,10 +402,15 @@ function AccountRegisterRow({
   onMove,
   first = false,
   lastInGroup = false,
+  onEditAccount,
 }: AccountRegisterRowProps) {
   const t = useT();
   const styles = useStyles();
-  const handlePress = useCallback(() => onSelect(account.id), [account.id, onSelect]);
+  // In *Edit* the row opens the editor; outside it, the filter (§2).
+  const handlePress = useCallback(
+    () => (onEditAccount ? onEditAccount(account.id) : onSelect(account.id)),
+    [account.id, onEditAccount, onSelect],
+  );
   const handleTransferFrom = useCallback(
     () => onTransferFrom?.(account.id),
     [account.id, onTransferFrom],

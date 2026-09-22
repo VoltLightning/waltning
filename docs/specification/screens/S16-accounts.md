@@ -259,8 +259,20 @@ and the two are never conflated.
 ## 7. Interaction
 
 ### Mobile
-Tap → editor. Reorder by long-press drag within a group. Archive is in the
-editor, not a swipe.
+**Tap → that account's transactions**, which is §2's filter: Home, narrowed,
+with a chip saying so and an ✕ that clears it. The register answers *what
+exists*; *what happened in it* is the list that already exists.
+
+**Everything that rewrites a row is behind *Edit*.** One control turns the
+register from a thing you read into a thing you arrange: a tap then opens the
+editor instead of the filter, and each row gains ▲▼ that move it **within its
+kind group** — the groups are this screen's order, not a person's. *Edit*
+withdraws while a search is narrowing the list, because `reorder_accounts`
+takes the whole ordered list and a filtered register cannot state one.
+
+Not a long-press drag: the gesture is invisible, it collides with the scroll
+this screen is mostly doing, and it cannot say which rows are movable. Archive
+stays in the editor, not a swipe.
 
 ### Web
 Inline edit, `Tab` between cells, sortable headers.
