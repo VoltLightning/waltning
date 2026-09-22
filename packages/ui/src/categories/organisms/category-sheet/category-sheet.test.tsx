@@ -2,7 +2,10 @@
 
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { expect, it, vi } from "vitest";
-import { expectContainsOverscroll } from "../../../primitives/nested-scroll.test-support.ts";
+import {
+  expectContainsOverscroll,
+  expectScrolledByTheSheet,
+} from "../../../primitives/nested-scroll.test-support.ts";
 import { CategorySheet, type CategoryTreeNode } from "./category-sheet";
 
 const FOOD: CategoryTreeNode = {
@@ -76,10 +79,12 @@ it("shows every leaf across groups when browsing, and none of the other kind", (
   expect(screen.queryByText("Salary")).toBeNull();
 });
 
-/** The grid contains its own overscroll, so scrolling it does not move the sheet behind it. */
-it("contains its own overscroll", () => {
+/** The sheet scrolls the grid; the search and the group chips stay put above it. */
+it("is scrolled by the sheet, with the search pinned above it", () => {
   render(<CategorySheet visible kind="expense" tree={TREE} onPick={vi.fn()} onDismiss={vi.fn()} />);
-  expectContainsOverscroll("category-grid-scroll");
+  expectScrolledByTheSheet("category-grid");
+  const body = screen.getByTestId("bottom-sheet-body");
+  expect(body.contains(screen.getByPlaceholderText(/Search/))).toBe(false);
 });
 
 /**

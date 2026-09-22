@@ -39,13 +39,15 @@ describe("sheetBounds, with the keyboard up", () => {
    */
   it("shrinks the cap by exactly what the lift will take", () => {
     const bounds = sheetBounds(PHONE, NOTCHED, KEYBOARD);
-    expect(bounds.maxHeight).toBe(844 - SHEET_TOP_OFFSET - KEYBOARD);
+    // Typed into, the sheet may rise to the status bar: the 170 is for a
+    // sheet being looked at, and under a keyboard it was most of a list.
+    expect(bounds.maxHeight).toBe(844 - (NOTCHED.top + 22) - KEYBOARD);
   });
 
   it("leaves the lifted sheet's head inside the window", () => {
     const bounds = sheetBounds(PHONE, NOTCHED, KEYBOARD);
-    // Lifted to the keyboard's top edge, the sheet still starts at the offset.
-    expect(sheetTopEdge(PHONE, KEYBOARD, bounds)).toBe(SHEET_TOP_OFFSET);
+    // Lifted to the keyboard's top edge, the sheet starts under the status bar.
+    expect(sheetTopEdge(PHONE, KEYBOARD, bounds)).toBe(NOTCHED.top + 22);
   });
 
   /** The home indicator is behind the keyboard — clearing it there clears it twice. */

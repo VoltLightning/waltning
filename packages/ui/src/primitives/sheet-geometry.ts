@@ -70,7 +70,12 @@ export type Frame = { width: number; height: number };
  * and silent the day someone returned a percentage here.
  */
 export function sheetMaxHeight(frame: Frame, insets: SafeAreaInsets, keyboard: number): number {
-  const top = Math.max(SHEET_TOP_OFFSET, insets.top + space.x5);
+  // **With the keyboard up the sheet may rise to the status bar.** The 170
+  // above it is there to keep the page in sight behind a sheet being looked
+  // at; one being typed into has lost half the window to the keys, and on a
+  // phone the 170 was most of what was left of a picker's list.
+  const top =
+    keyboard > 0 ? insets.top + space.x5 : Math.max(SHEET_TOP_OFFSET, insets.top + space.x5);
   return Math.max(SHEET_MIN_HEIGHT, frame.height - top - keyboard);
 }
 

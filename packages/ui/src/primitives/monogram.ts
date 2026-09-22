@@ -106,7 +106,7 @@ export type CategoryTint = {
 
 /**
  * `hashOf`, finished with an avalanche. djb2 alone leaves its low bits
- * correlated for short names, and ten hues read only those: three of the ten
+ * correlated for short names, and a ramp this short reads only those: three of ten
  * categories a first ledger shows landed on one hue. Still a hash — two
  * siblings can share a hue, and only a *stored* colour can promise otherwise.
  */

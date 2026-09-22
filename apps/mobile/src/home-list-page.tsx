@@ -662,10 +662,22 @@ function HomeListPageView({
     [geometry],
   );
 
-  /** `TodayPill`: a scroll when today is loaded, a jump home when it is not. */
+  /**
+   * `TodayPill`: a scroll when today is on the list as a day, a jump home when
+   * it is not.
+   *
+   * **A day, not a place.** `blockOf` finds a day inside a collapsed run, which
+   * is right for a tap on the strip — the run is where that day is drawn — and
+   * wrong for the pill, whose promise is *the list on today*. A list led past
+   * today draws today inside a *nothing recorded* run named by its newer end:
+   * scrolled there, the ring landed on that end, the settle reported it, and
+   * the pill stayed up over a list that could not reach today. The jump
+   * re-anchors, and the anchor is always its own item.
+   */
   const returnToToday = useCallback(() => {
-    if (!goTo(today)) onReturnToToday();
-  }, [goTo, today, onReturnToToday]);
+    const ownBlock = geometry.dates[blockOf(today, geometry.dates)] === today;
+    if (!ownBlock || !goTo(today)) onReturnToToday();
+  }, [geometry, goTo, today, onReturnToToday]);
 
   /** A tap on the strip, the same way (S04 §7). */
   const pickDay = useCallback(

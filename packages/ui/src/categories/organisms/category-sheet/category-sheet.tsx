@@ -60,7 +60,7 @@ import { Tag } from "../../../primitives/atoms/tag";
 import { TextField } from "../../../primitives/atoms/text-field/text-field";
 import { useInteraction } from "../../../primitives/interaction.ts";
 import { categoryTintFor } from "../../../primitives/monogram.ts";
-import { horizontalScrollProps, nestedScrollProps } from "../../../primitives/nested-scroll.ts";
+import { horizontalScrollProps } from "../../../primitives/nested-scroll.ts";
 import { BottomSheet } from "../../../primitives/organisms/bottom-sheet/bottom-sheet";
 import { usePressScale } from "../../../primitives/press-scale.ts";
 import { EmptyState } from "../../../states/organisms/empty-state/empty-state";
@@ -338,7 +338,45 @@ export function CategorySheet({
     : undefined;
 
   return (
-    <BottomSheet visible={visible} title={t("transactions.category")} onDismiss={handleDismiss}>
+    <BottomSheet
+      visible={visible}
+      title={t("transactions.category")}
+      onDismiss={handleDismiss}
+      steady
+      pinned={
+        <View style={styles.pinned}>
+          <TextField
+            label={t("common.search")}
+            value={query}
+            onChangeText={setQuery}
+            placeholder={
+              emptyTree
+                ? t("categories.searchEmpty")
+                : t("categories.search", { count: ordinaryLeaves.length })
+            }
+            hideLabel
+          />
+          {searching ? null : (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              testID="category-chip-row"
+              {...horizontalScrollProps(styles.chipRow)}
+            >
+              {groups.map((group) => (
+                <GroupChip
+                  key={group.id}
+                  name={group.name}
+                  selected={group.id === groupId}
+                  onPress={handleToggleGroup}
+                  id={group.id}
+                />
+              ))}
+            </ScrollView>
+          )}
+        </View>
+      }
+    >
       {proposedLeaf ? (
         <ProposalRow
           leaf={proposedLeaf}
@@ -346,44 +384,8 @@ export function CategorySheet({
           onPick={handlePick}
         />
       ) : null}
-      <TextField
-        label={t("common.search")}
-        value={query}
-        onChangeText={setQuery}
-        placeholder={
-          emptyTree
-            ? t("categories.searchEmpty")
-            : t("categories.search", { count: ordinaryLeaves.length })
-        }
-        hideLabel
-      />
-      {searching ? null : (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          testID="category-chip-row"
-          {...horizontalScrollProps(styles.chipRow)}
-        >
-          {groups.map((group) => (
-            <GroupChip
-              key={group.id}
-              name={group.name}
-              selected={group.id === groupId}
-              onPress={handleToggleGroup}
-              id={group.id}
-            />
-          ))}
-        </ScrollView>
-      )}
-      {/*
-        The declaration goes on the inner list — the bounded one
-        (`gridScroll`'s own `maxHeight`) — never on the sheet body, which has
-        to keep moving. Load-bearing today: `BottomSheet`'s body is a
-        `ScrollView`, so this is a nested-scrolling child of a real scroller on
-        Android, and on the web the containment is what stops the sheet sliding
-        when the grid reaches its end.
-      */}
-      <ScrollView testID="category-grid-scroll" {...nestedScrollProps(styles.gridScroll)}>
+      {/* The sheet's body scrolls the grid — see `BottomSheet`'s header. */}
+      <View testID="category-grid">
         {visibleLeaves.length === 0 ? (
           emptyTree ? (
             createAction === undefined ? (
@@ -444,7 +446,7 @@ export function CategorySheet({
             onPress={handlePick}
           />
         ) : null}
-      </ScrollView>
+      </View>
       {creating ? (
         <CreateRow
           groups={groups}
@@ -805,7 +807,8 @@ const useStyles = makeStyles((theme) => ({
   chipRow: { flexGrow: 0 },
   // Eight rows of leaves before the sheet scrolls internally — the same
   // "cap it at a token multiple" shape `select.tsx`'s `panelScroll` uses.
-  gridScroll: { maxHeight: touchTarget.min * 8 },
+  /** The body's own gap, kept between the search and the chips it filters with. */
+  pinned: { gap: space.x4 },
   grid: { flexDirection: "row", flexWrap: "wrap", gap: space.md },
   noMatches: { color: theme.textMuted, ...text.ui("body"), textAlign: "center", padding: space.x5 },
   /** `EmptyState`'s own shape, without the button it requires and this state cannot offer. */

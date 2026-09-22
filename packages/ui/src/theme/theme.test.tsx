@@ -723,9 +723,23 @@ describe("a component follows the active theme", () => {
     }
   });
 
-  it("names ten hues, and no two the same", () => {
+  /**
+   * **No red, and nothing a reader could take for it** (`02-tokens` §2.1). Red
+   * is `spend` and `danger`; a category tile in it reads as an alarm before
+   * the name is read. The band is crimson through orange-red, and it is a
+   * band of *saturated* colour: cocoa sits at 22° and is a brown.
+   */
+  it("draws no category in red", () => {
+    for (const step of categoryRamp) {
+      const [hue, saturation] = hueAndSaturation(step.solid);
+      const reddish = hue >= 335 || hue <= 20;
+      expect(reddish && saturation >= 0.4, `${step.name} at ${Math.round(hue)}°`).toBe(false);
+    }
+  });
+
+  it("names nine hues, and no two the same", () => {
     expect(new Set(categoryRamp.map((step) => step.solid)).size).toBe(categoryRamp.length);
-    expect(categoryRamp.length).toBe(10);
+    expect(categoryRamp.length).toBe(9);
   });
 
   /**
@@ -860,3 +874,18 @@ describe("`makeStyles` builds once per theme", () => {
     expect(first).not.toBe(second);
   });
 });
+
+/** HSL hue in degrees and saturation, from a `#rrggbb`. */
+function hueAndSaturation(hex: string): [number, number] {
+  const [r, g, b] = [1, 3, 5].map((at) => Number.parseInt(hex.slice(at, at + 2), 16) / 255);
+  if (r === undefined || g === undefined || b === undefined) return [0, 0];
+  const most = Math.max(r, g, b);
+  const least = Math.min(r, g, b);
+  const span = most - least;
+  if (span === 0) return [0, 0];
+  const lightness = (most + least) / 2;
+  const saturation = span / (1 - Math.abs(2 * lightness - 1));
+  const sixth =
+    most === r ? ((g - b) / span + 6) % 6 : most === g ? (b - r) / span + 2 : (r - g) / span + 4;
+  return [sixth * 60, saturation];
+}

@@ -174,7 +174,7 @@ as light as the darkest bar drawn on it allows, and the money bars and the
 category bars do not have the same headroom.
 
 **A category is recognised by a colour, and the colour is derived from its
-name.** Ten hues, carrying a category across a ledger row's tile, its option in
+name.** Nine hues, carrying a category across a ledger row's tile, its option in
 the picker, its chip on Add and its *Where it went* bar, so it is known without
 being read. **Not the green ramp**, which is sequential: one hue at nine
 lightnesses, built so adjacent slices of a stacked bar separate from each other,
@@ -187,12 +187,11 @@ green.
 | teal | `#dff6f4` | `#206f69` | `#247e78` | `#1f4745` | `#92e8e2` |
 | sky | `#dcedf9` | `#1a6393` | `#1f77b1` | `#1f3747` | `#88c7f2` |
 | indigo | `#dfe2f6` | `#273486` | `#5968cf` | `#1f2447` | `#96a1e9` |
-| rose | `#f7dee6` | `#8c2141` | `#cf3462` | `#471f2b` | `#ed91ad` |
+| rose | `#f4ddea` | `#8a2463` | `#bf3884` | `#471f36` | `#eb8dc2` |
 | plum | `#f1e4f1` | `#723b72` | `#a254a2` | `#432343` | `#d9a1d9` |
 | olive | `#eef4e1` | `#576b29` | `#63792e` | `#3b471f` | `#cbe198` |
 | cocoa | `#f2e9e3` | `#754f38` | `#976649` | `#452e21` | `#dbb59f` |
 | slate | `#e7eaee` | `#475666` | `#60738a` | `#2a323c` | `#aabbcf` |
-| coral | `#f9e2dc` | `#983016` | `#cc401d` | `#47271f` | `#f59b84` |
 
 **Each hue is three things.** A pale **tint with its own ink** — colour as a
 wash: a chip, a group, the option that is chosen. A **solid that carries white**
@@ -214,10 +213,17 @@ mauve, sky — spread across lightness so that a greyscale screenshot still told
 them apart, with green, yellow, purple and anything near `spend` refused. It was
 defensible on every count and it made every option in a picker the same: browns
 and greys that blended into the cream they sat on. The refusals are lifted for
-*categories* — olive, plum, amber and coral are in — because a category hue is
-never a control, never chrome and never a figure: it cannot be mistaken for the
-accent, for `asserted`, or for an amount, since it is always a wash or a small
-square *beside* a name.
+*categories* — olive, plum and amber are in — because a category hue is never a
+control, never chrome and never a figure: it cannot be mistaken for the accent,
+for `asserted`, or for an amount, since it is always a wash or a small square
+*beside* a name.
+
+**Except red, which stays refused.** Red is `spend` and `danger` — a loss, a
+refusal — and a row whose tile is red reads as *something is wrong here* before
+the name is read, which is exactly what a category mark is spotted by. So there
+is no coral, and rose sits at magenta (hue ≈ 326°) rather than at crimson: a
+pink tile is a category, a red one is an alarm. A hue added to this ramp keeps
+out of the band from orange-red to crimson.
 
 **Never colour alone — that is the guarantee that replaced lightness
 separation.** Pale tints cannot differ in lightness, so two categories may be

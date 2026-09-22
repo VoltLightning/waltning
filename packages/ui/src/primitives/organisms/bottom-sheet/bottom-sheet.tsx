@@ -76,12 +76,19 @@
  * has to carry it. One mechanism on both phones is the point; two would be
  * two things to keep true.
  *
- * **Nested scrolling is the caller's, not this component's.**
- * `nestedScrollEnabled` makes the view it is set on a nested-scrolling
- * *child*, so a bounded list inside this body carries it — the sheet body
- * does not. On web the body carries `overscroll-behavior: contain`, so
- * reaching the end of it stops there instead of scrolling the page behind the
- * sheet.
+ * **One scroller per sheet, and it is the body.** The library hands a
+ * content drag to the sheet or to *its* scrollable — never to a plain
+ * `ScrollView` inside it, which on iOS took no touch at all: the three pickers
+ * each nested a list capped at nine rows, and with the keyboard up the sheet
+ * was shorter than that and the rest of the list could not be reached. What a
+ * picker keeps in view while its list moves — a search — goes in `pinned`,
+ * which is drawn with the header and never scrolls. On web the body carries
+ * `overscroll-behavior: contain`, so reaching the end of it stops there
+ * instead of scrolling the page behind the sheet.
+ *
+ * **Typed into, a sheet shows what is typed.** The lift puts the sheet above
+ * the keys; `useSheetLook` then scrolls the body so the focused field is
+ * above the footer, for a sheet taller than the room the keyboard left.
  *
  * **The motion is `@gorhom/bottom-sheet`'s; everything above is still ours.**
  * This used to be `animationType="none"` on the `Modal` and a `View` at the
@@ -100,9 +107,27 @@ import GorhomBottomSheet, {
   BottomSheetFooter,
   type BottomSheetFooterProps,
   BottomSheetScrollView,
+  type BottomSheetScrollViewMethods,
 } from "@gorhom/bottom-sheet";
-import { useCallback, useMemo, useState } from "react";
-import { Modal, Pressable, Text, useWindowDimensions, View } from "react-native";
+import {
+  createContext,
+  type ReactNode,
+  type RefObject,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import {
+  type LayoutChangeEvent,
+  Modal,
+  Pressable,
+  Text,
+  useWindowDimensions,
+  View,
+} from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { useT } from "../../../i18n/provider";
 import { text } from "../../../theme/fonts.ts";
@@ -114,6 +139,7 @@ import { containOverscroll } from "../../nested-scroll.ts";
 import { useWindowInsets } from "../../safe-area";
 import { sheetBottomInset, sheetMaxHeight } from "../../sheet-geometry.ts";
 import { SheetInputProvider } from "../../sheet-input";
+import { useSheetLook } from "./use-sheet-look.ts";
 
 export type BottomSheetProps = {
   visible: boolean;
@@ -132,6 +158,20 @@ export type BottomSheetProps = {
    * Left on, the first downward roll of a date closed the picker.
    */
   bodyRolls?: boolean;
+  /**
+   * Drawn under the title and above the body, and never scrolled: a picker's
+   * search. The list it filters is the body, and the field stays where the
+   * keyboard left it while the list moves under it.
+   */
+  pinned?: ReactNode;
+  /**
+   * **The sheet never shrinks while it is open.** For a body that is filtered
+   * as it is typed into: sized to its content, a picker lost a row's height
+   * per letter and its top edge — search field and all — dropped away from
+   * the thumb that was typing. Held at the tallest it has been, the list
+   * narrows inside a sheet that stays put.
+   */
+  steady?: boolean;
   children: React.ReactNode;
 };
 
@@ -141,6 +181,8 @@ export function BottomSheet({
   onDismiss,
   footer,
   bodyRolls = false,
+  pinned,
+  steady = false,
   children,
 }: BottomSheetProps) {
   const t = useT();
@@ -155,6 +197,66 @@ export function BottomSheet({
   const insets = useWindowInsets();
   const frame = useWindowDimensions();
   const keyboard = useKeyboardHeight();
+  const handleRef = useRef<View>(null);
+  const footerRef = useRef<View>(null);
+  const contentRef = useRef<View>(null);
+  const scrollerRef = useRef<BottomSheetScrollViewMethods>(null);
+  const bodyHeight = useRef(0);
+  const viewport = useMemo(
+    () => ({
+      handle: handleRef,
+      footer: footerRef,
+      content: contentRef,
+      bodyHeight,
+      scroller: scrollerRef,
+    }),
+    [],
+  );
+  useSheetLook(keyboard, viewport);
+  const measureBody = useCallback((event: LayoutChangeEvent) => {
+    bodyHeight.current = event.nativeEvent.layout.height;
+  }, []);
+  // **The footer floats over the body, so the body makes room for it.** The
+  // library pins the footer on top of the content rather than under it, and
+  // without this the last rows of a list sat behind *Create account* at the
+  // end of the scroll.
+  const [footerHeight, setFooterHeight] = useState(0);
+  const measureFooter = useCallback(
+    (event: LayoutChangeEvent) => setFooterHeight(event.nativeEvent.layout.height),
+    [],
+  );
+  /*
+    **`steady`'s floor is the whole sheet, not the body.** A picker that hides
+    its filter chips while it is searched loses the pinned row's height from
+    the handle, and holding only the body let the sheet drop by exactly that.
+    So the tallest *handle plus content* is remembered, and the body is given
+    whatever of it the handle no longer takes. The content is measured on its
+    own box, not the scroller's content size, which already includes the floor.
+  */
+  const [handleHeight, setHandleHeight] = useState(0);
+  const [contentHeight, setContentHeight] = useState(0);
+  const [tallest, setTallest] = useState(0);
+  const measureHandle = useCallback(
+    (event: LayoutChangeEvent) => setHandleHeight(event.nativeEvent.layout.height),
+    [],
+  );
+  const measureContent = useCallback(
+    (event: LayoutChangeEvent) => setContentHeight(event.nativeEvent.layout.height),
+    [],
+  );
+  useEffect(() => {
+    if (!visible) {
+      setTallest(0);
+      return;
+    }
+    if (handleHeight <= 0 || contentHeight <= 0) return;
+    const whole = handleHeight + contentHeight;
+    setTallest((was) => (whole > was ? whole : was));
+  }, [visible, handleHeight, contentHeight]);
+  const holdHeight = useMemo(
+    () => (steady && tallest > handleHeight ? { minHeight: tallest - handleHeight } : null),
+    [steady, tallest, handleHeight],
+  );
   const handleFocus = useCallback(() => setBackdropFocused(true), []);
   const handleBlur = useCallback(() => setBackdropFocused(false), []);
 
@@ -186,31 +288,24 @@ export function BottomSheet({
    * indicator belongs, so the two are one element rather than two competing
    * for the same 20 points.
    */
-  const renderHandle = useCallback(
-    () => (
-      <View testID="bottom-sheet" accessibilityViewIsModal style={styles.handleArea}>
-        <View style={styles.handleIndicator} />
-        <View style={styles.header}>
-          <Text style={styles.title}>{title}</Text>
-          <Button label={t("common.close")} onPress={onDismiss} variant="ghost" />
-        </View>
-      </View>
-    ),
-    [styles, title, t, onDismiss],
+  const underFooter = useMemo(
+    () => (footer === undefined ? null : { paddingBottom: footerHeight + space.x4 }),
+    [footer, footerHeight],
   );
 
-  /**
-   * `BottomSheetFooter` is the library's own pinning — it keeps the slot above
-   * the keyboard and outside the scroll, which is the promise this component
-   * made before it and had to implement itself.
-   */
-  const renderFooter = useCallback(
-    (props: BottomSheetFooterProps) => (
-      <BottomSheetFooter {...props}>
-        <View style={[styles.footer, clearBottom]}>{footer}</View>
-      </BottomSheetFooter>
-    ),
-    [styles, footer, clearBottom],
+  const parts = useMemo<SheetParts>(
+    () => ({
+      title,
+      onDismiss,
+      pinned,
+      footer,
+      clearBottom,
+      handleRef,
+      footerRef,
+      measureFooter,
+      measureHandle,
+    }),
+    [title, onDismiss, pinned, footer, clearBottom, measureFooter, measureHandle],
   );
 
   if (!visible) return null;
@@ -259,34 +354,134 @@ export function BottomSheet({
             is the one thing the caller's `visible` cannot know on its own.
           */}
           <SheetInputProvider value>
-            <GorhomBottomSheet
-              enableDynamicSizing
-              maxDynamicContentSize={maxHeight}
-              enablePanDownToClose
-              enableContentPanningGesture={!bodyRolls}
-              onClose={onDismiss}
-              backgroundStyle={styles.sheetBackground}
-              style={styles.sheetShadow}
-              handleComponent={renderHandle}
-              {...(footer === undefined ? {} : { footerComponent: renderFooter })}
-            >
-              {/* A direct child, deliberately — see the header. */}
-              <BottomSheetScrollView
-                testID="bottom-sheet-body"
-                style={containOverscroll}
-                contentContainerStyle={[styles.bodyContent, clearBottom]}
-                keyboardShouldPersistTaps="handled"
-                showsVerticalScrollIndicator={false}
+            <SheetPartsContext.Provider value={parts}>
+              <GorhomBottomSheet
+                enableDynamicSizing
+                maxDynamicContentSize={maxHeight}
+                enablePanDownToClose
+                enableContentPanningGesture={!bodyRolls}
+                // Said, not defaulted: the sheet rides above the keys at the
+                // height it had, and goes back down when they go.
+                // **Vertical is the sheet's; sideways is not.** Without these the
+                // sheet's pan took any drag, and a chip row inside it — the
+                // category groups — could not be scrolled along on iOS.
+                activeOffsetY={PAN_ACTIVE_Y}
+                failOffsetX={PAN_FAIL_X}
+                keyboardBehavior="interactive"
+                keyboardBlurBehavior="restore"
+                onClose={onDismiss}
+                backgroundStyle={styles.sheetBackground}
+                style={styles.sheetShadow}
+                handleComponent={SheetHandle}
+                {...(footer === undefined ? {} : { footerComponent: SheetFooter })}
               >
-                {children}
-              </BottomSheetScrollView>
-            </GorhomBottomSheet>
+                {/* A direct child, deliberately — see the header. */}
+                <BottomSheetScrollView
+                  ref={scrollerRef}
+                  testID="bottom-sheet-body"
+                  style={containOverscroll}
+                  contentContainerStyle={holdHeight}
+                  onLayout={measureBody}
+                  keyboardShouldPersistTaps="handled"
+                  showsVerticalScrollIndicator={false}
+                >
+                  {/*
+                  One box around the content, so a focused field can be asked
+                  whether it is in here and the content's top can be measured —
+                  and `collapsable={false}`, because Android flattens a view
+                  that only wraps and it would measure as its parent.
+                */}
+                  <View
+                    ref={contentRef}
+                    testID="bottom-sheet-content"
+                    collapsable={false}
+                    onLayout={measureContent}
+                    style={[styles.bodyContent, clearBottom, underFooter]}
+                  >
+                    {children}
+                  </View>
+                </BottomSheetScrollView>
+              </GorhomBottomSheet>
+            </SheetPartsContext.Provider>
           </SheetInputProvider>
         </View>
       </GestureHandlerRootView>
     </Modal>
   );
 }
+
+/**
+ * What the handle and the footer draw, handed down rather than closed over.
+ *
+ * **The library renders them as components, so they must stay the same
+ * components.** Given a function that closed over this render's title and
+ * `pinned`, it got a new function per render — a new component type to React
+ * — and remounted the handle on every keystroke: a pinned search field lost
+ * its focus after the first letter.
+ */
+type SheetParts = {
+  title: string;
+  onDismiss: () => void;
+  pinned: ReactNode;
+  footer: ReactNode;
+  clearBottom: { paddingBottom: number };
+  handleRef: RefObject<View | null>;
+  footerRef: RefObject<View | null>;
+  measureFooter: (event: LayoutChangeEvent) => void;
+  measureHandle: (event: LayoutChangeEvent) => void;
+};
+
+const SheetPartsContext = createContext<SheetParts | null>(null);
+
+/** The grab, the title, *Close*, and whatever is pinned under them. */
+function SheetHandle() {
+  const parts = useContext(SheetPartsContext);
+  const styles = useStyles();
+  const t = useT();
+  if (parts === null) return null;
+  return (
+    <View
+      ref={parts.handleRef}
+      onLayout={parts.measureHandle}
+      testID="bottom-sheet"
+      accessibilityViewIsModal
+      style={styles.handleArea}
+    >
+      <View style={styles.handleIndicator} />
+      <View style={styles.header}>
+        <Text style={styles.title}>{parts.title}</Text>
+        <Button label={t("common.close")} onPress={parts.onDismiss} variant="ghost" />
+      </View>
+      {parts.pinned === undefined ? null : <View style={styles.pinned}>{parts.pinned}</View>}
+    </View>
+  );
+}
+
+/**
+ * `BottomSheetFooter` is the library's own pinning — it keeps the slot above
+ * the keyboard and outside the scroll.
+ */
+function SheetFooter(props: BottomSheetFooterProps) {
+  const parts = useContext(SheetPartsContext);
+  const styles = useStyles();
+  if (parts === null) return null;
+  return (
+    <BottomSheetFooter {...props}>
+      <View
+        ref={parts.footerRef}
+        onLayout={parts.measureFooter}
+        style={[styles.footer, parts.clearBottom]}
+      >
+        {parts.footer}
+      </View>
+    </BottomSheetFooter>
+  );
+}
+
+/** A drag moves the sheet once it has gone this far up or down… */
+const PAN_ACTIVE_Y: [number, number] = [-8, 8];
+/** …and never once it has gone this far sideways first. */
+const PAN_FAIL_X: [number, number] = [-8, 8];
 
 const useStyles = makeStyles((theme) => ({
   overlay: { flex: 1, justifyContent: "flex-end" },
@@ -336,6 +531,12 @@ const useStyles = makeStyles((theme) => ({
   },
   handleArea: { paddingTop: space.md, gap: space.x4 },
   /**
+   * Where the body's first child used to stand: straight under the header,
+   * which is a 44pt row — so the handle's gap is taken back above, and the
+   * body's own gap is given below, between the search and what it filters.
+   */
+  pinned: { paddingHorizontal: space.x5, marginTop: -space.x4, paddingBottom: space.x4 },
+  /**
    * **The lift fills the overlay, because the library positions inside it.**
    * `@gorhom/bottom-sheet` lays itself out absolutely against its parent —
    * `top: 0; bottom: 0` — so a parent that only shrink-wraps its child gives it
@@ -366,5 +567,17 @@ const useStyles = makeStyles((theme) => ({
   body: { flexShrink: 1 },
   /** The gap the sheet used to apply to every child directly, and the gutter. */
   bodyContent: { gap: space.x4, paddingHorizontal: space.x5 },
-  footer: { gap: space.md, paddingHorizontal: space.x5 },
+  /**
+   * **Drawn on the sheet's own surface, with a rule above it.** It floats over
+   * the body, so a transparent one laid its button on top of whatever row had
+   * scrolled under it.
+   */
+  footer: {
+    gap: space.md,
+    paddingHorizontal: space.x5,
+    paddingTop: space.x3,
+    backgroundColor: theme.surface,
+    borderTopWidth: 1,
+    borderTopColor: theme.border,
+  },
 }));

@@ -20,7 +20,7 @@
  * it and `visual/press.spec.ts` measures a press in Chrome.
  */
 
-import type { ReactNode } from "react";
+import type { ComponentType, ReactNode } from "react";
 import {
   ScrollView,
   type ScrollViewProps,
@@ -41,8 +41,8 @@ type SheetProps = ViewProps & {
    * them would drop both from the tree and every assertion about a title, a
    * Close button or a pinned footer would be asserting against nothing.
    */
-  handleComponent?: () => ReactNode;
-  footerComponent?: (props: { animatedFooterPosition: number }) => ReactNode;
+  handleComponent?: ComponentType;
+  footerComponent?: ComponentType<{ animatedFooterPosition: number }>;
 };
 
 /**
@@ -77,8 +77,8 @@ export default function BottomSheet({
   children,
   style,
   maxDynamicContentSize,
-  handleComponent,
-  footerComponent,
+  handleComponent: Handle,
+  footerComponent: Footer,
 }: SheetProps) {
   ceilingSeen = maxDynamicContentSize;
   const ceiling = maxDynamicContentSize === undefined ? null : { maxHeight: maxDynamicContentSize };
@@ -87,12 +87,15 @@ export default function BottomSheet({
   // the footer, which is where the home indicator actually has to be cleared.
   return (
     <View testID="bottom-sheet-frame" style={[style, ceiling]}>
-      {handleComponent?.()}
+      {/* Rendered as components, the way the library renders them — so a
+          handle that is a new component per render remounts here as it
+          does on a phone. Called as functions, that was invisible. */}
+      {Handle === undefined ? null : <Handle />}
       {children}
       {/* The real one is positioned against the sheet; here it is simply last,
           which is the only part of "pinned under the body" a DOM order test
           can see. */}
-      {footerComponent?.({ animatedFooterPosition: 0 })}
+      {Footer === undefined ? null : <Footer animatedFooterPosition={0} />}
     </View>
   );
 }

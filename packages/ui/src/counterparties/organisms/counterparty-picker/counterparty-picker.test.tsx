@@ -2,7 +2,7 @@
 
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { expectContainsOverscroll } from "../../../primitives/nested-scroll.test-support.ts";
+import { expectScrolledByTheSheet } from "../../../primitives/nested-scroll.test-support.ts";
 import { CounterpartyPicker } from "./counterparty-picker";
 
 const COUNTERPARTIES = [
@@ -28,8 +28,8 @@ describe("CounterpartyPicker", () => {
     expect(screen.queryByText("Recent")).toBeNull();
   });
 
-  /** The list contains its own overscroll, so scrolling it does not move the screen behind it. */
-  it("contains its own overscroll", () => {
+  /** The sheet scrolls the list; the search stays put above it. */
+  it("is scrolled by the sheet, with the search pinned above it", () => {
     render(
       <CounterpartyPicker
         visible
@@ -39,7 +39,7 @@ describe("CounterpartyPicker", () => {
         onDismiss={vi.fn()}
       />,
     );
-    expectContainsOverscroll("counterparty-picker-scroll");
+    expectScrolledByTheSheet("counterparty-picker-list");
   });
 
   it("shows a 'Recent' section for the given ids", () => {

@@ -3450,11 +3450,8 @@ describe("every scroller declares which kind it is", () => {
 
     expect(census).toEqual([
       "apps/mobile/src/ledger-screen.tsx#0 <FlatList> pageScrollProps",
-      "packages/ui/src/accounts/organisms/account-picker/account-picker.tsx#0 <ScrollView> nestedScrollProps",
       "packages/ui/src/categories/organisms/category-sheet/category-sheet.tsx#0 <ScrollView> horizontalScrollProps",
-      "packages/ui/src/categories/organisms/category-sheet/category-sheet.tsx#1 <ScrollView> nestedScrollProps",
-      "packages/ui/src/categories/organisms/category-sheet/category-sheet.tsx#2 <ScrollView> horizontalScrollProps",
-      "packages/ui/src/counterparties/organisms/counterparty-picker/counterparty-picker.tsx#0 <ScrollView> nestedScrollProps",
+      "packages/ui/src/categories/organisms/category-sheet/category-sheet.tsx#1 <ScrollView> horizontalScrollProps",
       "packages/ui/src/fx/organisms/rate-table/rate-table.tsx#0 <FlatList> pageScrollProps",
       "packages/ui/src/primitives/atoms/select/select.tsx#0 <ScrollView> nestedScrollProps",
       "packages/ui/src/primitives/atoms/wheel/wheel.tsx#0 <ScrollView> nestedScrollProps",

@@ -558,4 +558,22 @@ describe("a day that is already on screen", () => {
     expect(onReturnToToday, "today is loaded, so nothing is re-read").not.toHaveBeenCalled();
     expect(screen.queryByRole("button", { name: /Back to today/ })).toBeNull();
   });
+
+  /**
+   * **Today inside a collapsed run is not today on screen.** A list led past
+   * today — the strip left on the 18th — draws the 14th to the 17th as one
+   * *nothing recorded* row, named by its newer end. Scrolling to that row put
+   * the ring on the 17th, the settle reported the 17th, and the pill stayed
+   * up over a list that was never going to reach today. Found on a device.
+   */
+  it("jumps home when today is swallowed by a run", () => {
+    const onReturnToToday = vi.fn();
+    draw(ledgerWith([row("2026-08-13", 2, "-20.00")]), vi.fn(), {
+      anchor: accountingDate("2026-08-18"),
+      onReturnToToday,
+    });
+    expect(screen.getByText(/August 14\s–\s17, 2026/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /Back to today/ }));
+    expect(onReturnToToday).toHaveBeenCalledTimes(1);
+  });
 });
