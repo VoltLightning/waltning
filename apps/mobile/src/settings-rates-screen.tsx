@@ -77,15 +77,16 @@ import { useT } from "@waltning/ui/i18n/provider";
 import { BottomSheet } from "@waltning/ui/primitives/bottom-sheet";
 import { Button } from "@waltning/ui/primitives/button";
 import { DateField } from "@waltning/ui/primitives/date-field";
-import { Select, type SelectOption } from "@waltning/ui/primitives/select";
+import type { SelectOption } from "@waltning/ui/primitives/select";
 import { useBreakpoint } from "@waltning/ui/primitives/use-breakpoint";
 import { Card } from "@waltning/ui/shell/card";
 import { ConfirmDialog } from "@waltning/ui/shell/confirm-dialog";
 import { useGroundInset } from "@waltning/ui/shell/ground-inset";
+import { Banner } from "@waltning/ui/states/banner";
 import { Toast } from "@waltning/ui/states/toast";
 import { text } from "@waltning/ui/theme/fonts";
 import { makeStyles } from "@waltning/ui/theme/styles";
-import { space } from "@waltning/ui/tokens";
+import { radius, space } from "@waltning/ui/tokens";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { Text, View } from "react-native";
 import { PushedPage } from "./pushed-page";
@@ -389,6 +390,40 @@ export default function SettingsRatesScreen({
    */
   const noQuoteCurrency = quoteOptions.length === 0;
 
+  /** Pairs the replica holds anything at all for — the deck's first tile. */
+  const pairsHeld = shownCoverage.filter((row) => row.days > 0).length;
+  /** The stalest real quote, in days. `null` when nothing real is held at all. */
+  const oldestDays = useMemo(() => {
+    let oldest: number | null = null;
+    for (const row of shownCoverage) {
+      if (row.lastDate === null) continue;
+      const age = daysBetween(row.lastDate, today);
+      if (oldest === null || age > oldest) oldest = age;
+    }
+    return oldest;
+  }, [shownCoverage, today]);
+  const manualRows = shownCoverage.reduce((total, row) => total + row.manualDays, 0);
+
+  /**
+   * The source that stopped answering — §7.7's carry cap is ten days, after
+   * which a figure needing a rate says so rather than quietly using a stale
+   * one. The stalest currency past the cap names its own source; a source
+   * still answering for one currency and not another is reported as the one
+   * that is behind, which is the one a person can act on.
+   */
+  const stopped = useMemo(() => {
+    let worst: { source: string; lastDate: string; age: number } | undefined;
+    for (const row of shownCoverage) {
+      if (row.lastDate === null || row.source === null || row.source === "manual") continue;
+      const age = daysBetween(row.lastDate, today);
+      if (age <= CARRY_CAP_DAYS) continue;
+      if (worst === undefined || age > worst.age) {
+        worst = { source: row.source.toUpperCase(), lastDate: row.lastDate, age };
+      }
+    }
+    return worst;
+  }, [shownCoverage, today]);
+
   const editorPair = quote !== null && pivot !== undefined ? { quote, base: pivot.code } : null;
 
   // What *Clear manual* would delete, in the words the confirmation uses — one
@@ -417,14 +452,66 @@ export default function SettingsRatesScreen({
 
   const header = (
     <View style={styles.headerBlock}>
-      {pivot === undefined ? null : (
-        <Select
-          label={t("fx.pairLabel", { base: pivot.code })}
-          placeholder={t("fx.pairPlaceholder")}
-          options={quoteOptions}
-          value={quote}
-          onChange={handleChangeQuote}
+      {/*
+        S18's own drawing opens with the source that stopped, because that is
+        the state this screen exists to make visible: a dead source carries
+        forward for ten days and then leaves gaps, and a table of rows says so
+        only to someone who scrolls it.
+      */}
+      {stopped === undefined ? null : (
+        <Banner
+          tone="warn"
+          message={`${t("fx.sourceStopped", {
+            source: stopped.source,
+            date: stopped.lastDate,
+          })} ${t("fx.sourceStoppedWhy")}`}
         />
+      )}
+
+      {/* Three figures the table cannot state: how many pairs are held at
+          all, how stale the stalest is, and how much of this was typed. */}
+      {noQuoteCurrency ? null : (
+        <View style={styles.tiles}>
+          <View style={styles.tile}>
+            <Text style={styles.tileLabel}>{t("fx.tilePairs")}</Text>
+            <Text style={styles.tileValue}>{String(pairsHeld)}</Text>
+          </View>
+          <View style={styles.tile}>
+            <Text style={styles.tileLabel}>{t("fx.tileOldest")}</Text>
+            <Text
+              style={[
+                styles.tileValue,
+                oldestDays !== null && oldestDays > CARRY_CAP_DAYS ? styles.tileWarn : null,
+              ]}
+            >
+              {oldestDays === null ? "—" : t("fx.tileDays", { count: oldestDays })}
+            </Text>
+          </View>
+          <View style={styles.tile}>
+            <Text style={styles.tileLabel}>{t("fx.tileManual")}</Text>
+            <Text style={styles.tileValue}>{String(manualRows)}</Text>
+          </View>
+        </View>
+      )}
+
+      {/*
+        **Chips, not a `Select`.** Six quote currencies is a set small enough
+        to show whole, and S18 draws them that way: picking a pair is one tap
+        where a `Select` is three, and the row also says how many pairs there
+        are — which the closed field never did.
+      */}
+      {pivot === undefined ? null : (
+        <View style={styles.presetRow}>
+          {quoteOptions.map((option) => (
+            <PairChip
+              key={option.value}
+              code={option.value}
+              label={t("fx.pairChip", { quote: option.value, base: pivot.code })}
+              selected={option.value === quote}
+              onPress={handleChangeQuote}
+            />
+          ))}
+        </View>
       )}
 
       <View style={styles.presetRow}>
@@ -602,11 +689,53 @@ export default function SettingsRatesScreen({
   );
 }
 
+/**
+ * One quote currency, as a chip. A named component rather than an arrow in
+ * the map: `Button` takes no argument on press, and a fresh closure per
+ * render is what the JSX rule refuses.
+ */
+function PairChip({
+  code,
+  label,
+  selected,
+  onPress,
+}: {
+  code: string;
+  label: string;
+  selected: boolean;
+  onPress: (code: string) => void;
+}) {
+  const handlePress = useCallback(() => onPress(code), [code, onPress]);
+  return (
+    <Button
+      label={label}
+      onPress={handlePress}
+      variant={selected ? "primary" : "secondary"}
+      size="sm"
+    />
+  );
+}
+
+/** §7.7 — a rate carries forward ten days, and then a figure says it cannot be valued. */
+const CARRY_CAP_DAYS = 10;
+
 const useStyles = makeStyles((theme) => ({
   /** The gaps `GroundPanel`'s own scroll content used to carry, now that the list carries them. */
   headerBlock: { gap: space.x4, marginBottom: space.x4 },
   footerBlock: { gap: space.x4, marginTop: space.x4 },
   presetRow: { flexDirection: "row", flexWrap: "wrap", gap: space.sm },
+  tiles: { flexDirection: "row", gap: space.sm },
+  tile: {
+    flex: 1,
+    gap: space.xxs,
+    paddingVertical: space.md,
+    paddingHorizontal: space.lg,
+    borderRadius: radius.md,
+    backgroundColor: theme.insetFill,
+  },
+  tileLabel: { color: theme.textMuted, ...text.ui("caption") },
+  tileValue: { color: theme.text, ...text.ui("body", 600) },
+  tileWarn: { color: theme.assertedText },
   /** Phone: one column, so each field keeps its own chip row on its own line. */
   rangeRow: { gap: space.x3 },
   rangeRowDesk: { flexDirection: "row", gap: space.sm },

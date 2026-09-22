@@ -1541,6 +1541,17 @@ export const en = {
     pivotTargetPlaceholder: "Choose a currency",
     /** S18. */
     pairLabel: "Quote, against {{base}}",
+    sourceStopped: "{{source}} has not answered since {{date}}.",
+    sourceStoppedWhy:
+      "Rates carry forward for ten days, then a figure that needs one says so rather than quietly using a stale number.",
+    tilePairs: "Pairs held",
+    tileOldest: "Oldest",
+    tileManual: "Manual",
+    tileDays_one: "{{count}} day",
+    tileDays_few: "{{count}} days",
+    tileDays_many: "{{count}} days",
+    tileDays_other: "{{count}} days",
+    pairChip: "{{quote}}/{{base}}",
     pairPlaceholder: "Choose a currency",
     noQuoteCurrency: "No currency to compare against the pivot yet.",
     range30d: "30 d",
