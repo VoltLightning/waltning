@@ -21,6 +21,7 @@ import {
   toLedgerItems,
 } from "@waltning/client/transactions/ledger-days";
 import { type AccountingDate, accountingDate, yearMonth } from "@waltning/core/date";
+import { id as brandId } from "@waltning/core/id";
 import type { CurrencyCode } from "@waltning/core/money";
 import { dayLabel, dayRangeLabel, monthShort, weekdayInitial } from "@waltning/ui/i18n/locales";
 import { useLocale, useT } from "@waltning/ui/i18n/provider";
@@ -122,6 +123,15 @@ export type HomeListPageProps = {
    */
   query: string | null;
   /**
+   * S16 §2 — *tapping an account is a filter, not a screen*. One account's
+   * id, or `null` for the whole ledger.
+   *
+   * It narrows the same way a search does, and for the same reason: a
+   * filtered set has no day totals to state and no quiet days to mark, so it
+   * reaches `toLedgerItems` and `ribbonMarks` as `filtered` too.
+   */
+  accountId: string | null;
+  /**
    * The screen's shared offset, which the header collapses from.
    *
    * **Written here, read there — and not the value this page's own strip and
@@ -183,6 +193,7 @@ function HomeListPageView({
   onCategorize,
   onReturnToToday,
   query,
+  accountId,
   scrollY,
   onTick,
   active,
@@ -194,7 +205,16 @@ function HomeListPageView({
   // A new object per render would re-key the list and discard both halves on
   // every keystroke — `useLedgerList` treats a filter change as a jump, which
   // is right for a *different* filter and ruinous for an identical one.
-  const filter = useMemo(() => (query === null ? undefined : { text: query }), [query]);
+  const filter = useMemo(
+    () =>
+      query === null && accountId === null
+        ? undefined
+        : {
+            ...(query === null ? {} : { text: query }),
+            ...(accountId === null ? {} : { accountIds: [brandId<"accounts">(accountId)] }),
+          },
+    [query, accountId],
+  );
   // One list per anchor and query — what the gate, and the scroll to the
   // anchor, both reset on.
   /**
@@ -244,13 +264,13 @@ function HomeListPageView({
           // render probe counted ~2,000 re-renders per settle, every cell in
           // the list about five times over.
           toLedgerItems(rows, pivotCurrency, {
-            filtered: query !== null,
+            filtered: query !== null || accountId !== null,
             anchor: centred,
             // The line between *nothing recorded* and *not yet* (S04 §6).
             today,
           })
         : [],
-    [rows, settled, pivotCurrency, query, centred, today],
+    [rows, settled, pivotCurrency, query, centred, today, accountId],
   );
 
   /**
@@ -273,7 +293,7 @@ function HomeListPageView({
    * strip is the matched days and nothing else — not continuous, because a gap
    * between two matches says nothing about the ledger.
    */
-  const filtered = query !== null;
+  const filtered = query !== null || accountId !== null;
   const marks = useMemo(
     () => ribbonMarks(items, { filtered, anchor: centred }),
     [items, filtered, centred],

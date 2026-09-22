@@ -17,16 +17,22 @@
  */
 
 import { memo } from "react";
-import { View } from "react-native";
+import { Text, View } from "react-native";
 import Animated, {
   type SharedValue,
   useAnimatedStyle,
   useSharedValue,
 } from "react-native-reanimated";
+import { useT } from "../../../i18n/provider";
+import { PressableScaled } from "../../../primitives/atoms/pressable-scaled/pressable-scaled";
 import { SearchField } from "../../../primitives/atoms/search-field/search-field";
+import { XIcon } from "../../../primitives/icons";
+import { useInteraction } from "../../../primitives/interaction.ts";
 import { useSafeArea } from "../../../primitives/safe-area";
+import { text } from "../../../theme/fonts.ts";
+import { useTheme } from "../../../theme/provider";
 import { makeStyles } from "../../../theme/styles.ts";
-import { space } from "../../../tokens.ts";
+import { focus, radius, space, touchTarget } from "../../../tokens.ts";
 import { type PageTab, PageTabs } from "../../molecules/page-tabs/page-tabs";
 import { chromeSlack, collapseProgress } from "../../molecules/pager-header/collapse.ts";
 import { PagerHeader } from "../../molecules/pager-header/pager-header";
@@ -66,8 +72,8 @@ export type PagerFrameProps = {
    * whose title the search replaced.
    *
    * **It stays open while the search is on**, which is what says the screen is
-   * narrowed. §4's `FilterChip` is a different thing — a filter this screen
-   * *receives* from elsewhere — and nothing routes one here yet.
+   * narrowed. `filter` below is the other thing §4 names — a filter this
+   * screen *receives* from elsewhere, rather than one it composes.
    */
   searchOpen: boolean;
   /** The text in the field. `""` is the field open with nothing typed yet. */
@@ -75,6 +81,16 @@ export type PagerFrameProps = {
   onSearchChange: (value: string) => void;
   /** Clears the query and closes the field. The field's own ✕ calls it. */
   onSearchClose: () => void;
+  /**
+   * S04 §4's `FilterChip` — what the screen was narrowed to by somebody else,
+   * and the ✕ that clears it. **One chip**: this screen receives a filter, it
+   * does not compose them (composing is `FilterBar`, and it is S10's).
+   *
+   * Pinned under the tabs beside the search, because both answer the same
+   * question — *why am I not seeing everything* — and a reader who has to
+   * look in two places for that answer checks neither.
+   */
+  filter?: { label: string; onClear: () => void } | undefined;
   searchPlaceholder: string;
   /** Live matches, for the field's own count line. */
   searchCount?: number | undefined;
@@ -105,6 +121,7 @@ function PagerFrameView({
   onSearch,
   barLabels,
   searchOpen,
+  filter,
   searchQuery,
   onSearchChange,
   onSearchClose,
@@ -159,6 +176,11 @@ function PagerFrameView({
           labels={barLabels}
         />
         <PageTabs tabs={tabs} activeKey={activeKey} onSelect={onPageChange} progress={progress} />
+        {filter === undefined ? null : (
+          <View style={styles.search}>
+            <FilterChip label={filter.label} onClear={filter.onClear} />
+          </View>
+        )}
         {searchOpen ? (
           <View style={styles.search}>
             <SearchField
@@ -195,7 +217,48 @@ function PagerFrameView({
 
 export const PagerFrame = memo(PagerFrameView);
 
+/**
+ * S04 §4's chip: what the screen was narrowed to, and the ✕ that clears it.
+ * The whole pill is the target — a 12pt cross beside a label is a control
+ * only a stylus can hit, the same reasoning `SearchField` gives for its own.
+ */
+function FilterChip({ label, onClear }: { label: string; onClear: () => void }) {
+  const t = useT();
+  const styles = useStyles();
+  const theme = useTheme();
+  const { focused, handlers } = useInteraction();
+  return (
+    <PressableScaled
+      accessibilityRole="button"
+      accessibilityLabel={t("common.remove", { value: label })}
+      onPress={onClear}
+      {...handlers}
+      style={[styles.filterChip, focused ? styles.filterChipFocused : null]}
+    >
+      <Text style={styles.filterLabel}>{label}</Text>
+      <XIcon size={12} color={theme.accentText} />
+    </PressableScaled>
+  );
+}
+
 const useStyles = makeStyles((theme) => ({
+  filterChip: {
+    alignSelf: "flex-start",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: space.sm,
+    minHeight: touchTarget.min,
+    paddingHorizontal: space.x3,
+    borderRadius: radius.sm,
+    backgroundColor: theme.accentFill,
+  },
+  filterChipFocused: {
+    outlineWidth: focus.width,
+    outlineStyle: "solid",
+    outlineColor: theme.focusRing,
+    outlineOffset: focus.offset,
+  },
+  filterLabel: { color: theme.accentText, ...text.ui("bodySm", 600) },
   /**
    * **Out of flow, filling its parent — not `flex: 1`.**
    *

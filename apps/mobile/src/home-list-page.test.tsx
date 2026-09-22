@@ -80,6 +80,7 @@ function draw(
     onVisibleDay?: (date: AccountingDate) => void;
     onCategorize?: () => void;
     query?: string | null;
+    accountId?: string | null;
   } = {},
 ) {
   render(
@@ -93,6 +94,7 @@ function draw(
           revision={0}
           pivotCurrency={PLN}
           pivotDecimals={2}
+          accountId={over.accountId ?? null}
           onPickDay={onPickDay}
           onOpenTransaction={vi.fn()}
           onCategorize={over.onCategorize ?? vi.fn()}
@@ -599,4 +601,19 @@ describe("a day that is already on screen", () => {
     expect(onVisibleDay).toHaveBeenCalledWith(TODAY);
     expect(onReturnToToday, "today is on the list, so nothing is re-read").not.toHaveBeenCalled();
   });
+});
+
+/**
+ * S16 §2 — *tapping an account is a filter, not a screen*: the register hands
+ * this page one account and the list narrows to it, the same way a search
+ * narrows it (and with the same consequence for day totals and quiet runs).
+ */
+it("narrows to one account when the register hands it one", () => {
+  const account = id<"accounts">("00000000-0000-4000-8000-00000000000b");
+  const ledger = ledgerWith([row("2026-08-14", 1, "-96")]);
+  draw(ledger, vi.fn(), { accountId: account });
+
+  const readLedgerPage = vi.mocked(ledger.readLedgerPage);
+  const filter = readLedgerPage.mock.calls[0]?.[0]?.filter;
+  expect(filter?.accountIds).toEqual([account]);
 });
