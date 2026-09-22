@@ -196,12 +196,10 @@ describe("J10 — currency and rates", () => {
     render(<JourneyHarness controller={ledger.controller} stub={stub} />);
     await settleLayout();
 
-    // S18 — the quote picker, over PLN. The picker defaults to the first
-    // currency alphabetically (`settings-rates-screen.tsx`'s own
-    // `quoteOptions[0]`), so this opens it by its label rather than
-    // assuming which one that is.
-    fireEvent.click(screen.getByRole("button", { name: /^Quote, against USD/ }));
-    fireEvent.click(screen.getByRole("radio", { name: "PLN · Polish Złoty" }));
+    // S18 — the pair row, over PLN. The screen opens on whichever currency
+    // sorts first (`settings-rates-screen.tsx`'s own `quoteOptions[0]`), so
+    // this taps the pair it wants rather than assuming that is the one.
+    fireEvent.click(screen.getByRole("button", { name: "PLN/USD" }));
 
     // A tight custom range (`fx.rangeFrom`/`fx.rangeTo`) rather than the
     // default 30-day preset: this journey is about *which* rate Sunday's own

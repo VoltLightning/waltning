@@ -71,9 +71,29 @@ harness drive without a router to stand in for.
 
 ### Both surfaces
 
-Pair selector and date range above a `RateTable`. `SyncLog` beneath, carrying
-**coverage per currency** rather than only events. Web places them side by side;
-mobile stacks.
+A stopped-source banner, three figures, a pair chip row and a date range above
+a `RateTable`. `SyncLog` beneath, carrying **coverage per currency** rather
+than only events. Web places them side by side; mobile stacks.
+
+**The screen opens with the source that stopped.** *NBP has not answered since
+2026-09-02* — §7.7 carries a rate forward for ten days and then a figure that
+needs one says so, which makes a dead source the one state this screen exists
+to surface. Past the cap only: a gap inside it is the ordinary weekend, and a
+banner for it would be a banner nobody could act on. The stalest currency past
+the cap names its source; a source answering for one currency and not another
+is reported as the one that is behind.
+
+**Three figures the table cannot state**, on the ground above the pair row:
+*Pairs held* — how many quote currencies hold anything at all; *Oldest* — the
+stalest real quote in days, amber past the carry cap; *Manual* — rows asserted
+by hand, which is also what *Clear manual* acts on. A screen offering to clear
+them without saying how many there are is offering an action nobody can size.
+
+**The pair is a row of chips, not a `Select`.** The set is every quote
+currency of one pivot — small enough to show whole, and picking one is then a
+single tap where a closed field costs three. The row also states how many
+pairs there are, which a closed field never did (`design-system/04` §4.6 draws
+the same distinction for `CurrencyGrid`).
 
 **The table lists what is held, and a gap is one row.** Every day with a rate
 is its own row, with its source; a run of days with nothing held is a single

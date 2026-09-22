@@ -85,6 +85,7 @@ function fakeController(overrides: {
           calendarDays: 2100,
           coveragePct: 100,
           futureRows: 0,
+          manualDays: 0,
         },
       ]),
     addCurrency: overrides.addCurrency ?? (() => ({ code: "EUR" })),
@@ -421,6 +422,7 @@ it("a currency with no rates yet says so, as a plain caption and not a button", 
         calendarDays: 0,
         coveragePct: 0,
         futureRows: 0,
+        manualDays: 0,
       },
     ],
   });
@@ -462,6 +464,7 @@ it("R1 M5 — the row's accessible name carries everything the row shows", () =>
         calendarDays: 100,
         coveragePct: 23,
         futureRows: 0,
+        manualDays: 0,
       },
     ],
   });

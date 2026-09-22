@@ -691,6 +691,8 @@ export type PhoneCoverage = {
   coveragePct: number;
   /** L7 — rows held past today, excluded from every figure above (M4). */
   futureRows: number;
+  /** Rows asserted by hand, through today — S18's *Manual* tile and what *Clear manual* acts on. */
+  manualDays: number;
 };
 
 /** One row of S18's rate table — `listFxRates`'s answer. */

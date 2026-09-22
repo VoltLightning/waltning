@@ -184,6 +184,7 @@ it("states the categories in use and the oldest quote's age", () => {
         calendarDays: 400,
         coveragePct: 99,
         futureRows: 0,
+        manualDays: 0,
       },
     ],
   });

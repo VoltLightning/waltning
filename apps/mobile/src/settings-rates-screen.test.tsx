@@ -86,22 +86,26 @@ function fakeController(overrides: {
   listFxRates?: PhoneLedgerPort["listFxRates"];
   setManualRate?: PhoneLedgerPort["setManualRate"];
   clearManualRate?: PhoneLedgerPort["clearManualRate"];
+  readCoverage?: PhoneLedgerPort["readCoverage"];
 }) {
   const port = basePort({
     listCurrencySettings: overrides.listCurrencySettings ?? (() => [PLN_ROW, USD_ROW]),
-    readCoverage: () => [
-      {
-        code: PLN,
-        source: "nbp",
-        firstDate: accountingDate("2020-11-25"),
-        lastDate: accountingDate("2026-09-02"),
-        days: 2100,
-        realDays: 2100,
-        calendarDays: 2100,
-        coveragePct: 100,
-        futureRows: 0,
-      },
-    ],
+    readCoverage:
+      overrides.readCoverage ??
+      (() => [
+        {
+          code: PLN,
+          source: "nbp",
+          firstDate: accountingDate("2020-11-25"),
+          lastDate: accountingDate("2026-09-02"),
+          days: 2100,
+          realDays: 2100,
+          calendarDays: 2100,
+          coveragePct: 100,
+          futureRows: 0,
+          manualDays: 0,
+        },
+      ]),
     listFxRates: overrides.listFxRates ?? (() => []),
     setManualRate: overrides.setManualRate ?? (() => ({ written: 0, replacedManual: 0 })),
     clearManualRate: overrides.clearManualRate ?? (() => ({ deleted: 0 })),
@@ -135,7 +139,7 @@ function withLedger(
 
 it("renders the quote pair and the coverage panel", () => {
   withLedger();
-  expect(screen.getByText("PLN · Polish Złoty")).toBeDefined();
+  expect(screen.getByText("PLN per USD"), "the table is on the PLN pair").toBeDefined();
   expect(screen.getByText("100%")).toBeDefined();
 });
 
@@ -143,7 +147,7 @@ it("preselects the quote from ?quote=, S17's own link at 0% coverage", () => {
   withLedger({ listCurrencySettings: () => [PLN_ROW, EUR_ROW, USD_ROW] }, { quote: "EUR" });
   // Without the param, the first option (PLN) would win — EUR proves the
   // link, not the default.
-  expect(screen.getByText("EUR · Euro")).toBeDefined();
+  expect(screen.getByText("EUR per USD"), "the link chose the pair").toBeDefined();
 });
 
 /**
@@ -229,7 +233,7 @@ it("R1 H1 — an unresolvable ?quote= opens nothing, and does not move the selec
   expect(screen.queryByText(/ per USD, /)).toBeNull();
   // The selection falls back exactly as an unparameterised visit does — the
   // first option (PLN) — rather than to whatever the link named.
-  expect(screen.getByText("PLN · Polish Złoty")).toBeDefined();
+  expect(screen.getByText("PLN per USD"), "the table is on the PLN pair").toBeDefined();
 });
 
 /**
@@ -261,7 +265,7 @@ it("R1 L7 — a ?date= in the future opens nothing", () => {
 it("R2 H1 — ?date= with no ?quote= opens nothing", () => {
   withLedger({ listCurrencySettings: () => [PLN_ROW, EUR_ROW, USD_ROW] }, { date: "2026-08-30" });
   expect(screen.queryByText(/ per USD, /)).toBeNull();
-  expect(screen.getByText("PLN · Polish Złoty")).toBeDefined();
+  expect(screen.getByText("PLN per USD"), "the table is on the PLN pair").toBeDefined();
 });
 
 /**
@@ -276,12 +280,12 @@ it("R2 H1 — a repeated ?quote= names no pair, so it opens nothing", () => {
     { quote: ["PLN", "EUR"], date: "2026-08-30" },
   );
   expect(screen.queryByText(/ per USD, /)).toBeNull();
-  expect(screen.getByText("PLN · Polish Złoty")).toBeDefined();
+  expect(screen.getByText("PLN per USD"), "the table is on the PLN pair").toBeDefined();
 });
 
 it("no params at all leaves the editor closed on the first option", () => {
   withLedger();
-  expect(screen.getByText("PLN · Polish Złoty")).toBeDefined();
+  expect(screen.getByText("PLN per USD"), "the table is on the PLN pair").toBeDefined();
   expect(screen.queryByText(/^Set PLN per USD/)).toBeNull();
 });
 
@@ -614,4 +618,82 @@ it("R4 L2 — a link a thousand years back still opens on its day, in a 30-day w
   // And the table drew that window: its first and last rows, and nothing past.
   expect(screen.getByText(/^1000-01-01/)).toBeDefined();
   expect(screen.queryByText("1000-01-31")).toBeNull();
+});
+
+/**
+ * S18 §3 — the three figures the table cannot state, and the one state this
+ * screen exists to make visible: a source that stopped answering.
+ */
+it("states how many pairs are held, the stalest quote, and how much was typed", () => {
+  // The screen reads the device's own clock, so the fixture is dated from it.
+  const today = deviceRuntime().capture().date;
+  withLedger({
+    readCoverage: () => [
+      {
+        code: PLN,
+        source: "nbp",
+        firstDate: accountingDate("2020-11-25"),
+        lastDate: addDays(today, -2),
+        days: 2100,
+        realDays: 2090,
+        calendarDays: 2100,
+        coveragePct: 99,
+        futureRows: 0,
+        manualDays: 3,
+      },
+    ],
+  });
+  expect(screen.getByText("Pairs held")).toBeDefined();
+  // The suite captures 2026-09-03, and the last real quote is two days back.
+  expect(screen.getByText("2 days")).toBeDefined();
+  expect(screen.getByText("3")).toBeDefined();
+});
+
+/**
+ * §7.7 — a rate carries forward ten days and then a figure that needs one
+ * says so. Past that, the source has stopped and the screen says which.
+ */
+it("names the source that stopped, and why that matters", () => {
+  const today = deviceRuntime().capture().date;
+  withLedger({
+    readCoverage: () => [
+      {
+        code: PLN,
+        source: "nbp",
+        firstDate: accountingDate("2020-11-25"),
+        lastDate: addDays(today, -40),
+        days: 2100,
+        realDays: 2090,
+        calendarDays: 2100,
+        coveragePct: 99,
+        futureRows: 0,
+        manualDays: 0,
+      },
+    ],
+  });
+  expect(
+    screen.getByText(new RegExp(`NBP has not answered since ${addDays(today, -40)}`)),
+  ).toBeDefined();
+});
+
+/** Inside the carry cap is not a stopped source — ten days is the rule, not "any gap". */
+it("says nothing about a source still inside the carry window", () => {
+  const today = deviceRuntime().capture().date;
+  withLedger({
+    readCoverage: () => [
+      {
+        code: PLN,
+        source: "nbp",
+        firstDate: accountingDate("2020-11-25"),
+        lastDate: addDays(today, -4),
+        days: 2100,
+        realDays: 2100,
+        calendarDays: 2100,
+        coveragePct: 100,
+        futureRows: 0,
+        manualDays: 0,
+      },
+    ],
+  });
+  expect(screen.queryByText(/has not answered since/)).toBeNull();
 });

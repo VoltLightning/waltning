@@ -53,6 +53,8 @@ type Queryable<TRun, TSchema extends typeof ledgerSchema> = BaseSQLiteDatabase<
  * copy of the nearest real quote's rate.
  */
 const CARRIED_FORWARD = "carried_forward";
+/** `set_manual_rate`'s own source — the rows *Clear manual* acts on. */
+const MANUAL = "manual";
 
 /** §7.7 — a dead source eventually leaves genuine holes past this many days. */
 export const MAX_CARRY_DAYS = 10;
@@ -330,6 +332,15 @@ export type LocalCoverage = {
    * whose clock sits behind dates the replica already holds.
    */
   futureRows: number;
+  /**
+   * Rows a person asserted by hand (`source = 'manual'`), through today.
+   *
+   * S18's own *Manual* tile, and the figure *Clear manual* acts on: a screen
+   * offering to clear them without saying how many there are is offering an
+   * action nobody can size. Counted in the same aggregate as everything else
+   * here — one query per currency, whatever it answers.
+   */
+  manualDays: number;
 };
 
 /**
@@ -374,6 +385,7 @@ export function readCoverage<TRun, TSchema extends typeof ledgerSchema>(
       calendarDays: 0,
       coveragePct: 0,
       futureRows: 0,
+      manualDays: 0,
     };
     // No pivot set at all — vacuous, same empty answer as a currency with
     // no rows (`fx_rates` is always stored `base = pivot`, §4).
@@ -400,6 +412,7 @@ export function readCoverage<TRun, TSchema extends typeof ledgerSchema>(
           string | null
         >`max(case when ${fxRates.date} <= ${today} and ${fxRates.source} <> ${CARRIED_FORWARD} then ${fxRates.date} else null end)`,
         futureN: sql<number>`count(case when ${fxRates.date} > ${today} then 1 else null end)`,
+        manualN: sql<number>`count(case when ${fxRates.date} <= ${today} and ${fxRates.source} = ${MANUAL} then 1 else null end)`,
       })
       .from(fxRates)
       .where(and(eq(fxRates.quote, code), eq(fxRates.base, pivot)))
@@ -407,7 +420,8 @@ export function readCoverage<TRun, TSchema extends typeof ledgerSchema>(
 
     const days = agg?.n ?? 0;
     const futureRows = agg?.futureN ?? 0;
-    if (days === 0 || !agg?.firstDate) return { ...empty, futureRows };
+    const manualDays = agg?.manualN ?? 0;
+    if (days === 0 || !agg?.firstDate) return { ...empty, futureRows, manualDays };
 
     const firstDate = agg.firstDate as AccountingDate;
     const realDays = agg.realN ?? 0;
@@ -435,6 +449,7 @@ export function readCoverage<TRun, TSchema extends typeof ledgerSchema>(
       calendarDays,
       coveragePct,
       futureRows,
+      manualDays,
     };
   });
 }
