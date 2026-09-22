@@ -793,6 +793,13 @@ export const de: Messages = {
     currencyArchiveRefused: "Diese Währung konnte nicht archiviert werden.",
     currencyWriteFailed: "Das wurde nicht gespeichert.",
     currencyDetail: "{{symbol}} · {{decimals}} NK",
+    currencyHolds_one: "{{count}} Zeile",
+    currencyHolds_few: "{{count}} Zeilen",
+    currencyHolds_many: "{{count}} Zeilen",
+    currencyHolds_other: "{{count}} Zeilen",
+    removableTitle: "Darauf verweist noch nichts",
+    removableBody:
+      "{{codes}} halten weder Zeilen noch Kurse. Eine Währung ohne beides lässt sich folgenlos entfernen; eine mit Zeilen nur ausblenden.",
     editCurrency: "{{code}} bearbeiten",
     symbolPosition: "Symbolposition",
     symbolBefore: "Vor dem Betrag",

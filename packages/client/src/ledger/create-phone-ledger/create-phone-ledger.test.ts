@@ -370,6 +370,7 @@ function harness(
     readCrossRate: vi.fn(() => null),
     listCurrencySettings: () => [],
     readCoverage: vi.fn(() => []),
+    readCurrencyUsage: vi.fn(() => new Map()),
     listFxRates: vi.fn(() => []),
     addCurrency: vi.fn(),
     archiveCurrency: vi.fn(),

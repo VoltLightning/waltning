@@ -47,9 +47,21 @@ export type CurrencyRowData = {
  */
 export type CurrencyRowCoverage = CoverageStatusProps;
 
+/**
+ * What the currency holds — S17 §6's own decision variable, and the deck's
+ * right-hand column (*12 rows* · *0 rows*). Absent while a caller has not
+ * read it; zero is a different and louder answer, because zero is what makes
+ * a currency removable rather than merely hideable.
+ */
+export type CurrencyRowUsage = {
+  transactions: number;
+  accounts: number;
+};
+
 export type CurrencyRowProps = {
   row: CurrencyRowData;
   coverage: CurrencyRowCoverage | undefined;
+  usage?: CurrencyRowUsage | undefined;
   /** One row is open at a time — the caller owns which, so opening one closes the last. */
   expanded: boolean;
   onToggleExpanded: (code: string) => void;
@@ -63,6 +75,7 @@ export type CurrencyRowProps = {
 export function CurrencyRow({
   row,
   coverage,
+  usage,
   expanded,
   onToggleExpanded,
   onTogglePinned,
@@ -101,7 +114,16 @@ export function CurrencyRow({
   const handleEdit = useCallback(() => onEdit(row), [onEdit, row]);
   const handleViewRates = useCallback(() => onViewRates(row.code), [onViewRates, row.code]);
 
-  const detail = t("fx.currencyDetail", { symbol: row.symbol, decimals: row.decimals });
+  /**
+   * **What it holds, not what it looks like.** The row used to read
+   * `zł · 2dp`, which is the currency's *formatting* — a fact this screen
+   * can already change two taps in, and one nobody comes here to read. S17's
+   * drawing puts the count of rows here instead, because that is the fact
+   * the screen's own decisions turn on: a currency with rows can only be
+   * hidden, one with none can be removed outright (§6).
+   */
+  const held = usage === undefined ? 0 : usage.transactions + usage.accounts;
+  const detail = usage === undefined ? "" : t("fx.currencyHolds", { count: held });
   /**
    * **The row's own accessible name, composed rather than overridden.** An
    * `accessibilityLabel` replaces the name a reader would compose from the
@@ -114,7 +136,7 @@ export function CurrencyRow({
   const accessibilityLabel = [
     row.code,
     row.name,
-    detail,
+    detail === "" ? null : detail,
     coverage === undefined ? null : resolveCoverageStatus(t, coverage).label,
     // Gated on `!expanded` for the same reason the visible mark is: open, the
     // `Toggle` below states it and can change it, and a reader hearing "…
@@ -145,7 +167,7 @@ export function CurrencyRow({
           <Text style={styles.name} numberOfLines={1}>
             {row.name}
           </Text>
-          <Text style={styles.detail}>{detail}</Text>
+          {detail === "" ? null : <Text style={styles.detail}>{detail}</Text>}
         </View>
         <View style={styles.rowStatusLine}>
           {/*

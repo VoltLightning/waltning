@@ -775,6 +775,13 @@ export const be: Messages = {
     currencyArchiveRefused: "Не ўдалося адправіць валюту ў архіў.",
     currencyWriteFailed: "Не захавалася.",
     currencyDetail: "{{symbol}} · знакаў: {{decimals}}",
+    currencyHolds_one: "{{count}} радок",
+    currencyHolds_few: "{{count}} радкі",
+    currencyHolds_many: "{{count}} радкоў",
+    currencyHolds_other: "{{count}} радка",
+    removableTitle: "На іх пакуль нішто не спасылаецца",
+    removableBody:
+      "У {{codes}} няма ні радкоў, ні курсаў. Валюту без таго і другога можна выдаліць без наступстваў; тую, дзе ёсць радкі, — толькі схаваць.",
     editCurrency: "Змяніць {{code}}",
     symbolPosition: "Месца сімвала",
     symbolBefore: "Перад сумай",

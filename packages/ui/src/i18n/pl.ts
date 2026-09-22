@@ -830,6 +830,13 @@ export const pl: Messages = {
     currencyArchiveRefused: "Nie udało się zarchiwizować tej waluty.",
     currencyWriteFailed: "Nie udało się zapisać.",
     currencyDetail: "{{symbol}} · {{decimals}}dp",
+    currencyHolds_one: "{{count}} wiersz",
+    currencyHolds_few: "{{count}} wiersze",
+    currencyHolds_many: "{{count}} wierszy",
+    currencyHolds_other: "{{count}} wiersza",
+    removableTitle: "Nic jeszcze na nie nie wskazuje",
+    removableBody:
+      "{{codes}} nie mają ani wierszy, ani kursów. Walutę bez jednego i drugiego można usunąć bez żadnych skutków; tę z wierszami da się tylko ukryć.",
     editCurrency: "Edytuj {{code}}",
     symbolPosition: "Pozycja symbolu",
     symbolBefore: "Przed kwotą",
