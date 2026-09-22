@@ -11,6 +11,8 @@
     "./backup/*": "./src/backup/*.ts",
     "./connectivity/use-probe": "./src/connectivity/use-probe.ts",
     "./counterparties/counterparty-figures": "./src/counterparties/counterparty-figures/counterparty-figures.ts",
+    "./counterparties/debt-hero": "./src/counterparties/debt-hero/debt-hero.ts",
+    "./counterparties/debt-totals": "./src/counterparties/debt-totals/debt-totals.ts",
     "./counterparties/counterparty-net": "./src/counterparties/counterparty-net/counterparty-net.ts",
     "./counterparties/near-matches": "./src/counterparties/near-matches/near-matches.ts",
     "./currencies/display-currency": "./src/currencies/display-currency/display-currency.ts",

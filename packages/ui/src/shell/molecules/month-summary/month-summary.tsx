@@ -76,6 +76,28 @@ export type MonthSummaryProps = {
    * period and a note would be about an emptiness that is not there.
    */
   otherCurrencies?: number;
+  /**
+   * What the three figures are called, where they are not a month's.
+   *
+   * S12 §3: *"the hero card is S04's `MonthSummary`, with debt's three
+   * figures in it"* — same shape, same reading (a track, a fill, and the gap
+   * between them), different subtraction: what comes back to you is what you
+   * lent less what you owe. Absent, the labels are S04's own.
+   *
+   * All three together: one borrowed label beside two of the month's would
+   * be a card describing two different things at once.
+   */
+  labels?: { net: string; inflow: string; spend: string } | undefined;
+  /**
+   * Whether the leading figure carries its own `+`/`−`.
+   *
+   * A month's net is signed: the `+` is the difference between *"you have
+   * 3 529,82"* and *"you kept 3 529,82"*. A debt net is not — S12 §3 states
+   * direction in a word above the figure and forbids stating it by sign
+   * alone (P5), so the sign would be the label said twice, and a minus under
+   * *you owe* reads as owing a negative amount.
+   */
+  signed?: boolean;
 };
 
 export function MonthSummary({
@@ -86,6 +108,8 @@ export function MonthSummary({
   currency,
   decimals = 2,
   otherCurrencies = 0,
+  labels,
+  signed = true,
 }: MonthSummaryProps) {
   const t = useT();
   const styles = useStyles();
@@ -112,7 +136,7 @@ export function MonthSummary({
         between "you have 3 529,82" and "you kept 3 529,82".
       */}
       <View style={styles.hero}>
-        <Text style={styles.heroLabel}>{t("shell.keptSoFar")}</Text>
+        <Text style={styles.heroLabel}>{labels?.net ?? t("shell.keptSoFar")}</Text>
         {/*
           **`medium`, which is larger than `large`.** The size names do not
           order — `large` is `displayTwo` at 23 and `medium` is `displayOne` at
@@ -121,14 +145,14 @@ export function MonthSummary({
           draws it at 40. `medium` had zero callers before this one, which is
           what a name nobody reaches for looks like.
         */}
-        <Amount value={net} currency={currency} decimals={decimals} size="medium" signed />
+        <Amount value={net} currency={currency} decimals={decimals} size="medium" signed={signed} />
       </View>
 
       <FlowBar inflow={inflow} spend={spend} />
 
       <View style={styles.pair}>
         <View style={styles.pairItem}>
-          <Text style={styles.pairLabel}>{t("shell.cameIn")}</Text>
+          <Text style={styles.pairLabel}>{labels?.inflow ?? t("shell.cameIn")}</Text>
           <Amount
             value={inflow}
             currency={currency}
@@ -139,7 +163,7 @@ export function MonthSummary({
           />
         </View>
         <View style={styles.pairItemEnd}>
-          <Text style={styles.pairLabel}>{t("shell.wentOut")}</Text>
+          <Text style={styles.pairLabel}>{labels?.spend ?? t("shell.wentOut")}</Text>
           <Amount value={spend} currency={currency} decimals={decimals} size="small" kind="spend" />
         </View>
       </View>
