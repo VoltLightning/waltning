@@ -86,7 +86,9 @@ it("draws the two legs as rows with their balances, and the amount over them", (
   expect(screen.getByRole("button", { name: "To: Cash · PLN" })).toBeDefined();
   expect(screen.getByText(/12.480[.,]20/)).toBeDefined();
   expect(screen.getByLabelText("Amount")).toHaveProperty("value", "150");
-  expect(screen.getByText("$")).toBeDefined();
+  // The account's code, not its symbol: with no pivot to know, every currency
+  // draws its code (`04` §4.1) — the symbol is the pivot's alone.
+  expect(screen.getAllByText("USD").length).toBeGreaterThan(0);
 });
 
 it("shows the rate used, its unit, what it costs, and the reference beside it", () => {

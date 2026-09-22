@@ -34,6 +34,7 @@ import * as money from "@waltning/core/money";
 import { useCallback, useState } from "react";
 import { Text, View } from "react-native";
 import { Amount } from "../../../fx/atoms/amount/amount";
+import { CurrencyMark } from "../../../fx/currency-marks";
 import { formatRate } from "../../../fx/format-rate.ts";
 import { parseAmount } from "../../../fx/molecules/amount-field/amount-field";
 import { dayLabel, decimalMark } from "../../../i18n/locales";
@@ -333,7 +334,9 @@ export function TransferComposer({
             maxLength={AMOUNT_INTEGER_DIGITS + 1 + (from?.decimals ?? 2)}
             affix={
               from === undefined ? undefined : (
-                <Text style={styles.affix}>{from.symbol ?? from.currency}</Text>
+                <Text style={styles.affix}>
+                  <CurrencyMark code={from.currency} />
+                </Text>
               )
             }
             focused={focused === "amount"}
@@ -457,7 +460,11 @@ export function TransferComposer({
               onChangeText={handleToAmountText}
               step="displayTwo"
               maxLength={AMOUNT_INTEGER_DIGITS + 1 + to.decimals}
-              affix={<Text style={styles.affixSmall}>{to.symbol ?? to.currency}</Text>}
+              affix={
+                <Text style={styles.affixSmall}>
+                  <CurrencyMark code={to.currency} />
+                </Text>
+              }
               focused={focused === "toAmount"}
               onFocus={handleToAmountFocus}
               onBlur={handleBlur}

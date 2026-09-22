@@ -418,11 +418,8 @@ export function QuickAddComposer({
         raw={raw}
         onChangeRaw={onRawChange}
         decimals={selectedAccount?.decimals ?? 2}
-        currency={
-          selectedAccount === undefined
-            ? undefined
-            : (selectedAccount.symbol ?? selectedAccount.currency)
-        }
+        // The code: `AmountCard` draws the pivot's symbol or the code (`04` §4.1).
+        currency={selectedAccount?.currency}
         kind={type}
         context={pace}
         error={amountError}

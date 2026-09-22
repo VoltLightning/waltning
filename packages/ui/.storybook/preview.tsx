@@ -17,6 +17,7 @@
 import type { Decorator, Preview } from "@storybook/react-native-web-vite";
 import { View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
+import { CurrencyMarksProvider } from "../src/fx/currency-marks";
 import { ThemeProvider } from "../src/theme/provider";
 import type { ThemeName } from "../src/theme/roles.ts";
 import { makeStyles } from "../src/theme/styles.ts";
@@ -75,7 +76,13 @@ function Panel({
     // style — which is the one shape in this package where a colour reached JSX
     // directly, in the very file that renders every conformance check.
     <ThemeProvider name={name}>
-      <PanelSurface inset={inset}>{children}</PanelSurface>
+      {/*
+        The ledger these stories draw is złoty-pivoted, as the app's own is:
+        a PLN figure draws `zł` and every other currency its code (`04` §4.1).
+      */}
+      <CurrencyMarksProvider pivot="PLN" symbol="zł">
+        <PanelSurface inset={inset}>{children}</PanelSurface>
+      </CurrencyMarksProvider>
     </ThemeProvider>
   );
 }
