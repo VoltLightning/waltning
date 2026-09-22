@@ -344,3 +344,69 @@ it("has no Transfer action when the screen does not offer one", () => {
   );
   expect(screen.queryByRole("button", { name: "Transfer from here" })).toBeNull();
 });
+
+/**
+ * S16 §3 — reordering lives behind *Edit*, because a register is read far
+ * more often than it is arranged. Without the handler there is no *Edit* at
+ * all: a screen that cannot write the order must not offer to change it.
+ */
+it("offers Edit only where the order can be written", () => {
+  render(
+    <AccountRegister
+      accounts={[account({}), account({ id: "acc-2", name: "Bank B · PLN" })]}
+      archivedAccounts={[]}
+      onSelectAccount={vi.fn()}
+      onLoadArchived={vi.fn()}
+      onCreateAccount={vi.fn()}
+    />,
+  );
+  expect(screen.queryByRole("button", { name: "Edit" })).toBeNull();
+});
+
+it("sends the whole list in its new order, and refuses a move off the end", () => {
+  const onReorder = vi.fn();
+  render(
+    <AccountRegister
+      accounts={[
+        account({ id: "acc-1", name: "Bank A · PLN" }),
+        account({ id: "acc-2", name: "Bank B · PLN" }),
+        account({ id: "acc-3", name: "Cash · PLN", kind: "cash" }),
+      ]}
+      archivedAccounts={[account({ id: "acc-old", name: "Old · PLN" })]}
+      onSelectAccount={vi.fn()}
+      onLoadArchived={vi.fn()}
+      onCreateAccount={vi.fn()}
+      onReorder={onReorder}
+    />,
+  );
+
+  fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+  fireEvent.click(screen.getByRole("button", { name: "Move Bank B · PLN up" }));
+
+  // Every id the register holds, in the order it now draws them — `sort` is
+  // one sequence over the whole table.
+  expect(onReorder).toHaveBeenCalledWith(["acc-2", "acc-1", "acc-3", "acc-old"]);
+
+  // The only cash row cannot move: its group has one member, and a swap
+  // across a kind boundary would put a row in a group it cannot be seen in.
+  expect(
+    screen.getByRole("button", { name: "Move Cash · PLN up" }).getAttribute("aria-disabled"),
+  ).toBe("true");
+});
+
+/** A filtered register cannot state a whole order, and the operation takes nothing less. */
+it("withdraws Edit while a search is narrowing the list", () => {
+  render(
+    <AccountRegister
+      accounts={[account({}), account({ id: "acc-2", name: "Bank B · PLN" })]}
+      archivedAccounts={[]}
+      onSelectAccount={vi.fn()}
+      onLoadArchived={vi.fn()}
+      onCreateAccount={vi.fn()}
+      onReorder={vi.fn()}
+    />,
+  );
+  expect(screen.getByRole("button", { name: "Edit" })).toBeDefined();
+  fireEvent.change(screen.getByRole("searchbox"), { target: { value: "Bank B" } });
+  expect(screen.queryByRole("button", { name: "Edit" })).toBeNull();
+});

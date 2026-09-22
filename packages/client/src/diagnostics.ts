@@ -17,6 +17,7 @@ export type ClientAction =
   | "set_transaction_lines"
   | "update_account"
   | "archive_account"
+  | "reorder_accounts"
   | "reconcile_account"
   | "create_group"
   | "create_counterparty"

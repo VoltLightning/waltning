@@ -23,7 +23,7 @@ test("setting a manual rate for a pair with no manual history needs no confirmat
   await page.goto("/settings/rates?quote=EUR");
   await expect(page.getByText("EUR · Euro")).toBeVisible();
 
-  await page.getByText("Set a range").click();
+  await page.getByText("Set a rate by hand").click();
   // The reference USD → EUR rate this repository's own fixtures already use
   // (`transfer-screen.test.tsx`'s `pivotPerUnit("0.9200")`).
   await page.getByLabel("Rate · EUR per USD").fill("0.9200");

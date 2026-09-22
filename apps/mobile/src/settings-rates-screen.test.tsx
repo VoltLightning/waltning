@@ -297,7 +297,7 @@ it("a range write with no existing manual rows submits on the first press", () =
   const setManualRate = vi.fn(() => ({ written: 30, replacedManual: 0 }));
   withLedger({ setManualRate, listFxRates: () => [] });
 
-  fireEvent.click(screen.getByText("Set a range"));
+  fireEvent.click(screen.getByText("Set a rate by hand"));
   // The editor opens in a sheet whose header states the pair and the range —
   // the row that was tapped is 1,300 px above where this used to render.
   expect(screen.getByText(/^Set PLN per USD, /)).toBeDefined();
@@ -329,7 +329,7 @@ it("a range holding manual rows asks for a second confirmation before overwritin
   ]);
   withLedger({ setManualRate, listFxRates });
 
-  fireEvent.click(screen.getByText("Set a range"));
+  fireEvent.click(screen.getByText("Set a rate by hand"));
   fireEvent.change(screen.getByLabelText("Rate · PLN per USD"), { target: { value: "3.7556" } });
   fireEvent.click(screen.getByRole("button", { name: "Set rate" }));
   expect(setManualRate).not.toHaveBeenCalled();
@@ -542,7 +542,7 @@ it("a refused write states its reason inside the sheet, not on a toast behind it
   });
   withLedger({ setManualRate });
 
-  fireEvent.click(screen.getByText("Set a range"));
+  fireEvent.click(screen.getByText("Set a rate by hand"));
   fireEvent.change(screen.getByLabelText("Rate · PLN per USD"), { target: { value: "3.7556" } });
   fireEvent.click(screen.getByRole("button", { name: "Set rate" }));
 
@@ -561,7 +561,7 @@ it("R1 L5 — retyping the rate clears the refusal it caused", () => {
   });
   withLedger({ setManualRate });
 
-  fireEvent.click(screen.getByText("Set a range"));
+  fireEvent.click(screen.getByText("Set a rate by hand"));
   const field = screen.getByLabelText("Rate · PLN per USD");
   fireEvent.change(field, { target: { value: "3.7556" } });
   fireEvent.click(screen.getByRole("button", { name: "Set rate" }));
@@ -582,7 +582,7 @@ it("R1 L5 — retyping the rate clears the refusal it caused", () => {
  */
 it("R1 M3 — the rate field is the first control in the sheet", () => {
   withLedger({});
-  fireEvent.click(screen.getByText("Set a range"));
+  fireEvent.click(screen.getByText("Set a rate by hand"));
 
   const sheet = screen.getByLabelText(/^Set PLN per USD/);
   const field = within(sheet).getByLabelText("Rate · PLN per USD");
