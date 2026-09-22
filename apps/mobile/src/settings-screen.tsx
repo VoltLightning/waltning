@@ -15,6 +15,7 @@
 
 import { useLedgerController } from "@waltning/client/ledger/use-ledger-controller";
 import { usePhoneLedger } from "@waltning/client/ledger/use-phone-ledger";
+import { daysBetween, todayIn } from "@waltning/core/date";
 import { useT } from "@waltning/ui/i18n/provider";
 import {
   SettingsMenu,
@@ -93,13 +94,35 @@ export default function Settings() {
   const values = useMemo((): Partial<Record<Destination, string>> => {
     const accounts = snapshot.accounts.length;
     const currencies = snapshot.currencies.length;
+    // Categories something is filed under — the number that says whether the
+    // taxonomy is being used, not how big it is.
+    let inUse = 0;
+    for (const count of snapshot.categoryUsage.values()) if (count > 0) inUse += 1;
+    // The stalest last quote among the currencies that have any — the one
+    // fact that sends you into Exchange rates.
+    const today = todayIn(Intl.DateTimeFormat().resolvedOptions().timeZone);
+    let oldest: number | null = null;
+    for (const row of ledger.readCoverage(today)) {
+      if (row.lastDate === null) continue;
+      const age = daysBetween(row.lastDate, today);
+      if (oldest === null || age > oldest) oldest = age;
+    }
     return {
       ...(accounts > 0 ? { accounts: t("settings.accountsValue", { count: accounts }) } : {}),
+      ...(inUse > 0 ? { categories: t("settings.categoriesValue", { count: inUse }) } : {}),
       ...(currencies > 0
         ? { currencies: t("settings.currenciesValue", { count: currencies }) }
         : {}),
+      ...(oldest === null
+        ? {}
+        : {
+            rates:
+              oldest === 0
+                ? t("settings.ratesCurrent")
+                : t("settings.ratesOldest", { count: oldest }),
+          }),
     };
-  }, [snapshot.accounts, snapshot.currencies, t]);
+  }, [ledger, snapshot.accounts, snapshot.currencies, snapshot.categoryUsage, t]);
 
   /**
    * The development group, and **the gate is the row itself**.

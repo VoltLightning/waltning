@@ -41,6 +41,13 @@ order:
   └─────────────────────────────────┘
 ```
 
+**Every row states the one fact that sends you into it**, under its label:
+*5 accounts*, *12 in use* (the categories something is filed under — whether the
+taxonomy is being used, not how big it is), *7 currencies*, *Oldest quote 5 days
+old* (the stalest last quote among currencies that have one). Read from the
+ledger, never guessed: a row with nothing true to say — *Back up*, until a
+backup's time is kept — renders its label alone.
+
 **The register comes first** because it is the only one of them a person opens
 to look at their money rather than to configure something. The rest are
 reference data, in the order they depend on each other.

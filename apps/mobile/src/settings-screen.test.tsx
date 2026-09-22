@@ -22,7 +22,7 @@ import {
 } from "@waltning/client/ledger/create-phone-ledger";
 import { LedgerProvider } from "@waltning/client/ledger/ledger-provider";
 import { basePort } from "@waltning/client/ledger/test-port";
-import { accountingDate } from "@waltning/core/date";
+import { accountingDate, addDays } from "@waltning/core/date";
 import { id } from "@waltning/core/id";
 import { currencyCode, toMoney } from "@waltning/core/money";
 
@@ -148,4 +148,35 @@ it("offers the developer screen in a build that carries the preview flag", () =>
   withLedger();
   fireEvent.click(screen.getByRole("button", { name: /Developer/ }));
   expect(router.push).toHaveBeenCalledWith("/settings/developer");
+});
+
+/**
+ * **Every row states the fact that sends you into it** — how many categories
+ * something is filed under, how old the stalest quote is. A row with nothing
+ * true to say keeps its label alone.
+ */
+it("states the categories in use and the oldest quote's age", () => {
+  withLedger({
+    listCategoryUsage: () =>
+      new Map([
+        [id<"categories">("00000000-0000-4000-8000-0000000000c1"), 12],
+        [id<"categories">("00000000-0000-4000-8000-0000000000c2"), 3],
+        [id<"categories">("00000000-0000-4000-8000-0000000000c3"), 0],
+      ]),
+    readCoverage: (today) => [
+      {
+        code: currencyCode("EUR"),
+        source: "nbp",
+        firstDate: addDays(today, -400),
+        lastDate: addDays(today, -5),
+        days: 395,
+        realDays: 280,
+        calendarDays: 400,
+        coveragePct: 99,
+        futureRows: 0,
+      },
+    ],
+  });
+  expect(screen.getByText("2 in use")).toBeDefined();
+  expect(screen.getByText("Oldest quote 5 days old")).toBeDefined();
 });
