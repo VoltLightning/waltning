@@ -1005,6 +1005,8 @@ export const en = {
     flowRange: "{{count}} months + this month to date",
   },
   shell: {
+    /** The bar's first tab. S04, which is *Today* inside it and *Home* on the bar. */
+    home: "Home",
     /** The line under each tab root's name — what the screen is for. */
     ledgerSubtitle: "Every entry, in order",
     debtSubtitle: "Who owes whom, and since when",

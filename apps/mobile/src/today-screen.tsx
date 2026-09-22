@@ -49,7 +49,6 @@ import { NetWorthStrip } from "@waltning/ui/shell/net-worth-strip";
 import { PagerFrame } from "@waltning/ui/shell/organisms/pager-frame/pager-frame";
 import { PeriodPicker } from "@waltning/ui/shell/period-picker";
 import {
-  ArrowsLeftRightIcon,
   CircleHalfIcon,
   ListBulletsIcon,
   SlidersHorizontalIcon,
@@ -113,8 +112,7 @@ function handleGateway(key: string) {
   // A literal per branch rather than a lookup table: expo-router types its
   // routes, and a `Record<string, string>` throws that away — a typo would
   // become a runtime 404 instead of a compile error.
-  if (key === "debt") router.push("/debt");
-  else if (key === "categories") router.push("/settings/categories");
+  if (key === "categories") router.push("/settings/categories");
   else if (key === "currencies") router.push("/settings/currencies");
   else if (key === "rates") router.push("/settings/rates");
 }
@@ -770,8 +768,9 @@ export default function Today() {
   // `null` and draws no second line — an empty line looks broken.
   /**
    * **Every card carries a figure** (§3), which is what makes the grid a status
-   * board rather than a menu: *Between us* as a tab was a word and an icon;
-   * here it is a count of the people something is open with.
+   * board rather than a menu. Debt is not here: it is a tab of its own
+   * (`05-composites`), and a card for it would be a second door into the same
+   * room.
    *
    * `null` where the ledger genuinely has nothing to say yet — a card with an
    * empty line looks broken, and one with no line has simply not been given a
@@ -780,15 +779,6 @@ export default function Today() {
    */
   const gateways = useMemo(
     () => [
-      {
-        key: "debt",
-        label: t("routes.debt"),
-        detail:
-          snapshot.counterparties.length === 0
-            ? null
-            : t("shell.gatewayPeople", { count: snapshot.counterparties.length }),
-        icon: <ArrowsLeftRightIcon size={GATEWAY_ICON} color={gatewayInk} />,
-      },
       {
         key: "categories",
         label: t("routes.categories"),
@@ -816,7 +806,7 @@ export default function Today() {
         icon: <SlidersHorizontalIcon size={GATEWAY_ICON} color={gatewayInk} />,
       },
     ],
-    [gatewayInk, t, snapshot.counterparties, snapshot.netWorth, whereItWentRows],
+    [gatewayInk, t, snapshot.netWorth, whereItWentRows],
   );
 
   const ledgerBody = useMemo(

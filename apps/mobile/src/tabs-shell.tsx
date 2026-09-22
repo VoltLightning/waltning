@@ -116,8 +116,10 @@ function handleDeskScope(next: string) {
  */
 function PhoneHeader() {
   const t = useT();
-  const { items } = useTabBarItems();
-  const active = items.find((item) => item.active);
+  // `deskItems`, not `items`: a link can land the phone on the Ledger, which
+  // has no place on the bar and still needs its name over the page.
+  const { deskItems } = useTabBarItems();
+  const active = deskItems.find((item) => item.active);
   if (active === undefined || active.name === "today") return null;
   return <TabHeader title={active.label} subtitle={tabSubtitle(active.name, t)} />;
 }
@@ -129,6 +131,8 @@ function PhoneHeader() {
  */
 function tabSubtitle(name: string, t: ReturnType<typeof useT>): string {
   switch (name) {
+    case "accounts":
+      return t("pages.accounts");
     case "ledger":
       return t("shell.ledgerSubtitle");
     case "debt":
@@ -411,14 +415,14 @@ function DeskCommandBar() {
 function DeskLayer({ slot }: { slot: React.ReactNode }) {
   const t = useT();
   const styles = useStyles();
-  const { items, onSelect } = useTabBarItems();
+  const { deskItems: navItems, onSelect } = useTabBarItems();
   // §2.9's own split: everywhere but the landing route collapses to one row.
-  const collapsed = !items.find((item) => item.name === "today")?.active;
+  const collapsed = !navItems.find((item) => item.name === "today")?.active;
   // The landing route is one router tab and two screens: `S04 Today` under
   // 1024, `S01 Dashboard` at and above it (`app/(tabs)/index.tsx`). The tab's
   // own name stays `today` because that is what the router registered; only
   // the word on the band changes, and only here, where the width is known.
-  const deskItems = items.map((item) =>
+  const deskItems = navItems.map((item) =>
     item.name === "today" ? { ...item, label: t("dashboard.title") } : item,
   );
 

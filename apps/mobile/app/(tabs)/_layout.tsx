@@ -14,7 +14,9 @@
  * at desk width, `DeskBand`'s nav — the pattern `expo-router/ui`'s docs call
  * a fully custom tab bar.
  *
- * **Four routes, and Calendar is not one of them.** S11 is unbuilt, and the
+ * **Five routes and four tabs.** The Ledger is registered for the desk's
+ * band and for links into it, and has no place on the phone's bar
+ * (`../../src/use-tab-bar-items.tsx`). **Calendar is not a route at all.** S11 is unbuilt, and the
  * placeholder that stood in for it was a real route with a real trigger and
  * no way to reach it — no tab target, no header and no selected tab in the
  * bar, because nothing in the shell knew about it any more. A route nobody
@@ -40,6 +42,7 @@ export default function TabsLayout() {
       <TabsShell slot={<TabSlot />} />
       <TabList style={styles.hiddenList}>
         <TabTrigger name="today" href="/" />
+        <TabTrigger name="accounts" href="/accounts" />
         <TabTrigger name="ledger" href="/ledger" />
         <TabTrigger name="debt" href="/debt" />
         <TabTrigger name="settings" href="/settings" />

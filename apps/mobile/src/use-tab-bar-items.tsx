@@ -15,7 +15,15 @@
  * `useTabTrigger`, called once per tab — a fixed set known at compile time,
  * never a loop, so the hook count never varies between renders.
  *
- * **Four, not five: there is no Calendar.** S11 is not built, and the route
+ * **Four on the phone — Home · Accounts · Debt · Settings — and five at the
+ * desk** (`05-composites`, `TabBar`). The Ledger is S04 on the phone: a tab
+ * for it led to the screen you were already on. Its route stays registered,
+ * because the desk's band carries S10 between Accounts and Debt and because
+ * an unsettled banner still opens it filtered to one account; `items` is the
+ * bar's four, `deskItems` the band's five, and a phone that arrives on the
+ * Ledger by a link still finds its name in `deskItems` for the header.
+ *
+ * **There is no Calendar.** S11 is not built, and the route
  * that stood in for it answered *"this screen isn't built yet"* — a tab that
  * is one fifth of the app's whole navigation and leads to a placeholder
  * teaches the bar's other four to be ignored too. The route is gone with it
@@ -27,6 +35,7 @@
 import { useT } from "@waltning/ui/i18n/provider";
 import type { TabBarItem } from "@waltning/ui/shell/tab-bar";
 import {
+  AccountsTabIcon,
   DebtTabIcon,
   LedgerTabIcon,
   SettingsTabIcon,
@@ -35,62 +44,75 @@ import {
 import { useTabTrigger } from "expo-router/ui";
 import { useCallback } from "react";
 
-type TabName = "today" | "ledger" | "debt" | "settings";
+type TabName = "today" | "accounts" | "ledger" | "debt" | "settings";
 
 export function useTabBarItems(): {
+  /** The phone's bar: Home · Accounts · Debt · Settings. */
   items: readonly TabBarItem[];
+  /** The desk band's nav: the same four, and the Ledger after Accounts. */
+  deskItems: readonly TabBarItem[];
   onSelect: (name: string) => void;
 } {
   const t = useT();
   const today = useTabTrigger({ name: "today" });
+  const accounts = useTabTrigger({ name: "accounts" });
   const ledger = useTabTrigger({ name: "ledger" });
   const debt = useTabTrigger({ name: "debt" });
   const settings = useTabTrigger({ name: "settings" });
 
   const todayActive = today.trigger?.isFocused ?? false;
+  const accountsActive = accounts.trigger?.isFocused ?? false;
   const ledgerActive = ledger.trigger?.isFocused ?? false;
   const debtActive = debt.trigger?.isFocused ?? false;
   const settingsActive = settings.trigger?.isFocused ?? false;
 
-  const items: readonly TabBarItem[] = [
-    {
-      name: "today",
-      label: t("shell.today"),
-      icon: <TodayTabIcon active={todayActive} />,
-      active: todayActive,
-    },
-    {
-      name: "ledger",
-      label: t("routes.ledger"),
-      icon: <LedgerTabIcon active={ledgerActive} />,
-      active: ledgerActive,
-    },
-    {
-      name: "debt",
-      label: t("routes.debt"),
-      icon: <DebtTabIcon active={debtActive} />,
-      active: debtActive,
-    },
-    {
-      name: "settings",
-      label: t("routes.settings"),
-      icon: <SettingsTabIcon active={settingsActive} />,
-      active: settingsActive,
-    },
-  ];
+  const home: TabBarItem = {
+    name: "today",
+    label: t("shell.home"),
+    icon: <TodayTabIcon active={todayActive} />,
+    active: todayActive,
+  };
+  const accountsItem: TabBarItem = {
+    name: "accounts",
+    label: t("routes.accounts"),
+    icon: <AccountsTabIcon active={accountsActive} />,
+    active: accountsActive,
+  };
+  const ledgerItem: TabBarItem = {
+    name: "ledger",
+    label: t("routes.ledger"),
+    icon: <LedgerTabIcon active={ledgerActive} />,
+    active: ledgerActive,
+  };
+  const debtItem: TabBarItem = {
+    name: "debt",
+    label: t("routes.debt"),
+    icon: <DebtTabIcon active={debtActive} />,
+    active: debtActive,
+  };
+  const settingsItem: TabBarItem = {
+    name: "settings",
+    label: t("routes.settings"),
+    icon: <SettingsTabIcon active={settingsActive} />,
+    active: settingsActive,
+  };
+
+  const items: readonly TabBarItem[] = [home, accountsItem, debtItem, settingsItem];
+  const deskItems: readonly TabBarItem[] = [home, accountsItem, ledgerItem, debtItem, settingsItem];
 
   const onSelect = useCallback(
     (name: string) => {
       const triggers: Record<TabName, (typeof today)["switchTab"]> = {
         today: today.switchTab,
+        accounts: accounts.switchTab,
         ledger: ledger.switchTab,
         debt: debt.switchTab,
         settings: settings.switchTab,
       };
       triggers[name as TabName]?.(name, {});
     },
-    [today, ledger, debt, settings],
+    [today, accounts, ledger, debt, settings],
   );
 
-  return { items, onSelect };
+  return { items, deskItems, onSelect };
 }

@@ -513,6 +513,8 @@ export const pl: Messages = {
     flowRange: "{{count}} miesięcy + bieżący do dziś",
   },
   shell: {
+    /** The bar's first tab. S04, which is *Today* inside it and *Home* on the bar. */
+    home: "Start",
     ledgerSubtitle: "Każdy wpis, po kolei",
     debtSubtitle: "Kto komu jest winien i od kiedy",
     settingsSubtitle: "Wszystko o tym, jak to działa",

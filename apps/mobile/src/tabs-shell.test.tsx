@@ -40,14 +40,15 @@ installPhoneLayout();
 
 const switchTab = {
   today: vi.fn(),
+  accounts: vi.fn(),
   ledger: vi.fn(),
   debt: vi.fn(),
   settings: vi.fn(),
 };
-let focused: "today" | "ledger" | "debt" | "settings" = "today";
+let focused: "today" | "accounts" | "ledger" | "debt" | "settings" = "today";
 
 vi.mock("expo-router/ui", () => ({
-  useTabTrigger: ({ name }: { name: "today" | "ledger" | "debt" | "settings" }) => ({
+  useTabTrigger: ({ name }: { name: "today" | "accounts" | "ledger" | "debt" | "settings" }) => ({
     trigger: { isFocused: name === focused },
     switchTab: switchTab[name],
   }),
@@ -201,6 +202,24 @@ describe("TabsShell", () => {
    * Two matches: the bar's own label, and the header above the slot.
    */
   it("titles every tab but Today from the shell", async () => {
+    focused = "debt";
+    resizeTo(390);
+    render(
+      <LedgerProvider controller={fakeController()}>
+        <TabsShell slot={<Text>Route content</Text>} />
+      </LedgerProvider>,
+    );
+    await settleLayout();
+
+    expect(screen.getAllByText("Debt")).toHaveLength(2);
+  });
+
+  /**
+   * **A link can land the phone on the Ledger**, which has no place on the
+   * bar (an unsettled banner opens it filtered). It still has its name over
+   * the page — the header reads the desk's list, not the bar's.
+   */
+  it("titles the Ledger when a link lands the phone on it", async () => {
     focused = "ledger";
     resizeTo(390);
     render(
@@ -210,7 +229,7 @@ describe("TabsShell", () => {
     );
     await settleLayout();
 
-    expect(screen.getAllByText("Ledger")).toHaveLength(2);
+    expect(screen.getAllByText("Ledger")).toHaveLength(1);
   });
 
   /**
@@ -301,7 +320,7 @@ describe("TabsShell", () => {
     await settleLayout();
 
     // The tab's own label, and nothing above the slot repeating it.
-    expect(screen.getAllByText("Today")).toHaveLength(1);
+    expect(screen.getAllByText("Home")).toHaveLength(1);
   });
 
   /**
@@ -310,7 +329,7 @@ describe("TabsShell", () => {
    * a Dashboard, because the nav label came straight from `useTabBarItems`,
    * which has no idea how wide the window is.
    */
-  it("labels the landing route Today on the phone and Dashboard on the desk", async () => {
+  it("labels the landing route Home on the phone and Dashboard on the desk", async () => {
     resizeTo(390);
     render(
       <LedgerProvider controller={fakeController()}>
@@ -319,13 +338,13 @@ describe("TabsShell", () => {
     );
     await settleLayout();
 
-    expect(screen.getByText("Today")).toBeDefined();
+    expect(screen.getByText("Home")).toBeDefined();
     expect(screen.queryByText("Dashboard")).toBeNull();
 
     act(() => resizeTo(1440));
 
     expect(screen.getByText("Dashboard")).toBeDefined();
-    expect(screen.queryByText("Today")).toBeNull();
+    expect(screen.queryByText("Home")).toBeNull();
   });
 
   /**

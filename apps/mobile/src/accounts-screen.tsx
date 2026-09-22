@@ -10,11 +10,10 @@ import {
   AccountRegister,
   type AccountRegisterAccount,
 } from "@waltning/ui/accounts/account-register";
-import { useT } from "@waltning/ui/i18n/provider";
+import { GroundPanel } from "@waltning/ui/shell/card";
 import { Toast } from "@waltning/ui/states/toast";
 import { router, useLocalSearchParams } from "expo-router";
 import { useCallback, useState } from "react";
-import { PushedPage } from "./pushed-page";
 
 function handleCreateAccount() {
   router.push({ pathname: "/account/new", params: { returnTo: "accounts" } });
@@ -41,7 +40,6 @@ function toRegisterAccount(account: PhoneAccount): AccountRegisterAccount {
 }
 
 export default function Accounts() {
-  const t = useT();
   const ledger = useLedgerController();
   const snapshot = usePhoneLedger(ledger);
   // `archive_account` has no undo (the shared wave-3 plan says why — no
@@ -83,7 +81,9 @@ export default function Accounts() {
   const handleDismissToast = useCallback(() => setToast(null), []);
 
   return (
-    <PushedPage title={t("routes.accounts")} subtitle={t("pages.accounts")}>
+    // A tab root: the shell draws the title and the line under it, and there
+    // is nowhere to go back to.
+    <GroundPanel>
       <AccountRegister
         accounts={snapshot.accounts.map(toRegisterAccount)}
         archivedAccounts={snapshot.archivedAccounts.map(toRegisterAccount)}
@@ -96,6 +96,6 @@ export default function Accounts() {
       {toast === null ? null : (
         <Toast message={toast} onDismiss={handleDismissToast} token={toastToken} />
       )}
-    </PushedPage>
+    </GroundPanel>
   );
 }

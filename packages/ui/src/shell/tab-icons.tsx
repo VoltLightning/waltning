@@ -32,6 +32,7 @@ import { makeStyles } from "../theme/styles.ts";
 import {
   ArrowsLeftRightIcon,
   CalendarBlankIcon,
+  CreditCardIcon,
   HouseIcon,
   ListBulletsIcon,
   SlidersHorizontalIcon,
@@ -52,6 +53,17 @@ export function TodayTabIcon({ active = false }: TabIconProps) {
   return (
     <View style={styles.box}>
       <HouseIcon size={TAB_ICON_SIZE} color={active ? theme.accentText : theme.textMuted} />
+    </View>
+  );
+}
+
+/** The card Settings' Accounts row already draws — one glyph for one place. */
+export function AccountsTabIcon({ active = false }: TabIconProps) {
+  const styles = useStyles();
+  const theme = useTheme();
+  return (
+    <View style={styles.box}>
+      <CreditCardIcon size={TAB_ICON_SIZE} color={active ? theme.accentText : theme.textMuted} />
     </View>
   );
 }
