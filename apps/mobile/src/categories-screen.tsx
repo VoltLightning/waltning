@@ -23,7 +23,10 @@ import type {
 import { useCategoryReferenceCounts } from "@waltning/client/ledger/use-category-reference-counts";
 import { useLedgerController } from "@waltning/client/ledger/use-ledger-controller";
 import { usePhoneLedger } from "@waltning/client/ledger/use-phone-ledger";
+import { useSpendByCategory } from "@waltning/client/ledger/use-spend-by-category";
+import { categorySpend } from "@waltning/client/transactions/category-spend";
 import type { FieldError } from "@waltning/client/transport/field-errors";
+import { accountingDate, shiftMonth, todayIn, yearMonth } from "@waltning/core/date";
 import { id as brandId } from "@waltning/core/id";
 import { CategoryActionsSheet } from "@waltning/ui/categories/category-actions-sheet";
 import { CategoryTree, type CategoryTreeNode } from "@waltning/ui/categories/category-tree";
@@ -164,20 +167,57 @@ export default function CategoriesScreen() {
     [couldNotSave, t],
   );
 
+  /*
+    **What went where this month** — S19's figure per category, in the same
+    currency and from the same read as Summary's *Where it went* (the lead
+    currency, `netWorth[0]`), so the two screens never disagree. Spend in any
+    other currency is not converted here: a figure built from a guessed rate
+    would be the one wrong number on a picture of the month.
+  */
+  const month = useMemo(() => {
+    const today = todayIn(Intl.DateTimeFormat().resolvedOptions().timeZone);
+    const first = yearMonth(today.slice(0, 7));
+    return {
+      start: accountingDate(`${first}-01`),
+      end: accountingDate(`${shiftMonth(first, 1)}-01`),
+    };
+  }, []);
+  const leadCode = snapshot.netWorth[0]?.currency;
+  const pivot = snapshot.currencies.find((currency) => currency.code === leadCode);
+  const monthSpend = useSpendByCategory(ledger, month, "mine", snapshot.revision);
+  const spend = useMemo(
+    () => categorySpend(monthSpend, snapshot.fullCategoryTree, leadCode),
+    [monthSpend, snapshot.fullCategoryTree, leadCode],
+  );
+
   const nodes: readonly CategoryTreeNode[] = useMemo(
     () =>
-      snapshot.fullCategoryTree.map((node) => ({
-        id: node.id,
-        parentId: node.parentId,
-        name: node.name,
-        kind: node.kind,
-        isLeaf: node.isLeaf,
-        archived: node.archived,
-        depth: node.depth,
-        usageCount: snapshot.categoryUsage.get(node.id) ?? 0,
-        externalId: node.externalId,
-      })),
-    [snapshot.fullCategoryTree, snapshot.categoryUsage],
+      snapshot.fullCategoryTree.map((node) => {
+        const spent = spend.spent.get(node.id);
+        return {
+          id: node.id,
+          parentId: node.parentId,
+          name: node.name,
+          kind: node.kind,
+          isLeaf: node.isLeaf,
+          archived: node.archived,
+          depth: node.depth,
+          usageCount: snapshot.categoryUsage.get(node.id) ?? 0,
+          externalId: node.externalId,
+          ...(spent === undefined || pivot === undefined
+            ? {}
+            : {
+                spent: {
+                  amount: spent,
+                  // `04`: the pivot's symbol, every other currency's code.
+                  currency: pivot.isPivot ? (pivot.symbol ?? pivot.code) : pivot.code,
+                  decimals: pivot.decimals,
+                },
+                share: spend.share.get(node.id) ?? 0,
+              }),
+        };
+      }),
+    [snapshot.fullCategoryTree, snapshot.categoryUsage, spend, pivot],
   );
 
   const uncategorized = nodes.find(isUncategorized) ?? null;

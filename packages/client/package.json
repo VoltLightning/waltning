@@ -63,6 +63,7 @@
     "./security/app-lock": "./src/security/app-lock/app-lock.ts",
     "./security/use-app-lock": "./src/security/use-app-lock/use-app-lock.ts",
     "./transactions/accept-proposed-category": "./src/transactions/accept-proposed-category/accept-proposed-category.ts",
+    "./transactions/category-spend": "./src/transactions/category-spend/category-spend.ts",
     "./transactions/group-by-day": "./src/transactions/group-by-day/group-by-day.ts",
     "./transactions/last-capture": "./src/transactions/last-capture/last-capture.ts",
     "./transactions/ledger-days": "./src/transactions/ledger-days/ledger-days.ts",

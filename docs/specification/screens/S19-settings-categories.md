@@ -23,6 +23,15 @@ Rename, merge, archive and reparent the taxonomy — safely.
 ### Both surfaces
 
 Tree — 15 groups, 59 leaves — with usage counts per leaf and an archived toggle.
+
+**Each row says where money went this month.** A leaf carries its mark (the
+category's solid), its name, its count as a quiet meta line, and — where it was
+spent in — this month's figure over a thin bar sized against the month's
+largest category. A group carries its children's figure together. The currency
+and the read are Summary's *Where it went* (the lead currency), so the two
+screens never disagree; spend in another currency is not converted here. A row
+nothing was spent in carries no figure, not `0,00`. The count was an uppercase
+pill on every row, which outweighed the name it described; it is meta now.
 A collision finder sits above it. Web shows the tree and the merge preview side
 by side; mobile pushes the preview to a sheet.
 
@@ -54,7 +63,8 @@ and the count is visibly sitting there not shrinking.
 | `SearchField` | Across leaves and groups |
 | `CreateCategorySheet` | Name, kind, optional parent — S19's own `create_category`, the same write S06's sheet makes |
 | `EmptyState(first-run)` | A taxonomy with nothing in it, offering *New category* |
-| `Tag` | Usage count · `archived` · `unused` |
+| `Tag` | `archived` · `unused` — the usage count is meta text beside them |
+| `Amount` | This month's figure per row, with a bar against the month's largest (`SpendRows`' own rule) |
 | `ComparisonTable` | Merge preview — how many transactions move, and from where |
 | `MatchWarning` | The collision finder, reused. Looks for **near**-duplicates (`Groceries` / `Grocery`), since exact ones are already refused by the uniqueness index |
 | `ConfirmDialog` | Merge only. It is **not reversible in one step** |

@@ -15,12 +15,16 @@
  * making an entire row a second control around a control.
  */
 
-import { useCallback } from "react";
+import type * as money from "@waltning/core/money";
+import { useCallback, useMemo } from "react";
 import { Text, View } from "react-native";
+import { Amount } from "../../../fx/atoms/amount/amount";
 import { useT } from "../../../i18n/provider";
 import { IconButton } from "../../../primitives/atoms/icon-button/icon-button";
 import { Tag } from "../../../primitives/atoms/tag";
+import { categoryTintFor } from "../../../primitives/monogram.ts";
 import { text } from "../../../theme/fonts.ts";
+import { useTheme } from "../../../theme/provider";
 import { makeStyles } from "../../../theme/styles.ts";
 import { radius, space, touchTarget } from "../../../tokens.ts";
 
@@ -42,6 +46,14 @@ export type CategoryTreeNode = {
    * to matching by shape. Optional: a fixture that doesn't care can omit it.
    */
   externalId?: string | null;
+  /**
+   * **What went here this month**, in the pivot — S19's *Where money went*: a
+   * group's is its children's together. Absent where nothing was spent, or on
+   * a screen that does not say.
+   */
+  spent?: { amount: money.Money; currency: string; decimals: number };
+  /** `spent` against the month's largest category, `0..1` — the bar's length. */
+  share?: number;
 };
 
 export type CategoryTreeProps = {
@@ -80,23 +92,38 @@ function MoreGlyph() {
 function CategoryTreeRow({ node, onOpenActions }: CategoryTreeRowProps) {
   const t = useT();
   const styles = useStyles();
+  const theme = useTheme();
+  const tint = categoryTintFor(node.name, theme);
+  const mark = useMemo(() => ({ backgroundColor: tint.solid }), [tint.solid]);
+  const bar = useMemo(
+    () => ({
+      width: `${Math.round(Math.max(0, Math.min(1, node.share ?? 0)) * 100)}%` as const,
+      backgroundColor: tint.solid,
+    }),
+    [node.share, tint.solid],
+  );
 
   const handleOpenActions = useCallback(() => onOpenActions(node.id), [onOpenActions, node.id]);
   const indent = { paddingLeft: space.x4 * node.depth };
 
   return (
     <View style={[styles.row, indent]}>
+      {node.isLeaf ? <View style={[styles.mark, mark]} /> : null}
       <View style={styles.copy}>
         <Text style={[styles.name, node.isLeaf ? null : styles.groupName]} numberOfLines={1}>
           {node.name}
         </Text>
         {node.isLeaf ? (
           <View style={styles.tags}>
-            <Tag variant="neutral">
+            {/*
+              The count is meta, not a badge: an uppercase pill on every row
+              outweighed the name it described.
+            */}
+            <Text style={styles.meta}>
               {node.usageCount === 1
                 ? t("categories.usageOne", { count: node.usageCount })
                 : t("categories.usageMany", { count: node.usageCount })}
-            </Tag>
+            </Text>
             {node.archived ? <Tag variant="warn">{t("categories.archived")}</Tag> : null}
             {!node.archived && node.usageCount === 0 ? (
               <Tag variant="negative">{t("categories.unused")}</Tag>
@@ -104,6 +131,22 @@ function CategoryTreeRow({ node, onOpenActions }: CategoryTreeRowProps) {
           </View>
         ) : null}
       </View>
+      {node.spent === undefined ? null : (
+        <View style={styles.figure}>
+          <Amount
+            value={node.spent.amount}
+            currency={node.spent.currency}
+            decimals={node.spent.decimals}
+            size="small"
+            emphasis={node.isLeaf ? "default" : "muted"}
+          />
+          {node.isLeaf ? (
+            <View style={styles.track}>
+              <View style={[styles.fill, bar]} />
+            </View>
+          ) : null}
+        </View>
+      )}
       <IconButton
         label={t("categories.actionsFor", { name: node.name })}
         onPress={handleOpenActions}
@@ -127,7 +170,13 @@ const useStyles = makeStyles((theme) => ({
   copy: { flex: 1, gap: space.xs },
   name: { color: theme.text, ...text.ui("body") },
   groupName: { color: theme.textMuted, ...text.ui("body", 600), textTransform: "uppercase" },
-  tags: { flexDirection: "row", flexWrap: "wrap", gap: space.xs },
+  tags: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: space.xs },
+  meta: { color: theme.textMuted, ...text.ui("caption") },
+  /** The category's mark — its solid, the colour it carries everywhere else. */
+  mark: { width: 10, height: 10, borderRadius: radius.xs },
+  figure: { alignItems: "flex-end", gap: space.xs, minWidth: 76 },
+  track: { width: 76, height: 4, borderRadius: radius.xs, backgroundColor: theme.subtleFill },
+  fill: { height: 4, borderRadius: radius.xs },
   moreGlyph: {
     width: 16,
     height: 16,
