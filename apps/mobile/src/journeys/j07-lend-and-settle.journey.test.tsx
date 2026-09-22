@@ -102,6 +102,26 @@ function tapDigits(digits: readonly string[]) {
   for (const digit of digits) fireEvent.click(screen.getByRole("button", { name: digit }));
 }
 
+/**
+ * S14's own sheet, driven the way §3's SETTLE box draws it: an amount into an
+ * account, the amount it discharges, and the sheet's own submit — the last
+ * *Settle* in the tree, since `BottomSheet` leaves the trigger mounted.
+ */
+async function settle(into: readonly string[], discharges: readonly string[]) {
+  await waitFor(() => expect(screen.getByRole("button", { name: "Settle" })).toBeDefined());
+  fireEvent.click(screen.getByRole("button", { name: "Settle" }));
+
+  tapDigits(into);
+  fireEvent.click(screen.getByRole("button", { name: /^Discharges:/ }));
+  tapDigits(discharges);
+
+  fireEvent.click(screen.getByRole("button", { name: "Into" }));
+  fireEvent.click(screen.getByRole("radio", { name: "Cash · PLN" }));
+
+  const settleButtons = screen.getAllByRole("button", { name: "Settle" });
+  fireEvent.click(settleButtons[settleButtons.length - 1] as HTMLElement);
+}
+
 describe("J07 — lend and settle", () => {
   it("settles a PLN debt end to end: the debt tab's row clears and the counterparty's own figure reads zero (flows/J07-lend-and-settle.md §2–§6, R2 H4 — not stale)", async () => {
     const { ledger, stub } = setupJourney();
@@ -160,6 +180,86 @@ describe("J07 — lend and settle", () => {
     // nothing left to settle.
     act(() => stub.pushWithParams("debt", {}));
     expect(document.body.textContent ?? "").not.toContain("100.00 PLN");
+  });
+
+  /**
+   * §3's RECORD leg, which nothing exercised — the fixture booked its lend
+   * straight through the controller, so *S05 → attach counterparty → choose
+   * the role* was a path the suite asserted the output of without ever
+   * walking it. A role that never reaches `create_transaction` from a tap is
+   * a role the sheet can stop offering and no test would notice.
+   */
+  it("records a lend through S05's own role chip, and the debt tab carries it (flows/J07-lend-and-settle.md §3 RECORD)", async () => {
+    const { ledger, stub } = setupJourney();
+    stub.pushWithParams("quick-add", {});
+
+    render(<JourneyHarness controller={ledger.controller} stub={stub} />);
+    await settleLayout();
+
+    fireEvent.change(screen.getByLabelText("How much?"), { target: { value: "250" } });
+    fireEvent.click(screen.getByRole("button", { name: /^From/ }));
+    fireEvent.click(screen.getByRole("radio", { name: "Cash · PLN" }));
+    fireEvent.click(screen.getByRole("button", { name: /^More details/ }));
+
+    // §6.6 — the person and the role are one sheet, because a counterparty
+    // with no role is not a smaller claim than one with a role.
+    fireEvent.click(screen.getByRole("button", { name: /^Person/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Counterparty" }));
+    await waitFor(() => expect(screen.getByRole("radio", { name: "Placeholder" })).toBeDefined());
+    fireEvent.click(screen.getByRole("radio", { name: "Placeholder" }));
+    fireEvent.click(screen.getByRole("radio", { name: "Debt — expected back" }));
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+
+    fireEvent.click(screen.getByRole("radio", { name: "Eating out" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save expense" }));
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Save expense" })).toBeNull());
+
+    // S12 — 100 lent by the fixture plus 250 lent here, in the one place
+    // §7's *"who owes me money"* is answerable.
+    act(() => stub.pushWithParams("debt", {}));
+    await settleLayout();
+    expect(document.body.textContent ?? "").toContain("350.00 PLN");
+  });
+
+  /**
+   * §6's single most important rule: *"a settlement never implicitly clears a
+   * balance"*. The suite proved the reconciling case and never the one the
+   * rule exists for.
+   */
+  it("leaves the remainder outstanding when a settlement does not reconcile (§4, §6)", async () => {
+    const { ledger, fixture, stub } = setupJourney();
+    stub.pushWithParams("counterparty", { id: fixture.counterpartyId });
+
+    render(<JourneyHarness controller={ledger.controller} stub={stub} />);
+    await settleLayout();
+
+    await settle(["4", "0"], ["4", "0"]);
+
+    // 100 open, 40 discharged — the toast names what is left, in words
+    // rather than by sign (P5), and the balance stays open.
+    await waitFor(() => expect(screen.getByText(/60\.00 PLN/)).toBeDefined());
+    expect(screen.getByText(/they owe you/)).toBeDefined();
+    expect(document.body.textContent ?? "").not.toContain("All settled");
+  });
+
+  /**
+   * §4's third branch — *"over → becomes a balance in the other direction"*,
+   * stated as such rather than clamped to zero (§5).
+   */
+  it("turns an over-settlement into a balance the other way, never a clamp to zero (§4, §5)", async () => {
+    const { ledger, fixture, stub } = setupJourney();
+    stub.pushWithParams("counterparty", { id: fixture.counterpartyId });
+
+    render(<JourneyHarness controller={ledger.controller} stub={stub} />);
+    await settleLayout();
+
+    await settle(["1", "5", "0"], ["1", "5", "0"]);
+
+    // 100 owed to you, 150 repaid: you now hold 50 of theirs — the direction
+    // flipped rather than clamping, and the toast says which way in words.
+    await waitFor(() => expect(screen.getByText(/50\.00 PLN/)).toBeDefined());
+    expect(screen.getByText(/you owe them/)).toBeDefined();
+    expect(document.body.textContent ?? "").not.toContain("All settled");
   });
 
   /**
