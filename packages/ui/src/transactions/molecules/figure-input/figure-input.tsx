@@ -31,7 +31,7 @@ import { SheetAwareTextInput } from "../../../primitives/sheet-input";
 import { inputStep, text, textCap } from "../../../theme/fonts.ts";
 import { useInputHeight } from "../../../theme/input-height.ts";
 import { makeStyles } from "../../../theme/styles.ts";
-import { radius, space, tabularNums, touchTarget } from "../../../tokens.ts";
+import { radius, space, tabularNums, touchTarget, unseenInk } from "../../../tokens.ts";
 
 export type FigureStep = "displayHero" | "displayOne" | "displayTwo";
 
@@ -128,6 +128,7 @@ export function FigureInput({
           step === "displayOne" ? styles.inputOne : null,
           step === "displayTwo" ? styles.inputTwo : null,
           inputHeight,
+          styles.inkless,
         ]}
       />
     </View>
@@ -140,6 +141,9 @@ const DRAWN = {
   importantForAccessibility: "no-hide-descendants",
   "aria-hidden": true,
 } as const;
+
+/** Above iOS's hit-testing floor of `0.01`; see `input` below. */
+const TOUCHABLE_AND_UNSEEN = 0.02;
 
 const useStyles = makeStyles((theme) => ({
   figure: { minHeight: touchTarget.min, justifyContent: "center" },
@@ -169,6 +173,12 @@ const useStyles = makeStyles((theme) => ({
     Over the whole row, so a tap anywhere on the figure focuses it — and
     invisible: `opacity` rather than a transparent colour, because a transparent
     input still draws its selection handles on Android.
+
+    **Almost none, not none.** iOS leaves a view out of hit-testing at an alpha
+    of `0.01` or under, so at `0` the figure took its first focus from
+    `autoFocus` and could never be given another: once the keyboard was sent
+    away, no tap reached the input again. `0.02` is the other side of that
+    line and is still nothing anyone can see.
   */
   input: {
     position: "absolute",
@@ -176,8 +186,14 @@ const useStyles = makeStyles((theme) => ({
     right: 0,
     bottom: 0,
     left: 0,
-    opacity: 0,
+    opacity: TOUCHABLE_AND_UNSEEN,
     outlineWidth: 0,
     outlineStyle: "solid",
   },
+  // Last, over the step's own ink: two hundredths of a hero figure in full ink
+  // is a smudge beside the sign. **Nearly clear, not `transparent`** — Android
+  // reads a zero colour on an input as *unset* and draws the default ink. The
+  // handles have no colour to clear, which is why this is as well as the
+  // opacity and not instead of it.
+  inkless: { color: unseenInk },
 }));
