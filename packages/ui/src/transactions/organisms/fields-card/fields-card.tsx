@@ -9,12 +9,16 @@
  * `TransactionRow` already use. A `Chip` per field read as a row of centred,
  * filled buttons; nothing here fills a background.
  *
- * **Six rows, not the mock's seven.** Counterparty is not offered:
- * `#e3` has no counterparty write path yet, and `wave-3-shared.md` names
- * counterparty writes unbuilt this wave — a row that opened nothing would
- * be worse than one that is not there. `is_capital`'s toggle (§6.8) is the
- * same story: nothing in this wave drives it. Both are the PR's own
- * decision, named in its body rather than left for someone to notice later.
+ * **Every field S09 §3 draws, including the two that were deferred.**
+ * `update_transaction`'s patch carries `counterpartyId`, `counterpartyRole`
+ * and `isCapital`, and `readTransaction` now reads all three back — so the
+ * counterparty row and §6.8's one-off toggle are controls that write
+ * somewhere rather than into a void, which is why they were held back.
+ *
+ * **The role is a row of its own, and only once a counterparty is set.** A
+ * role with nobody to hold it is not a state the ledger has (§6.6), and a
+ * radio group under an empty field would offer one. The counterparty itself
+ * opens the screen's picker, like category and account.
  *
  * **One `Save`, not autosave per keystroke.** S09 §7 reads *"Save is implicit
  * per field"*; the plan this card was built from is explicit instead — a
@@ -44,6 +48,7 @@ import Animated from "react-native-reanimated";
 import { useT } from "../../../i18n/provider";
 import { Button } from "../../../primitives/atoms/button/button";
 import { DateField } from "../../../primitives/atoms/date-field/date-field";
+import { RadioGroup, type RadioGroupProps } from "../../../primitives/atoms/radio/radio";
 import { TextField } from "../../../primitives/atoms/text-field/text-field";
 import { Toggle } from "../../../primitives/atoms/toggle/toggle";
 import { useDisclosureMotion } from "../../../primitives/disclosure-motion.ts";
@@ -75,14 +80,20 @@ export type FieldsCardAccount = {
   archived?: boolean;
 };
 
+/** §6.6's three roles, restated structurally — `client` is a sibling package. */
+export type CounterpartyRoleValue = "debt" | "contribution" | "reference";
+
 /** The saved values this card diffs every draft against. */
 export type TransactionFields = {
   date: string;
   accountId: string;
   categoryId: string | null;
+  counterpartyId: string | null;
+  counterpartyRole: CounterpartyRoleValue | null;
   payee: string;
   note: string;
   isBusiness: boolean;
+  isCapital: boolean;
 };
 
 /** What `onSave` sends — only the keys that changed. */
@@ -90,9 +101,12 @@ export type TransactionFieldsPatch = {
   date?: string;
   accountId?: string;
   categoryId?: string | null;
+  counterpartyId?: string | null;
+  counterpartyRole?: CounterpartyRoleValue | null;
   payee?: string;
   note?: string;
   isBusiness?: boolean;
+  isCapital?: boolean;
 };
 
 export type FieldsCardProps = {
@@ -117,12 +131,20 @@ export type FieldsCardProps = {
   categoryId: string | null;
   categoryName: string | null;
   onOpenCategoryPicker: () => void;
+  /**
+   * The counterparty pick, controlled from the screen — `categoryId`'s own
+   * contract, for the same reason: `counterparties/` is a sibling domain and
+   * its picker is the screen's to compose (`architecture/11`).
+   */
+  counterpartyId: string | null;
+  counterpartyName: string | null;
+  onOpenCounterpartyPicker: () => void;
   fieldErrors?: FieldErrorMap;
   saving?: boolean;
   onSave: (patch: TransactionFieldsPatch) => void;
 };
 
-type OpenField = "date" | "payee" | "note";
+type OpenField = "date" | "payee" | "note" | "role";
 
 export function FieldsCard({
   fields,
@@ -133,6 +155,9 @@ export function FieldsCard({
   categoryId,
   categoryName,
   onOpenCategoryPicker,
+  counterpartyId,
+  counterpartyName,
+  onOpenCounterpartyPicker,
   fieldErrors,
   saving = false,
   onSave,
@@ -145,6 +170,8 @@ export function FieldsCard({
   const [payee, setPayee] = useState(fields.payee);
   const [note, setNote] = useState(fields.note);
   const [isBusiness, setIsBusiness] = useState(fields.isBusiness);
+  const [isCapital, setIsCapital] = useState(fields.isCapital);
+  const [role, setRole] = useState<CounterpartyRoleValue | null>(fields.counterpartyRole);
 
   const toggleField = useCallback((field: OpenField) => {
     setOpen((current) => {
@@ -167,7 +194,18 @@ export function FieldsCard({
     else toggleField("date");
   }, [phone, toggleField]);
   const handleTogglePayee = useCallback(() => toggleField("payee"), [toggleField]);
+  const handleToggleRole = useCallback(() => toggleField("role"), [toggleField]);
+  const handleRoleChange = useCallback((next: string) => setRole(isRole(next) ? next : null), []);
   const handleToggleNote = useCallback(() => toggleField("note"), [toggleField]);
+
+  const roleOptions = useMemo<RadioGroupProps["options"]>(
+    () => [
+      { value: "debt", label: t("transactions.role.debt") },
+      { value: "contribution", label: t("transactions.role.contribution") },
+      { value: "reference", label: t("transactions.role.reference") },
+    ],
+    [t],
+  );
 
   const dateValid = isAccountingDate(date);
   const selectedAccountName =
@@ -178,11 +216,31 @@ export function FieldsCard({
     if (dateValid && date !== fields.date) next.date = date;
     if (accountId !== fields.accountId) next.accountId = accountId;
     if (categoryId !== fields.categoryId) next.categoryId = categoryId;
+    if (counterpartyId !== fields.counterpartyId) {
+      next.counterpartyId = counterpartyId;
+      // §6.6 — a role belongs to the person it is about. Whoever is picked
+      // next has their own, and nobody at all has none.
+      if (counterpartyId === null) next.counterpartyRole = null;
+    }
+    if (counterpartyId !== null && role !== fields.counterpartyRole) next.counterpartyRole = role;
+    if (isCapital !== fields.isCapital) next.isCapital = isCapital;
     if (payee !== fields.payee) next.payee = payee;
     if (note !== fields.note) next.note = note;
     if (isBusiness !== fields.isBusiness) next.isBusiness = isBusiness;
     return next;
-  }, [accountId, categoryId, date, dateValid, fields, isBusiness, note, payee]);
+  }, [
+    accountId,
+    categoryId,
+    counterpartyId,
+    date,
+    dateValid,
+    fields,
+    isBusiness,
+    isCapital,
+    note,
+    payee,
+    role,
+  ]);
   const hasChanges = Object.keys(patch).length > 0;
 
   const handleSave = useCallback(() => {
@@ -244,8 +302,47 @@ export function FieldsCard({
         onPress={onOpenAccountPicker}
       />
 
+      <FieldDisclosureRow
+        label={t("transactions.counterparty")}
+        value={counterpartyName}
+        placeholder={t("transactions.noCounterparty")}
+        onPress={onOpenCounterpartyPicker}
+      />
+
+      {counterpartyId === null ? null : (
+        <FieldDisclosureRow
+          label={t("transactions.role")}
+          value={role === null ? null : t(`transactions.role.${role}`)}
+          placeholder={t("transactions.chooseRole")}
+          open={open.has("role")}
+          onPress={handleToggleRole}
+        >
+          <RadioGroup
+            label={t("transactions.role")}
+            options={roleOptions}
+            value={role}
+            onChange={handleRoleChange}
+          />
+        </FieldDisclosureRow>
+      )}
+
       <View style={styles.separated}>
         <Toggle label={t("transactions.business")} value={isBusiness} onChange={setIsBusiness} />
+      </View>
+
+      {/*
+        §6.8's one-off. Not on the capture sheet and never will be: you rarely
+        know at the till that a purchase would distort a trend, and marking it
+        later is the ordinary path. It moves no balance — only what a
+        comparison counts.
+      */}
+      <View style={styles.separated}>
+        <Toggle
+          label={t("transactions.capital")}
+          hint={t("transactions.capitalHint")}
+          value={isCapital}
+          onChange={setIsCapital}
+        />
       </View>
 
       <FieldDisclosureRow
@@ -290,6 +387,10 @@ export function FieldsCard({
       </View>
     </View>
   );
+}
+
+function isRole(value: string): value is CounterpartyRoleValue {
+  return value === "debt" || value === "contribution" || value === "reference";
 }
 
 type FieldDisclosureRowProps = {

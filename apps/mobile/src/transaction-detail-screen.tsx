@@ -20,11 +20,12 @@
  * `operations.md` for it to call, so this is a plain `Toast` instead. The
  * follow-up card this PR names: *restore ops for delete/archive*.
  *
- * **Counterparty and `is_capital` are not offered.** `#e3` has no
- * counterparty write path yet, and nothing in this wave drives `is_capital`
- * (§6.8) — both would be a control that writes into a void. `FieldsCard`'s
- * own doc says the same; repeated here because it is this screen's decision
- * to make, not only the component's.
+ * **Counterparty and `is_capital` are offered here and nowhere else.**
+ * `update_transaction`'s patch has always carried both and `readTransaction`
+ * now reads them back, so the two rows S09 §3 draws are controls that write.
+ * §6.8 is explicit that the one-off flag belongs *here* rather than on the
+ * capture sheet: you rarely know at the till that a purchase would distort a
+ * trend, and marking it later never moves a balance.
  *
  * **A read, not snapshot state.** `controller.getTransaction(id)` is called
  * once on mount and again after every successful write — there is no
@@ -49,6 +50,7 @@ import {
   CategorySheet,
   type CategorySheetCreateDraft,
 } from "@waltning/ui/categories/category-sheet";
+import { CounterpartyPicker } from "@waltning/ui/counterparties/counterparty-picker";
 import { resolveFieldErrorMessage } from "@waltning/ui/i18n/field-error-messages";
 import { dayLabel } from "@waltning/ui/i18n/locales";
 import { useLocale, useT } from "@waltning/ui/i18n/provider";
@@ -85,9 +87,12 @@ function toFields(detail: PhoneTransactionDetail): TransactionFields {
     date: detail.date,
     accountId: detail.accountId,
     categoryId: detail.categoryId,
+    counterpartyId: detail.counterpartyId,
+    counterpartyRole: detail.counterpartyRole,
     payee: detail.payee,
     note: detail.note,
     isBusiness: detail.isBusiness,
+    isCapital: detail.isCapital,
   };
 }
 
@@ -148,6 +153,12 @@ export default function TransactionDetail() {
    */
   const [pickedAccountId, setPickedAccountId] = useState<string | null>(null);
   const [accountPickerOpen, setAccountPickerOpen] = useState(false);
+  /** The same rule again: `counterparties/` is a sibling domain, so its picker is composed here. */
+  const [pickedCounterparty, setPickedCounterparty] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
+  const [counterpartyPickerOpen, setCounterpartyPickerOpen] = useState(false);
 
   const refetch = useCallback(() => {
     if (!transactionId) return;
@@ -161,6 +172,21 @@ export default function TransactionDetail() {
   const handlePickAccount = useCallback((next: string) => {
     setPickedAccountId(next);
     setAccountPickerOpen(false);
+  }, []);
+
+  const handleOpenCounterpartyPicker = useCallback(() => setCounterpartyPickerOpen(true), []);
+  const handleDismissCounterpartyPicker = useCallback(() => setCounterpartyPickerOpen(false), []);
+  const handlePickCounterparty = useCallback(
+    (next: string) => {
+      const picked = snapshot.counterparties.find((row) => row.id === next);
+      if (picked !== undefined) setPickedCounterparty({ id: picked.id, name: picked.name });
+      setCounterpartyPickerOpen(false);
+    },
+    [snapshot.counterparties],
+  );
+  const handleCreateCounterparty = useCallback(() => {
+    setCounterpartyPickerOpen(false);
+    router.push({ pathname: "/counterparty/new", params: { returnTo: "transaction" } });
   }, []);
 
   const handlePickCategory = useCallback(
@@ -279,6 +305,11 @@ export default function TransactionDetail() {
   }
 
   const effectiveAccountId = pickedAccountId ?? detail.accountId;
+  // The pick until it is saved, the saved row afterwards — `accountId`'s own rule.
+  const effectiveCounterparty = pickedCounterparty ?? {
+    id: detail.counterpartyId,
+    name: detail.counterpartyName,
+  };
 
   return (
     <PushedPage
@@ -304,6 +335,9 @@ export default function TransactionDetail() {
           categoryId={detail.categoryId}
           categoryName={detail.categoryName}
           onOpenCategoryPicker={handleOpenCategoryPicker}
+          counterpartyId={effectiveCounterparty.id}
+          counterpartyName={effectiveCounterparty.name}
+          onOpenCounterpartyPicker={handleOpenCounterpartyPicker}
           {...(fieldsErrors ? { fieldErrors: fieldsErrors } : {})}
           onSave={handleSaveFields}
         />
@@ -326,6 +360,13 @@ export default function TransactionDetail() {
         onPick={handlePickCategory}
         onCreate={handleCreateCategory}
         onDismiss={handleDismissCategorySheet}
+      />
+      <CounterpartyPicker
+        visible={counterpartyPickerOpen}
+        counterparties={snapshot.counterparties}
+        onPick={handlePickCounterparty}
+        onCreateNew={handleCreateCounterparty}
+        onDismiss={handleDismissCounterpartyPicker}
       />
       <AccountPicker
         visible={accountPickerOpen}

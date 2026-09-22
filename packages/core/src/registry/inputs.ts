@@ -1222,6 +1222,8 @@ export const createCounterpartyInput = z.object({
 });
 export type CreateCounterpartyInput = z.output<typeof createCounterpartyInput>;
 export type CounterpartyKind = CreateCounterpartyInput["kind"];
+/** §6.6's three roles, derived from the capture input rather than restated. */
+export type CounterpartyRole = NonNullable<CreateTransactionInput["counterpartyRole"]>;
 
 /**
  * `update_counterparty` — a patch with a version, same shape as

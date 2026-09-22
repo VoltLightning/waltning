@@ -40,9 +40,12 @@ const meta = {
       date: "2026-08-06",
       accountId: "account-a",
       categoryId: "cat-eating-out",
+      counterpartyId: null,
+      counterpartyRole: null,
       payee: "Café A",
       note: "",
       isBusiness: false,
+      isCapital: false,
     },
     accounts: ACCOUNTS,
     accountId: "account-a",
@@ -51,6 +54,9 @@ const meta = {
     categoryId: "cat-eating-out",
     categoryName: "Eating out",
     onOpenCategoryPicker: noop,
+    counterpartyId: null,
+    counterpartyName: null,
+    onOpenCounterpartyPicker: noop,
     onSave: noop,
   },
 } satisfies Meta<typeof FieldsCard>;
@@ -91,5 +97,27 @@ export const ChangedElsewhere: Story = {
       byField: {},
       formLevel: ["This transaction changed elsewhere — reload it before saving."],
     },
+  },
+};
+
+/**
+ * §6.6 — with a counterparty set, the role is a row of its own; §6.8's
+ * one-off toggle sits under it either way.
+ */
+export const WithCounterparty: Story = {
+  args: {
+    fields: {
+      date: "2026-08-06",
+      accountId: "account-a",
+      categoryId: "cat-eating-out",
+      counterpartyId: "cp-nina",
+      counterpartyRole: "debt",
+      payee: "Café A",
+      note: "",
+      isBusiness: false,
+      isCapital: true,
+    },
+    counterpartyId: "cp-nina",
+    counterpartyName: "Nina",
   },
 };
