@@ -35,15 +35,18 @@ import { CreateCategorySheet } from "@waltning/ui/categories/create-category-she
 import { MergeCategorySheet } from "@waltning/ui/categories/merge-category-sheet";
 import { MoveCategorySheet } from "@waltning/ui/categories/move-category-sheet";
 import { RenameCategorySheet } from "@waltning/ui/categories/rename-category-sheet";
-import { useT } from "@waltning/ui/i18n/provider";
+import { monthLabel } from "@waltning/ui/i18n/locales";
+import { useLocale, useT } from "@waltning/ui/i18n/provider";
 import { Button } from "@waltning/ui/primitives/button";
+import { PressableScaled } from "@waltning/ui/primitives/pressable-scaled";
 import { SearchField } from "@waltning/ui/primitives/search-field";
 import { Tag } from "@waltning/ui/primitives/tag";
-import { Toggle } from "@waltning/ui/primitives/toggle";
+import { Card } from "@waltning/ui/shell/card";
 import { EmptyState } from "@waltning/ui/states/empty-state";
 import { Toast, UndoToast } from "@waltning/ui/states/toast";
 import { text } from "@waltning/ui/theme/fonts";
 import { makeStyles } from "@waltning/ui/theme/styles";
+import { space, touchTarget } from "@waltning/ui/tokens";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { Text, View } from "react-native";
 import { PushedPage } from "./pushed-page";
@@ -86,6 +89,40 @@ type ToastState = { message: string; undo?: () => void; token: number } | null;
  * that isn't this row, and dropping `kind` from the match swept it into
  * this one and hid it from the tree entirely.
  */
+/**
+ * The archived section, as a row that says what archiving did.
+ *
+ * A named component because a row is pressable and `Pressable`'s handler
+ * takes no argument — an arrow in the JSX is what the rule refuses.
+ */
+function ArchivedRow({
+  count,
+  shown,
+  onPress,
+}: {
+  count: number;
+  shown: boolean;
+  onPress: () => void;
+}) {
+  const t = useT();
+  const styles = useStyles();
+  return (
+    <PressableScaled
+      accessibilityRole="button"
+      accessibilityState={{ expanded: shown }}
+      accessibilityLabel={`${t("categories.archived")} · ${count}`}
+      onPress={onPress}
+      style={styles.archivedRow}
+    >
+      <View style={styles.archivedWords}>
+        <Text style={styles.archivedTitle}>{t("categories.archived")}</Text>
+        <Text style={styles.archivedBody}>{t("categories.archivedWhat")}</Text>
+      </View>
+      <Text style={styles.archivedCount}>{String(count)}</Text>
+    </PressableScaled>
+  );
+}
+
 function isUncategorized(node: CategoryTreeNode): boolean {
   if (node.externalId === "seed:uncategorized") return true;
   return (
@@ -133,7 +170,9 @@ export default function CategoriesScreen() {
   const snapshot = usePhoneLedger(ledger);
 
   const [search, setSearch] = useState("");
+  const locale = useLocale();
   const [showArchived, setShowArchived] = useState(false);
+  const handleToggleArchived = useCallback(() => setShowArchived((shown) => !shown), []);
   const [sheet, setSheet] = useState<SheetState>(null);
   const [toast, setToast] = useState<ToastState>(null);
   // The `UndoToast` window's own `resetKey` (H1) — incremented on every show
@@ -447,8 +486,28 @@ export default function CategoriesScreen() {
    */
   const empty = nodes.length === 0;
 
+  /**
+   * §3 — the screen says what it holds before it says anything else: how many
+   * categories are in use, and how many are archived. The page's own line
+   * (*What spending is filed under*) restated the title in other words; these
+   * are two facts a person comes here to check.
+   */
+  const inUse = useMemo(
+    () => nodes.filter((node) => !node.archived && node.usageCount > 0).length,
+    [nodes],
+  );
+  const archivedCount = useMemo(() => nodes.filter((node) => node.archived).length, [nodes]);
+
+  /** The card's own heading — the month the figures beside each row are of. */
+  const monthHeading = t("categories.spentIn", {
+    month: monthLabel(yearMonth(month.start.slice(0, 7)), locale),
+  });
+
   return (
-    <PushedPage title={t("routes.categories")} subtitle={t("pages.categories")}>
+    <PushedPage
+      title={t("routes.categories")}
+      subtitle={t("categories.subtitle", { inUse, archived: archivedCount })}
+    >
       {empty ? (
         <EmptyState
           variant="first-run"
@@ -465,11 +524,6 @@ export default function CategoriesScreen() {
             onClear={handleClearSearch}
             {...(matchedLeaves === undefined ? {} : { resultCount: matchedLeaves })}
           />
-          <Toggle
-            label={t("categories.showArchived")}
-            value={showArchived}
-            onChange={setShowArchived}
-          />
           <CollisionFinder
             candidates={snapshot.categoryCollisions}
             onReview={handleReviewCollision}
@@ -484,20 +538,35 @@ export default function CategoriesScreen() {
               </Tag>
             </View>
           )}
-          <CategoryTree nodes={rows} onOpenActions={handleOpenActions} />
+          {/*
+            **One card, headed by the month its figures are of.** The rows
+            carry this month's spend (§3), and a list of figures with no
+            period on it is a list nobody can date. *New* rides the header
+            rather than the ground below a 59-row tree: the taxonomy grows
+            from this screen, and the action was a scroll away from the
+            place a person decides they need it.
+          */}
+          <Card
+            title={monthHeading}
+            action={
+              <Button label={t("categories.new")} onPress={handleOpenCreate} variant="ghost" />
+            }
+          >
+            <CategoryTree nodes={rows} onOpenActions={handleOpenActions} />
+          </Card>
 
           {/*
-            Persistent, on the ground under the tree — the taxonomy grows from
-            this screen, and an action reachable only from an empty state is
-            one that disappears the moment it is first used.
+            **A row, not a toggle.** *Show archived* named the control; this
+            names the state — what archiving did, and how many are in it —
+            which is the question someone opening it actually has.
           */}
-          <View style={styles.actions}>
-            <Button
-              label={t("categories.newCategory")}
-              onPress={handleOpenCreate}
-              variant="primary"
+          {archivedCount === 0 ? null : (
+            <ArchivedRow
+              count={archivedCount}
+              shown={showArchived}
+              onPress={handleToggleArchived}
             />
-          </View>
+          )}
         </>
       )}
 
@@ -561,6 +630,17 @@ export default function CategoriesScreen() {
 }
 
 const useStyles = makeStyles((theme) => ({
+  archivedRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: space.x3,
+    paddingVertical: space.lg,
+    minHeight: touchTarget.row,
+  },
+  archivedWords: { flex: 1, gap: space.xxs },
+  archivedTitle: { color: theme.text, ...text.ui("bodySm", 600) },
+  archivedBody: { color: theme.textMuted, ...text.ui("caption") },
+  archivedCount: { color: theme.textMuted, ...text.ui("body", 600) },
   uncategorized: {
     flexDirection: "row",
     alignItems: "center",

@@ -22,7 +22,24 @@ Rename, merge, archive and reparent the taxonomy — safely.
 
 ### Both surfaces
 
-Tree — 15 groups, 59 leaves — with usage counts per leaf and an archived toggle.
+Tree — 15 groups, 59 leaves — with usage counts per leaf, inside **one card
+headed by the month its figures are of**: *Where money went in August*. A list
+of figures with no period on it is a list nobody can date, and the heading is
+the only place that period can be said once rather than per row.
+
+**The screen's own line states what it holds** — *31 in use · 4 archived* —
+where a line restating the title in other words ("what spending is filed
+under") told a reader nothing they did not have.
+
+**New rides the card's header**, not the ground below the tree: the taxonomy
+grows from this screen, and under 59 rows the action is a scroll away from the
+moment a person decides they need it. The empty state keeps the whole sentence
+(*New category*), because there is no card yet to head.
+
+**Archived is a row, not a toggle.** *Archived · Kept on old entries, never
+offered again · 4* — the control named itself where the row names the state:
+what archiving did, and how many are in it, which is the question someone
+opening it actually has. It is absent when nothing is archived.
 
 **Each row says where money went this month.** A leaf carries its mark (the
 category's solid), its name, its count as a quiet meta line, and — where it was
@@ -83,7 +100,7 @@ and the count is visibly sitting there not shrinking.
 | State | Treatment |
 |---|---|
 | Loading | Instant from cache |
-| Populated | Tree, archived hidden by default |
+| Populated | Tree, archived hidden behind its own row |
 | Empty | `EmptyState(first-run)` — *No categories yet*, offering *New category*. The server-backed ledger seeds the taxonomy, and a phone-alone one seeds nothing: the screen was a search field and an archived toggle over a blank page |
 | Error | Rename collides with a sibling → refused by the uniqueness index, naming the existing sibling |
 | Offline | Read-only. Structural changes to a taxonomy that other queued writes reference are refused rather than queued. **Not modelled on the phone-alone ledger** (arc 1 has no server to be offline from); this rule applies once one exists |
