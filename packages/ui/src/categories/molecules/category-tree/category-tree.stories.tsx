@@ -3,6 +3,7 @@
  */
 
 import type { Meta, StoryObj } from "@storybook/react-native-web-vite";
+import { toMoney } from "@waltning/core/money";
 import { CategoryTree } from "./category-tree";
 
 function noop() {}
@@ -74,6 +75,31 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {};
+
+/**
+ * **Where money went this month** (S19): the figure over a bar against the
+ * month's largest, a group's being its children's together, and nothing on a
+ * row that was not spent in.
+ */
+export const ThisMonth: Story = {
+  args: {
+    nodes: [
+      { ...FOOD, spent: { amount: toMoney("1729.40"), currency: "zł", decimals: 2 } },
+      {
+        ...GROCERIES,
+        spent: { amount: toMoney("1240.50"), currency: "zł", decimals: 2 },
+        share: 1,
+      },
+      {
+        ...EATING_OUT,
+        spent: { amount: toMoney("488.90"), currency: "zł", decimals: 2 },
+        share: 0.39,
+      },
+      EARNINGS,
+      SALARY,
+    ],
+  },
+};
 
 /**
  * The archived toggle, on — a formerly hidden row rejoins the list right
