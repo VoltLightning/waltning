@@ -14,6 +14,7 @@ import { useLastUsedAccount } from "@waltning/client/transactions/last-capture";
 import { mapFieldErrors } from "@waltning/client/transport/field-errors";
 import { fold } from "@waltning/core/capture/names";
 import { proposeCategory } from "@waltning/core/capture/payee-memory";
+import { recentCategories } from "@waltning/core/capture/recent-categories";
 import { accountingDate, clockIn } from "@waltning/core/date";
 import * as money from "@waltning/core/money";
 import { AccountPicker, type AccountPickerAccount } from "@waltning/ui/accounts/account-picker";
@@ -467,6 +468,23 @@ export default function QuickAdd() {
     () => setComposerCategorySheet((current) => ({ ...current, open: false })),
     [],
   );
+  /**
+   * S06's *You used these last*, read when the sheet opens — D2's history is
+   * the same read the suggestion makes, and a closed sheet asks for nothing.
+   */
+  const recentCategoryIds = useMemo(() => {
+    if (!composerCategorySheet.open) return [];
+    const eligible = new Set(
+      snapshot.categories
+        .filter((category) => category.kind === composerCategorySheet.kind)
+        .map((category) => category.id),
+    );
+    return recentCategories(ledger.listPayeeHistory(), eligible);
+  }, [composerCategorySheet, ledger, snapshot.categories]);
+  const categoryUsage = useMemo(
+    () => Object.fromEntries(snapshot.categoryUsage),
+    [snapshot.categoryUsage],
+  );
   const handlePickComposerCategory = useCallback((next: string) => {
     setComposerCategoryId(next);
     setComposerCategorySheet((current) => ({ ...current, open: false }));
@@ -817,6 +835,9 @@ export default function QuickAdd() {
         visible={composerCategorySheet.open}
         kind={composerCategorySheet.kind}
         tree={snapshot.categoryTree}
+        usage={categoryUsage}
+        recent={recentCategoryIds}
+        payee={composerPayee}
         {...(categoryProposal === undefined ? {} : { proposal: categoryProposal })}
         onPick={handlePickComposerCategory}
         onCreate={handleCreateCategory}

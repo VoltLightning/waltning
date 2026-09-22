@@ -671,3 +671,63 @@ it("treats a tree holding only the seeded Uncategorized as empty (S06 §9.2)", (
   // The row itself still stands — it is the honest blank, not a category.
   expect(screen.getByRole("radio", { name: /Uncategorized/ })).toBeDefined();
 });
+
+/**
+ * **Recents sit above the grid; the grid never moves** (§9.1). *You used
+ * these last* names what was used most recently, and the grid below keeps its
+ * seeded order whatever the recents say — a thumb's muscle memory is the point.
+ */
+it("draws the recents above a grid that keeps its own order", () => {
+  render(
+    <CategorySheet
+      visible
+      kind="expense"
+      tree={TREE}
+      recent={[FUEL.id, GROCERIES.id]}
+      onPick={vi.fn()}
+      onDismiss={vi.fn()}
+    />,
+  );
+  const [recent, all] = screen.getAllByRole("radiogroup");
+  expect(recent?.getAttribute("aria-label")).toBe("You used these last");
+  expect(
+    within(recent as HTMLElement)
+      .getAllByRole("radio")
+      .map((r) => r.getAttribute("aria-label")),
+  ).toEqual(["Fuel", "Groceries"]);
+  expect(
+    within(all as HTMLElement)
+      .getAllByRole("radio")
+      .map((r) => r.getAttribute("aria-label")),
+  ).toEqual(["Groceries", "Eating out", "Fuel"]);
+});
+
+it("hides the recents under a search or a group, which are narrower answers", () => {
+  render(
+    <CategorySheet
+      visible
+      kind="expense"
+      tree={TREE}
+      recent={[FUEL.id]}
+      onPick={vi.fn()}
+      onDismiss={vi.fn()}
+    />,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Food" }));
+  expect(screen.queryByText("You used these last")).toBeNull();
+});
+
+it("says where the suggestion comes from when the draft names its payee", () => {
+  render(
+    <CategorySheet
+      visible
+      kind="expense"
+      tree={TREE}
+      payee="Café A"
+      proposal={{ categoryId: EATING_OUT.id, confidence: 0.9, basis: "exact", neighbours: [] }}
+      onPick={vi.fn()}
+      onDismiss={vi.fn()}
+    />,
+  );
+  expect(screen.getByText("Because you are at Café A")).toBeDefined();
+});

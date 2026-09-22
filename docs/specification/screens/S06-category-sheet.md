@@ -63,7 +63,10 @@ from `Delivery` (48) when the names are equally plausible, and they are what
 makes `Uncategorized` visibly a queue.
 
 **Positions never move.** Leaves sort by their seeded `sort` within a group and
-stay there — no recency reordering, no usage ranking. This screen is opened
+stay there — no recency reordering, no usage ranking. What was used last is a
+section above the grid (§9.1), and **a suggestion names its payee** — *Because
+you are at Café A* — when the draft has one, so the reader knows why it is
+there before judging it. This screen is opened
 several times a day by a thumb, and a target that has stopped moving can be hit
 without being read.
 
@@ -175,7 +178,14 @@ double-checking; the ordinary path is one tap on the leaf itself.
    and does it silently.
 
    The speed comes from search instead: live, already covering all 59 leaves
-   regardless of the selected group, and one keystroke away.
+   regardless of the selected group, and one keystroke away — **and from a
+   section above the grid, not a reordering of it.** *You used these last*
+   draws the four categories used most recently (`recentCategories`, read off
+   D2's own payee history) over an *All categories* line, and only over the
+   whole grid: a group or a search is already a narrower answer. Four, in two
+   rows, so once the history holds four the section's height never changes and
+   the grid under it stays exactly where the thumb left it. A recent is a
+   second place to find a leaf, never a move of the first.
 2. ~~**`Uncategorized` placement.**~~ **Decided: last in the grid, below a rule,
    muted, with its count.** Present and clearly not a peer of the real leaves —
    subordinate rather than hidden.

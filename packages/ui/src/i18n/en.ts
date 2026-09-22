@@ -880,6 +880,10 @@ export const en = {
     useLeaf: 'Use "{{name}}"',
     /** Heading over D2's proposal row. */
     suggested: "Suggested",
+    /** The suggestion, when the draft names its payee. */
+    becauseAt: "Because you are at {{payee}}",
+    recentTitle: "You used these last",
+    allTitle: "All categories",
     /** §14's 0.85 display threshold, rendered as text — never tint alone (P5). */
     lowConfidence: "Low confidence — check before using.",
     /**
