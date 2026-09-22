@@ -1,4 +1,3 @@
-import { useAppearance } from "@waltning/client/appearance/use-appearance";
 import { deviceRuntime } from "@waltning/client/ledger/device-runtime";
 import { isPagerPageKey } from "@waltning/client/ledger/pager-date";
 import { useDayFlows } from "@waltning/client/ledger/use-day-flows";
@@ -71,20 +70,15 @@ import { MonthList } from "@waltning/ui/transactions/organisms/month-list/month-
 import { YearChart, type YearColumn } from "@waltning/ui/transactions/year-chart";
 import { router, useLocalSearchParams } from "expo-router";
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
-import { Text as RNText, useColorScheme, View } from "react-native";
+import { Text as RNText, View } from "react-native";
 import { useAnimatedScrollHandler, useSharedValue } from "react-native-reanimated";
 import { HomeListPage } from "./home-list-page";
 import { openUnsettled } from "./open-unsettled.ts";
-import { appearance, dayTickHaptic, PREVIEW_RESET_ENABLED } from "./platform";
-import { PreviewAppearanceControls } from "./preview-appearance-controls";
+import { dayTickHaptic } from "./platform";
 import { usePagerRoute } from "./use-pager-route.ts";
 
 function handleCreateAccount() {
   router.push({ pathname: "/account/new", params: { returnTo: "today" } });
-}
-
-function handlePreference(next: "system" | "light" | "dark") {
-  return appearance.setPreference(next);
 }
 
 /**
@@ -180,7 +174,6 @@ function SectionLabel({ children }: { children: string }) {
 
 const useSectionStyles = makeStyles((theme) => ({
   label: { color: theme.textMuted, ...text.ui("kicker") },
-  goToRow: { flexDirection: "row", alignItems: "center" },
   // The day's entries, set off from the grid above them by the ground.
   dayPanel: { gap: space.xs },
   // Its own row so the tap target is the line, not the panel.
@@ -188,7 +181,6 @@ const useSectionStyles = makeStyles((theme) => ({
   /** The chart and the figures it gives a shape to, as one block. */
   year: { gap: space.x3 },
   nothing: { color: theme.textMuted, ...text.ui("caption") },
-  spacer: { flex: 1 },
 }));
 
 export default function Today() {
@@ -207,11 +199,6 @@ export default function Today() {
     [t],
   );
   const snapshot = usePhoneLedger(ledger);
-  const systemScheme = useColorScheme();
-  const resolved = useAppearance(
-    appearance,
-    systemScheme === "light" || systemScheme === "dark" ? systemScheme : null,
-  );
   const { message, nonce } = useLocalSearchParams<{ message?: string; nonce?: string }>();
   // A route param, not local state — but the screen can stay mounted across
   // two pushes that both carry the same `message` (delete two transactions
@@ -247,7 +234,6 @@ export default function Today() {
   /** Its own counter, so a second refusal with the same wording still shows. */
   const [refusalToken, setRefusalToken] = useState(0);
   const hasAccounts = snapshot.accounts.length > 0;
-  const handleReset = useCallback(() => ledger.reset(), [ledger]);
 
   // The error a failed refresh set stays on the snapshot until the next
   // success (`create-phone-ledger.ts`'s `refresh()`) — `ErrorState`'s action
@@ -882,26 +868,7 @@ export default function Today() {
               </DayGroup>
             ))
           )}
-          {/*
-        The appearance control, which the band used to carry in its action
-        slot. `PagerFrame` has no such slot — the bar carries the period,
-        search and nothing else (S04 §3) — and S04 §4 puts this in S30 ·
-        Settings, which does not have it yet. It rides the *Go to* kicker
-        until then: an icon alone on the ground is an unexplained circle, and
-        beside the heading for low-frequency destinations it at least has
-        company and a reason.
-      */}
-          <View style={sectionStyles.goToRow}>
-            <SectionLabel>{t("shell.goTo")}</SectionLabel>
-            <View style={sectionStyles.spacer} />
-            <PreviewAppearanceControls
-              tone="ground"
-              preference={resolved.preference}
-              resetEnabled={PREVIEW_RESET_ENABLED}
-              onPreference={handlePreference}
-              onReset={handleReset}
-            />
-          </View>
+          <SectionLabel>{t("shell.goTo")}</SectionLabel>
           <GatewayGrid gateways={gateways} onSelect={handleGateway} />
         </>
       ) : (
@@ -927,8 +894,6 @@ export default function Today() {
       pivotCurrency,
       whereItWent,
       gateways,
-      resolved.preference,
-      handleReset,
       sectionStyles,
     ],
   );

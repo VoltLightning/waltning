@@ -578,11 +578,6 @@ export const de: Messages = {
     transferFromHere: "Von hier umbuchen",
   },
   preview: {
-    appearance: "Darstellung",
-    system: "System",
-    light: "Hell",
-    dark: "Dunkel",
-    appearanceFailed: "Die Darstellung konnte nicht gespeichert werden.",
     resetTitle: "Vorschaudaten löschen",
     resetPrompt: "Alle Konten und Buchungen von diesem Telefon löschen?",
     loadDemo: "Demodaten laden",
@@ -654,6 +649,14 @@ export const de: Messages = {
     onThisPhoneTitle: "Alles ist auf diesem Telefon",
     onThisPhoneBody:
       "Nichts hat es verlassen. Wenn Sie einen Rechner hinzufügen, koppeln Sie beide hier.",
+    appearance: "Darstellung",
+    language: "Sprache",
+    followPhone: "Wie das Telefon",
+    followPhoneHint: "Gerade: {{value}}",
+    followPhoneValue: "Wie das Telefon · {{value}}",
+    light: "Hell",
+    dark: "Dunkel",
+    appearanceFailed: "Die Darstellung konnte nicht gespeichert werden.",
   },
   restore: {
     title: "Wiederherstellen",

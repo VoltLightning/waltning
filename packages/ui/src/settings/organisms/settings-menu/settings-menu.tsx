@@ -39,12 +39,14 @@ import { Card } from "../../../shell/molecules/card/card";
 import type { PhosphorIconProps } from "../../../shell/phosphor";
 import {
   ArrowsLeftRightIcon,
+  CircleHalfRegularIcon,
   ClockCounterClockwiseIcon,
   CreditCardIcon,
   CurrencyCircleDollarIcon,
   ShieldCheckIcon,
   SlidersHorizontalIcon,
   TagIcon,
+  TranslateIcon,
 } from "../../../shell/phosphor";
 import { text } from "../../../theme/fonts.ts";
 import { useTheme } from "../../../theme/provider";
@@ -59,6 +61,8 @@ export type SettingsMenuGlyph =
   | "rates"
   | "backup"
   | "restore"
+  | "appearance"
+  | "language"
   | "developer";
 
 const GLYPHS = {
@@ -68,6 +72,8 @@ const GLYPHS = {
   rates: ArrowsLeftRightIcon,
   backup: ShieldCheckIcon,
   restore: ClockCounterClockwiseIcon,
+  appearance: CircleHalfRegularIcon,
+  language: TranslateIcon,
   developer: SlidersHorizontalIcon,
 } as const satisfies Record<SettingsMenuGlyph, (props: PhosphorIconProps) => ReactElement>;
 

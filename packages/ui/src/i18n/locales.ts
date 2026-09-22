@@ -274,6 +274,47 @@ export function isLocale(value: string): value is Locale {
 }
 
 /**
+ * Each language's name **in itself** — *Deutsch*, *Русский* — never in the
+ * reader's language.
+ *
+ * A language list is read by someone who may not read the language the app is
+ * in right now: a phone set to German by mistake is fixed by finding
+ * *Русский*, not *Russisch*. So these are one table, not five catalogues'
+ * worth of translations, and they do not change with the locale.
+ */
+export const LANGUAGE_NAMES: Record<Locale, string> = {
+  en: "English",
+  pl: "Polski",
+  de: "Deutsch",
+  ru: "Русский",
+  be: "Беларуская",
+};
+
+/**
+ * Which language this device was told to use — one of the shipped ones, or
+ * `system`, which follows the phone. A device preference (`design-system/02`
+ * §2.9's category), stored beside appearance and never synced.
+ */
+export type LanguagePreference = Locale | "system";
+
+/** The stored string back into a preference; anything unrecognised is `null`, the default. */
+export function parseLanguagePreference(raw: string): LanguagePreference | null {
+  return raw === "system" || isLocale(raw) ? raw : null;
+}
+
+/**
+ * The language to render in: the one chosen, or — when nothing is, or the
+ * choice is to follow the phone — the device's own order through
+ * `resolveLocale`.
+ */
+export function chooseLocale(
+  preference: LanguagePreference | null,
+  preferred: readonly string[],
+): Locale {
+  return preference === null || preference === "system" ? resolveLocale(preferred) : preference;
+}
+
+/**
  * A device's ordered language preferences onto a language that ships.
  *
  * **Matched on the primary subtag.** A device set to `pl-PL` gets Polish, and

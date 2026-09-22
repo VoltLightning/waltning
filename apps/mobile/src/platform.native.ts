@@ -15,6 +15,7 @@ import {
 import { createLastCapturePreference } from "@waltning/client/transactions/last-capture";
 import { pivotCurrency } from "@waltning/core/currencies";
 import type { CurrencyCode } from "@waltning/core/money";
+import { type LanguagePreference, parseLanguagePreference } from "@waltning/ui/i18n/locales";
 import {
   type FloatPosition,
   parseFloatPosition,
@@ -38,6 +39,22 @@ export const appearance = createAppearance(
     get: () => AsyncStorage.getItem(APPEARANCE_KEY),
     set: (preference) => AsyncStorage.setItem(APPEARANCE_KEY, preference),
   },
+  mobileDiagnostics,
+);
+
+const LANGUAGE_KEY = "waltning.language";
+
+/**
+ * The language this device was told to use, or `system` to follow the phone —
+ * S30's Language row writes it, the root layout reads it. A device
+ * preference beside appearance, never a registry write.
+ */
+export const language = createDevicePreference<LanguagePreference>(
+  {
+    get: () => AsyncStorage.getItem(LANGUAGE_KEY),
+    set: (value) => AsyncStorage.setItem(LANGUAGE_KEY, value),
+  },
+  { parse: parseLanguagePreference, serialize: (value) => value },
   mobileDiagnostics,
 );
 
