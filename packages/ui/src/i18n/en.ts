@@ -715,6 +715,43 @@ export const en = {
       "The list stopped short at {{count}} rows — a page of results came back empty. Reload to try again.",
   },
   /* ── E5 · counterparties — S14's settle sheet ─────────────────────────── */
+  /** S36 · Allocate — J08's split, and the only screen that spends a pot down. */
+  allocate: {
+    title: "Allocate",
+    subtitle: "Who owes what, out of the pot",
+    toAllocate: "to allocate",
+    modeEven: "Even",
+    modeShares: "Shares",
+    modeCustom: "Custom",
+    you: "You",
+    chooseCategory: "Choose a category",
+    addSomeone: "+ Add someone",
+    leftToAllocate: "left to allocate",
+    /** S36 §3 — the commit states the figure, because the figure is the point. */
+    commit: "Allocate {{amount}} {{currency}}",
+    debtsOpen_one: "{{count}} debt open · the pot returns to zero",
+    debtsOpen_few: "{{count}} debts open · the pot returns to zero",
+    debtsOpen_many: "{{count}} debts open · the pot returns to zero",
+    debtsOpen_other: "{{count}} debts open · the pot returns to zero",
+    /** Nothing left in the pot and nobody to allocate to — reachable only by opening it directly. */
+    emptyTitle: "Nothing to allocate",
+    emptyBody:
+      "This pot is at zero. Transfer what you laid out for a group into it, then split it here.",
+    /** J08 §4 — the split may be committed incomplete; the banner is what says so. */
+    incomplete: "{{amount}} {{currency}} will stay on the pot",
+    over: "That is more than the pot holds",
+    editShare: "{{name}}'s share",
+    shareOf: "{{name}}'s share",
+    removeShare: "Remove {{name}}",
+    fewerShares: "Fewer shares for {{name}}",
+    moreShares: "More shares for {{name}}",
+    /** `allocate_shares`' own refusals, resolved the way `settleDebt`'s are. */
+    notClearing:
+      "Shares come out of a clearing account — the one that holds money on other people's behalf.",
+    exceedsPot: "That is more than this pot holds.",
+    currencyMismatch: "A share is in the pot's own currency.",
+    noCounterparty: "One of these people is no longer in your ledger.",
+  },
   counterparties: {
     notFound: "This person is no longer here. They may have been merged or removed.",
     /** `SettleSheet`'s title (S14 §3). */

@@ -33,16 +33,22 @@ export type DemoAccount = {
   ref: string;
   name: string;
   currency: CurrencyCode;
-  kind: "bank" | "card" | "cash" | "deposit";
+  kind: "bank" | "card" | "cash" | "deposit" | "clearing";
   openingBalance: string;
 };
 
 /**
- * Four accounts, three currencies.
+ * Five accounts, three currencies.
  *
  * More than one currency on purpose: a single-currency ledger never exercises
  * a conversion, and the figures a reader most wants to trust are the ones that
  * crossed one.
+ *
+ * **And one clearing account, funded but unallocated.** Without it the
+ * unsettled banner never fires on demo data, S36 is unreachable by hand, and
+ * §6.4's whole invariant is a sentence nobody can look at — the same gap that
+ * made Debt and Counterparty detail impossible to compare before this loader
+ * seeded any people.
  */
 export const DEMO_ACCOUNTS: readonly DemoAccount[] = [
   {
@@ -72,6 +78,15 @@ export const DEMO_ACCOUNTS: readonly DemoAccount[] = [
     currency: "PLN" as CurrencyCode,
     kind: "cash",
     openingBalance: "300.00",
+  },
+  {
+    ref: "clearing",
+    name: "Clearing",
+    currency: "PLN" as CurrencyCode,
+    kind: "clearing",
+    // Zero, and funded by a transfer instead: a pot with an *opening*
+    // balance is a pot nobody laid out, which is not the state J08 is about.
+    openingBalance: "0.00",
   },
 ];
 

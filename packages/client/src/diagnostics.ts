@@ -26,6 +26,7 @@ export type ClientAction =
   | "unmerge_counterparties"
   | "record_distinct_counterparties"
   | "settle_debt"
+  | "allocate_shares"
   | "rename_category"
   | "reparent_category"
   | "convert_leaf_group"

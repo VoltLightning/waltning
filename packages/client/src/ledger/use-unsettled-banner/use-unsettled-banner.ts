@@ -27,15 +27,23 @@
  *   back an id for.
  */
 
-import type { Id } from "@waltning/core/id";
 import * as money from "@waltning/core/money";
 import { useMemo } from "react";
 import type { PhoneClearingAccount } from "../create-phone-ledger/create-phone-ledger.ts";
 
 /** Where *Open* goes — resolved to a route by the screen, never here. */
-export type UnsettledOpenTarget =
-  | { kind: "transaction"; transactionId: Id<"transactions"> }
-  | { kind: "account"; accountId: string };
+/**
+ * Where the banner's action goes: the pot itself.
+ *
+ * **One shape, now that there is a screen that allocates.** It used to be
+ * two — the oldest open transaction, or the account when that entry was an
+ * opening balance and had no transaction to open (H2) — because opening *a
+ * row* was the only thing the app could do about an unallocated balance.
+ * S36 allocates the balance, and the balance is what the banner is about
+ * (J08 §4), so the fallback and the case it was a fallback for are the same
+ * destination.
+ */
+export type UnsettledOpenTarget = { accountId: string };
 
 export type UnsettledBannerModel = {
   name: string;
@@ -75,10 +83,7 @@ export function unsettledBannerModel(
       unsettled.oldestUnconsumedRemainder != null &&
       !money.eq(unsettled.oldestUnconsumedRemainder, unsettled.balance),
     more: accounts.length - 1,
-    openTarget:
-      unsettled.oldestUnconsumedTransactionId === null
-        ? { kind: "account", accountId: unsettled.accountId }
-        : { kind: "transaction", transactionId: unsettled.oldestUnconsumedTransactionId },
+    openTarget: { accountId: unsettled.accountId },
   };
 }
 

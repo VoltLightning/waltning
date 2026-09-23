@@ -30,6 +30,26 @@ export function XIcon({ size, color }: PrimitiveIconProps) {
   );
 }
 
+/** A stepper's own two marks — Phosphor `minus` and `plus`, vendored like the rest. */
+export function MinusIcon({ size, color }: PrimitiveIconProps) {
+  return (
+    <Svg width={size} height={size} viewBox={VIEW_BOX}>
+      <Path d="M224 128a8 8 0 0 1-8 8H40a8 8 0 0 1 0-16h176a8 8 0 0 1 8 8" fill={color} />
+    </Svg>
+  );
+}
+
+export function PlusIcon({ size, color }: PrimitiveIconProps) {
+  return (
+    <Svg width={size} height={size} viewBox={VIEW_BOX}>
+      <Path
+        d="M224 128a8 8 0 0 1-8 8h-80v80a8 8 0 0 1-16 0v-80H40a8 8 0 0 1 0-16h80V40a8 8 0 0 1 16 0v80h80a8 8 0 0 1 8 8"
+        fill={color}
+      />
+    </Svg>
+  );
+}
+
 export function MagnifyingGlassIcon({ size, color }: PrimitiveIconProps) {
   return (
     <Svg width={size} height={size} viewBox={VIEW_BOX}>

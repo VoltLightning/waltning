@@ -39,6 +39,7 @@ import { writeLocally } from "@waltning/ledger/write";
 import Database from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import { useSyncExternalStore } from "react";
+import Allocate from "../allocate-screen";
 import CounterpartyDetail from "../counterparty-detail-screen";
 import Debt from "../debt-screen";
 import QuickAdd from "../quick-add-screen";
@@ -245,16 +246,25 @@ export function seedJourneyFixture(ledger: JourneyLedger): JourneyFixture {
   };
 }
 
-export type JourneyRoute = "today" | "quick-add" | "debt" | "counterparty" | "transfer" | "rates";
+export type JourneyRoute =
+  | "today"
+  | "quick-add"
+  | "debt"
+  | "counterparty"
+  | "transfer"
+  | "rates"
+  | "allocate";
 
 /**
  * The shapes `router.push`/`dismissTo` are ever called with across these
  * journeys' own screens — a bare path (`tabs-shell.tsx`'s `"/quick-add"`,
  * `quick-add-screen.tsx`'s `"/"`, `debt-screen.tsx`'s `` `/counterparty/${id}` ``)
- * or `{ pathname, params }` (the account escape hatch, never scripted here —
- * see the stub's own doc below).
+ * or `{ pathname, params }` — the shape `open-unsettled.ts` uses for J08's
+ * own pot, and the account escape hatch beside it.
  */
-type RouteTarget = string | { readonly pathname: string };
+type RouteTarget =
+  | string
+  | { readonly pathname: string; readonly params?: Readonly<Record<string, string>> };
 
 export type JourneyRouterStub = {
   /** `expo-router`'s own shape — mocked, and swapping `getRoute()` is the whole point. */
@@ -311,6 +321,12 @@ export function createJourneyRouterStub(): JourneyRouterStub {
           go("counterparty", { id: target.slice(COUNTERPARTY_PREFIX.length) });
           return;
         }
+        // J08's own leg — the unsettled banner's `Open`, which `open-
+        // unsettled.ts` turns into the pot S36 allocates.
+        if (typeof target === "object" && target.pathname === "/allocate") {
+          go("allocate", { account: String(target.params?.["account"] ?? "") });
+          return;
+        }
         throw new Error(`journey harness: unscripted router.push(${JSON.stringify(target)})`);
       },
       back: () => go("today"),
@@ -364,6 +380,8 @@ export function JourneyHarness({ controller, stub }: JourneyHarnessProps) {
         <Transfer />
       ) : route === "rates" ? (
         <SettingsRatesScreen quote={params["quote"]} date={params["date"]} />
+      ) : route === "allocate" ? (
+        <Allocate />
       ) : (
         <TabsShell
           slot={route === "today" ? <Today /> : route === "debt" ? <Debt /> : <QuickAdd />}

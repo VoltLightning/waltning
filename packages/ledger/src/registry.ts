@@ -13,6 +13,7 @@ import { createCategoryExecutor } from "./categories/create-category.executor.ts
 import { mergeCategoriesExecutor } from "./categories/merge-categories.executor.ts";
 import { renameCategoryExecutor } from "./categories/rename-category.executor.ts";
 import { reparentCategoryExecutor } from "./categories/reparent-category.executor.ts";
+import { allocateSharesExecutor } from "./counterparties/allocate-shares.executor.ts";
 // ── end E3 block ─────────────────────────────────────────────────────────
 // ── E2 · counterparties and settlement — its own block, same reason ────────
 import { createCounterpartyExecutor } from "./counterparties/create-counterparty.executor.ts";
@@ -67,6 +68,7 @@ export const ledgerRegistry = localRegistry([
   mergeCounterpartiesExecutor,
   unmergeCounterpartiesExecutor,
   recordDistinctCounterpartiesExecutor,
+  allocateSharesExecutor,
   settleDebtExecutor,
   // ── end E2 block ───────────────────────────────────────────────────────────
   // ── A2 · transaction operations — the phone half ─────────────────────────

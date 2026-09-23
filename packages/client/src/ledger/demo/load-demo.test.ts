@@ -78,8 +78,9 @@ describe("loading it", () => {
 
     expect(outcome.accounts).toBe(DEMO_ACCOUNTS.length);
     expect(outcome.categories).toBe(DEMO_CATEGORIES.length);
-    // The patterns, plus one row per debt and the settlement that clears one.
-    expect(outcome.transactions).toBe(demoTransactions(TODAY, 3).length + DEMO_DEBTS.length + 1);
+    // The patterns, plus one row per debt, the settlement that clears one,
+    // and the transfer that funds the unallocated pot (J08 §3).
+    expect(outcome.transactions).toBe(demoTransactions(TODAY, 3).length + DEMO_DEBTS.length + 2);
     expect(outcome.refused, "a healthy run refuses nothing").toBe(0);
   });
 

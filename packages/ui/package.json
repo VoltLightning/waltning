@@ -31,6 +31,7 @@
     "./counterparties/counterparty-row": "./src/counterparties/molecules/counterparty-row/counterparty-row.tsx",
     "./counterparties/debt-direction-tag": "./src/counterparties/atoms/debt-direction-tag/debt-direction-tag.tsx",
     "./counterparties/merge-row": "./src/counterparties/molecules/merge-row/merge-row.tsx",
+    "./counterparties/share-row": "./src/counterparties/molecules/share-row/share-row.tsx",
     "./counterparties/settle-sheet": "./src/counterparties/organisms/settle-sheet/settle-sheet.tsx",
     "./dashboard/balances-widget": "./src/dashboard/organisms/balances-widget/balances-widget.tsx",
     "./dashboard/dashboard-grid": "./src/dashboard/organisms/dashboard-grid/dashboard-grid.tsx",
