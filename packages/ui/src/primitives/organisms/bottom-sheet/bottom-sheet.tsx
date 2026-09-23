@@ -139,7 +139,7 @@ import { FormAlertHost } from "../../form-alert-host";
 import { dismissKeyboard, useKeyboardHeight } from "../../keyboard.ts";
 import { containOverscroll } from "../../nested-scroll.ts";
 import { useWindowInsets } from "../../safe-area";
-import { sheetBottomInset, sheetMaxHeight } from "../../sheet-geometry.ts";
+import { SHEET_GUTTER, sheetBottomInset, sheetMaxHeight } from "../../sheet-geometry.ts";
 import { SheetInputProvider } from "../../sheet-input";
 import { useSheetLook } from "./use-sheet-look.ts";
 
@@ -541,7 +541,7 @@ const useStyles = makeStyles((theme) => ({
    * which is a 44pt row — so the handle's gap is taken back above, and the
    * body's own gap is given below, between the search and what it filters.
    */
-  pinned: { paddingHorizontal: space.x5, marginTop: -space.x4, paddingBottom: space.x4 },
+  pinned: { paddingHorizontal: SHEET_GUTTER, marginTop: -space.x4, paddingBottom: space.x4 },
   /**
    * **The lift fills the overlay, because the library positions inside it.**
    * `@gorhom/bottom-sheet` lays itself out absolutely against its parent —
@@ -555,7 +555,7 @@ const useStyles = makeStyles((theme) => ({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingHorizontal: space.x5,
+    paddingHorizontal: SHEET_GUTTER,
   },
   title: { color: theme.text, ...text.ui("displayThree") },
   /**
@@ -572,7 +572,7 @@ const useStyles = makeStyles((theme) => ({
    */
   body: { flexShrink: 1 },
   /** The gap the sheet used to apply to every child directly, and the gutter. */
-  bodyContent: { gap: space.x4, paddingHorizontal: space.x5 },
+  bodyContent: { gap: space.x4, paddingHorizontal: SHEET_GUTTER },
   /**
    * **Drawn on the sheet's own surface, with a rule above it.** It floats over
    * the body, so a transparent one laid its button on top of whatever row had
@@ -580,7 +580,7 @@ const useStyles = makeStyles((theme) => ({
    */
   footer: {
     gap: space.md,
-    paddingHorizontal: space.x5,
+    paddingHorizontal: SHEET_GUTTER,
     paddingTop: space.x3,
     backgroundColor: theme.surface,
     borderTopWidth: 1,

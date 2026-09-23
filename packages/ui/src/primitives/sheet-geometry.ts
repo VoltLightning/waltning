@@ -46,6 +46,19 @@ import type { SafeAreaInsets } from "./safe-area";
 export const SHEET_TOP_OFFSET = 170;
 
 /**
+ * The side gutter every part of a sheet keeps — the head, the pinned row, the
+ * body and the footer, which is why it is one value and not four.
+ *
+ * **Named because something inside a sheet has to cancel it.** A horizontal
+ * chip row is the one child whose content is meant to run past the gutter: cut
+ * at the padding edge, the last chip reads as a clipped control, and cut at the
+ * sheet's own edge it reads as a row with more to the right. Cancelling it
+ * takes the number, and a sheet's gutter spelled a second time in the sheet's
+ * children is the pair that drifts.
+ */
+export const SHEET_GUTTER = space.x5;
+
+/**
  * The floor, for a window shorter than the offset — a landscape phone, a small
  * browser, a keyboard eating two thirds of the screen. Three targets: the
  * header, one row, and the footer under it. Without it the arithmetic can

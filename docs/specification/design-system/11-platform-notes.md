@@ -16,7 +16,7 @@ One codebase via Expo + React Native Web (`SPEC.md` §14.6).
 
 **With the keyboard up, everything is still reachable.** On a phone the
 keyboard *covers* the window rather than shrinking it, on both platforms, so a
-layout that does nothing has its lower half behind it. Four rules, each found
+layout that does nothing has its lower half behind it. Five rules, each found
 on a device rather than reasoned out:
 
 - **A scroller holding a field gets the keyboard's *overlap* as room**, and the
@@ -30,6 +30,16 @@ on a device rather than reasoned out:
 - **A bottom-anchored action rides the keyboard.** *Save* on Add and *Move
   money* on Transfer sit on its top edge, the home-indicator inset dropped
   while it is up.
+- **Only one thing on a screen pays for the keyboard.** A page whose footer
+  rides it has already been taken out from under it, so the page above must
+  not also take the platform's own inset. iOS measures that inset once, at the
+  keyboard event, from the scroller's frame *at that moment* — before the
+  footer has grown — and never remeasures, so a page that asks for it there is
+  paid for twice: a keyboard's worth of empty ground under the last card, and
+  a scroll offset far enough that the top row is sliced by the header. The
+  page says which it is — the screen's own bottom edge, or a page with a
+  footer below it — and that one flag decides both the device inset and the
+  keyboard's.
 - **A popover places itself in the room the keyboard leaves**, so a searchable
   `Select`'s options are never the thing behind it.
 

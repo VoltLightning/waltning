@@ -64,6 +64,7 @@ import { categoryTintFor } from "../../../primitives/monogram.ts";
 import { horizontalScrollProps } from "../../../primitives/nested-scroll.ts";
 import { BottomSheet } from "../../../primitives/organisms/bottom-sheet/bottom-sheet";
 import { usePressScale } from "../../../primitives/press-scale.ts";
+import { SHEET_GUTTER } from "../../../primitives/sheet-geometry.ts";
 import { useSubmitCheck } from "../../../primitives/use-submit-check.ts";
 import { EmptyState } from "../../../states/organisms/empty-state/empty-state";
 import { focusBorder } from "../../../theme/focus.ts";
@@ -386,6 +387,7 @@ export function CategorySheet({
               showsHorizontalScrollIndicator={false}
               testID="category-chip-row"
               {...horizontalScrollProps(styles.chipRow)}
+              contentContainerStyle={styles.chipRowContent}
             >
               {groups.map((group) => (
                 <GroupChip
@@ -829,6 +831,7 @@ function CreateRow({
                 showsHorizontalScrollIndicator={false}
                 testID="category-chip-row"
                 {...horizontalScrollProps(styles.chipRow)}
+                contentContainerStyle={styles.chipRowContent}
               >
                 {groups.map((group) => (
                   <GroupChip
@@ -874,7 +877,20 @@ const useStyles = makeStyles((theme) => ({
     ...text.ui("kicker"),
     textTransform: "uppercase",
   },
-  chipRow: { flexGrow: 0 },
+  /*
+    **The row runs to the sheet's own edges, not to its gutter.** A chip row is
+    wider than the sheet by design — that is what makes it a row you scroll —
+    and where it was cut mattered: stopped at the gutter it drew *Subscri* with
+    its right border sliced off in the middle of the page, which reads as a
+    broken control rather than as more to the right. Bled out over the gutter
+    and padded back on the content, the same chip runs off the edge of the
+    screen, which is what every sideways row in the system says.
+  */
+  chipRow: { flexGrow: 0, marginHorizontal: -SHEET_GUTTER },
+  // The gutter between chips is the row's, not each chip's trailing margin —
+  // a margin on the last one is padding nobody asked for at the end of the
+  // travel, and with the row bled out it landed past the sheet's edge.
+  chipRowContent: { paddingHorizontal: SHEET_GUTTER, gap: space.md },
   // Eight rows of leaves before the sheet scrolls internally — the same
   // "cap it at a token multiple" shape `select.tsx`'s `panelScroll` uses.
   /** The body's own gap, kept between the search and the chips it filters with. */
@@ -892,6 +908,17 @@ const useStyles = makeStyles((theme) => ({
   // clear just under half the row.
   cellWrap: { width: "48%" },
   cell: {
+    /*
+      **Fills its wrapper, which is what makes a row of two one row.** The
+      wrapping row stretches every wrapper on a line to the tallest of them —
+      that is `alignItems: "stretch"`, and it was already happening. What did
+      not happen is the bordered surface inside following it: a `Pressable` in
+      a column-direction parent takes its content's height, so *Groceries*
+      beside *Household supplies* drew a short tile next to a two-line one and
+      every second row of the picker was ragged. `flex: 1` in a parent whose
+      height the line has already decided is what hands that height down.
+    */
+    flex: 1,
     minHeight: touchTarget.min,
     flexDirection: "row",
     alignItems: "center",
@@ -927,7 +954,6 @@ const useStyles = makeStyles((theme) => ({
     borderColor: theme.borderInteractive,
     borderRadius: radius.sm,
     paddingHorizontal: space.x3,
-    marginRight: space.md,
   },
   groupChipHovered: { backgroundColor: theme.hoverFill },
   groupChipText: { ...text.ui("body", 500) },

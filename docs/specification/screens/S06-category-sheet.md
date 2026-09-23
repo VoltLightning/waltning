@@ -54,6 +54,18 @@ filters the grid to Food's four leaves and nothing else happens.
 **Two columns because leaves are short and groups are few.** The deepest group
 is Home at ten leaves, which fits in five rows without scrolling.
 
+**A row of two is one row.** Both options on a line are the same height,
+whichever of them has the longer name — *Groceries* beside *Household
+supplies* draws two tiles of equal depth, not a short one next to a two-line
+one. A grid whose cells disagree reads as broken before it reads as a list,
+and half the rows of a real taxonomy have a wrapped name in one column.
+
+**The chip row runs to the sheet's edges, not to its gutter.** It is wider
+than the sheet by design — that is what makes it a row you scroll — so where
+it is cut says what it is: cut at the gutter, the last chip is a control with
+its border sliced off in the middle of the page; cut at the sheet's own edge,
+it is a row with more to the right.
+
 **The footer is pinned** so *Use ‹leaf›* is reachable without scrolling back,
 and `+ New` sits beside it rather than hidden in an overflow — creating a
 category mid-entry is a real flow, not an edge case.

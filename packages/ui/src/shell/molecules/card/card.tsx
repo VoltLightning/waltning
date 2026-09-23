@@ -103,12 +103,17 @@
 
 import { useRef } from "react";
 import { Text, View } from "react-native";
-import Animated, { type useAnimatedScrollHandler } from "react-native-reanimated";
+import Animated, {
+  useAnimatedRef,
+  type useAnimatedScrollHandler,
+  useAnimatedStyle,
+  useScrollViewOffset,
+} from "react-native-reanimated";
 import { Tag } from "../../../primitives/atoms/tag";
 import { FieldRevealProvider } from "../../../primitives/field-reveal";
 import {
   CONTENT_TOP_MARK_PROPS,
-  KEYBOARD_SCROLL_PROPS,
+  keyboardScrollProps,
   useKeyboardRoom,
 } from "../../../primitives/keyboard-room.ts";
 import { pageScrollProps } from "../../../primitives/nested-scroll.ts";
@@ -127,6 +132,33 @@ import { useFloatingClearance } from "../../atoms/floating-clearance";
  * between the finger and the header on every frame.
  */
 export type ScrollHandler = ReturnType<typeof useAnimatedScrollHandler>;
+
+/**
+ * How far the page travels before its top edge is fully drawn.
+ *
+ * Short on purpose: the edge answers *has this moved at all*, so a thumb that
+ * has barely started reading already has the line. Long enough not to flicker
+ * on the rubber-band a bounce leaves behind.
+ */
+export const EDGE_TRAVEL = 12;
+
+/**
+ * The top edge's opacity at a given scroll offset — the whole of the shape,
+ * as arithmetic.
+ *
+ * **A named function rather than `interpolate` inside the worklet**, because
+ * this is the part that can be wrong: the clamp at both ends — a bounce
+ * scrolls past zero into negative offsets, and unclamped that is a negative
+ * opacity — and the travel it is measured against. `interpolate` is a no-op in
+ * the component suite's Reanimated mock, so a shape expressed through it is a
+ * shape nothing checks.
+ */
+export function edgeOpacity(offset: number): number {
+  "worklet";
+  if (offset <= 0) return 0;
+  if (offset >= EDGE_TRAVEL) return 1;
+  return offset / EDGE_TRAVEL;
+}
 
 export type CardProps = {
   title?: string;
@@ -210,9 +242,13 @@ export function GroundPanel({
   const insets = useSafeArea();
   const floatClearance = useFloatingClearance();
   const panel = useRef<View>(null);
-  const scroller = useRef<Animated.ScrollView>(null);
+  // An animated ref, because the top edge below reads this scroller's offset
+  // on the UI thread — it is an ordinary ref everywhere else it is used.
+  const scroller = useAnimatedRef<Animated.ScrollView>();
   const contentTop = useRef<View>(null);
   const room = useKeyboardRoom(panel, scroller, contentTop);
+  const offset = useScrollViewOffset(scroller);
+  const edge = useAnimatedStyle(() => ({ opacity: edgeOpacity(offset.value) }), [offset]);
 
   if (scroll === "own") {
     // **No gutter and no bottom clearance here.** Both belong to the scroller
@@ -243,7 +279,17 @@ export function GroundPanel({
         // 16ms: the header derives its shape from this, and a default of 0
         // reports once per gesture — a header that jumps when the finger lifts.
         scrollEventThrottle={16}
-        {...KEYBOARD_SCROLL_PROPS}
+        /*
+          **The keyboard is this panel's only when it reaches the bottom of the
+          screen.** `clearBottom={false}` says a footer sits below it and
+          clears that edge itself — and that footer lifts by the keyboard's
+          height, so the scroller has already been taken out from under it.
+          iOS measures its own inset before that lift lands and never
+          remeasures (`primitives/keyboard-room.ts`), so asking for it there is
+          how Move money grew a keyboard's worth of empty ground under its last
+          card. Same flag, same reason, as the bottom inset above.
+        */
+        {...keyboardScrollProps(clearBottom)}
         {...pageScrollProps(styles.scroll)}
         contentContainerStyle={[styles.scrollContent, clearance]}
         ref={scroller}
@@ -254,6 +300,29 @@ export function GroundPanel({
           {children}
         </FieldRevealProvider>
       </Animated.ScrollView>
+      {/*
+        **The line the header grows when the page moves under it.**
+
+        Above the panel is always a band — a hero, a tab header, a composer's
+        own title (`PageHeader`) — and the band and the page are the same
+        cream, so with the page at rest there is nothing between them and
+        nothing should be: a rule under a title that has not been scrolled
+        past is a section divider drawn on every screen in the app. The moment
+        the first row slides under the band, though, the cut is arbitrary —
+        a row sheared through its middle with no edge to explain it, which is
+        what *Move money* looked like with its date row half gone.
+
+        So the edge is scroll-linked, which is the only thing that makes both
+        states right. It is drawn here rather than in the band because this is
+        the component that has the scroller; the band cannot see one.
+
+        **A hairline, not a shadow**: `design-system/02` gives this system one
+        shadow and reserves it for the one thing that floats. Elevation here is
+        by edge, and the edge follows the panel's own corner radius rather than
+        cutting straight across it, so on a tab root it traces the lift instead
+        of contradicting it.
+      */}
+      <Animated.View style={[styles.topEdge, edge]} pointerEvents="none" />
     </View>
   );
 }
@@ -314,6 +383,19 @@ const useStyles = makeStyles((theme) => ({
    */
   panelTop: { paddingTop: space.x2, gap: space.x2 },
   scroll: { flex: 1 },
+  topEdge: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    // Tall enough for the radius to curve through, which is all this height
+    // is for — the view draws its top border and nothing else.
+    height: radius.lg,
+    borderTopWidth: 1,
+    borderTopColor: theme.hairline,
+    borderTopLeftRadius: radius.lg,
+    borderTopRightRadius: radius.lg,
+  },
   /**
    * `flexGrow: 1` — a screen shorter than the device still fills it, while a
    * screen taller than the device scrolls instead of clipping. The gap is the

@@ -57,29 +57,39 @@ export function SharedGroup({ accounts, onSelectAccount }: SharedGroupProps) {
 
   if (accounts.length === 0) return null;
 
-  const action = (
-    <View style={styles.subtotals}>
-      {subtotals.map((subtotal) => (
-        <Amount
-          key={subtotal.currency}
-          value={subtotal.balance}
-          currency={subtotal.currency}
-          decimals={subtotal.decimals}
-          size="small"
-        />
-      ))}
-    </View>
-  );
+  // A group of one has no sum to state — the row below **is** the subtotal,
+  // and a header repeating it asks the reader to check that two identical
+  // figures match. `KindGroup` takes the same rule for the same reason.
+  const action =
+    accounts.length < 2 ? undefined : (
+      <View style={styles.subtotals}>
+        {subtotals.map((subtotal) => (
+          <Amount
+            key={subtotal.currency}
+            value={subtotal.balance}
+            currency={subtotal.currency}
+            decimals={subtotal.decimals}
+            size="small"
+            emphasis="muted"
+          />
+        ))}
+      </View>
+    );
 
   return (
     <Card
       title={t("accounts.sharedHeading")}
       tag={t("accounts.shared")}
-      action={action}
+      {...(action === undefined ? {} : { action })}
       edge="accent"
     >
-      {accounts.map((account) => (
-        <SharedAccountRow key={account.id} account={account} onSelect={onSelectAccount} />
+      {accounts.map((account, index) => (
+        <SharedAccountRow
+          key={account.id}
+          account={account}
+          last={index === accounts.length - 1}
+          onSelect={onSelectAccount}
+        />
       ))}
     </Card>
   );
@@ -87,10 +97,18 @@ export function SharedGroup({ accounts, onSelectAccount }: SharedGroupProps) {
 
 type SharedAccountRowProps = {
   account: SharedGroupAccount;
+  /**
+   * The last row draws no rule — the card's own edge already ends the list,
+   * and a hairline two pixels inside it reads as a row that failed to render.
+   * `BalanceRow` has taken this since the kind groups grew it; this card was
+   * the one caller that never passed it, so the shared card alone closed with
+   * a stray line under its final balance.
+   */
+  last: boolean;
   onSelect: (id: string) => void;
 };
 
-function SharedAccountRow({ account, onSelect }: SharedAccountRowProps) {
+function SharedAccountRow({ account, last, onSelect }: SharedAccountRowProps) {
   const handlePress = useCallback(() => onSelect(account.id), [account.id, onSelect]);
   return (
     <BalanceRow
@@ -103,6 +121,7 @@ function SharedAccountRow({ account, onSelect }: SharedAccountRowProps) {
       unsettled={account.unsettled ?? false}
       expectedBalance={account.expectedBalance ?? null}
       onPress={handlePress}
+      last={last}
     />
   );
 }

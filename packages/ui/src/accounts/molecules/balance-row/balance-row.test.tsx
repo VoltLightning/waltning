@@ -10,6 +10,32 @@ import { describe, expect, it, vi } from "vitest";
 import { BalanceRow } from "./balance-row";
 
 describe("BalanceRow", () => {
+  /**
+   * **The second line is optional, and inside a kind group there is none.**
+   * The register's card already names the kind and the figure on the right
+   * carries the currency, so the line that sat here was the one thing on the
+   * row said twice — and it made every account in the register two lines
+   * tall. The shared card is where it still earns its place: that one holds
+   * accounts of mixed kinds, which is the thing its own title cannot say.
+   */
+  it("draws no line under the name when no kind is given", () => {
+    render(<BalanceRow account="Everyday" balance={money.toMoney("100")} currency="PLN" />);
+    expect(screen.getByText("Everyday")).toBeDefined();
+    expect(screen.queryByText("Checking")).toBeNull();
+  });
+
+  it("draws the kind under the name where one is given", () => {
+    render(
+      <BalanceRow
+        account="Household"
+        kind="Deposit"
+        balance={money.toMoney("100")}
+        currency="PLN"
+      />,
+    );
+    expect(screen.getByText("Deposit")).toBeDefined();
+  });
+
   it("renders a home-currency balance as a plain amount", () => {
     render(
       <BalanceRow

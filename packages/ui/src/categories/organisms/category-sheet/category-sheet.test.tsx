@@ -735,3 +735,38 @@ it("says where the suggestion comes from when the draft names its payee", () => 
   );
   expect(screen.getByText("Because you are at Café A")).toBeDefined();
 });
+
+/**
+ * **A row of two is one row, whatever the two names are.**
+ *
+ * The wrapping row already stretches every wrapper on a line to the tallest of
+ * them; what did not follow was the bordered surface inside one. So
+ * *Groceries* beside *Household supplies* drew a short tile next to a two-line
+ * one, and on a device every second row of the picker was ragged — the one
+ * thing a grid is for is that its cells agree.
+ */
+it("gives each option a surface that fills its row", () => {
+  render(<CategorySheet visible kind="expense" tree={TREE} onPick={vi.fn()} onDismiss={vi.fn()} />);
+  const option = screen.getByRole("radio", { name: "Groceries" });
+  // `flex: 1` in the wrapper, whose own height the line has decided.
+  expect(getComputedStyle(option).flexGrow).toBe("1");
+});
+
+/**
+ * **The chip row runs to the sheet's edges, and its content is padded back.**
+ *
+ * A chip row is wider than the sheet by design. Cut at the gutter it drew the
+ * last chip with its right border sliced off in the middle of the page, which
+ * reads as a broken control; cut at the sheet's own edge the same chip runs
+ * off the screen, which is what a sideways row says everywhere else.
+ */
+it("bleeds the chip row over the sheet's gutter and pads its content back", () => {
+  render(<CategorySheet visible kind="expense" tree={TREE} onPick={vi.fn()} onDismiss={vi.fn()} />);
+  const row = screen.getAllByTestId("category-chip-row")[0] as HTMLElement;
+  const bleed = getComputedStyle(row).marginLeft;
+  const content = row.firstElementChild as HTMLElement;
+  expect(content).not.toBeNull();
+  // The two are the same number with opposite signs — one gutter out, one back.
+  expect(`-${getComputedStyle(content).paddingLeft}`).toBe(bleed);
+  expect(bleed.startsWith("-")).toBe(true);
+});
