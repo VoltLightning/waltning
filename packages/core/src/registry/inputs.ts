@@ -1402,6 +1402,103 @@ export const settleDebtInput = z
   });
 export type SettleDebtInput = z.output<typeof settleDebtInput>;
 
+/**
+ * `allocate_shares` — J08's whole write, and it had none. The journey's path
+ * names an ALLOCATE step and no operation performed it.
+ *
+ * **Amounts, not weights, and that is deliberate.** S36 §6 puts the
+ * unallocated remainder on screen throughout, because an allocation that does
+ * not sum is the commonest way a clearing balance quietly stops meaning
+ * anything. A screen that shows one set of figures while the operation
+ * recomputes another is that failure with extra steps — so the split is
+ * computed once, in `packages/client`, over
+ * `money.allocateLargestRemainder`, and the figures a person read are the
+ * figures written. What the operation owes in return is refusing any set that
+ * does not fit the pot.
+ *
+ * **A share with no counterparty is your own** (J08 §4). It is not a debt —
+ * a receivable against yourself would keep the account from ever reaching
+ * zero — so it is written as an ordinary expense with the allocation's
+ * category and nothing else. At most one, because two would be the same
+ * statement made twice.
+ *
+ * **One id per row, minted here.** `mints` has to name every row the write
+ * brings into existence (`executor.ts`), and an allocation brings several;
+ * a caller that let the executor mint them would have no way to name the
+ * rows it just created.
+ */
+export const allocateSharesInput = z
+  .object({
+    /** The clearing account the pot sits in. Every row is written out of it. */
+    accountId: zId<"accounts">(),
+    date: zAccountingDate,
+    /** The pot's own currency — refused when it contradicts the account (§6.5). */
+    currency: zCurrencyCode,
+    /**
+     * One category for the whole allocation: what the money was for.
+     *
+     * The debt rows carry it too. Until the taxonomy ships (J01 §2), there is
+     * no *Debt & giving › Lent out* to put them in, and a row with no
+     * category at all is refused by `create_transaction` itself.
+     */
+    categoryId: zId<"categories">(),
+    note: z.string().trim().max(2000).default(""),
+    shares: z
+      .array(
+        z.object({
+          id: zId<"transactions">(),
+          /** `null` is your own share — a category, no debt (J08 §4). */
+          counterpartyId: zId<"counterparties">().nullable(),
+          /** Positive. Direction is what the row is, never what the figure says. */
+          amount: zMoney,
+        }),
+      )
+      .min(1),
+  })
+  .superRefine((v, ctx) => {
+    v.shares.forEach((share, index) => {
+      // The same guard `settleDebtInput` takes: a malformed figure already
+      // carries `zMoney`'s own issue, and `dec()` would throw on it, so this
+      // is skipped rather than duplicated for that case.
+      if (safeDec(share.amount)?.lte(0) === true) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["shares", index, "amount"],
+          message: "a share is positive — allocating nothing is not allocating",
+        });
+      }
+    });
+
+    const own = v.shares.filter((share) => share.counterpartyId === null);
+    if (own.length > 1) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["shares"],
+        message: "one share is yours, not two — your own share is a single row",
+      });
+    }
+
+    // Two rows for one person would fold into one balance and read as one
+    // debt, so the second row is invisible the moment it is written. The
+    // screen has one row per person; this is what keeps that true.
+    const named = v.shares
+      .map((share) => share.counterpartyId)
+      .filter((id): id is NonNullable<typeof id> => id !== null);
+    if (new Set(named).size !== named.length) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["shares"],
+        message: "a counterparty holds one share in an allocation, not several",
+      });
+    }
+
+    const ids = v.shares.map((share) => share.id);
+    if (new Set(ids).size !== ids.length) {
+      ctx.addIssue({ code: "custom", path: ["shares"], message: "every share mints its own id" });
+    }
+  });
+export type AllocateSharesInput = z.output<typeof allocateSharesInput>;
+
 /* ════════════════════════════════════════════════════════════════════════
  * end E2 block
  * ════════════════════════════════════════════════════════════════════════ */

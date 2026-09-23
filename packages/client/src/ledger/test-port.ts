@@ -101,6 +101,7 @@ export function basePort(overrides: Partial<PhoneLedgerPort> = {}): PhoneLedgerP
     unmergeCounterparties: () => undefined,
     recordDistinctCounterparties: () => undefined,
     settleDebt: () => ({ residual: toMoney("0"), overSettled: false }),
+    allocateShares: () => ({ rows: [], remaining: toMoney("0") }),
     renameCategory: () => undefined,
     reparentCategory: () => undefined,
     convertLeafGroup: () => undefined,

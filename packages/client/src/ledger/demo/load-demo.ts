@@ -19,7 +19,7 @@
  */
 
 import { accountingDate, addDays } from "@waltning/core/date";
-import type { UnitsPerPivot } from "@waltning/core/money";
+import { currencyCode, type UnitsPerPivot } from "@waltning/core/money";
 import type { FieldError } from "../../transport/field-errors/field-errors.ts";
 import type {
   ConvertCategoryDraft,
@@ -381,6 +381,36 @@ export function loadDemo(
       }),
     );
     if (settled === null) outcome.refused += 1;
+    else outcome.transactions += 1;
+  }
+
+  // ── the unallocated pot (J08 §3) ───────────────────────────────────────
+  //
+  // One transfer into the clearing account and nothing splitting it, which is
+  // exactly §6.4's warning state: a group expense paid and never allocated.
+  // Without it the unsettled banner never fires on demo data and S36 has
+  // nothing to open.
+  const potId = accountIds.get("clearing");
+  const paidFrom = accountIds.get("bank-a");
+  if (potId !== undefined && paidFrom !== undefined) {
+    const funded = accepted(() =>
+      target.createTransaction({
+        type: "transfer",
+        amount: "400.00",
+        accountId: paidFrom,
+        toAccountId: potId,
+        toAmount: "400.00",
+        toCurrency: currencyCode("PLN"),
+        categoryId: null,
+        date: addDays(accountingDate(today), -2),
+        payee: "",
+        note: "",
+        isBusiness: false,
+        counterpartyId: null,
+        counterpartyRole: null,
+      }),
+    );
+    if (funded === null) outcome.refused += 1;
     else outcome.transactions += 1;
   }
 

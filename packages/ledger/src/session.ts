@@ -15,6 +15,7 @@ import type {
 } from "@waltning/core/money";
 import type {
   AddCurrencyInput,
+  AllocateSharesInput,
   ArchiveAccountInput,
   ArchiveCategoryInput,
   ArchiveCurrencyInput,
@@ -89,6 +90,10 @@ import { type LocalCategory, readCategoryTree } from "./categories/read-category
 import { readCategoryUsage } from "./categories/read-category-usage.ts";
 import { renameCategoryExecutor } from "./categories/rename-category.executor.ts";
 import { reparentCategoryExecutor } from "./categories/reparent-category.executor.ts";
+import {
+  type AllocateSharesResult,
+  allocateSharesExecutor,
+} from "./counterparties/allocate-shares.executor.ts";
 import {
   createCounterpartyExecutor,
   type LocalCounterpartyRow,
@@ -429,6 +434,8 @@ export type LocalLedgerSession = {
   ) => LocalDistinctPairRow;
   /** H9: takes the amount and what it discharges — never a residual. Returns one. */
   settleDebt: (input: SettleDebtInput, capture: Capture) => SettleDebtResult;
+  /** J08's split — one write, one row per share (`allocate-shares.executor.ts`). */
+  allocateShares: (input: AllocateSharesInput, capture: Capture) => AllocateSharesResult;
   // ── end E2 block ─────────────────────────────────────────────────────────
   renameCategory: (input: RenameCategoryInput, capture: Capture) => LocalCategoryRow;
   reparentCategory: (input: ReparentCategoryInput, capture: Capture) => LocalCategoryRow;
@@ -980,6 +987,14 @@ export function createLocalLedgerSession<TRun>(
     settleDebt: (input, capture) =>
       writeLocally(requireOpen(), {
         executor: settleDebtExecutor,
+        registry: ledgerRegistry,
+        input,
+        capture,
+        ...(options.diagnostics ? { diagnostics: options.diagnostics } : {}),
+      }).row,
+    allocateShares: (input, capture) =>
+      writeLocally(requireOpen(), {
+        executor: allocateSharesExecutor,
         registry: ledgerRegistry,
         input,
         capture,

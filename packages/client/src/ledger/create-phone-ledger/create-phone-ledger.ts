@@ -20,10 +20,12 @@ import * as money from "@waltning/core/money";
 import {
   type AccountKind,
   type AddCurrencyInput,
+  type AllocateSharesInput,
   type ArchiveAccountInput,
   type ArchiveCategoryInput,
   type ArchiveCurrencyInput,
   addCurrencyInput,
+  allocateSharesInput,
   archiveAccountInput,
   archiveCategoryInput,
   archiveCurrencyInput,
@@ -390,6 +392,25 @@ export type PhoneCounterparty = {
 export type PhoneSettleDebtResult = {
   residual: Money;
   overSettled: boolean;
+};
+
+/**
+ * What the port answers for J08's split — the rows it wrote, and what the pot
+ * still holds (`0` when the split was complete, §6.4).
+ *
+ * Narrower than the executor's own result on purpose: a port type naming
+ * `LocalTransactionRow` would put a replica row shape in `packages/client`,
+ * where nothing may know what a replica row is.
+ */
+export type PhoneAllocateSharesResult = {
+  rows: readonly { id: Id<"transactions"> }[];
+  remaining: Money;
+};
+
+/** What the controller answers — the ids alone, which is all a screen can use. */
+export type PhoneAllocateShares = {
+  ids: readonly Id<"transactions">[];
+  remaining: Money;
 };
 
 /**
@@ -893,6 +914,8 @@ export type PhoneLedgerPort = {
    * way every other write's `{ id }` success is.
    */
   settleDebt: (input: SettleDebtInput, capture: PhoneCapture) => PhoneSettleDebtResult;
+  /** J08's split — one write, one row per share, and what the pot still holds. */
+  allocateShares: (input: AllocateSharesInput, capture: PhoneCapture) => PhoneAllocateSharesResult;
   // ── end E2 block ─────────────────────────────────────────────────────────
   renameCategory: (input: RenameCategoryInput, capture: PhoneCapture) => void;
   reparentCategory: (input: ReparentCategoryInput, capture: PhoneCapture) => void;
@@ -1433,6 +1456,21 @@ export type SettleDebtDraft = {
   categoryId: string | null;
 };
 
+/**
+ * S36's split, as the screen holds it — plain strings, ids minted by the
+ * controller the way every other draft's are.
+ *
+ * `counterpartyId: null` is your own share (J08 §4): a category, no debt.
+ */
+export type AllocateSharesDraft = {
+  accountId: string;
+  date: string;
+  currency: string;
+  categoryId: string;
+  note: string;
+  shares: readonly { counterpartyId: string | null; amount: string }[];
+};
+
 /** What a caller hands the export. Mirrors `@waltning/ledger`'s `ExportOptions`. */
 export type PhoneExportOptions = {
   readonly recipient: string;
@@ -1745,6 +1783,9 @@ export type PhoneLedgerController = {
   ) =>
     | { id: Id<"transactions">; residual: Money; overSettled: boolean }
     | { fieldErrors: readonly FieldError[] };
+  allocateShares: (
+    draft: AllocateSharesDraft,
+  ) => PhoneAllocateShares | { fieldErrors: readonly FieldError[] };
   // ── end E2 block ─────────────────────────────────────────────────────────
   /** S19's merge sheet, on demand — the same "not through the snapshot" call. */
   readCategoryReferenceCounts: (categoryId: string) => PhoneCategoryReferenceCounts;
@@ -2045,6 +2086,30 @@ function unmergeCounterpartiesRefusal(error: Error): FieldError | null {
  * form-level (`path: ""`), carrying the shared `common.couldNotSave` key
  * instead.
  */
+/**
+ * `allocate_shares`' refusals, routed to the field a person is looking at.
+ *
+ * The pot and its kind are properties of the account the screen was opened
+ * on, so both land there; anything else is the split itself, which is the
+ * row list.
+ */
+function allocateSharesRefusal(error: Error): FieldError {
+  const message = error.message;
+  if (/clearing account/.test(message)) {
+    return { path: "accountId", message, messageKey: "allocate.notClearing" };
+  }
+  if (/does not hold/.test(message)) {
+    return { path: "shares", message, messageKey: "allocate.exceedsPot" };
+  }
+  if (/does not match account currency/.test(message)) {
+    return { path: "currency", message, messageKey: "allocate.currencyMismatch" };
+  }
+  if (/no counterparty/.test(message)) {
+    return { path: "shares", message, messageKey: "allocate.noCounterparty" };
+  }
+  return { path: "shares", message };
+}
+
 function settleDebtRefusal(error: Error): FieldError {
   const message = errorFromThrown(error).message;
   if (message.includes("no counterparty")) {
@@ -3288,6 +3353,78 @@ export function createPhoneLedger(
         emitClientDiagnostic(diagnostics, {
           scope: "client_action",
           action: "settle_debt",
+          phase: "failure",
+          error: clientFailure(error),
+        });
+        throw error;
+      }
+    },
+    /**
+     * S36's commit — J08 §3's ALLOCATE step, as one write.
+     *
+     * **Ids are minted here, one per share**, the same way every other
+     * draft's is: the screen holds rows, not identities, and `mints` has to
+     * name every row the write brings into existence (`executor.ts`).
+     *
+     * Everything else is the executor's. It reads the pot from the live
+     * replica rather than trusting a figure this screen was holding — the
+     * same discipline `settleDebt` above takes with a balance — so there is
+     * nothing here to re-derive and nothing to disagree about.
+     */
+    allocateShares: (draft) => {
+      emitClientDiagnostic(diagnostics, {
+        scope: "client_action",
+        action: "allocate_shares",
+        phase: "start",
+      });
+      try {
+        const parsed = allocateSharesInput.safeParse({
+          accountId: draft.accountId,
+          date: draft.date,
+          currency: draft.currency,
+          categoryId: draft.categoryId,
+          note: draft.note,
+          shares: draft.shares.map((share) => ({
+            id: runtime.id<"transactions">(),
+            counterpartyId: share.counterpartyId,
+            amount: share.amount,
+          })),
+        });
+        if (!parsed.success) {
+          emitClientDiagnostic(diagnostics, {
+            scope: "client_action",
+            action: "allocate_shares",
+            phase: "failure",
+            error: clientFailure(parsed.error),
+          });
+          return { fieldErrors: fieldErrorsFromZod(parsed.error) ?? [] };
+        }
+        let allocated: PhoneAllocateSharesResult;
+        try {
+          allocated = port.allocateShares(parsed.data, runtime.capture());
+        } catch (refusal) {
+          emitClientDiagnostic(diagnostics, {
+            scope: "client_action",
+            action: "allocate_shares",
+            phase: "failure",
+            error: clientFailure(refusal),
+          });
+          if (!(refusal instanceof Error)) throw refusal;
+          return { fieldErrors: [allocateSharesRefusal(refusal)] };
+        }
+        refresh();
+        return finish(
+          diagnostics,
+          { scope: "client_action", action: "allocate_shares" },
+          {
+            ids: allocated.rows.map((row) => row.id),
+            remaining: allocated.remaining,
+          },
+        );
+      } catch (error) {
+        emitClientDiagnostic(diagnostics, {
+          scope: "client_action",
+          action: "allocate_shares",
           phase: "failure",
           error: clientFailure(error),
         });

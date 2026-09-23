@@ -3,11 +3,14 @@
  * banner, written once.
  *
  * `packages/client`'s `unsettledBannerModel` decides *what* to open and hands
- * back an `UnsettledOpenTarget`: the oldest open entry's transaction, or the
- * account when that entry is an opening balance and has no transaction to
- * open (H2). Turning that description into a route is the app's job — a
- * `pathname` is a thing only `apps/mobile` knows — so it stops here rather
- * than in the hook.
+ * back an `UnsettledOpenTarget` — the pot. Turning that into a route is the
+ * app's job, since a `pathname` is a thing only `apps/mobile` knows, so it
+ * stops here rather than in the hook.
+ *
+ * **It goes to S36, not to a transaction.** J08 §4: the banner is about a
+ * balance that has not been attributed to anybody, and allocating it is the
+ * one action that answers it. Opening the oldest row instead was what the
+ * app could do before a screen existed that could spend the pot down.
  *
  * **One function, because three screens ask.** `today-screen.tsx`,
  * `debt-screen.tsx` and `dashboard-screen.tsx` all render the banner, and all
@@ -22,9 +25,5 @@ import type { UnsettledOpenTarget } from "@waltning/client/ledger/use-unsettled-
 import { router } from "expo-router";
 
 export function openUnsettled(target: UnsettledOpenTarget) {
-  if (target.kind === "transaction") {
-    router.push({ pathname: "/transaction/[id]", params: { id: target.transactionId } });
-    return;
-  }
-  router.push({ pathname: "/ledger", params: { account: target.accountId } });
+  router.push({ pathname: "/allocate", params: { account: target.accountId } });
 }

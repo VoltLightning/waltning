@@ -807,24 +807,27 @@ describe("Today", () => {
     expect(screen.queryByText("Uncategorized")).toBeNull();
   });
 
-  it("shows the unsettled banner and opens the named transaction", () => {
+  it("shows the unsettled banner and opens the pot to allocate", () => {
     withLedger(<Today />, fakeController({ accounts: [PLN_ACCOUNT, CLEARING_ACCOUNT] }));
 
     expect(screen.getByRole("alert")).toBeDefined();
     fireEvent.click(screen.getByText("Open"));
+    // J08 §4 — the banner is about a balance nobody has been charged for,
+    // and S36 is the screen that charges them.
     expect(router.push).toHaveBeenCalledWith({
-      pathname: "/transaction/[id]",
-      params: { id: id<"transactions">(`unsettled-${CLEARING_ACCOUNT.id}`) },
+      pathname: "/allocate",
+      params: { account: CLEARING_ACCOUNT.id },
     });
   });
 
   /**
    * H2 — when the oldest unconsumed entry is the account's own opening
    * balance rather than a transaction, `oldestUnconsumedTransactionId` is
-   * `null`: there is no transaction to name or to open, so the banner says
-   * so and `Open` falls back to the account's own filtered ledger.
+   * `null`: there is no transaction to *name*, so the banner says so. Where
+   * `Open` goes is no longer affected — the pot is the destination either
+   * way, which is what retired the fallback this case used to need.
    */
-  it("shows the opening-balance banner and falls back to the filtered ledger", () => {
+  it("shows the opening-balance banner and still opens the pot", () => {
     const controller = fakeController({
       accounts: [PLN_ACCOUNT, CLEARING_ACCOUNT],
       unsettled: [
@@ -847,17 +850,18 @@ describe("Today", () => {
     expect(rendered).toContain("opening balance");
     fireEvent.click(screen.getByText("Open"));
     expect(router.push).toHaveBeenCalledWith({
-      pathname: "/ledger",
+      pathname: "/allocate",
       params: { account: CLEARING_ACCOUNT.id },
     });
   });
 
   /**
    * §8's own reason for existing — `find_unsettled`'s third field — once
-   * `readUnsettledClearing` names a payee: the banner names the transaction,
-   * not the account, and `Open` goes straight there (S04 §3 Shared).
+   * `readUnsettledClearing` names a payee: the banner names the transaction
+   * rather than the account, so you know *which* night went unsplit. Where
+   * it opens is the pot regardless (J08 §4).
    */
-  it("names the transaction once fifoOldestOpen finds one, and Open goes straight to it", () => {
+  it("names the transaction once fifoOldestOpen finds one, and opens the pot", () => {
     const oldestId = id<"transactions">("66666666-6666-4666-8666-666666666666");
     const port = basePort({
       listAccounts: () => [PLN_ACCOUNT],
@@ -903,8 +907,8 @@ describe("Today", () => {
 
     fireEvent.click(screen.getByText("Open"));
     expect(router.push).toHaveBeenCalledWith({
-      pathname: "/transaction/[id]",
-      params: { id: oldestId },
+      pathname: "/allocate",
+      params: { account: CLEARING_ACCOUNT.id },
     });
   });
 
@@ -956,9 +960,10 @@ describe("Today", () => {
     expect(rendered).toContain("and 1 more");
 
     fireEvent.click(screen.getByText("Open"));
+    // The first pot leads; the others are a count, not a second banner.
     expect(router.push).toHaveBeenCalledWith({
-      pathname: "/transaction/[id]",
-      params: { id: id<"transactions">(`unsettled-${CLEARING_ACCOUNT.id}`) },
+      pathname: "/allocate",
+      params: { account: CLEARING_ACCOUNT.id },
     });
   });
 

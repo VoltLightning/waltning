@@ -89,12 +89,12 @@ per-person history this screen deliberately does not carry — that is S13.
 | Component | Notes |
 |---|---|
 | `SegmentControl` | The three split modes. `Even` and `Shares` compute every amount; `Custom` leaves them typed |
-| `CounterpartyRow` | Same monogram ramp as S12 (Q10), with the amount as an editable field rather than a read figure |
+| `ShareRow` | Its own molecule, not S12's `CounterpartyRow`: same monogram ramp (Q10), but the amount is being *decided* rather than reported, and your row says what the money was for where a counterparty's says *owes you* |
 | `Amount` | Every figure, including the remainder — §4.1's currency affix, tabular numerals |
-| `Select` | *+ Add someone*, searchable, with S15's *+ New person or company* in its footer |
-| `Chip` | Your row's category, opening S06 |
+| `CounterpartyPicker` | *+ Add someone* — the same sheet S05 opens, with S15's *+ New person or company* in its footer |
+| `CategorySheet` | Your row's category, opening S06. One category for the whole allocation: the debt rows carry it too, since until the taxonomy ships (J01 §2) there is no *Debt & giving › Lent out* to put them in |
 | `Button(primary)` | *Allocate* — states the amount it will write, because the figure is the point |
-| `Banner(warn)` | Shown when the shares do not sum: the remainder stays on the pot and the banner will still be there tomorrow. **Commit is allowed** (§4) |
+| `Banner(warn)` | Shown when the split exceeds the pot — the one case commit is refused. A split that merely does not *sum* needs no banner: the remainder line already states it, and **commit is allowed** (§4) |
 | `ConfirmDialog` | Not used. Allocation writes debts that are all individually editable afterwards, and a confirm on a screen whose whole job is stating the arithmetic would be asking twice |
 
 ## 5. Data
@@ -107,8 +107,17 @@ per-person history this screen deliberately does not carry — that is S13.
 
 **One operation, not N captures.** `allocate_shares` writes every row in one
 transaction, so a split is a single audited event rather than four rows that
-might half-exist. §8's largest-remainder arithmetic runs inside it, over the
-weights the mode produced, never over amounts a client rounded.
+might half-exist.
+
+**It takes amounts, not weights, and the split is computed once.** §6 puts the
+remainder on screen throughout; a screen that showed one set of figures while
+the operation recomputed another would be that same failure with extra steps.
+So `split-shares.ts` in `packages/client` produces the figures a person reads,
+and those exact figures are what is written. What the operation owes in return
+is refusing any set that does not fit: it reads the pot from the live replica —
+the same discipline S14 takes with a balance — and refuses a split larger than
+it, which would drive the balance past zero, where a non-zero pot stops meaning
+*shares are missing*.
 
 **The payer is first in the weights**, which is what makes §5's *"remainder
 assigned to the payer explicitly"* true rather than incidental: 100,00 three
@@ -122,9 +131,9 @@ yours because that row is index 0.
 | Loading | The pot's own figure resolves first; it is the number every other figure is measured against |
 | Populated | Editing · committing |
 | Empty | A clearing account at zero has nothing to allocate, and this screen says so rather than drawing an empty split. Reached only by opening it directly — the banner cannot lead here |
-| Error | A refused commit writes nothing. The draft is retained and the reason lands on the row that caused it |
+| Error | A refused commit writes nothing and the draft is retained. The reason is stated once, above the button: every refusal `allocate_shares` can produce is about the split as a whole — the pot, its kind, its currency — so there is no row to hang one on |
 | Offline | The whole screen works. `allocate_shares` is `offlineEligible` — J08 is a restaurant on a Friday night, which is precisely where there is no signal |
-| Gated | A share in a currency the pot does not hold is refused: every row of an allocation is denominated in the clearing account's own currency (§6.5). Settling in another currency is S14's job, later, per person |
+| Gated | Three refusals, all about the split rather than a field: a pot that is not a clearing account (§6.4 — allocating out of the account you paid *from* would take the bill out of it twice), a currency the pot does not hold (§6.5), and a split larger than the pot. Settling in another currency is S14's job, later, per person |
 
 ## 7. Interaction
 

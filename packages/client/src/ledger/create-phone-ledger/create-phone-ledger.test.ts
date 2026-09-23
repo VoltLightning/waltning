@@ -387,6 +387,7 @@ function harness(
     unmergeCounterparties: vi.fn(),
     recordDistinctCounterparties: vi.fn(),
     settleDebt: vi.fn(() => ({ residual: money.toMoney("0"), overSettled: false })),
+    allocateShares: vi.fn(() => ({ rows: [], remaining: money.toMoney("0") })),
     listCounterpartyBalances: vi.fn(() => []),
     renameCategory,
     reparentCategory,

@@ -6,7 +6,7 @@
  * rules exists is a case the original grew one screen at a time: the H2
  * opening balance with no payee, the H3 remainder that is less than the
  * balance, the `more` fold that keeps one banner instead of a stack, and
- * `openTarget`'s account fallback for a leg with no transaction to open. Each
+ * `openTarget`, which now names the pot whatever the oldest leg is. Each
  * of those is one branch here and eight sentences downstream, so a screen test
  * covers whichever branch its fixture happens to hit and no more.
  */
@@ -78,21 +78,27 @@ describe("unsettledBannerModel", () => {
     expect(model?.remainderDiffers).toBe(false);
   });
 
-  it("H2 — an opening balance is `isOpening`, has no payee, and opens the account", () => {
+  it("H2 — an opening balance is `isOpening` and has no payee", () => {
     const model = unsettledBannerModel([
       clearing({ oldestUnconsumedTransactionId: null, oldestUnconsumedPayee: null }),
     ]);
     expect(model?.isOpening).toBe(true);
     expect(model?.payee).toBeNull();
-    expect(model?.openTarget).toEqual({
-      kind: "account",
-      accountId: "11111111-1111-4111-8111-111111111111",
-    });
   });
 
-  it("S04 §3 — opens the unallocated transaction, not a list, whenever there is one", () => {
-    const model = unsettledBannerModel([clearing()]);
-    expect(model?.openTarget).toEqual({ kind: "transaction", transactionId: TX });
+  /**
+   * J08 §4 — the banner is about a balance nobody has been charged for, and
+   * S36 is the screen that charges them. It used to open the oldest row,
+   * with the account as a fallback for an opening balance that had no row;
+   * both cases are the pot, and the pot is now somewhere to go.
+   */
+  it("opens the pot, whatever the oldest open leg happens to be", () => {
+    expect(unsettledBannerModel([clearing()])?.openTarget).toEqual({
+      accountId: "11111111-1111-4111-8111-111111111111",
+    });
+    expect(
+      unsettledBannerModel([clearing({ oldestUnconsumedTransactionId: null })])?.openTarget,
+    ).toEqual({ accountId: "11111111-1111-4111-8111-111111111111" });
   });
 
   it("one banner, never a stack — the rest become a count, and the first one still leads", () => {
@@ -107,6 +113,6 @@ describe("unsettledBannerModel", () => {
     ]);
     expect(model?.more).toBe(2);
     expect(model?.name).toBe("Clearing · Bank A");
-    expect(model?.openTarget).toEqual({ kind: "transaction", transactionId: TX });
+    expect(model?.openTarget).toEqual({ accountId: "11111111-1111-4111-8111-111111111111" });
   });
 });
