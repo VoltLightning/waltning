@@ -49,7 +49,7 @@ One rule set, chosen per sheet by what the sheet holds. *Sized* is the sheet as 
 | Component | Notes |
 |---|---|
 | `TransactionList` | **The column.** Owns the separators and the keys; rows are given as data, not as children |
-| `TransactionRow` | Date · payee · category · `Amount`. `BIZ` tag when business. Payee at weight 500, so the identity reads before its metadata. Leads with `BrandIcon` once a screen passes `brandKey` (§14.4b) |
+| `TransactionRow` | Date · payee · category · `Amount`. Empty payee falls back to category, then Expense/Income/Transfer; a linked current name can be secondary when the saved text differs. `BIZ` tag when business. Payee at weight 500, so the identity reads before its metadata. Leads with `BrandIcon` once a screen passes `brandKey` (§14.4b) |
 | `BrandIcon` | A transaction's own recognised-merchant mark — ORLEN, YouTube, or another the bundled catalogue carries (§14.4b), resolved offline at write time, never from a network fetch. Unknown or absent key → the same deterministic monogram `CounterpartyRow`'s own fallback gives an unmatched name, never blank. Sizes: row (24) and widget (20) — the same two `ServiceIcon` below already uses, and the seam S34 reuses to add a real vector mark without another transaction-facing change |
 | `CategorySheet` option | **A white tile wearing its category's mark** — the hue's `solid` square (`02-tokens` §2.1) with the category's letter, the same square a ledger row wears for that category, then the name on up to two lines and its count. Ten outlined tiles with only a name were ten of one thing, and a reader found *Groceries* by reading all of them. **The chosen option is said in its own colour**: the hue's wash for a fill and its solid for a two-pixel edge, never the accent. Group chips above wear their group's hue as a wash; the chosen one takes the solid as its edge. The mark is decorative — the name is already there |
 | `AccountPicker` tile | The same tile, marked by **kind** rather than by name: a washed square carrying the kind's icon in its ink — bank `sky`, cash `amber`, card `indigo`, and one hue each for the rest — so a bank account, a card and cash are told apart before they are read. The balance keeps its money colour |
@@ -162,6 +162,7 @@ person can owe you in one currency while you owe them in another.
 | `BalanceLedger` | Per-currency table. Positive = they owe you, negative = you owe them — the **negation** of the ledger's cash-flow sign (`SPEC.md` §6.6), computed once here so no screen has to remember it. Direction stated in words, never by sign alone (P5) |
 | `SettleSheet` | Amount, currency, which balance it discharges, rate (editable), **residual shown before commit** |
 | `DebtDirectionTag` | `owes you` / `you owe` — text, not a colour |
+| `WhoPicker` | S05/S09 identity sheet: search; Recent, People, Shops & services; saved selection, Use text, Add via S15, clear. Keyboard-accessible and draft-preserving; distinct from the required-party debt picker |
 | `CounterpartyPicker` | Search, recent, create-in-place. Same shape as the category sheet |
 | `AgeingBar` | Days outstanding. **Companies only** — see O15 |
 

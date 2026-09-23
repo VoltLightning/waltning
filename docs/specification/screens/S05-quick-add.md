@@ -1,7 +1,7 @@
 # S05 · Quick add
 
 **Surface** mobile · **Journeys** J2, J3, J7, J8 · **Frequency** several times a day
-**Design** [S05.html](design/S05.html) · [S05-dark.html](design/S05-dark.html) — the deck's frames
+**Design** [S05.html](design/S05.html) · [Who and debt states](design/S05-who.html) · [S05-dark.html](design/S05-dark.html) — the deck's frames
 **Status** specified · tier 1
 
 ---
@@ -51,7 +51,7 @@ the phone is typed on.
 │  │ G  Category                               › ││
 │  │    Groceries                                ││
 │  │ ─────────────────────────────────────────── ││
-│  │ …  More details                           › ││  ← payee · date · time · scope · person, folded
+│  │ …  More details                           › ││  ← Who · date · time · scope · money owed, folded
 │  └─────────────────────────────────────────────┘│
 │  [Groceries] [Transport] [Home] [Fun]           │  ← this kind's four most-used, tinted by name
 │  ┌─────────────────────────────────────────────┐│
@@ -100,7 +100,7 @@ top-right, "out of the thumb zone" — and out of the design.
 **Two rows at rest, and the rest behind one.** *From* and *Category* are the
 two choices a capture always needs, and they are drawn as rows in one card: a
 32 tile in the account's or the category's own tint, the field's name over its
-value, a caret saying it opens something. Payee, date, time, scope and person
+value, a caret saying it opens something. Who, date, time, scope and money owed
 wait behind *More details*, a row in the same card that unfolds them — the chip row
 this replaces put seven placeholders in one wrapping line, every one the same
 weight, so the two that mattered were no more visible than the five that
@@ -239,6 +239,65 @@ This is a genuine divergence rather than a reflow. The mobile design optimises
 for one thumb and no keyboard; the desktop has a keyboard and a person sitting
 still, and a numeric keypad on screen would be slower than typing.
 
+### Who and money owed
+
+**Specified extension:** this replaces the separate Payee/Person capture
+controls. Data semantics and migration are owned by `SPEC.md` §6.6.1.
+
+More details contains **Who (optional)**, Date/time, Scope and **Track money
+owed** (off). The optional note stays separate. Who is a searchable sheet with
+Recent (unlinked text), People and Shops & services groups; empty groups are
+omitted. Labels and icons distinguish groups without relying on colour. Search
+uses the shared normalized fold; exact matches precede prefix then substring
+matches, with recency within each rank and a stable name/id tie-break. Saved
+entries appear once, in their kind group. Recent rows may show the last category
+and usage count; no invented count and no forced kind for free text.
+
+```
+Who                         [ Search names                 ]
+RECENT                      Corner café · Eating out
+PEOPLE                      Friend A
+SHOPS & SERVICES            Shop A
+                            Use “New café”
+                            Add to People & companies…
+                            Leave Who empty
+```
+
+Selecting a saved entry returns to the draft with ordinary reference semantics.
+**Use “…”** retains text only, without asking another question. **Add…** opens
+S15 with the name prefilled and kind unselected; save returns the linked entry,
+cancel restores the query and transaction draft. A typed name is never itself
+permission to create a saved entry. Blank search shows recent entries, with
+saved groups ordered by recent use then name; scrolling loads bounded pages.
+
+Track money owed reveals a **separate party selector** and an explicit meaning.
+For expenses: **I'll get this back** or **I'm paying someone back**. For income:
+**I'll pay this back** or **Someone is paying me back**. None is preselected.
+The summary names who owes whom after this payment and states **Full amount**.
+Existing debt/settlement computations decide the effect; paying back uses S14
+and its balance/overpayment checks rather than a new unrestricted debt write.
+Changing kind clears confirmation of the meaning. Back from S14 preserves the
+capture draft; a completed settlement consumes it so Save cannot duplicate it.
+
+A saved Who is suggested as the debt party but requires confirmation. Selecting
+another party keeps Who intact: **Who: Shop A; I'll get this back: Friend A**.
+Turning tracking off clears the debt draft and restores ordinary reference
+semantics. Cancellation writes nothing. For a partial or multi-person split,
+link to J08/S36; do not apply the full amount as another person's debt. This
+leaves the purchase draft unsaved and explains the funded clearing-account flow;
+it does not also save an ordinary expense or silently move money into a pot. Shared
+account contributions remain an explicit **Contribution from** choice using the
+existing contribution role, not a debt-toggle synonym.
+
+The picker supports keyboard search, arrow navigation, Enter to select and Esc
+to return without changes. On phone, the sheet keeps its search above the
+keyboard with 44px targets and restores focus to Who on close. Screen readers
+announce group, name and selection, not merely an avatar. Loading shows a
+skeleton, a failed query retains text with Retry, and zero results keeps both
+Use and Add available. Offline reads use the local ledger; saved-entry creation
+and dependent transaction intents retain their ordering through sync.
+
+
 ## 4. Components
 
 | Component | Notes |
@@ -247,7 +306,8 @@ still, and a numeric keypad on screen would be slower than typing.
 | `SegmentControl` | The kind — Expense · Income · Transfer. Transfer opens S31 |
 | `AmountCard` | *How much?* over a `TextInput` at `display-hero`, tabular lining numerals, the kind's sign in the kind's colour, the currency affix in the accent; the pace line under it |
 | `FigureInput` | The figure inside `AmountCard`, and *Leaves* and *Arrives* on S31. **Drawn as text, with a transparent input over it**: the sign, the digits and the currency are three `Text`s in one row, so they share a baseline on every platform, and the input lying over them only takes the typing. Done the other way round it failed three times on a device — a sign mounted on the first keystroke pushed every later digit sideways; an input whose width was *estimated* per character re-laid its content under each key, which is the figure jumping as it is typed; and a `Text` sign baseline-aligned to a `TextInput` sat on the baseline like an underscore on Android. The caret is drawn after the last digit — standing on the digits' baseline and as tall as they are, never centred in the row, whose box on iOS includes the line's space under the glyphs — and typing is at the end. **The input is unseen, never absent**: opacity `0.02` and a nearly clear ink, because iOS delivers no touch to a view at `0.01` or under — a figure at `0` takes its first focus from `autoFocus` and can never be tapped back into — and Android draws the default ink for a fully transparent one |
-| `ComposerRows` · `ComposerRow` | The card of choices: a 32 tinted tile, label over value, caret. *From* on an expense and *Into* on an income — the account the money leaves or lands in, named for the direction it moves — then *Category* · *More details*, which unfolds *Payee* · *Date* · *Scope* · *Person*. **≥44px** (Q3). The account row fills from last-used **only within a short window**, and is otherwise empty, Save refusing until one is chosen — a stale default reads as an answer rather than a question (§9) |
+| `ComposerRows` · `ComposerRow` | The card of choices: a 32 tinted tile, label over value, caret. *From* on an expense and *Into* on an income — the account the money leaves or lands in, named for the direction it moves — then *Category* · *More details*, which unfolds *Who* · *Date* · *Scope* · *Track money owed*. **≥44px** (Q3). The account row fills from last-used **only within a short window**, and is otherwise empty, Save refusing until one is chosen — a stale default reads as an answer rather than a question (§9) |
+| `WhoPicker` | Grouped saved entries and recent names; Use text, Add via S15, and clear. Defined in `design-system/05` |
 | `CategoryChips` | This kind's four most-used categories, tinted by name, the picked one always among them |
 | `Banner` | `neutral`, under the rows, when the chosen account's currency has no rate — the refusal, and its one action, *Set a ‹CUR› rate* → S18 |
 | `TrailRow` | *From your history: Corner Café* + **Undo**, under the rows, while a proposal fills the category on its own. The P2 component |
@@ -262,7 +322,7 @@ still, and a numeric keypad on screen would be slower than typing.
 | Reads | Writes |
 |---|---|
 | `get_accounts`, `get_category_tree` | **`create_transaction`** |
-| `get_counterparties` | `create_category` (via S06, proposed) |
+| `get_counterparties` · `get_payee_suggestions` | `create_category` (via S06, proposed) |
 | Rate for the draft's date | `create_counterparty` (via S15) |
 
 `create_transaction` is the operation the agent inherits (§11.0), which is why
@@ -325,8 +385,8 @@ fact.
   recomputed.
 - **§14.3** — every write carries a client-generated UUID, so a retry cannot
   become a second coffee.
-- **§6.6** — attaching a counterparty requires choosing a role; it is never
-  defaulted, because *they owe me* and *was with them* are opposite claims.
+- **§6.6.1** — ordinary Who selection explicitly means reference; debt and
+  contribution require their own choices. Selecting a name never infers an obligation.
 
 ## 9. Open questions
 

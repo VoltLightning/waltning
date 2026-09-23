@@ -14,6 +14,11 @@ presumes a backend to report on. A backendless phone backs itself up a different
 way and this screen's backup and drill panels do
 not apply to it (`architecture/14` §14.3) — see §3.
 
+**Settings navigation:** the reference-data group also links to S37 · People &
+companies, beside Categories and Currencies. It is available without a backend
+and opens the directory rather than the Debt tab.
+
+
 ## 2. Entry and exit
 
 | From | Via | Back to |

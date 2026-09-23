@@ -18,6 +18,10 @@ That structure cannot answer the question you actually have. It knows the total
 owed to you in PLN. It does not know that **one person owes you PLN and you owe
 them EUR**, because the person is not a record anywhere.
 
+For a purchase on behalf of someone, Who retains the merchant and Track money
+owed names the separate person. Ordinary Who selection never enters the debt
+ledger. S05 owns the controls; `SPEC.md` §6.6.1 owns the two-identity contract.
+
 ## 2. Preconditions
 
 An account to move money through. Counterparties are created in place (S15), so
@@ -27,15 +31,15 @@ nothing has to exist first.
 
 ```
 RECORD
-  S05 Quick add → attach counterparty → CHOOSE THE ROLE
+  S05 Quick add → optional Who → TRACK MONEY OWED
         │            ▸ new person/company → S15 Counterparty editor
-        │                name · kind · THEIR settlement currency
+        │                name · explicit kind · optional repayment currency
         │
-        │   role = debt      → enters the ledger below
+        │   choose who owes whom → role = debt → ledger below
         │          category defaults: Debt & giving › Lent out
         │                         or Other inflows › Borrowed
         │   role = contribution → J8 / §6.7, NOT a debt
-        │   role = reference    → recorded, no obligation
+        │   ordinary Who selection → reference, no obligation
         │
         Save
 

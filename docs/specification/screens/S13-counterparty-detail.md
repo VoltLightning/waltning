@@ -21,6 +21,13 @@ One person's full position, across every currency at once.
 **Exits** — S14 settle · S15 edit · S05 prefilled · their history filtered:
 S10 on the desk, S04 on the phone.
 
+**Caller selects the initial view.** From Debt, show debts as described below;
+from S37, show all linked transactions, matching either identity FK and counting
+a transaction only once. Display the role per row and keep the debt totals
+separate from purchases. Reference-only parties have a truthful no-debt state,
+not a fictitious zero repayment action. `SPEC.md` §6.6.1 defines identity history.
+
+
 ## 3. Layout
 
 ### Both surfaces
@@ -45,8 +52,8 @@ S10 on the desk, S04 on the phone.
   28 Jul   lent for tickets             +780,00 zł
 ```
 
-**History defaults to `debt` rows**, so every visible row explains a number in
-the ledger above it. `reference` and `contribution` rows are one tap away — and
+**When entered from Debt, history defaults to `debt` rows**, so every visible
+row explains a number in the ledger above it. S37 enters All activity instead. `reference` and `contribution` rows are one tap away — and
 the toggle **states the count it is hiding**, because a default filter that
 silently omits real data is the failure mode, and naming the count is the
 cheapest guard against it (`design-system/08` §8.1).
@@ -91,7 +98,7 @@ Web adds the ageing bar inline for companies and shows history as a table.
 |---|---|
 | Loading | Skeleton ledger rows |
 | Populated | Outstanding · fully settled · **mixed direction** |
-| Empty | All settled — states it plainly, keeps the history, keeps the counterparty |
+| Empty | No debt history → No money owed, with all activity available; settled debt → All settled, keeping its history |
 | Error | `ErrorState(recoverable)` |
 | Offline | Cached with age |
 | Gated | n/a |
@@ -99,7 +106,7 @@ Web adds the ageing bar inline for companies and shows history as a table.
 ## 7. Interaction
 
 ### Mobile
-Settle is the primary action. History scrolls; tapping a row → S09.
+Settle is primary only while debt is outstanding; otherwise Edit remains available. History scrolls; tapping a row → S09.
 
 ### Web
 Same, with history as a sortable table and both actions in a fixed header.
@@ -118,7 +125,7 @@ Same, with history as a sortable table and both actions in a fixed header.
 ## 9. Open questions
 
 1. ~~**Should history include `reference`-role rows?**~~ **Decided: available
-   behind a toggle, debts only by default.** The primary read stays clean —
+   behind a toggle, debts only when entered from Debt; all activity from S37.** The primary read stays clean —
    every visible row explains a number in the ledger above it — and the full
    picture is one tap away.
 

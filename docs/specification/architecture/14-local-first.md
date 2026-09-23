@@ -202,6 +202,13 @@ than a misfire — `08`'s H16 **blocks** a stale tax-sensitive field, so a payee
 typo corrected elsewhere permanently blocks an unrelated queued edit while
 reporting that another device changed `is_business`. Nothing did.
 
+**Identity fields are a semantic group.** For the specified Who extension
+(`SPEC.md` §6.6.1), a write touching payee text, its saved-party link, the
+relationship party or role carries prior values for all four and checks them
+together. A concurrent merchant/debt edit must not become a hybrid identity;
+unrelated category/note edits retain ordinary per-field behavior. Old outbox
+entries use the deterministic upcast in that section before these checks.
+
 So **a write carries the prior value of every field it sets**, and the server
 compares field by field — plain compare-and-swap, which answers the question
 literally. `version` stays as the fast path: equal versions mean nothing moved

@@ -1569,6 +1569,148 @@ an automatic write: the names are inconsistent (first name, first name plus
 initial, nickname) and merging two spellings of one person silently would
 corrupt a balance.
 
+### 6.6.1 Who, the directory, and money owed
+
+**Specified, not implemented:** the independent payee link and unified Who
+experience below require schema, contract, executor and screen work. Existing
+counterparty roles retain their meanings; this section is the implementation
+contract, not a claim that the current database has the additional column.
+
+**Who** is the optional person or business involved in an ordinary payment.
+**People & companies** is its saved directory; **Debt** lists obligations,
+not everybody in that directory. Kind (`person | company`) groups the directory;
+role describes this transaction. A company can be owed money and a person can
+be paid without creating debt. Accounts remain places money is held, never
+entries created to represent a shop or friend. Categories answer what money
+was for; no generic party or extra category is required for an unknown shop.
+
+#### Two identities on one transaction
+
+Add nullable `transactions.payee_counterparty_id`, an FK to `counterparties`,
+independent of the existing `counterparty_id` and `counterparty_role` pair.
+The new link identifies **Who**. The existing pair identifies the relationship
+that affects debt or shared contributions. `payee` remains the entered text
+snapshot for import provenance, regex rules and historical display.
+
+| Capture | Payee link | Existing relationship pair |
+|---|---|---|
+| Unnamed shop | NULL; empty payee | NULL / NULL |
+| Use free text “Shop A” | NULL; entered payee | NULL / NULL |
+| Select saved Shop A, ordinary purchase | Shop A; name copied to payee | Shop A / reference |
+| Pay Shop A for Friend A, expecting full repayment | Shop A; name copied to payee | Friend A / debt |
+| Friend A contributes to a shared account | Friend A; name copied to payee | Friend A / contribution |
+
+A separate merchant table was rejected because a company can also hold debt.
+Keeping only merchant text was rejected because directory rename/merge/history
+would then lose the merchant association whenever a debtor occupies the existing
+FK. Making the relationship role nullable was rejected because `reference`
+already expresses an ordinary involvement without weakening the pair constraint.
+
+The two links may equal one another; they do not have to. Debt calculations
+continue to read only the existing `debt`-role pair. A linked merchant must not
+receive a receivable merely because another person owes the payment back.
+`reference` remains explicit; NULL is not a new spelling of that role.
+
+For newly written or identity-edited rows, a reference pair equals the payee
+link. A linked payee with no debt/contribution uses that same reference pair.
+An unlinked payee may coexist with a debt/contribution pair. Preserve the
+existing pair-shape CHECK; add FKs and an index for the payee link, plus a CHECK
+that a non-null payee link has a relationship pair and that `reference` equals
+that link. Enforce these in both databases and operation validation, with
+refusal tests against both engines. Legacy reference-only rows may have a null
+payee link until backfilled; unrelated edits must not invent an identity.
+
+Migration backfills the link **only** from existing reference-role rows; it
+never matches names to debt/contribution rows. Preserve payee text, including
+empty text. New create/update inputs expose `payeeCounterpartyId`; old queued
+operations missing it get a versioned, deterministic upcast matching that
+backfill rule, not a name lookup. Include the field in replica serialization,
+backup/restore, audit, seeds and generated schemas. Treat the two links, role
+and payee text as one identity conflict group when concurrent edits overlap;
+never silently combine another merchant with an old debtor selection.
+
+Changing or clearing Who preserves a separately selected debt/contribution
+party. Without one, replace/clear the reference pair atomically with Who.
+Turning debt tracking off restores a reference pair to the linked Who, or clears
+both relationship fields if Who is free text/empty. Changing expense to income
+requires re-confirming the debt meaning; it must not silently reverse it.
+Editing payee text freely clears its link unless the person explicitly keeps
+that association. All these changes use the ordinary update operation and its
+existing gates, including closed-period restrictions.
+
+#### Names, history, and directory maintenance
+
+Selecting an entry copies its current name into the transaction's payee text.
+Renaming or merging directory entries does not rewrite those snapshots. A
+transaction may show the saved text and a secondary current directory name when
+they differ. Clearing an archived selection is allowed; an unchanged archived
+reference remains readable and survives unrelated edits. New selections exclude
+archived entries.
+
+Recent suggestions group non-empty text by the existing case/diacritic fold,
+use the latest spelling, count live transactions, and propose the most recently
+used active category. They exclude deleted rows and do not guess person/company
+kind. Search spans saved entries and recent text. Folded exact matches to saved
+entries appear only in their saved group; similar spellings are not silently
+linked. Dismissing a duplicate warning is not permission to merge. Adding a
+saved entry links the current draft only: no retroactive matching by name.
+
+Names exceeding the directory's 120-character limit remain usable as payee
+text up to its existing 200-character limit. Add asks for a shorter saved name;
+it never truncates or changes the transaction snapshot silently. Two distinct
+parties with identical normalized names require an explicit distinguishing
+label; kind alone does not bypass the existing unique-name rule.
+
+Explicit merging updates **both** FK positions, counts each affected transaction
+once, and records which positions moved so unmerge restores exactly those
+positions. Never overwrite an intervening edit during unmerge: refuse a changed
+position and offer reviewed correction. Free-text history and imported raw
+strings are not rewritten. Near-match checking runs against the local directory
+when offline, with that scope stated. At sync, preserve architecture/08 H13:
+accept the client identity with a visibly disambiguated name on collision, then
+offer reviewed merging. Do not silently redirect either FK to an existing party.
+Other creation refusals block dependent writes with recoverable draft state.
+
+`get_counterparties` supplies saved directory entries; `get_payee_suggestions`
+returns bounded, paginated recent text/category/count suggestions using the local
+ledger or authenticated server. It is read-only and offline-eligible. Explicit
+linked-party history searches match either FK and deduplicate transaction IDs;
+debt reads keep their existing role filter. No count is inferred from the
+current `readPayeeHistory` result: that helper does not return usage counts.
+
+#### Agent behavior
+
+An agent may select a known party, retain a new name as text, or propose a
+`create_counterparty` followed by the transaction. The confirmation exposes the
+creation, chosen kind, merchant and any separate obligation. Ambiguous identity
+or debt intent requires clarification. Default creation is gated; only an
+explicit scoped auto-grant may bypass that approval under §11.2. No fuzzy match
+or merchant selection grants permission to create debt or merge identities.
+Execute dependent writes in order using stable IDs; a refused creation prevents
+the dependent transaction, and retry does not create another entry. If creation
+succeeds and transaction approval is declined, retain the saved directory entry
+and report that result accurately rather than claiming the payment was saved.
+
+#### Acceptance examples
+
+- Saving an unnamed grocery purchase creates no directory entry; the category
+  is the list label, with Expense/Income as fallback if it too is absent.
+- Paying saved Shop A ordinarily leaves all debt balances unchanged.
+- Paying Shop A for Friend A preserves both links; only Friend A's debt changes.
+- Clearing Who on that row retains Friend A's debt; disabling the debt restores
+  the merchant reference and removes the obligation only after explicit Save.
+- Replaying an offline new-party plus transaction pair twice produces one of
+  each; a refused creation leaves the transaction unapplied with its draft intact.
+  A name collision admitted under H13 retains its distinct client identity.
+- Merging a party appearing in both FK positions changes each position once;
+  unmerge restores both, without rewriting the payee snapshot.
+
+Unpaid invoices and partial reimbursement of an ordinary purchase are not
+created by a Who selection. The ledger records money movements; multi-person
+shares use J08/S36's funded-pot allocation flow. A single debt capture applies
+to the full transaction amount and says so before Save.
+
+
 ### 6.6a Debt reassignment — the transfer that moves nothing
 
 The probe (§8.1a) found **173 transfers whose source and destination are the
@@ -3172,6 +3314,12 @@ The agent may **propose** a new category when nothing fits; it never creates one
 silently. This is the guardrail that keeps a dynamic taxonomy from becoming 400
 junk categories — and the risk is not hypothetical, given 122 categories with 13
 name collisions today.
+
+**Identity selection and creation:** §6.6.1 defines Who and the separate debt
+party. Agent proposals expose both, any new directory entry and its kind, with
+normal approval/auto-grant enforcement. A category suggestion is not evidence
+that a merchant identity is known or that money is owed.
+
 
 ### 11.6 What the agent keeps in mind
 

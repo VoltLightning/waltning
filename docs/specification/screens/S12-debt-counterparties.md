@@ -24,6 +24,14 @@ Who owes you, and whom you owe, across every currency.
 **Exits** — a counterparty → S13 · add → S15 · unallocated clearing → the
 transaction that needs allocating.
 
+**Directory boundary:** S37 contains all People & companies. S12 defaults to
+parties with any non-zero per-currency debt balance; offsetting converted totals
+do not hide them. Settled shows parties with debt history and no open balance. A
+reference-only shop or person appears in neither debt group merely because it
+was saved. Existing debt rows can still be inspected after settlement. Directory
+navigation is available from Settings; this screen remains about obligations.
+
+
 ## 3. Layout
 
 **The hero card is S04's `MonthSummary`, with debt's three figures in it.** Label above the number, the number on its own line, a `FlowBar` whose track is *you lent* and whose fill is *you owe* — so the gap that remains is what comes back to you — then the labelled pair beneath. Every figure carries its currency
