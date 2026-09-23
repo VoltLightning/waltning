@@ -372,11 +372,16 @@ describe("the phone ledger session", () => {
     const insert = sqlite.prepare(
       "insert into categories (id, parent_id, name, kind, is_leaf, archived, created_at, updated_at) values (?, ?, ?, ?, ?, ?, ?, ?)",
     );
-    insert.run("66666666-6666-4666-8666-666666666666", null, "Food", "expense", 0, 0, 0, 0);
+    // Names the shipped taxonomy does not already hold, so this reads as one
+    // group a person added rather than colliding with `seed:food`. The tree
+    // arrives with the app now (`categories/bootstrap-taxonomy.ts`), so a
+    // fixture that expected an otherwise empty table would be asserting
+    // against a state no device is ever in.
+    insert.run("66666666-6666-4666-8666-666666666666", null, "Moorings", "expense", 0, 0, 0, 0);
     insert.run(
       "77777777-7777-4777-8777-777777777777",
       "66666666-6666-4666-8666-666666666666",
-      "Groceries",
+      "Winter berth",
       "expense",
       1,
       0,
@@ -396,9 +401,18 @@ describe("the phone ledger session", () => {
     sqlite.close();
 
     const tree = session.listCategoryTree();
-    expect(tree.map((c) => c.name)).toEqual(["Food", "Groceries"]);
-    expect(tree.find((c) => c.name === "Food")).toMatchObject({ isLeaf: false, parentId: null });
-    expect(tree.find((c) => c.name === "Groceries")).toMatchObject({
+    const names = tree.map((c) => c.name);
+    expect(names).toContain("Moorings");
+    expect(names).toContain("Winter berth");
+    // The subject of this case: an archived leaf is not in the tree.
+    expect(names).not.toContain("Retired");
+    // And the shipped tree is under it, unaffected by any of the above.
+    expect(names).toContain("Groceries");
+    expect(tree.find((c) => c.name === "Moorings")).toMatchObject({
+      isLeaf: false,
+      parentId: null,
+    });
+    expect(tree.find((c) => c.name === "Winter berth")).toMatchObject({
       isLeaf: true,
       parentId: "66666666-6666-4666-8666-666666666666",
     });

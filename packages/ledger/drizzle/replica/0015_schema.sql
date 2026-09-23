@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX `categories_external_id_uq` ON `categories` (`external_id`);
