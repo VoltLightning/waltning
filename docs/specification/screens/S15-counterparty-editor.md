@@ -17,6 +17,7 @@ who is the same person.
 |---|---|---|
 | S05 | Counterparty chip → *new* | S05, with the counterparty attached |
 | S12 | Add | S12 |
+| S37 | New / edit | S37 |
 | S13 | Edit | S13 |
 | S29b | Counterparty proposal review | S29b |
 
@@ -48,6 +49,23 @@ convey that accepting it merges two ledgers (`design-system/08` §8.4).
 
 **Two actions, no default.** Choosing *these are different* records the
 decision, so the pair is never queried again.
+
+### Lightweight creation and callers
+
+S37 and S05's Who picker both enter this editor. On creation the only required
+fields are Name and **Person / Shop or service**; no kind is silently selected
+from spelling or the API's default. Shop or service stores `company`. Contact,
+Note and settlement preference are optional under More details; the latter is
+labelled **Preferred repayment currency** and may stay unset. This is the
+specified replacement for the always-expanded form in the drawing above.
+
+Creating from Who returns to the preserved transaction draft with the saved
+entry selected. Cancelling returns the query unchanged. Choosing an existing
+near-match selects it; it does not merge historical records in a create flow.
+An actual merge is an explicit maintenance action with affected-row count and
+confirmation. `SPEC.md` §6.6.1 owns both-link merge/unmerge behavior. Creation
+links only the current draft; existing free-text transactions are not relabelled.
+
 
 ## 4. Components
 

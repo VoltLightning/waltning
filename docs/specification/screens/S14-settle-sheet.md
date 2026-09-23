@@ -16,7 +16,15 @@ agreed.
 | From | Via | Back to |
 |---|---|---|
 | S13 | Settle | S13, balance updated |
+| S05 | Paying back / being paid back | Cancel → retained draft; success → caller with draft consumed |
 | S12 | Swipe-free row action | S12 |
+
+**Capture handoff:** carry the draft amount, account, date and Who snapshot/link
+into settlement, with the selected debt party kept separately. S14 previews the
+actual amount and FX discharge and owns the sole `settle_debt` write. A stable
+intent ID prevents retry or returning to S05 from saving the same payment twice;
+cancel keeps the untouched draft. The settlement contract must accept Who fields
+under `SPEC.md` §6.6.1 rather than silently replacing the merchant with the debtor.
 
 ## 3. Layout
 

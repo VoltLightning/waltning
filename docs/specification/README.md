@@ -143,7 +143,7 @@ exists.
 §3). Purpose, components, data, states and rules are written once; only layout
 and interaction split into mobile and web subsections.
 
-**34 screens, and the IDs have two gaps.** S23 (Calendar · web) merged into S11
+**35 screens, and the IDs have two gaps.** S23 (Calendar · web) merged into S11
 and S26 (Debt overview · web) into S12 — both were the same concept at a wider
 density, which is exactly what a web subsection is for. Their numbers are
 retired rather than reused: a screen ID is a stable identifier that flows and
@@ -209,6 +209,7 @@ more than its prose.
 | [S34](screens/S34-subscriptions.md) | Subscriptions | both | — | 3 | specified |
 | [S35](screens/S35-conflict-sheet.md) | Conflict sheet | both | — | 3 | specified |
 | [S36](screens/S36-allocate.md) | Allocate | both | — | 2 | specified |
+| [S37](screens/S37-people-and-companies.md) | People & companies | both | ✅ | 2 | specified |
 
 **Deliberately not on every surface.** S01 and S04 answer the same question at
 different scales and would compete as landing surfaces, so neither is ported.

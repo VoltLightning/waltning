@@ -53,7 +53,7 @@ remember to log itself is an operation that will eventually forget.
 |---|---|
 | Transactions | `search_transactions` · `get_transaction` · `get_audit_log` |
 | Balances | `get_balances` · `get_accounts` |
-| Taxonomy | `get_category_tree` · `get_counterparties` |
+| Taxonomy | `get_category_tree` · `get_counterparties` · `get_payee_suggestions` |
 | Analysis | `spend_by_category` · `spend_by_period` · `compare_periods` · `income_vs_expense` |
 | Debt | `counterparty_balances` · `find_unsettled` |
 | Import | `get_import_batch` · `get_import_rows` · `get_rules` |
@@ -174,6 +174,25 @@ Auto column: ✅ eligible for a bounded auto-mode grant, ❌ never.
 | `consolidate_memory` | ❌ | Rewrites many entries at once; the only way to lose several at a stroke, so it shows its diff |
 
 ---
+
+## Who and directory contracts
+
+`SPEC.md` §6.6.1 owns the specified identity extension. `get_payee_suggestions`
+is a read, offline-eligible, with bounded query/cursor/limit input and paginated
+text, last active category and usage count output. `get_counterparties` supports
+kind/search/archive filters. Both have equivalent local and server contracts;
+creating a provider gateway must not make a local picker depend on the network.
+
+`create_transaction`, `update_transaction` and `settle_debt` carry the independent
+`payeeCounterpartyId` and existing relationship pair, validated together.
+`search_transactions` gains an explicit linked-party filter matching either FK
+without duplicates; existing debt-only callers retain their semantics.
+`create_counterparty` remains the sole entry creation operation; naming a shop
+never creates an account. Merge/unmerge cover both FK positions as specified.
+Agent creation uses the normal gate/explicit auto-grant policy; dependency
+ordering and partial completion are visible to the user. No additional ad-hoc
+write is introduced by the picker or the agent.
+
 
 ## What is never an operation
 
