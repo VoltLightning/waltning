@@ -25,7 +25,8 @@ Who owes you, and whom you owe, across every currency.
 transaction that needs allocating.
 
 **Directory boundary:** S37 contains all People & companies. S12 defaults to
-parties with outstanding debt; Settled shows parties with debt history. A
+parties with any non-zero per-currency debt balance; offsetting converted totals
+do not hide them. Settled shows parties with debt history and no open balance. A
 reference-only shop or person appears in neither debt group merely because it
 was saved. Existing debt rows can still be inspected after settlement. Directory
 navigation is available from Settings; this screen remains about obligations.

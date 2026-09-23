@@ -1700,7 +1700,8 @@ and report that result accurately rather than claiming the payment was saved.
 - Clearing Who on that row retains Friend A's debt; disabling the debt restores
   the merchant reference and removes the obligation only after explicit Save.
 - Replaying an offline new-party plus transaction pair twice produces one of
-  each; a collision leaves the transaction unapplied with its draft intact.
+  each; a refused creation leaves the transaction unapplied with its draft intact.
+  A name collision admitted under H13 retains its distinct client identity.
 - Merging a party appearing in both FK positions changes each position once;
   unmerge restores both, without rewriting the payee snapshot.
 

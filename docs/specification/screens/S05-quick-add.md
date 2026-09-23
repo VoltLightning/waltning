@@ -283,7 +283,9 @@ A saved Who is suggested as the debt party but requires confirmation. Selecting
 another party keeps Who intact: **Who: Shop A; I'll get this back: Friend A**.
 Turning tracking off clears the debt draft and restores ordinary reference
 semantics. Cancellation writes nothing. For a partial or multi-person split,
-link to J08/S36; do not apply the full amount as another person's debt. Shared
+link to J08/S36; do not apply the full amount as another person's debt. This
+leaves the purchase draft unsaved and explains the funded clearing-account flow;
+it does not also save an ordinary expense or silently move money into a pot. Shared
 account contributions remain an explicit **Contribution from** choice using the
 existing contribution role, not a debt-toggle synonym.
 
