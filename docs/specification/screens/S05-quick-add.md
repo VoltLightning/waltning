@@ -100,7 +100,7 @@ top-right, "out of the thumb zone" — and out of the design.
 **Two rows at rest, and the rest behind one.** *From* and *Category* are the
 two choices a capture always needs, and they are drawn as rows in one card: a
 32 tile in the account's or the category's own tint, the field's name over its
-value, a caret saying it opens something. Payee, date, time, scope and person
+value, a caret saying it opens something. Who, date, time, scope and money owed
 wait behind *More details*, a row in the same card that unfolds them — the chip row
 this replaces put seven placeholders in one wrapping line, every one the same
 weight, so the two that mattered were no more visible than the five that
@@ -383,8 +383,8 @@ fact.
   recomputed.
 - **§14.3** — every write carries a client-generated UUID, so a retry cannot
   become a second coffee.
-- **§6.6** — attaching a counterparty requires choosing a role; it is never
-  defaulted, because *they owe me* and *was with them* are opposite claims.
+- **§6.6.1** — ordinary Who selection explicitly means reference; debt and
+  contribution require their own choices. Selecting a name never infers an obligation.
 
 ## 9. Open questions
 

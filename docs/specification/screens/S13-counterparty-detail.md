@@ -52,8 +52,8 @@ not a fictitious zero repayment action. `SPEC.md` §6.6.1 defines identity histo
   28 Jul   lent for tickets             +780,00 zł
 ```
 
-**History defaults to `debt` rows**, so every visible row explains a number in
-the ledger above it. `reference` and `contribution` rows are one tap away — and
+**When entered from Debt, history defaults to `debt` rows**, so every visible
+row explains a number in the ledger above it. S37 enters All activity instead. `reference` and `contribution` rows are one tap away — and
 the toggle **states the count it is hiding**, because a default filter that
 silently omits real data is the failure mode, and naming the count is the
 cheapest guard against it (`design-system/08` §8.1).

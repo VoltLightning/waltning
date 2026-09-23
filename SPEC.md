@@ -1666,8 +1666,10 @@ once, and records which positions moved so unmerge restores exactly those
 positions. Never overwrite an intervening edit during unmerge: refuse a changed
 position and offer reviewed correction. Free-text history and imported raw
 strings are not rewritten. Near-match checking runs against the local directory
-when offline, with that scope stated; sync identity collisions require a person
-to resolve them before dependent writes drain.
+when offline, with that scope stated. At sync, preserve architecture/08 H13:
+accept the client identity with a visibly disambiguated name on collision, then
+offer reviewed merging. Do not silently redirect either FK to an existing party.
+Other creation refusals block dependent writes with recoverable draft state.
 
 `get_counterparties` supplies saved directory entries; `get_payee_suggestions`
 returns bounded, paginated recent text/category/count suggestions using the local
