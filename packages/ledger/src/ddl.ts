@@ -531,6 +531,12 @@ export const REPLICA_STEPS: readonly {
     tag: "0014_schema",
     statements: [`ALTER TABLE \`transactions\` ADD \`time_of_day\` text`],
   },
+  {
+    tag: "0015_schema",
+    statements: [
+      `CREATE UNIQUE INDEX \`categories_external_id_uq\` ON \`categories\` (\`external_id\`)`,
+    ],
+  },
 ];
 
 /** One step per file in `drizzle/outbox`, filename order — the queue, its index, and the counter `claimSeq` allocates from. */

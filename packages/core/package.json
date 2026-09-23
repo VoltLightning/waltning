@@ -19,6 +19,7 @@
     "./random": "./src/random.ts",
     "./registry/*": "./src/registry/*.ts",
     "./rule-zero-fetch": "./src/rule-zero-fetch.ts",
+    "./taxonomy": "./src/taxonomy.ts",
     "./zod": "./src/zod.ts"
   },
   "scripts": {

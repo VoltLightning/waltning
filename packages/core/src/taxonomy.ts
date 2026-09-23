@@ -1,9 +1,19 @@
 /**
- * Seed data — the category taxonomy from TAXONOMY.md.
+ * The category taxonomy from `TAXONOMY.md` — 15 groups, 59 leaves and
+ * `Uncategorized`, which is what a ledger starts with.
  *
- * Currencies are **not** here. They are reference data both the server and the
- * phone need, so they live in `@waltning/core/currencies`; a list only the
- * server could reach is what made the phone's replica a single-currency one.
+ * **Here rather than in `packages/db`, for the reason this file used to give
+ * about currencies.** It said them first: *"a list only the server could
+ * reach is what made the phone's replica a single-currency one."* The same
+ * sentence was true of the tree it was sitting in. `packages/ledger` cannot
+ * name `@waltning/db` by any path (`tests/architecture.test.ts`), so while
+ * the taxonomy lived there the phone shipped with **no categories at all** —
+ * an empty picker on first run, and J01 §2's *"currencies and taxonomy
+ * seeded"* half true.
+ *
+ * Both engines now read this one list: `packages/db`'s seed upserts it into
+ * Postgres, and `packages/ledger`'s own migration inserts it into the
+ * replica. `taxonomy.test.ts` in `packages/ledger` holds the two together.
  *
  * One refinement against that document: it drew `EARNINGS` and `UNEARNED` as
  * top-level groups, which would have made income three levels deep and broken

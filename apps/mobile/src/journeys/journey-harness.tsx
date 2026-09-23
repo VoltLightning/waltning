@@ -29,13 +29,10 @@ import { LedgerProvider } from "@waltning/client/ledger/ledger-provider";
 import { currencies as referenceCurrencies } from "@waltning/core/currencies";
 import { addDays } from "@waltning/core/date";
 import { currencyCode } from "@waltning/core/money";
-import { convertLeafGroupExecutor } from "@waltning/ledger/categories/convert-leaf-group.executor";
 import type { SqliteOpener } from "@waltning/ledger/open";
-import { ledgerRegistry } from "@waltning/ledger/registry";
 import { ledgerSchema } from "@waltning/ledger/schema-map";
 import { type BootstrapCurrency, createLocalLedgerSession } from "@waltning/ledger/session";
 import { nodeFs, type ScratchStores, scratchStores } from "@waltning/ledger/test/stores";
-import { writeLocally } from "@waltning/ledger/write";
 import Database from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import { useSyncExternalStore } from "react";
@@ -144,25 +141,20 @@ export function seedJourneyFixture(ledger: JourneyLedger): JourneyFixture {
     throw new Error(`journey fixture: rate refused — ${JSON.stringify(rate.fieldErrors)}`);
   }
 
-  const group = controller.createCategory({ name: "Food", kind: "expense", parentId: null });
-  if (!("id" in group)) {
-    throw new Error(`journey fixture: group refused — ${JSON.stringify(group.fieldErrors)}`);
-  }
-  writeLocally(ledger.scratch.ledger, {
-    executor: convertLeafGroupExecutor,
-    registry: ledgerRegistry,
-    input: { id: group.id, version: 1, to: "group" },
-    capture: deviceRuntime().capture(),
-  });
+  /*
+    **Found, not created.** The taxonomy ships with the app now
+    (`categories/bootstrap-taxonomy.ts`), so *Food › Eating out* is already
+    there on the first launch — as it is on a real device. This used to
+    create both, which stopped working the day the tree shipped and is the
+    more honest fixture either way: a journey that seeds its own categories
+    is not walking the path a person walks.
+  */
   controller.refresh();
-
-  const category = controller.createCategory({
-    name: "Eating out",
-    kind: "expense",
-    parentId: group.id,
-  });
-  if (!("id" in category)) {
-    throw new Error(`journey fixture: category refused — ${JSON.stringify(category.fieldErrors)}`);
+  const category = controller
+    .getSnapshot()
+    .categories.find((candidate) => candidate.name === "Eating out");
+  if (category === undefined) {
+    throw new Error("journey fixture: the shipped taxonomy has no 'Eating out'");
   }
 
   // Yesterday, so `readPayeeHistory`'s own "newest first" ordering has no say

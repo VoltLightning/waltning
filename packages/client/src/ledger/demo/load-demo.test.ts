@@ -101,6 +101,28 @@ describe("loading it", () => {
     expect(used, "and the device's own id is what the rows point at").toContain("real-groceries");
   });
 
+  /**
+   * The taxonomy ships with the app now, so every device has it before this
+   * loader ever runs — and what it holds is not only leaves.
+   *
+   * **Found on a device.** `existingCategories` was handed the capturable
+   * *leaves*, so the loader could not see that *Food*, *Home*, *Transport*
+   * and *Subscriptions* already existed as groups; it tried to create all
+   * four, the ledger refused each, and the screen reported *4 refused* on an
+   * otherwise healthy run.
+   */
+  it("reuses groups the device already has, not only leaves", () => {
+    const shipped = [...new Set(DEMO_CATEGORIES.map((c) => c.group).filter((g) => g !== null))].map(
+      (name, index) => ({ id: `shipped-${index}`, name: name as string }),
+    );
+    const t = target({ existingCategories: shipped });
+    const outcome = loadDemo(t, TODAY, 1);
+
+    const created = vi.mocked(t.createCategory).mock.calls.map(([draft]) => draft.name);
+    for (const group of shipped) expect(created).not.toContain(group.name);
+    expect(outcome.refused, "a group it can already see is not a refusal").toBe(0);
+  });
+
   /** Nothing here deletes: clearing a ledger is `reset()`, behind its own confirmation. */
   it("is additive", () => {
     const t = target();

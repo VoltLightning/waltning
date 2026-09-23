@@ -13,6 +13,7 @@ import type {
   PeriodSpendRow,
   SpendByCategoryRow,
 } from "@waltning/core/money";
+import { type IdGenerator, randomId } from "@waltning/core/random";
 import type {
   AddCurrencyInput,
   AllocateSharesInput,
@@ -73,6 +74,7 @@ import {
 } from "./backup/export.ts";
 import { type RestoreResult, restoreBackup as restoreBackupInto } from "./backup/restore.ts";
 import { archiveCategoryExecutor } from "./categories/archive-category.executor.ts";
+import { bootstrapTaxonomy } from "./categories/bootstrap-taxonomy.ts";
 import { convertLeafGroupExecutor } from "./categories/convert-leaf-group.executor.ts";
 import {
   createCategoryExecutor,
@@ -472,6 +474,12 @@ export type LocalLedgerSessionOptions<TRun> = {
    */
   bootstrapCurrencies: readonly BootstrapCurrency[];
   /**
+   * How the shipped taxonomy's ids are minted. Defaults to `randomId`; a
+   * test passes its own so a seeded tree is reproducible without any id ever
+   * being written down in source.
+   */
+  mintId?: IdGenerator;
+  /**
    * The two chains, when a caller needs a session over a database **below**
    * this build's head. Defaults to this build's own; the app never sets it.
    *
@@ -592,6 +600,10 @@ function start<TRun>(
         .onConflictDoNothing()
         .run();
     }
+    // J01 §2's other half — the taxonomy ships with the app too, and until
+    // now did not. Beside the currencies rather than in a migration for the
+    // reasons `bootstrap-taxonomy.ts` sets out; idempotent on `seed:<key>`.
+    bootstrapTaxonomy(ledger.replica.db, options.mintId ?? randomId);
     stage = "recover";
     const recovery = recoverOnLaunch(ledger, ledgerRegistry);
 

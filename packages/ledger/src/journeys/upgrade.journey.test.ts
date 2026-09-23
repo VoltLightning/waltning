@@ -49,10 +49,12 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { id } from "@waltning/core/id";
 import { currencyCode } from "@waltning/core/money";
+import { randomId } from "@waltning/core/random";
 import Database from "better-sqlite3";
 import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { taxonomyRows } from "../categories/bootstrap-taxonomy.ts";
 import type { LedgerDiagnosticEvent } from "../diagnostics.ts";
 import {
   COPY_SUFFIX,
@@ -402,12 +404,27 @@ describe.each(PAIRS)("upgrading from replica-v$version / outbox-v$version", (pai
           dashboard_widgets: 5,
         };
         const seedsDashboard = pair.version < versionOfTag(DASHBOARD_SEED_TAG);
+        /**
+         * The shipped taxonomy, which every one of these fixtures gains.
+         *
+         * **Unconditional, unlike the dashboard's**, and that difference is
+         * the point: the dashboard is a migration step, so a fixture dumped
+         * above it already holds those rows, while the taxonomy is a
+         * bootstrap that runs at every launch
+         * (`categories/bootstrap-taxonomy.ts`). So an install that predates
+         * it gains the tree the next time the app opens — which is the
+         * intended outcome, since these are categories it should have
+         * shipped with. Counted from the list rather than written down, so
+         * the number cannot drift from it.
+         */
+        const taxonomyRowCount = taxonomyRows(randomId).length;
         for (const [table, before] of Object.entries(fixture.replicaCountsBefore)) {
           const after = replicaCountsAfter[table];
+          const seeded =
+            (seedsDashboard ? (DASHBOARD_SEED_ROWS[table] ?? 0) : 0) +
+            (table === "categories" ? taxonomyRowCount : 0);
           const expected =
-            table === "transactions"
-              ? before + fixture.pendingBefore.length
-              : before + (seedsDashboard ? (DASHBOARD_SEED_ROWS[table] ?? 0) : 0);
+            table === "transactions" ? before + fixture.pendingBefore.length : before + seeded;
           expect(after, `${table}'s row count after the upgrade`).toBe(expected);
         }
         // `SPEC.md` §14.4b — `brand_aliases` is the first table the replica

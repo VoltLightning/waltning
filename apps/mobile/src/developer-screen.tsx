@@ -50,7 +50,12 @@ export default function Developer() {
         createCounterparty: ledger.createCounterparty,
         settleDebt: ledger.settleDebt,
         setManualRate: ledger.setManualRate,
-        existingCategories: snapshot.categories,
+        // **The whole tree, groups included.** `snapshot.categories` is
+        // capturable leaves only, so the loader could not see that *Food*,
+        // *Home*, *Transport* and *Subscriptions* already exist — it tried
+        // to create all four and the ledger refused them, which is what a
+        // device looked like the day the taxonomy started shipping.
+        existingCategories: snapshot.categoryTree,
         // The device's own pivot, not the plan's guess at one: every rate is
         // quoted against it and `set_manual_rate` refuses any other base.
         pivot: snapshot.currencies.find((currency) => currency.isPivot)?.code ?? "",
@@ -65,7 +70,7 @@ export default function Developer() {
         people: outcome.counterparties,
       }) + (outcome.refused > 0 ? t("developer.refused", { count: outcome.refused }) : ""),
     );
-  }, [ledger, snapshot.categories, snapshot.currencies, t]);
+  }, [ledger, snapshot.categoryTree, snapshot.currencies, t]);
 
   const askReset = useCallback(() => setConfirming(true), []);
   const cancelReset = useCallback(() => setConfirming(false), []);

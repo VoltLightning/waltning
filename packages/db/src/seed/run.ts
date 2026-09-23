@@ -15,13 +15,13 @@
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import type { Id } from "@waltning/core/id";
+import { expenseTree, incomeTree, type SeedGroup, topLevelLeaves } from "@waltning/core/taxonomy";
 import { eq } from "drizzle-orm";
 import { createDb } from "../client.ts";
 import { requireRow } from "../rows.ts";
 import { categories } from "../schema.ts";
 import { seedBrandAliases } from "./brand-aliases.ts";
 import { seedCurrencies } from "./currencies.ts";
-import { expenseTree, incomeTree, type SeedGroup, topLevelLeaves } from "./data.ts";
 
 const rootEnv = fileURLToPath(new URL("../../../../.env", import.meta.url));
 if (existsSync(rootEnv)) process.loadEnvFile(rootEnv);

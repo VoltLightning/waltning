@@ -1786,9 +1786,9 @@ describe("a constraint declared in the schema is present on the device", () => {
       inspect(join(dir, "indexes-replica.db"), (db) => objects(db, "index")),
       "regenerate the chain (`pnpm ledger:generate`) — a declared index that does not ship is worse than none",
     ).toEqual([
-      // The four `uniqueIndex(...)` declarations — three of them partial, which
-      // a bare `unique()` could not express — land in `sqlite_master` as
-      // ordinary indexes, so they are listed together with the plain ones.
+      // The five `uniqueIndex(...)` declarations — three of them partial,
+      // which a bare `unique()` could not express — land in `sqlite_master`
+      // as ordinary indexes, so they are listed together with the plain ones.
       //
       // **What this cannot see:** the autoindexes SQLite creates to back a
       // primary key it does not store as the rowid. Those are named
@@ -1800,6 +1800,9 @@ describe("a constraint declared in the schema is present on the device", () => {
       // is a named `uniqueIndex(...)`, which is why they are all in the list
       // below. They are the engine's own and move with the table; the ones
       // listed here are the chain's.
+      // What makes the shipped taxonomy idempotent: writing the list a second
+      // time is a no-op on `seed:<key>` rather than a second tree.
+      "categories_external_id_uq",
       "counterparties_name_uq",
       "counterparty_merges_loser_open_uq",
       "dashboard_layouts_one_active",
