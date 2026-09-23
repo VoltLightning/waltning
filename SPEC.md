@@ -1195,6 +1195,20 @@ account should trend to zero.** A persistent non-zero balance means an
 unallocated group expense. That becomes a dashboard warning and an agent tool
 (`find_unsettled`) — a genuinely new capability rather than a port.
 
+**The pot is funded, then spent down** (J08 §3). Paying for a group is a
+transfer *into* the clearing account; each person's share is an expense back
+*out* of it, carrying their counterparty and `counterparty_role = 'debt'`; your
+own share is the same expense with a category and no counterparty. The account
+reaches zero exactly when the last share is written.
+
+It is forced rather than chosen: a row cannot both credit the pot and create a
+receivable, because on any account money in means debt down (§6.6's
+`signed_amount`). A row returning money to the pot necessarily says *you* owe
+*them*. Which is also what the old ledger did — 636 of `Clearing · PLN`'s 678
+rows are transfers — and why the invariant can be stated as an equality rather
+than a tendency: what is left in the pot is what has not been attributed to
+anybody.
+
 ### 6.5 Integrity constraints
 
 Enforced in the database, not merely the application:

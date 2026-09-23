@@ -1,7 +1,7 @@
 # J8 · Group expense
 
 **Frequency** weekly · **Surface** mobile
-**Screens** S05, S12, S13, S14, S01, S04
+**Screens** S31, S36, S12, S13, S14, S01, S04
 **Status** specified
 
 ---
@@ -24,47 +24,70 @@ clearing balance told you *that* something was unallocated. Now it tells you
 
 ## 2. Preconditions
 
-A clearing account exists (`kind = 'clearing'`). Counterparties are created in
-place, so nobody needs to exist first.
+A clearing account exists (`kind = 'clearing'`), and the money you laid out has
+been transferred into it. Counterparties are created in place, so nobody needs
+to exist first.
 
 ## 3. The path
 
 ```
 you pay for the group
         │
-   S05 Quick add → account: Clearing · <currency>
-        │          the full amount, one transaction
+   S31 Transfer → Bank A · PLN  ──400,00──▶  Clearing · PLN
+        │          the full amount, one ordinary transfer
+        │          the pot is FUNDED, and allocation spends it down
         │
-   ALLOCATE                                    ✅ designed — gaps.dc.html G2
-        │
-        │   split mode:  ▸ Even        n ways, remainder to the payer
-        │                ▸ Custom      per-person amounts
-        │                ▸ Shares      weights, e.g. 2·1·1
-        │
-        │   each share → counterparty, role = DEBT
-        │   UNALLOCATED REMAINDER ALWAYS VISIBLE
-        │
-   the clearing balance should now trend to ZERO
-        │
-        ├─ zero      → done
-        └─ non-zero  → S01/S04 unsettled banner
+        └─ the balance is now non-zero → S01/S04 unsettled banner
                        "a group expense was paid but never allocated"
                        one action: allocate
         │
+   S36 ALLOCATE
+        │
+        │   split mode:  ▸ Even        n ways, remainder to the payer
+        │                ▸ Shares      weights, e.g. 2·1·1
+        │                ▸ Custom      per-person amounts
+        │
+        │   each person's share → an EXPENSE out of the pot,
+        │                         counterparty + role = DEBT
+        │   YOUR OWN share      → an EXPENSE out of the pot,
+        │                         a category, NO counterparty
+        │   UNALLOCATED REMAINDER ALWAYS VISIBLE
+        │
+   every share written → the clearing balance is ZERO
+        │
+        ├─ zero      → done, and the banner is gone
+        └─ non-zero  → the banner stays; shares are still missing
+        │
    CHASE   → S12 shows WHO has not settled
         │
-   SETTLE  → S14, per person (J7)
+   SETTLE  → S14, per person (J7) — into any account, and the
+             pot is not touched again
 ```
+
+**The pot is funded, not drained, and that is forced rather than chosen.** A
+share cannot both credit the clearing account and create a receivable in one
+row: on any account, money in means debt down (§6.6's `signed_amount`), so a row
+returning money to the pot necessarily says *you* owe *them*. So the money goes
+**in** first, as a transfer, and each share takes its portion back out. The old
+ledger did the same thing for the same reason — 636 of `Clearing · PLN`'s 678
+rows are transfers.
+
+**Which is what makes §6.4's invariant literally true.** The pot reaches zero
+exactly when every share has been written, yours included. A non-zero clearing
+balance means shares are missing, and nothing else — not a payment waiting to be
+repaid, not a rate, not a rounding. Settlement happens later and elsewhere: when
+someone repays, the money lands in whatever account you name and their debt
+clears. The pot is already at zero and stays there.
 
 ## 4. Branches
 
 | At | Condition | Goes to |
 |---|---|---|
 | Allocate | Person unknown | S15, created in place |
-| Allocate | Your own share | Stays on the clearing account and is **not** a counterparty row — you do not owe yourself |
+| Allocate | Your own share | An expense out of the pot with a category and **no** counterparty — you do not owe yourself. Removing the row entirely is allowed and means you are owed the whole bill |
 | Allocate | Shares do not sum to the total | Remainder shown; commit allowed, balance stays non-zero, banner persists |
 | Allocate | Someone paid you back immediately | Allocate then settle in one pass — the balance opens and closes, and the history records both |
-| Banner | Tapped | Straight to the unallocated transaction, not to a list |
+| Banner | Tapped | S36, opened on that pot — the balance that is left to allocate, not a list of transactions |
 | S12 | Filtered to a clearing account | Who owes against that pot specifically |
 
 ## 5. Failure paths
@@ -88,8 +111,11 @@ you pay for the group
 - **Each share is a debt, not a note.** Role `debt` (§6.6), so it appears in the
   counterparty ledger, ages if the counterparty is a company, and can be
   settled. The old model could only record the name in free text.
-- **Your own share is not a debt.** It stays on the clearing account. Modelling
-  it as a receivable against yourself would make the account never reach zero.
+- **Your own share is not a debt.** It is written out of the pot as an ordinary
+  expense with a category and no counterparty — the last row of the split, and
+  the one that takes the balance to zero. Modelling it as a receivable against
+  yourself would make the account never reach zero; leaving it unwritten would
+  leave the banner firing after a correctly-split dinner.
 - **Amber here means unsettled**, which is one instance of the single meaning P4
   now carries: not finished, or not fully observed.
 
@@ -98,6 +124,6 @@ you pay for the group
 | Measure | Target |
 |---|---|
 | Allocation | A four-way dinner split in **under 20 seconds**, from the paid transaction |
-| Invariant | The clearing balance returns to zero after every fully-settled group expense |
+| Invariant | The clearing balance returns to zero the moment a group expense is fully **allocated** — before anyone has repaid a grosz |
 | Attribution | *"Who hasn't paid me back for the trip"* is answerable by name, not by amount |
 | Visibility | No allocation is ever committed with a hidden remainder |

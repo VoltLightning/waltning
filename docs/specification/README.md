@@ -143,7 +143,7 @@ exists.
 §3). Purpose, components, data, states and rules are written once; only layout
 and interaction split into mobile and web subsections.
 
-**32 screens, and the IDs have two gaps.** S23 (Calendar · web) merged into S11
+**34 screens, and the IDs have two gaps.** S23 (Calendar · web) merged into S11
 and S26 (Debt overview · web) into S12 — both were the same concept at a wider
 density, which is exactly what a web subsection is for. Their numbers are
 retired rather than reused: a screen ID is a stable identifier that flows and
@@ -167,8 +167,8 @@ prose depth is tiered:
 | Tier | Bar | Screens |
 |---|---|---|
 | **1 · deep** | Every state designed, both surfaces laid out, interaction specified to the keystroke | S01–S07, S09, S10, S11 |
-| **2 · full** | All nine sections at working depth; layout described rather than drawn | S08, S12–S16, S25, S27, S28, S29, S31 |
-| **3 · floor** | All nine sections, concise. Enough to build from, not enough to prototype from | S17–S22, S24, S30, S32–S34 |
+| **2 · full** | All nine sections at working depth; layout described rather than drawn | S08, S12–S16, S25, S27, S28, S29, S31, S36 |
+| **3 · floor** | All nine sections, concise. Enough to build from, not enough to prototype from | S17–S22, S24, S30, S32–S35 |
 
 A tier-3 screen is not a stub — it is a screen whose open questions are worth
 more than its prose.
@@ -207,6 +207,8 @@ more than its prose.
 | [S32](screens/S32-agent-memory.md) | Settings · What the agent remembers | both | — | 3 | specified |
 | [S33](screens/S33-settings-models.md) | Settings · Models and providers | web | — | 3 | specified |
 | [S34](screens/S34-subscriptions.md) | Subscriptions | both | — | 3 | specified |
+| [S35](screens/S35-conflict-sheet.md) | Conflict sheet | both | — | 3 | specified |
+| [S36](screens/S36-allocate.md) | Allocate | both | — | 2 | specified |
 
 **Deliberately not on every surface.** S01 and S04 answer the same question at
 different scales and would compete as landing surfaces, so neither is ported.
