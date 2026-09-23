@@ -4,6 +4,7 @@ import {
   insetsAreNative,
   keyboardDismissal,
   keyboardOverlap,
+  keyboardScrollProps,
   lookFor,
   windowTopOnScreen,
 } from "./keyboard-room.ts";
@@ -102,5 +103,34 @@ describe("where to scroll so the focused field clears the keyboard", () => {
     expect(lookFor({ ...lifted, contentTop: 100, fieldTop: 520, fieldHeight: 48 })).toBe(
       520 + 48 + FOCUS_MARGIN - 540,
     );
+  });
+});
+
+/**
+ * **Who pays for the keyboard, when two things both could.**
+ *
+ * The platform's own inset is measured once, at the keyboard event, off the
+ * scroller's frame *at that moment* — before a footer under it has grown by
+ * the keyboard's height and taken the scroller out from under it. Nothing
+ * remeasures afterwards, so a scroller with such a footer that also asked for
+ * the platform's inset was paid for twice: a keyboard's worth of empty ground
+ * under the last card, and a content offset far enough to slice the top row.
+ */
+describe("which scroller takes the platform's own keyboard inset", () => {
+  it("the one that is the screen's own bottom edge", () => {
+    expect(keyboardScrollProps(true).automaticallyAdjustKeyboardInsets).toBe(true);
+  });
+
+  it("never the one with a footer below it that lifts", () => {
+    expect(keyboardScrollProps(false).automaticallyAdjustKeyboardInsets).toBe(false);
+  });
+
+  it("leaves the other two the same either way — they are not about room", () => {
+    for (const owns of [true, false]) {
+      expect(keyboardScrollProps(owns).keyboardShouldPersistTaps).toBe("handled");
+      // Never `on-drag`: with the keyboard up the page could not be moved at
+      // all, which is the one time a field under it matters.
+      expect(keyboardScrollProps(owns).keyboardDismissMode).not.toBe("on-drag");
+    }
   });
 });

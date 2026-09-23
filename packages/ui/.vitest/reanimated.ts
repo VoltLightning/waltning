@@ -75,6 +75,14 @@ export const interpolateColor = (
  * the mock, not the component.
  */
 export const useAnimatedRef = <T>() => useRef<T | null>(null);
+/**
+ * **A page at rest, which is the only offset jsdom can honestly report.**
+ * There is no scroller here to read, and the one thing this drives —
+ * `GroundPanel`'s top edge — is a function of the offset rather than of the
+ * hook, so the arithmetic is asserted directly (`card.test.tsx`'s own
+ * `edgeOpacity`) and the wiring is looked at on a device.
+ */
+export const useScrollViewOffset = () => m.useSharedValue(0);
 export const scrollTo = () => {};
 export const useFrameCallback = (): {
   setActive: (active: boolean) => void;

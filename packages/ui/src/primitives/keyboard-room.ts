@@ -145,15 +145,41 @@ export const KEYBOARD_DISMISSAL = keyboardDismissal(Platform.OS);
  * The props every scroller holding a field spreads, so the three are decided
  * once. `handled`: a tap on a control is the control's; a tap on bare page
  * puts the keyboard away.
+ *
+ * **`ownsBottomEdge` is the whole of the third one.** iOS's own inset is the
+ * right answer for a scroller that runs to the bottom of the screen and the
+ * wrong one for a scroller with a footer under it that lifts — and the two
+ * cases are not told apart by the platform, because of *when* it measures.
+ * `RCTScrollViewComponentView`'s `_keyboardWillChangeFrame` computes
+ * `MAX(scrollViewLowerY − keyboardTop, 0)` at the keyboard event, from the
+ * frame the scroller has *then*: before the footer has grown by the keyboard's
+ * height and pushed the scroller's own bottom edge up above it. Nothing
+ * recomputes it afterwards — there is no second keyboard event — so a page
+ * whose footer already cleared the keyboard was given a bottom inset for the
+ * whole of it a second time. On Move money that is a band of empty ground the
+ * height of the keyboard under the last card, and a content offset pushed far
+ * enough that the top row is sliced by the header.
+ *
+ * So the scroller says whether it is the screen's bottom edge, and only that
+ * one takes the platform's inset. The other one has a footer below it that
+ * pays for the keyboard itself, and `useKeyboardRoom` measures the overlap of
+ * whatever is left rather than assuming it.
  */
-export const KEYBOARD_SCROLL_PROPS = {
-  keyboardShouldPersistTaps: "handled",
-  keyboardDismissMode: KEYBOARD_DISMISSAL,
-  automaticallyAdjustKeyboardInsets: true,
-} as const satisfies Pick<
+export function keyboardScrollProps(
+  ownsBottomEdge: boolean,
+): Pick<
   ScrollViewProps,
   "keyboardShouldPersistTaps" | "keyboardDismissMode" | "automaticallyAdjustKeyboardInsets"
->;
+> {
+  return {
+    keyboardShouldPersistTaps: "handled",
+    keyboardDismissMode: KEYBOARD_DISMISSAL,
+    automaticallyAdjustKeyboardInsets: ownsBottomEdge,
+  };
+}
+
+/** The scroller that *is* the screen's bottom edge — the common case. */
+export const KEYBOARD_SCROLL_PROPS = keyboardScrollProps(true);
 
 /**
  * The keyboard's top edge **in window coordinates**, or `null` with it away —

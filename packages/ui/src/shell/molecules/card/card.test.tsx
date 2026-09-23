@@ -6,7 +6,7 @@ import { expect, it } from "vitest";
 import { type SafeAreaInsets, SafeAreaProvider } from "../../../primitives/safe-area";
 import { floating } from "../../../tokens.ts";
 import { FloatingClearanceProvider } from "../../atoms/floating-clearance";
-import { GroundPanel } from "./card";
+import { EDGE_TRAVEL, edgeOpacity, GroundPanel } from "./card";
 
 /** `shell.test.tsx`'s own notched fixture — a device with a home indicator. */
 const NOTCHED: SafeAreaInsets = { top: 59, right: 0, bottom: 34, left: 0 };
@@ -170,4 +170,36 @@ it("clearBottom={false} — a panel that is not the screen's own bottom edge (a 
   const content = scroll.firstElementChild as HTMLElement;
   // Only space.x4 (20) — the design padding, never the device's own inset.
   expect(getComputedStyle(content).paddingBottom).toBe("20px");
+});
+
+/**
+ * **The edge under the band above, which is a function of how far the page
+ * has moved and nothing else.**
+ *
+ * Every screen carries a band over this panel — a hero, a tab header, a
+ * composer's title — and the two are the same cream, so at rest there is
+ * nothing between them and nothing should be: a rule under a title nobody has
+ * scrolled past is a divider drawn on every screen in the app. Once the first
+ * row is under the band the cut is arbitrary, and the line is what explains it.
+ *
+ * Asserted here as arithmetic rather than through a rendered scroll: jsdom has
+ * no scroller to move, and `interpolate` is a no-op in the Reanimated mock, so
+ * a shape expressed through it is a shape nothing checks.
+ */
+it("draws no edge with the page at rest", () => {
+  expect(edgeOpacity(0)).toBe(0);
+});
+
+it("draws the edge in full once the page has moved past the travel", () => {
+  expect(edgeOpacity(EDGE_TRAVEL)).toBe(1);
+  expect(edgeOpacity(EDGE_TRAVEL * 40)).toBe(1);
+});
+
+it("fades it in across the travel rather than snapping it on", () => {
+  expect(edgeOpacity(EDGE_TRAVEL / 2)).toBeCloseTo(0.5);
+});
+
+/** A bounce scrolls past zero, and unclamped that is a negative opacity. */
+it("draws no edge for the overscroll a bounce leaves behind", () => {
+  expect(edgeOpacity(-40)).toBe(0);
 });
