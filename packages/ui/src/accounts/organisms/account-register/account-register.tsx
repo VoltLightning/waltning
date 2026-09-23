@@ -348,22 +348,41 @@ function KindGroup({
   const styles = useStyles();
   const subtotals = subtotalsOf(rows);
 
-  const action = (
-    <View style={styles.subtotals}>
-      {subtotals.map((subtotal) => (
-        <Amount
-          key={subtotal.currency}
-          value={subtotal.balance}
-          currency={subtotal.currency}
-          decimals={subtotal.decimals}
-          size="small"
-        />
-      ))}
-    </View>
-  );
+  /*
+    **A subtotal is drawn as a subtotal, and a group of one has none.**
+
+    Two defects, one line apart on a real device. The figure here was at full
+    ink and one step down, which against the row figures under it is no step
+    at all — so the loudest thing in every card was its total, and a reader
+    scanning for *what is in Everyday* landed on a number that is not any
+    account's balance. Muted is the step the artboard draws and the one the
+    deck gives every other header figure: the card's title is already a muted
+    label, and its figure belongs with it.
+
+    And a card holding one account printed that account's balance twice, forty
+    points apart, identical — *Cash 840,00 zł* over *Wallet 840,00 zł*. There
+    is no sum to state when there is one thing to sum: the row below **is**
+    the subtotal, and a header repeating it is asking the reader to check
+    whether two numbers that should match do.
+  */
+  const action =
+    rows.length < 2 ? undefined : (
+      <View style={styles.subtotals}>
+        {subtotals.map((subtotal) => (
+          <Amount
+            key={subtotal.currency}
+            value={subtotal.balance}
+            currency={subtotal.currency}
+            decimals={subtotal.decimals}
+            size="small"
+            emphasis="muted"
+          />
+        ))}
+      </View>
+    );
 
   return (
-    <Card title={label} action={action}>
+    <Card title={label} {...(action === undefined ? {} : { action })}>
       {rows.map((row, index) => (
         <AccountRegisterRow
           key={row.id}
@@ -419,9 +438,11 @@ function AccountRegisterRow({
   const row = (
     <BalanceRow
       account={account.name}
-      // The currency, not the kind: the card's title already names the kind,
-      // and a row reading *Bank A · Bank* under *Bank* said it twice.
-      kind={account.currency}
+      // **No second line at all.** The card's title names the kind and the
+      // figure on the right carries the currency, so the line that used to
+      // sit here — the currency code, alone — was the one thing on the row
+      // that was already said twice. Every account in the register was two
+      // lines tall for it.
       {...(account.conversion === undefined ? {} : { conversion: account.conversion })}
       balance={account.balance}
       currency={account.currency}

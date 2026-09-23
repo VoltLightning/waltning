@@ -410,3 +410,42 @@ it("withdraws Edit while a search is narrowing the list", () => {
   fireEvent.change(screen.getByRole("searchbox"), { target: { value: "Bank B" } });
   expect(screen.queryByRole("button", { name: "Edit" })).toBeNull();
 });
+
+/**
+ * **A group of one states no sum.** *Cash* holding one account printed
+ * `840.00` in its header and `840.00` in the row forty points below it — two
+ * identical figures, one of them meaning nothing the other did not, and the
+ * reader's job is to notice they match. There is no subtotal to state when
+ * there is one thing to sum.
+ */
+it("prints a lone account's balance once, not as its own subtotal too", () => {
+  render(
+    <AccountRegister
+      accounts={[
+        account({ id: "cash-1", name: "Wallet", kind: "cash", balance: money.toMoney("840") }),
+      ]}
+      archivedAccounts={[]}
+      onSelectAccount={vi.fn()}
+      onLoadArchived={vi.fn()}
+      onCreateAccount={vi.fn()}
+    />,
+  );
+  expect(screen.getAllByText("840.00")).toHaveLength(1);
+});
+
+/** Two accounts is a sum worth stating, and then it is stated once. */
+it("states the subtotal for a group that actually sums something", () => {
+  render(
+    <AccountRegister
+      accounts={[
+        account({ id: "bank-1", name: "Everyday", kind: "bank", balance: money.toMoney("6200") }),
+        account({ id: "bank-2", name: "Studio", kind: "bank", balance: money.toMoney("2220.10") }),
+      ]}
+      archivedAccounts={[]}
+      onSelectAccount={vi.fn()}
+      onLoadArchived={vi.fn()}
+      onCreateAccount={vi.fn()}
+    />,
+  );
+  expect(screen.getByText("8 420.10")).toBeDefined();
+});

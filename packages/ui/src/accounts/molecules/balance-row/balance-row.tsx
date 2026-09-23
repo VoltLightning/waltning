@@ -38,7 +38,19 @@ import { focus, hairline, space, touchTarget } from "../../../tokens.ts";
 
 export type BalanceRowProps = {
   account: string;
-  kind: string;
+  /**
+   * The line under the name — the account's kind, where that is not already
+   * said by whatever holds the row.
+   *
+   * **Optional, and left out is the common case.** Inside a kind group the
+   * card's own title says *Bank*, and the figure on the right already carries
+   * the currency, so a second line under the name had nothing left to add:
+   * every row of the register was two lines tall to print a code the amount
+   * beside it was printing anyway. The shared card is where it earns its
+   * place — that one holds accounts of mixed kinds, so the kind is the one
+   * thing the card above cannot say.
+   */
+  kind?: string;
   balance: money.Money;
   currency: string;
   decimals?: number;
@@ -92,7 +104,7 @@ export function BalanceRow({
           {isBusiness ? <Tag variant="biz">{t("accounts.tagBiz")}</Tag> : null}
           {unsettled ? <Tag variant="warn">{t("accounts.tagUnsettled")}</Tag> : null}
         </View>
-        <Text style={styles.meta}>{kind}</Text>
+        {kind === undefined ? null : <Text style={styles.meta}>{kind}</Text>}
         {expectedBalance === undefined || expectedBalance === null ? null : (
           <View style={styles.lastObservedLine}>
             <Text style={styles.meta}>{t("accounts.lastObserved")}</Text>
@@ -155,7 +167,15 @@ const useStyles = makeStyles((theme) => ({
   ruled: { borderBottomWidth: hairline.width, borderBottomColor: theme.hairline },
   identity: { flex: 1, gap: space.xxs },
   nameLine: { flexDirection: "row", alignItems: "center", gap: space.md },
-  name: { color: theme.text, ...text.ui("bodySm") },
+  /*
+    **The name is the thing being scanned, so it is the heaviest thing on the
+    row.** It was `bodySm` in the regular weight, which on a register put the
+    account — the one word a reader is looking for — a step below the figure
+    beside it and level with the muted code under it. A list whose labels are
+    quieter than its numbers is read number-first, which is the opposite of
+    how a register is used: you find *Everyday*, then you read what is in it.
+  */
+  name: { color: theme.text, ...text.ui("body", 600) },
   meta: { color: theme.textMuted, ...text.ui("caption") },
   lastObservedLine: { flexDirection: "row", alignItems: "center", gap: space.xxs },
   /** §10's floor, on the target `Pressable` adds — the row's own content already runs taller in practice. */

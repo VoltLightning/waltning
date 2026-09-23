@@ -80,7 +80,30 @@ because a shared account being overdrawn is a real fact.
 
 Each group — kind or `SharedGroup` — is a card of grouped rows: the group name
 is the card's title, its per-currency subtotals the card's one header figure,
-and the balance rows the body. The search field above the groups stays on the
+and the balance rows the body.
+
+**The subtotal is drawn as a subtotal.** Muted, beside a muted title — the
+card's header is a label, and its figure belongs with the label rather than
+with the balances under it. Drawn at full ink it is the loudest thing in every
+card, so a reader scanning for *what is in Everyday* lands first on a number
+that is not any account's balance.
+
+**A group of one states no subtotal.** There is nothing to sum when there is
+one thing to sum: the row below is the total, and a header repeating it prints
+the same figure twice, forty points apart, and asks the reader to notice they
+match.
+
+**An account's row is one line.** The name, its tags, and the figure. The
+card's title already names the kind and the figure carries the currency, so a
+second line under the name has nothing left to say — and printing the currency
+code there made every account in the register two lines tall to repeat the
+mark beside it. `SharedGroup` is the exception and keeps the kind, because
+that card is the one holding accounts of mixed kinds.
+
+**The name carries the row.** It is the heaviest thing on it — heavier than
+the figure beside it. A register is read name-first: you find *Everyday*, then
+you read what is in it, and a list whose labels are quieter than its numbers
+inverts that. The search field above the groups stays on the
 ground, and so does **Add account**, the register's own primary, below the last
 group and **above** the archived section. It is offered whether or not the
 register is empty: an action that lives only in the empty state disappears the
@@ -115,7 +138,7 @@ otherwise buried in an editor.
 |---|---|
 | `Card` | One per kind group and per `SharedGroup` — grouped rows, not a hero figure. The group name is the title, the per-currency subtotals the header figure, the balance rows the body. `SharedGroup`'s is titled *Jointly owned* and carries `edge="accent"` and a `Shared` tag |
 | `SearchField` | Name, kind, currency. Same placement as S06, S10, S12 |
-| `BalanceRow` | Account · kind · `FxAmount` for foreign |
+| `BalanceRow` | Account, its tags, and the figure — one line. `kind` is **optional** and left out inside a kind group, where the card's title already says it and the figure already carries the currency; `SharedGroup` passes it, being the one card of mixed kinds. `FxAmount` for foreign |
 | `SharedGroup` | Own subtotal, distinct, not diminished — accent left edge and a `Shared` tag, at full weight |
 | `FxAmount` | Every foreign balance carries its basis (P1) |
 | `Tag` | `BIZ` · `archived` · clearing's amber marker |
