@@ -16,7 +16,16 @@
  * `onConflictDoNothing`, so the list is data and the write is idempotent.
  * This is that, one table over, with ids minted the ordinary way.
  *
- * **`external_id` is what makes it idempotent**, the same `seed:<key>` the
+ * **It seeds a ledger that has not started, and only that one.** A person
+ * who already has categories has already chosen them — and every name the
+ * shipped list shares with theirs would otherwise arrive as a second row,
+ * indistinguishable in the picker from the one they have used 254 times.
+ * Claiming their *Groceries* as `seed:groceries` instead would be merging
+ * two identities on a spelling, which `SPEC.md` §6.6.1 refuses for
+ * counterparties and refuses here for the same reason. So a non-empty table
+ * is left alone: this is a starting taxonomy, and they have started.
+ *
+ * **`external_id` is what makes the rest of it idempotent**, the same `seed:<key>` the
  * server's own upsert matches on — so the two engines agree on which row is
  * *Groceries* without ever having agreed on a uuid. Re-running changes
  * nothing: a row already carrying that key is left exactly as it is, renamed
@@ -31,6 +40,7 @@
 import { id as brand, type Id } from "@waltning/core/id";
 import type { IdGenerator } from "@waltning/core/random";
 import { expenseTree, incomeTree, topLevelLeaves } from "@waltning/core/taxonomy";
+import { count } from "drizzle-orm";
 import type { ReplicaDb } from "./../open.ts";
 import { ledgerSchema } from "../schema-map.ts";
 
@@ -118,6 +128,12 @@ export function bootstrapTaxonomy<TRun, TSchema extends typeof ledgerSchema>(
   db: ReplicaDb<TRun, TSchema>,
   mintId: IdGenerator,
 ): void {
+  // Started already — see the file header. Counted rather than probed for a
+  // `seed:` row, because a ledger holding only a person's own categories is
+  // just as started as one holding these.
+  const [existing] = db.select({ n: count() }).from(categories).all();
+  if ((existing?.n ?? 0) > 0) return;
+
   const rows = taxonomyRows(mintId);
   if (rows.length === 0) return;
   db.insert(categories)

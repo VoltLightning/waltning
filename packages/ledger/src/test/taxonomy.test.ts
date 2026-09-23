@@ -20,6 +20,7 @@ import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { currencies as referenceCurrencies } from "@waltning/core/currencies";
+import { id as brand } from "@waltning/core/id";
 import { expenseTree, incomeTree, topLevelLeaves } from "@waltning/core/taxonomy";
 import Database from "better-sqlite3";
 import { eq } from "drizzle-orm";
@@ -191,6 +192,35 @@ describe("the taxonomy ships with the app", () => {
     // beside the currencies rather than a migration full of literal ids.
     expect(second).toHaveLength(first);
     expect(new Set(second.map((row) => row.externalId)).size).toBe(second.length);
+  });
+
+  it("leaves a ledger that already has categories alone", () => {
+    // Found on a device, not in a test: an install that already held
+    // *Groceries* got a second one the moment the tree shipped — same name,
+    // no usage, indistinguishable in the picker from the one used 254 times.
+    // A starting taxonomy is for a ledger that has not started.
+    withSession(() => undefined);
+    const sqlite = new Database(paths.replica);
+    const db = drizzle(sqlite, { schema: ledgerSchema });
+    // Leaves before groups: a leaf references its group, and `on delete
+    // restrict` means the other order is refused.
+    db.delete(categories).where(eq(categories.isLeaf, true)).run();
+    db.delete(categories).run();
+    db.insert(categories)
+      .values({
+        id: brand<"categories">("99999999-9999-4999-8999-999999999999"),
+        name: "Groceries",
+        kind: "expense",
+      })
+      .run();
+    sqlite.close();
+
+    withSession(() => {
+      const rows = rowsOf();
+      expect(rows).toHaveLength(1);
+      expect(rows[0]?.name).toBe("Groceries");
+      expect(rows[0]?.externalId).toBeNull();
+    });
   });
 
   it("leaves a renamed or archived category exactly as the person left it", () => {
