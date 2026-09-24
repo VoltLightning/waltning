@@ -38,14 +38,14 @@ function target(overrides: Partial<DemoTarget> = {}): DemoTarget {
 }
 
 describe("the plan", () => {
-  it("walks whole months back, and nothing past today", () => {
+  it("walks whole months back, and nothing past today", async () => {
     const rows = demoTransactions(TODAY, 26);
     const dates = rows.map((r) => r.date).sort();
     expect(dates[0]?.slice(0, 7), "26 months back from September 2026").toBe("2024-08");
     expect(dates.at(-1)?.localeCompare(TODAY), "nothing in the future").toBeLessThanOrEqual(0);
   });
 
-  it("leaves the current month partial", () => {
+  it("leaves the current month partial", async () => {
     const inThisMonth = demoTransactions(TODAY, 1).map((r) => Number(r.date.slice(8)));
     expect(Math.max(...inThisMonth), "no day after the 18th").toBeLessThanOrEqual(18);
   });
@@ -55,7 +55,7 @@ describe("the plan", () => {
    * and they have to be *stable*, or the same demo describes a different
    * ledger every time it is loaded.
    */
-  it("varies amounts between months and repeats them exactly", () => {
+  it("varies amounts between months and repeats them exactly", async () => {
     const first = demoTransactions(TODAY, 26);
     const second = demoTransactions(TODAY, 26);
     expect(first).toEqual(second);
@@ -64,7 +64,7 @@ describe("the plan", () => {
     expect(new Set(rents).size, "rent is not the same figure every month").toBeGreaterThan(3);
   });
 
-  it("skips a day the month does not have", () => {
+  it("skips a day the month does not have", async () => {
     // The 29th and 30th are in the patterns; February 2025 has 28 days.
     const february = demoTransactions("2025-02-28", 1).map((r) => Number(r.date.slice(8)));
     expect(Math.max(...february)).toBeLessThanOrEqual(28);
@@ -72,9 +72,9 @@ describe("the plan", () => {
 });
 
 describe("loading it", () => {
-  it("creates the accounts, the taxonomy and every transaction", () => {
+  it("creates the accounts, the taxonomy and every transaction", async () => {
     const t = target();
-    const outcome = loadDemo(t, TODAY, 3);
+    const outcome = await loadDemo(t, TODAY, 3);
 
     expect(outcome.accounts).toBe(DEMO_ACCOUNTS.length);
     expect(outcome.categories).toBe(DEMO_CATEGORIES.length);
@@ -90,9 +90,9 @@ describe("loading it", () => {
    * which is the thing `packages/db`'s fixture refuses to do for the same
    * reason.
    */
-  it("reuses a category the device already has rather than creating a twin", () => {
+  it("reuses a category the device already has rather than creating a twin", async () => {
     const t = target({ existingCategories: [{ id: "real-groceries", name: "Groceries" }] });
-    loadDemo(t, TODAY, 1);
+    await loadDemo(t, TODAY, 1);
 
     const created = vi.mocked(t.createCategory).mock.calls.map(([draft]) => draft.name);
     expect(created, "Groceries is not created again").not.toContain("Groceries");
@@ -111,12 +111,12 @@ describe("loading it", () => {
    * four, the ledger refused each, and the screen reported *4 refused* on an
    * otherwise healthy run.
    */
-  it("reuses groups the device already has, not only leaves", () => {
+  it("reuses groups the device already has, not only leaves", async () => {
     const shipped = [...new Set(DEMO_CATEGORIES.map((c) => c.group).filter((g) => g !== null))].map(
       (name, index) => ({ id: `shipped-${index}`, name: name as string }),
     );
     const t = target({ existingCategories: shipped });
-    const outcome = loadDemo(t, TODAY, 1);
+    const outcome = await loadDemo(t, TODAY, 1);
 
     const created = vi.mocked(t.createCategory).mock.calls.map(([draft]) => draft.name);
     for (const group of shipped) expect(created).not.toContain(group.name);
@@ -124,13 +124,13 @@ describe("loading it", () => {
   });
 
   /** Nothing here deletes: clearing a ledger is `reset()`, behind its own confirmation. */
-  it("is additive", () => {
+  it("is additive", async () => {
     const t = target();
-    loadDemo(t, TODAY, 1);
+    await loadDemo(t, TODAY, 1);
     expect(Object.keys(t)).not.toContain("reset");
   });
 
-  it("counts refusals instead of stopping on one", () => {
+  it("counts refusals instead of stopping on one", async () => {
     let calls = 0;
     const t = target({
       createTransaction: vi.fn(() => {
@@ -140,7 +140,7 @@ describe("loading it", () => {
           : { id: `t-${calls}` };
       }),
     });
-    const outcome = loadDemo(t, TODAY, 1);
+    const outcome = await loadDemo(t, TODAY, 1);
 
     expect(outcome.refused, "the one refusal is reported").toBe(1);
     expect(outcome.transactions, "and the rest still landed").toBe(
@@ -148,7 +148,7 @@ describe("loading it", () => {
     );
   });
 
-  it("refuses a leaf whose group was refused rather than rooting it", () => {
+  it("refuses a leaf whose group was refused rather than rooting it", async () => {
     const t = target({
       createCategory: vi.fn((draft: CreateCategoryDraft) =>
         draft.parentId === null && draft.name === "Food"
@@ -156,7 +156,7 @@ describe("loading it", () => {
           : { id: `c-${draft.name}` },
       ),
     });
-    const outcome = loadDemo(t, TODAY, 1);
+    const outcome = await loadDemo(t, TODAY, 1);
 
     const created = vi.mocked(t.createCategory).mock.calls.map(([draft]) => draft.name);
     expect(created, "Groceries is never created at the root").not.toContain("Groceries");
@@ -172,9 +172,9 @@ describe("loading it", () => {
  * the app on the first press of Load demo data.
  */
 describe("groups, and refusals that arrive by throwing", () => {
-  it("converts every group before hanging anything under it", () => {
+  it("converts every group before hanging anything under it", async () => {
     const t = target();
-    loadDemo(t, TODAY, 1);
+    await loadDemo(t, TODAY, 1);
 
     const created = vi.mocked(t.createCategory).mock.calls.map(([draft]) => draft);
     const converted = vi.mocked(t.convertCategory).mock.calls.map(([draft]) => draft.id);
@@ -189,7 +189,7 @@ describe("groups, and refusals that arrive by throwing", () => {
     }
   });
 
-  it("counts a thrown refusal instead of letting it escape", () => {
+  it("counts a thrown refusal instead of letting it escape", async () => {
     const t = target({
       createTransaction: vi.fn(() => {
         throw new Error("create_transaction: the replica refused this row");
@@ -197,18 +197,18 @@ describe("groups, and refusals that arrive by throwing", () => {
     });
 
     // The whole point: this must not throw.
-    const outcome = loadDemo(t, TODAY, 1);
+    const outcome = await loadDemo(t, TODAY, 1);
     expect(outcome.transactions).toBe(0);
     expect(outcome.refused, "every row counted, none escaped").toBeGreaterThan(0);
   });
 
-  it("does not hang children off a group whose conversion was refused", () => {
+  it("does not hang children off a group whose conversion was refused", async () => {
     const t = target({
       convertCategory: vi.fn(() => {
         throw new Error("convert_leaf_group: refused");
       }),
     });
-    loadDemo(t, TODAY, 1);
+    await loadDemo(t, TODAY, 1);
 
     const created = vi.mocked(t.createCategory).mock.calls.map(([draft]) => draft);
     expect(
@@ -227,9 +227,9 @@ describe("groups, and refusals that arrive by throwing", () => {
  * holding nothing but the PLN ones.
  */
 describe("currencies the ledger does not keep its books in", () => {
-  it("sets a rate for each of them, spanning every date the plan names", () => {
+  it("sets a rate for each of them, spanning every date the plan names", async () => {
     const t = target();
-    loadDemo(t, TODAY, 26);
+    await loadDemo(t, TODAY, 26);
 
     const calls = vi.mocked(t.setManualRate).mock.calls.map(([draft]) => draft);
     expect(
@@ -283,7 +283,7 @@ describe("currencies the ledger does not keep its books in", () => {
    * Order is the whole fix: a rate written *after* the rows it values arrives
    * too late, and every one of them has already been declined.
    */
-  it("writes them before the first transaction", () => {
+  it("writes them before the first transaction", async () => {
     const order: string[] = [];
     const t = target({
       setManualRate: vi.fn(() => {
@@ -295,7 +295,7 @@ describe("currencies the ledger does not keep its books in", () => {
         return { id: "t" };
       }),
     });
-    loadDemo(t, TODAY, 1);
+    await loadDemo(t, TODAY, 1);
 
     expect(order.indexOf("transaction"), "a transaction was attempted").toBeGreaterThan(-1);
     expect(order.lastIndexOf("rate"), "every rate precedes it").toBeLessThan(
@@ -305,7 +305,7 @@ describe("currencies the ledger does not keep its books in", () => {
 });
 
 describe("rateWindows", () => {
-  it("never asks for a range the operation refuses", () => {
+  it("never asks for a range the operation refuses", async () => {
     // L11 caps a manual rate range at 366 days because the operation writes
     // one row per day. The demo is 26 months, so one call for the whole span
     // was refused — and the refusal presented as **532 transactions refused
@@ -319,7 +319,7 @@ describe("rateWindows", () => {
     }
   });
 
-  it("covers the span exactly, with no gap and no overlap", () => {
+  it("covers the span exactly, with no gap and no overlap", async () => {
     const windows = rateWindows("2024-07-01", "2026-09-20");
     expect(windows[0]?.from).toBe("2024-07-01");
     expect(windows.at(-1)?.to).toBe("2026-09-20");
@@ -332,13 +332,13 @@ describe("rateWindows", () => {
     }
   });
 
-  it("is one window for a span that fits", () => {
+  it("is one window for a span that fits", async () => {
     expect(rateWindows("2026-01-01", "2026-03-01")).toEqual([
       { from: "2026-01-01", to: "2026-03-01" },
     ]);
   });
 
-  it("is one window for a single day", () => {
+  it("is one window for a single day", async () => {
     expect(rateWindows("2026-01-01", "2026-01-01")).toEqual([
       { from: "2026-01-01", to: "2026-01-01" },
     ]);
@@ -346,7 +346,7 @@ describe("rateWindows", () => {
 });
 
 describe("demoRates", () => {
-  it("quotes every other demo currency against whatever the pivot is", () => {
+  it("quotes every other demo currency against whatever the pivot is", async () => {
     // A phone that has never synced bootstraps `currencies.ts`'s default,
     // which is USD — the plan was written around PLN, and `set_manual_rate`
     // refuses any base that is not the pivot.
@@ -362,7 +362,7 @@ describe("demoRates", () => {
     ).toEqual(["EUR", "USD"]);
   });
 
-  it("states how many of the quote one pivot buys, not the reciprocal", () => {
+  it("states how many of the quote one pivot buys, not the reciprocal", async () => {
     // **`UnitsPerPivot` — the figure `fx_rates.rate` stores and the executor
     // divides by.** With the books in USD one pivot buys 4.05 PLN, so the
     // USD/PLN rate is 4.05. The first version returned 0.24691358 here, which
@@ -375,7 +375,7 @@ describe("demoRates", () => {
     expect(demoRates("USD").find((r) => r.quote === "EUR")?.rate).toBe("0.937500000000");
   });
 
-  it("round-trips a figure through the rate it writes", () => {
+  it("round-trips a figure through the rate it writes", async () => {
     // The check that would have caught the inversion without knowing which way
     // round the field is: value an amount and value it back.
     const rate = demoRates("USD").find((r) => r.quote === "PLN")?.rate;
@@ -386,7 +386,7 @@ describe("demoRates", () => {
     expect(Number(usd)).toBeCloseTo(50.444, 2);
   });
 
-  it("asks for nothing when the pivot is a currency the plan does not price", () => {
+  it("asks for nothing when the pivot is a currency the plan does not price", async () => {
     // Inventing a rate would be a ledger whose figures mean nothing.
     expect(demoRates("JPY")).toEqual([]);
   });
@@ -398,9 +398,42 @@ describe("demoRates", () => {
  * half of the app went uncompared against its own drawing.
  */
 describe("the people money moves between", () => {
-  it("creates each one, and a debt row for each", () => {
+  /**
+   * **Before the history, so an interrupted load still has them.** They were
+   * written last, after nine hundred rows; on a phone the load looked frozen,
+   * was reloaded partway, and the Counterparties tab stayed empty.
+   */
+  it("creates the people before the first history row", async () => {
     const t = target();
-    const outcome = loadDemo(t, TODAY, 1);
+    await loadDemo(t, TODAY, 1);
+    const lastPerson = Math.max(...vi.mocked(t.createCounterparty).mock.invocationCallOrder);
+    const historyRow = vi
+      .mocked(t.createTransaction)
+      .mock.calls.findIndex(
+        ([draft]) => draft.obligationCounterpartyId === null && draft.type !== "transfer",
+      );
+    const firstHistoryCall =
+      vi.mocked(t.createTransaction).mock.invocationCallOrder[historyRow] ?? 0;
+    expect(lastPerson).toBeLessThan(firstHistoryCall);
+  });
+
+  /** The history in chunks, each one batch, with how far it has got after every one. */
+  it("writes the history in batches and reports its progress", async () => {
+    const t = target();
+    const batch = vi.fn((write: () => void) => write());
+    const progress = vi.fn();
+    await loadDemo({ ...t, batch }, TODAY, 3, progress);
+    expect(batch.mock.calls.length).toBeGreaterThan(1);
+    const [written, of] = progress.mock.calls.at(-1) ?? [];
+    expect(written).toBe(of);
+    expect(progress.mock.calls.map(([w]) => w)).toEqual(
+      [...progress.mock.calls.map(([w]) => w)].sort((x, y) => x - y),
+    );
+  });
+
+  it("creates each one, and a debt row for each", async () => {
+    const t = target();
+    const outcome = await loadDemo(t, TODAY, 1);
 
     expect(outcome.counterparties).toBe(DEMO_COUNTERPARTIES.length);
     expect(outcome.refused).toBe(0);
@@ -417,9 +450,9 @@ describe("the people money moves between", () => {
    * only the second, which left the identity link with nothing behind it on
    * any screen that reads it.
    */
-  it("names who the row was with, as well as who owes because of it", () => {
+  it("names who the row was with, as well as who owes because of it", async () => {
     const t = target();
-    loadDemo(t, TODAY, 1);
+    await loadDemo(t, TODAY, 1);
 
     const obligations = vi
       .mocked(t.createTransaction)
@@ -431,9 +464,9 @@ describe("the people money moves between", () => {
   });
 
   /** One of the three is settled, which is a settlement written after its debt. */
-  it("settles exactly one of them, in full and after the debt it clears", () => {
+  it("settles exactly one of them, in full and after the debt it clears", async () => {
     const t = target();
-    loadDemo(t, TODAY, 1);
+    await loadDemo(t, TODAY, 1);
 
     const settlements = vi.mocked(t.settleDebt).mock.calls;
     expect(settlements).toHaveLength(1);
@@ -456,7 +489,7 @@ describe("the people money moves between", () => {
   });
 
   /** Both sides exist, so Debt has something in each of its segments. */
-  it("leaves one who owes you and one you owe", () => {
+  it("leaves one who owes you and one you owe", async () => {
     const owing = DEMO_DEBTS.filter((row) => row.counterparty === "owing");
     const owed = DEMO_DEBTS.filter((row) => row.counterparty === "owed");
     expect(

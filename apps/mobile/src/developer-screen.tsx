@@ -38,10 +38,20 @@ export default function Developer() {
   const ledger = useLedgerController();
   const snapshot = usePhoneLedger(ledger);
   const [wrote, setWrote] = useState<string | null>(null);
+  /** History rows written so far, of how many — `null` when no load is running. */
+  const [progress, setProgress] = useState<{ written: number; of: number } | null>(null);
   const [confirming, setConfirming] = useState(false);
 
-  const handleLoad = useCallback(() => {
-    const outcome = loadDemo(
+  /**
+   * **Async, and the screen stays live while it runs.** The loader writes the
+   * history in chunks and yields between them, so this can say how far it has
+   * got — and a device that shows progress is one nobody reloads halfway,
+   * which is what used to leave the Counterparties tab empty.
+   */
+  const handleLoad = useCallback(async () => {
+    setWrote(null);
+    setProgress({ written: 0, of: 0 });
+    const outcome = await loadDemo(
       {
         createAccount: ledger.createAccount,
         createCategory: ledger.createCategory,
@@ -59,9 +69,13 @@ export default function Developer() {
         // The device's own pivot, not the plan's guess at one: every rate is
         // quoted against it and `set_manual_rate` refuses any other base.
         pivot: snapshot.currencies.find((currency) => currency.isPivot)?.code ?? "",
+        batch: ledger.batch,
       },
       todayIn(Intl.DateTimeFormat().resolvedOptions().timeZone),
+      undefined,
+      (written, of) => setProgress({ written, of }),
     );
+    setProgress(null);
     ledger.refresh();
     setWrote(
       t("developer.loaded", {
@@ -84,7 +98,19 @@ export default function Developer() {
     <PushedPage title={t("routes.developer")} subtitle={t("developer.subtitle")}>
       <Text style={styles.lede}>{t("developer.lede")}</Text>
 
-      <Button label={t("preview.loadDemo")} onPress={handleLoad} variant="primary" size="lg" />
+      <Button
+        label={t("preview.loadDemo")}
+        onPress={handleLoad}
+        variant="primary"
+        size="lg"
+        loading={progress !== null}
+        disabled={progress !== null}
+      />
+      {progress === null || progress.of === 0 ? null : (
+        <Text style={styles.lede}>
+          {t("developer.loading", { written: progress.written, of: progress.of })}
+        </Text>
+      )}
       {wrote === null ? null : <Banner tone="neutral" message={wrote} />}
 
       <View style={styles.danger}>

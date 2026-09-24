@@ -782,6 +782,7 @@ export const de: Messages = {
   developer: {
     subtitle: "Daten zum Anschauen",
     lede: "Erfundene Konten und zwei Jahre Buchungen, direkt auf dieses Gerät geschrieben. Nichts davon berührt einen Server.",
+    loading: "Verlauf wird geschrieben… {{written}} von {{of}}",
     loaded: "{{transactions}} Zeilen · {{accounts}} Konten · {{people}} Personen",
     refused: " · {{count}} abgelehnt",
   },
