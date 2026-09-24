@@ -794,6 +794,39 @@ export const REPLICA_BACKFILLS: Readonly<Record<string, Backfill>> = {
       );
     },
   },
+  "0019_schema": {
+    /**
+     * **`reference` rows move onto the identity link, and the role dies with
+     * them.** It meant *this party is involved but nothing is owed*, which is
+     * exactly what `counterparty_id` with an empty obligation pair now says —
+     * so a row that carried it is not losing anything, it is being written the
+     * way the schema can finally express.
+     *
+     * Two statements, in this order and not one: the copy has to land before
+     * the pair is cleared, or the value it copies from is already gone. A
+     * single `UPDATE … SET counterparty_id = obligation_counterparty_id,
+     * obligation_counterparty_id = NULL` happens to work in SQLite, which
+     * evaluates the right-hand sides against the old row — and relying on
+     * that is a rule this file would be the only reader of.
+     *
+     * `counterparty_id IS NULL` on the first guards nothing today (the column
+     * is one step old) and guards a re-run tomorrow: an `objects` or `fill`
+     * hook re-runs whenever its step does, so it must be idempotent on a
+     * database that has already had it.
+     */
+    fill: (tx) => {
+      tx.run(
+        sql.raw(
+          `update "transactions" set "counterparty_id" = "obligation_counterparty_id" where "obligation_role" = 'reference' and "counterparty_id" is null`,
+        ),
+      );
+      tx.run(
+        sql.raw(
+          `update "transactions" set "obligation_counterparty_id" = null, "obligation_role" = null where "obligation_role" = 'reference'`,
+        ),
+      );
+    },
+  },
 };
 
 /** No outbox step needs a backfill today — its table shape barely changes (§08 item 2), and none of the changes it has had were unexpressable in SQL alone. */

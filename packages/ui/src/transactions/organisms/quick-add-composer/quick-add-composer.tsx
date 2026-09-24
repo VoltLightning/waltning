@@ -74,7 +74,7 @@ import {
   ComposerTileGlyph,
 } from "../../molecules/composer-rows/composer-rows";
 
-const OBLIGATION_ROLES = ["debt", "contribution", "reference"] as const;
+const OBLIGATION_ROLES = ["debt", "contribution"] as const;
 type ObligationRole = (typeof OBLIGATION_ROLES)[number];
 /** How many categories the chip row offers — the deck draws four. */
 const CHIP_COUNT = 4;
@@ -166,7 +166,7 @@ export type QuickAddComposerProps = {
   obligationCounterpartyId: string | null;
   onCounterpartyChange: (obligationCounterpartyId: string) => void;
   obligationRole: ObligationRole | null;
-  onObligationRoleChange: (role: ObligationRole) => void;
+  onObligationRoleChange: (role: ObligationRole | null) => void;
   /**
    * S15's *+ New* escape — the counterparty sheet's own footer. Optional: a
    * screen that has not wired S15 yet (a story, an older test) still renders.
@@ -185,7 +185,14 @@ export type QuickAddComposerProps = {
 };
 
 /** The fields a capture cannot be saved without. */
-export type QuickAddCheckField = "amount" | "account" | "obligationRole";
+/**
+ * **`obligationRole` is no longer one of these.** Naming a counterparty used
+ * to leave the form unfinished until a role was chosen, because `reference`
+ * was the only way to say "involved, owes nothing". §6.6.1's identity link
+ * says that by itself, so a role is an answer somebody gives when there is an
+ * obligation — never a blank the composer waits on.
+ */
+export type QuickAddCheckField = "amount" | "account";
 
 type OpenSheet = "date" | "time" | "scope" | "enteredName" | "counterparty" | null;
 
@@ -384,8 +391,10 @@ export function QuickAddComposer({
   const dateError = fieldErrors?.byField["date"]?.[0];
   const timeError = fieldErrors?.byField["timeOfDay"]?.[0];
   const counterpartyError = fieldErrors?.byField["obligationCounterpartyId"]?.[0];
-  const obligationRoleError =
-    check?.errorFor("obligationRole") ?? fieldErrors?.byField["obligationRole"]?.[0];
+  // The executor can still refuse a malformed pair (`transactions_obligation_
+  // pair_shape`); what is gone is the composer's own *pre*-submit objection,
+  // which existed only because naming somebody used to demand a role.
+  const obligationRoleError = fieldErrors?.byField["obligationRole"]?.[0];
   /** §6.7's mirror (`create-transaction.executor.ts`'s own refusal), named onto the row the scope renders. */
   const scopeError = fieldErrors?.byField["isBusiness"]?.[0];
   const moreError =
@@ -469,17 +478,22 @@ export function QuickAddComposer({
           machineFilled={categoryMachineFilled}
           error={categoryError}
         />
-        <Anchored check={check} field="obligationRole">
-          <ComposerRow
-            label={t("transactions.moreDetails")}
-            value={moreSummary === "" ? undefined : moreSummary}
-            placeholder={t("transactions.moreDetailsHint")}
-            tile={<ComposerTileGlyph glyph="…" ink={theme.textMuted} />}
-            tileFill={theme.subtleFill}
-            onPress={handleToggleMore}
-            error={moreShown ? undefined : moreError}
-          />
-        </Anchored>
+        {/*
+          No `Anchored` here: the more-details row holds no field the composer
+          checks before submitting. It wrapped `obligationRole` while naming a
+          counterparty demanded one — §6.6.1's identity link ended that, and an
+          anchor for a check that cannot fire would scroll to a row with
+          nothing wrong with it.
+        */}
+        <ComposerRow
+          label={t("transactions.moreDetails")}
+          value={moreSummary === "" ? undefined : moreSummary}
+          placeholder={t("transactions.moreDetailsHint")}
+          tile={<ComposerTileGlyph glyph="…" ink={theme.textMuted} />}
+          tileFill={theme.subtleFill}
+          onPress={handleToggleMore}
+          error={moreShown ? undefined : moreError}
+        />
         {moreShown ? (
           <>
             <ComposerRow
@@ -748,10 +762,10 @@ type CounterpartyPickerProps = {
   obligationCounterpartyId: string | null;
   onCounterpartyChange: (obligationCounterpartyId: string) => void;
   obligationRole: ObligationRole | null;
-  onObligationRoleChange: (role: ObligationRole) => void;
+  onObligationRoleChange: (role: ObligationRole | null) => void;
 };
 
-/** §6.6 — the role picker lives in the same sheet, and is never defaulted. */
+/** §6.6 — the role picker lives in the same sheet, and defaults to no obligation. */
 function CounterpartyPicker({
   counterparties,
   obligationCounterpartyId,
@@ -765,17 +779,25 @@ function CounterpartyPicker({
       counterparties.map((counterparty) => ({ value: counterparty.id, label: counterparty.name })),
     [counterparties],
   );
+  /**
+   * **`none` is a real option, not a blank.** A role stopped being required
+   * when §6.6.1's identity link arrived — naming somebody owes them nothing —
+   * but a radio group cannot be un-picked, so without this a role chosen by
+   * mistake was permanent. Selected by default, because "no obligation" is
+   * what naming a counterparty already means.
+   */
   const roleOptions = useMemo<RadioGroupProps["options"]>(
     () => [
+      { value: NO_OBLIGATION, label: t("transactions.role.none") },
       { value: "debt", label: t("transactions.role.debt") },
       { value: "contribution", label: t("transactions.role.contribution") },
-      { value: "reference", label: t("transactions.role.reference") },
     ],
     [t],
   );
   const handleRoleChange = useCallback(
     (next: string) => {
-      if (isObligationRole(next)) onObligationRoleChange(next);
+      if (next === NO_OBLIGATION) onObligationRoleChange(null);
+      else if (isObligationRole(next)) onObligationRoleChange(next);
     },
     [onObligationRoleChange],
   );
@@ -795,13 +817,16 @@ function CounterpartyPicker({
         <RadioGroup
           label={t("transactions.role")}
           options={roleOptions}
-          value={obligationRole}
+          value={obligationRole ?? NO_OBLIGATION}
           onChange={handleRoleChange}
         />
       ) : null}
     </View>
   );
 }
+
+/** The radio value standing for "named, and owing nothing". */
+const NO_OBLIGATION = "none";
 
 function isObligationRole(value: string): value is ObligationRole {
   return (OBLIGATION_ROLES as readonly string[]).includes(value);

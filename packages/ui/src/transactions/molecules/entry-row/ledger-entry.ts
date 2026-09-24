@@ -35,5 +35,5 @@ export type LedgerEntry = {
    * this builds is one the catalogue is known to hold — a widened role would
    * make `counterparties.role.${role}` a key nobody can prove exists.
    */
-  obligationRole?: "debt" | "contribution" | "reference" | null;
+  obligationRole?: "debt" | "contribution" | null;
 };

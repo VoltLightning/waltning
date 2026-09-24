@@ -233,8 +233,9 @@ export function dumpFixture(options: DumpFixtureOptions = {}): void {
         isBusiness: false,
         isCapital: false,
         source: "manual",
-        obligationCounterpartyId: ID.cpA,
-        obligationRole: "reference",
+        // Named, owing nothing: the identity link on its own, which is what
+        // the retired `reference` role meant.
+        counterpartyId: ID.cpA,
       },
       CAPTURE,
     );

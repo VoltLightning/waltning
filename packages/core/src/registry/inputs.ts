@@ -88,8 +88,13 @@ const TXN_TYPE = ["income", "expense", "transfer", "adjustment"] as const;
 /** S29 writes migrated rows as `migration`; the receipt and voice paths differ too. */
 const TXN_SOURCE = ["manual", "import", "receipt", "agent", "migration"] as const;
 
-/** §6.6 — naming a counterparty is not the same as owing them. */
-const OBLIGATION_ROLE = ["debt", "contribution", "reference"] as const;
+/**
+ * §6.6 — naming a counterparty is not the same as owing them, and now that
+ * the identity link exists that is a difference the schema states rather than
+ * a role value. `reference` is gone: ordinary involvement is `counterpartyId`
+ * with no obligation pair.
+ */
+const OBLIGATION_ROLE = ["debt", "contribution"] as const;
 
 /** §6.6 — a person or a company; `O15`'s ageing applies to companies only. */
 const COUNTERPARTY_KIND = ["person", "company"] as const;
@@ -323,9 +328,18 @@ export const createTransactionInput = z
     categoryId: zId<"categories">().optional(),
 
     /**
+     * §6.6.1 — who the transaction was **with**. The commoner of the two
+     * links and the one that carries the plain name; naming a shop here owes
+     * nobody anything.
+     */
+    counterpartyId: zId<"counterparties">().optional(),
+
+    /**
      * §6.6 — who the obligation is *with*, which is a separate fact from who
      * the transaction was with. Paired with the role by
-     * `transactions_obligation_pair_shape`.
+     * `transactions_obligation_pair_shape`, and tied to `counterpartyId` by
+     * nothing at all: the two may name the same counterparty, different ones,
+     * or one without the other.
      */
     obligationCounterpartyId: zId<"counterparties">().optional(),
     obligationRole: z.enum(OBLIGATION_ROLE).optional(),
@@ -834,6 +848,7 @@ const transactionPatch = z
     accountId: zId<"accounts">().optional(),
     amountOriginal: zMoney.optional(),
     categoryId: zId<"categories">().nullable().optional(),
+    counterpartyId: zId<"counterparties">().nullable().optional(),
     obligationCounterpartyId: zId<"counterparties">().nullable().optional(),
     obligationRole: z.enum(OBLIGATION_ROLE).nullable().optional(),
     toAccountId: zId<"accounts">().nullable().optional(),

@@ -677,8 +677,11 @@ describe("phone ledger controller", () => {
       date: "2026-07-01",
       note: "Freelance invoice",
       isBusiness: true,
-      obligationCounterpartyId: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
-      obligationRole: "reference",
+      // Named, owing nothing — the identity link, which is what `reference`
+      // used to say through the obligation pair.
+      counterpartyId: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+      obligationCounterpartyId: null,
+      obligationRole: null,
     });
 
     expect(createTransaction.mock.calls[0]?.[0]).toMatchObject({
@@ -688,8 +691,46 @@ describe("phone ledger controller", () => {
       date: accountingDate("2026-07-01"),
       note: "Freelance invoice",
       isBusiness: true,
+      counterpartyId: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+    });
+  });
+
+  /**
+   * **The other half of §6.6.1's pair, and the composer's whole mapping.** A
+   * draft that names a counterparty *and* a role means both: the transaction
+   * was with them, and it owes them. Two different counterparties in the two
+   * links is a real state — paying a shop for a friend — but it is S09's edit
+   * rather than something one chip row can express, so the composer writes
+   * the same one to both and this is where that is stated.
+   */
+  it("fills both links when a draft names a counterparty and a role", () => {
+    const category: PhoneCategory = {
+      id: id<"categories">("cccccccc-cccc-4ccc-8ccc-cccccccccccc"),
+      name: "Freelance",
+      kind: "income",
+    };
+    const { controller, createTransaction } = harness(undefined, {
+      categories: [category],
+    });
+    const accountId = idOf(controller.createAccount(minimalDraft("Bank A · PLN", PLN)));
+
+    controller.createTransaction({
+      type: "income",
+      amount: "48.90",
+      accountId,
+      categoryId: category.id,
+      date: "2026-07-02",
+      note: "",
+      isBusiness: false,
+      counterpartyId: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
       obligationCounterpartyId: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
-      obligationRole: "reference",
+      obligationRole: "debt",
+    });
+
+    expect(createTransaction.mock.calls[0]?.[0]).toMatchObject({
+      counterpartyId: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+      obligationCounterpartyId: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+      obligationRole: "debt",
     });
   });
 
@@ -1757,6 +1798,7 @@ describe("phone ledger controller — transaction detail writes (C5)", () => {
       accountName: "Cash · PLN",
       categoryId: null,
       categoryName: null,
+      counterpartyId: null,
       obligationCounterpartyId: null,
       counterpartyName: null,
       obligationRole: null,

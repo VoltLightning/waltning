@@ -414,9 +414,9 @@ export const en = {
     /** §6.6 — the counterparty chip's own value while a role is unresolved. Never defaulted. */
     obligationRoleMissing: "{{name}} · role?",
     /** §6.6 — what naming a counterparty on this row means. */
+    "role.none": "Just involved — nothing owed",
     "role.debt": "Debt — expected back",
     "role.contribution": "Contribution to a shared account",
-    "role.reference": "Just involved — no obligation",
     /** `Dock`'s mode row (S05 §3) — the keypad is the one arc 1 builds; the other three are named, disabled. */
     modeKeypad: "Keypad",
     modeVoice: "Voice",
@@ -869,7 +869,6 @@ export const en = {
     /** `TransactionRow`'s `roleTag` — the same three values `transactions."role.*"` names, kept short for a tag. */
     "role.debt": "debt",
     "role.contribution": "contribution",
-    "role.reference": "reference",
     /** S13's overflow — one live merge into this record. */
     mergedInto: "Merged {{name}} into this record · {{count}} rows",
     unmerge: "Unmerge",

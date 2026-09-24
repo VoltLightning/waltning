@@ -80,7 +80,7 @@ function debtRow(opts: {
   type: "income" | "expense";
   amount: string;
   obligationCounterpartyId: Id<"counterparties">;
-  role?: "debt" | "contribution" | "reference";
+  role?: "debt" | "contribution";
 }) {
   s.ledger.replica.db
     .insert(transactions)

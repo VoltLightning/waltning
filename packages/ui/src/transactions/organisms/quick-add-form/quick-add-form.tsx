@@ -50,7 +50,7 @@ export type QuickAddCategory = { id: string; name: string; kind: "income" | "exp
 /** A counterparty the form can attach a role to (§6.6). */
 export type QuickAddCounterparty = { id: string; name: string };
 
-const OBLIGATION_ROLES = ["debt", "contribution", "reference"] as const;
+const OBLIGATION_ROLES = ["debt", "contribution"] as const;
 type ObligationRole = (typeof OBLIGATION_ROLES)[number];
 
 /**
@@ -253,9 +253,11 @@ export function QuickAddForm({
   );
   const roleOptions = useMemo<RadioGroupProps["options"]>(
     () => [
+      // `none` is a real option, not a blank: a role stopped being required when
+      // §6.6.1's identity link arrived, and a radio group cannot be un-picked.
+      { value: NO_OBLIGATION, label: t("transactions.role.none") },
       { value: "debt", label: t("transactions.role.debt") },
       { value: "contribution", label: t("transactions.role.contribution") },
-      { value: "reference", label: t("transactions.role.reference") },
     ],
     [t],
   );
@@ -350,7 +352,7 @@ export function QuickAddForm({
                 <RadioGroup
                   label={t("transactions.role")}
                   options={roleOptions}
-                  value={obligationRole}
+                  value={obligationRole ?? NO_OBLIGATION}
                   onChange={handleRoleChange}
                 />
               ) : null}
@@ -366,6 +368,9 @@ export function QuickAddForm({
     </View>
   );
 }
+
+/** The radio value standing for "named, and owing nothing". */
+const NO_OBLIGATION = "none";
 
 function isObligationRole(value: string): value is ObligationRole {
   return (OBLIGATION_ROLES as readonly string[]).includes(value);

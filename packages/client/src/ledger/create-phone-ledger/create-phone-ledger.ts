@@ -475,7 +475,7 @@ export type PhoneSearchFilter = {
   /** S13's whole history — every row whose obligation names this counterparty, any role. */
   obligationCounterpartyId?: Id<"counterparties">;
   /** S13 §3's default toggle — `debt` only until "· N other rows" is opened. */
-  obligationRole?: "debt" | "contribution" | "reference";
+  obligationRole?: "debt" | "contribution";
 };
 
 export type PhoneSearchCursor = { date: AccountingDate; id: Id<"transactions"> };
@@ -531,7 +531,7 @@ export type PhoneSearchTransaction = {
   isBusiness: boolean;
   isCapital: boolean;
   /** `null` off any row with no counterparty at all — the ordinary case. */
-  obligationRole: "debt" | "contribution" | "reference" | null;
+  obligationRole: "debt" | "contribution" | null;
 };
 
 export type PhoneCurrencyTotal = {
@@ -604,6 +604,8 @@ export type PhoneTransactionDetail = {
   accountName: string;
   categoryId: Id<"categories"> | null;
   categoryName: string | null;
+  /** §6.6.1 — who the transaction was *with*, and the name to draw for it. */
+  counterpartyId: Id<"counterparties"> | null;
   /** §6.6 — S09 is where a capture's missing role is corrected. */
   obligationCounterpartyId: Id<"counterparties"> | null;
   counterpartyName: string | null;
@@ -1204,8 +1206,10 @@ export type QuickAddDraft = {
   enteredName?: string;
   note: string;
   isBusiness: boolean;
+  /** §6.6.1 — who it was *with*. Optional: most drafts name nobody. */
+  counterpartyId?: string | null;
   obligationCounterpartyId: string | null;
-  obligationRole: "debt" | "contribution" | "reference" | null;
+  obligationRole: "debt" | "contribution" | null;
   /** S31's destination leg (§7.5) — present only when `type === "transfer"`. */
   toAccountId?: string;
   toAmount?: string;
@@ -1270,7 +1274,7 @@ export type TransactionFilterDraft = {
   from?: string;
   to?: string;
   obligationCounterpartyId?: string;
-  obligationRole?: "debt" | "contribution" | "reference";
+  obligationRole?: "debt" | "contribution";
 };
 
 export type TransactionSearchCursorDraft = { date: string; id: string };
@@ -3787,6 +3791,7 @@ export function createPhoneLedger(
           enteredName: draft.enteredName ?? "",
           note: draft.note,
           isBusiness: draft.isBusiness,
+          ...(draft.counterpartyId ? { counterpartyId: draft.counterpartyId } : {}),
           obligationCounterpartyId: draft.obligationCounterpartyId ?? undefined,
           obligationRole: draft.obligationRole ?? undefined,
           // S31's destination leg (§7.5) — absent on every other caller, and

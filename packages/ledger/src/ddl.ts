@@ -618,6 +618,13 @@ export const REPLICA_STEPS: readonly {
       `CREATE UNIQUE INDEX \`dashboard_widgets_external_id_uq\` ON \`dashboard_widgets\` (\`external_id\`)`,
     ],
   },
+  {
+    tag: "0019_schema",
+    statements: [
+      `ALTER TABLE \`transactions\` ADD \`counterparty_id\` text REFERENCES counterparties(id)`,
+      `CREATE INDEX \`transactions_counterparty_idx\` ON \`transactions\` (\`counterparty_id\`)`,
+    ],
+  },
 ];
 
 /** One step per file in `drizzle/outbox`, filename order — the queue, its index, and the counter `claimSeq` allocates from. */

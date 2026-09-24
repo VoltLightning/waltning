@@ -39,7 +39,7 @@ RECORD
         │          category defaults: Debt & giving › Lent out
         │                         or Other inflows › Borrowed
         │   role = contribution → J8 / §6.7, NOT a debt
-        │   ordinary Who selection → reference, no obligation
+        │   ordinary Who selection → identity link, no obligation
         │
         Save
 

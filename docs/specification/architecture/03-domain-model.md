@@ -21,7 +21,7 @@ erDiagram
     ACCOUNTS ||--o{ TRANSACTIONS : "from / to"
     CATEGORIES ||--o{ TRANSACTIONS : classifies
     CATEGORIES ||--o{ CATEGORIES : parent
-    COUNTERPARTIES ||--o{ TRANSACTIONS : "debt / contribution / reference"
+    COUNTERPARTIES ||--o{ TRANSACTIONS : "identity · debt / contribution"
     TRANSACTIONS ||--o{ TRANSACTION_LINES : "optional breakdown"
     TRANSACTIONS ||--o| RECEIPTS : evidences
     RECEIPTS ||--o{ TRANSACTION_LINES : extracted

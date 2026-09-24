@@ -70,7 +70,7 @@ export type CommandBarDraft = {
   note: string;
   isBusiness: boolean;
   obligationCounterpartyId: string | null;
-  obligationRole: "debt" | "contribution" | "reference" | null;
+  obligationRole: "debt" | "contribution" | null;
 };
 
 /**

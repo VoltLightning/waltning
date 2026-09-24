@@ -82,7 +82,7 @@ entered name is a row that memory can never fire on.
 | Category chip | A group is tapped | Narrows the grid. **Groups are not selectable** — only leaves are assignable (`TAXONOMY.md` R1, enforced in the database) |
 | Account chip | Account does not exist | S16 editor, returns to the draft with it selected |
 | Counterparty attached | Person not known | S15 editor — name, kind, their settlement currency |
-| Counterparty attached | — | **A role must be chosen**: debt, contribution, or reference (§4.1 below) |
+| Counterparty attached | — | Naming them is enough; **a role is optional** and says what is owed (§4.1 below) |
 | Voice | Two intents heard | S08 Voice multi-intent — one `DiffCard` per intent |
 | Photo | — | J3, from S07a |
 | Account is a clearing account | — | J8 — the allocation prompt appears after Save, not before |
@@ -96,7 +96,7 @@ the chip asks. Wording, not enum values:
 |---|---|---|
 | *they owe me* / *I owe them* | `debt` | Enters the debt ledger. Category defaults to `Debt & giving › Lent out` or `Other inflows › Borrowed` |
 | *their share* | `contribution` | Attribution only. Never a balance, never aged (§6.7) |
-| *was with them* | `reference` | Records who was involved. No obligation either way |
+| *was with them* | no role | The identity link alone. Records who was involved, and owes nothing either way |
 
 Defaulting silently would be wrong in both directions: treating a dinner
 companion as a debtor invents money owed, and treating a loan as a reference

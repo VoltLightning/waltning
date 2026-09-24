@@ -56,6 +56,7 @@ export type LocalTransactionDetail = {
    * missing role is corrected — and a role with no counterparty, or the
    * reverse, is what the detail screen exists to make visible.
    */
+  counterpartyId: Id<"counterparties"> | null;
   obligationCounterpartyId: Id<"counterparties"> | null;
   counterpartyName: string | null;
   obligationRole: ObligationRole | null;
@@ -93,6 +94,7 @@ export function readTransaction<TRun, TSchema extends typeof ledgerSchema>(
       accountName: accounts.name,
       categoryId: transactions.categoryId,
       categoryName: categories.name,
+      counterpartyId: transactions.counterpartyId,
       obligationCounterpartyId: transactions.obligationCounterpartyId,
       counterpartyName: counterparties.name,
       obligationRole: transactions.obligationRole,

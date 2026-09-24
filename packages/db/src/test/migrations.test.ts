@@ -153,6 +153,11 @@ describe("migrations apply from empty", () => {
       "tax_omission_candidates.entered_name",
       "tax_omission_candidates.obligation_counterparty_id",
       "tax_unvalued_revenue.entered_name",
+      // `transactions_valued` is `SELECT t.*`, so it gained the identity link
+      // the moment the table did — and `tax_ledger` did not, because it names
+      // its columns and still exports only the obligation one. Whether a tax
+      // export wants identity instead is a §13 question, not a rename's.
+      "transactions_valued.counterparty_id",
       "transactions_valued.entered_name",
       "transactions_valued.obligation_counterparty_id",
     ]);

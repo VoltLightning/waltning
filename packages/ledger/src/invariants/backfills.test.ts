@@ -161,6 +161,46 @@ const FILLED_COLUMNS = [
     rows: PRESET_LAYOUT.widgets.length,
     expected: (source: string) => `${layoutKey(PRESET_LAYOUT)}:${source}`,
   },
+  {
+    /**
+     * §6.6.1 — the `reference` rows moving onto the identity link.
+     *
+     * **`source` is the row's own id, not the column the value came from**,
+     * and that is the one place this entry differs from the others in kind.
+     * The rest *derive* a value from a column that survives the step; this
+     * one **moves** one, and clears `obligation_counterparty_id` on the way —
+     * so reading the source back after the migration would find the null the
+     * fill deliberately left, and assert against it. The property worth
+     * stating is that the counterparty the seed put on the row is the one the
+     * identity link now holds: not resolved by name, not picked some other
+     * way, the same row's own party.
+     */
+    tag: "0019_schema",
+    table: "transactions",
+    column: "counterparty_id",
+    /** `ADD COLUMN` with no default leaves NULL. */
+    sentinel: null,
+    source: "id",
+    seed: (run: (statement: SQL) => void) => {
+      const when = 1_767_225_600;
+      // Currency first: `accounts.currency` is a foreign key into it, and the
+      // migrator runs with foreign keys on.
+      run(
+        sql`insert into "currencies" ("code", "name", "decimals", "is_pivot", "updated_at") values ('PLN', 'Polish zloty', 2, 1, ${when})`,
+      );
+      run(
+        sql`insert into "counterparties" ("id", "name", "created_at", "updated_at") values ('cp-ref', 'Shop A', ${when}, ${when})`,
+      );
+      run(
+        sql`insert into "accounts" ("id", "name", "currency", "kind", "created_at", "updated_at") values ('acc-ref', 'Bank A · PLN', 'PLN', 'bank', ${when}, ${when})`,
+      );
+      run(
+        sql`insert into "transactions" ("id", "date", "type", "account_id", "amount_original", "currency", "fx_rate", "obligation_counterparty_id", "obligation_role", "created_at", "updated_at") values ('txn-ref', '2026-08-01', 'expense', 'acc-ref', '18.00000000', 'PLN', '1.000000000000', 'cp-ref', 'reference', ${when}, ${when})`,
+      );
+    },
+    rows: 1,
+    expected: () => "cp-ref",
+  },
 ] as const;
 
 let dir: string;

@@ -362,8 +362,9 @@ describe("searchTransactions — structural filters, alone and combined", () => 
     insertExpense({
       id: "00000000-0000-4000-8000-000000000006",
       enteredName: "Just involved",
-      obligationCounterpartyId: nina,
-      obligationRole: "reference",
+      // Named with no obligation — the identity link alone, which is what
+      // `reference` used to say.
+      counterpartyId: nina,
       date: accountingDate("2026-08-07"),
     });
 
@@ -371,9 +372,40 @@ describe("searchTransactions — structural filters, alone and combined", () => 
       obligationCounterpartyId: nina,
       obligationRole: "debt",
     });
-    const every = searchTransactions(stores.ledger.replica.db, { obligationCounterpartyId: nina });
+    // S13's whole history — either link, so the row that merely names her
+    // comes back beside the one she owes on. `obligationCounterpartyId` on its
+    // own would find only the second, which is the point of the two filters
+    // being different questions rather than one widened.
+    const every = searchTransactions(stores.ledger.replica.db, { involvesCounterpartyId: nina });
     expect(debtOnly.rows.map((r) => r.enteredName)).toEqual(["Dinner, split four ways"]);
     expect(every.rows.length).toBe(2);
+  });
+
+  /**
+   * **A row naming the same counterparty in *both* columns is one row.**
+   * Paying a shop for a friend puts two different counterparties in the two
+   * links; settling with that friend puts the same one in both, and an `OR`
+   * across two columns is exactly where a join-shaped filter would return her
+   * twice.
+   */
+  it("returns a row once when both links name the same counterparty", () => {
+    const ola = id<"counterparties">("00000000-0000-4000-8000-0000000000d3");
+    stores.ledger.replica.db
+      .insert(counterparties)
+      .values([{ id: ola, name: "Ola", nameFolded: "ola", kind: "person" }])
+      .run();
+    insertExpense({
+      id: "00000000-0000-4000-8000-000000000007",
+      enteredName: "Both links",
+      counterpartyId: ola,
+      obligationCounterpartyId: ola,
+      obligationRole: "debt",
+      date: accountingDate("2026-08-08"),
+    });
+    const rows = searchTransactions(stores.ledger.replica.db, {
+      involvesCounterpartyId: ola,
+    }).rows;
+    expect(rows.length, "one row, not one per matching column").toBe(1);
   });
 
   it("combines every filter with AND", () => {

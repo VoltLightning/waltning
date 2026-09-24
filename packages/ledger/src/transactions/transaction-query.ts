@@ -69,6 +69,17 @@ export function structuralWhere(filter: TransactionSearchFilter): SQL | undefine
     filter.obligationCounterpartyId !== undefined
       ? eq(transactions.obligationCounterpartyId, filter.obligationCounterpartyId)
       : undefined,
+    // §6.6.1 — *every row that names this counterparty*, whichever of the two
+    // links does the naming. Separate from the filter above rather than a
+    // widening of it: `obligationCounterpartyId` is what a settlement and a
+    // debt balance ask, and answering that question with identity rows in it
+    // would put transactions nobody owes anything on into a debt figure.
+    filter.involvesCounterpartyId !== undefined
+      ? or(
+          eq(transactions.counterpartyId, filter.involvesCounterpartyId),
+          eq(transactions.obligationCounterpartyId, filter.involvesCounterpartyId),
+        )
+      : undefined,
     filter.obligationRole !== undefined
       ? eq(transactions.obligationRole, filter.obligationRole)
       : undefined,

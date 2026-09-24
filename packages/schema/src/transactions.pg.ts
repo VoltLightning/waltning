@@ -50,6 +50,18 @@ export const transactionsColumns = () => ({
   categoryId: k
     .uuid<"categories">("category_id")
     .references(() => categories.id, { onDelete: "restrict" }),
+  /**
+   * **Who the transaction was *with*** — §6.6.1's identity link, and the
+   * plainer of the two counterparties a row can name. Most transactions name
+   * a shop and owe nobody, so this carries the plain name and the obligation
+   * pair below carries the qualified one.
+   *
+   * Nullable, and nothing ties it to that pair: a cash loan to a friend has
+   * an obligation and no third party, a shop purchase has a party and no
+   * obligation, and paying a shop on a friend's behalf is both at once with
+   * two different counterparties in the two columns.
+   */
+  counterpartyId: k.uuid<"counterparties">("counterparty_id").references(() => counterparties.id),
   obligationCounterpartyId: k
     .uuid<"counterparties">("obligation_counterparty_id")
     .references(() => counterparties.id),
