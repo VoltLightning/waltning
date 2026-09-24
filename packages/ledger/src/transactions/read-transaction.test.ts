@@ -165,6 +165,31 @@ describe("readTransaction", () => {
     expect(result?.lines).toEqual([]);
   });
 
+  /** S09's *Pair* card reads it; every other type carries `null`. */
+  it("names a transfer's destination account, and nothing on any other type", () => {
+    const db = stores.ledger.replica.db;
+    const SAVINGS = id<"accounts">("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa");
+    const MOVE = id<"transactions">("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb");
+    db.insert(accounts).values({ id: SAVINGS, name: "Savings · USD", currency: USD }).run();
+    db.insert(transactions)
+      .values({
+        id: MOVE,
+        date: accountingDate("2026-08-23"),
+        type: "transfer" as const,
+        accountId: ACCOUNT,
+        toAccountId: SAVINGS,
+        amountOriginal: money.toMoney("100"),
+        toAmount: money.toMoney("100"),
+        currency: USD,
+        toCurrency: USD,
+        fxRate: money.pivotPerUnit("1"),
+        enteredName: "",
+      })
+      .run();
+    expect(readTransaction(db, MOVE)?.toAccountId).toBe(SAVINGS);
+    expect(readTransaction(db, TXN)?.toAccountId).toBeNull();
+  });
+
   it("returns null for a row that does not exist", () => {
     expect(readTransaction(stores.ledger.replica.db, OTHER_TXN)).toBeNull();
   });

@@ -607,6 +607,8 @@ export type PhoneTransactionDetail = {
   isBusiness: boolean;
   accountId: Id<"accounts">;
   accountName: string;
+  /** A transfer's destination; `null` on every other type. */
+  toAccountId: Id<"accounts"> | null;
   categoryId: Id<"categories"> | null;
   categoryName: string | null;
   /** §6.6.1 — who the transaction was *with*, and the name to draw for it. */
@@ -796,6 +798,7 @@ export type PhoneLedgerPort = {
   readSpendByCategory: (
     period: money.Period,
     scope: money.LedgerScope,
+    options?: money.SpendByCategoryOptions,
   ) => readonly PhoneSpendByCategory[];
   /** §12, on demand — `S01`'s line chart. `DESK4`. */
   readIncomeVsExpense: (
@@ -1612,6 +1615,7 @@ export type PhoneLedgerController = {
   readSpendByCategory: (
     period: money.Period,
     scope: money.LedgerScope,
+    options?: money.SpendByCategoryOptions,
   ) => readonly PhoneSpendByCategory[];
   /** §12, on demand — `S01`'s line chart. Same reasoning as `readPeriodSpend` above. `DESK4`. */
   readIncomeVsExpense: (
@@ -2410,7 +2414,12 @@ export function createPhoneLedger(
     readLedgerYears: () => port.readLedgerYears(),
     readNearestActivity: (period) => port.readNearestActivity(period),
     readDayRows: (date) => port.readDayRows(date),
-    readSpendByCategory: (period, scope) => port.readSpendByCategory(period, scope),
+    // Forwarded only when given: S01's reads pass two arguments and assert
+    // exactly two, and an `undefined` third is still a third.
+    readSpendByCategory: (period, scope, options) =>
+      options === undefined
+        ? port.readSpendByCategory(period, scope)
+        : port.readSpendByCategory(period, scope, options),
     readIncomeVsExpense: (buckets, scope) => port.readIncomeVsExpense(buckets, scope),
     readActiveDashboardLayout: () => port.readActiveDashboardLayout(),
     listCounterpartyBalances: (today) => port.listCounterpartyBalances(today),

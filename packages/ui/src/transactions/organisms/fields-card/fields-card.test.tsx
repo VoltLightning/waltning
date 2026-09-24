@@ -99,9 +99,9 @@ it("carries an account change (picked by the screen's own AccountPicker) into th
   expect(onSave).toHaveBeenCalledWith({ accountId: "account-b" });
 });
 
-it("Save starts disabled — nothing has changed yet", () => {
+it("draws no Save until something has changed — at rest there is nothing to commit", () => {
   renderCard();
-  expect(screen.getByRole("button", { name: "Save" })).toHaveProperty("disabled", true);
+  expect(screen.queryByRole("button", { name: "Save" })).toBeNull();
 });
 
 it("Save sends only the field that changed", () => {
@@ -120,7 +120,7 @@ it("Save sends only the field that changed", () => {
 it("carries a category change (set by the screen once the sheet picks one) alongside a field change, in one patch", () => {
   const { onSave } = renderCard({ categoryId: "cat-groceries", categoryName: "Groceries" });
 
-  fireEvent.click(screen.getByRole("switch", { name: "Business" }));
+  fireEvent.click(screen.getByRole("checkbox", { name: "Business" }));
   fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
   expect(onSave).toHaveBeenCalledWith({ categoryId: "cat-groceries", isBusiness: true });
@@ -182,7 +182,7 @@ it("drops the role when the counterparty is cleared", () => {
 /** §6.8 — this screen is the flag's only producer, and it moves no balance. */
 it("sends the one-off flag, which is off until it is turned on here", () => {
   const { onSave } = renderCard();
-  const toggle = screen.getByRole("switch", { name: "One-off" });
+  const toggle = screen.getByRole("checkbox", { name: "One-off" });
   expect(toggle.getAttribute("aria-checked")).toBe("false");
   fireEvent.click(toggle);
   fireEvent.click(screen.getByRole("button", { name: "Save" }));

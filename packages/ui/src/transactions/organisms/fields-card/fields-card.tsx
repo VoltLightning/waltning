@@ -1,8 +1,10 @@
 /**
- * S09's editable fields in two groups, using the same cards as the register:
- * everyday details first; obligations and reporting flags second. One Save
- * commits the field draft, and stays outside the cards on the page ground.
- * Pickers are composed by the screen so each domain owns its own controls.
+ * S09's editable fields — one card of rows, then the flags as chips
+ * (`screens/S09-transaction-detail.md` §3). *Someone owes* opens the
+ * obligation picker and, once somebody is named, becomes an *Owes* row inside
+ * the card with its role beneath; *Business* and *One-off* are on/off chips.
+ * One Save commits the draft, and appears only once there is something to
+ * commit. Pickers are composed by the screen so each domain owns its controls.
  */
 
 import { accountingDate, isAccountingDate } from "@waltning/core/date";
@@ -12,10 +14,10 @@ import { Pressable, Text, View } from "react-native";
 import Animated from "react-native-reanimated";
 import { useT } from "../../../i18n/provider";
 import { Button } from "../../../primitives/atoms/button/button";
+import { Chip } from "../../../primitives/atoms/chip/chip";
 import { DateField } from "../../../primitives/atoms/date-field/date-field";
 import { RadioGroup, type RadioGroupProps } from "../../../primitives/atoms/radio/radio";
 import { TextField } from "../../../primitives/atoms/text-field/text-field";
-import { Toggle } from "../../../primitives/atoms/toggle/toggle";
 import { useDisclosureMotion } from "../../../primitives/disclosure-motion.ts";
 import type { FieldErrorMap } from "../../../primitives/field-errors.ts";
 import { useInteraction } from "../../../primitives/interaction.ts";
@@ -181,6 +183,8 @@ export function FieldsCard({
   const handleToggleRole = useCallback(() => toggleField("role"), [toggleField]);
   const handleRoleChange = useCallback((next: string) => setRole(isRole(next) ? next : null), []);
   const handleToggleNote = useCallback(() => toggleField("note"), [toggleField]);
+  const handleToggleBusiness = useCallback(() => setIsBusiness((current) => !current), []);
+  const handleToggleCapital = useCallback(() => setIsCapital((current) => !current), []);
   const handleOpenIdentityPicker = useCallback(
     () => onOpenCounterpartyPicker("identity"),
     [onOpenCounterpartyPicker],
@@ -339,75 +343,76 @@ export function FieldsCard({
               counter
             />
           </FieldDisclosureRow>
-        </View>
-      </Card>
 
-      <Card>
-        <View>
           {/*
-        And who it *owes*, which is a different question with a different
-        answer often enough to deserve its own row: paying a shop for a friend
-        names the shop above and the friend here.
-      */}
-          <FieldDisclosureRow
-            first
-            label={t("transactions.obligationParty")}
-            value={obligationCounterpartyName}
-            placeholder={t("transactions.noObligation")}
-            onPress={handleOpenObligationPicker}
-          />
-
+            And who it *owes*, a different question with a different answer
+            often enough to deserve its own row: paying a shop for a friend
+            names the shop above and the friend here. Drawn only once somebody
+            is named — until then the *Someone owes* chip below asks.
+          */}
           {obligationCounterpartyId === null ? null : (
-            <FieldDisclosureRow
-              label={t("transactions.role")}
-              value={role === null ? null : t(`transactions.role.${role}`)}
-              placeholder={t("transactions.chooseRole")}
-              open={open.has("role")}
-              onPress={handleToggleRole}
-            >
-              <RadioGroup
-                label={t("transactions.role")}
-                options={roleOptions}
-                value={role ?? NO_OBLIGATION}
-                onChange={handleRoleChange}
+            <>
+              <FieldDisclosureRow
+                label={t("transactions.obligationParty")}
+                value={obligationCounterpartyName}
+                placeholder={t("transactions.noObligation")}
+                onPress={handleOpenObligationPicker}
               />
-            </FieldDisclosureRow>
+
+              <FieldDisclosureRow
+                label={t("transactions.role")}
+                value={role === null ? null : t(`transactions.role.${role}`)}
+                placeholder={t("transactions.chooseRole")}
+                open={open.has("role")}
+                onPress={handleToggleRole}
+              >
+                <RadioGroup
+                  label={t("transactions.role")}
+                  options={roleOptions}
+                  value={role ?? NO_OBLIGATION}
+                  onChange={handleRoleChange}
+                />
+              </FieldDisclosureRow>
+            </>
           )}
-
-          <View style={styles.separated}>
-            <Toggle
-              label={t("transactions.business")}
-              value={isBusiness}
-              onChange={setIsBusiness}
-            />
-          </View>
-
-          {/*
-        §6.8's one-off. Not on the capture sheet and never will be: you rarely
-        know at the till that a purchase would distort a trend, and marking it
-        later is the ordinary path. It moves no balance — only what a
-        comparison counts.
-      */}
-          <View style={styles.separated}>
-            <Toggle
-              label={t("transactions.capital")}
-              hint={t("transactions.capitalHint")}
-              value={isCapital}
-              onChange={setIsCapital}
-            />
-          </View>
         </View>
       </Card>
 
-      <View style={styles.actions}>
-        <Button
-          label={t("common.save")}
-          onPress={handleSave}
-          disabled={!hasChanges}
-          loading={saving}
-          variant="primary"
+      <View style={styles.flags}>
+        {obligationCounterpartyId === null ? (
+          <Chip placeholder={t("transactions.someoneOwes")} onPress={handleOpenObligationPicker} />
+        ) : null}
+        <Chip
+          placeholder={t("transactions.business")}
+          selected={isBusiness}
+          role="checkbox"
+          onPress={handleToggleBusiness}
+        />
+        {/*
+          §6.8's one-off. Not on the capture sheet and never will be: you
+          rarely know at the till that a purchase would distort a trend, and
+          marking it later is the ordinary path. It moves no balance — only
+          what a comparison counts — and its hint says so once it is on.
+        */}
+        <Chip
+          placeholder={t("transactions.capital")}
+          selected={isCapital}
+          role="checkbox"
+          onPress={handleToggleCapital}
         />
       </View>
+      {isCapital ? <Text style={styles.hint}>{t("transactions.capitalHint")}</Text> : null}
+
+      {hasChanges ? (
+        <View style={styles.actions}>
+          <Button
+            label={t("common.save")}
+            onPress={handleSave}
+            loading={saving}
+            variant="primary"
+          />
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -529,4 +534,6 @@ const useStyles = makeStyles((theme) => ({
   formLevel: { gap: space.xs },
   formLevelMessage: { color: theme.dangerText, ...text.ui("caption") },
   actions: { flexDirection: "row", justifyContent: "flex-end" },
+  flags: { flexDirection: "row", flexWrap: "wrap", gap: space.md },
+  hint: { color: theme.textMuted, ...text.ui("caption"), marginTop: -space.md },
 }));

@@ -293,6 +293,19 @@ export const de: Messages = {
     total: "Ergibt zusammen",
     linesUnbalanced: "Die Positionen müssen den Betrag der Buchung ergeben.",
     notFound: "Diese Buchung gibt es nicht mehr.",
+    /** S09 — the chip that opens the obligation picker when nobody is named yet. */
+    someoneOwes: "Jemand schuldet",
+    /** S09 §3 — the context cards (`computations.md` §6a). */
+    contextLabel: "Was das bedeutet",
+    contextInMonth: "{{month}} · {{times}}×",
+    contextSeeAll: "Alle anzeigen",
+    contextUsual: "üblich",
+    contextOneOff: "Einmalig — bei Vergleichen ausgelassen",
+    contextThisOne: "diese Buchung",
+    contextLinkTitle: "Mit wem war das?",
+    contextLinkBody:
+      "Verknüpfe es mit jemandem aus deinem Verzeichnis, um zu sehen, wie oft du dort bist.",
+    contextLinkAction: "Auswählen",
     transfer: "Umbuchung",
     realized: "Realisiert",
     referenceRate: "Referenz {{rate}} · {{source}} · {{date}}",

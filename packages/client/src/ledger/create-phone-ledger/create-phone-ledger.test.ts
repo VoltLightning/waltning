@@ -1796,6 +1796,7 @@ describe("phone ledger controller — transaction detail writes (C5)", () => {
       isBusiness: false,
       accountId: id<"accounts">("22222222-2222-4222-8222-222222222222"),
       accountName: "Cash · PLN",
+      toAccountId: null,
       categoryId: null,
       categoryName: null,
       counterpartyId: null,

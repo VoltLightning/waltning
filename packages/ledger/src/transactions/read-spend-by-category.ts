@@ -39,6 +39,7 @@ export function readSpendByCategory<TRun, TSchema extends typeof ledgerSchema>(
   db: ReplicaDb<TRun, TSchema>,
   period: money.Period,
   scope: money.LedgerScope,
+  options: money.SpendByCategoryOptions = {},
 ): readonly money.SpendByCategoryRow[] {
   const transactionRows = db
     .select({
@@ -51,6 +52,7 @@ export function readSpendByCategory<TRun, TSchema extends typeof ledgerSchema>(
       decimals: currencies.decimals,
       categoryId: transactions.categoryId,
       amountOriginal: transactions.amountOriginal,
+      isCapital: transactions.isCapital,
     })
     .from(transactions)
     .innerJoin(accounts, eq(transactions.accountId, accounts.id))
@@ -78,5 +80,5 @@ export function readSpendByCategory<TRun, TSchema extends typeof ledgerSchema>(
       .all(),
   );
 
-  return money.spendByCategory(transactionRows, lineRows, period, scope);
+  return money.spendByCategory(transactionRows, lineRows, period, scope, options);
 }

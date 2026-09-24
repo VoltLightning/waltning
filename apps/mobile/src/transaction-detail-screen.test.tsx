@@ -159,6 +159,7 @@ const DETAIL: NonNullable<FakeDetail> = {
   isBusiness: false,
   accountId: ACCOUNT,
   accountName: "Cash · PLN",
+  toAccountId: null,
   categoryId: null,
   categoryName: null,
   counterpartyId: null,
@@ -188,7 +189,8 @@ beforeEach(() => {
 describe("TransactionDetail", () => {
   it("shows the hero amount and the fields of the row it was pushed for", () => {
     withLedger(<TransactionDetail />);
-    expect(screen.getByText("-48.90")).toBeDefined();
+    // The band, and the header line it folds into — both carry the figure.
+    expect(screen.getAllByText("-48.90").length).toBeGreaterThan(0);
     expect(screen.getByRole("button", { name: "Payee: Café A" })).toBeDefined();
   });
 
@@ -286,7 +288,8 @@ describe("TransactionDetail", () => {
       "naming somebody owes them nothing",
     ).toBeNull();
 
-    fireEvent.click(screen.getByRole("button", { name: "Owes" }));
+    // Nobody owes yet, so the chip asks; once somebody is named it is a row.
+    fireEvent.click(screen.getByRole("button", { name: "Someone owes" }));
     fireEvent.click(screen.getByRole("button", { name: "Nina" }));
     expect(screen.getByRole("button", { name: "Owes: Nina" })).toBeDefined();
 
@@ -298,7 +301,7 @@ describe("TransactionDetail", () => {
   /** §6.8's one-off, whose only producer is this screen. */
   it("offers the one-off flag, off until it is set here", () => {
     withLedger(<TransactionDetail />);
-    const toggle = screen.getByRole("switch", { name: "One-off" });
+    const toggle = screen.getByRole("checkbox", { name: "One-off" });
     expect(toggle.getAttribute("aria-checked")).toBe("false");
     fireEvent.click(toggle);
     expect(toggle.getAttribute("aria-checked")).toBe("true");

@@ -287,6 +287,18 @@ export const be: Messages = {
     total: "У суме",
     linesUnbalanced: "Сума пазіцый павінна супадаць з сумай аперацыі.",
     notFound: "Гэтай аперацыі больш няма.",
+    /** S09 — the chip that opens the obligation picker when nobody is named yet. */
+    someoneOwes: "Нехта вінен",
+    /** S09 §3 — the context cards (`computations.md` §6a). */
+    contextLabel: "Што гэта значыць",
+    contextInMonth: "{{month}} · {{times}}×",
+    contextSeeAll: "Паказаць усё",
+    contextUsual: "звычайна",
+    contextOneOff: "Разовая — не ўлічваецца ў параўнаннях",
+    contextThisOne: "гэтая аперацыя",
+    contextLinkTitle: "З кім гэта было?",
+    contextLinkBody: "Звяжыце з кімсьці з даведніка, каб бачыць, як часта вы там бываеце.",
+    contextLinkAction: "Выбраць",
     transfer: "Перавод",
     realized: "Фактычны",
     referenceRate: "апорны {{rate}} · {{source}} · {{date}}",

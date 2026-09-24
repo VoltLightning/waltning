@@ -3462,6 +3462,7 @@ describe("every scroller declares which kind it is", () => {
       "packages/ui/src/shell/organisms/pager/pager.tsx#0 <ScrollView> pageScrollProps",
       "packages/ui/src/transactions/molecules/day-ribbon/day-ribbon.tsx#0 <ScrollView> nestedScrollProps",
       "packages/ui/src/transactions/molecules/day-ribbon/day-ribbon.tsx#1 <FlatList> horizontalScrollProps",
+      "packages/ui/src/transactions/organisms/context-strip/context-strip.tsx#0 <ScrollView> horizontalScrollProps",
       "packages/ui/src/transactions/organisms/ledger-filter-rail/ledger-filter-rail.tsx#0 <ScrollView> nestedScrollProps",
       "packages/ui/src/transactions/organisms/ledger-scroller/ledger-scroller.tsx#0 <FlatList> pageScrollProps",
       "packages/ui/src/transactions/organisms/ledger-table/ledger-table.tsx#0 <FlatList> nestedScrollProps",

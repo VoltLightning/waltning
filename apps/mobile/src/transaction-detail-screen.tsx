@@ -39,8 +39,10 @@ import type {
 } from "@waltning/client/ledger/create-phone-ledger";
 import { deviceRuntime } from "@waltning/client/ledger/device-runtime";
 import { parseTransactionRoute } from "@waltning/client/ledger/preview-routes";
+import type { TransactionContextCard } from "@waltning/client/ledger/transaction-context";
 import { useLedgerController } from "@waltning/client/ledger/use-ledger-controller";
 import { usePhoneLedger } from "@waltning/client/ledger/use-phone-ledger";
+import { useTransactionContext } from "@waltning/client/ledger/use-transaction-context";
 import type { FieldError } from "@waltning/client/transport/field-errors";
 import { mapFieldErrors } from "@waltning/client/transport/field-errors";
 import { id as brandId } from "@waltning/core/id";
@@ -56,15 +58,19 @@ import { dayLabel } from "@waltning/ui/i18n/locales";
 import { useLocale, useT } from "@waltning/ui/i18n/provider";
 import { Button } from "@waltning/ui/primitives/button";
 import { ErrorState } from "@waltning/ui/states/error-state";
+import { useTheme } from "@waltning/ui/theme/provider";
 import { makeStyles } from "@waltning/ui/theme/styles";
 import { space } from "@waltning/ui/tokens";
+import { ContextStrip, type ContextStripCard } from "@waltning/ui/transactions/context-strip";
 import {
   FieldsCard,
   type TransactionFields,
   type TransactionFieldsPatch,
 } from "@waltning/ui/transactions/fields-card";
+import { HeroHeaderTitle } from "@waltning/ui/transactions/hero-header-title";
 import { LinesCard, type LinesCardDraftLine } from "@waltning/ui/transactions/lines-card";
-import { TransactionHero } from "@waltning/ui/transactions/transaction-hero";
+import { heroTint, TransactionHero } from "@waltning/ui/transactions/transaction-hero";
+import { useHeroScroll } from "@waltning/ui/transactions/use-hero-scroll";
 import { router, useLocalSearchParams } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
 import { View } from "react-native";
@@ -130,6 +136,49 @@ function toPickerChoice(account: PhoneCapturableAccount): AccountPickerAccount {
  */
 function handleCreateAccountFromDetail() {
   router.push({ pathname: "/account/new", params: { returnTo: "accounts" } });
+}
+
+/**
+ * The context figures onto `ContextStrip`'s cards — names from the directory
+ * and the account list, and the two ways out a card offers. Figures pass
+ * through untouched; `computations.md` §6a is `useTransactionContext`'s.
+ */
+function toStripCards(
+  context: readonly TransactionContextCard[],
+  names: {
+    counterparty: (id: string) => string | null;
+    account: (id: string) => string | null;
+    fromAccount: string;
+    categoryName: string | null;
+  },
+  actions: { onOpenCounterparty: () => void; onLink: () => void },
+): ContextStripCard[] {
+  const cards: ContextStripCard[] = [];
+  for (const card of context) {
+    switch (card.kind) {
+      case "who": {
+        const name = names.counterparty(card.counterpartyId);
+        if (name === null) break;
+        cards.push({ ...card, name, onOpenAll: actions.onOpenCounterparty });
+        break;
+      }
+      case "pair":
+        cards.push({
+          ...card,
+          fromName: names.fromAccount,
+          toName: names.account(card.toAccountId) ?? "—",
+        });
+        break;
+      case "category":
+        if (names.categoryName === null) break;
+        cards.push({ ...card, name: names.categoryName });
+        break;
+      case "link":
+        cards.push({ kind: "link", onLink: actions.onLink });
+        break;
+    }
+  }
+  return cards;
 }
 
 export default function TransactionDetail() {
@@ -287,6 +336,38 @@ export default function TransactionDetail() {
     setFieldsErrors(toFormLevel(t, result.fieldErrors));
   }, [detail, ledger, t, transactionId]);
 
+  const theme = useTheme();
+  const heroScroll = useHeroScroll();
+  const context = useTransactionContext(ledger, detail, snapshot.revision);
+  const handleOpenCounterparty = useCallback(() => {
+    if (detail?.counterpartyId) router.push(`/counterparty/${detail.counterpartyId}`);
+  }, [detail?.counterpartyId]);
+  const handleLinkCounterparty = useCallback(() => setPickerTarget("identity"), []);
+  const stripCards = useMemo(
+    () =>
+      detail === null
+        ? []
+        : toStripCards(
+            context,
+            {
+              counterparty: (id) =>
+                snapshot.counterparties.find((row) => row.id === id)?.name ?? null,
+              account: (id) => snapshot.accounts.find((row) => row.id === id)?.name ?? null,
+              fromAccount: detail.accountName,
+              categoryName: detail.categoryName,
+            },
+            { onOpenCounterparty: handleOpenCounterparty, onLink: handleLinkCounterparty },
+          ),
+    [
+      context,
+      detail,
+      handleLinkCounterparty,
+      handleOpenCounterparty,
+      snapshot.accounts,
+      snapshot.counterparties,
+    ],
+  );
+
   const today = useMemo(() => deviceRuntime().capture().date, []);
   const categoryKind = detail?.type === "income" ? "income" : "expense";
   // Same-currency only: reassigning across a currency boundary would also
@@ -341,19 +422,39 @@ export default function TransactionDetail() {
 
   return (
     <PushedPage
-      title={detail.enteredName === "" ? t("routes.transaction") : detail.enteredName}
-      subtitle={dayLabel(detail.date, locale)}
-    >
-      <View style={styles.content}>
-        <TransactionHero
+      title={dayLabel(detail.date, locale)}
+      tint={heroTint(detail.categoryName, theme).fill}
+      titleNode={
+        <HeroHeaderTitle
+          scrollY={heroScroll.scrollY}
+          date={dayLabel(detail.date, locale)}
+          name={detail.enteredName === "" ? t("routes.transaction") : detail.enteredName}
           amount={detail.amount}
           currency={detail.currency}
           decimals={detail.decimals}
           type={detail.type}
-          accountName={detail.accountName}
-          enteredName={detail.enteredName}
-          brandKey={detail.brandKey}
         />
+      }
+      onScroll={heroScroll.onScroll}
+    >
+      <TransactionHero
+        amount={detail.amount}
+        currency={detail.currency}
+        decimals={detail.decimals}
+        type={detail.type}
+        accountName={detail.accountName}
+        toAccountName={
+          detail.toAccountId === null
+            ? null
+            : (snapshot.accounts.find((row) => row.id === detail.toAccountId)?.name ?? null)
+        }
+        categoryName={detail.categoryName}
+        enteredName={detail.enteredName}
+        brandKey={detail.brandKey}
+        scrollY={heroScroll.scrollY}
+      />
+      <View style={styles.content}>
+        <ContextStrip cards={stripCards} />
         <FieldsCard
           fields={toFields(detail)}
           accounts={pickerAccounts}

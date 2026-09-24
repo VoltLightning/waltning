@@ -57,6 +57,8 @@
     "./ledger/use-phone-ledger-startup": "./src/ledger/use-phone-ledger-startup/use-phone-ledger-startup.ts",
     "./ledger/use-recent-days": "./src/ledger/use-recent-days/use-recent-days.ts",
     "./ledger/use-spend-by-category": "./src/ledger/use-spend-by-category/use-spend-by-category.ts",
+    "./ledger/transaction-context": "./src/ledger/use-transaction-context/transaction-context.ts",
+    "./ledger/use-transaction-context": "./src/ledger/use-transaction-context/use-transaction-context.ts",
     "./ledger/use-transaction-search": "./src/ledger/use-transaction-search/use-transaction-search.ts",
     "./ledger/use-unsettled-banner": "./src/ledger/use-unsettled-banner/use-unsettled-banner.ts",
     "./ledger/use-where-it-went": "./src/ledger/use-where-it-went/use-where-it-went.ts",

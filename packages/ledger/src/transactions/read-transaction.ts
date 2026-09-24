@@ -49,6 +49,8 @@ export type LocalTransactionDetail = {
   isBusiness: boolean;
   accountId: Id<"accounts">;
   accountName: string;
+  /** A transfer's destination; `null` on every other type. S09's *Pair* card (`computations.md` §6a). */
+  toAccountId: Id<"accounts"> | null;
   categoryId: Id<"categories"> | null;
   categoryName: string | null;
   /**
@@ -92,6 +94,7 @@ export function readTransaction<TRun, TSchema extends typeof ledgerSchema>(
       isBusiness: transactions.isBusiness,
       accountId: transactions.accountId,
       accountName: accounts.name,
+      toAccountId: transactions.toAccountId,
       categoryId: transactions.categoryId,
       categoryName: categories.name,
       counterpartyId: transactions.counterpartyId,
