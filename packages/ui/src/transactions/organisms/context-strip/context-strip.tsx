@@ -76,9 +76,16 @@ export type ContextStripCard =
     })
   | { kind: "link"; onLink: () => void };
 
-export type ContextStripProps = { cards: readonly ContextStripCard[] };
+export type ContextStripProps = {
+  cards: readonly ContextStripCard[];
+  /**
+   * The widest the page's own cards get. A phone's slide is exactly as wide as
+   * the cards under it, so it takes the same cap they do.
+   */
+  column: number;
+};
 
-export function ContextStrip({ cards }: ContextStripProps) {
+export function ContextStrip({ cards, column }: ContextStripProps) {
   const styles = useStyles();
   const t = useT();
   const phone = useBreakpoint() === "phone";
@@ -102,9 +109,9 @@ export function ContextStrip({ cards }: ContextStripProps) {
   const handleLayout = useCallback((event: LayoutChangeEvent) => {
     setWidth(event.nativeEvent.layout.width);
   }, []);
-  const { cardWidth, snaps } = useMemo(
-    () => pagerGeometry(width, cards.length, { lead, trail, gap: space.lg }),
-    [width, cards.length, lead, trail],
+  const { cardWidth, snaps, trailPad } = useMemo(
+    () => pagerGeometry(width, cards.length, { lead, trail, gap: space.lg, column }),
+    [width, cards.length, lead, trail, column],
   );
   const handleScroll = useCallback(
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
@@ -134,7 +141,7 @@ export function ContextStrip({ cards }: ContextStripProps) {
   }
 
   const bleed = { marginLeft: -lead, marginRight: -trail };
-  const offsets = { paddingLeft: lead, paddingRight: trail };
+  const offsets = { paddingLeft: lead, paddingRight: trailPad };
   return (
     <View accessibilityLabel={t("transactions.contextLabel")} style={styles.strip}>
       <View onLayout={handleLayout} style={bleed}>

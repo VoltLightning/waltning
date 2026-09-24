@@ -474,9 +474,9 @@ export default function TransactionDetail() {
         column its cards were sliced at 720pt. At desk width the cards sit
         side by side inside the column like everything else.
       */}
-      {phone ? <ContextStrip cards={stripCards} /> : null}
+      {phone ? <ContextStrip cards={stripCards} column={COLUMN} /> : null}
       <View style={styles.content}>
-        {phone ? null : <ContextStrip cards={stripCards} />}
+        {phone ? null : <ContextStrip cards={stripCards} column={COLUMN} />}
         <FieldsCard
           fields={toFields(detail)}
           accounts={pickerAccounts}
@@ -535,7 +535,10 @@ export default function TransactionDetail() {
   );
 }
 
+/** The page's column: the details card's cap, and the context slides' with it. */
+const COLUMN = 680;
+
 const useStyles = makeStyles(() => ({
-  content: { width: "100%", maxWidth: 680, alignSelf: "flex-start", gap: space.x3 },
+  content: { width: "100%", maxWidth: COLUMN, alignSelf: "flex-start", gap: space.x3 },
   deleteAction: { alignItems: "flex-start", paddingTop: space.xl },
 }));

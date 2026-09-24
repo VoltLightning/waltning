@@ -65,7 +65,7 @@ function DetailPreview({ phone }: { phone: boolean }) {
           brandKey={null}
           categoryName="Eating out"
         />
-        <ContextStrip cards={CARDS} />
+        <ContextStrip cards={CARDS} column={680} />
         <FieldsCard {...fieldsMeta.args} />
         <LinesCard lines={[]} total={toMoney("48.90")} currency="PLN" onSave={noop} />
         <View style={styles.deleteAction}>
