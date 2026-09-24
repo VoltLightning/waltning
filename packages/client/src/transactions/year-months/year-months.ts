@@ -104,6 +104,34 @@ function inPivot(
   return flow.currency === pivot ? { inflow: flow.inflow, spend: flow.spend } : null;
 }
 
+/**
+ * One period's §5 figures, in the pivot — S04's month card.
+ *
+ * **The same fold as a Months row, over whatever period it is handed**, so the
+ * card and the row for the same month cannot disagree: both add the same day
+ * rows, each already converted at its own transactions' rates. The card read
+ * `readPeriodSpend` and kept the lead currency's row alone, which drew
+ * *came in 0,00* on a ledger whose lead was the card's euros.
+ */
+export function periodInPivot(
+  flows: readonly money.DayFlowRow[],
+  pivot: money.CurrencyCode,
+): { inflow: money.Money; spend: money.Money; net: money.Money; otherCurrencies: number } {
+  let inflow = money.ZERO;
+  let spend = money.ZERO;
+  const others = new Set<string>();
+  for (const flow of flows) {
+    const figures = inPivot(flow, pivot);
+    if (figures === null) {
+      others.add(flow.currency);
+      continue;
+    }
+    inflow = money.add(inflow, figures.inflow);
+    spend = money.add(spend, figures.spend);
+  }
+  return { inflow, spend, net: money.sub(inflow, spend), otherCurrencies: others.size };
+}
+
 /** The currencies the year could not count — none, when every row carried its rate. */
 export function otherCurrenciesInYear(
   flows: readonly money.DayFlowRow[],

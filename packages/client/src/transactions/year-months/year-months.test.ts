@@ -1,7 +1,7 @@
 import { accountingDate, yearMonth } from "@waltning/core/date";
 import * as money from "@waltning/core/money";
 import { describe, expect, it } from "vitest";
-import { busiestMonth, otherCurrenciesInYear, yearMonths } from "./year-months.ts";
+import { busiestMonth, otherCurrenciesInYear, periodInPivot, yearMonths } from "./year-months.ts";
 
 const PLN = "PLN" as money.CurrencyCode;
 const USD = "USD" as money.CurrencyCode;
@@ -169,5 +169,43 @@ describe("otherCurrenciesInYear", () => {
     expect(otherCurrenciesInYear([flow("2026-03-04", { spend: money.toMoney("40") })], PLN)).toBe(
       0,
     );
+  });
+});
+
+/**
+ * S04's month card — the same fold over one period, so the card and that
+ * month's Months row add the same rows. It kept the lead currency's row alone
+ * and said *came in 0,00* on a ledger whose lead was the card's euros.
+ */
+describe("periodInPivot", () => {
+  it("adds every currency's income and spend in the pivot", () => {
+    const figures = periodInPivot(
+      [
+        flow("2026-03-01", {
+          inflow: money.toMoney("4000"),
+          inflowPivot: money.toMoney("1000"),
+          spendPivot: money.ZERO,
+        }),
+        flow("2026-03-02", {
+          currency: "EUR" as money.CurrencyCode,
+          spend: money.toMoney("100"),
+          spendPivot: money.toMoney("108"),
+          inflowPivot: money.ZERO,
+        }),
+      ],
+      USD,
+    );
+    expect(figures).toEqual({
+      inflow: money.toMoney("1000"),
+      spend: money.toMoney("108"),
+      net: money.toMoney("892"),
+      otherCurrencies: 0,
+    });
+  });
+
+  it("names what it could not convert rather than folding it in", () => {
+    const figures = periodInPivot([flow("2026-03-01", { inflow: money.toMoney("50") })], USD);
+    expect(figures.inflow).toEqual(money.ZERO);
+    expect(figures.otherCurrencies).toBe(1);
   });
 });

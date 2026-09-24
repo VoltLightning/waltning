@@ -18,6 +18,7 @@ import { monthGrid, weekdayHeadings } from "@waltning/client/transactions/month-
 import {
   busiestMonth,
   otherCurrenciesInYear,
+  periodInPivot,
   yearMonths,
 } from "@waltning/client/transactions/year-months";
 import { FIRST_YEAR, stepYearPage, yearPage } from "@waltning/client/transactions/year-pages";
@@ -522,12 +523,9 @@ export default function Today() {
     }),
     [month],
   );
-  // A plain synchronous read, not an effect — the phone's SQLite has no
-  // async boundary to wait on. `snapshot` is in the dependency array so a
-  // write elsewhere (a save, a reset) recomputes this too: `refresh()`
-  // always hands back a new snapshot object, never mutates the old one.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: snapshot re-runs this by identity, not by being read.
-  const periodSpendRows = useMemo(() => ledger.readPeriodSpend(period), [ledger, period, snapshot]);
+  // The period's day rows — the same read Months folds, so the card and that
+  // month's row add up the same rows and cannot disagree.
+  const periodFlows = useDayFlows(ledger, period, snapshot);
 
   const leadNetWorth = snapshot.netWorth[0];
   /**
@@ -546,9 +544,16 @@ export default function Today() {
     () => snapshot.currencies.find((currency) => currency.isPivot),
     [snapshot.currencies],
   );
-  const leadPeriodSpend = leadNetWorth
-    ? periodSpendRows.find((row) => row.currency === leadNetWorth.currency)
-    : undefined;
+  /**
+   * The month card's figures: every currency, in the pivot, each transaction
+   * at its own stored rate (`computations.md` §4). With no pivot yet there is
+   * nothing to convert to, and the lead currency's own rows are all it can add.
+   */
+  const periodFigures = useMemo(
+    () =>
+      periodInPivot(periodFlows, pivotCurrency?.code ?? leadNetWorth?.currency ?? LEAD_FALLBACK),
+    [periodFlows, pivotCurrency, leadNetWorth],
+  );
 
   const unsettledModel = useUnsettledBanner(snapshot.unsettledClearing);
   // S04 §3, Shared: "Tapping the unsettled banner goes straight to the
@@ -613,35 +618,21 @@ export default function Today() {
     ],
   );
 
-  /**
-   * What the period's three figures leave out — the count of currencies with
-   * rows in this period that are not the lead one. `readPeriodSpend` returns
-   * one row per currency, so this is the rest of that list; the card states it
-   * rather than a converted figure, which is class **S** (S04).
-   */
-  const periodOtherCurrencies = useMemo(
-    () =>
-      leadNetWorth === undefined
-        ? 0
-        : periodSpendRows.filter((row) => row.currency !== leadNetWorth.currency).length,
-    [periodSpendRows, leadNetWorth],
-  );
-
   /** Under the hero, compact: §5's three figures in the shape `net = inflow − spend`. */
   const monthCard = useMemo(
     () =>
       leadNetWorth ? (
         <MonthSummary
-          spend={leadPeriodSpend?.spend ?? money.ZERO}
-          inflow={leadPeriodSpend?.inflow ?? money.ZERO}
-          net={leadPeriodSpend?.net ?? money.ZERO}
-          currency={leadNetWorth.currency}
-          decimals={leadNetWorth.decimals}
-          otherCurrencies={periodOtherCurrencies}
+          spend={periodFigures.spend}
+          inflow={periodFigures.inflow}
+          net={periodFigures.net}
+          currency={pivotCurrency?.code ?? leadNetWorth.currency}
+          decimals={pivotCurrency?.decimals ?? leadNetWorth.decimals}
+          otherCurrencies={periodFigures.otherCurrencies}
           layout="compact"
         />
       ) : null,
-    [leadNetWorth, leadPeriodSpend, periodOtherCurrencies],
+    [leadNetWorth, pivotCurrency, periodFigures],
   );
 
   // One object per language rather than per render, so a re-render for an
