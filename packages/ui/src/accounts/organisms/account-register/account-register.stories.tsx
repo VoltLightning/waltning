@@ -24,21 +24,84 @@ function account(overrides: Partial<AccountRegisterAccount>): AccountRegisterAcc
   };
 }
 
+/** The display currency — the one the register states its totals in. */
+const PIVOT = { currency: "PLN", decimals: 2 };
+
+/**
+ * **Several accounts per kind, and more than one currency**, because one
+ * account per kind is the shape in which every layout looks fine: it is the
+ * runs of rows that the rules, the marks and the subtotals are all for.
+ * Invented names, never the ledger's (`CLAUDE.md`) — and not named after their
+ * own kind, which S16 §3 asks of a register and the old fixture ignored.
+ */
 const POPULATED: readonly AccountRegisterAccount[] = [
-  account({ id: "bank-1", name: "Bank A · PLN", kind: "bank", balance: money.toMoney("6200") }),
+  account({
+    id: "bank-1",
+    name: "Everyday",
+    kind: "bank",
+    balance: money.toMoney("6200"),
+    pivotBalance: money.toMoney("6200"),
+  }),
   account({
     id: "bank-2",
-    name: "Bank A/BIZ · PLN",
+    name: "Studio",
     kind: "bank",
     balance: money.toMoney("2220.10"),
+    pivotBalance: money.toMoney("2220.10"),
     isBusiness: true,
   }),
-  account({ id: "cash-1", name: "Cash · PLN", kind: "cash", balance: money.toMoney("840") }),
+  account({
+    id: "bank-3",
+    name: "Abroad",
+    kind: "bank",
+    currency: "EUR",
+    balance: money.toMoney("3140"),
+    pivotBalance: money.toMoney("13391.76"),
+  }),
+  account({
+    id: "cash-1",
+    name: "Wallet",
+    kind: "cash",
+    balance: money.toMoney("840"),
+    pivotBalance: money.toMoney("840"),
+  }),
+  account({
+    id: "cash-2",
+    name: "Travel float",
+    kind: "cash",
+    currency: "EUR",
+    balance: money.toMoney("210"),
+    pivotBalance: money.toMoney("895.44"),
+  }),
+  account({
+    id: "card-1",
+    name: "Card A",
+    kind: "card",
+    currency: "EUR",
+    balance: money.toMoney("-2096.90"),
+    pivotBalance: money.toMoney("-8941.18"),
+  }),
+  account({
+    id: "card-2",
+    name: "Card B",
+    kind: "card",
+    currency: "EUR",
+    balance: money.toMoney("-418.30"),
+    pivotBalance: money.toMoney("-1783.63"),
+  }),
+  account({
+    id: "invest-1",
+    name: "Brokerage",
+    kind: "investment",
+    balance: money.toMoney("31200"),
+    pivotBalance: money.toMoney("31200"),
+  }),
   account({
     id: "clearing-1",
-    name: "Clearing · PLN",
+    name: "Unallocated",
     kind: "clearing",
     balance: money.toMoney("340"),
+    pivotBalance: money.toMoney("340"),
   }),
 ];
 
@@ -46,16 +109,17 @@ const SHARED: readonly AccountRegisterAccount[] = [
   ...POPULATED,
   account({
     id: "shared-1",
-    name: "Household · USD",
+    name: "Household",
     kind: "deposit",
     ownership: "shared",
     currency: "USD",
     balance: money.toMoney("1800"),
+    pivotBalance: money.toMoney("6460.40"),
   }),
 ];
 
 const ARCHIVED: readonly AccountRegisterAccount[] = [
-  account({ id: "old-1", name: "Old · PLN", kind: "bank", balance: money.toMoney("0") }),
+  account({ id: "old-1", name: "Closed savings", kind: "bank", balance: money.toMoney("0") }),
 ];
 
 const meta = {
@@ -67,13 +131,14 @@ const meta = {
     onSelectAccount: noop,
     onLoadArchived: noop,
     onCreateAccount: noop,
+    pivot: PIVOT,
   },
 } satisfies Meta<typeof AccountRegister>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/** Grouped by kind, each with its own subtotal — the register's ordinary state. */
+/** Grouped by kind, a rule between every account, the total above — the ordinary state. */
 export const Populated: Story = {};
 
 /** A shared account, apart and at the same weight, never inside a kind group. */
@@ -86,7 +151,7 @@ export const WithArchived: Story = {
     const canvas = within(canvasElement);
     const toggle = await canvas.findByRole("button", { name: "Archived" });
     await userEvent.click(toggle);
-    await canvas.findByText("Old · PLN");
+    await canvas.findByText("Closed savings");
     // The row mounts the instant `archivedOpen` flips and carries no
     // opacity or transform of its own — `ArchivedToggle`'s own comment: a
     // whole-row fade failed `axe`'s contrast check here. What is still

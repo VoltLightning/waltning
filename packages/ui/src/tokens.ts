@@ -433,6 +433,105 @@ export const categoryRamp = [
   },
 ] as const;
 
+/**
+ * **One colour per account kind, and a grounded one.**
+ *
+ * `categoryRamp` above exists to make one leaf findable among fifty-nine in a
+ * picker, so its inks are bright by design. A register is the opposite
+ * problem: nine kinds, each a run of rows you read rather than hunt, on a page
+ * of money. Borrowing the category hues put a blue, a magenta and a lime on
+ * a ledger, which is the version this replaces — every pair here is low chroma
+ * and lives in the same warm-charcoal (or warm-paper) world as the ground.
+ *
+ * **Nine kinds and nine hues, so a colour is never reassigned.** The kind of
+ * an account does not change, and neither should its mark: a hue that moved
+ * when a tenth kind arrived would silently re-teach every row on the screen.
+ *
+ * **Two values, not three.** A kind's mark is the `tint` filled with a small
+ * square of its own `ink`, and the section label takes that same `ink` — so
+ * the one pair is held to 4.5:1 in both themes (`theme.test.tsx`) and there is
+ * no third colour that could drift out of step with it. The category ramp
+ * needs a `solid` because its marks carry white letters; these carry nothing.
+ *
+ * **No red, for `categoryRamp`'s own reason.** Red is `spend` and `danger`.
+ * `loan_payable` is brick — a desaturated red-brown that reads as earth rather
+ * than as a refusal — and nothing here comes nearer than that.
+ */
+export const accountKindRamp = [
+  {
+    kind: "bank",
+    name: "slate blue",
+    tint: "#e3e8ee",
+    ink: "#3e5570",
+    darkTint: "#35465a",
+    darkInk: "#9db4c9",
+  },
+  {
+    kind: "cash",
+    name: "moss",
+    tint: "#e8ecdf",
+    ink: "#4b5a34",
+    darkTint: "#3c4a2c",
+    darkInk: "#b0bf93",
+  },
+  {
+    kind: "card",
+    name: "clay",
+    tint: "#f0e4e0",
+    ink: "#6d4238",
+    darkTint: "#5b3b33",
+    darkInk: "#d9aea3",
+  },
+  {
+    kind: "clearing",
+    name: "tobacco",
+    tint: "#efe7d8",
+    ink: "#6a5225",
+    darkTint: "#574327",
+    darkInk: "#d4b184",
+  },
+  {
+    kind: "loan_receivable",
+    name: "sage",
+    tint: "#e4eae4",
+    ink: "#42553f",
+    darkTint: "#3d4a3f",
+    darkInk: "#a8bda9",
+  },
+  {
+    kind: "loan_payable",
+    name: "brick",
+    tint: "#f2e2e3",
+    ink: "#6b3a40",
+    darkTint: "#503339",
+    darkInk: "#cca4aa",
+  },
+  {
+    kind: "investment",
+    name: "deep teal",
+    tint: "#dfeae8",
+    ink: "#2d5854",
+    darkTint: "#2c4a48",
+    darkInk: "#93bcb8",
+  },
+  {
+    kind: "deposit",
+    name: "stone",
+    tint: "#ece7df",
+    ink: "#5a5043",
+    darkTint: "#4a4236",
+    darkInk: "#c3b69f",
+  },
+  {
+    kind: "other",
+    name: "warm grey",
+    tint: "#eae7e2",
+    ink: "#504a42",
+    darkTint: "#3f3a33",
+    darkInk: "#b6ada0",
+  },
+] as const;
+
 /* ── 2.2 Typography ──────────────────────────────────────────────────────── */
 
 /**

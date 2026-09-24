@@ -16,7 +16,7 @@ import { dirname, join } from "node:path";
 import { render, screen } from "@testing-library/react";
 import { useEffect, useRef } from "react";
 import { describe, expect, it } from "vitest";
-import { categoryRamp, color, radius } from "../tokens.ts";
+import { accountKindRamp, categoryRamp, color, radius } from "../tokens.ts";
 import { ThemeProvider, useTheme } from "./provider";
 import { dark, light, themes } from "./roles.ts";
 import { makeStyles } from "./styles.ts";
@@ -702,6 +702,34 @@ describe("a component follows the active theme", () => {
         `${step.name} dark`,
       ).toBeGreaterThanOrEqual(4.5);
     }
+  });
+
+  /**
+   * The account kinds' own ramp, held to the same floor. One pair per kind
+   * and no `solid`: a kind's mark is its `tint` filled with a square of its
+   * own `ink`, and the section label beside it takes that same `ink`, so this
+   * single ratio is every use of the colour.
+   */
+  it("reads its own ink on every account kind, in both themes", () => {
+    for (const step of accountKindRamp) {
+      expect(contrastRatio(step.ink, step.tint), `${step.kind} light`).toBeGreaterThanOrEqual(4.5);
+      expect(
+        contrastRatio(step.darkInk, step.darkTint),
+        `${step.kind} dark`,
+      ).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+
+  /**
+   * **A hue is never reassigned**, which takes the kinds being distinct in the
+   * ramp itself — two kinds sharing a tint would put one colour on two runs of
+   * the register and quietly teach the reader nothing.
+   */
+  it("gives every kind its own colour, and no kind two", () => {
+    const kinds = accountKindRamp.map((step) => step.kind);
+    expect(new Set(kinds).size).toBe(kinds.length);
+    expect(new Set(accountKindRamp.map((step) => step.darkTint)).size).toBe(kinds.length);
+    expect(new Set(accountKindRamp.map((step) => step.tint)).size).toBe(kinds.length);
   });
 
   it("carries white on every category mark", () => {

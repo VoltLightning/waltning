@@ -5,6 +5,9 @@ import * as money from "@waltning/core/money";
 import { expect, it, vi } from "vitest";
 import { AccountRegister, type AccountRegisterAccount } from "./account-register";
 
+/** The display currency, for the cases that exercise the register's own totals. */
+const PIVOT = { currency: "PLN", decimals: 2 };
+
 function account(overrides: Partial<AccountRegisterAccount>): AccountRegisterAccount {
   return {
     id: "acc-1",
@@ -35,21 +38,35 @@ it("shows the first-run empty state with nothing to hold", () => {
   expect(onCreateAccount).toHaveBeenCalledTimes(1);
 });
 
-it("groups by kind, in S16's order, with a subtotal header per currency", () => {
+it("groups by kind, in S16's order, with a subtotal in the display currency", () => {
   render(
     <AccountRegister
       accounts={[
-        account({ id: "cash-1", name: "Cash", kind: "cash", balance: money.toMoney("840") }),
-        account({ id: "bank-1", name: "Bank A", kind: "bank", balance: money.toMoney("6200") }),
+        account({
+          id: "cash-1",
+          name: "Wallet",
+          kind: "cash",
+          balance: money.toMoney("840"),
+          pivotBalance: money.toMoney("840"),
+        }),
+        account({
+          id: "bank-1",
+          name: "Everyday",
+          kind: "bank",
+          balance: money.toMoney("6200"),
+          pivotBalance: money.toMoney("6200"),
+        }),
         account({
           id: "bank-2",
-          name: "Bank A/BIZ",
+          name: "Studio",
           kind: "bank",
           balance: money.toMoney("2220.10"),
+          pivotBalance: money.toMoney("2220.10"),
           isBusiness: true,
         }),
       ]}
       archivedAccounts={[]}
+      pivot={PIVOT}
       onSelectAccount={vi.fn()}
       onLoadArchived={vi.fn()}
       onCreateAccount={vi.fn()}
@@ -58,8 +75,32 @@ it("groups by kind, in S16's order, with a subtotal header per currency", () => 
   const headings = screen.getAllByText(/^(Bank|Cash)$/).map((node) => node.textContent);
   // Bank before Cash — S16 §3's order, not alphabetical or insertion order.
   expect(headings.indexOf("Bank")).toBeLessThan(headings.indexOf("Cash"));
-  expect(screen.getByText("8 420.10")).toBeDefined();
+  expect(screen.getAllByText("8 420.10").length).toBeGreaterThan(0);
   expect(screen.getByText("BIZ")).toBeDefined();
+});
+
+/**
+ * **A kind's subtotal exists only in the display currency.** A kind is the one
+ * grouping whose members need not share a unit — three banks in złoty, euro
+ * and dollars have a sum only once converted — so a caller that cannot convert
+ * gets the label and no figure, rather than three figures side by side where
+ * a reader asked for one.
+ */
+it("states no subtotal at all without a display currency", () => {
+  render(
+    <AccountRegister
+      accounts={[
+        account({ id: "bank-1", name: "Everyday", balance: money.toMoney("6200") }),
+        account({ id: "bank-2", name: "Studio", balance: money.toMoney("2220.10") }),
+      ]}
+      archivedAccounts={[]}
+      onSelectAccount={vi.fn()}
+      onLoadArchived={vi.fn()}
+      onCreateAccount={vi.fn()}
+    />,
+  );
+  expect(screen.queryByText("8 420.10")).toBeNull();
+  expect(screen.getByText("Bank")).toBeDefined();
 });
 
 /**
@@ -412,40 +453,136 @@ it("withdraws Edit while a search is narrowing the list", () => {
 });
 
 /**
- * **A group of one states no sum.** *Cash* holding one account printed
- * `840.00` in its header and `840.00` in the row forty points below it — two
- * identical figures, one of them meaning nothing the other did not, and the
- * reader's job is to notice they match. There is no subtotal to state when
- * there is one thing to sum.
+ * **A kind's subtotal is stated in the display currency, always.**
+ *
+ * It used to be one figure per currency in the header, and to vanish for a
+ * group of one because those two figures were identical and printed in the
+ * same voice. Neither holds now: the section's label reads as the section's
+ * own line rather than as another balance, and the figure beside it is the
+ * one number a reader cannot get by looking — three banks in three currencies
+ * summed into the one unit the screen totals in.
  */
-it("prints a lone account's balance once, not as its own subtotal too", () => {
+it("states a kind's subtotal in the display currency, one account or three", () => {
   render(
     <AccountRegister
       accounts={[
-        account({ id: "cash-1", name: "Wallet", kind: "cash", balance: money.toMoney("840") }),
+        account({
+          id: "cash-1",
+          name: "Wallet",
+          kind: "cash",
+          balance: money.toMoney("840"),
+          pivotBalance: money.toMoney("840"),
+        }),
       ]}
       archivedAccounts={[]}
+      pivot={PIVOT}
       onSelectAccount={vi.fn()}
       onLoadArchived={vi.fn()}
       onCreateAccount={vi.fn()}
     />,
   );
-  expect(screen.getAllByText("840.00")).toHaveLength(1);
+  // The row, the section's subtotal, and the register's own total: one
+  // account is all three, and each says so in its own place.
+  expect(screen.getAllByText("840.00").length).toBeGreaterThanOrEqual(2);
 });
 
-/** Two accounts is a sum worth stating, and then it is stated once. */
-it("states the subtotal for a group that actually sums something", () => {
+/**
+ * **A foreign account with no rate is in the list and out of the total**, and
+ * the line under the figure is what says so — a sum over two of three accounts
+ * passed off as a sum over three is the one thing S16 §3 refuses.
+ */
+it("counts only the accounts it can convert, and says how many that was", () => {
   render(
     <AccountRegister
       accounts={[
-        account({ id: "bank-1", name: "Everyday", kind: "bank", balance: money.toMoney("6200") }),
-        account({ id: "bank-2", name: "Studio", kind: "bank", balance: money.toMoney("2220.10") }),
+        account({
+          id: "bank-1",
+          name: "Everyday",
+          balance: money.toMoney("6200"),
+          pivotBalance: money.toMoney("6200"),
+        }),
+        account({
+          id: "bank-2",
+          name: "Studio",
+          balance: money.toMoney("2220.10"),
+          pivotBalance: money.toMoney("2220.10"),
+        }),
+        account({ id: "bank-3", name: "Abroad", currency: "EUR", balance: money.toMoney("500") }),
       ]}
       archivedAccounts={[]}
+      pivot={PIVOT}
       onSelectAccount={vi.fn()}
       onLoadArchived={vi.fn()}
       onCreateAccount={vi.fn()}
     />,
   );
-  expect(screen.getByText("8 420.10")).toBeDefined();
+  expect(screen.getAllByText("8 420.10").length).toBeGreaterThan(0);
+  expect(screen.getByText("2 of 3 accounts counted")).toBeDefined();
+});
+
+/**
+ * **A section folds, and the register is read far more often than it is
+ * arranged.** Eleven accounts across five kinds is a screen you scroll; the
+ * kinds you never look at should be one line each, and the ones you do should
+ * still be open when you arrive — which is why the state is *shut* rather than
+ * *open*, and empty by default.
+ */
+it("opens every section, and folds the one you press", () => {
+  render(
+    <AccountRegister
+      accounts={[
+        account({ id: "bank-1", name: "Everyday", kind: "bank" }),
+        account({ id: "cash-1", name: "Wallet", kind: "cash" }),
+      ]}
+      archivedAccounts={[]}
+      pivot={PIVOT}
+      onSelectAccount={vi.fn()}
+      onLoadArchived={vi.fn()}
+      onCreateAccount={vi.fn()}
+    />,
+  );
+  expect(screen.getByRole("button", { name: "Everyday" })).toBeDefined();
+
+  fireEvent.click(screen.getByRole("button", { name: "Bank" }));
+  expect(screen.queryByRole("button", { name: "Everyday" })).toBeNull();
+  // Its own label stays, and only it folded — Cash is untouched.
+  expect(screen.getByRole("button", { name: "Bank" })).toBeDefined();
+  expect(screen.getByRole("button", { name: "Wallet" })).toBeDefined();
+
+  fireEvent.click(screen.getByRole("button", { name: "Bank" }));
+  expect(screen.getByRole("button", { name: "Everyday" })).toBeDefined();
+});
+
+/**
+ * **Two groupings, because a kind and a currency answer different questions.**
+ * By kind is *what sort of money is this*; by currency is *what do I hold in
+ * euro*. The same accounts, regrouped — nothing is filtered out by the switch.
+ */
+it("regroups by currency without losing an account", () => {
+  render(
+    <AccountRegister
+      accounts={[
+        account({ id: "bank-1", name: "Everyday", kind: "bank", currency: "PLN" }),
+        account({ id: "card-1", name: "Card A", kind: "card", currency: "EUR" }),
+        account({ id: "cash-1", name: "Wallet", kind: "cash", currency: "PLN" }),
+      ]}
+      archivedAccounts={[]}
+      pivot={PIVOT}
+      onSelectAccount={vi.fn()}
+      onLoadArchived={vi.fn()}
+      onCreateAccount={vi.fn()}
+    />,
+  );
+  // The section headers, by role: a currency's *code* also appears as the mark
+  // beside every figure, so matching on bare text would find EUR either way.
+  expect(screen.getByRole("button", { name: "Bank" })).toBeDefined();
+  expect(screen.queryByRole("button", { name: "EUR" })).toBeNull();
+
+  fireEvent.click(screen.getByRole("tab", { name: "By currency" }));
+  expect(screen.getByRole("button", { name: "PLN" })).toBeDefined();
+  expect(screen.getByRole("button", { name: "EUR" })).toBeDefined();
+  expect(screen.queryByRole("button", { name: "Bank" })).toBeNull();
+  for (const name of ["Everyday", "Card A", "Wallet"]) {
+    expect(screen.getByRole("button", { name })).toBeDefined();
+  }
 });
