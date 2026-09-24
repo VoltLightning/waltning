@@ -82,6 +82,7 @@ const updatedAt = () => timestamp("updated_at", { withTimezone: true }).notNull(
  * Enums
  * ------------------------------------------------------------------ */
 
+import { ACCOUNT_COLOR } from "@waltning/schema/enums";
 /**
  * **The enums live in `@waltning/schema` now, and are re-exported here.**
  *
@@ -220,6 +221,12 @@ export const accounts = pgTable("accounts", accountsColumns(), (t) => [
   index("accounts_ownership_idx").on(t.ownership),
   // Shared money is never reportable (§13).
   check("accounts_shared_not_business", sql`${t.ownership} = 'own' or ${t.isBusiness} = false`),
+  // A colour is one of the ramp's nine or none — a hex here would bypass both
+  // themes' contrast and spacing (`02-tokens` §2.1b).
+  check(
+    "accounts_color_known",
+    sql.raw(`color is null or color in (${ACCOUNT_COLOR.map((c) => `'${c}'`).join(", ")})`),
+  ),
 ]);
 
 /* ------------------------------------------------------------------ *

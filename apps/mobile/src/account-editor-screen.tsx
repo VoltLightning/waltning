@@ -79,6 +79,7 @@ export default function AccountEditorScreen() {
       groupId: account.groupId,
       version: account.version,
       expectedBalance: account.expectedBalance,
+      color: account.color,
     };
   }, [account, currency]);
 

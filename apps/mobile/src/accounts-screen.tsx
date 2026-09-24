@@ -97,6 +97,7 @@ function toRegisterAccount(
     expectedBalance: account.expectedBalance,
     hidden: account.hidden,
     inTotal: account.inTotal,
+    color: account.color,
     version: account.version,
   };
 }

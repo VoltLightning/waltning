@@ -25,7 +25,7 @@
  */
 
 import * as money from "@waltning/core/money";
-import type { AccountKind } from "@waltning/core/registry/inputs";
+import type { AccountColor, AccountKind } from "@waltning/core/registry/inputs";
 import { useCallback, useMemo, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import Animated from "react-native-reanimated";
@@ -49,7 +49,7 @@ import { useTheme } from "../../../theme/provider";
 import { makeStyles } from "../../../theme/styles.ts";
 import { focus, hairline, radius, space, touchTarget } from "../../../tokens.ts";
 import { KIND_LABEL_KEY } from "../../kind-label.ts";
-import { type KindTint, kindTint } from "../../kind-tint.ts";
+import { accountTint, type KindTint, kindTint } from "../../kind-tint.ts";
 import { BalanceRow, type BalanceRowProps } from "../../molecules/balance-row/balance-row";
 import { SharedGroup, type SharedGroupAccount } from "../../molecules/shared-group/shared-group";
 import { type VisibilityAccount, VisibilitySheet } from "../visibility-sheet/visibility-sheet";
@@ -85,6 +85,8 @@ export type AccountRegisterAccount = {
   inTotal?: boolean;
   /** `set_account_visibility`'s compare-and-swap token. */
   version?: number;
+  /** A colour picked by hand, or `null`/absent for the kind's own (`02-tokens` §2.1b). */
+  color?: AccountColor | null;
 };
 
 export type AccountRegisterProps = {
@@ -754,6 +756,7 @@ function AccountRegisterRow({
 }: AccountRegisterRowProps) {
   const t = useT();
   const styles = useStyles();
+  const theme = useTheme();
   // In *Edit* the row opens the editor; outside it, the filter (§2).
   const handlePress = useCallback(
     () => (onEditAccount ? onEditAccount(account.id) : onSelect(account.id)),
@@ -780,6 +783,7 @@ function AccountRegisterRow({
       unsettled={account.kind === "clearing" && !money.isZero(account.balance)}
       expectedBalance={account.expectedBalance}
       onPress={handlePress}
+      swatch={accountTint(account, theme).ink}
       first={first}
     />
   );

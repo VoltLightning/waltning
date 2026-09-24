@@ -65,6 +65,7 @@ function fakeController(rows: readonly Row[]) {
     archived: row.archived ?? false,
     hidden: row.hidden ?? false,
     inTotal: row.inTotal ?? true,
+    color: null,
     expectedBalance: null,
     openingBalance: toMoney(row.balance),
     openingDate: null,

@@ -42,7 +42,20 @@ function props(overrides: Partial<HoldingsCardProps> = {}): HoldingsCardProps {
       },
     ],
     loans: [{ kind: "loan_payable", count: 1, value: money.toMoney("-900") }],
+    byAccount: [
+      {
+        id: "a1",
+        name: "Bank A",
+        kind: "bank",
+        color: "rust",
+        currency: "PLN",
+        decimals: 2,
+        balance: money.toMoney("80"),
+        value: money.toMoney("80"),
+      },
+    ],
     onOpenAccounts: vi.fn(),
+    onOpenAccount: vi.fn(),
     ...overrides,
   };
 }
@@ -107,5 +120,14 @@ describe("HoldingsCard", () => {
   it("says how many accounts the figure covers when some are left out", () => {
     render(<HoldingsCard {...props({ of: 4 })} />);
     expect(screen.getByText("3 of 4 accounts")).toBeDefined();
+  });
+
+  /** The third lens is where a hand-picked colour is read — and a row opens that account. */
+  it("lists each account by name, and opens the one pressed", () => {
+    const onOpenAccount = vi.fn();
+    render(<HoldingsCard {...props({ onOpenAccount })} initiallyOpen />);
+    fireEvent.click(screen.getByRole("tab", { name: "By account" }));
+    fireEvent.click(screen.getByText("Bank A"));
+    expect(onOpenAccount).toHaveBeenCalledWith("a1");
   });
 });

@@ -134,6 +134,41 @@ describe("update_account", () => {
       }),
     ).toThrow(/never business/);
   });
+
+  /**
+   * `02-tokens` §2.1b — a colour of the account's own, and `null` back to its
+   * kind's. Starts `null`, so an account nobody has touched wears its kind.
+   */
+  it("gives an account a colour of its own, and takes it back to its kind's", () => {
+    const before = account(ACCOUNT_A);
+    expect(before?.color).toBeNull();
+    const coloured = write(updateAccountExecutor, {
+      id: ACCOUNT_A,
+      version: before?.version,
+      patch: { color: "rust" },
+    });
+    expect(coloured.row.color).toBe("rust");
+
+    const cleared = write(updateAccountExecutor, {
+      id: ACCOUNT_A,
+      version: coloured.row.version,
+      patch: { color: null },
+    });
+    expect(cleared.row.color).toBeNull();
+  });
+
+  /** A key into the ramp, never a hex — the input refuses before any row moves. */
+  it("refuses a colour that is not one of the nine", () => {
+    const before = account(ACCOUNT_A);
+    expect(() =>
+      write(updateAccountExecutor, {
+        id: ACCOUNT_A,
+        version: before?.version,
+        patch: { color: "#ff00ff" as "rust" },
+      }),
+    ).toThrow();
+    expect(account(ACCOUNT_A)?.color).toBeNull();
+  });
 });
 
 /* ── archive_account ─────────────────────────────────────────────────────── */

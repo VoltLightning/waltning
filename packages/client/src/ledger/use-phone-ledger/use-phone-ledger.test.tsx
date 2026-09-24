@@ -45,6 +45,7 @@ describe("usePhoneLedger", () => {
               archived: false,
               hidden: false,
               inTotal: true,
+              color: null,
               expectedBalance: null,
               openingBalance: input.openingBalance,
               openingDate: input.openingDate ?? null,

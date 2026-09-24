@@ -29,6 +29,7 @@ import { isAccountingDate } from "@waltning/core/date";
 import * as money from "@waltning/core/money";
 import {
   ACCOUNT_KIND,
+  type AccountColor,
   type AccountKind,
   type CreateAccountInput,
 } from "@waltning/core/registry/inputs";
@@ -51,6 +52,7 @@ import { useSubmitCheck } from "../../../primitives/use-submit-check.ts";
 import { text } from "../../../theme/fonts.ts";
 import { makeStyles } from "../../../theme/styles.ts";
 import { space } from "../../../tokens.ts";
+import { SwatchPicker } from "../../molecules/swatch-picker/swatch-picker";
 
 type Ownership = CreateAccountInput["ownership"];
 
@@ -77,6 +79,8 @@ export type AccountEditorAccount = {
   version: number;
   /** The last balance a reconciliation recorded (S16 §5) — `null` before the first one. */
   expectedBalance: money.Money | null;
+  /** A colour picked by hand, or `null` for the kind's own (`02-tokens` §2.1b). */
+  color: AccountColor | null;
 };
 
 /** Only the fields that changed — `update_account`'s executor refuses an empty patch. */
@@ -89,6 +93,7 @@ export type AccountPatch = Partial<{
   isBusiness: boolean;
   openingBalance: string;
   openingDate: string | null;
+  color: AccountColor | null;
 }>;
 
 export type AccountEditorProps = {
@@ -141,6 +146,7 @@ export function AccountEditor({
   const [openingDateText, setOpeningDateText] = useState(account.openingDate ?? "");
   const [memo, setMemo] = useState(account.memo);
   const [groupId, setGroupId] = useState<string | null>(account.groupId);
+  const [color, setColor] = useState<AccountColor | null>(account.color);
   const [creatingGroup, setCreatingGroup] = useState(false);
   const [newGroupName, setNewGroupName] = useState("");
 
@@ -203,10 +209,12 @@ export function AccountEditor({
     if (openingBalanceChanged) next.openingBalance = openingBalance;
     const nextOpeningDate = openingDateText === "" ? null : openingDateText;
     if (nextOpeningDate !== account.openingDate) next.openingDate = nextOpeningDate;
+    if (color !== account.color) next.color = color;
     return next;
   }, [
     account,
     businessValue,
+    color,
     groupId,
     kind,
     memo,
@@ -324,6 +332,12 @@ export function AccountEditor({
         value={kind}
         onChange={handleKindChange}
       />
+      {/*
+        Under the kind, because *its kind's* is the kind just chosen above —
+        changing the kind with no colour picked changes the colour too, and
+        the picker shows that as it happens.
+      */}
+      <SwatchPicker kind={kind} value={color} onChange={setColor} />
       <RadioGroup
         label={t("accounts.ownership")}
         options={ownershipOptions}

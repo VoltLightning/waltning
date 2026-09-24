@@ -625,6 +625,10 @@ export const REPLICA_STEPS: readonly {
       `CREATE INDEX \`transactions_counterparty_idx\` ON \`transactions\` (\`counterparty_id\`)`,
     ],
   },
+  {
+    tag: "0020_schema",
+    statements: [`ALTER TABLE \`accounts\` ADD \`color\` text`],
+  },
 ];
 
 /** One step per file in `drizzle/outbox`, filename order — the queue, its index, and the counter `claimSeq` allocates from. */

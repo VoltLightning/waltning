@@ -26,7 +26,7 @@
  */
 
 import * as money from "@waltning/core/money";
-import type { AccountKind } from "@waltning/core/registry/inputs";
+import type { AccountColor, AccountKind } from "@waltning/core/registry/inputs";
 import { useCallback, useMemo, useState } from "react";
 import { Text, View } from "react-native";
 import { Amount } from "../../../fx/atoms/amount/amount";
@@ -40,10 +40,13 @@ import { useTheme } from "../../../theme/provider";
 import { makeStyles } from "../../../theme/styles.ts";
 import { focus, radius, space, touchTarget } from "../../../tokens.ts";
 import { KIND_LABEL_KEY } from "../../kind-label.ts";
-import { kindTint } from "../../kind-tint.ts";
+import { accountTint, kindTint } from "../../kind-tint.ts";
 import { KIND_ORDER } from "../account-register/account-register";
 
+/** The register's two lenses — what S16 can be opened on. */
 export type HoldingsLens = "kind" | "currency";
+/** The card's own three: the register's two, and each account by its own colour. */
+export type CardLens = HoldingsLens | "account";
 
 export type HoldingsCardKind = { kind: AccountKind; count: number; value: money.Money };
 export type HoldingsCardCurrency = {
@@ -52,6 +55,18 @@ export type HoldingsCardCurrency = {
   name?: string | undefined;
   decimals: number;
   count: number;
+  balance: money.Money;
+  value: money.Money;
+};
+
+export type HoldingsCardAccount = {
+  id: string;
+  name: string;
+  kind: AccountKind;
+  /** Picked by hand, or `null` for the kind's own (`02-tokens` §2.1b). */
+  color: AccountColor | null;
+  currency: string;
+  decimals: number;
   balance: money.Money;
   value: money.Money;
 };
@@ -70,10 +85,14 @@ export type HoldingsCardProps = {
   byKind: readonly HoldingsCardKind[];
   byCurrency: readonly HoldingsCardCurrency[];
   loans: readonly HoldingsCardKind[];
-  /** The count in the header, and every row — S16, on the lens it was pressed from. */
+  byAccount: readonly HoldingsCardAccount[];
+  /** The count in the header, and every kind or currency row — S16, on that row's lens. */
   onOpenAccounts: (lens: HoldingsLens) => void;
-  /** Open on arrival — a story's state, never a screen's. */
+  /** An account row — that account's transactions, the register's own row tap (S16 §2). */
+  onOpenAccount: (id: string) => void;
+  /** Open on arrival, and on which lens — a story's state, never a screen's. */
   initiallyOpen?: boolean;
+  initialLens?: CardLens;
 };
 
 /** Currencies have no colour of their own; the accent, stepped down, tells them apart by lightness. */
@@ -91,23 +110,34 @@ export function HoldingsCard({
   byKind,
   byCurrency,
   loans,
+  byAccount,
   onOpenAccounts,
+  onOpenAccount,
   initiallyOpen = false,
+  initialLens = "kind",
 }: HoldingsCardProps) {
   const t = useT();
   const styles = useStyles();
   const theme = useTheme();
   const [open, setOpen] = useState(initiallyOpen);
-  const [lens, setLens] = useState<HoldingsLens>("kind");
+  const [lens, setLens] = useState<CardLens>(initialLens);
 
   const handleToggle = useCallback(() => setOpen((current) => !current), []);
   const handleOpenKind = useCallback(() => onOpenAccounts("kind"), [onOpenAccounts]);
-  const handleOpenLens = useCallback(() => onOpenAccounts(lens), [onOpenAccounts, lens]);
+  const handleOpenLens = useCallback(
+    () => onOpenAccounts(lens === "currency" ? "currency" : "kind"),
+    [onOpenAccounts, lens],
+  );
 
   /** The register's order, not the fold's — the same kind sits in the same place on both screens. */
   const kinds = useMemo(
     () => [...byKind].sort((a, b) => KIND_ORDER.indexOf(a.kind) - KIND_ORDER.indexOf(b.kind)),
     [byKind],
+  );
+  /** The register's order: kinds in `KIND_ORDER`, and the person's own order inside each. */
+  const accountsInOrder = useMemo(
+    () => [...byAccount].sort((a, b) => KIND_ORDER.indexOf(a.kind) - KIND_ORDER.indexOf(b.kind)),
+    [byAccount],
   );
   const orderedLoans = useMemo(
     () => [...loans].sort((a, b) => KIND_ORDER.indexOf(a.kind) - KIND_ORDER.indexOf(b.kind)),
@@ -123,12 +153,19 @@ export function HoldingsCard({
             color: kindTint(row.kind, theme).ink,
             opacity: 1,
           }))
-        : byCurrency.map((row, index) => ({
-            key: row.currency,
-            value: row.value,
-            color: theme.accent,
-            opacity: CURRENCY_STEPS[index % CURRENCY_STEPS.length] ?? 1,
-          }));
+        : lens === "account"
+          ? accountsInOrder.map((row) => ({
+              key: row.id,
+              value: row.value,
+              color: accountTint(row, theme).ink,
+              opacity: 1,
+            }))
+          : byCurrency.map((row, index) => ({
+              key: row.currency,
+              value: row.value,
+              color: theme.accent,
+              opacity: CURRENCY_STEPS[index % CURRENCY_STEPS.length] ?? 1,
+            }));
     // A share is a ratio, not an amount — the one number here, and it is
     // worked out in decimal first, `FlowBar`'s own way.
     const positive = parts.filter((part) => money.isPositive(part.value));
@@ -141,13 +178,14 @@ export function HoldingsCard({
         opacity: part.opacity,
       },
     }));
-  }, [lens, kinds, byCurrency, theme]);
+  }, [lens, kinds, accountsInOrder, byCurrency, theme]);
 
   const segments = useMemo(
     () =>
       [
         { value: "kind" as const, label: t("accounts.byKind") },
         { value: "currency" as const, label: t("accounts.byCurrency") },
+        { value: "account" as const, label: t("accounts.byAccount") },
       ] as const,
     [t],
   );
@@ -221,38 +259,50 @@ export function HoldingsCard({
         <View style={styles.breakdown}>
           <SegmentControl segments={segments} value={lens} onChange={setLens} />
           <View>
-            {lens === "kind"
-              ? kinds.map((row, index) => (
-                  <BreakdownRow
-                    key={row.kind}
-                    swatch={kindTint(row.kind, theme).ink}
-                    opacity={1}
-                    name={t(`accounts.${KIND_LABEL_KEY[row.kind]}`)}
-                    meta={t("accounts.accountCount", { count: row.count })}
-                    value={row.value}
-                    currency={currency}
-                    decimals={decimals}
-                    last={index === kinds.length - 1}
-                    onPress={handleOpenLens}
-                  />
-                ))
-              : byCurrency.map((row, index) => (
-                  <BreakdownRow
-                    key={row.currency}
-                    swatch={theme.accent}
-                    opacity={CURRENCY_STEPS[index % CURRENCY_STEPS.length] ?? 1}
-                    name={row.name ?? row.currency}
-                    meta={`${row.currency} · ${t("accounts.accountCount", { count: row.count })}`}
-                    value={row.balance}
-                    currency={row.currency}
-                    decimals={row.decimals}
-                    converted={row.currency === currency ? undefined : row.value}
+            {lens === "account"
+              ? accountsInOrder.map((row, index) => (
+                  <AccountRow
+                    key={row.id}
+                    account={row}
+                    meta={t(`accounts.${KIND_LABEL_KEY[row.kind]}`)}
                     displayCurrency={currency}
                     displayDecimals={decimals}
-                    last={index === byCurrency.length - 1}
-                    onPress={handleOpenLens}
+                    last={index === accountsInOrder.length - 1}
+                    onOpenAccount={onOpenAccount}
                   />
-                ))}
+                ))
+              : lens === "kind"
+                ? kinds.map((row, index) => (
+                    <BreakdownRow
+                      key={row.kind}
+                      swatch={kindTint(row.kind, theme).ink}
+                      opacity={1}
+                      name={t(`accounts.${KIND_LABEL_KEY[row.kind]}`)}
+                      meta={t("accounts.accountCount", { count: row.count })}
+                      value={row.value}
+                      currency={currency}
+                      decimals={decimals}
+                      last={index === kinds.length - 1}
+                      onPress={handleOpenLens}
+                    />
+                  ))
+                : byCurrency.map((row, index) => (
+                    <BreakdownRow
+                      key={row.currency}
+                      swatch={theme.accent}
+                      opacity={CURRENCY_STEPS[index % CURRENCY_STEPS.length] ?? 1}
+                      name={row.name ?? row.currency}
+                      meta={`${row.currency} · ${t("accounts.accountCount", { count: row.count })}`}
+                      value={row.balance}
+                      currency={row.currency}
+                      decimals={row.decimals}
+                      converted={row.currency === currency ? undefined : row.value}
+                      displayCurrency={currency}
+                      displayDecimals={decimals}
+                      last={index === byCurrency.length - 1}
+                      onPress={handleOpenLens}
+                    />
+                  ))}
           </View>
           {lens === "kind" && orderedLoans.length > 0 ? (
             <View>
@@ -293,6 +343,43 @@ export function HoldingsCard({
         <View style={[styles.chevron, open ? styles.chevronUp : styles.chevronDown]} />
       </PressableScaled>
     </Card>
+  );
+}
+
+/** One account in the third lens — its own colour, its own figure, and its transactions. */
+function AccountRow({
+  account,
+  meta,
+  displayCurrency,
+  displayDecimals,
+  last,
+  onOpenAccount,
+}: {
+  account: HoldingsCardAccount;
+  meta: string;
+  displayCurrency: string;
+  displayDecimals: number;
+  last: boolean;
+  onOpenAccount: (id: string) => void;
+}) {
+  const theme = useTheme();
+  const { id } = account;
+  const handlePress = useCallback(() => onOpenAccount(id), [onOpenAccount, id]);
+  return (
+    <BreakdownRow
+      swatch={accountTint(account, theme).ink}
+      opacity={1}
+      name={account.name}
+      meta={meta}
+      value={account.balance}
+      currency={account.currency}
+      decimals={account.decimals}
+      converted={account.currency === displayCurrency ? undefined : account.value}
+      displayCurrency={displayCurrency}
+      displayDecimals={displayDecimals}
+      last={last}
+      onPress={handlePress}
+    />
   );
 }
 

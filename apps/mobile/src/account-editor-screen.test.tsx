@@ -53,6 +53,7 @@ const ACCOUNT = {
   archived: false,
   hidden: false,
   inTotal: true,
+  color: null,
   expectedBalance: null,
   openingBalance: toMoney("1240.50"),
   openingDate: null,

@@ -93,13 +93,19 @@ different sort of thing*. The account rule is drawn on the **top** of the row:
 below, the last row of a section lands its hairline on the section rule under
 it and every boundary is two lines.
 
-**Every kind wears one colour, and it is a grounded one.** `02-tokens` §2.1b's
+**Every kind wears one colour, told apart at a glance.** `02-tokens` §2.1b's
 `accountKindRamp` — nine kinds, nine hues, so a hue is never reassigned when a
-kind is added. Low chroma and warm-compatible: the category ramp exists to make
-one leaf findable among fifty-nine in a picker and its inks are bright by
-design, which on a register put a blue, a magenta and a lime on a page of
-money. The kind's mark is its `tint` filled with a square of its own `ink`,
+kind is added, and every pair far enough apart to read as two colours in both
+themes. The kind's mark is its `tint` filled with a square of its own `ink`,
 and the section's label takes that same `ink`.
+
+**And every account wears its own, which is its kind's until someone picks
+another.** Each row in the register carries a small square in the account's
+colour; the editor's *Colour* row offers *its kind's* first — drawn as the
+colour it would be — and then the ramp's nine. Nine, never a free colour: a
+colour picked by hand is one of the ramp's pairs, so it keeps the contrast and
+spacing every default is held to. Two banks are one colour by default; this is
+how one of them becomes the rust one you recognise in S04's *By account* bar.
 
 **The colour belongs to the axis you grouped on.** In the currency view a
 section holds a bank, a card and a wallet at once, so it carries no mark and
