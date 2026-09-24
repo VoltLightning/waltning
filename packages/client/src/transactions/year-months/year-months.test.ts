@@ -1,7 +1,7 @@
 import { accountingDate, yearMonth } from "@waltning/core/date";
 import * as money from "@waltning/core/money";
 import { describe, expect, it } from "vitest";
-import { busiestMonth, otherCurrenciesInYear, yearMonths } from "./year-months.ts";
+import { busiestMonth, otherCurrenciesInYear, periodInPivot, yearMonths } from "./year-months.ts";
 
 const PLN = "PLN" as money.CurrencyCode;
 const USD = "USD" as money.CurrencyCode;
@@ -14,11 +14,58 @@ function flow(date: string, over: Partial<money.DayFlowRow> = {}): money.DayFlow
     decimals: 2,
     spend: money.ZERO,
     inflow: money.ZERO,
+    spendPivot: null,
+    inflowPivot: null,
     ...over,
   };
 }
 
 describe("yearMonths", () => {
+  /**
+   * **The bug this exists for.** Income in złoty, a card in euros, a pivot in
+   * dollars: counting one currency drew spend and no income. Every day row
+   * carries its figures in the pivot, each transaction at its own rate, so all
+   * three currencies meet in one month.
+   */
+  it("counts every currency in the pivot, income included", () => {
+    const EUR = "EUR" as money.CurrencyCode;
+    const rows = yearMonths(
+      [
+        flow("2026-03-01", {
+          currency: PLN,
+          inflow: money.toMoney("4000"),
+          inflowPivot: money.toMoney("1000"),
+          spendPivot: money.ZERO,
+        }),
+        flow("2026-03-02", {
+          currency: EUR,
+          spend: money.toMoney("100"),
+          spendPivot: money.toMoney("108"),
+          inflowPivot: money.ZERO,
+        }),
+      ],
+      2026,
+      USD,
+      TODAY,
+    );
+    const march = rows[2];
+    expect(march?.inflow).toEqual(money.toMoney("1000"));
+    expect(march?.spend).toEqual(money.toMoney("108"));
+    expect(march?.otherCurrencies).toBe(0);
+  });
+
+  /** A day that came without its rate keeps its own currency, and is named if it is not the pivot's. */
+  it("leaves out only the days it cannot convert, and says so", () => {
+    const rows = yearMonths(
+      [flow("2026-03-01", { currency: PLN, inflow: money.toMoney("50") })],
+      2026,
+      USD,
+      TODAY,
+    );
+    expect(rows[2]?.inflow).toEqual(money.ZERO);
+    expect(rows[2]?.otherCurrencies).toBe(1);
+  });
+
   it("gives twelve rows, empty months included", () => {
     // A year is twelve months whether or not you spent in all of them, and a
     // list that skipped the empty ones would change length as the ledger fills.
@@ -122,5 +169,43 @@ describe("otherCurrenciesInYear", () => {
     expect(otherCurrenciesInYear([flow("2026-03-04", { spend: money.toMoney("40") })], PLN)).toBe(
       0,
     );
+  });
+});
+
+/**
+ * S04's month card — the same fold over one period, so the card and that
+ * month's Months row add the same rows. It kept the lead currency's row alone
+ * and said *came in 0,00* on a ledger whose lead was the card's euros.
+ */
+describe("periodInPivot", () => {
+  it("adds every currency's income and spend in the pivot", () => {
+    const figures = periodInPivot(
+      [
+        flow("2026-03-01", {
+          inflow: money.toMoney("4000"),
+          inflowPivot: money.toMoney("1000"),
+          spendPivot: money.ZERO,
+        }),
+        flow("2026-03-02", {
+          currency: "EUR" as money.CurrencyCode,
+          spend: money.toMoney("100"),
+          spendPivot: money.toMoney("108"),
+          inflowPivot: money.ZERO,
+        }),
+      ],
+      USD,
+    );
+    expect(figures).toEqual({
+      inflow: money.toMoney("1000"),
+      spend: money.toMoney("108"),
+      net: money.toMoney("892"),
+      otherCurrencies: 0,
+    });
+  });
+
+  it("names what it could not convert rather than folding it in", () => {
+    const figures = periodInPivot([flow("2026-03-01", { inflow: money.toMoney("50") })], USD);
+    expect(figures.inflow).toEqual(money.ZERO);
+    expect(figures.otherCurrencies).toBe(1);
   });
 });

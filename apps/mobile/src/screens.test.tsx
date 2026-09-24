@@ -285,15 +285,33 @@ function dayFlowsOf(
   rows: readonly PhoneSearchTransaction[],
   period: money.Period,
 ): readonly money.DayFlowRow[] {
-  const byDay = new Map<string, { spend: Money; inflow: Money }>();
+  const byDay = new Map<
+    string,
+    { spend: Money; inflow: Money; spendPivot: Money; inflowPivot: Money }
+  >();
   for (const row of rows) {
     if (row.date < period.start || row.date >= period.end) continue;
-    const bucket = byDay.get(row.date) ?? { spend: money.ZERO, inflow: money.ZERO };
+    const bucket = byDay.get(row.date) ?? {
+      spend: money.ZERO,
+      inflow: money.ZERO,
+      spendPivot: money.ZERO,
+      inflowPivot: money.ZERO,
+    };
+    // At the row's own rate, as `readDayFlows` does (§4).
+    const pivot = money.toPivot(money.abs(row.amount), row.fxRate);
     byDay.set(
       row.date,
       money.cmp(row.amount, money.ZERO) < 0
-        ? { ...bucket, spend: money.add(bucket.spend, money.abs(row.amount)) }
-        : { ...bucket, inflow: money.add(bucket.inflow, row.amount) },
+        ? {
+            ...bucket,
+            spend: money.add(bucket.spend, money.abs(row.amount)),
+            spendPivot: money.add(bucket.spendPivot, pivot),
+          }
+        : {
+            ...bucket,
+            inflow: money.add(bucket.inflow, row.amount),
+            inflowPivot: money.add(bucket.inflowPivot, pivot),
+          },
     );
   }
   return [...byDay.entries()]
@@ -304,6 +322,8 @@ function dayFlowsOf(
       decimals: 2,
       spend: flow.spend,
       inflow: flow.inflow,
+      spendPivot: flow.spendPivot,
+      inflowPivot: flow.inflowPivot,
     }));
 }
 
@@ -739,26 +759,50 @@ describe("Today", () => {
    * in. Stating all three is what makes the month card readable as one
    * sentence rather than two numbers and a subtraction.
    */
-  it("shows the month card's three figures from periodSpend, spend as a positive magnitude", () => {
-    const rows: readonly PeriodSpendRow[] = [
-      {
-        currency: currencyCode("PLN"),
-        decimals: 2,
-        spend: toMoney("120.50"),
-        inflow: toMoney("160.50"),
-        net: toMoney("40.00"),
-      },
-    ];
-    withLedger(<Today />, fakeController({ accounts: [PLN_ACCOUNT], periodSpend: rows }));
+  it("shows the month card's three figures, spend as a positive magnitude", () => {
+    const month = deviceRuntime().capture().date.slice(0, 7);
+    const entry = (day: string, amount: string): PhoneSearchTransaction => ({
+      id: id<"transactions">(`44444444-4444-4444-8444-4444444444${day}`),
+      date: accountingDate(`${month}-${day}`),
+      type: amount.startsWith("-") ? "expense" : "income",
+      enteredName: "Placeholder",
+      note: "",
+      categoryName: "Groceries",
+      brandKey: null,
+      accountId: PLN_ACCOUNT.id,
+      accountName: PLN_ACCOUNT.name,
+      toAccountId: null,
+      toAccountName: null,
+      amount: toMoney(amount),
+      currency: currencyCode("PLN"),
+      decimals: 2,
+      fxRate: money.pivotPerUnit("1"),
+      fxRateEstimated: false,
+      toAmount: null,
+      toFxRate: null,
+      toCurrency: null,
+      toDecimals: null,
+      isBusiness: false,
+      isCapital: false,
+      obligationRole: null,
+    });
+    withLedger(
+      <Today />,
+      fakeController({
+        accounts: [PLN_ACCOUNT],
+        ledger: [entry("01", "-120.50"), entry("01", "160.50")],
+      }),
+    );
 
     expect(screen.getByText("Kept so far")).toBeDefined();
-    expect(screen.getByText("Came in")).toBeDefined();
-    expect(screen.getByText("Went out")).toBeDefined();
-    const rendered = document.body.textContent ?? "";
-    expect(rendered).toContain("120.50");
-    expect(rendered).not.toContain("-120.50");
-    expect(rendered).toContain("160.50");
-    expect(rendered).toContain("40.00");
+    // The card, not the page: the same rows are drawn below it as a day, and
+    // there the expense is rightly -120.50.
+    const figureBeside = (label: string) =>
+      screen.getByText(label).parentElement?.textContent ?? "";
+    expect(figureBeside("Went out")).toContain("120.50");
+    expect(figureBeside("Went out")).not.toContain("-120.50");
+    expect(figureBeside("Came in")).toContain("160.50");
+    expect(figureBeside("Kept so far")).toContain("40.00");
   });
 
   /**

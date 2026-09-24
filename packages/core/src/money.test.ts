@@ -460,10 +460,42 @@ describe("dayFlows", () => {
         decimals: 2,
         spend: money.toMoney("42.50"),
         inflow: money.toMoney("100.00"),
+        spendPivot: null,
+        inflowPivot: null,
       },
     ]);
     const [total] = money.periodSpend(rows, period);
     expect(total?.spend).toEqual(money.toMoney("42.50"));
+  });
+
+  /** §4 — each row at its own stored rate, so a day's figures can meet another currency's. */
+  it("states the day in the pivot too, each row at its own rate", () => {
+    const [day] = money.dayFlows(
+      [
+        row({ amountOriginal: money.toMoney("40.00"), fxRate: money.pivotPerUnit("0.25") }),
+        row({ amountOriginal: money.toMoney("20.00"), fxRate: money.pivotPerUnit("0.30") }),
+        row({
+          type: "income",
+          amountOriginal: money.toMoney("100.00"),
+          fxRate: money.pivotPerUnit("0.25"),
+        }),
+      ],
+      period,
+    );
+    expect(day?.spendPivot).toEqual(money.toMoney("16.00"));
+    expect(day?.inflowPivot).toEqual(money.toMoney("25.00"));
+  });
+
+  /** A sum over most of a day's rows would pass for the day, so one missing rate voids it. */
+  it("gives no pivot figure for a day with a row that came without a rate", () => {
+    const [day] = money.dayFlows(
+      [
+        row({ amountOriginal: money.toMoney("40.00"), fxRate: money.pivotPerUnit("0.25") }),
+        row({ amountOriginal: money.toMoney("20.00") }),
+      ],
+      period,
+    );
+    expect(day?.spendPivot).toBeNull();
   });
 
   it("leaves an empty day absent rather than zero", () => {

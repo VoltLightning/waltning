@@ -34,6 +34,7 @@ export function readDayFlows<TRun, TSchema extends typeof ledgerSchema>(
       currency: transactions.currency,
       decimals: currencies.decimals,
       amountOriginal: transactions.amountOriginal,
+      fxRate: transactions.fxRate,
     })
     .from(transactions)
     .innerJoin(accounts, eq(transactions.accountId, accounts.id))
