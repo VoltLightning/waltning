@@ -765,6 +765,7 @@ export const be: Messages = {
   developer: {
     subtitle: "Даныя для прагляду",
     lede: "Выдуманыя рахункі і два гады аперацый, запісаныя проста на гэту прыладу. Сервер тут не ўдзельнічае.",
+    loading: "Запіс гісторыі… {{written}} з {{of}}",
     loaded: "Радкоў: {{transactions}} · рахункаў: {{accounts}} · людзей: {{people}}",
     refused: " · адхілена: {{count}}",
   },

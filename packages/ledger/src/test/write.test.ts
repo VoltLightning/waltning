@@ -267,6 +267,47 @@ describe("a write records its intent and materialises", () => {
     expect(first.deps).toEqual([]);
   });
 
+  /**
+   * Minted ids are remembered per entry rather than re-parsed from the whole
+   * queue on every write — the scan that made every save slower the longer a
+   * phone stayed offline. What is remembered must still be right: an entry
+   * first met on an earlier write is still a dependency, and one the drain has
+   * removed is not.
+   */
+  it("still finds a dependency learned on an earlier write, and forgets a drained one", () => {
+    const minter = writeLocally(s.ledger, {
+      executor: createCounterparty,
+      registry,
+      input: { id: "cp-1", name: "Placeholder" },
+      capture,
+    });
+    // An unrelated write, so the minter's ids are learned here and remembered.
+    writeLocally(s.ledger, {
+      executor: createTransaction,
+      registry,
+      input: input("txn-a"),
+      capture,
+    });
+
+    const naming = writeLocally(s.ledger, {
+      executor: createTransaction,
+      registry,
+      input: { ...input("txn-b"), counterparty_id: "cp-1" },
+      capture,
+    });
+    expect(naming.deps).toEqual([minter.entryId]);
+
+    // The server admitted the minter: the drain removes it from the queue.
+    s.ledger.outbox.db.delete(outbox).where(eq(outbox.id, minter.entryId)).run();
+    const after = writeLocally(s.ledger, {
+      executor: createTransaction,
+      registry,
+      input: { ...input("txn-c"), counterparty_id: "cp-1" },
+      capture,
+    });
+    expect(after.deps).not.toContain(minter.entryId);
+  });
+
   it("does not invent a dependency when nothing queued mints the id", () => {
     // The counterparty already exists locally and was acknowledged long ago —
     // naming it must not hold the transaction behind anything.

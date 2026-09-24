@@ -197,6 +197,14 @@ covers only name collisions. Any other refusal of `create_counterparty` leaves
 five transactions pointing at a row that does not exist, and a hand-maintained
 dependency list in a queue this varied will be wrong within a month.
 
+**What each entry mints is read once, not on every write.** A phone with no
+server never drains, so the unacknowledged queue is the device's whole history,
+and re-parsing every payload in it at each enqueue made every save slower the
+longer the phone stayed offline. An entry's payload never changes after it is
+written, so its minted ids are remembered by entry id when it is first seen;
+each enqueue reads the queue's ids and only the payloads it has not met, and
+forgets entries the drain has removed.
+
 ### Crash recovery, and the drain's transaction boundaries
 
 iOS force-quit gives **no callback at all**, so an entry interrupted in `sending`

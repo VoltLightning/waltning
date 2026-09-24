@@ -36,7 +36,7 @@
  */
 
 import { type AccountingDate, todayAtOffset } from "@waltning/core/date";
-import { type ExtractTablesWithRelations, eq } from "drizzle-orm";
+import { type ExtractTablesWithRelations, eq, inArray } from "drizzle-orm";
 import type { SQLiteTransaction } from "drizzle-orm/sqlite-core";
 import type { z } from "zod";
 import {
@@ -293,18 +293,7 @@ export function writeLocally<Input extends z.ZodTypeAny, Row, TRun, TSchema exte
       // removes an entry when the server admits it, so there is no `state` filter
       // to get wrong here. A `blocked` entry counts: it is still unsent, and a
       // dependent must not overtake it.
-      const queued = tx
-        .select({ id: outbox.id, operation: outbox.operation, payload: outbox.payload })
-        .from(outbox)
-        .all();
-
-      const deps = deriveDeps(
-        payload,
-        queued.map((entry) => ({
-          id: entry.id,
-          mintedIds: mintedIdsOf(registry[entry.operation], entry.payload),
-        })),
-      );
+      const deps = deriveDeps(payload, unacknowledgedOf(ledger.outbox.db, tx, registry));
 
       const [row] = tx
         .insert(outbox)
@@ -500,6 +489,61 @@ export function writeLocally<Input extends z.ZodTypeAny, Row, TRun, TSchema exte
  * "never drop" rule preventing. `recover.ts` reports the unknown operation, and
  * S30 is where it becomes visible.
  */
+/**
+ * Each queued entry's minted ids, remembered per outbox rather than re-read.
+ *
+ * **This scan was quadratic, and it was on every write.** Every row still in
+ * the outbox is unacknowledged by definition, and a phone with no server never
+ * drains — so the queue is the whole history of the device, and each write
+ * read every payload in it back out and parsed it through its operation's
+ * schema to learn what ids it minted. Nine hundred demo rows took 1.6 s of
+ * parsing alone, and a real ledger kept offline for a year would pay the same
+ * on every tap of *Save*.
+ *
+ * An entry's payload is written once and its minted ids never change, so they
+ * are read once, when an entry is first seen, and kept by entry id. What each
+ * write still reads is the queue's ids — a narrow index scan — and only the
+ * payloads it has not met before. Entries the drain has removed are dropped
+ * from the memory on the next write, so it holds exactly the queue.
+ *
+ * Keyed by the outbox handle, not globally: two ledgers in one process (the
+ * tests, a restore) may reuse an id with a different payload.
+ */
+/** The handle `ledger.outbox.db.transaction` passes its callback. */
+type OutboxTx<TRun, TSchema extends LedgerSchema> = Parameters<
+  Parameters<Ledger<TRun, TSchema>["outbox"]["db"]["transaction"]>[0]
+>[0];
+
+const mintedMemory = new WeakMap<object, Map<string, readonly string[]>>();
+
+function unacknowledgedOf<TRun, TSchema extends LedgerSchema, Tx>(
+  outboxDb: object,
+  tx: OutboxTx<TRun, TSchema>,
+  registry: LocalRegistry<Tx>,
+): { id: string; mintedIds: readonly string[] }[] {
+  let memory = mintedMemory.get(outboxDb);
+  if (memory === undefined) {
+    memory = new Map();
+    mintedMemory.set(outboxDb, memory);
+  }
+  const queued = tx.select({ id: outbox.id, operation: outbox.operation }).from(outbox).all();
+  const unseen = queued.filter((entry) => !memory.has(entry.id)).map((entry) => entry.id);
+  for (let at = 0; at < unseen.length; at += UNSEEN_CHUNK) {
+    const rows = tx
+      .select({ id: outbox.id, operation: outbox.operation, payload: outbox.payload })
+      .from(outbox)
+      .where(inArray(outbox.id, unseen.slice(at, at + UNSEEN_CHUNK)))
+      .all();
+    for (const row of rows) memory.set(row.id, mintedIdsOf(registry[row.operation], row.payload));
+  }
+  const live = new Set(queued.map((entry) => entry.id));
+  for (const id of memory.keys()) if (!live.has(id)) memory.delete(id);
+  return queued.map((entry) => ({ id: entry.id, mintedIds: memory.get(entry.id) ?? [] }));
+}
+
+/** SQLite's bound-parameter ceiling is 999 on older builds; stay well under it. */
+const UNSEEN_CHUNK = 500;
+
 function mintedIdsOf<Tx>(
   executor: AnyLocalExecutor<Tx> | undefined,
   payload: OutboxPayload,

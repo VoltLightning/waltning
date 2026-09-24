@@ -40,13 +40,14 @@ function withLedger(over: Partial<PhoneLedgerPort> = {}) {
   return port;
 }
 
-it("loads on one press and says what it wrote", () => {
+it("loads on one press and says what it wrote", async () => {
   withLedger();
   fireEvent.click(screen.getByRole("button", { name: "Load demo data" }));
 
   // The count is the only evidence a press did anything, so it is on screen
-  // rather than in a toast that has already gone by the time you look up.
-  expect(screen.getByText(/rows · .* accounts/)).toBeDefined();
+  // rather than in a toast that has already gone by the time you look up. The
+  // loader yields between chunks, so the count arrives when it finishes.
+  expect(await screen.findByText(/rows · .* accounts/, {}, { timeout: 10_000 })).toBeDefined();
 });
 
 /**

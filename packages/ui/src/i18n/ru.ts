@@ -768,6 +768,7 @@ export const ru: Messages = {
   developer: {
     subtitle: "Данные для просмотра",
     lede: "Выдуманные счета и два года операций, записанные прямо на это устройство. Сервер здесь не участвует.",
+    loading: "Запись истории… {{written}} из {{of}}",
     loaded: "Строк: {{transactions}} · счетов: {{accounts}} · людей: {{people}}",
     refused: " · отклонено: {{count}}",
   },

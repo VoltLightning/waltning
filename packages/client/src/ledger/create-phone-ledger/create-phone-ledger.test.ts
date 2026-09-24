@@ -500,6 +500,42 @@ describe("phone ledger controller", () => {
     expect(controller.getSnapshot().revision).toBe(2);
   });
 
+  /**
+   * A batch rebuilds the snapshot once, not once per write inside it — the
+   * demo loader's nine hundred rows paid nine hundred rebuilds, each over a
+   * ledger one row larger, and held the screen for the whole of it.
+   */
+  it("rebuilds once for a batch of writes, and the batch's writes are all in it", () => {
+    const { controller } = harness();
+    const listener = vi.fn();
+    controller.subscribe(listener);
+    controller.batch(() => {
+      controller.createAccount(minimalDraft("Bank A · PLN", PLN));
+      controller.createAccount(minimalDraft("Bank B · PLN", PLN));
+      controller.createAccount(minimalDraft("Cash · PLN", PLN));
+      // Inside the batch, nothing has been rebuilt yet.
+      expect(controller.getSnapshot().revision).toBe(1);
+    });
+    expect(controller.getSnapshot().revision).toBe(2);
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(controller.getSnapshot().accounts).toHaveLength(3);
+  });
+
+  /** The `finally` — a write that throws must not leave the snapshot stale for good. */
+  it("still rebuilds when a write inside the batch throws", () => {
+    const { controller } = harness();
+    expect(() =>
+      controller.batch(() => {
+        controller.createAccount(minimalDraft("Bank A · PLN", PLN));
+        throw new Error("a loader failing halfway");
+      }),
+    ).toThrow("a loader failing halfway");
+    expect(controller.getSnapshot().accounts).toHaveLength(1);
+    // And the next write outside a batch rebuilds as it always did.
+    controller.createAccount(minimalDraft("Bank B · PLN", PLN));
+    expect(controller.getSnapshot().accounts).toHaveLength(2);
+  });
+
   it("creates an account in the currency it was given, through the shared defaults", () => {
     const { controller, createAccount } = harness();
     const accountId = idOf(controller.createAccount(minimalDraft("Bank A · PLN", PLN)));
