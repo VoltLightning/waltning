@@ -304,6 +304,8 @@ function dayFlowsOf(
       decimals: 2,
       spend: flow.spend,
       inflow: flow.inflow,
+      spendPivot: null,
+      inflowPivot: null,
     }));
 }
 

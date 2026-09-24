@@ -1285,12 +1285,13 @@ export default function Today() {
       yearMonths(
         yearFlows,
         shownYear,
-        // With no account there is no lead currency, and the year is twelve
-        // empty rows either way — the fold has nothing to leave out.
-        leadNetWorth?.currency ?? LEAD_FALLBACK,
+        // The pivot, because every row is counted in it at its own rate —
+        // with no pivot yet there is nothing to convert to, and the fold
+        // counts the lead currency's own rows, as it always could.
+        pivotCurrency?.code ?? leadNetWorth?.currency ?? LEAD_FALLBACK,
         yearMonth(today.slice(0, 7)),
       ),
-    [yearFlows, shownYear, leadNetWorth, today],
+    [yearFlows, shownYear, pivotCurrency, leadNetWorth, today],
   );
   const monthRows = useMemo<readonly MonthRow[]>(() => {
     return yearRows.map((row) => ({
@@ -1299,8 +1300,8 @@ export default function Today() {
       inflow: row.inflow,
       spend: row.spend,
       net: row.net,
-      currency: leadNetWorth?.currency ?? "",
-      decimals: leadNetWorth?.decimals ?? 2,
+      currency: pivotCurrency?.code ?? leadNetWorth?.currency ?? "",
+      decimals: pivotCurrency?.decimals ?? leadNetWorth?.decimals ?? 2,
       note:
         row.otherCurrencies === 0
           ? null
@@ -1310,7 +1311,7 @@ export default function Today() {
       // §7's *how often, and when* includes *not in this month*.
       matches: monthMatches === null ? null : monthMatch(t, monthMatches.get(row.month) ?? 0),
     }));
-  }, [yearRows, locale, leadNetWorth, monthMatches, t]);
+  }, [yearRows, locale, pivotCurrency, leadNetWorth, monthMatches, t]);
 
   /**
    * The chart's columns — the same rows, measured rather than stated.
@@ -1350,9 +1351,12 @@ export default function Today() {
   const yearKeptNote = useMemo(() => {
     // With no account there is no lead currency and no figures to qualify —
     // the same fallback `yearRows` makes, for the same reason.
-    const others = otherCurrenciesInYear(yearFlows, leadNetWorth?.currency ?? LEAD_FALLBACK);
+    const others = otherCurrenciesInYear(
+      yearFlows,
+      pivotCurrency?.code ?? leadNetWorth?.currency ?? LEAD_FALLBACK,
+    );
     return others === 0 ? undefined : t("shell.plusOtherCurrencies", { count: others });
-  }, [yearFlows, leadNetWorth, t]);
+  }, [yearFlows, pivotCurrency, leadNetWorth, t]);
 
   const thisYear = Number(today.slice(0, 4));
   const [pickerYearPage, setPickerYearPage] = useState<number | null>(null);

@@ -478,14 +478,17 @@ is a year holding nothing rendered as a year holding everything, which is
 exactly what shipped once. The stub is 2pt of `border`: present, clearly
 nothing.
 
-**Empty means nothing happened, not nothing in the lead currency.** A month
-whose only rows are foreign keeps its slot in the money colours at zero height:
-the row four pixels below it says *+1 other currency* about the same month, and
-two elements contradicting each other about one month is worse than a column
-that cannot state a figure. The figure it would need is a conversion arc-phone
-does not do (class **S**). The year's own total carries the same note — it is
-the largest figure on the page and was the only one drawing money with nothing
-to say what it left out.
+**Months counts every currency, in the pivot, each row at its own rate.**
+Every transaction is stored with the rate of its own date (`computations.md`
+§4), so a month of złoty income, euro card spend and dollar investments adds
+up exactly — class **R**, nothing looked up and nothing invented. It used to
+count one currency, the *lead* — the first of the net-worth rows — and a
+ledger whose lead was the card's euros drew a year of spend and not one bar
+of income, because the salary was in złoty.
+
+**Empty means nothing happened.** A month whose rows could not be converted —
+none, when every row carries its rate — keeps its slot at zero height and its
+row says *+1 other currency*; the year's own total carries the same note.
 
 **The year's own arrows live on the chart, not only in the chrome.** The chart
 *is* the year, so the control that changes it sits where the eye already is.
@@ -531,10 +534,9 @@ ledger whose largest day is 200 zł and one whose largest is 20 000 would
 otherwise draw every mark the same, and the mark exists to say *this was
 unusual for you*.
 
-**A day or a month holding two currencies keeps its mark and loses its
-figure.** Arc-phone converts nothing, so no single number is true; the calendar
-draws the mark without a total and a month's row names the currencies its
-figures leave out. Dropping them silently would be worse than saying so.
+**A day holding two currencies keeps its mark and loses its figure** on the
+Calendar, which still draws one currency's day; a month on Months states the
+whole, in the pivot, as above.
 
 ### Web — ≥1024px
 

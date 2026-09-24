@@ -599,6 +599,12 @@ export type PeriodTransactionRow = {
   currency: CurrencyCode;
   decimals: number;
   amountOriginal: Money;
+  /**
+   * The row's own rate to the pivot, as stored (`transactions.fx_rate`, §4).
+   * Optional because only `dayFlows` reads it; a reader that supplies it gets
+   * the day's figures in the pivot as well.
+   */
+  fxRate?: PivotPerUnit;
 };
 
 export type PeriodSpendRow = {
@@ -685,6 +691,14 @@ export type DayFlowRow = {
   spend: Money;
   /** The day's income. */
   inflow: Money;
+  /**
+   * The same two figures in the pivot, each row converted at **its own**
+   * stored rate (§4: *the row's own date*) — exact, not a rate looked up now,
+   * so a month of four currencies can be added up without inventing a figure.
+   * `null` when any row in the bucket came without a rate.
+   */
+  spendPivot: Money | null;
+  inflowPivot: Money | null;
 };
 
 /**
@@ -713,23 +727,52 @@ export const dayFlows = (
   rows: readonly PeriodTransactionRow[],
   period: Period,
 ): readonly DayFlowRow[] => {
-  const byDay = new Map<string, { decimals: number; spend: Decimal; inflow: Decimal }>();
+  type Bucket = {
+    decimals: number;
+    spend: Decimal;
+    inflow: Decimal;
+    spendPivot: Decimal | null;
+    inflowPivot: Decimal | null;
+  };
+  const byDay = new Map<string, Bucket>();
   for (const row of rows) {
     if (row.ownership !== "own") continue;
     if (row.type !== "income" && row.type !== "expense") continue;
     if (!inPeriod(row.date, period)) continue;
     const key = `${row.date}\u0000${row.currency}`;
-    const bucket = byDay.get(key) ?? { decimals: row.decimals, spend: dec(0), inflow: dec(0) };
+    const bucket: Bucket = byDay.get(key) ?? {
+      decimals: row.decimals,
+      spend: dec(0),
+      inflow: dec(0),
+      spendPivot: dec(0),
+      inflowPivot: dec(0),
+    };
     const amount = dec(row.amountOriginal);
-    if (row.type === "expense") bucket.spend = bucket.spend.plus(amount);
-    else bucket.inflow = bucket.inflow.plus(amount);
+    // One row without a rate leaves the whole bucket without a pivot figure:
+    // a sum over most of a day's rows would pass for the day.
+    const pivot = row.fxRate === undefined ? null : amount.times(row.fxRate);
+    if (row.type === "expense") {
+      bucket.spend = bucket.spend.plus(amount);
+      bucket.spendPivot = pivot === null ? null : (bucket.spendPivot?.plus(pivot) ?? null);
+    } else {
+      bucket.inflow = bucket.inflow.plus(amount);
+      bucket.inflowPivot = pivot === null ? null : (bucket.inflowPivot?.plus(pivot) ?? null);
+    }
     byDay.set(key, bucket);
   }
   return [...byDay.entries()]
     .sort(([a], [b]) => a.localeCompare(b))
-    .map(([key, { decimals, spend, inflow }]) => {
+    .map(([key, { decimals, spend, inflow, spendPivot, inflowPivot }]) => {
       const [date, currency] = key.split("\u0000") as [AccountingDate, CurrencyCode];
-      return { date, currency, decimals, spend: toMoney(spend), inflow: toMoney(inflow) };
+      return {
+        date,
+        currency,
+        decimals,
+        spend: toMoney(spend),
+        inflow: toMoney(inflow),
+        spendPivot: spendPivot === null ? null : toMoney(spendPivot),
+        inflowPivot: inflowPivot === null ? null : toMoney(inflowPivot),
+      };
     });
 };
 
