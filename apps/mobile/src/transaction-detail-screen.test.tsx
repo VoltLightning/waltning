@@ -161,6 +161,7 @@ const DETAIL: NonNullable<FakeDetail> = {
   accountName: "Cash · PLN",
   categoryId: null,
   categoryName: null,
+  counterpartyId: null,
   obligationCounterpartyId: null,
   counterpartyName: null,
   obligationRole: null,

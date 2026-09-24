@@ -47,8 +47,13 @@ const txn = (overrides: {
   date: ReturnType<typeof accountingDate>;
   type: "income" | "expense";
   amountOriginal: money.Money;
-  obligationCounterpartyId: ReturnType<typeof id<"counterparties">>;
-  obligationRole?: "debt" | "contribution" | "reference";
+  /**
+   * Optional since the identity link arrived: a row can name a counterparty
+   * and owe them nothing, which is what the retired `reference` role meant.
+   */
+  obligationCounterpartyId?: ReturnType<typeof id<"counterparties">>;
+  obligationRole?: "debt" | "contribution" | null;
+  counterpartyId?: ReturnType<typeof id<"counterparties">>;
   deletedAt?: Date;
   currency?: money.CurrencyCode;
   debtCurrency?: money.CurrencyCode;
@@ -273,8 +278,11 @@ describe("readCounterpartyBalances — structural exclusions", () => {
           date: accountingDate("2026-08-02"),
           type: "expense",
           amountOriginal: money.toMoney("30"),
-          obligationCounterpartyId: NINA,
-          obligationRole: "reference",
+          // Named, and owed nothing — which used to be `role: "reference"`
+          // and is now the identity link with no obligation pair at all. The
+          // balance read must still ignore it.
+          counterpartyId: NINA,
+          obligationRole: null,
         }),
       ])
       .run();

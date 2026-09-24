@@ -1106,6 +1106,7 @@ category_mappings       external_id PK, external_path, category_id, note
 counterparties          id, name, kind (person|company), settlement_currency,
                         contact, note, archived, sort         -- debt (§6.6)
 transactions            id, date, type, account_id, to_account_id, category_id,
+                        counterparty_id,                      -- who it was with (§6.6.1)
                         obligation_counterparty_id,           -- debt (§6.6)
                         obligation_role,
                         is_capital,                           -- one-off (§6.8)
@@ -1413,18 +1414,26 @@ notes, as free text.
 counterparties     id, name, kind (person | company),
                    settlement_currency,      -- the currency they prefer to settle in
                    contact, note, archived, sort, created_at
-transactions       + obligation_counterparty_id  -- nullable FK
-                   + obligation_role            -- debt | contribution | reference
+transactions       + counterparty_id             -- nullable FK: who it was *with*
+                   + obligation_counterparty_id  -- nullable FK: who it owes
+                   + obligation_role            -- debt | contribution
 ```
 
-**`obligation_role` decides what a reference *means*.** Naming a counterparty
-is not the same as owing them, and three different things want the field:
+**`obligation_role` decides what an obligation *means*.** Naming a
+counterparty is not the same as owing them — that difference is now the two
+links (§6.6.1), and what remains for the role is the two kinds of obligation
+there actually are:
 
 | Role | Meaning | Debt ledger | Ageing |
 |---|---|---|---|
 | `debt` | Money moved that is expected back, in either direction | ✅ | companies only (O15) |
 | `contribution` | An inflow to a shared account, attributed to who put it in (§6.7) | ❌ | never |
-| `reference` | This transaction merely involved them — no obligation either way | ❌ | never |
+
+A third value, `reference`, said *"this transaction merely involved them — no
+obligation either way"*. That is what `counterparty_id` with an empty
+obligation pair says, and saying it twice left a value inside `obligation_role`
+whose meaning was "not one". It is retired; its rows carry the identity link
+instead.
 
 Set at write time, never inferred. The alternative — deriving the distinction
 from `accounts.ownership` — works today but silently rewrites the meaning of
@@ -1575,10 +1584,11 @@ corrupt a balance.
 
 ### 6.6.1 Who, the directory, and money owed
 
-**Specified, not implemented:** the independent identity link and unified Who
-experience below require schema, contract, executor and screen work. Existing
-counterparty roles retain their meanings; this section is the implementation
-contract, not a claim that the current database has the additional column.
+**The identity link exists; the unified Who experience does not yet.**
+`transactions.counterparty_id` is on both engines with its own index, the
+registry inputs carry it, and `reference` has been retired. What remains of
+this section as a contract rather than a description is the *screen* work —
+one directory, one detail view, and the merge of S12 and S37.
 
 **Who** is the optional person or business involved in an ordinary payment.
 **People & companies** is its saved directory; **Debt** lists obligations,
@@ -1620,13 +1630,11 @@ Keeping only merchant text was rejected because directory rename/merge/history
 would then lose the merchant association whenever a debtor occupies the
 obligation link.
 
-**`reference` is what an identity link with no obligation replaces.** The role
-exists today to say *this party is involved but nothing is owed*, which is
-exactly what an identity link and an empty obligation pair say — so it is
-retired in the same change that gives its rows the identity column to move
-onto, leaving `obligation_role` as `debt | contribution`. Until then the pair
-above is written `Shop A / reference`, and the third row of the table is the
-one that changes.
+**`reference` is gone, and the identity link is what replaced it.** The role
+said *this party is involved but nothing is owed* — exactly what an identity
+link and an empty obligation pair say — so keeping it would leave a value
+inside `obligation_role` whose meaning is "not one". Its rows moved onto
+`counterparty_id` in the same migration that dropped it.
 
 The two links may equal one another; they do not have to. Debt calculations
 read only the `debt`-role obligation. A named merchant must not receive a
@@ -1641,9 +1649,9 @@ obligation, so any rule joining them would refuse a real capture. The identity
 link gets an FK and an index of its own, in both databases, with refusal tests
 against both engines.
 
-Migration backfills identity **only** from existing `reference`-role rows,
-which is what that role already meant; it never matches names to
-debt/contribution rows, and never invents an identity on an unrelated edit.
+Migration backfilled identity **only** from the `reference`-role rows, which
+is what that role already meant; it matched no names, touched no
+debt/contribution row, and invented an identity nowhere.
 `entered_name` is preserved exactly, including empty text. Create and update
 inputs expose the identity link as `counterpartyId` alongside the obligation's
 `obligationCounterpartyId`/`obligationRole`; a queued operation written before
@@ -1721,8 +1729,9 @@ and report that result accurately rather than claiming the payment was saved.
   is the list label, with Expense/Income as fallback if it too is absent.
 - Paying saved Shop A ordinarily leaves all debt balances unchanged.
 - Paying Shop A for Friend A preserves both links; only Friend A's debt changes.
-- Clearing Who on that row retains Friend A's debt; disabling the debt restores
-  the merchant reference and removes the obligation only after explicit Save.
+- Clearing Who on that row retains Friend A's debt; disabling the debt leaves
+  the merchant on the identity link and removes the obligation only after
+  explicit Save.
 - Replaying an offline new-party plus transaction pair twice produces one of
   each; a refused creation leaves the transaction unapplied with its draft intact.
   A name collision admitted under H13 retains its distinct client identity.

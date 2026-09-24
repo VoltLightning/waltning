@@ -33,6 +33,11 @@ export type TransactionSearchFilter = {
   to?: AccountingDate;
   /** S13's whole history — every row naming this counterparty, any role. */
   obligationCounterpartyId?: Id<"counterparties">;
+  /**
+   * Either link — S13's *"every row naming this counterparty"*. A row is
+   * matched once however many of its two columns name them.
+   */
+  involvesCounterpartyId?: Id<"counterparties">;
   /** S13 §3's default toggle — `debt` only until "· N other rows" is opened. */
   obligationRole?: ObligationRole;
 };

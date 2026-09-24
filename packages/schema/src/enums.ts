@@ -54,10 +54,16 @@ export const COUNTERPARTY_KIND = ["person", "company"] as const;
  * §6.6 — naming a counterparty is not the same as owing them, which is why
  * this is an *obligation* role and not a counterparty one. Only `debt` rows
  * reach `counterparty_balances`; `contribution` attributes an inflow to a
- * shared account (§6.7) and carries no settlement expectation; `reference`
- * merely records who was involved.
+ * shared account (§6.7) and carries no settlement expectation.
+ *
+ * **`reference` was the third value and is gone.** It meant *this party is
+ * involved but nothing is owed*, which is exactly what `transactions.
+ * counterparty_id` — the identity link — now says by itself. Keeping it would
+ * leave a value inside `obligation_role` whose meaning is "not one", and a row
+ * claiming an obligation it does not have. Ordinary involvement is the
+ * identity link with an empty obligation pair.
  */
-export const OBLIGATION_ROLE = ["debt", "contribution", "reference"] as const;
+export const OBLIGATION_ROLE = ["debt", "contribution"] as const;
 
 /**
  * §7.6 — `manual` outranks every synced source for the same pair and date.

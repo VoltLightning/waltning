@@ -83,17 +83,6 @@ const JPY_ACCOUNT = {
   decimals: 0,
 };
 
-const COUNTERPARTY = {
-  id: id<"counterparties">("44444444-4444-4444-8444-444444444444"),
-  name: "Corner Café",
-  kind: "person" as const,
-  settlementCurrency: null,
-  contact: null,
-  note: "",
-  archived: false,
-  version: 1,
-};
-
 function fakeController(
   overrides: {
     createTransaction?: PhoneLedgerPort["createTransaction"];
@@ -265,23 +254,22 @@ describe("QuickAdd — the phone path (Dock + QuickAddComposer)", () => {
    * read errors before this fix. Save must not let the draft reach the write
    * at all while the role is unresolved, not only render the refusal after.
    */
-  it("refuses Save while a counterparty is picked with no role yet (SPEC.md §6.6)", () => {
-    const createTransaction = vi.fn();
-    withLedger({ createTransaction, counterparties: () => [COUNTERPARTY] });
-
-    typeAmount("48.90");
-    pickCashAccount();
-    expect(screen.getByRole("button", { name: "Save expense" })).toHaveProperty("disabled", false);
-
-    openMore();
-    fireEvent.click(screen.getByRole("button", { name: "Person" }));
-    fireEvent.click(screen.getByRole("button", { name: "Counterparty" }));
-    fireEvent.click(screen.getByRole("radio", { name: "Corner Café" }));
-
-    expectSaveRefused();
-    expect(screen.getByText("Corner Café · role?")).toBeDefined();
-    expect(createTransaction).not.toHaveBeenCalled();
-  });
+  /**
+   * **The refusal this file used to assert here is gone, and §6.6.1 is why.**
+   * Naming a counterparty demanded a role, because `reference` was the only
+   * way to say *involved, owes nothing* and the pair-shape rule refused a
+   * party without one. The identity link says that by itself, so an ordinary
+   * purchase from a saved shop is now a complete capture.
+   *
+   * **The replacement lives in `create-phone-ledger.test.ts`, not here**, and
+   * that is a limitation of this file rather than a preference: a Save pressed
+   * while a sheet is open strands the sheet in the document, so the *next*
+   * test finds two of every radio and fails on an assertion that is correct.
+   * The old test never tripped it because it never got as far as saving. What
+   * the controller test proves instead is the whole of the mapping — the
+   * picker fills `counterpartyId`, and a role fills the obligation pair with
+   * the same counterparty — which is the part §6.6.1 actually changed.
+   */
 
   /**
    * `M` — one Save rule across the three composers: the desk form (`QuickAddForm`'s

@@ -1818,6 +1818,7 @@ describe("a constraint declared in the schema is present on the device", () => {
       "transaction_lines_category_idx",
       "transaction_lines_transaction_idx",
       "transactions_category_idx",
+      "transactions_counterparty_idx",
       "transactions_date_idx",
       "transactions_obligation_counterparty_idx",
     ]);

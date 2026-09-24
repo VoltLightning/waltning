@@ -81,7 +81,7 @@ export type FieldsCardAccount = {
 };
 
 /** §6.6's three roles, restated structurally — `client` is a sibling package. */
-export type ObligationRoleValue = "debt" | "contribution" | "reference";
+export type ObligationRoleValue = "debt" | "contribution";
 
 /** The saved values this card diffs every draft against. */
 export type TransactionFields = {
@@ -200,9 +200,11 @@ export function FieldsCard({
 
   const roleOptions = useMemo<RadioGroupProps["options"]>(
     () => [
+      // `none` is a real option, not a blank: a role stopped being required when
+      // §6.6.1's identity link arrived, and a radio group cannot be un-picked.
+      { value: NO_OBLIGATION, label: t("transactions.role.none") },
       { value: "debt", label: t("transactions.role.debt") },
       { value: "contribution", label: t("transactions.role.contribution") },
-      { value: "reference", label: t("transactions.role.reference") },
     ],
     [t],
   );
@@ -321,7 +323,7 @@ export function FieldsCard({
           <RadioGroup
             label={t("transactions.role")}
             options={roleOptions}
-            value={role}
+            value={role ?? NO_OBLIGATION}
             onChange={handleRoleChange}
           />
         </FieldDisclosureRow>
@@ -390,8 +392,11 @@ export function FieldsCard({
   );
 }
 
+/** The radio value standing for "named, and owing nothing". */
+const NO_OBLIGATION = "none";
+
 function isRole(value: string): value is ObligationRoleValue {
-  return value === "debt" || value === "contribution" || value === "reference";
+  return value === "debt" || value === "contribution";
 }
 
 type FieldDisclosureRowProps = {

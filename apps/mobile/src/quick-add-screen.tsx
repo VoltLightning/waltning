@@ -47,7 +47,7 @@ import { Alert, Text, View } from "react-native";
 import { lastCapture, saveHaptic } from "./platform";
 
 type CreateAccountEscapeDraft = { amount: string; accountId: string | null };
-type ObligationRole = "debt" | "contribution" | "reference";
+type ObligationRole = "debt" | "contribution";
 
 function handleDeskCancel() {
   router.back();
@@ -524,7 +524,7 @@ export default function QuickAdd() {
     (next: string) => setComposerCounterpartyId(next),
     [],
   );
-  const handleComposerObligationRoleChange = useCallback((next: ObligationRole) => {
+  const handleComposerObligationRoleChange = useCallback((next: ObligationRole | null) => {
     setComposerObligationRole(next);
   }, []);
 
@@ -559,8 +559,12 @@ export default function QuickAdd() {
         ? t("common.chooseOne")
         : selectedComposerAccount?.capturable === false &&
           t("transactions.needsRate", { currency: selectedComposerAccount.currency }),
-    obligationRole:
-      composerCounterpartyId !== null && composerObligationRole === null && t("common.chooseOne"),
+    // §6.6.1 — **no longer required.** Naming a counterparty used to force a
+    // role, because `reference` was the only way to say "involved, owes
+    // nothing" and the pair-shape CHECK refused a party without one. The
+    // identity link says that by itself now, so a role is what somebody
+    // chooses when there *is* an obligation, and its absence is an ordinary
+    // answer rather than an unfinished form.
   });
   const saveComposer = useCallback(() => {
     const amount = parseAmount(composerAmountRaw);
@@ -579,7 +583,12 @@ export default function QuickAdd() {
         : { timeOfDay: readTyped(composerTime) ?? composerTime.trim() }),
       note: composerNote,
       isBusiness: composerIsBusiness,
-      obligationCounterpartyId: composerCounterpartyId,
+      // The picker names who the transaction was **with** — the identity
+      // link, and the answer for the ordinary case. A role turns that into an
+      // obligation *as well*, with the same counterparty on both: the two
+      // differing is S09's edit, not something one chip row can express.
+      counterpartyId: composerCounterpartyId,
+      obligationCounterpartyId: composerObligationRole === null ? null : composerCounterpartyId,
       obligationRole: composerObligationRole,
     };
     const result = ledger.createTransaction(next);

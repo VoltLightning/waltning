@@ -439,6 +439,7 @@ export const transactions = pgTable("transactions", transactionsColumns(), (t) =
   index("transactions_account_date_idx").on(t.accountId, t.date),
   index("transactions_category_idx").on(t.categoryId),
   index("transactions_to_account_idx").on(t.toAccountId),
+  index("transactions_counterparty_idx").on(t.counterpartyId),
   index("transactions_obligation_counterparty_idx").on(t.obligationCounterpartyId),
   index("transactions_entered_name_idx").on(t.enteredName),
   index("transactions_capital_idx").on(t.isCapital).where(sql`${t.isCapital}`),
