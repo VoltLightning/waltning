@@ -15,6 +15,7 @@ import * as money from "@waltning/core/money";
 import {
   AccountRegister,
   type AccountRegisterAccount,
+  type RegisterView,
 } from "@waltning/ui/accounts/account-register";
 import { GroundPanel } from "@waltning/ui/shell/card";
 import { Toast } from "@waltning/ui/states/toast";
@@ -134,7 +135,17 @@ export default function Accounts() {
   // during render — the endorsed pattern for adjusting state from a changed
   // prop — so the new toast is already showing by the time this render
   // commits.
-  const { message, nonce } = useLocalSearchParams<{ message?: string; nonce?: string }>();
+  const { message, nonce, view } = useLocalSearchParams<{
+    message?: string;
+    nonce?: string;
+    view?: string;
+  }>();
+  // S04's breakdown opens this register on the lens its row was on.
+  const requestedView = useMemo(
+    (): { view: RegisterView; nonce: string } | undefined =>
+      (view === "kind" || view === "currency") && nonce !== undefined ? { view, nonce } : undefined,
+    [view, nonce],
+  );
   const [lastNonce, setLastNonce] = useState(nonce);
   const [toast, setToast] = useState<string | null>(message ?? null);
   const [toastToken, setToastToken] = useState(1);
@@ -214,6 +225,7 @@ export default function Accounts() {
         onTransferFrom={handleTransferFrom}
         {...(registerPivot === undefined ? {} : { pivot: registerPivot })}
         onSetVisibility={handleSetVisibility}
+        requestedView={requestedView}
       />
       {toast === null ? null : (
         <Toast message={toast} onDismiss={handleDismissToast} token={toastToken} />

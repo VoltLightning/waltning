@@ -31,7 +31,8 @@ from:
 | Figure | Class | Why |
 |---|---|---|
 | §2 Account balance | **F** | Signed entries summed over the complete replica |
-| §3 Net worth, mine and ours | **F** | A sum of account balances, per currency until a display currency exists to sum across |
+| §3 Net worth, mine and ours | **F** | A sum of account balances, per currency |
+| §3.1 What you hold | **R** | §3 in the pivot at today's replica rate; an account with no rate is left out and counted as left out |
 | §4 Display conversion | **R** | The replica carries each row's already-converted display amount |
 | §4a FX margin | **S** | Needs both reference rates; a stale one makes the margin identically zero |
 | §5 Period spend | **R** for the base figure · **S** for shared-boundary netting | Netting needs `to_amount_pivot`, and getting it wrong silently uses the source amount |
@@ -153,15 +154,11 @@ mine(ccy)  = Σ balance(a)  over accounts where currency = ccy AND ownership = '
 ours(ccy)  = Σ balance(a)  over accounts where currency = ccy
 ```
 
-**Not `balance_display(a, d)` summed across currencies.** There is no display
-currency yet and no rate to sum across (§4: "display currency is a client
-preference applied at render time"), so `money.ts`'s `netWorth` and the
-server's SQL counterpart both fold `balance(a)` (§2) — an account's own
-currency, unconverted — into one `{mine, ours}` pair *per currency held*, the
-same call the Today screen's `CurrencyTotals` makes and for the same reason:
-inventing a rate here to force a single cross-currency figure is H21 with
-nothing to check it against. A single-figure `mine`/`ours` becomes possible
-once a display currency and its rate exist to convert through.
+**Per currency, unconverted.** `money.ts`'s `netWorth` and the server's SQL
+counterpart fold `balance(a)` (§2) — an account's own currency — into one
+`{mine, ours}` pair *per currency held*. That is the figure a currency's own
+subtotal states, and it needs no rate. The single figure across currencies is
+§3.1, which converts, and which says what it could not.
 
 **Business accounts are included in `mine`.** The scope *partition* (§6.7) is a
 transaction-level filter — `own AND NOT is_business` — and is a different thing
@@ -174,6 +171,31 @@ lists and period figures, and never the hero (S01, S04).
 
 Receivables are **excluded** — lending is an expense and repayment an unearned
 inflow (§6.6). Net worth is money you hold.
+
+### 3.1 · What you hold — one figure
+
+S04's hero. §3, in the pivot, at today's rate:
+
+```
+held(a)   = balance_display(a, today)            -- §4, the replica's rate for today
+counted   = own accounts, not hidden, in_total, not a loan, with a rate for today
+mine      = Σ held(a)  over counted
+ours      = mine + Σ held(a) over shared accounts, same rules   -- only where one exists
+```
+
+**An account with no rate is left out, and the figure says so** — `counted` of
+the own non-loan accounts that are visible. S16's register made the same
+choice first: a total over nine of ten accounts that says *nine of ten* is
+true, and one that folds in the tenth at a guessed rate is H21.
+
+**Both loan kinds sit outside it.** Receivables are excluded by §3 already;
+whether a payable belongs is open (S04 §9), so neither is added and both are
+listed beside the figure under their own rule. **S16's register total is a
+different figure** — every counted account, loans included, labelled
+*Everything, in …* — and the two differ by exactly the loans.
+
+Class **R**: balances and today's rate are both replica rows. `holdings()` in
+`packages/client` is the fold; `HoldingsCard` renders it and adds nothing.
 
 ---
 

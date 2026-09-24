@@ -223,7 +223,7 @@ describe("a component follows the active theme", () => {
     ["light text on ground", light.text, light.ground],
     ["light text on surface", light.text, light.surface],
     // **Muted text is not only ever on the page**, and it is the ink most
-    // often put on a fill: `NetWorthStrip` rests on `subtleFill`, every card's
+    // often put on a fill: a hovered row rests on `subtleFill`, every card's
     // kicker sits on `surface`, and the rows below name every other fill it
     // reaches. Which is why it is censused against all six rather than against
     // the ground alone.

@@ -24,7 +24,7 @@ shows today is the list that shows every day before it.
 | Push notification | Unsettled clearing, failed backup | The thing it names |
 
 **Exits** — `+` → S05 · Scan → S07a · say-a-transaction → S05 in voice mode ·
-a row → S09 · *What you hold*'s header → S16, and a *By kind* row → S16 at that section · unsettled banner → J8 allocation ·
+a row → S09 · *What you hold*'s count → S16, and a breakdown row → S16 on that row's lens · unsettled banner → J8 allocation ·
 tab bar → S16, S12, S30.
 
 **S04 has no *show all*, and the tab bar has no Ledger or Calendar tab.**
@@ -293,7 +293,7 @@ same action as swiping to it; neither is the primary.
 │  │ ─────────────────────────────────────────── ││
 │  │               Break it down ⌄               ││
 │  └─────────────────────────────────────────────┘│
-│  ┌ September so far ───────────── +3 529,82 zł ┐│  ← MonthSummary, compact
+│  ┌ Kept so far ────────────────── +3 529,82 zł ┐│  ← MonthSummary, compact
 │  │ ████████████████░░░░░░░░░░░░░░░░░░░░░░░░░░░ ││  ← FlowBar: out against in
 │  │ Came in +9 200,00         Went out 5 670,18 ││
 │  └─────────────────────────────────────────────┘│
@@ -321,19 +321,21 @@ follows as a compact card whose label and figure share one line.
 **Breaking it down opens the same card, in place.** *Break it down* unfolds the
 hero into rows beneath its own figure, under a two-way lens — **By kind** (bank
 accounts, savings and deposits, investments, cash, cards) or **By currency**
-(each currency held, its own figure and the converted one under it, as S16 draws
-them). The bar under the figure is always the lens's composition, so the closed
+(each currency held, by name, its own figure and the converted one under it,
+as S16 draws them). The bar under the figure is always the lens's composition, so the closed
 card already says what the total is made of, and opening it names the parts.
 Cards are negative and draw red; the bar is what is **held**, and the line above
-it says what is owed, because a negative cannot be a share of a whole. A kind
-row is a door into S16 at that kind's section, which the register already sorts
-by; a currency row is a figure and not a door, because S16 has no currency to
-open at.
+it says what is owed, because a negative cannot be a share of a whole. Every
+row is a door into S16 **on the same lens** — the register groups by kind or by
+currency with the same switch — so the parts named here are the sections
+there.
 
 **Loans are listed, and sit outside the total** — below a rule that says so, in
-muted figures rather than money colours. §3 of `computations.md` excludes
-receivables from net worth, and whether a payable belongs in it is an open
-question (§9); the breakdown shows both without the total having to answer it.
+muted figures rather than money colours (`computations.md` §3.1). Receivables
+are out of net worth by §3, and whether a payable belongs is an open question
+(§9); the breakdown shows both without the total having to answer it. S16's
+register total includes them and says *Everything*, so the two figures differ
+by exactly the loans, and each says which it is.
 
 *Ours* follows the rule the strip had: where a shared account exists, the hero
 is labelled *mine* and *ours* sits under the figure, muted; with none, it is
@@ -550,7 +552,7 @@ happened*.
 | `SearchField` | The search itself, pinned under `PageTabs` while one is on, with the live match count and an `✕` that **leaves the search** — it empties the field and closes it in one press, because this field is pinned open and the ✕ is the only way back to an unnarrowed ledger. It is therefore offered whether or not anything is typed, which is the opposite of the clear control's own rule elsewhere (`03` §3.7: a clear button on an empty field is a target with nothing to do). Drawn inline — no border, no fill — on a band that is already a surface. **Under the tabs, not in the header**: the header's shape is a function of the scroll — the title travels, scales and hands its room to a stepper — so a field placed there would either inherit the collapse or fight it, and the period would leave the screen exactly when §7 wants the reader stepping through periods. It stays open for as long as the search is on, which is what says the screen is narrowed |
 | `Pager` | The four pages, swiped or tapped between, over one shared date |
 | `GatewayGrid` | Summary's *Go to* — rows on the ground, two across, each with a figure. Not cards: a card groups rows or holds a hero, and a single destination is neither. Only destinations neither the tab bar **nor the shared bar** carries, which is why Accounts, Debt and the agent are absent from it |
-| `HoldingsCard` | The hero. Label and account count on one line (the count → S16), the total at display size, a *held · owed* line, the lens's composition bar, and *Break it down*. Open, a `SegmentControl` (*By kind* · *By currency*) and rows — swatch, name, count, figure; a kind row's chevron → S16 at that section — then *Loans · outside the total*. Labelled *mine* only where *ours* is drawn under the figure; otherwise *What you hold* (§6.7). Renders above the error branch, so a failed refresh keeps it (§6) |
+| `HoldingsCard` | The hero, over `holdings()` (`computations.md` §3.1). Title and account count on one line (the count → S16; *9 of 10 accounts* when one has no rate), the total at display size, a *held · owed* line, the lens's composition bar, and *Break it down*. Open, a `SegmentControl` (*By kind* · *By currency*) and rows — swatch, name, count, figure, chevron → S16 on that lens — then, by kind, *Loans · outside the total*. Labelled *mine* only where *ours* is drawn under the figure; otherwise *What you hold* (§6.7). Renders above the error branch, so a failed refresh keeps it (§6) |
 | `MonthSummary` | The compact card under the hero, opening month only. Label and signed figure on one line, a `FlowBar`, then the labelled pair. Draws three zeroes for a period the ledger did not exist in — that is the true answer, not an empty state. **The three labels are a prop**, defaulting to this screen's: S12 §3 holds debt's subtraction in the same card, and a second component would be the same shape twice |
 | `FlowBar` | Track is *came in*, fill is *went out*, gap is *kept*. Fill clamps at 100%; a deficit is carried by the figures, not by an overrunning bar |
 | `SpendRows` | *Where it went* — §6 at leaf granularity, five rows plus a named remainder, bars proportional to the largest row, one colour. Opening month only |
@@ -867,16 +869,13 @@ list at the destination without traversal.
    (§6, two `UNION ALL` branches that miscount a multi-line transaction). It is
    already server-only and stays so; offline it does not draw, which is the
    existing behaviour and not something the infinite list changes.
-4. **One figure across currencies.** The hero states a single total in the
-   display currency, the figure S16's register already draws under its accounts.
-   `computations.md` §3 still defines net worth **per currency**, written before
-   display conversion (§4) existed, and says a single figure becomes possible
-   once a rate exists to convert through. It now does; §3 is to be restated as
-   `Σ balance_display(a, today)` before `HoldingsCard` is built, with what the
-   card draws when a currency has no rate.
+4. ~~**One figure across currencies.**~~ **Decided: `computations.md` §3.1.**
+   §3 stays the per-currency definition; the hero is §3.1, every counted
+   account in the pivot at today's rate. An account with no rate is left out
+   and the count says so (*9 of 10 accounts*), the register's own rule.
 5. **Do payable loans belong in the total?** Receivables are out by §3. The
    drawing keeps both loan kinds outside the total, under their own rule, so
    this can be decided without redrawing — only the rule's position moves.
-6. **Which lens opens.** *By kind* by default, and the last lens chosen is kept
-   per device, like the display currency. Whether the card remembers being open
-   is the same question; the drawing assumes it opens closed.
+6. **Which lens opens.** *By kind*, and the card opens closed, on every visit.
+   Whether either should be remembered per device — like the display currency —
+   is open; nothing is stored yet.

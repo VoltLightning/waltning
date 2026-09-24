@@ -18,7 +18,7 @@ The register: what accounts exist, what is in them, and which total they feed.
 | S01 | `balances` widget | S01 |
 | S05 | Account chip → *new* | S05, with it selected |
 | S29a | First-run step 3 | S29a |
-| S04 | The net-worth strip | S04 |
+| S04 | *What you hold*'s count, or a breakdown row — opened **on that row's lens**, *By kind* or *By currency* | S04 |
 
 **Exits** — an account row → its transactions, **filtered and visibly so**:
 S04 on the phone, S10 on the desk · a group's title → the same, filtered to

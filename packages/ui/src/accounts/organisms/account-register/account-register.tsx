@@ -30,7 +30,6 @@ import { useCallback, useMemo, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import Animated from "react-native-reanimated";
 import { Amount } from "../../../fx/atoms/amount/amount";
-import type { Messages } from "../../../i18n/en.ts";
 import { useT } from "../../../i18n/provider";
 import { Button } from "../../../primitives/atoms/button/button";
 import { IconButton } from "../../../primitives/atoms/icon-button/icon-button";
@@ -49,6 +48,7 @@ import { text } from "../../../theme/fonts.ts";
 import { useTheme } from "../../../theme/provider";
 import { makeStyles } from "../../../theme/styles.ts";
 import { focus, hairline, radius, space, touchTarget } from "../../../tokens.ts";
+import { KIND_LABEL_KEY } from "../../kind-label.ts";
 import { type KindTint, kindTint } from "../../kind-tint.ts";
 import { BalanceRow, type BalanceRowProps } from "../../molecules/balance-row/balance-row";
 import { SharedGroup, type SharedGroupAccount } from "../../molecules/shared-group/shared-group";
@@ -152,6 +152,13 @@ export type AccountRegisterProps = {
    * changes them.
    */
   onSetVisibility?: (id: string, next: { hidden: boolean; inTotal: boolean }) => void;
+  /**
+   * A lens asked for from outside — S04's breakdown opens the register on the
+   * lens its row was on. `nonce` makes a second request for the same lens
+   * count: the tab stays mounted, so a lens switched by hand in between would
+   * otherwise keep the request from applying again.
+   */
+  requestedView?: { view: RegisterView; nonce: string } | undefined;
 };
 
 /**
@@ -201,18 +208,6 @@ function currencyOrder(rows: readonly AccountRegisterAccount[]): readonly string
   return seen;
 }
 
-const KIND_LABEL_KEY: Record<AccountKind, keyof Messages["accounts"]> = {
-  cash: "kindCash",
-  bank: "kindBank",
-  card: "kindCard",
-  loan_receivable: "kindLoanReceivable",
-  loan_payable: "kindLoanPayable",
-  clearing: "kindClearing",
-  investment: "kindInvestment",
-  deposit: "kindDeposit",
-  other: "kindOther",
-};
-
 function matches(row: AccountRegisterAccount, query: string): boolean {
   return query === "" || row.name.toLowerCase().includes(query);
 }
@@ -229,12 +224,20 @@ export function AccountRegister({
   onEditAccount,
   pivot,
   onSetVisibility,
+  requestedView,
 }: AccountRegisterProps) {
   const t = useT();
   const theme = useTheme();
   const styles = useStyles();
   const [query, setQuery] = useState("");
-  const [view, setView] = useState<RegisterView>("kind");
+  const [view, setView] = useState<RegisterView>(requestedView?.view ?? "kind");
+  // Adjusted during render, the endorsed way to follow a changed prop: the
+  // lens is already right on the render that shows it.
+  const [appliedNonce, setAppliedNonce] = useState(requestedView?.nonce);
+  if (requestedView !== undefined && requestedView.nonce !== appliedNonce) {
+    setAppliedNonce(requestedView.nonce);
+    setView(requestedView.view);
+  }
   /**
    * Which sections are folded away, by section key.
    *

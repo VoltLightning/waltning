@@ -165,6 +165,20 @@ export const en = {
     byCurrency: "By currency",
     everythingIn: "Everything, in {{currency}}",
     countedOf: "{{counted}} of {{total}} accounts counted",
+    /** S04 `HoldingsCard` — the hero, its line, and its breakdown. */
+    holdingsTitle: "What you hold",
+    /** Where a shared account puts *ours* under the figure — the pair is a contrast (§6.7). */
+    holdingsTitleMine: "Mine",
+    held: "held",
+    owed: "owed",
+    breakItDown: "Break it down",
+    foldItAway: "Fold it away",
+    loansOutsideTotal: "Loans · outside the total",
+    accountCount_one: "{{count}} account",
+    accountCount_few: "{{count}} accounts",
+    accountCount_many: "{{count}} accounts",
+    accountCount_other: "{{count}} accounts",
+    accountsOf: "{{counted}} of {{total}} accounts",
     whatCounts: "What you see, and what counts",
     whatCountsBody:
       "An account can be in the list and out of the total. Hiding one takes it out of both — this is a view, not archiving.",
@@ -1133,14 +1147,12 @@ export const en = {
      * These two are a **contrast**, and only say anything as a pair. Where a
      * ledger has no shared account there is no *ours*, and a lone *mine* names
      * an opposite that is not on the screen — it reads as a filter someone
-     * applied, or a second figure they have not found yet. So a strip with one
-     * figure labels it by what it is (`whatYouHold`) and these two appear
-     * together or not at all.
+     * applied, or a second figure they have not found yet. So `HoldingsCard`
+     * titles one figure by what it is (`accounts.holdingsTitle`), and these
+     * two appear together or not at all.
      */
     mine: "mine",
     ours: "ours",
-    /** The one-figure label, where there is no *ours* to contrast it with. */
-    whatYouHold: "what you hold",
     openAccounts: "Open your accounts",
     alsoInOtherCurrencies_one: "Also held in {{count}} other currency",
     alsoInOtherCurrencies_few: "Also held in {{count}} other currencies",
