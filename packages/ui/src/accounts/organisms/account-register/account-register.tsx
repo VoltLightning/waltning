@@ -1007,13 +1007,19 @@ const useStyles = makeStyles((theme) => ({
     marginHorizontal: -space.x3b,
     paddingHorizontal: space.x3b,
   },
+  /**
+   * **The same room above the label as below it** (`design-system/05` §5.0).
+   * It was 16 above and 4 below — fine while rows follow, but a shut section
+   * put its label on the next rule. Even padding holds in both states, so the
+   * head does not change height when it opens.
+   */
   sectionHead: {
     flexDirection: "row",
     alignItems: "center",
     gap: space.md,
     minHeight: touchTarget.min,
-    paddingTop: space.x3,
-    paddingBottom: space.xs,
+    paddingTop: space.lg,
+    paddingBottom: space.lg,
   },
   sectionMark: {
     width: 19,

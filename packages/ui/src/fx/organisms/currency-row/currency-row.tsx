@@ -22,7 +22,7 @@ import { Toggle } from "../../../primitives/atoms/toggle/toggle";
 import { useInteraction } from "../../../primitives/interaction.ts";
 import { text } from "../../../theme/fonts.ts";
 import { makeStyles } from "../../../theme/styles.ts";
-import { focus, space, touchTarget } from "../../../tokens.ts";
+import { focus, hairline, space, touchTarget } from "../../../tokens.ts";
 import {
   CoverageStatus,
   type CoverageStatusProps,
@@ -60,6 +60,8 @@ export type CurrencyRowUsage = {
 
 export type CurrencyRowProps = {
   row: CurrencyRowData;
+  /** The first row in its card draws no rule above it. */
+  first?: boolean;
   coverage: CurrencyRowCoverage | undefined;
   usage?: CurrencyRowUsage | undefined;
   /** One row is open at a time — the caller owns which, so opening one closes the last. */
@@ -74,6 +76,7 @@ export type CurrencyRowProps = {
 
 export function CurrencyRow({
   row,
+  first = false,
   coverage,
   usage,
   expanded,
@@ -147,7 +150,7 @@ export function CurrencyRow({
     .join(" · ");
 
   return (
-    <View style={styles.row}>
+    <View style={first ? null : styles.separated}>
       {/*
         The whole header is the target — a disclosure chevron alone would be a
         10 px button on a 44 px row, the same reasoning `Toggle` states for
@@ -223,7 +226,13 @@ export function CurrencyRow({
 }
 
 const useStyles = makeStyles((theme) => ({
-  row: { borderBottomWidth: 1, borderBottomColor: theme.border },
+  /**
+   * A rule above every row but the first, never one below each: a rule below
+   * the last row floated inside the card's padding, and the card's gap landed
+   * above each rule, so a shut row sat 26 under the rule above it and 14 over
+   * the rule below (`design-system/05` §5.0).
+   */
+  separated: { borderTopWidth: hairline.width, borderTopColor: theme.border },
   /** §10's 44 pt floor — the whole header is the disclosure target. */
   rowHeader: { gap: space.xs, paddingVertical: space.x2, minHeight: touchTarget.min },
   /**

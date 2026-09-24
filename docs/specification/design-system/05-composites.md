@@ -1,5 +1,26 @@
 # Composites
 
+### 5.0 Disclosure heads
+
+**A collapsed head's words sit as far from the edge below them as from the
+edge above.** The edge is the neighbouring rule, or the container's own edge
+when the head is first or last. A head padded for the rows that follow it —
+room above, little below — puts its words on the next rule the moment it
+shuts, which is how the register's kind heads read (16 above, 4 below).
+
+- **The padding is the same open and shut**, so a head does not change height
+  as it opens; the rows below bring their own padding.
+- **Rows in one card separate with a rule above every row but the first**,
+  never a rule below each, and never the card's `gap` — a gap lands above each
+  rule and a rule below the last floats inside the card's padding.
+- **A head that is a card's foot reaches the card's edge** (a negative bottom
+  margin of the card's padding), so its words sit as far from that edge as
+  from its own rule.
+
+Holding today: `FieldsCard`'s and `LinesCard`'s rows, `ComposerRow`, `Select`,
+the register's kind heads, currency rows, and the holdings card's *Break it
+down*.
+
 ### 5.1 Structural
 
 | Component | Contents |

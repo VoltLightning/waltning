@@ -105,8 +105,16 @@ const useStyles = makeStyles((theme) => ({
     alignItems: "center",
     justifyContent: "space-between",
     gap: space.xl,
+    /*
+      **Room under the words.** The band ended where the subtitle's line did,
+      so the line sat on the band's lower edge — the edge the page grows a
+      rule along once it scrolls under it. The panel below adds its own top
+      padding for its content; this is the band's side of that seam.
+    */
+    paddingBottom: space.x2,
   },
-  words: { flex: 1, gap: space.xxs },
+  words: { flex: 1, gap: space.xs },
   title: { color: theme.text, ...text.ui("displayTwo") },
-  subtitle: { color: theme.textMuted, ...text.ui("label", 400) },
+  /** A step up from `label`: 13pt under a 23pt title read as a footnote to it. */
+  subtitle: { color: theme.textMuted, ...text.ui("bodySm") },
 }));

@@ -522,6 +522,10 @@ const useStyles = makeStyles((theme) => ({
     gap: space.sm,
     borderTopWidth: 1,
     borderTopColor: theme.border,
+    // The card's own bottom padding, taken back: the toggle is the card's
+    // foot, so its label sits as far from the card's edge as from its rule
+    // (`design-system/05` §5.0). It had 12.5 above and 30.5 below.
+    marginBottom: -space.x3b,
   },
   toggleLabel: { color: theme.accentText, ...text.ui("label", 600) },
   countLink: {
