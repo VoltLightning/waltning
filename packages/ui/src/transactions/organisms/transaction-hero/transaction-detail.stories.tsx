@@ -65,7 +65,7 @@ function DetailPreview({ phone }: { phone: boolean }) {
           brandKey={null}
           categoryName="Eating out"
         />
-        <ContextStrip cards={CARDS} />
+        <ContextStrip cards={CARDS} column={680} />
         <FieldsCard {...fieldsMeta.args} />
         <LinesCard lines={[]} total={toMoney("48.90")} currency="PLN" onSave={noop} />
         <View style={styles.deleteAction}>
@@ -79,7 +79,12 @@ function DetailPreview({ phone }: { phone: boolean }) {
 const useStyles = makeStyles(() => ({
   phone: { width: 390, maxWidth: "100%" },
   desk: { width: "100%" },
-  body: { paddingTop: space.x2, paddingHorizontal: gutter, paddingBottom: gutter, gap: space.x3 },
+  body: {
+    paddingTop: space.x2,
+    paddingHorizontal: gutter,
+    paddingBottom: gutter,
+    gap: space.x3,
+  },
   deleteAction: { alignItems: "flex-start", paddingTop: space.xl },
 }));
 

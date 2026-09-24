@@ -56,6 +56,7 @@ import { resolveFieldErrorMessage } from "@waltning/ui/i18n/field-error-messages
 import { dayLabel } from "@waltning/ui/i18n/locales";
 import { useLocale, useT } from "@waltning/ui/i18n/provider";
 import { Button } from "@waltning/ui/primitives/button";
+import { useBreakpoint } from "@waltning/ui/primitives/use-breakpoint";
 import { ErrorState } from "@waltning/ui/states/error-state";
 import { useTheme } from "@waltning/ui/theme/provider";
 import { makeStyles } from "@waltning/ui/theme/styles";
@@ -353,6 +354,7 @@ export default function TransactionDetail() {
   }, [detail, ledger, t, transactionId]);
 
   const theme = useTheme();
+  const phone = useBreakpoint() === "phone";
   const heroScroll = useHeroScroll();
   const context = useTransactionContext(ledger, live, snapshot.revision);
   const handleOpenCounterparty = useCallback(() => {
@@ -439,6 +441,7 @@ export default function TransactionDetail() {
     <PushedPage
       title={dayLabel(shown.date, locale)}
       tint={heroTint(shown.categoryName, theme).fill}
+      topWash={heroTint(shown.categoryName, theme).fill}
       titleNode={
         <HeroHeaderTitle
           scrollY={heroScroll.scrollY}
@@ -464,8 +467,16 @@ export default function TransactionDetail() {
         brandKey={shown.brandKey}
         scrollY={heroScroll.scrollY}
       />
+      {/*
+        On a phone the strip spans the page's full content width, outside the
+        680pt column, so its scroller can take the gutter back and reach both
+        screen edges — an iPad in portrait is a phone here, and inside the
+        column its cards were sliced at 720pt. At desk width the cards sit
+        side by side inside the column like everything else.
+      */}
+      {phone ? <ContextStrip cards={stripCards} column={COLUMN} /> : null}
       <View style={styles.content}>
-        <ContextStrip cards={stripCards} />
+        {phone ? null : <ContextStrip cards={stripCards} column={COLUMN} />}
         <FieldsCard
           fields={toFields(detail)}
           accounts={pickerAccounts}
@@ -524,7 +535,10 @@ export default function TransactionDetail() {
   );
 }
 
+/** The page's column: the details card's cap, and the context slides' with it. */
+const COLUMN = 680;
+
 const useStyles = makeStyles(() => ({
-  content: { width: "100%", maxWidth: 680, alignSelf: "flex-start", gap: space.x3 },
+  content: { width: "100%", maxWidth: COLUMN, alignSelf: "flex-start", gap: space.x3 },
   deleteAction: { alignItems: "flex-start", paddingTop: space.xl },
 }));

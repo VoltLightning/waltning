@@ -16,7 +16,7 @@
 
 import type { YearMonth } from "@waltning/core/date";
 import * as money from "@waltning/core/money";
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import {
   type LayoutChangeEvent,
   type NativeScrollEvent,
@@ -31,13 +31,15 @@ import { useLocale, useT } from "../../../i18n/provider";
 import { Button } from "../../../primitives/atoms/button/button";
 import { categoryTintFor } from "../../../primitives/monogram.ts";
 import { horizontalScrollProps } from "../../../primitives/nested-scroll.ts";
+import { useSafeArea } from "../../../primitives/safe-area";
 import { useBreakpoint } from "../../../primitives/use-breakpoint.ts";
 import { Card } from "../../../shell/molecules/card/card";
 import { text } from "../../../theme/fonts.ts";
 import { useTheme } from "../../../theme/provider";
 import { makeStyles } from "../../../theme/styles.ts";
-import { radius, space } from "../../../tokens.ts";
+import { gutter, radius, space } from "../../../tokens.ts";
 import { MonthBars, type MonthBarsMonth } from "../../molecules/month-bars/month-bars";
+import { pageAt, pagerGeometry } from "./pager-geometry.ts";
 
 type Figures = {
   currency: string;
@@ -74,30 +76,51 @@ export type ContextStripCard =
     })
   | { kind: "link"; onLink: () => void };
 
-export type ContextStripProps = { cards: readonly ContextStripCard[] };
+export type ContextStripProps = {
+  cards: readonly ContextStripCard[];
+  /**
+   * The widest the page's own cards get. A phone's slide is exactly as wide as
+   * the cards under it, so it takes the same cap they do.
+   */
+  column: number;
+};
 
-/** How much of the next card a phone shows, so the row reads as swipeable. */
-const PEEK = 44;
-
-export function ContextStrip({ cards }: ContextStripProps) {
+export function ContextStrip({ cards, column }: ContextStripProps) {
   const styles = useStyles();
   const t = useT();
   const phone = useBreakpoint() === "phone";
   const [width, setWidth] = useState(0);
   const [page, setPage] = useState(0);
+  const insets = useSafeArea();
 
+  /*
+    **The scroller runs edge to edge; the cards keep the gutter.** Inside the
+    page's padding the scroller clipped every card at the gutter, so a swipe
+    showed cards sliced by an invisible wall. The strip takes the padding
+    back, and gives it to the scroller's content instead: the first card still
+    starts on the gutter as wide as every card under it, the next one's edge
+    shows at the screen's, and a swiped card slides out past the screen
+    rather than into a margin. This
+    holds only while the strip spans the page's full content width — S09
+    places it outside its 680pt column on a phone for that reason.
+  */
+  const lead = gutter + insets.left;
+  const trail = gutter + insets.right;
   const handleLayout = useCallback((event: LayoutChangeEvent) => {
     setWidth(event.nativeEvent.layout.width);
   }, []);
-  const cardWidth = Math.max(0, width - PEEK);
+  const { cardWidth, snaps, trailPad } = useMemo(
+    () => pagerGeometry(width, cards.length, { lead, trail, gap: space.lg, column }),
+    [width, cards.length, lead, trail, column],
+  );
   const handleScroll = useCallback(
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
       if (cardWidth === 0) return;
-      const next = Math.round(event.nativeEvent.contentOffset.x / (cardWidth + space.lg));
+      const next = pageAt(snaps, event.nativeEvent.contentOffset.x);
       // Only a new page sets state — the scroll itself never re-renders the cards.
       setPage((current) => (current === next ? current : next));
     },
-    [cardWidth],
+    [cardWidth, snaps],
   );
 
   if (cards.length === 0) return null;
@@ -117,19 +140,21 @@ export function ContextStrip({ cards }: ContextStripProps) {
     );
   }
 
+  const bleed = { marginLeft: -lead, marginRight: -trail };
+  const offsets = { paddingLeft: lead, paddingRight: trailPad };
   return (
     <View accessibilityLabel={t("transactions.contextLabel")} style={styles.strip}>
-      <View onLayout={handleLayout}>
+      <View onLayout={handleLayout} style={bleed}>
         {width === 0 ? null : (
           <ScrollView
             {...horizontalScrollProps(styles.scroller)}
             horizontal
             showsHorizontalScrollIndicator={false}
-            snapToInterval={cardWidth + space.lg}
+            snapToOffsets={snaps}
             decelerationRate="fast"
             onScroll={handleScroll}
             scrollEventThrottle={32}
-            contentContainerStyle={styles.pager}
+            contentContainerStyle={[styles.pager, offsets]}
           >
             {rendered}
           </ScrollView>
