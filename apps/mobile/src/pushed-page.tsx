@@ -73,6 +73,8 @@ export type PushedPageProps = PushedHeaderProps & {
   scroll?: GroundPanelProps["scroll"];
   /** Passed straight through — a header that folds as the page moves. */
   onScroll?: GroundPanelProps["onScroll"];
+  /** Passed straight through — a page band's colour, continued above the page for a bounce. */
+  topWash?: GroundPanelProps["topWash"];
 };
 
 /**
@@ -91,6 +93,7 @@ export function PushedPage({
   children,
   scroll,
   onScroll,
+  topWash,
 }: PushedPageProps) {
   return (
     <>
@@ -103,6 +106,7 @@ export function PushedPage({
       <GroundPanel
         {...(scroll === undefined ? {} : { scroll })}
         {...(onScroll === undefined ? {} : { onScroll })}
+        {...(topWash === undefined ? {} : { topWash })}
       >
         {children}
       </GroundPanel>

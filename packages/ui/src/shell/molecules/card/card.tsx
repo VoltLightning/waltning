@@ -230,6 +230,16 @@ export type GroundPanelProps = {
    * the list is the one that can report it, and does.
    */
   onScroll?: ScrollHandler | undefined;
+  /**
+   * A colour the page's top continues upward when iOS bounces past it. A page
+   * that opens with a band of its own (S09's category wash, under a header
+   * of the same tint) would otherwise tear on a pull: the band travels down
+   * with the content and page ground opens between it and the header. Drawn
+   * here because this is the component that owns the scroller and clips its
+   * content — a fill painted by the band itself reaches outside whatever it
+   * is placed in. **Read in `scroll="page"` only.**
+   */
+  topWash?: string;
 };
 
 export function GroundPanel({
@@ -237,6 +247,7 @@ export function GroundPanel({
   scroll = "page",
   clearBottom = true,
   onScroll,
+  topWash,
 }: GroundPanelProps) {
   const styles = useStyles();
   const insets = useSafeArea();
@@ -263,6 +274,7 @@ export function GroundPanel({
   // on the device. The clearance goes on the scroll *content*, so the last row
   // clears the home indicator at the end of the travel rather than at the fold.
   const deviceBottom = clearBottom ? insets.bottom : 0;
+  const wash = topWash === undefined ? null : { backgroundColor: topWash };
   const clearance = {
     paddingLeft: gutter + insets.left,
     paddingRight: gutter + insets.right,
@@ -295,6 +307,7 @@ export function GroundPanel({
         ref={scroller}
       >
         <View ref={contentTop} {...CONTENT_TOP_MARK_PROPS} />
+        {wash === null ? null : <View style={[styles.topWash, wash]} />}
         {/* A refused submit on this page scrolls here to its first broken field. */}
         <FieldRevealProvider scroller={scroller} contentTop={contentTop}>
           {children}
@@ -404,6 +417,14 @@ const useStyles = makeStyles((theme) => ({
    */
   // The deck's gutter is 20 on the sides, and 14 between cards and above the
   // first — the same 14 the cards keep between themselves.
+  /**
+   * Above the content, out of sight until a pull. An absolute child is laid
+   * against the content's padding box, so `left`/`right: 0` is the scroller's
+   * full width. iOS rubber-banding keeps a pull to a fraction of the screen,
+   * so one screen height of wash is always enough; the 14pt overlap is the
+   * content's own top padding, where a page band starts.
+   */
+  topWash: { position: "absolute", left: 0, right: 0, top: -1200, height: 1200 + space.x2 },
   scrollContent: {
     paddingTop: space.x2,
     paddingHorizontal: gutter,

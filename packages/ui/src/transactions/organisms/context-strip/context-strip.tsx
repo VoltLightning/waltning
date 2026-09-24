@@ -16,7 +16,7 @@
 
 import type { YearMonth } from "@waltning/core/date";
 import * as money from "@waltning/core/money";
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import {
   type LayoutChangeEvent,
   type NativeScrollEvent,
@@ -39,6 +39,7 @@ import { useTheme } from "../../../theme/provider";
 import { makeStyles } from "../../../theme/styles.ts";
 import { gutter, radius, space } from "../../../tokens.ts";
 import { MonthBars, type MonthBarsMonth } from "../../molecules/month-bars/month-bars";
+import { pageAt, pagerGeometry } from "./pager-geometry.ts";
 
 type Figures = {
   currency: string;
@@ -77,9 +78,6 @@ export type ContextStripCard =
 
 export type ContextStripProps = { cards: readonly ContextStripCard[] };
 
-/** How much of the next card a phone shows, so the row reads as swipeable. */
-const PEEK = 28;
-
 export function ContextStrip({ cards }: ContextStripProps) {
   const styles = useStyles();
   const t = useT();
@@ -93,25 +91,29 @@ export function ContextStrip({ cards }: ContextStripProps) {
     page's padding the scroller clipped every card at the gutter, so a swipe
     showed cards sliced by an invisible wall. The strip takes the padding
     back, and gives it to the scroller's content instead: the first card still
-    starts on the gutter, the next one's edge shows at the screen's, and a
-    swiped card slides out past the screen rather than into a margin.
+    starts on the gutter as wide as every card under it, the next one's edge
+    shows at the screen's, and a swiped card slides out past the screen
+    rather than into a margin. This
+    holds only while the strip spans the page's full content width — S09
+    places it outside its 680pt column on a phone for that reason.
   */
   const lead = gutter + insets.left;
   const trail = gutter + insets.right;
   const handleLayout = useCallback((event: LayoutChangeEvent) => {
     setWidth(event.nativeEvent.layout.width);
   }, []);
-  const cardWidth = Math.max(0, width - lead - space.lg - PEEK);
-  const step = cardWidth + space.lg;
-  const snaps = cards.map((_card, index) => index * step);
+  const { cardWidth, snaps } = useMemo(
+    () => pagerGeometry(width, cards.length, { lead, trail, gap: space.lg }),
+    [width, cards.length, lead, trail],
+  );
   const handleScroll = useCallback(
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
       if (cardWidth === 0) return;
-      const next = Math.round(event.nativeEvent.contentOffset.x / (cardWidth + space.lg));
+      const next = pageAt(snaps, event.nativeEvent.contentOffset.x);
       // Only a new page sets state — the scroll itself never re-renders the cards.
       setPage((current) => (current === next ? current : next));
     },
-    [cardWidth],
+    [cardWidth, snaps],
   );
 
   if (cards.length === 0) return null;

@@ -58,9 +58,6 @@ import {
 } from "../../molecules/transaction-row/transaction-row";
 import { bandOpacity } from "./fold.ts";
 
-/** How far above the page the band's wash reaches, for iOS's bounce. */
-const OVERSCROLL = 1200;
-
 /** How far the figure rises on arrival. */
 const RISE = 12;
 /** The figure's beat behind the mark. */
@@ -185,49 +182,41 @@ export function TransactionHero({
     paddingRight: gutter + space.xs + insets.right,
   };
 
-  // The same wash, reaching up out of sight: iOS bounces the page down past
-  // its top, and without this a pull opened a slab of page ground between
-  // the tinted header and the band — the two halves of one band pulled apart.
-  const above = { backgroundColor: tint.fill };
-
   return (
-    <>
-      <View style={[styles.overscroll, above]} />
-      <View style={[styles.band, bleed]}>
-        <Animated.View style={[styles.contents, foldStyle]}>
-          <View style={styles.identity}>
-            <Animated.View style={markStyle}>
-              <BrandIcon
-                {...(brandKey !== undefined ? { brandKey } : {})}
-                enteredName={enteredName}
-                size={40}
-              />
-            </Animated.View>
-            <View style={styles.words}>
-              <Text
-                style={styles.name}
-                numberOfLines={2}
-                maxFontSizeMultiplier={textCap("displayTwo")}
-              >
-                {name}
-              </Text>
-              <Text style={[styles.context, ink]} numberOfLines={1}>
-                {direction === null ? where : `${direction} · ${where}`}
-              </Text>
-            </View>
-          </View>
-          <Animated.View style={figureStyle}>
-            <Amount
-              value={amount}
-              currency={currency}
-              decimals={decimals}
-              size="hero"
-              kind={type ? TRANSACTION_AMOUNT_KIND[type] : "auto"}
+    <View style={[styles.band, bleed]}>
+      <Animated.View style={[styles.contents, foldStyle]}>
+        <View style={styles.identity}>
+          <Animated.View style={markStyle}>
+            <BrandIcon
+              {...(brandKey !== undefined ? { brandKey } : {})}
+              enteredName={enteredName}
+              size={40}
             />
           </Animated.View>
+          <View style={styles.words}>
+            <Text
+              style={styles.name}
+              numberOfLines={2}
+              maxFontSizeMultiplier={textCap("displayTwo")}
+            >
+              {name}
+            </Text>
+            <Text style={[styles.context, ink]} numberOfLines={1}>
+              {direction === null ? where : `${direction} · ${where}`}
+            </Text>
+          </View>
+        </View>
+        <Animated.View style={figureStyle}>
+          <Amount
+            value={amount}
+            currency={currency}
+            decimals={decimals}
+            size="hero"
+            kind={type ? TRANSACTION_AMOUNT_KIND[type] : "auto"}
+          />
         </Animated.View>
-      </View>
-    </>
+      </Animated.View>
+    </View>
   );
 }
 
@@ -244,18 +233,6 @@ const useStyles = makeStyles((theme) => ({
     overflow: "hidden",
   },
   contents: { gap: space.x3 },
-  /**
-   * Taller than any pull: the page never bounces further than this. Drawn
-   * before the band, so the band's rounded foot lies over it.
-   */
-  // An absolute child spans the scroll content's padding box: edge to edge.
-  overscroll: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    top: -OVERSCROLL,
-    height: OVERSCROLL + space.x3,
-  },
   identity: { flexDirection: "row", alignItems: "center", gap: space.xl },
   words: { flex: 1, gap: space.xxs },
   name: { color: theme.text, ...text.ui("displayTwo") },

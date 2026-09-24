@@ -80,9 +80,6 @@ const useStyles = makeStyles(() => ({
   phone: { width: 390, maxWidth: "100%" },
   desk: { width: "100%" },
   body: {
-    // The app's page scroller clips its content; this stand-in has to as well,
-    // or the band's overscroll wash paints over the header above it.
-    overflow: "hidden",
     paddingTop: space.x2,
     paddingHorizontal: gutter,
     paddingBottom: gutter,
