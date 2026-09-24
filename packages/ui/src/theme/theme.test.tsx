@@ -16,7 +16,7 @@ import { dirname, join } from "node:path";
 import { render, screen } from "@testing-library/react";
 import { useEffect, useRef } from "react";
 import { describe, expect, it } from "vitest";
-import { accountKindRamp, categoryRamp, color, radius } from "../tokens.ts";
+import { accountKindRamp, categoryRamp, color, darkColor, radius } from "../tokens.ts";
 import { ThemeProvider, useTheme } from "./provider";
 import { dark, light, themes } from "./roles.ts";
 import { makeStyles } from "./styles.ts";
@@ -730,6 +730,59 @@ describe("a component follows the active theme", () => {
     expect(new Set(kinds).size).toBe(kinds.length);
     expect(new Set(accountKindRamp.map((step) => step.darkTint)).size).toBe(kinds.length);
     expect(new Set(accountKindRamp.map((step) => step.tint)).size).toBe(kinds.length);
+  });
+
+  /**
+   * **Every kind told apart at a glance**, in both themes. Distance is OKLab,
+   * ×100 — the scale on which the old earth-tone ramp's nearest pair sat at
+   * 2.6, which is why a nine-kind bar read as three colours. Money's two
+   * colours are held off too: a kind that looked like `income` or `spend`
+   * would be read as a figure's sign.
+   */
+  it("keeps every kind's ink far from every other's, and from money's colours", () => {
+    const toLinear = (c: number) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+    const channel = (hex: string, at: number) =>
+      toLinear(Number.parseInt(hex.slice(at, at + 2), 16) / 255);
+    const oklab = (hex: string): readonly [number, number, number] => {
+      const [r, g, b] = [channel(hex, 1), channel(hex, 3), channel(hex, 5)];
+      const l = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b);
+      const m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b);
+      const s = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b);
+      return [
+        0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s,
+        1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s,
+        0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s,
+      ];
+    };
+    const distance = (a: string, b: string) => {
+      const [x, y] = [oklab(a), oklab(b)];
+      return Math.hypot(x[0] - y[0], x[1] - y[1], x[2] - y[2]) * 100;
+    };
+    const themes = [
+      {
+        name: "light",
+        inks: accountKindRamp.map((step) => [step.kind, step.ink] as const),
+        money: [color.income, color.spend],
+      },
+      {
+        name: "dark",
+        inks: accountKindRamp.map((step) => [step.kind, step.darkInk] as const),
+        money: [darkColor.income, darkColor.spend],
+      },
+    ];
+    for (const theme of themes) {
+      for (const [index, [kind, ink]] of theme.inks.entries()) {
+        for (const [other, otherInk] of theme.inks.slice(index + 1)) {
+          expect(
+            distance(ink, otherInk),
+            `${kind} ~ ${other}, ${theme.name}`,
+          ).toBeGreaterThanOrEqual(10);
+        }
+        for (const figure of theme.money) {
+          expect(distance(ink, figure), `${kind} ~ money, ${theme.name}`).toBeGreaterThanOrEqual(9);
+        }
+      }
+    }
   });
 
   it("carries white on every category mark", () => {

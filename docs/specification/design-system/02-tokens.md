@@ -267,13 +267,13 @@ without being classed.
 
 `accountKindRamp` — nine kinds, nine hues, a `tint` and an `ink` per theme.
 
-**Not the category ramp, and the reason is what each is for.** `categoryRamp`
-exists to make one leaf findable among fifty-nine in a picker, so its inks are
-bright by design. A register is the opposite problem: nine kinds, each a run of
-rows you read rather than hunt, on a page of money. Borrowing those hues put a
-blue, a magenta and a lime on a ledger. Every pair here is low chroma and lives
-in the same warm ground the page does — slate blue, moss, clay, tobacco, sage,
-brick, deep teal, stone, warm grey.
+**Nine colours told apart at a glance.** A kind's colour is read in a bar and
+a list side by side — S04's breakdown, S16's register — so the job is telling
+nine apart, not blending them into the page. Every pair of inks is at least 10
+apart in OKLab (×100) in both themes; the earth-tone ramp this replaces had its
+nearest pair at 2.6, and a nine-kind bar read as three colours. Chroma is capped
+so none glows: blue, teal, rose, slate, violet, umber, warm grey, sky and rust
+in light, and their lifted twins in dark.
 
 **A hue is never reassigned.** An account's kind does not change and neither
 should its mark: a colour that moved when a tenth kind arrived would silently
@@ -287,9 +287,10 @@ square of its own `ink`, and the section label beside it takes that same `ink`
 themes (`theme.test.tsx`). `categoryRamp` needs a third because its marks
 carry white letters; these carry nothing.
 
-**No red, for `categoryRamp`'s own reason.** Red is `spend` and `danger`.
-`loan_payable` is brick — a desaturated red-brown that reads as earth rather
-than as a refusal — and nothing comes nearer than that.
+**Green and red stay money's.** `income` and `spend` are the colours a figure is
+read by, so every kind keeps at least 9 from both: *cash* is teal rather than
+green, *loan_payable* rust rather than red. `theme.test.tsx` holds both
+distances.
 
 ### 2.2 Typography
 

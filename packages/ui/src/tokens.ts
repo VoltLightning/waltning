@@ -434,14 +434,14 @@ export const categoryRamp = [
 ] as const;
 
 /**
- * **One colour per account kind, and a grounded one.**
+ * **One colour per account kind, and every one told apart at a glance.**
  *
- * `categoryRamp` above exists to make one leaf findable among fifty-nine in a
- * picker, so its inks are bright by design. A register is the opposite
- * problem: nine kinds, each a run of rows you read rather than hunt, on a page
- * of money. Borrowing the category hues put a blue, a magenta and a lime on
- * a ledger, which is the version this replaces — every pair here is low chroma
- * and lives in the same warm-charcoal (or warm-paper) world as the ground.
+ * Nine kinds in one bar and one list — S04's breakdown and S16's register —
+ * so the job is telling nine colours apart, and a ramp of low-chroma earth
+ * tones failed it: its two nearest inks were 2.6 apart in OKLab, below what
+ * reads as two colours on a phone. Every pair here is at least 10 apart in
+ * both themes (`theme.test.tsx`), in hue and lightness both, and chroma is
+ * capped so none of them glows — calm, and still nine different things.
  *
  * **Nine kinds and nine hues, so a colour is never reassigned.** The kind of
  * an account does not change, and neither should its mark: a hue that moved
@@ -450,85 +450,84 @@ export const categoryRamp = [
  * **Two values, not three.** A kind's mark is the `tint` filled with a small
  * square of its own `ink`, and the section label takes that same `ink` — so
  * the one pair is held to 4.5:1 in both themes (`theme.test.tsx`) and there is
- * no third colour that could drift out of step with it. The category ramp
- * needs a `solid` because its marks carry white letters; these carry nothing.
+ * no third colour that could drift out of step with it.
  *
- * **No red, for `categoryRamp`'s own reason.** Red is `spend` and `danger`.
- * `loan_payable` is brick — a desaturated red-brown that reads as earth rather
- * than as a refusal — and nothing here comes nearer than that.
+ * **Green and red stay money's.** `income` and `spend` are the colours a
+ * figure is read by, so every kind keeps its distance from both (the same
+ * test): *cash* is teal rather than green, *loan_payable* rust rather than red.
  */
 export const accountKindRamp = [
   {
     kind: "bank",
-    name: "slate blue",
-    tint: "#e3e8ee",
-    ink: "#3e5570",
-    darkTint: "#35465a",
-    darkInk: "#9db4c9",
+    name: "blue",
+    tint: "#e8f1fe",
+    ink: "#003988",
+    darkTint: "#29364a",
+    darkInk: "#70a1ea",
   },
   {
     kind: "cash",
-    name: "moss",
-    tint: "#e8ecdf",
-    ink: "#4b5a34",
-    darkTint: "#3c4a2c",
-    darkInk: "#b0bf93",
+    name: "teal",
+    tint: "#e4f5ee",
+    ink: "#004a36",
+    darkTint: "#1f3c32",
+    darkInk: "#42bc98",
   },
   {
     kind: "card",
-    name: "clay",
-    tint: "#f0e4e0",
-    ink: "#6d4238",
-    darkTint: "#5b3b33",
-    darkInk: "#d9aea3",
+    name: "rose",
+    tint: "#fcebf1",
+    ink: "#a14b70",
+    darkTint: "#462d36",
+    darkInk: "#df86aa",
   },
   {
     kind: "clearing",
-    name: "tobacco",
-    tint: "#efe7d8",
-    ink: "#6a5225",
-    darkTint: "#574327",
-    darkInk: "#d4b184",
+    name: "slate",
+    tint: "#eef0f3",
+    ink: "#465463",
+    darkTint: "#323639",
+    darkInk: "#bfc5cb",
   },
   {
     kind: "loan_receivable",
-    name: "sage",
-    tint: "#e4eae4",
-    ink: "#42553f",
-    darkTint: "#3d4a3f",
-    darkInk: "#a8bda9",
+    name: "sky",
+    tint: "#e2f4f9",
+    ink: "#007499",
+    darkTint: "#1b3a43",
+    darkInk: "#50d1f1",
   },
   {
     kind: "loan_payable",
-    name: "brick",
-    tint: "#f2e2e3",
-    ink: "#6b3a40",
-    darkTint: "#503339",
-    darkInk: "#cca4aa",
+    name: "rust",
+    tint: "#fdece8",
+    ink: "#873d2e",
+    darkTint: "#482e28",
+    darkInk: "#ffa591",
   },
   {
     kind: "investment",
-    name: "deep teal",
-    tint: "#dfeae8",
-    ink: "#2d5854",
-    darkTint: "#2c4a48",
-    darkInk: "#93bcb8",
+    name: "violet",
+    tint: "#f1eefd",
+    ink: "#6f56aa",
+    darkTint: "#373148",
+    darkInk: "#c1abff",
   },
   {
     kind: "deposit",
-    name: "stone",
-    tint: "#ece7df",
-    ink: "#5a5043",
-    darkTint: "#4a4236",
-    darkInk: "#c3b69f",
+    name: "umber",
+    tint: "#faeee3",
+    ink: "#553516",
+    darkTint: "#443120",
+    darkInk: "#d8914e",
   },
   {
     kind: "other",
     name: "warm grey",
-    tint: "#eae7e2",
-    ink: "#504a42",
-    darkTint: "#3f3a33",
-    darkInk: "#b6ada0",
+    tint: "#f2f0ec",
+    ink: "#776959",
+    darkTint: "#383531",
+    darkInk: "#9f9f9f",
   },
 ] as const;
 
