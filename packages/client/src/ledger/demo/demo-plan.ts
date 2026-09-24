@@ -515,6 +515,15 @@ export const DEMO_COUNTERPARTIES: readonly DemoCounterparty[] = [
   { ref: "owing", name: "Marta", kind: "person", settlementCurrency: null },
   { ref: "owed", name: "Piotr", kind: "person", settlementCurrency: null },
   { ref: "settled", name: "Studio B", kind: "company", settlementCurrency: null },
+  // **Not only Polish names.** The ledger is kept in three languages, and a
+  // directory of Polish names never exercises `fold()` on an umlaut or on
+  // Cyrillic at all — the two scripts its uniqueness rule most needs to hold
+  // for. A German friend settling in euros, and a Belarusian one written in
+  // his own alphabet.
+  { ref: "de-owing", name: "Jürgen", kind: "person", settlementCurrency: "EUR" },
+  { ref: "by-owed", name: "Алесь", kind: "person", settlementCurrency: null },
+  // And a dollar debt, so S12's totals carry a third currency.
+  { ref: "us-owing", name: "John Henry", kind: "person", settlementCurrency: "USD" },
 ];
 
 /**
@@ -569,6 +578,39 @@ export const DEMO_DEBTS: readonly DemoDebt[] = [
     type: "income",
     amount: "1400.00",
     daysAgo: 21,
+  },
+  // A euro debt, on the euro card, owed by someone who settles in euros.
+  {
+    counterparty: "de-owing",
+    role: "debt",
+    account: "card-a",
+    category: "Eating out",
+    enteredName: "Concert · tickets",
+    type: "expense",
+    amount: "84.00",
+    daysAgo: 9,
+  },
+  {
+    counterparty: "us-owing",
+    role: "debt",
+    account: "bank-b",
+    category: "Taxi",
+    enteredName: "Airport taxi · shared",
+    type: "expense",
+    amount: "45.00",
+    daysAgo: 3,
+  },
+  // Money that arrived and is owed back — filed under `Borrowed`, the income
+  // leaf for exactly that.
+  {
+    counterparty: "by-owed",
+    role: "debt",
+    account: "cash",
+    category: "Borrowed",
+    enteredName: "Cash · until Friday",
+    type: "income",
+    amount: "300.00",
+    daysAgo: 6,
   },
   // Settled: the debt, then the settlement that clears it.
   {

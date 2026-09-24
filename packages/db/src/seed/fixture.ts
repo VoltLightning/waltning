@@ -457,6 +457,10 @@ const COUNTERPARTIES: FixtureCounterparty[] = [
   { ref: "owed", name: "Olek Placeholder", kind: "person" },
   { ref: "settled", name: "Studio B", kind: "company" },
   { ref: "company", name: "Agency C", kind: "company" },
+  // Not only Polish: an umlaut and Cyrillic are the two scripts
+  // `counterparties_name_uq`'s fold most needs to hold for.
+  { ref: "de-owing", name: "Jürgen Platzhalter", kind: "person" },
+  { ref: "by-owed", name: "Алесь Заменнік", kind: "person" },
 ];
 
 /**
@@ -519,6 +523,26 @@ export const OBLIGATIONS: FixtureObligation[] = [
     type: "income",
     amount: "130.00",
     daysAgo: 9,
+  },
+  {
+    counterparty: "de-owing",
+    role: "debt",
+    account: "bank-a",
+    category: "Eating out",
+    enteredName: "Concert · tickets",
+    type: "expense",
+    amount: "84.00",
+    daysAgo: 9,
+  },
+  {
+    counterparty: "by-owed",
+    role: "debt",
+    account: "cash",
+    category: "Borrowed",
+    enteredName: "Cash · until Friday",
+    type: "income",
+    amount: "300.00",
+    daysAgo: 6,
   },
   // Saved, dealt with, and square — the directory's other half.
   {
