@@ -102,12 +102,6 @@ export type HomeListPageProps = {
   onPickDay: (date: string) => void;
   onOpenTransaction: (id: string) => void;
   /**
-   * Short swipe (S04 §7). The kind travels with the id because the screen owns
-   * the sheet and the sheet needs to know which tree to open — and this page
-   * is the only thing holding the row.
-   */
-  onCategorize: (id: string, kind: "income" | "expense") => void;
-  /**
    * The way back from a jump (§6). The pill is drawn only when the anchor is
    * not today, so this is never the no-op it looks like.
    */
@@ -190,7 +184,6 @@ function HomeListPageView({
   pivotDecimals,
   onPickDay,
   onOpenTransaction,
-  onCategorize,
   onReturnToToday,
   query,
   accountId,
@@ -735,8 +728,8 @@ function HomeListPageView({
    * and re-render every visible row on the next scroll frame.
    */
   const handlers = useMemo<ListEntryHandlers>(
-    () => ({ onOpenTransaction, onCategorize, onPickDay }),
-    [onOpenTransaction, onCategorize, onPickDay],
+    () => ({ onOpenTransaction, onPickDay }),
+    [onOpenTransaction, onPickDay],
   );
 
   /**

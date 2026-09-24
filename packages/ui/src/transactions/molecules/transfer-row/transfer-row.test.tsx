@@ -41,6 +41,23 @@ describe("TransferRow", () => {
     expect(screen.getByText("31.25")).toBeDefined();
   });
 
+  /** Inside a day group the header has given the date — a transfer is no exception. */
+  it("draws no date when its day group has already given it", () => {
+    render(
+      <TransferRow
+        date="2026-01-05"
+        fromAccountName="A"
+        toAccountName="B"
+        amount={money.toMoney("-10.00000000")}
+        currency="PLN"
+        toAmount={money.toMoney("10.00000000")}
+        toCurrency="PLN"
+        withDate={false}
+      />,
+    );
+    expect(screen.queryByText("01-05")).toBeNull();
+  });
+
   it("shows the bare accounting date, never through a Date", () => {
     render(
       <TransferRow

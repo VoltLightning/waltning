@@ -665,8 +665,15 @@ everything between needs a rule.
 ## 7. Interaction
 
 `+` floats and is placed by the thumb that uses it. Pull to refresh re-syncs
-rates and balances. Rows swipe to categorize (short) and to edit (long) — never
-to delete (`design-system/05` §5.6). Haptic on save arrival.
+rates and balances. **Rows answer a tap and nothing else** — no swipe. S04 is
+four pages a swipe moves between, and a row that also slid under the finger
+claimed that swipe for itself: the content moved inside the card and the page
+stayed put. Categorising and editing are one tap away, in S09, where every
+field of a row lives. Haptic on save arrival.
+
+**A row gives its date to its day.** Inside a day group every row leaves the
+date to the group's header, a transfer included — it was the one row that
+drew its own, so a day of expenses and one transfer had a date on one line.
 
 Tapping the unsettled banner goes **straight to the unallocated transaction**,
 not to a list. A warning that costs you a search is a warning you learn to
@@ -746,14 +753,6 @@ place it is stuck, because a strip that did not move when asked is against its
 own end. The track's width is computed from the band and the count of cells,
 never taken from a content-size report, which the web does not repeat when the
 track's padding changes.
-
-**A row owns one axis and gives back the other.** The transaction rows swipe
-sideways (below) inside a list that scrolls vertically, and a pan told only a
-minimum distance activates in *any* direction — so every attempt to scroll that
-began on a row, which is most of the surface of this page, was claimed by that
-row and the list stood still. A row activates on sideways travel and fails on
-downward travel, with the sideways threshold the larger of the two, so the
-gesture a reader makes constantly wins ties over the one they make rarely.
 
 **A fling is damped, and only a fling.** Below fifteen days a second the strip
 tracks the list exactly — and *exactly* is a promise about a speed, not about a

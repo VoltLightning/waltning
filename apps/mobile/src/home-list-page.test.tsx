@@ -78,7 +78,6 @@ function draw(
     anchor?: AccountingDate;
     onReturnToToday?: () => void;
     onVisibleDay?: (date: AccountingDate) => void;
-    onCategorize?: () => void;
     query?: string | null;
     accountId?: string | null;
   } = {},
@@ -97,7 +96,6 @@ function draw(
           accountId={over.accountId ?? null}
           onPickDay={onPickDay}
           onOpenTransaction={vi.fn()}
-          onCategorize={over.onCategorize ?? vi.fn()}
           onReturnToToday={over.onReturnToToday ?? vi.fn()}
           query={over.query ?? null}
           scrollY={scrollY}
@@ -229,23 +227,34 @@ it("names where the list is, and returns it", () => {
 });
 
 /**
- * **§7 gives every row two gestures, and the phone list passed neither.**
- * `LedgerRowItem` has taken `onShortSwipe`/`onLongSwipe` since S10 wired them
- * on the desk; this page rendered it with `onPress` alone, so every row was
- * tap-only and the component silently fell back to a plain `EntryRow`.
- *
- * The swipe itself is `SwipeableRow`'s and is tested there. What this pins is
- * that the row is wrapped in one at all, which is the thing that was missing.
+ * **A row does not slide, because the page already owns sideways** (S04 §7).
+ * S04 is four pages a swipe moves between; a row wrapped in `SwipeableRow`
+ * claimed that swipe for itself, so the content moved inside the card and the
+ * page stayed put. Categorising and editing are a tap away, in S09.
  */
-it("wraps a categorisable row in the layer its gestures move", () => {
+it("draws an expense row with no layer that travels sideways", () => {
   draw(ledgerWith([row("2026-08-14", 1, "-96")]));
-  // `SwipeableRow` is the only thing on this row that can travel sideways, so
-  // a `translateX` above the button is the wrapper's own signature. Asserting
-  // the handler props instead would prove the page passes them, not that
-  // `LedgerRowItem` accepted both and built the row it builds when it does.
+  // `SwipeableRow` is the only thing that could put a `translateX` above the
+  // row's button, so its absence is the check — not the absence of a prop.
   const button = screen.getByRole("button", { name: /EnteredName 1/ });
-  const travelled = button.closest("[style*='translateX']");
-  expect(travelled, "an expense takes both gestures (§7)").not.toBeNull();
+  expect(button.closest("[style*='translateX']"), "no swipe on S04's rows").toBeNull();
+});
+
+/** The day header gives the date; a transfer row does not say it again. */
+it("draws a transfer without a date of its own, like every row in a day", () => {
+  draw(
+    ledgerWith([
+      row("2026-08-14", 1, "-96", {
+        type: "transfer",
+        toAccountName: "Bank B",
+        toAmount: toMoney("96.00"),
+        toCurrency: PLN,
+        toDecimals: 2,
+        toFxRate: pivotPerUnit("1"),
+      }),
+    ]),
+  );
+  expect(screen.queryByText("08-14")).toBeNull();
 });
 
 it("leaves a transfer tap-only, because it has no category to choose", () => {
