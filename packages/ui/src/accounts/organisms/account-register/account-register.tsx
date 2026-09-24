@@ -687,7 +687,11 @@ function RegisterSection({
         aria-expanded={open}
         onPress={onToggle}
         {...handlers}
-        style={[styles.sectionHead, focused ? styles.focused : null]}
+        style={[
+          styles.sectionHead,
+          open ? null : styles.sectionHeadShut,
+          focused ? styles.focused : null,
+        ]}
       >
         {tint === undefined ? null : (
           <View style={[styles.sectionMark, markFill]}>
@@ -1008,19 +1012,20 @@ const useStyles = makeStyles((theme) => ({
     paddingHorizontal: space.x3b,
   },
   /**
-   * **The same room above the label as below it** (`design-system/05` §5.0).
-   * It was 16 above and 4 below — fine while rows follow, but a shut section
-   * put its label on the next rule. Even padding holds in both states, so the
-   * head does not change height when it opens.
+   * Open, the label belongs to the rows under it: room above, little below
+   * (S16's drawing). Shut, nothing follows, and that same 4 put the label on
+   * the next rule — `sectionHeadShut` gives it the room it has above
+   * (`design-system/05` §5.0).
    */
   sectionHead: {
     flexDirection: "row",
     alignItems: "center",
     gap: space.md,
     minHeight: touchTarget.min,
-    paddingTop: space.lg,
-    paddingBottom: space.lg,
+    paddingTop: space.x3,
+    paddingBottom: space.xs,
   },
+  sectionHeadShut: { paddingBottom: space.x3 },
   sectionMark: {
     width: 19,
     height: 19,
