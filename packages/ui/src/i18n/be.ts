@@ -566,6 +566,7 @@ export const be: Messages = {
     showAdd: "Паказаць кнопку дадання",
     mine: "маё",
     ours: "нашае",
+    whatYouHold: "што ў вас ёсць",
     openAccounts: "Адкрыць рахункі",
     alsoInOtherCurrencies_one: "Ёсць яшчэ ў {{count}} валюце",
     alsoInOtherCurrencies_few: "Ёсць яшчэ ў {{count}} валютах",

@@ -112,12 +112,27 @@ export function FxAmount({
     );
 
   if (stacked) {
+    // **Stacked drops the rate, and keeps only a marker that varies.**
+    //
+    // The rate is a property of a *currency on a date*, not of a row — so in
+    // a list that is as of today (S16's register, S12's directory), the same
+    // four decimals repeat down every row holding euros and say nothing new on
+    // any of them. Inline it still shows, because there each row carries its
+    // own date and the rate is what differs between them — and `BalanceLedger`
+    // keeps the inline form for exactly that, stating the rate's date beside
+    // it rather than letting it read as today's.
+    //
+    // `override` goes for a harder reason: a self-hosted ledger with no rate
+    // feed has *every* rate set by hand, so the amber `manual` tag fires on
+    // every foreign row forever. A marker that never varies marks nothing —
+    // it reads as a warning and carries no information, which is worse than
+    // silence (P4 is about a figure being asserted rather than observed, and
+    // "all of them are" is the answer here). `stale` and `estimated` stay:
+    // both vary, and both say this particular figure may be wrong.
     return (
       <View style={styles.stacked}>
         <Amount value={value} currency={currency} decimals={decimals} />
         <View style={styles.under}>
-          <Text style={styles.rate}>{money.toMoney(rate, rateDecimals)}</Text>
-          <Text style={styles.separator}>·</Text>
           <Amount
             value={converted}
             currency={displayCurrency}
@@ -125,7 +140,7 @@ export function FxAmount({
             size="small"
             emphasis="muted"
           />
-          {tag}
+          {provenance.kind === "override" ? null : tag}
         </View>
       </View>
     );

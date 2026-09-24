@@ -39,6 +39,15 @@ Archived parties appear in neither; they are finished, not filtered. Existing
 balance rows stay inspectable after settlement, through the party's own detail
 (S13).
 
+**The split is only visible in data that has both sides of it.** A directory
+where everyone is open makes *Open* look like it works while it filters
+nothing, so the development fixture carries somebody who owes, somebody who is
+owed, a debt settled in full, and a `contribution` — the role that deliberately
+moves no balance (§6.6) — and `fixture.test.ts` refuses a list missing any of
+them. Every obligation row there sets **both** links (§6.6.1): a fixture that
+set only the obligation leaves the identity link with nothing behind it on any
+screen that reads it.
+
 
 ## 3. Layout
 

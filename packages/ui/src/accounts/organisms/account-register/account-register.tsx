@@ -484,7 +484,11 @@ export function AccountRegister({
       <SearchField
         value={query}
         onChangeText={setQuery}
-        placeholder={t("common.search")}
+        // `accounts.search` — *"Search 11 accounts"*, the same placeholder
+        // `AccountPicker` already uses. The generic `common.search` was left
+        // here when the register was rebuilt, so the one screen that is
+        // entirely about accounts said less than the sheet that lists them.
+        placeholder={t("accounts.search", { count: accounts.length })}
         onClear={handleClear}
         {...(resultCount === undefined ? {} : { resultCount })}
       />

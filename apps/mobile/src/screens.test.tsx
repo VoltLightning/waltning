@@ -710,11 +710,16 @@ describe("Today", () => {
   /**
    * `DualTotal`'s own contract: `ours: null`, not the same figure as `mine`,
    * when no shared account exists — never a household total printed twice.
+   *
+   * And with nothing to contrast it against, the surviving figure is named by
+   * what it is rather than whose it is: *mine* alone points at an *ours* the
+   * screen does not have (`design-system/05`, `NetWorthStrip`).
    */
   it("shows one figure, not ours repeated, when the ledger holds no shared account", () => {
     withLedger(<Today />, fakeController({ accounts: [PLN_ACCOUNT] }));
 
-    expect(screen.getByText("mine")).toBeDefined();
+    expect(screen.getByText("what you hold")).toBeDefined();
+    expect(screen.queryByText("mine")).toBeNull();
     expect(screen.queryByText("ours")).toBeNull();
   });
 
@@ -1281,7 +1286,9 @@ describe("CategoriesScreen", () => {
   it("filters the tree by search, keeping a matched leaf's group visible", () => {
     withLedger(<CategoriesScreen />, fakeController({ categories: tree, categoryUsage: usage }));
 
-    fireEvent.change(screen.getByPlaceholderText("Search…"), { target: { value: "eating" } });
+    fireEvent.change(screen.getByPlaceholderText(/^Search \d+ categories$/), {
+      target: { value: "eating" },
+    });
 
     expect(screen.getByText("Food")).toBeDefined();
     expect(screen.getByText("Eating out")).toBeDefined();

@@ -56,16 +56,72 @@ describe("the demo ledger's accounts", () => {
    * rather than silently exempted by a weaker assertion.
    */
   it("all see activity, the clearing pot excepted", () => {
-    const moved = new Set(DEMO_PATTERNS.map((pattern) => pattern.account));
+    // Either leg counts: a savings account nothing spends from still sees
+    // money, and it arrives as a transfer's destination.
+    const moved = new Set(
+      DEMO_PATTERNS.flatMap((pattern) =>
+        pattern.toAccount === undefined ? [pattern.account] : [pattern.account, pattern.toAccount],
+      ),
+    );
     const idle = DEMO_ACCOUNTS.filter(
       (account) => account.kind !== "clearing" && !moved.has(account.ref),
     ).map((account) => account.ref);
     expect(idle, "accounts with a balance and no transactions").toEqual([]);
   });
 
+  /**
+   * **A flag nothing sets is a tag nobody sees.** `BalanceRow` has drawn a
+   * `BIZ` tag since S16 §4 and no demo account was ever business, so the
+   * branch rendered in a story and never on a screen.
+   */
+  it("mark one account business, so the BIZ tag is drawn at all", () => {
+    expect(DEMO_ACCOUNTS.some((account) => account.isBusiness === true)).toBe(true);
+  });
+
   it("only spend through categories the demo actually creates", () => {
     const known = new Set(DEMO_CATEGORIES.map((category) => category.name));
-    const unknown = DEMO_PATTERNS.map((p) => p.category).filter((name) => !known.has(name));
+    const unknown = DEMO_PATTERNS.filter((p) => p.toAccount === undefined)
+      .map((p) => p.category)
+      .filter((name) => !known.has(name));
     expect([...new Set(unknown)], "patterns naming a category nothing seeds").toEqual([]);
+  });
+
+  /**
+   * **A transfer carries no category, and §7.5 is why**: it moves money
+   * between two of your own accounts, so categorising it would double count
+   * it against the same spend total.
+   */
+  it("give transfers a destination and no category", () => {
+    for (const pattern of DEMO_PATTERNS.filter((p) => p.toAccount !== undefined)) {
+      expect(pattern.category, `${pattern.enteredName} is a transfer`).toBe("");
+      expect(pattern.toAccount, `${pattern.enteredName}'s destination`).not.toBe(pattern.account);
+    }
+  });
+
+  /**
+   * **The demo has to circulate, not accumulate.** Before the transfers
+   * existed money arrived in the banks every month and left the wallet every
+   * month with nothing carrying it back: 26 months in the current account
+   * held 248 000 zł and cash was 3 585 zł *negative*. Nobody can judge a
+   * screen against figures nobody could hold.
+   *
+   * So: every account somebody spends from is topped up or paid off by a
+   * transfer. Stated as a property rather than a number, because the numbers
+   * are meant to be tuned and the rule is not.
+   */
+  it("top up or pay off every account that is spent from", () => {
+    const spendsFrom = new Set(
+      DEMO_PATTERNS.filter((p) => p.toAccount === undefined && p.type === "expense").map(
+        (p) => p.account,
+      ),
+    );
+    const fed = new Set([
+      ...DEMO_PATTERNS.filter((p) => p.toAccount !== undefined).map((p) => p.toAccount),
+      ...DEMO_PATTERNS.filter((p) => p.toAccount === undefined && p.type === "income").map(
+        (p) => p.account,
+      ),
+    ]);
+    const drains = [...spendsFrom].filter((account) => !fed.has(account));
+    expect(drains, "accounts that only ever lose money").toEqual([]);
   });
 });

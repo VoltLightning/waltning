@@ -363,7 +363,10 @@ trigger (§6.5); allowing it would silently reinterpret every row.
 - **§6.7** — both totals; shared distinct, not lesser; negative shared balances
   are ordinary.
 - **§6.4** — a clearing account trends to zero, and non-zero is surfaced.
-- **P1** — every foreign balance carries its rate.
+- **P1** — every foreign balance is *built* from a rate and cannot render
+  without one. It does not *print* it: one date for every row means one rate
+  per currency, so the figure shows and the rate lives in S18
+  (`design-system/04` §4.2).
 - **Archive, never delete** — history references accounts (§6.9).
 - **§8.4** — opening balance is derived on migration, typed only for accounts
   created afterwards.

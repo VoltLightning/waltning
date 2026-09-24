@@ -1127,9 +1127,20 @@ export const en = {
     add: "Add",
     /** The parked tab that brings the add button back. */
     showAdd: "Show the add button",
-    /** §6.7 — lower case, deliberately: a label beneath a figure, not a heading. */
+    /**
+     * §6.7 — lower case, deliberately: a label beneath a figure, not a heading.
+     *
+     * These two are a **contrast**, and only say anything as a pair. Where a
+     * ledger has no shared account there is no *ours*, and a lone *mine* names
+     * an opposite that is not on the screen — it reads as a filter someone
+     * applied, or a second figure they have not found yet. So a strip with one
+     * figure labels it by what it is (`whatYouHold`) and these two appear
+     * together or not at all.
+     */
     mine: "mine",
     ours: "ours",
+    /** The one-figure label, where there is no *ours* to contrast it with. */
+    whatYouHold: "what you hold",
     openAccounts: "Open your accounts",
     alsoInOtherCurrencies_one: "Also held in {{count}} other currency",
     alsoInOtherCurrencies_few: "Also held in {{count}} other currencies",

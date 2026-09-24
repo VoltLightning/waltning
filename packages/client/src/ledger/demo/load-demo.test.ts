@@ -411,6 +411,25 @@ describe("the people money moves between", () => {
     expect(withCounterparty.every(([draft]) => draft.obligationRole !== null)).toBe(true);
   });
 
+  /**
+   * §6.6.1 — **both** links on every obligation row. The two say different
+   * things (who it was with; who owes because of it) and the demo used to set
+   * only the second, which left the identity link with nothing behind it on
+   * any screen that reads it.
+   */
+  it("names who the row was with, as well as who owes because of it", () => {
+    const t = target();
+    loadDemo(t, TODAY, 1);
+
+    const obligations = vi
+      .mocked(t.createTransaction)
+      .mock.calls.filter(([draft]) => draft.obligationCounterpartyId !== null);
+    expect(obligations).not.toHaveLength(0);
+    expect(
+      obligations.every(([draft]) => draft.counterpartyId === draft.obligationCounterpartyId),
+    ).toBe(true);
+  });
+
   /** One of the three is settled, which is a settlement written after its debt. */
   it("settles exactly one of them, in full and after the debt it clears", () => {
     const t = target();

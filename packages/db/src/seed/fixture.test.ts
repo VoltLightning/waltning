@@ -22,7 +22,7 @@
 
 import { ACCOUNT_KIND } from "@waltning/schema/enums";
 import { describe, expect, it } from "vitest";
-import { ACCOUNTS, PATTERNS } from "./fixture.ts";
+import { ACCOUNTS, MOVES, OBLIGATIONS, PATTERNS } from "./fixture.ts";
 
 describe("the seeded fixture", () => {
   it("carries at least one account of every kind", () => {
@@ -64,7 +64,12 @@ describe("the seeded fixture", () => {
    * show that its figure, its colour and its sign survive a month of use.
    */
   it("gives every account some activity", () => {
-    const used = new Set(PATTERNS.map((pattern) => pattern.account));
+    // Either leg of a `MOVES` transfer counts: a loan is repaid rather than
+    // spent from, and that arrives as a transfer's destination.
+    const used = new Set([
+      ...PATTERNS.map((pattern) => pattern.account),
+      ...MOVES.flatMap((move) => [move.from, move.to]),
+    ]);
     const idle = ACCOUNTS.filter((account) => !used.has(account.ref)).map((a) => a.ref);
     expect(idle, "accounts with an opening balance and no transactions").toEqual([]);
   });
@@ -81,5 +86,59 @@ describe("the seeded fixture", () => {
     expect(receivable?.openingBalance.startsWith("-"), "money owed to you reads positive").toBe(
       false,
     );
+  });
+
+  /**
+   * **S12 was an empty state on a seeded database.** The fixture wrote eleven
+   * accounts and two years of rows and not one counterparty, so the whole
+   * Counterparties tab — both segments, the People/Companies grouping, the
+   * direction totals — had nothing to render on a database that was otherwise
+   * full, and could not be looked at while it was being built.
+   *
+   * Both directions, because the two are different money colours and a
+   * fixture with only one proves half the screen.
+   */
+  it("gives the directory somebody in each direction", () => {
+    const owedToYou = OBLIGATIONS.filter((o) => o.role === "debt" && o.type === "expense");
+    const youOwe = OBLIGATIONS.filter((o) => o.role === "debt" && o.type === "income");
+    expect(owedToYou.length, "somebody who owes you").toBeGreaterThan(0);
+    expect(youOwe.length, "somebody you owe").toBeGreaterThan(0);
+  });
+
+  /**
+   * **Saved and square is the state the two segments exist to tell apart.**
+   * *Open* filters on having something outstanding, so a directory where
+   * everyone is open makes the filter look like it works while filtering
+   * nothing — both a settled obligation and a `contribution`, which is the
+   * role that deliberately moves no balance (§6.6), are here for that.
+   */
+  it("keeps somebody in the directory with nothing outstanding", () => {
+    expect(
+      OBLIGATIONS.some((o) => o.settle === true),
+      "a debt settled in full",
+    ).toBe(true);
+    expect(
+      OBLIGATIONS.some((o) => o.role === "contribution"),
+      "a row whose role moves no balance",
+    ).toBe(true);
+  });
+
+  /**
+   * **An income row under an expense leaf is refused outright** by the
+   * category-kind rule (H1) — silently, row by row, which is how the loan
+   * repayments sat at their opening figure for a whole fixture before anyone
+   * noticed. Both directions of an obligation have to name a leaf of their own
+   * kind, and this is the cheap half of that check: the leaf names are
+   * verified against the real taxonomy by the fixture run itself.
+   */
+  it("never files an obligation against a leaf of the wrong kind", () => {
+    const EXPENSE_ONLY = ["Eating out", "Taxi", "Repayment made"];
+    const wrong = OBLIGATIONS.filter(
+      (o) => o.type === "income" && EXPENSE_ONLY.includes(o.category),
+    );
+    expect(
+      wrong.map((o) => o.enteredName),
+      "income rows on expense leaves",
+    ).toEqual([]);
   });
 });

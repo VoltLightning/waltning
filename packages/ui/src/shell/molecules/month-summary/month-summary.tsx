@@ -179,7 +179,14 @@ export function MonthSummary({
 
 const useStyles = makeStyles((theme) => ({
   hero: { gap: space.xs },
-  heroLabel: { color: theme.textMuted, ...text.ui("label") },
+  /**
+   * **Primary text, not muted** — the only label in this card that is. It
+   * names the screen's hero figure, and a muted label over a 38pt number read
+   * as chrome attached to the card rather than as the figure's own name; the
+   * two component labels under it stay muted, which is what makes the
+   * hierarchy visible at all. Muting all three flattened them into one tone.
+   */
+  heroLabel: { color: theme.text, ...text.ui("label") },
   pair: { flexDirection: "row", justifyContent: "space-between", gap: space.x3 },
   pairItem: { gap: space.xxs },
   pairItemEnd: { gap: space.xxs, alignItems: "flex-end" },
