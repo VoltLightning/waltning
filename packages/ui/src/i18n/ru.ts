@@ -187,6 +187,8 @@ export const ru: Messages = {
     chooseRole: "Какая?",
     counterparty: "Контрагент",
     noCounterparty: "Без контрагента",
+    obligationParty: "Обязательство перед",
+    noObligation: "Никто",
     role: "Роль",
     obligationRoleMissing: "{{name}} · роль?",
     "role.none": "Просто участвует — ничего не должны",

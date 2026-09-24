@@ -410,6 +410,8 @@ export const en = {
     chooseRole: "Which?",
     counterparty: "Counterparty",
     noCounterparty: "No counterparty",
+    obligationParty: "Owes",
+    noObligation: "Nobody",
     role: "Role",
     /** §6.6 — the counterparty chip's own value while a role is unresolved. Never defaulted. */
     obligationRoleMissing: "{{name}} · role?",

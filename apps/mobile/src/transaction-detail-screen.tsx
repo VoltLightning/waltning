@@ -87,6 +87,7 @@ function toFields(detail: PhoneTransactionDetail): TransactionFields {
     date: detail.date,
     accountId: detail.accountId,
     categoryId: detail.categoryId,
+    counterpartyId: detail.counterpartyId,
     obligationCounterpartyId: detail.obligationCounterpartyId,
     obligationRole: detail.obligationRole,
     enteredName: detail.enteredName,
@@ -155,10 +156,17 @@ export default function TransactionDetail() {
   const [accountPickerOpen, setAccountPickerOpen] = useState(false);
   /** The same rule again: `counterparties/` is a sibling domain, so its picker is composed here. */
   const [pickedCounterparty, setPickedCounterparty] = useState<{
-    id: string;
-    name: string;
-  } | null>(null);
-  const [counterpartyPickerOpen, setCounterpartyPickerOpen] = useState(false);
+    identity?: { id: string; name: string };
+    obligation?: { id: string; name: string };
+  }>({});
+  /**
+   * **Which link the one picker is answering for.** S09 is the surface where
+   * the two can differ (§6.6.1) — paying a shop for a friend names the shop
+   * on one row and the friend on the other — and `null` is "closed", so the
+   * sheet's own visibility and its target are one piece of state rather than
+   * two that can disagree.
+   */
+  const [pickerTarget, setPickerTarget] = useState<"identity" | "obligation" | null>(null);
 
   const refetch = useCallback(() => {
     if (!transactionId) return;
@@ -174,18 +182,26 @@ export default function TransactionDetail() {
     setAccountPickerOpen(false);
   }, []);
 
-  const handleOpenCounterpartyPicker = useCallback(() => setCounterpartyPickerOpen(true), []);
-  const handleDismissCounterpartyPicker = useCallback(() => setCounterpartyPickerOpen(false), []);
+  const handleOpenCounterpartyPicker = useCallback(
+    (target: "identity" | "obligation") => setPickerTarget(target),
+    [],
+  );
+  const handleDismissCounterpartyPicker = useCallback(() => setPickerTarget(null), []);
   const handlePickCounterparty = useCallback(
     (next: string) => {
       const picked = snapshot.counterparties.find((row) => row.id === next);
-      if (picked !== undefined) setPickedCounterparty({ id: picked.id, name: picked.name });
-      setCounterpartyPickerOpen(false);
+      if (picked !== undefined && pickerTarget !== null) {
+        setPickedCounterparty((current) => ({
+          ...current,
+          [pickerTarget]: { id: picked.id, name: picked.name },
+        }));
+      }
+      setPickerTarget(null);
     },
-    [snapshot.counterparties],
+    [pickerTarget, snapshot.counterparties],
   );
   const handleCreateCounterparty = useCallback(() => {
-    setCounterpartyPickerOpen(false);
+    setPickerTarget(null);
     router.push({ pathname: "/counterparty/new", params: { returnTo: "transaction" } });
   }, []);
 
@@ -306,7 +322,16 @@ export default function TransactionDetail() {
 
   const effectiveAccountId = pickedAccountId ?? detail.accountId;
   // The pick until it is saved, the saved row afterwards — `accountId`'s own rule.
-  const effectiveCounterparty = pickedCounterparty ?? {
+  // The pick until it is saved, the saved row afterwards — `accountId`'s own
+  // rule, once per link. A name comes from the directory rather than the row's
+  // own join, which carries one name and now has two ids to name.
+  const nameOf = (id: string | null): string | null =>
+    id === null ? null : (snapshot.counterparties.find((row) => row.id === id)?.name ?? null);
+  const effectiveIdentity = pickedCounterparty.identity ?? {
+    id: detail.counterpartyId,
+    name: nameOf(detail.counterpartyId),
+  };
+  const effectiveObligation = pickedCounterparty.obligation ?? {
     id: detail.obligationCounterpartyId,
     name: detail.counterpartyName,
   };
@@ -335,8 +360,10 @@ export default function TransactionDetail() {
           categoryId={detail.categoryId}
           categoryName={detail.categoryName}
           onOpenCategoryPicker={handleOpenCategoryPicker}
-          obligationCounterpartyId={effectiveCounterparty.id}
-          counterpartyName={effectiveCounterparty.name}
+          counterpartyId={effectiveIdentity.id}
+          counterpartyName={effectiveIdentity.name}
+          obligationCounterpartyId={effectiveObligation.id}
+          obligationCounterpartyName={effectiveObligation.name}
           onOpenCounterpartyPicker={handleOpenCounterpartyPicker}
           {...(fieldsErrors ? { fieldErrors: fieldsErrors } : {})}
           onSave={handleSaveFields}
@@ -362,7 +389,7 @@ export default function TransactionDetail() {
         onDismiss={handleDismissCategorySheet}
       />
       <CounterpartyPicker
-        visible={counterpartyPickerOpen}
+        visible={pickerTarget !== null}
         counterparties={snapshot.counterparties}
         onPick={handlePickCounterparty}
         onCreateNew={handleCreateCounterparty}

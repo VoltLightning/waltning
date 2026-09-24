@@ -198,6 +198,8 @@ export const pl: Messages = {
     chooseRole: "Jaka?",
     counterparty: "Kontrahent",
     noCounterparty: "Brak kontrahenta",
+    obligationParty: "Zobowiązanie wobec",
+    noObligation: "Nikt",
     role: "Rola",
     obligationRoleMissing: "{{name}} · rola?",
     "role.none": "Tylko uczestniczy — nic nie zalega",

@@ -187,6 +187,8 @@ export const de: Messages = {
     chooseRole: "Welche?",
     counterparty: "Gegenpartei",
     noCounterparty: "Keine Gegenpartei",
+    obligationParty: "Schuldet",
+    noObligation: "Niemand",
     role: "Rolle",
     obligationRoleMissing: "{{name}} · Rolle?",
     "role.none": "Nur beteiligt — nichts geschuldet",

@@ -185,6 +185,8 @@ export const be: Messages = {
     chooseRole: "Якая?",
     counterparty: "Контрагент",
     noCounterparty: "Без контрагента",
+    obligationParty: "Абавязацельства перад",
+    noObligation: "Ніхто",
     role: "Роля",
     obligationRoleMissing: "{{name}} · роля?",
     "role.none": "Проста ўдзельнічае — нічога не вінныя",

@@ -88,6 +88,13 @@ export type TransactionFields = {
   date: string;
   accountId: string;
   categoryId: string | null;
+  /**
+   * §6.6.1 — who the transaction was **with**. Separate from the obligation
+   * below, and S09 is the one surface where the two can differ: paying a shop
+   * for a friend names the shop here and the friend there, which no single
+   * chip row can express.
+   */
+  counterpartyId: string | null;
   obligationCounterpartyId: string | null;
   obligationRole: ObligationRoleValue | null;
   enteredName: string;
@@ -101,6 +108,7 @@ export type TransactionFieldsPatch = {
   date?: string;
   accountId?: string;
   categoryId?: string | null;
+  counterpartyId?: string | null;
   obligationCounterpartyId?: string | null;
   obligationRole?: ObligationRoleValue | null;
   enteredName?: string;
@@ -136,9 +144,17 @@ export type FieldsCardProps = {
    * contract, for the same reason: `counterparties/` is a sibling domain and
    * its picker is the screen's to compose (`architecture/11`).
    */
-  obligationCounterpartyId: string | null;
+  counterpartyId: string | null;
   counterpartyName: string | null;
-  onOpenCounterpartyPicker: () => void;
+  obligationCounterpartyId: string | null;
+  obligationCounterpartyName: string | null;
+  /**
+   * Which link the picker is being opened for — one sheet, two rows. A second
+   * picker component would be the same list twice with two sets of state to
+   * keep in step, which is the arrangement §6.6.1's own merge argument is
+   * about.
+   */
+  onOpenCounterpartyPicker: (target: "identity" | "obligation") => void;
   fieldErrors?: FieldErrorMap;
   saving?: boolean;
   onSave: (patch: TransactionFieldsPatch) => void;
@@ -155,8 +171,10 @@ export function FieldsCard({
   categoryId,
   categoryName,
   onOpenCategoryPicker,
-  obligationCounterpartyId,
+  counterpartyId,
   counterpartyName,
+  obligationCounterpartyId,
+  obligationCounterpartyName,
   onOpenCounterpartyPicker,
   fieldErrors,
   saving = false,
@@ -197,6 +215,14 @@ export function FieldsCard({
   const handleToggleRole = useCallback(() => toggleField("role"), [toggleField]);
   const handleRoleChange = useCallback((next: string) => setRole(isRole(next) ? next : null), []);
   const handleToggleNote = useCallback(() => toggleField("note"), [toggleField]);
+  const handleOpenIdentityPicker = useCallback(
+    () => onOpenCounterpartyPicker("identity"),
+    [onOpenCounterpartyPicker],
+  );
+  const handleOpenObligationPicker = useCallback(
+    () => onOpenCounterpartyPicker("obligation"),
+    [onOpenCounterpartyPicker],
+  );
 
   const roleOptions = useMemo<RadioGroupProps["options"]>(
     () => [
@@ -218,6 +244,7 @@ export function FieldsCard({
     if (dateValid && date !== fields.date) next.date = date;
     if (accountId !== fields.accountId) next.accountId = accountId;
     if (categoryId !== fields.categoryId) next.categoryId = categoryId;
+    if (counterpartyId !== fields.counterpartyId) next.counterpartyId = counterpartyId;
     if (obligationCounterpartyId !== fields.obligationCounterpartyId) {
       next.obligationCounterpartyId = obligationCounterpartyId;
       // §6.6 — a role belongs to the person it is about. Whoever is picked
@@ -234,6 +261,7 @@ export function FieldsCard({
   }, [
     accountId,
     categoryId,
+    counterpartyId,
     obligationCounterpartyId,
     date,
     dateValid,
@@ -305,11 +333,24 @@ export function FieldsCard({
         onPress={onOpenAccountPicker}
       />
 
+      {/* Who it was *with* — the commoner fact, and the plainer label. */}
       <FieldDisclosureRow
         label={t("transactions.counterparty")}
         value={counterpartyName}
         placeholder={t("transactions.noCounterparty")}
-        onPress={onOpenCounterpartyPicker}
+        onPress={handleOpenIdentityPicker}
+      />
+
+      {/*
+        And who it *owes*, which is a different question with a different
+        answer often enough to deserve its own row: paying a shop for a friend
+        names the shop above and the friend here.
+      */}
+      <FieldDisclosureRow
+        label={t("transactions.obligationParty")}
+        value={obligationCounterpartyName}
+        placeholder={t("transactions.noObligation")}
+        onPress={handleOpenObligationPicker}
       />
 
       {obligationCounterpartyId === null ? null : (

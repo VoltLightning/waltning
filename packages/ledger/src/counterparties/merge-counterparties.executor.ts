@@ -99,27 +99,58 @@ function namedMovedRows(
   if (movedTransactionIds.length === 0) return [];
   const named = chunkIds(movedTransactionIds).flatMap((batch) =>
     tx
-      .select({ id: transactions.id, counterpartyId: transactions.obligationCounterpartyId })
+      .select({
+        id: transactions.id,
+        counterpartyId: transactions.counterpartyId,
+        obligationCounterpartyId: transactions.obligationCounterpartyId,
+      })
       .from(transactions)
       .where(inArray(transactions.id, batch))
       .all(),
   );
-  const counterpartyById = new Map(named.map((row) => [row.id, row.counterpartyId]));
-  const stale = movedTransactionIds.filter((id) => counterpartyById.get(id) !== loserId);
+  // **Either link counts as naming them (§6.6.1).** A row can carry the loser
+  // as who it was *with*, as who it owes, or as both — paying a shop for a
+  // friend puts two different parties in the two columns, and merging two
+  // spellings of the shop has nothing to do with the friend. A stale check
+  // that asked only about the obligation would call an identity-only row
+  // "no longer named" and refuse a merge that is perfectly ordinary.
+  const namesLoser = new Map(
+    named.map((row) => [
+      row.id,
+      row.counterpartyId === loserId || row.obligationCounterpartyId === loserId,
+    ]),
+  );
+  const stale = movedTransactionIds.filter((id) => namesLoser.get(id) !== true);
   if (stale.length > 0) {
     throw new LocalRefusal(
       `merge_counterparties: ${stale.length} named transaction(s) no longer name ` +
         `${loserId} (${stale.join(", ")}) — reload and try again`,
     );
   }
-  return chunkIds(movedTransactionIds).flatMap((batch) =>
-    tx
+  // **Per link, and conditional on that link naming the loser** — not one
+  // blanket `set`. The stale check above proves each row names the loser
+  // *somewhere*, which is no longer a proof that both columns do: writing the
+  // winner into an obligation that was empty would invent a debt, and into
+  // one naming a third party would move somebody else's.
+  return chunkIds(movedTransactionIds).flatMap((batch) => {
+    const identity = tx
+      .update(transactions)
+      .set({ counterpartyId: winnerId })
+      .where(and(inArray(transactions.id, batch), eq(transactions.counterpartyId, loserId)))
+      .returning({ id: transactions.id })
+      .all();
+    const obligation = tx
       .update(transactions)
       .set({ obligationCounterpartyId: winnerId })
-      .where(inArray(transactions.id, batch))
+      .where(
+        and(inArray(transactions.id, batch), eq(transactions.obligationCounterpartyId, loserId)),
+      )
       .returning({ id: transactions.id })
-      .all(),
-  );
+      .all();
+    // A row naming the loser on both links is one moved row, not two.
+    const moved = new Set([...identity, ...obligation].map((row) => row.id));
+    return [...moved].map((id) => ({ id }));
+  });
 }
 
 function mergeCounterparties(
@@ -218,7 +249,16 @@ function mergeCounterparties(
     .select({ id: transactions.id })
     .from(transactions)
     .where(
-      and(eq(transactions.obligationCounterpartyId, input.loserId), isNull(transactions.deletedAt)),
+      and(
+        // Either link, for the same reason the stale check above asks about
+        // both: a row left naming the loser as *who it was with* would have
+        // that name vanish from every screen the moment the loser archives.
+        or(
+          eq(transactions.counterpartyId, input.loserId),
+          eq(transactions.obligationCounterpartyId, input.loserId),
+        ),
+        isNull(transactions.deletedAt),
+      ),
     )
     .limit(1)
     .all();

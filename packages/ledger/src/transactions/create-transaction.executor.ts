@@ -148,6 +148,8 @@ export function insertTransaction(
      */
     ...(input.timeOfDay !== undefined ? { timeOfDay: input.timeOfDay } : {}),
     ...(input.categoryId !== undefined ? { categoryId: input.categoryId } : {}),
+    // §6.6.1 — who it was *with*, independent of the obligation pair below.
+    ...(input.counterpartyId !== undefined ? { counterpartyId: input.counterpartyId } : {}),
     ...(input.obligationCounterpartyId !== undefined
       ? { obligationCounterpartyId: input.obligationCounterpartyId }
       : {}),

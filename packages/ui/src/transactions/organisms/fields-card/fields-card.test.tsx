@@ -29,6 +29,7 @@ const FIELDS: TransactionFields = {
   date: "2026-08-06",
   accountId: "account-a",
   categoryId: "cat-eating-out",
+  counterpartyId: null,
   obligationCounterpartyId: null,
   obligationRole: null,
   enteredName: "Café A",
@@ -52,8 +53,10 @@ function renderCard(overrides: Partial<Parameters<typeof FieldsCard>[0]> = {}) {
       categoryId="cat-eating-out"
       categoryName="Eating out"
       onOpenCategoryPicker={onOpenCategoryPicker}
-      obligationCounterpartyId={null}
+      counterpartyId={null}
       counterpartyName={null}
+      obligationCounterpartyId={null}
+      obligationCounterpartyName={null}
       onOpenCounterpartyPicker={onOpenCounterpartyPicker}
       onSave={onSave}
       {...overrides}
@@ -155,6 +158,8 @@ it("carries a counterparty and the role picked for them in one patch", () => {
   fireEvent.click(screen.getByRole("button", { name: "Role" }));
   fireEvent.click(screen.getByRole("radio", { name: "Debt — expected back" }));
   fireEvent.click(screen.getByRole("button", { name: "Save" }));
+  // No `counterpartyId` — the identity link did not move, and the patch
+  // carries only what changed.
   expect(onSave).toHaveBeenCalledWith({
     obligationCounterpartyId: "cp-nina",
     obligationRole: "debt",
@@ -165,8 +170,10 @@ it("carries a counterparty and the role picked for them in one patch", () => {
 it("drops the role when the counterparty is cleared", () => {
   const { onSave } = renderCard({
     fields: { ...FIELDS, obligationCounterpartyId: "cp-nina", obligationRole: "debt" },
-    obligationCounterpartyId: null,
+    counterpartyId: null,
     counterpartyName: null,
+    obligationCounterpartyId: null,
+    obligationCounterpartyName: null,
   });
   fireEvent.click(screen.getByRole("button", { name: "Save" }));
   expect(onSave).toHaveBeenCalledWith({ obligationCounterpartyId: null, obligationRole: null });
