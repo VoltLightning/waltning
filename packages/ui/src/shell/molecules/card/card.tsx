@@ -258,7 +258,12 @@ export function GroundPanel({
   const scroller = useAnimatedRef<Animated.ScrollView>();
   const contentTop = useRef<View>(null);
   const room = useKeyboardRoom(panel, scroller, contentTop);
-  const offset = useScrollViewOffset(scroller);
+  // **Only a page-scrolling panel has a scroller to observe.** In
+  // `scroll="own"` the ref is never attached — the screen's own list scrolls —
+  // and Reanimated warns *animatedRef is not initialized* on every mount when
+  // handed one. `null` is its documented "nothing to observe"; the hook still
+  // runs, so the hook order does not change between modes.
+  const offset = useScrollViewOffset(scroll === "own" ? null : scroller);
   const edge = useAnimatedStyle(() => ({ opacity: edgeOpacity(offset.value) }), [offset]);
 
   if (scroll === "own") {

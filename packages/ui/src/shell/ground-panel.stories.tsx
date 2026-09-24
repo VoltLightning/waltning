@@ -58,6 +58,20 @@ function TallContent() {
   );
 }
 
+/**
+ * A screen that owns its list: the panel is a plain `View` with no scroller of
+ * its own. `visual/reanimated-warnings.spec.ts` opens this with the real
+ * Reanimated and holds the console to no *animatedRef is not initialized*.
+ */
+function OwnScroller() {
+  const styles = useStyles();
+  return (
+    <GroundPanel scroll="own">
+      <Text style={styles.row}>The screen's own list scrolls here</Text>
+    </GroundPanel>
+  );
+}
+
 function Frame({ children }: { children: React.ReactNode }) {
   const styles = useStyles();
   return <View style={styles.frame}>{children}</View>;
@@ -137,3 +151,8 @@ const useStyles = makeStyles((theme) => ({
     color: theme.text,
   },
 }));
+
+export const OwnScrollerStory: Story = {
+  name: "OwnScroller",
+  render: OwnScroller,
+};
