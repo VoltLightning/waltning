@@ -24,7 +24,7 @@ shows today is the list that shows every day before it.
 | Push notification | Unsettled clearing, failed backup | The thing it names |
 
 **Exits** — `+` → S05 · Scan → S07a · say-a-transaction → S05 in voice mode ·
-a row → S09 · the net-worth strip → S16 · unsettled banner → J8 allocation ·
+a row → S09 · *What you hold*'s header → S16, and a *By kind* row → S16 at that section · unsettled banner → J8 allocation ·
 tab bar → S16, S12, S30.
 
 **S04 has no *show all*, and the tab bar has no Ledger or Calendar tab.**
@@ -286,11 +286,16 @@ same action as swiping to it; neither is the primary.
 #### Summary
 
 ```
-│  WHAT YOU HOLD  +48 620,84 zł                 › │  ← NetWorthStrip, on the ground
-│  ┌ Kept so far ────────────────────────────────┐│  ← MonthSummary
-│  │ +3 529,82 zł                                ││
+│  ┌ What you hold ──────────────── 9 accounts › ┐│  ← HoldingsCard, the hero
+│  │ 49 415,84 zł                                ││
+│  │ 50 670,52 held · 1 254,68 owed on cards     ││
+│  │ ██████████████▌█████████▌██████▌█           ││  ← what it is made of, by the lens
+│  │ ─────────────────────────────────────────── ││
+│  │               Break it down ⌄               ││
+│  └─────────────────────────────────────────────┘│
+│  ┌ September so far ───────────── +3 529,82 zł ┐│  ← MonthSummary, compact
 │  │ ████████████████░░░░░░░░░░░░░░░░░░░░░░░░░░░ ││  ← FlowBar: out against in
-│  │ Came in                            Went out ││
+│  │ Came in +9 200,00         Went out 5 670,18 ││
 │  └─────────────────────────────────────────────┘│
 │  ┌ Where it went ──────────────────────────────┐│  ← SpendRows, §6
 │  └─────────────────────────────────────────────┘│
@@ -307,6 +312,33 @@ same action as swiping to it; neither is the primary.
 **The landing page, and the one the app opens on.** §1's question is answered
 here; the other three are where you go once it has been.
 
+**Where you stand is the big card, and the month is the one under it.** §1 asks
+*where do I stand*, and the answer is what you hold; what this month did is part
+of that answer — the reason the figure moved — not a second question competing
+with it. So the total is the hero, at the month card's old size, and the month
+follows as a compact card whose label and figure share one line.
+
+**Breaking it down opens the same card, in place.** *Break it down* unfolds the
+hero into rows beneath its own figure, under a two-way lens — **By kind** (bank
+accounts, savings and deposits, investments, cash, cards) or **By currency**
+(each currency held, its own figure and the converted one under it, as S16 draws
+them). The bar under the figure is always the lens's composition, so the closed
+card already says what the total is made of, and opening it names the parts.
+Cards are negative and draw red; the bar is what is **held**, and the line above
+it says what is owed, because a negative cannot be a share of a whole. A kind
+row is a door into S16 at that kind's section, which the register already sorts
+by; a currency row is a figure and not a door, because S16 has no currency to
+open at.
+
+**Loans are listed, and sit outside the total** — below a rule that says so, in
+muted figures rather than money colours. §3 of `computations.md` excludes
+receivables from net worth, and whether a payable belongs in it is an open
+question (§9); the breakdown shows both without the total having to answer it.
+
+*Ours* follows the rule the strip had: where a shared account exists, the hero
+is labelled *mine* and *ours* sits under the figure, muted; with none, it is
+*What you hold* and nothing names an opposite that is not on screen (§6.7).
+
 **One card anatomy, from the deck, and nothing wearing it that is not a card.**
 A card is `surface` on `ground`, a one-pixel `border`, `radius-md`, **18 of
 padding** (`space.x3b`) and its label as a plain first line — no rule under
@@ -314,10 +346,10 @@ it. Cards sit **14 apart** (`space.x2`) inside a **20 gutter** (`space.x4`), and
 a row inside one is **54 tall** with 14 at each side. The app had every card at
 22 of padding with a hairline under its title, 20 between cards in a 22
 gutter, and rows at 44 — each a size heavier than its drawing, which is what
-"the app is not as nice as the design" turned out to mean when measured. The
-net-worth line and *Go to* are on the ground because they are a figure and a
-menu, not groups of rows (`design-system/05` §5.1): four cards each holding one
-destination were four boxes around four controls.
+"the app is not as nice as the design" turned out to mean when measured. *Go to*
+is on the ground because it is a menu, not a group of rows (`design-system/05`
+§5.1): four cards each holding one destination were four boxes around four
+controls. The total is a card because a card is what holds a hero figure.
 
 **The last days are drawn as the List draws them.** A *Recent* card with a
 *Show all* door was two things the deck does not have: a second anatomy for a
@@ -518,8 +550,8 @@ happened*.
 | `SearchField` | The search itself, pinned under `PageTabs` while one is on, with the live match count and an `✕` that **leaves the search** — it empties the field and closes it in one press, because this field is pinned open and the ✕ is the only way back to an unnarrowed ledger. It is therefore offered whether or not anything is typed, which is the opposite of the clear control's own rule elsewhere (`03` §3.7: a clear button on an empty field is a target with nothing to do). Drawn inline — no border, no fill — on a band that is already a surface. **Under the tabs, not in the header**: the header's shape is a function of the scroll — the title travels, scales and hands its room to a stepper — so a field placed there would either inherit the collapse or fight it, and the period would leave the screen exactly when §7 wants the reader stepping through periods. It stays open for as long as the search is on, which is what says the screen is narrowed |
 | `Pager` | The four pages, swiped or tapped between, over one shared date |
 | `GatewayGrid` | Summary's *Go to* — rows on the ground, two across, each with a figure. Not cards: a card groups rows or holds a hero, and a single destination is neither. Only destinations neither the tab bar **nor the shared bar** carries, which is why Accounts, Debt and the agent are absent from it |
-| `NetWorthStrip` | One figure on the ground in one line, *ours* and any second currency muted beneath it. It is labelled *mine* only where an *ours* is drawn under it — the two are a contrast and a lone possessive names an opposite the screen does not have; with no shared account it reads *what you hold* (§6.7 is about nobody mistaking a household figure for their own, which needs both on screen to be at issue). Pressable → S16. Renders above the error branch, so a failed refresh keeps it (§6) |
-| `MonthSummary` | The hero, opening month only. *Kept so far* stacked over its figure, a `FlowBar`, then the labelled pair. Draws three zeroes for a period the ledger did not exist in — that is the true answer, not an empty state. **The three labels are a prop**, defaulting to this screen's: S12 §3 holds debt's subtraction in the same card, and a second component would be the same shape twice |
+| `HoldingsCard` | The hero. Label and account count on one line (the count → S16), the total at display size, a *held · owed* line, the lens's composition bar, and *Break it down*. Open, a `SegmentControl` (*By kind* · *By currency*) and rows — swatch, name, count, figure; a kind row's chevron → S16 at that section — then *Loans · outside the total*. Labelled *mine* only where *ours* is drawn under the figure; otherwise *What you hold* (§6.7). Renders above the error branch, so a failed refresh keeps it (§6) |
+| `MonthSummary` | The compact card under the hero, opening month only. Label and signed figure on one line, a `FlowBar`, then the labelled pair. Draws three zeroes for a period the ledger did not exist in — that is the true answer, not an empty state. **The three labels are a prop**, defaulting to this screen's: S12 §3 holds debt's subtraction in the same card, and a second component would be the same shape twice |
 | `FlowBar` | Track is *came in*, fill is *went out*, gap is *kept*. Fill clamps at 100%; a deficit is carried by the figures, not by an overrunning bar |
 | `SpendRows` | *Where it went* — §6 at leaf granularity, five rows plus a named remainder, bars proportional to the largest row, one colour. Opening month only |
 | `DayRibbon` | Under `PageTabs`, on the List page only. **A scrubber, not a selector** — the highlight is a ring fixed at the middle of the band and never moves; what moves under it is the run of days, driven by the list's own scroll offset. Continuous and **endless to a hand** — a cell for **every** day, from a 1 January ten years before the oldest day the list has heard of, to today and past it — because the distance between two marks is part of what the strip draws, and a strip a thumb can reach the end of after six weeks is a window, not a scrubber. A cell's index is *the number of days since that first day*: pure arithmetic, so nothing is clamped to an end and nothing is re-cut as the reader moves (a run re-centred around the anchor moved every cell's index under a strip that was in the middle of landing on one). The list collapses a five-year gap into one row and the strip cannot — so it is **virtualised**: a dozen cells are on screen, a few bands either side of them are drawn, and a day is asked for when its cell is. **Three kinds of day hold no rows and they are not the same**: between two loaded days it is *quiet* (the faint dot, *“nothing”*) — a gap there really is a gap in the ledger; past today, once the list reaches today, it is *not yet*; anywhere else it is **unread** — no mark at all and a label that is only its date, because *nothing* would be a claim about a day the list has never loaded. **The 1st says its month and 1 January its year**, in the weekday letter's place: two years from anything that names them, bare day numbers say nothing about where the reader is. Under a search the strip is the matched days and nothing else — not continuous, since a gap between two matches says nothing about the ledger. **Earliest at the left.** Past today it keeps going: enough further days to reach the band's right edge, drawn in `textMuted` — quieter in ink, never in opacity, which mixes the ground into the number and lands at 2.7:1 where 4.5 is required. Without them a centred ring has nothing to its right on a cold open, and the strip reads as truncated rather than as a position in a run. That count is a function of the measured band, so the resting state is the same on every device and in every month; it is **not** the list's forward horizon, which is §9's month-end and a different question. Horizontally scrollable, clipped at both edges. 48×66 cells with the day number at 17px and room around the weekday letter. Activity mark per §3 |
@@ -835,3 +867,16 @@ list at the destination without traversal.
    (§6, two `UNION ALL` branches that miscount a multi-line transaction). It is
    already server-only and stays so; offline it does not draw, which is the
    existing behaviour and not something the infinite list changes.
+4. **One figure across currencies.** The hero states a single total in the
+   display currency, the figure S16's register already draws under its accounts.
+   `computations.md` §3 still defines net worth **per currency**, written before
+   display conversion (§4) existed, and says a single figure becomes possible
+   once a rate exists to convert through. It now does; §3 is to be restated as
+   `Σ balance_display(a, today)` before `HoldingsCard` is built, with what the
+   card draws when a currency has no rate.
+5. **Do payable loans belong in the total?** Receivables are out by §3. The
+   drawing keeps both loan kinds outside the total, under their own rule, so
+   this can be decided without redrawing — only the rule's position moves.
+6. **Which lens opens.** *By kind* by default, and the last lens chosen is kept
+   per device, like the display currency. Whether the card remembers being open
+   is the same question; the drawing assumes it opens closed.
