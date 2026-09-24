@@ -99,6 +99,14 @@ kind is added, and every pair far enough apart to read as two colours in both
 themes. The kind's mark is its `tint` filled with a square of its own `ink`,
 and the section's label takes that same `ink`.
 
+**And every account wears its own, which is its kind's until someone picks
+another.** Each row in the register carries a small square in the account's
+colour; the editor's *Colour* row offers *its kind's* first — drawn as the
+colour it would be — and then the ramp's nine. Nine, never a free colour: a
+colour picked by hand is one of the ramp's pairs, so it keeps the contrast and
+spacing every default is held to. Two banks are one colour by default; this is
+how one of them becomes the rust one you recognise in S04's *By account* bar.
+
 **The colour belongs to the axis you grouped on.** In the currency view a
 section holds a bank, a card and a wallet at once, so it carries no mark and
 its label is muted: one hue over accounts of three kinds would be saying

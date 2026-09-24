@@ -21,10 +21,14 @@
  */
 
 import * as money from "@waltning/core/money";
-import type { AccountKind } from "@waltning/core/registry/inputs";
+import type { AccountColor, AccountKind } from "@waltning/core/registry/inputs";
 
 export type HoldingsAccount = {
+  id: string;
+  name: string;
   kind: AccountKind;
+  /** Picked by hand, or `null` for the kind's own — the card resolves it to ink. */
+  color: AccountColor | null;
   currency: money.CurrencyCode;
   decimals: number;
   balance: money.Money;
@@ -45,6 +49,18 @@ export type HoldingsCurrency = {
   value: money.Money;
 };
 
+/** One counted account — its own `balance`, and `value` in the display currency. */
+export type HoldingsAccountRow = {
+  id: string;
+  name: string;
+  kind: AccountKind;
+  color: AccountColor | null;
+  currency: money.CurrencyCode;
+  decimals: number;
+  balance: money.Money;
+  value: money.Money;
+};
+
 export type Holdings = {
   currency: money.CurrencyCode;
   decimals: number;
@@ -61,6 +77,8 @@ export type Holdings = {
   /** In first-seen order; the card orders kinds itself, as the register does. */
   byKind: readonly HoldingsKind[];
   byCurrency: readonly HoldingsCurrency[];
+  /** Every account in `mine`, in the order handed in — the register's own. */
+  byAccount: readonly HoldingsAccountRow[];
   /** Both loan kinds, own and counted, never in `mine`. */
   loans: readonly HoldingsKind[];
 };
@@ -98,6 +116,7 @@ export function holdings(
   const byKind = new Map<AccountKind, HoldingsKind>();
   const byCurrency = new Map<money.CurrencyCode, HoldingsCurrency>();
   const loans = new Map<AccountKind, HoldingsKind>();
+  const byAccount: HoldingsAccountRow[] = [];
 
   for (const account of accounts) {
     if (account.hidden) continue;
@@ -125,6 +144,16 @@ export function holdings(
 
     counted += 1;
     mine = money.add(mine, value);
+    byAccount.push({
+      id: account.id,
+      name: account.name,
+      kind: account.kind,
+      color: account.color,
+      currency: account.currency,
+      decimals: account.decimals,
+      balance: account.balance,
+      value,
+    });
     if (money.isPositive(value)) held = money.add(held, value);
     else owed = money.add(owed, money.abs(value));
     bump(byKind, account.kind, { kind: account.kind, count: 0, value: money.ZERO }, (row) => ({
@@ -162,6 +191,7 @@ export function holdings(
     of,
     byKind: [...byKind.values()],
     byCurrency: [...byCurrency.values()],
+    byAccount,
     loans: [...loans.values()],
   };
 }

@@ -319,16 +319,18 @@ with it. So the total is the hero, at the month card's old size, and the month
 follows as a compact card whose label and figure share one line.
 
 **Breaking it down opens the same card, in place.** *Break it down* unfolds the
-hero into rows beneath its own figure, under a two-way lens — **By kind** (bank
-accounts, savings and deposits, investments, cash, cards) or **By currency**
+hero into rows beneath its own figure, under three lenses — **By kind** (bank
+accounts, savings and deposits, investments, cash, cards), **By currency**
 (each currency held, by name, its own figure and the converted one under it,
-as S16 draws them). The bar under the figure is always the lens's composition, so the closed
+as S16 draws them), or **By account** (every counted account in its own
+colour — its kind's, or one picked in the editor — and its own figure). The bar under the figure is always the lens's composition, so the closed
 card already says what the total is made of, and opening it names the parts.
 Cards are negative and draw red; the bar is what is **held**, and the line above
-it says what is owed, because a negative cannot be a share of a whole. Every
-row is a door into S16 **on the same lens** — the register groups by kind or by
-currency with the same switch — so the parts named here are the sections
-there.
+it says what is owed, because a negative cannot be a share of a whole. A kind
+or currency row is a door into S16 **on the same lens** — the register groups
+by kind or by currency with the same switch — so the parts named here are the
+sections there. An account row opens that account's transactions, the
+register's own row tap (S16 §2).
 
 **Loans are listed, and sit outside the total** — below a rule that says so, in
 muted figures rather than money colours (`computations.md` §3.1). Receivables
@@ -552,7 +554,7 @@ happened*.
 | `SearchField` | The search itself, pinned under `PageTabs` while one is on, with the live match count and an `✕` that **leaves the search** — it empties the field and closes it in one press, because this field is pinned open and the ✕ is the only way back to an unnarrowed ledger. It is therefore offered whether or not anything is typed, which is the opposite of the clear control's own rule elsewhere (`03` §3.7: a clear button on an empty field is a target with nothing to do). Drawn inline — no border, no fill — on a band that is already a surface. **Under the tabs, not in the header**: the header's shape is a function of the scroll — the title travels, scales and hands its room to a stepper — so a field placed there would either inherit the collapse or fight it, and the period would leave the screen exactly when §7 wants the reader stepping through periods. It stays open for as long as the search is on, which is what says the screen is narrowed |
 | `Pager` | The four pages, swiped or tapped between, over one shared date |
 | `GatewayGrid` | Summary's *Go to* — rows on the ground, two across, each with a figure. Not cards: a card groups rows or holds a hero, and a single destination is neither. Only destinations neither the tab bar **nor the shared bar** carries, which is why Accounts, Debt and the agent are absent from it |
-| `HoldingsCard` | The hero, over `holdings()` (`computations.md` §3.1). Title and account count on one line (the count → S16; *9 of 10 accounts* when one has no rate), the total at display size, a *held · owed* line, the lens's composition bar, and *Break it down*. Open, a `SegmentControl` (*By kind* · *By currency*) and rows — swatch, name, count, figure, chevron → S16 on that lens — then, by kind, *Loans · outside the total*. Labelled *mine* only where *ours* is drawn under the figure; otherwise *What you hold* (§6.7). Renders above the error branch, so a failed refresh keeps it (§6) |
+| `HoldingsCard` | The hero, over `holdings()` (`computations.md` §3.1). Title and account count on one line (the count → S16; *9 of 10 accounts* when one has no rate), the total at display size, a *held · owed* line, the lens's composition bar, and *Break it down*. Open, a `SegmentControl` (*By kind* · *By currency* · *By account*) and rows — swatch, name, count, figure, chevron → S16 on that lens, or an account's own transactions — then, by kind, *Loans · outside the total*. Labelled *mine* only where *ours* is drawn under the figure; otherwise *What you hold* (§6.7). Renders above the error branch, so a failed refresh keeps it (§6) |
 | `MonthSummary` | The compact card under the hero, opening month only. Label and signed figure on one line, a `FlowBar`, then the labelled pair. Draws three zeroes for a period the ledger did not exist in — that is the true answer, not an empty state. **The three labels are a prop**, defaulting to this screen's: S12 §3 holds debt's subtraction in the same card, and a second component would be the same shape twice |
 | `FlowBar` | Track is *came in*, fill is *went out*, gap is *kept*. Fill clamps at 100%; a deficit is carried by the figures, not by an overrunning bar |
 | `SpendRows` | *Where it went* — §6 at leaf granularity, five rows plus a named remainder, bars proportional to the largest row, one colour. Opening month only |

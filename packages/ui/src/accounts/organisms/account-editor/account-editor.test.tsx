@@ -29,6 +29,7 @@ const account: AccountEditorAccount = {
   groupId: null,
   version: 3,
   expectedBalance: null,
+  color: null,
 };
 
 const groups: readonly AccountEditorGroup[] = [{ id: "group-1", name: "Household" }];
@@ -124,6 +125,45 @@ it("emits a patch with only the field that changed", () => {
   fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Bank A · renamed" } });
   fireEvent.click(screen.getByRole("button", { name: "Save" }));
   expect(onSave).toHaveBeenCalledWith({ name: "Bank A · renamed" });
+});
+
+function renderEditor(
+  onSave: (patch: unknown) => void,
+  overrides: Partial<AccountEditorAccount> = {},
+) {
+  render(
+    <AccountEditor
+      account={{ ...account, ...overrides }}
+      today={TODAY}
+      groups={groups}
+      onCancel={noop}
+      onSave={onSave}
+      onArchive={noop}
+      onReconcile={noop}
+      onCreateGroup={noopCreateGroup}
+    />,
+  );
+}
+
+/** `02-tokens` §2.1b — a colour of its own is one field in the patch, and nothing else moves. */
+it("sends a picked colour and nothing else", () => {
+  const onSave = vi.fn();
+  renderEditor(onSave);
+  expect(screen.getByRole("radio", { name: "Its kind's" }).getAttribute("aria-checked")).toBe(
+    "true",
+  );
+  fireEvent.click(screen.getByRole("radio", { name: "Rust" }));
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
+  expect(onSave).toHaveBeenCalledWith({ color: "rust" });
+});
+
+/** Taking the override back is `null`, the kind's own — never the kind's colour written down. */
+it("takes a colour back to its kind's as null", () => {
+  const onSave = vi.fn();
+  renderEditor(onSave, { color: "teal" });
+  fireEvent.click(screen.getByRole("radio", { name: "Its kind's" }));
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
+  expect(onSave).toHaveBeenCalledWith({ color: null });
 });
 
 it("forces business off when ownership moves to shared, and disables the toggle", () => {

@@ -12,6 +12,9 @@ const rateOf = (currency: money.CurrencyCode) =>
 
 function account(overrides: Partial<HoldingsAccount> = {}): HoldingsAccount {
   return {
+    id: `a-${Math.random()}`,
+    name: "Bank A",
+    color: null,
     kind: "bank",
     currency: PLN,
     decimals: 2,
@@ -69,6 +72,26 @@ describe("holdings", () => {
       rateOf,
     );
     expect([fig(h.held), fig(h.owed), fig(h.mine)]).toEqual(["100.00", "40.00", "60.00"]);
+  });
+
+  /** The third lens: every counted account, own figure and converted, in the order handed in. */
+  it("lists each counted account, loans and shared ones apart", () => {
+    const h = holdings(
+      [
+        account({ id: "a1", name: "Bank A", color: "rust" }),
+        account({ id: "a2", name: "Dollar", currency: USD, balance: money.toMoney("10") }),
+        account({ id: "a3", kind: "loan_payable", balance: money.toMoney("-5") }),
+        account({ id: "a4", ownership: "shared" }),
+      ],
+      DISPLAY,
+      rateOf,
+    );
+    expect(h.byAccount.map((row) => [row.id, row.color, fig(row.balance), fig(row.value)])).toEqual(
+      [
+        ["a1", "rust", "100.00", "100.00"],
+        ["a2", null, "10.00", "40.00"],
+      ],
+    );
   });
 
   /** Nine of ten, said as such — never a tenth at a guessed rate. */

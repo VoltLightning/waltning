@@ -18,6 +18,7 @@ import type { JsonValue } from "@waltning/core/json";
 import type { CurrencyCode, Money, PivotPerUnit, UnitsPerPivot } from "@waltning/core/money";
 import * as money from "@waltning/core/money";
 import {
+  type AccountColor,
   type AccountKind,
   type AddCurrencyInput,
   type AllocateSharesInput,
@@ -176,6 +177,8 @@ export type PhoneAccount = {
   hidden: boolean;
   /** S16 §3 — in the register's total, a separate question from being in its list. */
   inTotal: boolean;
+  /** A colour picked by hand, or `null` for the kind's own (`02-tokens` §2.1b). */
+  color: AccountColor | null;
   /** The last balance a reconciliation recorded (S16 §5) — `null` before the first one. */
   expectedBalance: Money | null;
   /** `AccountEditor`'s own fields — shown and, `version` apart, edited. */
@@ -1352,6 +1355,7 @@ export type AccountPatch = Partial<{
   isBusiness: boolean;
   openingBalance: string;
   openingDate: string | null;
+  color: AccountColor | null;
 }>;
 
 export type UpdateAccountDraft = {

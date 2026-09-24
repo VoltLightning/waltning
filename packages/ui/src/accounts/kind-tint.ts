@@ -15,7 +15,7 @@
  * default and shipping two kinds wearing the same mark.
  */
 
-import type { AccountKind } from "@waltning/core/registry/inputs";
+import type { AccountColor, AccountKind } from "@waltning/core/registry/inputs";
 import type { Theme } from "../theme/roles.ts";
 import { accountKindRamp } from "../tokens.ts";
 
@@ -62,3 +62,26 @@ export function kindTint(kind: AccountKind, theme: Theme): KindTint {
     ? { tint: step.darkTint, ink: step.darkInk }
     : { tint: step.tint, ink: step.ink };
 }
+
+/**
+ * The colour an **account** wears: the one picked for it by hand, or its
+ * kind's (`02-tokens` §2.1b). The nine picks are the ramp's own pairs, so a
+ * hand-picked colour keeps every contrast and spacing guarantee the defaults
+ * carry — there is no colour an account can be given that the ramp has not
+ * been checked with.
+ */
+export function accountTint(
+  account: { kind: AccountKind; color?: AccountColor | null | undefined },
+  theme: Theme,
+): KindTint {
+  if (account.color === null || account.color === undefined) return kindTint(account.kind, theme);
+  const step = BY_COLOR.get(account.color);
+  if (step === undefined) return kindTint(account.kind, theme);
+  return theme.scheme === "dark"
+    ? { tint: step.darkTint, ink: step.darkInk }
+    : { tint: step.tint, ink: step.ink };
+}
+
+const BY_COLOR = new Map<AccountColor, (typeof accountKindRamp)[number]>(
+  accountKindRamp.map((step) => [step.color, step]),
+);

@@ -25,6 +25,7 @@
  */
 
 import type * as money from "@waltning/core/money";
+import { useMemo } from "react";
 import { Text, View } from "react-native";
 import { Amount } from "../../../fx/atoms/amount/amount";
 import { FxAmount, type FxProvenance } from "../../../fx/atoms/fx-amount/fx-amount";
@@ -34,7 +35,7 @@ import { Tag } from "../../../primitives/atoms/tag";
 import { useInteraction } from "../../../primitives/interaction.ts";
 import { text } from "../../../theme/fonts.ts";
 import { makeStyles } from "../../../theme/styles.ts";
-import { focus, hairline, space, touchTarget } from "../../../tokens.ts";
+import { focus, hairline, radius, space, touchTarget } from "../../../tokens.ts";
 
 export type BalanceRowProps = {
   account: string;
@@ -71,6 +72,12 @@ export type BalanceRowProps = {
   /** Present only where the row is a target — S16's register, tap to edit. */
   onPress?: () => void;
   /**
+   * The account's own colour, as a small square before its name — its kind's,
+   * or one picked by hand (`02-tokens` §2.1b). The register is where accounts
+   * are listed, so it is where a colour chosen in the editor is recognised.
+   */
+  swatch?: string;
+  /**
    * The first row of its section draws no rule above it — the section's own
    * label is already the thing that begins the list, and a hairline between a
    * label and the row it introduces reads as a divider between two unrelated
@@ -95,16 +102,22 @@ export function BalanceRow({
   unsettled = false,
   expectedBalance,
   onPress,
+  swatch,
   first = false,
 }: BalanceRowProps) {
   const t = useT();
   const styles = useStyles();
   const { focused, handlers } = useInteraction();
+  const swatchFill = useMemo(
+    () => (swatch === undefined ? undefined : { backgroundColor: swatch }),
+    [swatch],
+  );
 
   const content = (
     <View style={[styles.row, first ? null : styles.ruled]}>
       <View style={styles.identity}>
         <View style={styles.nameLine}>
+          {swatchFill === undefined ? null : <View style={[styles.swatch, swatchFill]} />}
           <Text style={styles.name}>{account}</Text>
           {isBusiness ? <Tag variant="biz">{t("accounts.tagBiz")}</Tag> : null}
           {unsettled ? <Tag variant="warn">{t("accounts.tagUnsettled")}</Tag> : null}
@@ -156,6 +169,7 @@ export function BalanceRow({
 }
 
 const useStyles = makeStyles((theme) => ({
+  swatch: { width: 10, height: 10, borderRadius: radius.xs },
   row: {
     flexDirection: "row",
     alignItems: "center",

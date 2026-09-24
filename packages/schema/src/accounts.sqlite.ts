@@ -1,6 +1,7 @@
 import * as money from "@waltning/core/money";
 import { accountGroups } from "./account-groups.sqlite.ts";
 import { currencies } from "./currencies.sqlite.ts";
+import type { AccountColor } from "./enums.ts";
 import { ACCOUNT_KIND, OWNERSHIP } from "./enums.ts";
 import { sqliteKit as k } from "./kit.ts";
 
@@ -55,6 +56,13 @@ export const accountsColumns = () => ({
    * new accounts out would make it wrong the moment one was created.
    */
   inTotal: k.boolean("in_total").notNull().default(true),
+  /**
+   * **A colour chosen by hand**, or `null` for the kind's own (`02-tokens`
+   * §2.1b). Two banks are one colour by default; this is how one of them
+   * becomes the orange one you recognise in a bar. A key into the ramp, never
+   * a hex — the CHECK naming the nine is in `packages/db`.
+   */
+  color: k.text("color").$type<AccountColor>(),
   sort: k.integer("sort").notNull().default(0),
   externalId: k.text("external_id"),
   createdAt: k.stamp("created_at"),

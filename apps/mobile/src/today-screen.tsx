@@ -620,6 +620,10 @@ export default function Today() {
    * tap on the same lens apply again: the Accounts tab stays mounted, and a
    * lens switched by hand in between would otherwise keep the request out.
    */
+  /** An account row in the breakdown — the register's own row tap (S16 §2). */
+  const handleOpenAccount = useCallback((id: string) => {
+    router.push({ pathname: "/", params: { account: id } });
+  }, []);
   const handleOpenHoldings = useCallback((lens: HoldingsLens) => {
     router.push({ pathname: "/accounts", params: { view: lens, nonce: String(Date.now()) } });
   }, []);
@@ -649,9 +653,16 @@ export default function Today() {
             name: snapshot.currencies.find((currency) => currency.code === row.currency)?.name,
           }))}
           onOpenAccounts={handleOpenHoldings}
+          onOpenAccount={handleOpenAccount}
         />
       ),
-    [holdings, snapshot.accounts.length, snapshot.currencies, handleOpenHoldings],
+    [
+      holdings,
+      snapshot.accounts.length,
+      snapshot.currencies,
+      handleOpenHoldings,
+      handleOpenAccount,
+    ],
   );
 
   /**

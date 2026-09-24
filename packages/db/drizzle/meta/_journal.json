@@ -162,6 +162,13 @@
       "when": 1790225289720,
       "tag": "0022_identity_link",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1790268835298,
+      "tag": "0023_account_color",
+      "breakpoints": true
     }
   ]
 }

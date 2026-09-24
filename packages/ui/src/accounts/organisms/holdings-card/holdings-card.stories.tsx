@@ -55,7 +55,70 @@ const BASE: HoldingsCardProps = {
     { kind: "loan_receivable", count: 1, value: money.toMoney("3000.00") },
     { kind: "loan_payable", count: 1, value: money.toMoney("-3795.00") },
   ],
+  byAccount: [
+    {
+      id: "a1",
+      name: "Bank A",
+      kind: "bank",
+      color: null,
+      currency: "PLN",
+      decimals: 2,
+      balance: money.toMoney("18200.00"),
+      value: money.toMoney("18200.00"),
+    },
+    {
+      id: "a2",
+      name: "Bank B",
+      kind: "bank",
+      color: "rust",
+      currency: "PLN",
+      decimals: 2,
+      balance: money.toMoney("6110.52"),
+      value: money.toMoney("6110.52"),
+    },
+    {
+      id: "a3",
+      name: "Wallet",
+      kind: "cash",
+      color: null,
+      currency: "PLN",
+      decimals: 2,
+      balance: money.toMoney("1820.00"),
+      value: money.toMoney("1820.00"),
+    },
+    {
+      id: "a4",
+      name: "Card A",
+      kind: "card",
+      color: null,
+      currency: "PLN",
+      decimals: 2,
+      balance: money.toMoney("-1254.68"),
+      value: money.toMoney("-1254.68"),
+    },
+    {
+      id: "a5",
+      name: "Brokerage",
+      kind: "investment",
+      color: null,
+      currency: "USD",
+      decimals: 2,
+      balance: money.toMoney("2380.00"),
+      value: money.toMoney("9640.00"),
+    },
+    {
+      id: "a6",
+      name: "Savings",
+      kind: "deposit",
+      color: "teal",
+      currency: "PLN",
+      decimals: 2,
+      balance: money.toMoney("14900.00"),
+      value: money.toMoney("14900.00"),
+    },
+  ],
   onOpenAccounts: noop,
+  onOpenAccount: noop,
 };
 
 const meta = {
@@ -78,3 +141,10 @@ export const Shared: Story = { args: { ours: money.toMoney("61240.10") } };
 
 /** One currency has no rate — the count says the total covers nine of ten. */
 export const OneWithoutARate: Story = { args: { of: 10 } };
+
+/**
+ * **Each account in its own colour** — two banks, one of them given rust by
+ * hand, and a deposit given teal. The third lens is where a colour picked in
+ * the editor is read.
+ */
+export const ByAccount: Story = { args: { initiallyOpen: true, initialLens: "account" } };

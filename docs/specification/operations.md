@@ -119,7 +119,7 @@ Auto column: ✅ eligible for a bounded auto-mode grant, ❌ never.
 
 | Operation | Auto | Notes |
 |---|---|---|
-| `create_account` · `update_account` · `archive_account` · `reorder_accounts` | ❌ | Structural |
+| `create_account` · `update_account` · `archive_account` · `reorder_accounts` | ❌ | Structural. `update_account`'s patch carries `color` — one of `02-tokens` §2.1b's nine keys, or `null` for the kind's own; never a hex, and `accounts_color_known` refuses anything else |
 | `set_account_visibility` | ❌ | S16 §3's two pills — what the register shows (`hidden`), and what its total counts (`in_total`). **Not archiving**: the account stays open, stays captured into, and every figure outside the register is unchanged, where `archive_account` says it is finished and takes it out of the pickers. A hidden account that claims to be counted is **refused** — a row nobody can see still moving the total is a figure with no way to check it. Refused on an archived account, which is already out of the register. Compare-and-swap on `version` |
 | `create_group` · `update_group` · `reorder_groups` · `archive_group` | ❌ | **Were missing.** `update_group` sets `institution`, which `FX Cost` totals by — a headline figure whose grouping field nothing could set. Several groups may share one institution |
 | `reconcile_account` | ❌ | **Was missing entirely.** Writes one `adjustment` transaction for the difference between the computed balance and one you observed, and updates `expected_balance`. Never a silent balance overwrite — the balance is derived (`computations.md` §2) and there is no field to set. The agent may *notice* a discrepancy; it cannot assert what you counted |

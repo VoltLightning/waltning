@@ -287,6 +287,12 @@ square of its own `ink`, and the section label beside it takes that same `ink`
 themes (`theme.test.tsx`). `categoryRamp` needs a third because its marks
 carry white letters; these carry nothing.
 
+**A default an account can override.** Each step carries a `color` key, and an
+account may be given any of the nine by hand (`update_account`'s `color`;
+`accountTint` resolves it, and `null` is the kind's own). A picked colour is
+still one of these pairs, so it inherits every guarantee here; the ramp's keys
+and `ACCOUNT_COLOR` are held equal by `theme.test.tsx`.
+
 **Green and red stay money's.** `income` and `spend` are the colours a figure is
 read by, so every kind keeps at least 9 from both: *cash* is teal rather than
 green, *loan_payable* rust rather than red. `theme.test.tsx` holds both

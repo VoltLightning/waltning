@@ -14,6 +14,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { render, screen } from "@testing-library/react";
+import { ACCOUNT_COLOR } from "@waltning/core/registry/inputs";
 import { useEffect, useRef } from "react";
 import { describe, expect, it } from "vitest";
 import { accountKindRamp, categoryRamp, color, darkColor, radius } from "../tokens.ts";
@@ -783,6 +784,15 @@ describe("a component follows the active theme", () => {
         }
       }
     }
+  });
+
+  /**
+   * Every colour an account can be given is one of the ramp's pairs, and every
+   * pair can be given — so a hand-picked colour carries exactly the contrast
+   * and spacing the two tests above hold, and none is offered that they skip.
+   */
+  it("offers exactly the ramp's colours for an account to pick", () => {
+    expect(accountKindRamp.map((step) => step.color).sort()).toEqual([...ACCOUNT_COLOR].sort());
   });
 
   it("carries white on every category mark", () => {

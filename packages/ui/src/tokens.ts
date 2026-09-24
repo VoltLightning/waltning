@@ -460,6 +460,8 @@ export const accountKindRamp = [
   {
     kind: "bank",
     name: "blue",
+    /** The key an account picks this colour by (`ACCOUNT_COLOR`). */
+    color: "blue",
     tint: "#e8f1fe",
     ink: "#003988",
     darkTint: "#29364a",
@@ -468,6 +470,7 @@ export const accountKindRamp = [
   {
     kind: "cash",
     name: "teal",
+    color: "teal",
     tint: "#e4f5ee",
     ink: "#004a36",
     darkTint: "#1f3c32",
@@ -476,6 +479,7 @@ export const accountKindRamp = [
   {
     kind: "card",
     name: "rose",
+    color: "rose",
     tint: "#fcebf1",
     ink: "#a14b70",
     darkTint: "#462d36",
@@ -484,6 +488,7 @@ export const accountKindRamp = [
   {
     kind: "clearing",
     name: "slate",
+    color: "slate",
     tint: "#eef0f3",
     ink: "#465463",
     darkTint: "#323639",
@@ -492,6 +497,7 @@ export const accountKindRamp = [
   {
     kind: "loan_receivable",
     name: "sky",
+    color: "sky",
     tint: "#e2f4f9",
     ink: "#007499",
     darkTint: "#1b3a43",
@@ -500,6 +506,7 @@ export const accountKindRamp = [
   {
     kind: "loan_payable",
     name: "rust",
+    color: "rust",
     tint: "#fdece8",
     ink: "#873d2e",
     darkTint: "#482e28",
@@ -508,6 +515,7 @@ export const accountKindRamp = [
   {
     kind: "investment",
     name: "violet",
+    color: "violet",
     tint: "#f1eefd",
     ink: "#6f56aa",
     darkTint: "#373148",
@@ -516,6 +524,7 @@ export const accountKindRamp = [
   {
     kind: "deposit",
     name: "umber",
+    color: "umber",
     tint: "#faeee3",
     ink: "#553516",
     darkTint: "#443120",
@@ -524,6 +533,7 @@ export const accountKindRamp = [
   {
     kind: "other",
     name: "warm grey",
+    color: "warm_grey",
     tint: "#f2f0ec",
     ink: "#776959",
     darkTint: "#383531",

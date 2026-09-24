@@ -3,6 +3,7 @@ import type { Id } from "@waltning/core/id";
 import type { CurrencyCode, Money } from "@waltning/core/money";
 import * as money from "@waltning/core/money";
 import type { AccountKind } from "@waltning/core/registry/inputs";
+import type { AccountColor } from "@waltning/schema/enums";
 import { and, asc, eq, inArray, isNull, or } from "drizzle-orm";
 import type { ReplicaDb } from "../open.ts";
 import { ledgerSchema } from "../schema-map.ts";
@@ -41,6 +42,8 @@ export type LocalAccountSummary = {
   hidden: boolean;
   /** S16 §3 — in the register's total, a separate question from being in its list. */
   inTotal: boolean;
+  /** A colour picked by hand, or `null` for the kind's own (`02-tokens` §2.1b). */
+  color: AccountColor | null;
   expectedBalance: Money | null;
   openingBalance: Money;
   openingDate: AccountingDate | null;
@@ -81,6 +84,7 @@ function selectAccountRows<TRun, TSchema extends typeof ledgerSchema>(
       archived: accounts.archived,
       hidden: accounts.hidden,
       inTotal: accounts.inTotal,
+      color: accounts.color,
       openingBalance: accounts.openingBalance,
       openingDate: accounts.openingDate,
       memo: accounts.memo,

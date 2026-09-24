@@ -24,6 +24,7 @@ const ACCOUNT: AccountEditorAccount = {
   groupId: null,
   version: 3,
   expectedBalance: null,
+  color: null,
 };
 
 const GROUPS = [{ id: "group-bank-a", name: "Bank A" }];

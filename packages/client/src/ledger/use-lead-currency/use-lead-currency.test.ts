@@ -51,6 +51,7 @@ function account(overrides: Partial<PhoneAccount>): PhoneAccount {
     archived: false,
     hidden: false,
     inTotal: true,
+    color: null,
     expectedBalance: null,
     openingBalance: money.toMoney("0"),
     openingDate: null,

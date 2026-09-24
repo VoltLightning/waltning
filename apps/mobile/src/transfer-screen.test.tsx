@@ -55,6 +55,7 @@ const HOUSEHOLD: PhoneAccount = {
   archived: false,
   hidden: false,
   inTotal: true,
+  color: null,
   expectedBalance: null,
   openingBalance: toMoney("0"),
   openingDate: null,

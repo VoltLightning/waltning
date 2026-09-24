@@ -40,6 +40,24 @@ export const ACCOUNT_KIND = [
 /** §6.7 — a shared account is ordinary; it just belongs to a different total. */
 export const OWNERSHIP = ["own", "shared"] as const;
 
+/**
+ * The colours an account can be given by hand — `02-tokens` §2.1b's nine, by
+ * name. A key rather than a hex, so each one is its own pair in both themes
+ * and keeps the ramp's contrast and spacing guarantees; `null` on the column
+ * means *the kind's own*.
+ */
+export const ACCOUNT_COLOR = [
+  "blue",
+  "teal",
+  "rose",
+  "slate",
+  "violet",
+  "umber",
+  "warm_grey",
+  "sky",
+  "rust",
+] as const;
+
 export const CATEGORY_KIND = ["income", "expense"] as const;
 
 export const TXN_TYPE = ["income", "expense", "transfer", "adjustment"] as const;
@@ -111,6 +129,7 @@ export const BRAND_SOURCE = ["auto", "manual", "none"] as const;
 
 export type AccountKind = (typeof ACCOUNT_KIND)[number];
 export type Ownership = (typeof OWNERSHIP)[number];
+export type AccountColor = (typeof ACCOUNT_COLOR)[number];
 export type CategoryKind = (typeof CATEGORY_KIND)[number];
 export type TxnType = (typeof TXN_TYPE)[number];
 export type TxnSource = (typeof TXN_SOURCE)[number];

@@ -1,0 +1,2 @@
+ALTER TABLE "accounts" ADD COLUMN "color" text;--> statement-breakpoint
+ALTER TABLE "accounts" ADD CONSTRAINT "accounts_color_known" CHECK (color is null or color in ('blue', 'teal', 'rose', 'slate', 'violet', 'umber', 'warm_grey', 'sky', 'rust'));

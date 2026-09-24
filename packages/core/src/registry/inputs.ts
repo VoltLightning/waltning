@@ -83,6 +83,25 @@ export const ACCOUNT_KIND = [
 /** §6.7 — a shared account is ordinary; it just belongs to a different total. */
 const OWNERSHIP = ["own", "shared"] as const;
 
+/**
+ * An account's hand-picked colour — `02-tokens` §2.1b's nine, by name.
+ * Restated from `@waltning/schema/enums`, and pinned to it by
+ * `packages/db`'s `account-color.test.ts`. Exported so the editor's picker
+ * offers exactly what the input accepts.
+ */
+export const ACCOUNT_COLOR = [
+  "blue",
+  "teal",
+  "rose",
+  "slate",
+  "violet",
+  "umber",
+  "warm_grey",
+  "sky",
+  "rust",
+] as const;
+export type AccountColor = (typeof ACCOUNT_COLOR)[number];
+
 const TXN_TYPE = ["income", "expense", "transfer", "adjustment"] as const;
 
 /** S29 writes migrated rows as `migration`; the receipt and voice paths differ too. */
@@ -597,6 +616,12 @@ const accountPatch = z
     isBusiness: z.boolean().optional(),
     openingBalance: zMoney.optional(),
     openingDate: zAccountingDate.nullable().optional(),
+    /**
+     * A colour of the account's own, or `null` for its kind's (`02-tokens`
+     * §2.1b). A key, never a hex: the nine are the ramp's, each a pair that
+     * holds its contrast in both themes.
+     */
+    color: z.enum(ACCOUNT_COLOR).nullable().optional(),
   })
   .strict();
 
