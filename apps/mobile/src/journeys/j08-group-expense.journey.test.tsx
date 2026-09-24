@@ -25,10 +25,10 @@ import type { JourneyRouterStub } from "./journey-harness";
 
 installPhoneLayout();
 
-const switchTab = { today: vi.fn(), ledger: vi.fn(), debt: vi.fn(), settings: vi.fn() };
+const switchTab = { today: vi.fn(), ledger: vi.fn(), counterparties: vi.fn(), settings: vi.fn() };
 
 vi.mock("expo-router/ui", () => ({
-  useTabTrigger: ({ name }: { name: "today" | "ledger" | "debt" }) => ({
+  useTabTrigger: ({ name }: { name: "today" | "ledger" | "counterparties" }) => ({
     trigger: { isFocused: name === "today" },
     switchTab: switchTab[name],
   }),
@@ -171,7 +171,7 @@ describe("J08 — group expense", () => {
 
     // And what it became: three debts, each in the debt ledger because the
     // role is what puts it there (§6.6).
-    act(() => stub.pushWithParams("debt", {}));
+    act(() => stub.pushWithParams("counterparties", {}));
     await settleLayout();
     const debt = document.body.textContent ?? "";
     for (const name of ["Placeholder", "Marek", "Piotr"]) expect(debt).toContain(name);

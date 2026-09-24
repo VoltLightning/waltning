@@ -22,7 +22,7 @@ One person's full position, across every currency at once.
 S10 on the desk, S04 on the phone.
 
 **Caller selects the initial view.** From Debt, show debts as described below;
-from S37, show all linked transactions, matching either identity FK and counting
+from S12's *Everyone*, show all linked transactions, matching either link and counting
 a transaction only once. Display the role per row and keep the debt totals
 separate from purchases. Reference-only parties have a truthful no-debt state,
 not a fictitious zero repayment action. `SPEC.md` §6.6.1 defines identity history.
@@ -53,7 +53,7 @@ not a fictitious zero repayment action. `SPEC.md` §6.6.1 defines identity histo
 ```
 
 **When entered from Debt, history defaults to `debt` rows**, so every visible
-row explains a number in the ledger above it. S37 enters All activity instead. `contribution` rows, and rows that merely
+row explains a number in the ledger above it. S12's *Everyone* enters All activity instead. `contribution` rows, and rows that merely
 name this counterparty (the identity link, no obligation), are one tap away — and
 the toggle **states the count it is hiding**, because a default filter that
 silently omits real data is the failure mode, and naming the count is the
@@ -127,7 +127,7 @@ Same, with history as a sortable table and both actions in a fixed header.
 
 1. ~~**Should history include rows that merely name this counterparty?**~~
    **Decided: available behind a toggle, debts only when entered from Debt;
-   all activity from S37.** Asked when such a row meant `role = 'reference'`;
+   all activity from S12's *Everyone*.** Asked when such a row meant `role = 'reference'`;
    it is now the identity link with no obligation, and the answer is
    unchanged — the read is `search_transactions(involvesCounterpartyId)`,
    which matches either link and returns a row once. The primary read stays clean —

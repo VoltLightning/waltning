@@ -58,11 +58,11 @@ function formatRate(rate: string): string {
 
 installPhoneLayout();
 
-const switchTab = { today: vi.fn(), ledger: vi.fn(), debt: vi.fn(), settings: vi.fn() };
-const focused: "today" | "ledger" | "debt" = "today";
+const switchTab = { today: vi.fn(), ledger: vi.fn(), counterparties: vi.fn(), settings: vi.fn() };
+const focused: "today" | "ledger" | "counterparties" = "today";
 
 vi.mock("expo-router/ui", () => ({
-  useTabTrigger: ({ name }: { name: "today" | "ledger" | "debt" }) => ({
+  useTabTrigger: ({ name }: { name: "today" | "ledger" | "counterparties" }) => ({
     trigger: { isFocused: name === focused },
     switchTab: switchTab[name],
   }),

@@ -40,7 +40,7 @@ vi.mock("expo-router", () => ({
 }));
 
 // L2 — spies on `emitClientDiagnostic` while keeping the module's other
-// exports (`clientFailure`) real, so `debt-screen.tsx`'s own totals-failure
+// exports (`clientFailure`) real, so `counterparties-screen.tsx`'s own totals-failure
 // effect can be counted rather than only observed through its render output.
 const emitClientDiagnosticSpy = vi.fn();
 vi.mock("@waltning/client/diagnostics", async (importOriginal) => {
@@ -53,9 +53,9 @@ vi.mock("@waltning/client/diagnostics", async (importOriginal) => {
   };
 });
 
+import Debt from "./counterparties-screen";
 import CounterpartyDetail from "./counterparty-detail-screen";
 import CounterpartyEditor from "./counterparty-editor-screen";
-import Debt from "./debt-screen";
 
 const PLN = currencyCode("PLN");
 const EUR = currencyCode("EUR");
@@ -248,8 +248,10 @@ describe("Debt (S12)", () => {
 
     expect(screen.getByText("Comes back to you")).toBeDefined();
     expect(screen.getByText("You lent")).toBeDefined();
-    // Twice now: the segment that filters to them, and the hero's own pair.
-    expect(screen.getAllByText("You owe")).toHaveLength(2);
+    // Once: the hero's own pair. The segment that used to repeat the word
+    // went with the S37 merge — the switcher asks *open or everyone* now, and
+    // direction is what the hero and the per-currency card already state.
+    expect(screen.getAllByText("You owe")).toHaveLength(1);
     // 840 lent less 240 owed — the hero states the gap, signed.
     expect(screen.getByText(/600[.,]00/)).toBeDefined();
   });
@@ -585,11 +587,26 @@ describe("Debt (S12)", () => {
     expect(screen.getByText("you owe")).toBeDefined();
   });
 
-  it("shows Nina under both They owe and You owe when her balances split both ways", () => {
+  /**
+   * **The merge S12 absorbed S37 for.** `listCounterpartyBalances` only ever
+   * returns parties money has moved with, so a shop somebody saved and has
+   * not spent at yet lives in the directory and nowhere else — which is the
+   * gap S37 existed to fill, and the one a switcher fills without a second
+   * screen to navigate to.
+   *
+   * Nina holds balances that split both ways, so she is *open* whichever way
+   * a net would have folded; the shop is in the directory and owes nothing,
+   * so it appears only under *Everyone*, under its own heading.
+   */
+  it("lists only open parties under Open, and the whole directory under Everyone", () => {
+    const shop = id<"counterparties">("99999999-9999-4999-8999-999999999999");
     const controller = controllerOf(
       basePort({
         listCurrencies: () => [EUR_PIVOT_CURRENCY],
-        listCounterparties: () => [{ ...NINA_COUNTERPARTY, settlementCurrency: EUR }],
+        listCounterparties: () => [
+          { ...NINA_COUNTERPARTY, settlementCurrency: EUR },
+          { ...NINA_COUNTERPARTY, id: shop, name: "Shop A", kind: "company" },
+        ],
         listCounterpartyBalances: () => NINA_MIXED_ROWS,
         readRate: () => null,
       }),
@@ -600,11 +617,15 @@ describe("Debt (S12)", () => {
       </LedgerProvider>,
     );
 
-    fireEvent.click(screen.getByText("They owe"));
     expect(screen.getByText("Nina")).toBeDefined();
+    expect(screen.queryByText("Shop A"), "a saved party owing nothing is not open").toBeNull();
 
-    fireEvent.click(screen.getByText("You owe"));
+    fireEvent.click(screen.getByText("Everyone"));
+
     expect(screen.getByText("Nina")).toBeDefined();
+    expect(screen.getByText("Shop A")).toBeDefined();
+    expect(screen.getByText("People"), "grouped by legal nature (S37 §3)").toBeDefined();
+    expect(screen.getByText("Companies")).toBeDefined();
   });
 
   /**

@@ -135,8 +135,8 @@ function tabSubtitle(name: string, t: ReturnType<typeof useT>): string {
       return t("pages.accounts");
     case "ledger":
       return t("shell.ledgerSubtitle");
-    case "debt":
-      return t("shell.debtSubtitle");
+    case "counterparties":
+      return t("shell.counterpartiesSubtitle");
     case "settings":
       return t("shell.settingsSubtitle");
     default:

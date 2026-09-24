@@ -186,7 +186,7 @@ more than its prose.
 | [S09](screens/S09-transaction-detail.md) | Transaction detail | both | — | 1 | specified |
 | [S10](screens/S10-transactions-list.md) | Transactions list | desk | — | 1 | specified |
 | [S11](screens/S11-calendar.md) | Calendar | desk | — | 1 | specified |
-| [S12](screens/S12-debt-counterparties.md) | Debt | both | — | 2 | specified |
+| [S12](screens/S12-counterparties.md) | Counterparties | both | — | 2 | specified |
 | [S13](screens/S13-counterparty-detail.md) | Counterparty detail | both | — | 2 | specified |
 | [S14](screens/S14-settle-sheet.md) | Settle sheet | both | — | 2 | specified |
 | [S15](screens/S15-counterparty-editor.md) | Counterparty editor | both | — | 2 | specified |
@@ -209,7 +209,6 @@ more than its prose.
 | [S34](screens/S34-subscriptions.md) | Subscriptions | both | — | 3 | specified |
 | [S35](screens/S35-conflict-sheet.md) | Conflict sheet | both | — | 3 | specified |
 | [S36](screens/S36-allocate.md) | Allocate | both | — | 2 | specified |
-| [S37](screens/S37-people-and-companies.md) | People & companies | both | ✅ | 2 | specified |
 
 **Deliberately not on every surface.** S01 and S04 answer the same question at
 different scales and would compete as landing surfaces, so neither is ported.

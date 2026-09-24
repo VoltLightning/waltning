@@ -1272,7 +1272,15 @@ export type UpdateCurrencyInput = z.output<typeof updateCurrencyInput>;
 export const createCounterpartyInput = z.object({
   id: zId<"counterparties">(),
   name: z.string().trim().min(1).max(120),
-  kind: z.enum(COUNTERPARTY_KIND).default("person"),
+  /**
+   * **No default, and that is the decision.** `person` and `company` are not
+   * interchangeable — O15 ages companies and not people, and the directory
+   * groups by this — so defaulting would have every unstated counterparty
+   * arrive as a person and be quietly wrong for half of them. A caller says
+   * which, including the agent: an unstated kind is an incomplete proposal,
+   * not one to guess at.
+   */
+  kind: z.enum(COUNTERPARTY_KIND),
   /** Their preference, not a system concept (§6.6 cross-currency debt). */
   settlementCurrency: zCurrencyCode.nullable().default(null),
   contact: z.string().trim().max(200).nullable().default(null),

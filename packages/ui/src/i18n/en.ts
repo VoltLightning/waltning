@@ -811,9 +811,10 @@ export const en = {
     /** `AgeingBar` — O15: *old*, never *overdue* (no `payment_terms_days` field exists). */
     ageingDays: "{{days}} days · old",
     /* ── S12 · the register ─────────────────────────────────────────────── */
-    segmentAll: "All",
-    segmentTheyOwe: "They owe",
-    segmentYouOwe: "You owe",
+    groupPeople: "People",
+    groupCompanies: "Companies",
+    segmentOpen: "Open",
+    segmentEveryone: "Everyone",
     /** The two direction totals — §6.6, never summed across people. */
     theyOweTotal: "they owe you",
     youOweTotal: "you owe",
@@ -847,7 +848,7 @@ export const en = {
      */
     noPivotTitle: "Couldn't read your currencies",
     noPivotWhy: "No currency in this ledger is marked as the reference one.",
-    /** M — `directionTotals` throwing on a genuine invariant violation (S12 debt-screen.tsx); the executor's own message is diagnostics-only. */
+    /** M — `directionTotals` throwing on a genuine invariant violation (S12 counterparties-screen.tsx); the executor's own message is diagnostics-only. */
     totalsInconsistentWhy: "Something went wrong totalling what's owed.",
     /* ── S13 · one person's whole position ──────────────────────────────── */
     netIn: "net in {{currency}}",
@@ -1075,7 +1076,7 @@ export const en = {
     home: "Home",
     /** The line under each tab root's name — what the screen is for. */
     ledgerSubtitle: "Every entry, in order",
-    debtSubtitle: "Who owes whom, and since when",
+    counterpartiesSubtitle: "Who you deal with, and what is outstanding",
     settingsSubtitle: "Everything about how this behaves",
     /** Summary's gateway grid — a kicker over the cards. */
     goTo: "Go to",
@@ -1384,7 +1385,7 @@ export const en = {
     accounts: "Accounts",
     editAccount: "Edit account",
     ledger: "Ledger",
-    debt: "Debt",
+    counterparties: "Counterparties",
     /** S09's nav title — no page heading repeats it (`TransactionHero` already states the amount). */
     transaction: "Transaction",
     settings: "Settings",

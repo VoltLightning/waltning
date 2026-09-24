@@ -13,7 +13,7 @@
  * app could do before a screen existed that could spend the pot down.
  *
  * **One function, because three screens ask.** `today-screen.tsx`,
- * `debt-screen.tsx` and `dashboard-screen.tsx` all render the banner, and all
+ * `counterparties-screen.tsx` and `dashboard-screen.tsx` all render the banner, and all
  * three had written the same two-branch `router.push` against the raw
  * snapshot row — which is how `S04` §3's rule (*"straight to the unallocated
  * transaction, not to a list"*) came to be stated in three places that could

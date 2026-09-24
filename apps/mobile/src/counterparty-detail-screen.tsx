@@ -191,7 +191,7 @@ export default function CounterpartyDetail() {
     snapshot.counterparties.find((candidate) => candidate.id === rawId) ??
     snapshot.archivedCounterparties.find((candidate) => candidate.id === rawId);
 
-  // H1 — `snapshot.revision` in deps (same reasoning as `debt-screen.tsx`):
+  // H1 — `snapshot.revision` in deps (same reasoning as `counterparties-screen.tsx`):
   // `listCounterpartyBalances` is a live controller read, never cached in
   // the snapshot, so without `revision` here `settleDebt` → `refresh()`
   // never invalidates this memo — the screen kept showing the pre-settle
@@ -607,7 +607,7 @@ export default function CounterpartyDetail() {
           variant="range"
           // L3 — the history section's own key: distinct from
           // `BalanceLedger`'s `ledgerSettled` (the card above) and from
-          // S12's own `emptySettledTitle` (`debt-screen.tsx`), which this
+          // S12's own `emptySettledTitle` (`counterparties-screen.tsx`), which this
           // used to borrow — two screens sharing one key meant an edit to
           // either's copy silently changed the other's.
           title={t("counterparties.historySettled")}

@@ -13,10 +13,10 @@ const switchTab = {
   today: vi.fn(),
   accounts: vi.fn(),
   ledger: vi.fn(),
-  debt: vi.fn(),
+  counterparties: vi.fn(),
   settings: vi.fn(),
 };
-type Tab = "today" | "accounts" | "ledger" | "debt" | "settings";
+type Tab = "today" | "accounts" | "ledger" | "counterparties" | "settings";
 let focused: Tab = "today";
 
 vi.mock("expo-router/ui", () => ({
@@ -36,7 +36,7 @@ describe("useTabBarItems", () => {
     expect(result.current.items.map((i) => i.name)).toEqual([
       "today",
       "accounts",
-      "debt",
+      "counterparties",
       "settings",
     ]);
     expect(result.current.items.map((i) => i.active)).toEqual([false, true, false, false]);
@@ -55,7 +55,7 @@ describe("useTabBarItems", () => {
       "today",
       "accounts",
       "ledger",
-      "debt",
+      "counterparties",
       "settings",
     ]);
     expect(result.current.deskItems.find((i) => i.active)?.name).toBe("ledger");
@@ -77,7 +77,7 @@ describe("useTabBarItems", () => {
       return <>{items.map((item) => item.label).join(" · ")}</>;
     }
     render(<Probe />);
-    expect(screen.getByText("Home · Accounts · Debt · Settings")).toBeDefined();
+    expect(screen.getByText("Home · Accounts · Counterparties · Settings")).toBeDefined();
   });
 
   /**
