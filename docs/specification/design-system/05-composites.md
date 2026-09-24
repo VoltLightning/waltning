@@ -212,6 +212,13 @@ parties agreed — not the rate a central bank published.
 
 ### 5.6 Data surfaces
 
+**Nothing destructive is ever on a swipe.** A gesture can be performed by
+accident, and one that removes a financial record removes it with no moment to
+see what is going; deletion is a control on the detail screen. **And no list
+row takes a gesture nothing on screen names** — a reader cannot discover it,
+so it fires by accident — which is why ledger rows answer a tap and nothing
+else.
+
 | Component | Notes |
 |---|---|
 | `FilterBar` | Account · category · scope · currency · date range · counterparty. Each filter is a `Chip` carrying its **value**, not its name — `Business` rather than `Scope`. An active filter shows the count it excludes, which is what `EmptyState(filtered)` reads from (§8.1). Clear-one and clear-all are separate affordances |

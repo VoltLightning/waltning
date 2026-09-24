@@ -230,7 +230,7 @@ it("names where the list is, and returns it", () => {
  * **A row does not slide, because the page already owns sideways** (S04 §7).
  * S04 is four pages a swipe moves between; a row that took a sideways drag
  * claimed that swipe for itself, so the content moved inside the card and the
- * page stayed put. No list's rows swipe now (S10 §7); this pins S04's.
+ * page stayed put. No list row swipes (S10 §7); this pins S04's.
  */
 it("draws an expense row with no layer that travels sideways", () => {
   draw(ledgerWith([row("2026-08-14", 1, "-96")]));
@@ -257,7 +257,7 @@ it("draws a transfer without a date of its own, like every row in a day", () => 
   expect(screen.queryByText("08-14")).toBeNull();
 });
 
-it("leaves a transfer tap-only, because it has no category to choose", () => {
+it("draws a transfer as one row that does not slide", () => {
   draw(
     ledgerWith([
       row("2026-08-14", 1, "-96", {
@@ -276,10 +276,7 @@ it("leaves a transfer tap-only, because it has no category to choose", () => {
   // two accounts rather than offering one target — so there is no button here
   // to find.
   const row1 = screen.getByText(/^Transfer · /);
-  expect(
-    row1.closest("[style*='translateX']"),
-    "a swipe onto a sheet with nothing in it is worse than no swipe",
-  ).toBeNull();
+  expect(row1.closest("[style*='translateX']"), "no swipe on S04's rows").toBeNull();
 });
 
 /**

@@ -31,36 +31,16 @@ export class PanBuilder {
   minDistance(_distance: number): this {
     return this;
   }
-  /**
-   * **Which axis the pan owns**, and which one it gives back.
-   *
-   * **Recorded, unlike the rest.** A sideways pan needs both of these to
-   * sit inside a vertical list at all — without them a pan activates in *any*
-   * direction and eats every scroll that begins on a row, which is a bug that
-   * shipped. Inert like every other builder here, the axes could be swapped —
-   * the exact inversion of that fix — and every test in the repository still
-   * passed. Storing the values is what lets one assert the thing the spec
-   * states: the sideways threshold is the larger of the two.
-   */
-  activeOffsetXValue: number | readonly number[] | null = null;
-  activeOffsetYValue: number | readonly number[] | null = null;
-  failOffsetXValue: number | readonly number[] | null = null;
-  failOffsetYValue: number | readonly number[] | null = null;
-
-  activeOffsetX(offsets: number | readonly number[]): this {
-    this.activeOffsetXValue = offsets;
+  activeOffsetX(_offsets: number | readonly number[]): this {
     return this;
   }
-  activeOffsetY(offsets: number | readonly number[]): this {
-    this.activeOffsetYValue = offsets;
+  activeOffsetY(_offsets: number | readonly number[]): this {
     return this;
   }
-  failOffsetX(offsets: number | readonly number[]): this {
-    this.failOffsetXValue = offsets;
+  failOffsetX(_offsets: number | readonly number[]): this {
     return this;
   }
-  failOffsetY(offsets: number | readonly number[]): this {
-    this.failOffsetYValue = offsets;
+  failOffsetY(_offsets: number | readonly number[]): this {
     return this;
   }
   enabled(_enabled: boolean): this {

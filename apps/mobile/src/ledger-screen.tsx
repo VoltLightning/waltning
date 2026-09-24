@@ -1,7 +1,6 @@
 /**
  * S10 · the whole ledger — searchable, filterable, grouped by day, with a
- * running total. Rows answer a tap only: a sideways drag did two things
- * nothing on screen named, and was removed rather than labelled (S10 §7).
+ * running total. Rows answer a tap and nothing else (S10 §7).
  *
  * **One screen, both surfaces**, per `wave-3-shared.md` §3 — a real second
  * layout, not a style tweak, branched on `useBreakpoint()` at the top of the
