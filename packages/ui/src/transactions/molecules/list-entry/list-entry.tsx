@@ -42,7 +42,6 @@ import { type DayTotal, type EntryHeightKey, heightKeyOf, type ListEntry } from 
  */
 export type ListEntryHandlers = {
   onOpenTransaction: (id: string) => void;
-  onCategorize: (id: string, kind: "income" | "expense") => void;
   /** Going to a day — from a collapsed run's *Show*. */
   onPickDay: (date: string) => void;
 };
@@ -128,21 +127,19 @@ function body(
 export const ListEntryCell = memo(ListEntryView);
 
 /**
- * One row, and the two gestures S04 §7 gives it.
+ * One row, and a tap is all it answers (S04 §7).
  *
- * **A component rather than two arrows in JSX.** `architecture/11` refuses an
- * inline function there, and this row is why the rule exists: a fresh pair per
- * render would make `LedgerRowItem`'s `memo` compare unequal on every scroll
- * frame and re-render every visible row.
+ * **No swipe, because the page already owns sideways.** S04 is four pages a
+ * swipe moves between, and a row that also slid under the finger claimed that
+ * swipe for itself: the content moved inside the card and the page stayed
+ * where it was. Both things the swipe did are a tap away — S09 is where a
+ * row's category and every other field live.
  *
- * `LedgerRowItem` decides *whether* the row swipes — a transfer and an
- * adjustment have no category by constraint — so the kind read here is only
- * ever the kind that reaches the sheet.
+ * **A component rather than an arrow in JSX.** `architecture/11` refuses an
+ * inline function there, and a fresh one per render would make
+ * `LedgerRowItem`'s `memo` compare unequal on every scroll frame.
  */
 function ListRowView({ row, handlers }: { row: Row; handlers: ListEntryHandlers }) {
-  const kind = row.type === "income" ? "income" : "expense";
-  const onCategorize = handlers.onCategorize;
-  const categorize = useCallback((id: string) => onCategorize(id, kind), [onCategorize, kind]);
   return (
     <LedgerRowItem
       row={row}
@@ -150,11 +147,6 @@ function ListRowView({ row, handlers }: { row: Row; handlers: ListEntryHandlers 
       // that needs it per row, because it does not group by day.
       withDate={false}
       onPress={handlers.onOpenTransaction}
-      onShortSwipe={categorize}
-      // Long swipe is *edit*, and editing a row is opening it — S09 is where
-      // every field of it lives, so a second editor here would be a second
-      // place the same row can be changed.
-      onLongSwipe={handlers.onOpenTransaction}
     />
   );
 }

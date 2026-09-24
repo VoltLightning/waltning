@@ -53,6 +53,13 @@ export type TransferRowProps = {
   toAmount: money.Money;
   toCurrency: string;
   toDecimals?: number;
+  /**
+   * Draw the date — off inside a `<DayGroup>`, whose header has already given
+   * it, exactly as `TransactionRow` does. A transfer was the one row that drew
+   * its date anyway, so a day of expenses and one transfer had a date on one
+   * row only.
+   */
+  withDate?: boolean;
 };
 
 export function TransferRow({
@@ -65,6 +72,7 @@ export function TransferRow({
   toAmount,
   toCurrency,
   toDecimals = 2,
+  withDate = true,
 }: TransferRowProps) {
   const t = useT();
   const theme = useTheme();
@@ -76,7 +84,7 @@ export function TransferRow({
 
   return (
     <View style={styles.row}>
-      <Text style={styles.date}>{date.slice(5)}</Text>
+      {withDate ? <Text style={styles.date}>{date.slice(5)}</Text> : null}
       <View style={[styles.tile, tileFill]}>
         <ArrowsLeftRightIcon size={15} color={theme.textMuted} />
       </View>
