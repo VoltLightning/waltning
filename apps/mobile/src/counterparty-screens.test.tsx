@@ -227,9 +227,8 @@ describe("Debt (S12)", () => {
   });
 
   /**
-   * S12 §3 — the hero is S04's own card holding debt's subtraction: the
-   * track is what you lent, the fill is what you owe, and the gap between
-   * them is what comes back to you.
+   * S12 §3 — the hero is S04's own card holding debt's subtraction: what you
+   * lent against what you owe, and what comes back to you above them.
    */
   it("opens with what comes back to you, over what was lent and what is owed", () => {
     const controller = controllerOf(

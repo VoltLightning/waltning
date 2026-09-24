@@ -832,6 +832,12 @@ export type SpendByCategoryTransactionRow = {
   amountOriginal: Money;
   /** §6.8's one-off — dropped only when the caller asks for a comparison. */
   isCapital: boolean;
+  /**
+   * The row's own rate to the pivot, as stored (§4). Optional: a reader that
+   * supplies it gets each bucket in the pivot as well, and a line is converted
+   * at its parent's rate — a split is one transaction on one date.
+   */
+  fxRate?: PivotPerUnit;
 };
 
 /**
@@ -852,6 +858,13 @@ export type SpendByCategoryRow = {
   decimals: number;
   categoryId: string | null;
   amount: Money;
+  /**
+   * The same bucket in the pivot, each transaction at its own stored rate —
+   * `null` when any row in it came without one. What lets S04's *where it
+   * went* break down a *went out* stated across every currency. Absent from a
+   * reader that has no rate to give, which reads the same as `null`.
+   */
+  amountPivot?: Money | null;
 };
 
 /**
@@ -901,6 +914,7 @@ export const spendByCategory = (
     decimals: number;
     categoryId: string | null;
     amount: Decimal;
+    amountPivot: Decimal | null;
   };
   const totals = new Map<string, Bucket>();
   const bucketOf = (
@@ -911,7 +925,7 @@ export const spendByCategory = (
     const key = `${currency}::${categoryId ?? ""}`;
     const existing = totals.get(key);
     if (existing) return existing;
-    const created: Bucket = { currency, decimals, categoryId, amount: dec(0) };
+    const created: Bucket = { currency, decimals, categoryId, amount: dec(0), amountPivot: dec(0) };
     totals.set(key, created);
     return created;
   };
@@ -924,6 +938,7 @@ export const spendByCategory = (
     linedIds.add(line.transactionId);
     const bucket = bucketOf(parent.currency, parent.decimals, line.categoryId);
     bucket.amount = bucket.amount.plus(dec(line.amount));
+    bucket.amountPivot = plusPivot(bucket.amountPivot, dec(line.amount), parent.fxRate);
   }
 
   // Branch B — a row WITHOUT a breakdown: attribute to its own category.
@@ -931,6 +946,7 @@ export const spendByCategory = (
     if (linedIds.has(row.id)) continue;
     const bucket = bucketOf(row.currency, row.decimals, row.categoryId);
     bucket.amount = bucket.amount.plus(dec(row.amountOriginal));
+    bucket.amountPivot = plusPivot(bucket.amountPivot, dec(row.amountOriginal), row.fxRate);
   }
 
   return [...totals.values()]
@@ -939,13 +955,22 @@ export const spendByCategory = (
         a.currency.localeCompare(b.currency) ||
         (a.categoryId ?? "").localeCompare(b.categoryId ?? ""),
     )
-    .map(({ currency, decimals, categoryId, amount }) => ({
+    .map(({ currency, decimals, categoryId, amount, amountPivot }) => ({
       currency,
       decimals,
       categoryId,
       amount: toMoney(amount),
+      amountPivot: amountPivot === null ? null : toMoney(amountPivot),
     }));
 };
+
+/** A running pivot sum, voided for good by one amount that came without its rate. */
+const plusPivot = (
+  running: Decimal | null,
+  amount: Decimal,
+  rate: PivotPerUnit | undefined,
+): Decimal | null =>
+  running === null || rate === undefined ? null : running.plus(amount.times(rate));
 
 export type Ranked<T> = { top: readonly T[]; restTotal: Money };
 

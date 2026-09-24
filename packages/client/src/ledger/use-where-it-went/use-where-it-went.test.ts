@@ -56,11 +56,12 @@ describe("useWhereItWent", () => {
   });
 
   /**
-   * **The lead currency only, and nothing is converted.** §6's rows are per
-   * currency and arc-phone has no display-currency conversion, so summing two
-   * into one bar would be inventing a figure.
+   * **Never an unconverted figure beside a converted one.** A bucket that
+   * came without its rate keeps its own figure only when it is already in the
+   * pivot; any other is left out, since adding 9 000 BYN to 10 PLN as if they
+   * were one unit would be inventing a figure.
    */
-  it("keeps one currency and drops the rest", () => {
+  it("keeps a bucket without a rate only when it is already in the pivot", () => {
     const rows = rowsFor(
       [bucket("groceries", "10.00", "PLN"), bucket("home", "9000.00", "BYN")],
       [node("groceries", "Groceries"), node("home", "Home")],
@@ -166,5 +167,30 @@ describe("useWhereItWent", () => {
       [node("mine", "Uncategorized")],
     );
     expect(rows).toHaveLength(2);
+  });
+});
+
+/**
+ * The bars break down the card's *went out*, which is stated in the pivot
+ * across every currency — so one category spent in two currencies is one bar,
+ * in the pivot. It kept the lead currency's buckets alone and drew a few euros
+ * of taxi under a *went out* of 2 962 dollars.
+ */
+describe("in the pivot", () => {
+  it("adds one category's spending in two currencies into one bar", () => {
+    const rows = rowsFor(
+      [
+        { ...bucket("taxi", "40", "EUR"), amountPivot: money.toMoney("43.20") },
+        { ...bucket("taxi", "100", "PLN"), amountPivot: money.toMoney("27.00") },
+      ],
+      [node("taxi", "Taxi")],
+      "USD",
+    );
+    expect(rows).toEqual([{ key: "taxi", label: "Taxi", amount: money.toMoney("70.20") }]);
+  });
+
+  it("leaves out a bucket it cannot convert rather than adding it unconverted", () => {
+    const rows = rowsFor([bucket("taxi", "40", "EUR")], [node("taxi", "Taxi")], "USD");
+    expect(rows).toEqual([]);
   });
 });

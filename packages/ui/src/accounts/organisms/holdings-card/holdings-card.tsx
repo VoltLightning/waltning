@@ -41,7 +41,6 @@ import { makeStyles } from "../../../theme/styles.ts";
 import { focus, radius, space, touchTarget } from "../../../tokens.ts";
 import { KIND_LABEL_KEY } from "../../kind-label.ts";
 import { accountTint, kindTint } from "../../kind-tint.ts";
-import { KIND_ORDER } from "../account-register/account-register";
 
 /** The register's two lenses — what S16 can be opened on. */
 export type HoldingsLens = "kind" | "currency";
@@ -98,6 +97,16 @@ export type HoldingsCardProps = {
 /** Currencies have no colour of their own; the accent, stepped down, tells them apart by lightness. */
 const CURRENCY_STEPS = [1, 0.62, 0.36, 0.2] as const;
 
+/**
+ * **Largest first, left to right and top to bottom** — the bar and the rows
+ * under it in one order, so the widest segment is the first row. It followed
+ * the register's kind order, which put a thin sliver of cash between the two
+ * biggest blocks and asked the reader to find the largest part by eye.
+ */
+function bySize<Row extends { value: money.Money }>(rows: readonly Row[]): Row[] {
+  return [...rows].sort((a, b) => money.cmp(b.value, a.value));
+}
+
 export function HoldingsCard({
   currency,
   decimals,
@@ -129,18 +138,12 @@ export function HoldingsCard({
     [onOpenAccounts, lens],
   );
 
-  /** The register's order, not the fold's — the same kind sits in the same place on both screens. */
-  const kinds = useMemo(
-    () => [...byKind].sort((a, b) => KIND_ORDER.indexOf(a.kind) - KIND_ORDER.indexOf(b.kind)),
-    [byKind],
-  );
-  /** The register's order: kinds in `KIND_ORDER`, and the person's own order inside each. */
-  const accountsInOrder = useMemo(
-    () => [...byAccount].sort((a, b) => KIND_ORDER.indexOf(a.kind) - KIND_ORDER.indexOf(b.kind)),
-    [byAccount],
-  );
+  const kinds = useMemo(() => bySize(byKind), [byKind]);
+  const accountsInOrder = useMemo(() => bySize(byAccount), [byAccount]);
+  const currenciesInOrder = useMemo(() => bySize(byCurrency), [byCurrency]);
+  /** Loans are listed apart and not in the bar; biggest first by size, whichever way it runs. */
   const orderedLoans = useMemo(
-    () => [...loans].sort((a, b) => KIND_ORDER.indexOf(a.kind) - KIND_ORDER.indexOf(b.kind)),
+    () => [...loans].sort((a, b) => money.cmp(money.abs(b.value), money.abs(a.value))),
     [loans],
   );
 
@@ -160,7 +163,7 @@ export function HoldingsCard({
               color: accountTint(row, theme).ink,
               opacity: 1,
             }))
-          : byCurrency.map((row, index) => ({
+          : currenciesInOrder.map((row, index) => ({
               key: row.currency,
               value: row.value,
               color: theme.accent,
@@ -178,7 +181,7 @@ export function HoldingsCard({
         opacity: part.opacity,
       },
     }));
-  }, [lens, kinds, accountsInOrder, byCurrency, theme]);
+  }, [lens, kinds, accountsInOrder, currenciesInOrder, theme]);
 
   const segments = useMemo(
     () =>
@@ -286,7 +289,7 @@ export function HoldingsCard({
                       onPress={handleOpenLens}
                     />
                   ))
-                : byCurrency.map((row, index) => (
+                : currenciesInOrder.map((row, index) => (
                     <BreakdownRow
                       key={row.currency}
                       swatch={theme.accent}
@@ -299,7 +302,7 @@ export function HoldingsCard({
                       converted={row.currency === currency ? undefined : row.value}
                       displayCurrency={currency}
                       displayDecimals={decimals}
-                      last={index === byCurrency.length - 1}
+                      last={index === currenciesInOrder.length - 1}
                       onPress={handleOpenLens}
                     />
                   ))}

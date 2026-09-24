@@ -69,18 +69,6 @@ export type Theme = {
    * keep 3:1 on it. The category chart keeps `subtleFill` — see `chartBar`.
    */
   trackFill: string;
-  /**
-   * `<FlowBar>`'s track when the month has flow: income as a *field*, where
-   * `income` is income as *ink*. The two money colours are the same lightness —
-   * they are told apart by hue — so `spend` on `income` was 1.0045:1 and the bar
-   * was one uniform rectangle. `spend` reads on this at 3.60.
-   *
-   * **A card fill, not a page fill**: 1.5:1 on `ground`, `surface` and
-   * `insetFill` only. It does not clear `subtleFill`, `hoverFill` or
-   * `pressedFill`, and the floor names the three it does rather than claiming
-   * the seven `trackFill` carries.
-   */
-  incomeFill: string;
   /** The fill under a pointer. Between `subtleFill` and `pressedFill`. */
   hoverFill: string;
   /** The transient fill under a finger or cursor. */
@@ -304,7 +292,6 @@ export const light: Theme = {
   surface: color.surface,
   subtleFill: color.subtle,
   trackFill: color.track,
-  incomeFill: color.incomeFill,
   hoverFill: color.hover,
   pressedFill: color.pressed,
 
@@ -370,7 +357,6 @@ export const dark: Theme = {
   surface: darkColor.surface,
   subtleFill: darkColor.subtle,
   trackFill: darkColor.track,
-  incomeFill: darkColor.incomeFill,
   hoverFill: darkColor.hover,
   pressedFill: darkColor.pressed,
 

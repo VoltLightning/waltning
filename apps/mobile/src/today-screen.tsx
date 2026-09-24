@@ -665,7 +665,9 @@ export default function Today() {
     // transactions filed under it — so resolving names from that tree
     // relabelled last month's spending as the honest blank.
     snapshot.fullCategoryTree,
-    leadNetWorth?.currency,
+    // The pivot: the bars break down the card's *went out*, which is stated
+    // in it — every currency, each row at its own rate.
+    pivotCurrency?.code ?? leadNetWorth?.currency,
     whereItWentLabels,
   );
   // Memoised for the reason the banner and the month card are: `ledgerBody` is
@@ -713,12 +715,12 @@ export default function Today() {
         <Card title={t("shell.whereItWent")}>
           <SpendRows
             rows={whereItWentRows}
-            currency={leadNetWorth.currency}
-            decimals={leadNetWorth.decimals}
+            currency={pivotCurrency?.code ?? leadNetWorth.currency}
+            decimals={pivotCurrency?.decimals ?? leadNetWorth.decimals}
           />
         </Card>
       ),
-    [whereItWentRows, leadNetWorth, t],
+    [whereItWentRows, pivotCurrency, leadNetWorth, t],
   );
 
   // S04 §3 draws exactly one banner row, and `Banner`'s own doc is explicit —

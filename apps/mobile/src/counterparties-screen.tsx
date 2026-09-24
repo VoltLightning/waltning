@@ -196,9 +196,9 @@ export default function Counterparties() {
   }, [balances, ledger.readRate, pivot, snapshot.currencies, today]);
 
   /**
-   * S12 §3's hero — S04's own card, holding debt's subtraction: the track is
-   * what you lent, the fill is what you owe, and the gap between them is what
-   * comes back to you. The arithmetic is `debtHero`'s, in `packages/client`,
+   * S12 §3's hero — S04's own card, holding debt's subtraction: its bar splits
+   * what you lent against what you owe, and the figure above it is what comes
+   * back to you. The arithmetic is `debtHero`'s, in `packages/client`,
    * where money arithmetic lives (`architecture/11`).
    *
    * **In the pivot, and only when every line can reach it.** A figure folded

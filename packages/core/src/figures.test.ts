@@ -533,6 +533,86 @@ describe("spendByCategory — §6 (DESK4)", () => {
     ).toBe(m("100"));
   });
 
+  /**
+   * §4 — each transaction at its own stored rate, a split's lines at their
+   * parent's. What lets S04's *where it went* add up to a *went out* stated
+   * across every currency.
+   */
+  it("states each bucket in the pivot too, a split's lines at their parent's rate", () => {
+    const base = {
+      type: "expense" as const,
+      date: accountingDate("2026-08-05"),
+      ownership: "own" as const,
+      isBusiness: false,
+      decimals: 2,
+      isCapital: false,
+    };
+    const rows = money.spendByCategory(
+      [
+        {
+          ...base,
+          id: "t1",
+          currency: PLN,
+          categoryId: GROCERIES,
+          amountOriginal: m("100"),
+          fxRate: money.pivotPerUnit("0.25"),
+        },
+        {
+          ...base,
+          id: "t2",
+          currency: PLN,
+          categoryId: null,
+          amountOriginal: m("40"),
+          fxRate: money.pivotPerUnit("0.25"),
+        },
+      ],
+      [
+        { transactionId: "t2", categoryId: GROCERIES, amount: m("30") },
+        { transactionId: "t2", categoryId: null, amount: m("10") },
+      ],
+      period,
+      "mine",
+    );
+    const groceries = rows.find((row) => row.categoryId === GROCERIES);
+    expect(groceries?.amountPivot).toBe("32.50000000");
+  });
+
+  it("gives no pivot figure to a bucket holding a row without its rate", () => {
+    const [row] = money.spendByCategory(
+      [
+        {
+          id: "t1",
+          type: "expense",
+          date: accountingDate("2026-08-05"),
+          ownership: "own",
+          isBusiness: false,
+          currency: PLN,
+          decimals: 2,
+          categoryId: GROCERIES,
+          amountOriginal: m("100"),
+          isCapital: false,
+          fxRate: money.pivotPerUnit("0.25"),
+        },
+        {
+          id: "t2",
+          type: "expense",
+          date: accountingDate("2026-08-06"),
+          ownership: "own",
+          isBusiness: false,
+          currency: PLN,
+          decimals: 2,
+          categoryId: GROCERIES,
+          amountOriginal: m("50"),
+          isCapital: false,
+        },
+      ],
+      [],
+      period,
+      "mine",
+    );
+    expect(row?.amountPivot).toBeNull();
+  });
+
   it("attributes a plain expense row to its own category", () => {
     const rows: money.SpendByCategoryTransactionRow[] = [
       {
@@ -549,7 +629,13 @@ describe("spendByCategory — §6 (DESK4)", () => {
       },
     ];
     expect(money.spendByCategory(rows, [], period, "mine")).toEqual([
-      { currency: PLN, decimals: 2, categoryId: GROCERIES, amount: "100.00000000" },
+      {
+        currency: PLN,
+        decimals: 2,
+        categoryId: GROCERIES,
+        amount: "100.00000000",
+        amountPivot: null,
+      },
     ]);
   });
 
@@ -587,9 +673,21 @@ describe("spendByCategory — §6 (DESK4)", () => {
     const total = result.reduce((sum, row) => money.add(sum, row.amount), money.ZERO);
     expect(total).toBe("100.00000000");
     expect(result).toEqual([
-      { currency: PLN, decimals: 2, categoryId: DINING, amount: "50.00000000" },
-      { currency: PLN, decimals: 2, categoryId: GROCERIES, amount: "30.00000000" },
-      { currency: PLN, decimals: 2, categoryId: TRANSPORT, amount: "20.00000000" },
+      { currency: PLN, decimals: 2, categoryId: DINING, amount: "50.00000000", amountPivot: null },
+      {
+        currency: PLN,
+        decimals: 2,
+        categoryId: GROCERIES,
+        amount: "30.00000000",
+        amountPivot: null,
+      },
+      {
+        currency: PLN,
+        decimals: 2,
+        categoryId: TRANSPORT,
+        amount: "20.00000000",
+        amountPivot: null,
+      },
     ]);
   });
 
@@ -615,7 +713,7 @@ describe("spendByCategory — §6 (DESK4)", () => {
       { transactionId: "t-mixed", categoryId: DINING, amount: m("40") },
     ];
     expect(money.spendByCategory(rows, lines, period, "mine")).toEqual([
-      { currency: PLN, decimals: 2, categoryId: DINING, amount: "40.00000000" },
+      { currency: PLN, decimals: 2, categoryId: DINING, amount: "40.00000000", amountPivot: null },
     ]);
   });
 
@@ -638,7 +736,7 @@ describe("spendByCategory — §6 (DESK4)", () => {
       { transactionId: "t-uncat", categoryId: null, amount: m("15") },
     ];
     expect(money.spendByCategory(rows, lines, period, "mine")).toEqual([
-      { currency: PLN, decimals: 2, categoryId: null, amount: "15.00000000" },
+      { currency: PLN, decimals: 2, categoryId: null, amount: "15.00000000", amountPivot: null },
     ]);
   });
 
@@ -724,8 +822,20 @@ describe("spendByCategory — §6 (DESK4)", () => {
       },
     ];
     expect(money.spendByCategory(rows, [], period, "mine")).toEqual([
-      { currency: PLN, decimals: 2, categoryId: GROCERIES, amount: "100.00000000" },
-      { currency: USD, decimals: 2, categoryId: GROCERIES, amount: "40.00000000" },
+      {
+        currency: PLN,
+        decimals: 2,
+        categoryId: GROCERIES,
+        amount: "100.00000000",
+        amountPivot: null,
+      },
+      {
+        currency: USD,
+        decimals: 2,
+        categoryId: GROCERIES,
+        amount: "40.00000000",
+        amountPivot: null,
+      },
     ]);
   });
 

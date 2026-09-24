@@ -183,11 +183,12 @@ describe("the token spec and the tokens agree", () => {
     // key in `color`, so the light half skips it and only the dark half of
     // that pair is enforced. Splitting the alias into its own light row would
     // not help: it would name a value `tokens.ts` does not hold either.
-    // 44/37 since §2.6c added `danger-solid` and `text-on-danger` to both
-    // halves — a destructive control's fill and the ink on it.
+    // 44/37 once §2.6c added `danger-solid` and `text-on-danger` to both
+    // halves; 43/36 since `income-fill` left both, with the flow bar that was
+    // its only use.
     expect(compared, "a drop here means rows stopped being compared").toEqual({
-      light: 44,
-      dark: 37,
+      light: 43,
+      dark: 36,
     });
   });
 
@@ -606,35 +607,6 @@ describe("a component follows the active theme", () => {
   ])("keeps the %s money bars readable on that track", (_name, theme) => {
     expect(contrastRatio(theme.income, theme.trackFill)).toBeGreaterThanOrEqual(3);
     expect(contrastRatio(theme.spend, theme.trackFill)).toBeGreaterThanOrEqual(3);
-  });
-
-  /**
-   * **`<FlowBar>` drew `spend` on `income` at 1.0045:1 in light.**
-   *
-   * The two money colours are the same lightness in this palette on purpose:
-   * a figure is told apart by hue, and both clear the page (5.80 and 5.78).
-   * Every check in this file paired each of them with a *fill* — ground,
-   * surface, subtle, hover, pressed, accentFill — and none paired them with
-   * each other, so the one component that draws one on the other rendered a
-   * single uniform rectangle at the place "what you kept" is meant to be
-   * readable, and the suite was green.
-   *
-   * `incomeFill` is income as a field rather than as ink. Its floor names
-   * `ground`, `surface` and `insetFill` — the three fills a card or a page can
-   * be — and deliberately not the other four: it sits at 1.46 on `subtleFill`,
-   * 1.38 on `hoverFill` and 1.28 on `pressedFill`, so a money bar drawn in a
-   * chip or under a finger is a bar this token cannot carry. `trackFill` is the
-   * one held to all seven, and the difference between the two lists is the
-   * difference between the roles.
-   */
-  it.each([
-    ["light", light],
-    ["dark", dark],
-  ])("keeps the %s flow bar's two halves apart", (_name, theme) => {
-    expect(contrastRatio(theme.spend, theme.incomeFill)).toBeGreaterThanOrEqual(3);
-    for (const fill of ["ground", "surface", "insetFill"] as const) {
-      expect(contrastRatio(theme.incomeFill, theme[fill]), fill).toBeGreaterThanOrEqual(1.5);
-    }
   });
 
   it.each([

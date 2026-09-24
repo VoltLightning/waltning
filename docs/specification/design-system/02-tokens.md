@@ -21,8 +21,7 @@ whatever the chrome around them does.
 | `ground` | `#faf6ef` | Page background; all cards sit on it |
 | `surface` | `#ffffff` | Cards, sheets, rows |
 | `subtle` | `#f1ebe0` | Table headers, inset boxes, neutral tag fills, the segment track |
-| `track` | `#f1ebe0` | The unfilled part of a money bar — `MonthList`'s two, `FlowBar`'s empty one, `IncomeVsExpenseWidget`'s. **Quiet on purpose**: the fill is the signal and the track is only its room. A lifted track (1.91:1) drew a year of empty months as twelve full-width bars, so a month holding nothing looked like a month holding everything. `income` and `spend` keep **3:1 on it** — 5.25 at the tightest — which is the floor that matters, because the fill is the datum |
-| `income-fill` | `#bccaa9` | `FlowBar`'s track when the month has flow — income as a *field*, where `income` is income as *ink*. The two money colours are the same lightness by design (a figure is told apart by hue), so `spend` on `income` was **1.0045:1** and the bar was one uniform rectangle. `green-300`, so the ramp gives the value. `spend` reads on it at 3.75. **A card fill**: 1.5:1 on `ground`, `surface` and `inset` only — 1.46 on `subtle`, 1.38 on `hover`, 1.28 on `pressed`, so a money bar in a chip or under a finger is a bar this cannot carry |
+| `track` | `#f1ebe0` | The unfilled part of a money bar — `MonthList`'s two, `FlowBar`'s empty one (a month with nothing in or out), `IncomeVsExpenseWidget`'s. **Quiet on purpose**: the fill is the signal and the track is only its room. A lifted track (1.91:1) drew a year of empty months as twelve full-width bars, so a month holding nothing looked like a month holding everything. `income` and `spend` keep **3:1 on it** — 5.25 at the tightest — which is the floor that matters, because the fill is the datum |
 | `hover` | `#ece5d7` | The fill under a pointer |
 | `pressed` | `#e6ddcb` | The transient fill under a finger |
 | `border` | `#eae3d5` | Card edges and dividers — a boundary between two areas, which WCAG sets no floor for. **Never a control's edge**: at 1.19:1 on `ground` it cannot carry 1.4.11, so an unfilled chip takes `border-interactive` like every other control |
@@ -103,7 +102,6 @@ with dark text.
 | `surface` | `#26221b` |
 | `subtleFill` / `tagNeutralFill` | `#2b2620` |
 | `trackFill` | `#2b2620` |
-| `incomeFill` | `#3b4d33` |
 | `hoverFill` | `#302a23` |
 | `pressedFill` | `#363027` |
 | `border` | `#38332a` |
