@@ -579,6 +579,7 @@ export const de: Messages = {
     showAdd: "Hinzufügen-Knopf zeigen",
     mine: "meins",
     ours: "unseres",
+    whatYouHold: "was du hast",
     openAccounts: "Ihre Konten öffnen",
     alsoInOtherCurrencies_one: "Auch in {{count}} weiteren Währung gehalten",
     alsoInOtherCurrencies_few: "Auch in {{count}} weiteren Währungen gehalten",

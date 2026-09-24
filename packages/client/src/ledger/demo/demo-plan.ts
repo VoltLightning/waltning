@@ -42,6 +42,13 @@ export type DemoAccount = {
    * had four entries nothing rendered.
    */
   kind: AccountKind;
+  /**
+   * §6.7's flag, and the register draws a `BIZ` tag from it (S16 §4). No demo
+   * account carried it, so the tag the component has always supported could
+   * never appear on a screen anybody looked at — the same gap the four
+   * missing account kinds had.
+   */
+  isBusiness?: boolean;
   openingBalance: string;
 };
 
@@ -144,6 +151,7 @@ export const DEMO_ACCOUNTS: readonly DemoAccount[] = [
     name: "Studio account",
     currency: "PLN" as CurrencyCode,
     kind: "bank",
+    isBusiness: true,
     openingBalance: "3100.00",
   },
   {
@@ -207,6 +215,19 @@ export type DemoPattern = {
   category: string;
   type: "income" | "expense";
   account: string;
+  /**
+   * **A transfer's other leg, and the reason the demo balances at all.**
+   * Without it a pattern can only add to an account or take from one, so
+   * money entered the banks every month and left the wallet every month and
+   * neither ever came back: 26 months in, the current account held 248 000 zł
+   * and cash was 3 585 zł *negative*. A ledger nobody could hold is a ledger
+   * nobody can judge the screens against.
+   *
+   * Present makes the row a transfer, and `category` is ignored — §7.5: a
+   * transfer moves money between two of your own accounts and categorising it
+   * would double count it against the same spend total.
+   */
+  toAccount?: string;
   amount: string;
   /** Days of the month it lands on. A day the month does not have is skipped. */
   days: readonly number[];
@@ -220,25 +241,8 @@ export const DEMO_PATTERNS: readonly DemoPattern[] = [
     category: "Salary",
     type: "income",
     account: "bank-a",
-    amount: "14200.00",
+    amount: "9200.00",
     days: [27],
-  },
-  {
-    enteredName: "Client One",
-    category: "Services",
-    type: "income",
-    account: "bank-b",
-    amount: "1800.00",
-    days: [12],
-  },
-  {
-    enteredName: "Client Two",
-    category: "Services",
-    type: "income",
-    account: "bank-b",
-    amount: "950.00",
-    days: [19],
-    every: 3,
   },
 
   {
@@ -279,7 +283,7 @@ export const DEMO_PATTERNS: readonly DemoPattern[] = [
     category: "Rent",
     type: "expense",
     account: "bank-a",
-    amount: "3200.00",
+    amount: "5200.00",
     days: [5],
   },
   {
@@ -287,7 +291,7 @@ export const DEMO_PATTERNS: readonly DemoPattern[] = [
     category: "Utilities",
     type: "expense",
     account: "bank-a",
-    amount: "287.60",
+    amount: "420.00",
     days: [14],
   },
 
@@ -296,7 +300,7 @@ export const DEMO_PATTERNS: readonly DemoPattern[] = [
     category: "Groceries",
     type: "expense",
     account: "bank-a",
-    amount: "204.30",
+    amount: "720.00",
     days: [2, 16, 29],
   },
   {
@@ -359,25 +363,6 @@ export const DEMO_PATTERNS: readonly DemoPattern[] = [
   // month of use. These are the smallest patterns that give the late kinds a
   // history worth looking at.
   {
-    enteredName: "Repayment received",
-    category: "Lent out",
-    type: "expense",
-    account: "loan-out",
-    amount: "350.00",
-    days: [12],
-  },
-  {
-    enteredName: "Car loan",
-    category: "Repayment made",
-    type: "income",
-    account: "loan-in",
-    // Income *on the payable*: what you owe reads negative, so a repayment
-    // moves it toward zero. The other way round would draw a debt that grows
-    // every month and read as a rendering bug.
-    amount: "620.00",
-    days: [8],
-  },
-  {
     enteredName: "Brokerage",
     category: "Investment returns",
     type: "income",
@@ -399,7 +384,7 @@ export const DEMO_PATTERNS: readonly DemoPattern[] = [
     category: "Services",
     type: "income",
     account: "bank-c",
-    amount: "4800.00",
+    amount: "3400.00",
     days: [15],
   },
   {
@@ -409,6 +394,101 @@ export const DEMO_PATTERNS: readonly DemoPattern[] = [
     account: "card-b",
     amount: "89.00",
     days: [6],
+  },
+  // ── what makes the ledger circulate ───────────────────────────────────
+  //
+  // **Every one of these is a transfer, and before they existed the demo did
+  // not balance.** Money arrived in the banks each month and left the wallet
+  // each month with nothing carrying it back, so 26 months in the current
+  // account held 248 000 zł, cash was 3 585 zł negative, and a receivable had
+  // been repaid four times over. None of that is a ledger anybody could hold,
+  // which makes it useless for judging the screens that draw it.
+  {
+    enteredName: "Cash withdrawal",
+    category: "",
+    type: "expense",
+    account: "bank-a",
+    toAccount: "cash",
+    amount: "150.00",
+    days: [7],
+  },
+  {
+    enteredName: "To savings",
+    category: "",
+    type: "expense",
+    account: "bank-a",
+    toAccount: "bank-b",
+    amount: "600.00",
+    days: [28],
+  },
+  {
+    enteredName: "Card A",
+    category: "",
+    type: "expense",
+    account: "bank-a",
+    // ~94 € of subscriptions and rides a month, in the złoty that buys them.
+    toAccount: "card-a",
+    amount: "406.00",
+    days: [14],
+  },
+  {
+    enteredName: "Card B",
+    category: "",
+    type: "expense",
+    account: "bank-a",
+    toAccount: "card-b",
+    amount: "89.00",
+    days: [14],
+  },
+  // The car loan amortises: what you owe walks toward zero over the demo's
+  // 26 months rather than sitting at its opening figure forever.
+  {
+    enteredName: "Car loan",
+    category: "",
+    type: "expense",
+    account: "bank-a",
+    toAccount: "loan-in",
+    amount: "620.00",
+    days: [8],
+  },
+  // And the friend repays you, into the account the money left from.
+  {
+    enteredName: "Repayment received",
+    category: "",
+    type: "expense",
+    account: "loan-out",
+    toAccount: "bank-a",
+    amount: "150.00",
+    days: [12],
+  },
+  // The studio pays its owner, so a business account does not grow forever
+  // either. Its own costs are the `card-b` software line above.
+  {
+    enteredName: "Owner draw",
+    category: "",
+    type: "expense",
+    account: "bank-c",
+    toAccount: "bank-a",
+    amount: "3000.00",
+    days: [26],
+  },
+  {
+    enteredName: "Top up",
+    category: "",
+    type: "expense",
+    account: "bank-a",
+    // ~48 € of transit a month, likewise.
+    toAccount: "other",
+    amount: "207.00",
+    days: [2],
+  },
+  {
+    enteredName: "Restaurant",
+    category: "Eating out",
+    type: "expense",
+    account: "bank-a",
+    amount: "320.00",
+    days: [3, 16, 24],
   },
 ];
 
@@ -519,7 +599,9 @@ export type DemoTransaction = {
   account: string;
   category: string;
   enteredName: string;
-  type: "income" | "expense";
+  type: "income" | "expense" | "transfer";
+  /** The destination leg, on a transfer and only a transfer (§7.5). */
+  toAccount?: string;
   amount: string;
   date: string;
 };
@@ -585,7 +667,8 @@ export function demoTransactions(today: string, months: number): readonly DemoTr
           account: pattern.account,
           category: pattern.category,
           enteredName: pattern.enteredName,
-          type: pattern.type,
+          type: pattern.toAccount === undefined ? pattern.type : "transfer",
+          ...(pattern.toAccount === undefined ? {} : { toAccount: pattern.toAccount }),
           amount: vary(pattern.amount, `${pattern.enteredName}-${date}`),
           date,
         });

@@ -18,6 +18,15 @@
  * more figures competing with the month's. The register is one tap away and
  * shows every one of them — which is the reason this is pressable rather than
  * a label.
+ *
+ * **`mine` and `ours` are a contrast, and appear together or not at all.**
+ * §6.7's guarantee is that nobody reads a household figure as their own, and
+ * that only needs saying where both are on screen. Where no shared account
+ * exists, `ours` is `null` and the strip used to draw *mine* against nothing:
+ * a possessive naming an opposite the screen does not contain, which reads as
+ * a filter someone applied or a second total they have not found. The figure
+ * is then labelled by what it is rather than whose it is, and the word comes
+ * back the moment there is something to contrast it with.
  */
 
 import type * as money from "@waltning/core/money";
@@ -83,7 +92,9 @@ export function NetWorthStrip({
     >
       <View style={styles.figures}>
         <View style={styles.line}>
-          <Text style={styles.kicker}>{t("shell.mine")}</Text>
+          <Text style={styles.kicker}>
+            {ours === null ? t("shell.whatYouHold") : t("shell.mine")}
+          </Text>
           <Amount value={mine} currency={currency} decimals={decimals} size="body" />
         </View>
         {/*

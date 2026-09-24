@@ -23,14 +23,14 @@
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { matchBrand } from "@waltning/core/brands/match";
-import { type AccountingDate, accountingDate, todayIn } from "@waltning/core/date";
+import { type AccountingDate, accountingDate, addDays, todayIn } from "@waltning/core/date";
 import type { Id } from "@waltning/core/id";
 import * as money from "@waltning/core/money";
 import { type CurrencyCode, currencyCode } from "@waltning/core/money";
 import type { AccountKind } from "@waltning/schema/enums";
-import { eq, isNotNull, like, sql } from "drizzle-orm";
+import { eq, inArray, isNotNull, like, sql } from "drizzle-orm";
 import { createDb } from "../client.ts";
-import { accounts, categories, transactions } from "../schema.ts";
+import { accounts, categories, counterparties, transactions } from "../schema.ts";
 
 const rootEnv = fileURLToPath(new URL("../../../../.env", import.meta.url));
 if (existsSync(rootEnv)) process.loadEnvFile(rootEnv);
@@ -202,7 +202,7 @@ export const PATTERNS: Pattern[] = [
     category: "Salary",
     type: "income",
     account: "bank-a",
-    amount: "14200.00",
+    amount: "9200.00",
     days: [27],
   },
   {
@@ -359,17 +359,6 @@ export const PATTERNS: Pattern[] = [
     days: [12],
   },
   {
-    enteredName: "Car loan",
-    category: "Repayment made",
-    type: "income",
-    account: "loan-in",
-    // Income *on the payable*: what you owe reads negative, so a repayment
-    // moves it toward zero. A fixture that had this the other way round would
-    // draw a debt that grows every month and look like a rendering bug.
-    amount: "620.00",
-    days: [8],
-  },
-  {
     enteredName: "Brokerage",
     category: "Investment returns",
     type: "income",
@@ -402,7 +391,7 @@ export const PATTERNS: Pattern[] = [
     category: "Services",
     type: "income",
     account: "bank-c",
-    amount: "4800.00",
+    amount: "3400.00",
     days: [15],
   },
   {
@@ -425,9 +414,136 @@ export const PATTERNS: Pattern[] = [
  */
 type Move = { from: string; to: string; amount: string; day: number };
 
-const MOVES: Move[] = [
+export const MOVES: Move[] = [
   { from: "bank-a", to: "cash", amount: "400.00", day: 8 },
   { from: "bank-a", to: "card-a", amount: "40.00", day: 22 },
+  // **The loans move here, not as patterns, and the difference is not
+  // cosmetic.** A repayment is money leaving one account and arriving in
+  // another; written as a single-leg pattern it had to be filed under a
+  // category, and `Repayment made` is an *expense* leaf — so an `income` row
+  // carrying it was refused by the category-kind rule on every run, silently,
+  // and the payable sat at its opening figure for the whole fixture.
+  { from: "bank-a", to: "loan-in", amount: "620.00", day: 8 },
+  { from: "loan-out", to: "bank-a", amount: "150.00", day: 12 },
+  // And the rest of what makes the fixture circulate rather than accumulate:
+  // a savings standing order, the second card paid off, and the studio paying
+  // its owner. Without these the current account climbed every month with
+  // nothing ever carrying the money back out of it.
+  { from: "bank-a", to: "bank-b", amount: "600.00", day: 28 },
+  { from: "bank-a", to: "card-b", amount: "89.00", day: 14 },
+  { from: "bank-c", to: "bank-a", amount: "3000.00", day: 26 },
+  { from: "bank-a", to: "other", amount: "207.00", day: 2 },
+];
+
+type FixtureCounterparty = {
+  ref: string;
+  name: string;
+  kind: "person" | "company";
+};
+
+/**
+ * **Somebody to owe, and somebody to owe you.** S12 was an empty state on a
+ * seeded database: the fixture wrote nine accounts and two years of rows and
+ * not one counterparty, so the whole Counterparties tab — its two segments,
+ * its People/Companies grouping, its direction totals — had nothing to render
+ * and could not be looked at while it was being built.
+ *
+ * **No `external_id` on this table** (`counterparties.pg.ts`), so idempotency
+ * keys on the name instead, which is what `counterparties_name_uq` already
+ * makes unique. Invented, like every other name in this file.
+ */
+const COUNTERPARTIES: FixtureCounterparty[] = [
+  { ref: "owing", name: "Nina Placeholder", kind: "person" },
+  { ref: "owed", name: "Olek Placeholder", kind: "person" },
+  { ref: "settled", name: "Studio B", kind: "company" },
+  { ref: "company", name: "Agency C", kind: "company" },
+];
+
+/**
+ * An obligation row: an ordinary transaction that also carries a counterparty.
+ *
+ * **Both links, deliberately** (§6.6.1). `counterparty_id` says who the row was
+ * *with* and `obligation_counterparty_id` says who owes because of it — the
+ * pair the rename in #238 separated, and a fixture that set only the second
+ * would leave the identity link with no data behind it on any screen.
+ *
+ * `settle` writes the mirror row straight after, so the directory has someone
+ * who is *saved but square* — the case the **everyone** segment exists to show
+ * and the **open** segment must leave out.
+ */
+type FixtureObligation = {
+  counterparty: string;
+  role: "debt" | "contribution";
+  account: string;
+  category: string;
+  enteredName: string;
+  type: "income" | "expense";
+  amount: string;
+  /** Days back from today, so an obligation is always recent enough to see. */
+  daysAgo: number;
+  settle?: boolean;
+};
+
+export const OBLIGATIONS: FixtureObligation[] = [
+  // They owe you — you paid, on their behalf.
+  {
+    counterparty: "owing",
+    role: "debt",
+    account: "bank-a",
+    category: "Eating out",
+    enteredName: "Dinner · split",
+    type: "expense",
+    amount: "240.00",
+    daysAgo: 12,
+  },
+  {
+    counterparty: "owing",
+    role: "debt",
+    account: "card-a",
+    category: "Taxi",
+    enteredName: "Train tickets",
+    type: "expense",
+    amount: "96.50",
+    daysAgo: 4,
+  },
+  // You owe them — they paid, on yours. An **income** row, so it is filed
+  // under an income leaf: `Borrowed` is what the taxonomy calls money that
+  // arrives and is owed back, and an expense leaf on an income row is refused
+  // outright by the category-kind rule (H1).
+  {
+    counterparty: "owed",
+    role: "debt",
+    account: "cash",
+    category: "Borrowed",
+    enteredName: "Lunch · covered",
+    type: "income",
+    amount: "130.00",
+    daysAgo: 9,
+  },
+  // Saved, dealt with, and square — the directory's other half.
+  {
+    counterparty: "settled",
+    role: "debt",
+    account: "bank-a",
+    category: "Eating out",
+    enteredName: "Shared order",
+    type: "expense",
+    amount: "180.00",
+    daysAgo: 30,
+    settle: true,
+  },
+  // A contribution, which is the role that does **not** move a balance (§6.6):
+  // it is here so the history has both kinds to tell apart.
+  {
+    counterparty: "company",
+    role: "contribution",
+    account: "bank-c",
+    category: "Eating out",
+    enteredName: "Team lunch",
+    type: "expense",
+    amount: "320.00",
+    daysAgo: 18,
+  },
 ];
 
 /**
@@ -505,6 +621,14 @@ async function leafId(name: string): Promise<Id<"categories"> | null> {
 async function drop(): Promise<void> {
   await db.delete(transactions).where(like(transactions.externalId, `${PREFIX}%`));
   await db.delete(accounts).where(like(accounts.externalId, `${PREFIX}%`));
+  // Counterparties carry no `external_id` to match on, so they go by the names
+  // this file invented — and after the transactions, which reference them.
+  await db.delete(counterparties).where(
+    inArray(
+      counterparties.name,
+      COUNTERPARTIES.map((c) => c.name),
+    ),
+  );
   console.log("fixture removed");
 }
 
@@ -659,8 +783,95 @@ async function apply(today: AccountingDate, months: number): Promise<void> {
     }
   }
 
+  // ── counterparties, and what they leave outstanding ───────────────────
+  // Last, because an obligation row is an ordinary transaction that happens to
+  // name somebody: it needs the accounts and the taxonomy already in.
+  const counterpartyIds = new Map<string, Id<"counterparties">>();
+  for (const c of COUNTERPARTIES) {
+    const [existing] = await db
+      .select({ id: counterparties.id })
+      .from(counterparties)
+      .where(eq(counterparties.name, c.name))
+      .limit(1);
+    if (existing) {
+      counterpartyIds.set(c.ref, existing.id);
+      continue;
+    }
+    // `name_folded` is `GENERATED ALWAYS AS` on Postgres (`schema.ts`), so it
+    // is deliberately absent here — supplying it is an error, not a shortcut.
+    const [row] = await db
+      .insert(counterparties)
+      .values({ name: c.name, kind: c.kind })
+      .returning({ id: counterparties.id });
+    if (!row) throw new Error(`counterparty insert returned nothing: ${c.name}`);
+    counterpartyIds.set(c.ref, row.id);
+  }
+
+  for (const o of OBLIGATIONS) {
+    const counterpartyId = counterpartyIds.get(o.counterparty);
+    const accountId = accountIds.get(o.account);
+    const account = ACCOUNTS.find((a) => a.ref === o.account);
+    if (!counterpartyId || !accountId || !account) continue;
+    const categoryId = await leafId(o.category);
+    const rate = TO_PIVOT[account.currency] ?? "1";
+
+    // Both legs of a settled obligation share this stem, so the mirror row is
+    // as idempotent as the row it settles.
+    const stem = `${PREFIX}obligation-${o.counterparty}-${o.enteredName}`;
+    const legs: { suffix: string; type: "income" | "expense"; daysAgo: number }[] = [
+      { suffix: "", type: o.type, daysAgo: o.daysAgo },
+      ...(o.settle === true
+        ? [
+            {
+              suffix: "-settled",
+              type: (o.type === "expense" ? "income" : "expense") as "income" | "expense",
+              daysAgo: Math.max(0, o.daysAgo - 3),
+            },
+          ]
+        : []),
+    ];
+
+    for (const leg of legs) {
+      // The settling leg reverses the direction, so its category has to as
+      // well — `leafId` is asked for the row's own, and an income row filed
+      // under an expense leaf is refused by the category-kind rule (the same
+      // way the loan repayments were, above).
+      const legCategoryId = leg.type === o.type ? categoryId : await leafId("Repayment received");
+      await db
+        .insert(transactions)
+        .values({
+          externalId: `${stem}${leg.suffix}`,
+          date: addDays(today, -leg.daysAgo),
+          type: leg.type,
+          accountId,
+          categoryId: leg.type === "income" && legCategoryId === null ? null : legCategoryId,
+          amountOriginal: money.toMoney(o.amount),
+          currency: account.currency,
+          fxRate: money.pivotPerUnit(rate),
+          enteredName: o.enteredName,
+          // §6.6.1 — who it was with, and separately who owes because of it.
+          counterpartyId,
+          obligationCounterpartyId: counterpartyId,
+          obligationRole: o.role,
+          ...brandOf(o.enteredName),
+        })
+        .onConflictDoUpdate({
+          target: transactions.externalId,
+          targetWhere: sql`${transactions.externalId} is not null and ${transactions.deletedAt} is null`,
+          set: {
+            amountOriginal: money.toMoney(o.amount),
+            date: addDays(today, -leg.daysAgo),
+            counterpartyId,
+            obligationCounterpartyId: counterpartyId,
+            obligationRole: o.role,
+          },
+        });
+      written += 1;
+    }
+  }
+
   console.log(
-    `fixture applied: ${ACCOUNTS.length} accounts, ${written} transactions across ${months} months`,
+    `fixture applied: ${ACCOUNTS.length} accounts, ${COUNTERPARTIES.length} counterparties, ${written} transactions across ${months} months`,
   );
   console.log("  every name invented — this is placeholder data, not a ledger");
 }

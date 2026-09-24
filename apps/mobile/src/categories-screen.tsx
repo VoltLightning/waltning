@@ -520,7 +520,13 @@ export default function CategoriesScreen() {
           <SearchField
             value={search}
             onChangeText={setSearch}
-            placeholder={t("common.search")}
+            // `categories.search` — *"Search 59 categories"*, the key this
+            // screen has always had. The generic one said less than the
+            // sheet that picks from the same tree (S06), for no reason
+            // beyond which placeholder was to hand when it was wired.
+            placeholder={t("categories.search", {
+              count: nodes.filter((node) => node.isLeaf && !node.archived).length,
+            })}
             onClear={handleClearSearch}
             {...(matchedLeaves === undefined ? {} : { resultCount: matchedLeaves })}
           />

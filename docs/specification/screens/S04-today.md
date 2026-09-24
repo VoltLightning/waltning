@@ -286,7 +286,7 @@ same action as swiping to it; neither is the primary.
 #### Summary
 
 ```
-│  MINE  +48 620,84 zł                          › │  ← NetWorthStrip, on the ground
+│  WHAT YOU HOLD  +48 620,84 zł                 › │  ← NetWorthStrip, on the ground
 │  ┌ Kept so far ────────────────────────────────┐│  ← MonthSummary
 │  │ +3 529,82 zł                                ││
 │  │ ████████████████░░░░░░░░░░░░░░░░░░░░░░░░░░░ ││  ← FlowBar: out against in
@@ -518,7 +518,7 @@ happened*.
 | `SearchField` | The search itself, pinned under `PageTabs` while one is on, with the live match count and an `✕` that **leaves the search** — it empties the field and closes it in one press, because this field is pinned open and the ✕ is the only way back to an unnarrowed ledger. It is therefore offered whether or not anything is typed, which is the opposite of the clear control's own rule elsewhere (`03` §3.7: a clear button on an empty field is a target with nothing to do). Drawn inline — no border, no fill — on a band that is already a surface. **Under the tabs, not in the header**: the header's shape is a function of the scroll — the title travels, scales and hands its room to a stepper — so a field placed there would either inherit the collapse or fight it, and the period would leave the screen exactly when §7 wants the reader stepping through periods. It stays open for as long as the search is on, which is what says the screen is narrowed |
 | `Pager` | The four pages, swiped or tapped between, over one shared date |
 | `GatewayGrid` | Summary's *Go to* — rows on the ground, two across, each with a figure. Not cards: a card groups rows or holds a hero, and a single destination is neither. Only destinations neither the tab bar **nor the shared bar** carries, which is why Accounts, Debt and the agent are absent from it |
-| `NetWorthStrip` | *Mine* on the ground in one line, *ours* and any second currency muted beneath it. Pressable → S16. Renders above the error branch, so a failed refresh keeps it (§6) |
+| `NetWorthStrip` | One figure on the ground in one line, *ours* and any second currency muted beneath it. It is labelled *mine* only where an *ours* is drawn under it — the two are a contrast and a lone possessive names an opposite the screen does not have; with no shared account it reads *what you hold* (§6.7 is about nobody mistaking a household figure for their own, which needs both on screen to be at issue). Pressable → S16. Renders above the error branch, so a failed refresh keeps it (§6) |
 | `MonthSummary` | The hero, opening month only. *Kept so far* stacked over its figure, a `FlowBar`, then the labelled pair. Draws three zeroes for a period the ledger did not exist in — that is the true answer, not an empty state. **The three labels are a prop**, defaulting to this screen's: S12 §3 holds debt's subtraction in the same card, and a second component would be the same shape twice |
 | `FlowBar` | Track is *came in*, fill is *went out*, gap is *kept*. Fill clamps at 100%; a deficit is carried by the figures, not by an overrunning bar |
 | `SpendRows` | *Where it went* — §6 at leaf granularity, five rows plus a named remainder, bars proportional to the largest row, one colour. Opening month only |

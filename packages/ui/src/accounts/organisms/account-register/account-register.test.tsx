@@ -279,7 +279,9 @@ it("says the query excluded them, not that there are none", () => {
       onCreateAccount={vi.fn()}
     />,
   );
-  fireEvent.change(screen.getByPlaceholderText("Search…"), { target: { value: "zzz" } });
+  fireEvent.change(screen.getByPlaceholderText(/^Search \d+ accounts$/), {
+    target: { value: "zzz" },
+  });
   fireEvent.click(screen.getByText("Archived"));
 
   expect(screen.getByText("No archived accounts match.")).toBeDefined();

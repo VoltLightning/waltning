@@ -606,6 +606,7 @@ export const pl: Messages = {
     showAdd: "Pokaż przycisk dodawania",
     mine: "moje",
     ours: "nasze",
+    whatYouHold: "co masz",
     openAccounts: "Otwórz konta",
     // 1 → walucie, 2–4 → walutach, 5+ (and 0) → walutach. All four forms,
     // because Polish resolves `few`/`many` and a bare key holds the singular —

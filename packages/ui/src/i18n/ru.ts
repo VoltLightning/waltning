@@ -568,6 +568,7 @@ export const ru: Messages = {
     showAdd: "Показать кнопку добавления",
     mine: "моё",
     ours: "наше",
+    whatYouHold: "что у вас есть",
     openAccounts: "Открыть счета",
     alsoInOtherCurrencies_one: "Есть ещё в {{count}} валюте",
     alsoInOtherCurrencies_few: "Есть ещё в {{count}} валютах",

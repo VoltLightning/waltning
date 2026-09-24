@@ -65,13 +65,28 @@ The rate is for **the row's own date**. Three variants:
 | Variant | Trailing marker |
 |---|---|
 | `synced` | none |
-| `override` | amber `manual` tag — travels with the row into lists, balances, and the dashboard |
+| `override` | amber `manual` tag, inline only — see *What a marker has to vary against* below |
 | `stale` | amber `stale` tag with the age |
-| `estimated` | amber `estimated` tag — the row's date had no published rate, so the nearest was used (`SPEC.md` §7.6). Travels like `override` |
+| `estimated` | amber `estimated` tag — the row's date had no published rate, so the nearest was used (`SPEC.md` §7.6) |
 
 All three non-synced variants are amber under one meaning: the figure is
 asserted or aged rather than observed (P4). They differ in **text**, which is
 what makes them distinguishable (P5).
+
+**What a marker has to vary against.** P4 is not "say where the rate came
+from"; it is "say when a figure is asserted rather than observed", and that
+only informs where observed figures are also on screen. This product is a
+self-hosted ledger with no rate feed at all, so *every* rate is entered by
+hand: `override` is not the exception in a column of synced rows, it is the
+whole column. A tag on every foreign figure forever reads as a warning and
+distinguishes nothing, which is worse than silence — the person learns to skip
+amber, and then skips it on the row where it meant something.
+
+So `override` is **inline only**, where it sits beside the rate it describes and
+one tap from the rate that produced it. `stale` and `estimated` stay everywhere:
+both vary row to row, and neither describes provenance — each says *this
+particular figure may be wrong*, which is a different sentence and the one P4
+was written for.
 
 `<FxAmount>` **cannot be rendered without a rate.** That is what makes P1 a
 guarantee rather than a convention.
@@ -79,16 +94,34 @@ guarantee rather than a convention.
 **Inline in a row of figures, stacked in a row of names.** Where the amount is
 the row — a transaction list, a ledger — it reads inline as drawn above. Where a
 name leads — S16's register — it stacks, right-aligned: the balance in its own
-currency, and under it, small and muted, the rate, the converted figure and any
-marker:
+currency, and under it, small and muted, the converted figure:
 
 ```
   Travel float            62,40 BYN
-  BYN            0,3121 · 19,48 zł [manual]
+  Savings · BYN               19,48 zł
 ```
 
 Inline, the whole figure took a third of a 390pt row and left the account's name
 none of it.
+
+**Stacked drops the rate**, because a rate is a property of a *currency on a
+date* and not of a row. In a transaction list that distinction is the point —
+each row has its own date, and the rate is what differs between two otherwise
+identical figures. A register or a directory is one date, today, for every row
+at once, so the same four decimals repeat down every row holding that currency
+and separate none of them. The rate has its own screen (`<RateTable>`, §4.7)
+and these rows are not a worse copy of it.
+
+Both call sites are lists of names: S16's `BalanceRow` and S12's
+`CounterpartyRow`. `BalanceLedger` keeps the **inline** form deliberately and
+states the rate's own date beside it, because there the rate is the subject.
+
+What survives the drop is what §4.2 actually guarantees: the figure is still
+built from a rate and cannot be rendered without one (P1), and the markers that
+vary still show. The register was the densest call site in the product —
+name, kind, balance, converted figure, rate and a permanent amber tag on one
+390pt line — and two of those six carried no information that changed between
+rows.
 
 ### 4.3 `<TransferAmount>`
 

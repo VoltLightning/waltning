@@ -287,8 +287,12 @@ describe("Accounts", () => {
 
   /**
    * **A balance held in anything but the pivot says what it comes to** (S16
-   * §3): the balance, and under it the rate and the pivot figure, in the
-   * pivot's own symbol. The pivot's own accounts draw no conversion.
+   * §3): the balance, and under it the pivot figure, in the pivot's own
+   * symbol. The pivot's own accounts draw no conversion.
+   *
+   * **And no rate.** One date for every row means one rate per currency, so
+   * the four decimals repeat down every dollar account and separate none of
+   * them; the rate belongs to `<RateTable>` (`design-system/04` §4.2).
    */
   it("draws the converted figure under a foreign balance, and none under the pivot's", () => {
     withLedger([
@@ -311,9 +315,10 @@ describe("Accounts", () => {
         balance: "50",
       },
     ]);
-    expect(screen.getByText("3.8000")).toBeDefined();
-    // One rate on the screen — the dollar account's; the złoty one has none.
-    expect(screen.getAllByText(/^\d+\.\d{4}$/)).toHaveLength(1);
+    // No rate anywhere on the register — not on the dollar row, not on the
+    // złoty one.
+    expect(screen.queryByText("3.8000")).toBeNull();
+    expect(screen.queryAllByText(/^\d+\.\d{4}$/)).toHaveLength(0);
     // Twice, and deliberately: the row's converted figure, and the register's
     // own total — which with one convertible account is the same number.
     expect(screen.getAllByText(/380[.,]00/).length).toBeGreaterThanOrEqual(1);

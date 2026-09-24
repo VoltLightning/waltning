@@ -19,7 +19,7 @@
  */
 
 import { accountingDate, addDays } from "@waltning/core/date";
-import { currencyCode, type UnitsPerPivot } from "@waltning/core/money";
+import { type CurrencyCode, currencyCode, type UnitsPerPivot } from "@waltning/core/money";
 import type { FieldError } from "../../transport/field-errors/field-errors.ts";
 import type {
   ConvertCategoryDraft,
@@ -35,6 +35,7 @@ import {
   DEMO_COUNTERPARTIES,
   DEMO_DEBTS,
   DEMO_MONTHS,
+  DEMO_REFERENCE,
   demoRates,
   demoSpan,
   demoTransactions,
@@ -171,6 +172,19 @@ export function rateWindows(from: string, to: string): readonly { from: string; 
 /** L11's own cap, restated where the loader has to respect it. */
 const MAX_RATE_WINDOW_DAYS = 366;
 
+/**
+ * One currency into another, through `DEMO_REFERENCE`'s quotes against PLN.
+ *
+ * Rounded to two places because that is what a transfer's destination leg is:
+ * a figure somebody's bank actually credited, not an exact reconversion.
+ */
+function convertDemo(amount: string, from: CurrencyCode, to: CurrencyCode): string {
+  if (from === to) return amount;
+  const fromRate = Number(DEMO_REFERENCE[from] ?? "1");
+  const toRate = Number(DEMO_REFERENCE[to] ?? "1");
+  return ((Number(amount) * fromRate) / toRate).toFixed(2);
+}
+
 export function loadDemo(
   target: DemoTarget,
   today: string,
@@ -264,7 +278,7 @@ export function loadDemo(
         currency: account.currency,
         kind: account.kind,
         ownership: "own",
-        isBusiness: false,
+        isBusiness: account.isBusiness ?? false,
         openingBalance: account.openingBalance,
         openingDate: null,
         memo: "",
@@ -286,18 +300,49 @@ export function loadDemo(
       outcome.refused += 1;
       continue;
     }
+    // A transfer names its destination and no category (§7.5); everything
+    // else is an ordinary income or expense with one.
+    // **A transfer states its destination leg in full, and is refused without
+    // it.** `transactions_to_amount_shape` requires `to_amount` and
+    // `to_currency` on a transfer and forbids them anywhere else — a leg that
+    // named only the account was rejected silently, so the money left one
+    // account and arrived nowhere: the first pass of these patterns drained
+    // the current account and left cash exactly where it was.
+    const toAccount =
+      row.toAccount === undefined
+        ? undefined
+        : DEMO_ACCOUNTS.find((account) => account.ref === row.toAccount);
+    const toAccountId = row.toAccount === undefined ? undefined : accountIds.get(row.toAccount);
+    if (row.toAccount !== undefined && (toAccountId === undefined || toAccount === undefined)) {
+      outcome.refused += 1;
+      continue;
+    }
+    const from = DEMO_ACCOUNTS.find((account) => account.ref === row.account);
+    const toLeg: { toAccountId: string; toCurrency: CurrencyCode; toAmount: string } | undefined =
+      toAccount === undefined || from === undefined || toAccountId === undefined
+        ? undefined
+        : {
+            toAccountId,
+            toCurrency: toAccount.currency,
+            // Same currency is the amount itself; across currencies the demo's
+            // own reference table converts, so a złoty leaving a PLN account
+            // arrives as the euro it actually buys rather than as the same
+            // number with a different symbol.
+            toAmount: convertDemo(row.amount, from.currency, toAccount.currency),
+          };
     const id = accepted(() =>
       target.createTransaction({
         type: row.type,
         amount: row.amount,
         accountId,
-        categoryId: categoryIds.get(row.category) ?? null,
+        categoryId: row.type === "transfer" ? null : (categoryIds.get(row.category) ?? null),
         date: row.date,
         enteredName: row.enteredName,
         note: "",
         isBusiness: false,
         obligationCounterpartyId: null,
         obligationRole: null,
+        ...(toLeg ?? {}),
       }),
     );
     if (id === null) outcome.refused += 1;
@@ -344,6 +389,10 @@ export function loadDemo(
         enteredName: debt.enteredName,
         note: "",
         isBusiness: false,
+        // §6.6.1 — both links. Who the row was *with* is a different fact from
+        // who owes because of it, and a demo that set only the second left the
+        // identity link with no data behind it anywhere in the app.
+        counterpartyId,
         obligationCounterpartyId: counterpartyId,
         obligationRole: debt.role,
       }),

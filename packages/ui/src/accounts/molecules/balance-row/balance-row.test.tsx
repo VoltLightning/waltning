@@ -48,9 +48,12 @@ describe("BalanceRow", () => {
     expect(screen.getByText("100.00")).toBeDefined();
   });
 
-  it("renders a foreign balance through FxAmount, rate and all", () => {
-    // The rate is required to build the conversion at all — a foreign balance
-    // cannot be rendered as a bare converted number (P1).
+  it("renders a foreign balance converted, and does not repeat the rate", () => {
+    // The rate is still required to *build* the conversion — a foreign balance
+    // is never a bare converted number (P1) — but it is a property of the
+    // currency on a date, not of this row. In a register every row is as of
+    // today, so the same four decimals would repeat down every dollar account
+    // and distinguish none of them (`design-system/04` §4.2).
     render(
       <BalanceRow
         account="Bank B"
@@ -60,8 +63,48 @@ describe("BalanceRow", () => {
         conversion={{ rate: money.pivotPerUnit("4.00000000"), displayCurrency: "PLN" }}
       />,
     );
-    expect(screen.getByText("4.0000")).toBeDefined();
     expect(screen.getByText("400.00")).toBeDefined();
+    expect(screen.queryByText("4.0000")).toBeNull();
+  });
+
+  /**
+   * A self-hosted ledger has no rate feed, so every rate is entered by hand and
+   * `manual` would fire on every foreign row forever. A marker that never
+   * varies marks nothing, and reads as a warning while carrying no information.
+   */
+  it("does not tag a hand-entered rate in the register", () => {
+    render(
+      <BalanceRow
+        account="Bank B"
+        kind="deposit"
+        balance={money.toMoney("100.00000000")}
+        currency="USD"
+        conversion={{
+          rate: money.pivotPerUnit("4.00000000"),
+          displayCurrency: "PLN",
+          provenance: { kind: "override" },
+        }}
+      />,
+    );
+    expect(screen.queryByText("manual")).toBeNull();
+  });
+
+  /** `stale` and `estimated` do vary, and each says this figure may be wrong. */
+  it("still tags a stale rate, which is a warning and not a provenance note", () => {
+    render(
+      <BalanceRow
+        account="Bank B"
+        kind="deposit"
+        balance={money.toMoney("100.00000000")}
+        currency="USD"
+        conversion={{
+          rate: money.pivotPerUnit("4.00000000"),
+          displayCurrency: "PLN",
+          provenance: { kind: "stale", ageDays: 9 },
+        }}
+      />,
+    );
+    expect(screen.getByText("stale 9d")).toBeDefined();
   });
 
   it("renders the BIZ tag on a business account", () => {
