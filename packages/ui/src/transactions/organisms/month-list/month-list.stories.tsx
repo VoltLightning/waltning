@@ -3,9 +3,8 @@
  *
  * **Two bars, never one.** A month that took 8 000 and spent 8 000 nets to
  * nothing and was not a quiet month; a single net bar would draw it as one.
- * `FlowBar` on Summary makes the opposite choice for the opposite reason —
- * there the subject is what is left of one month, here it is how twelve
- * compare.
+ * `FlowBar` on Summary is one bar split two ways — one month, where the only
+ * question is which there was more of; here it is how twelve compare.
  */
 
 import type { Meta, StoryObj } from "@storybook/react-native-web-vite";

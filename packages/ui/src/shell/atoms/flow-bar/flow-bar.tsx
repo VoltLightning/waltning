@@ -1,73 +1,71 @@
 /**
- * `<FlowBar>` — the month's arithmetic, as a shape (S04 §3).
+ * `<FlowBar>` — the month's two figures, as a shape (S04 §3).
  *
- * **The track is what came in and the fill is what went out, so the gap that
- * remains is what you kept.** That is the same subtraction the three figures
- * beside it state, in a form readable without reading any of them.
+ * **What came in and what went out, side by side, each its share of the
+ * two.** Green on the left under *came in*, red on the right under *went out*
+ * — the same order as the labels beneath it — so a month that took in 3 000
+ * and spent 2 000 reads as mostly green, which is what it was.
  *
- * **Rejected: two proportional shares of the month's flow.** That answers how
- * the month divided — a question nobody asks — where this answers *how much of
- * what arrived is still here*, which is the card's whole subject.
+ * **It used to be the other way, and it misread.** The track was what came in
+ * and the fill what went out, so the bar answered *how much of the income was
+ * spent*: 2 000 of 3 000 painted two thirds of it red, and a month that kept a
+ * third of its income looked like a month that was mostly loss. Nobody reads a
+ * bar as a ratio of one figure to another; they read which colour there is
+ * more of.
  *
- * **A deficit fills the track and stops.** *Kept so far* goes negative and
- * takes the expense ink; the fill never overruns, because a bar longer than
- * its own container is a graphic that has to be explained. The figures carry
- * the overshoot, which is what figures are for.
+ * **Told apart by a gap, not only by hue.** `income` and `spend` are the same
+ * lightness in this palette on purpose — a figure is told apart by hue — so
+ * the two segments meet at a 2pt gap rather than touching, and read as two
+ * even for a reader who cannot separate the hues.
  *
- * **A month with nothing in it draws an empty track**, not a full one: zero
- * arrived and zero left, and a bar filled by `0 / 0` would say the month was
- * entirely spent.
- *
- * **The track is `incomeFill`, not `income`.** This is the one component that
- * draws one money colour *on* the other, and the two are the same lightness in
- * this palette on purpose — a figure is told apart by hue. So `spend` on
- * `income` was 1.0045:1 in light and the whole bar rendered as one uniform
- * rectangle, with no boundary at the very place "what you kept" is supposed to
- * be readable. Income as a *field* is a paler green; `spend` reads on it at
- * 3.60. Both floors are in `theme/theme.test.tsx`.
+ * **A month with nothing in it draws an empty track**: zero and zero is not a
+ * split, and half green half red would claim one.
  */
 
 import * as money from "@waltning/core/money";
 import { memo, useMemo } from "react";
 import { View } from "react-native";
 import { makeStyles } from "../../../theme/styles.ts";
-import { radius } from "../../../tokens.ts";
+import { radius, space } from "../../../tokens.ts";
 
 export type FlowBarProps = {
-  /** What arrived — the track. */
+  /** What arrived — the green segment, on the left. */
   inflow: money.Money;
-  /** What left, as a positive magnitude (§12) — the fill. */
+  /** What left, as a positive magnitude (§12) — the red segment, on the right. */
   spend: money.Money;
 };
 
-/** The fill's share of the track, 0–1. */
+/** Came in's share of the two, 0–1 — worked out in decimal, only the ratio a number. */
 export function flowShare(inflow: money.Money, spend: money.Money): number {
-  if (money.isZero(inflow) || !money.isPositive(inflow)) return money.isZero(spend) ? 0 : 1;
-  const share = Number(money.dec(spend).div(money.dec(inflow)).toFixed(4));
-  return Math.min(Math.max(share, 0), 1);
+  const inAmount = money.isPositive(inflow) ? money.dec(inflow) : money.dec(0);
+  const outAmount = money.isPositive(spend) ? money.dec(spend) : money.dec(0);
+  const whole = inAmount.plus(outAmount);
+  if (whole.isZero()) return 0;
+  return Number(inAmount.div(whole).toFixed(4));
 }
 
 function FlowBarView({ inflow, spend }: FlowBarProps) {
   const styles = useStyles();
-  // Nothing arrived and nothing left: a neutral track, not a full green one.
-  // The track is what came in, so painting it green on an empty month says
-  // "you kept all of it" about a month in which nothing happened — a success
-  // state drawn over an absence.
-  const empty = money.isZero(inflow) && money.isZero(spend);
   const share = flowShare(inflow, spend);
-  // The one value `makeStyles` cannot hold: it is the datum, not the design.
-  const width = useMemo(() => ({ width: `${share * 100}%` }) as const, [share]);
+  const empty = !money.isPositive(inflow) && !money.isPositive(spend);
+  // The two values `makeStyles` cannot hold: they are the datum, not the design.
+  const inFlex = useMemo(() => ({ flex: share }), [share]);
+  const outFlex = useMemo(() => ({ flex: 1 - share }), [share]);
   return (
-    // Decorative: the same subtraction is stated in words and figures either
-    // side of it, so a reader who cannot see it loses nothing and a reader
-    // using a screen reader is not read a bar.
+    // Decorative: the same two figures are stated in words and numbers under
+    // it, so a reader using a screen reader is not read a bar.
     <View
       accessibilityElementsHidden
       importantForAccessibility="no-hide-descendants"
       {...HIDDEN}
       style={[styles.track, empty ? styles.trackEmpty : null]}
     >
-      {empty ? null : <View style={[styles.fill, width]} />}
+      {empty ? null : (
+        <>
+          {share > 0 ? <View style={[styles.segment, styles.in, inFlex]} /> : null}
+          {share < 1 ? <View style={[styles.segment, styles.out, outFlex]} /> : null}
+        </>
+      )}
     </View>
   );
 }
@@ -84,10 +82,13 @@ export const FlowBar = memo(FlowBarView);
 const useStyles = makeStyles((theme) => ({
   track: {
     height: 12,
+    flexDirection: "row",
+    gap: space.xxs,
     borderRadius: radius.sm,
     overflow: "hidden",
-    backgroundColor: theme.incomeFill,
   },
   trackEmpty: { backgroundColor: theme.trackFill },
-  fill: { height: "100%", backgroundColor: theme.spend },
+  segment: { height: "100%" },
+  in: { backgroundColor: theme.income },
+  out: { backgroundColor: theme.spend },
 }));
