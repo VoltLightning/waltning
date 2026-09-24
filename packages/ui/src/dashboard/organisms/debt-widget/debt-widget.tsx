@@ -1,7 +1,7 @@
 /**
  * `<DebtWidget>` — `S01` §3/§4/§14.5's `debt` widget: E3's two direction
  * totals (`money.directionTotals`), per currency. **Never nets across people
- * or currencies** (§6.6, S12 §8) — the same rule `debt-screen.tsx` states for
+ * or currencies** (§6.6, S12 §8) — the same rule `counterparties-screen.tsx` states for
  * the full S12 list holds here, at the summary's own scale.
  */
 

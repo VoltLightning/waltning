@@ -105,7 +105,7 @@ export const OpeningAndMore: Story = {
 
 /**
  * S12 says *Allocate* where S04 and S01 say *Open* — the one word
- * `debt-screen.tsx` still passes for itself. Same route either way.
+ * `counterparties-screen.tsx` still passes for itself. Same route either way.
  */
 export const AllocateLabel: Story = {
   args: { model: { ...BASE, enteredName: "Grocer" }, actionLabel: "Allocate" },

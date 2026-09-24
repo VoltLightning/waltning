@@ -58,7 +58,7 @@ export async function createAccount(
 /**
  * S15's minimal path — a name is the only field `create_counterparty`
  * requires. Reached through S12 Debt's own empty-state `+ Add`
- * (`debt-screen.tsx`'s `handleAdd`), not a direct `page.goto("/counterparty/
+ * (`counterparties-screen.tsx`'s `handleAdd`), not a direct `page.goto("/counterparty/
  * new")`: a create-mode Save calls `router.back()`
  * (`counterparty-editor-screen.tsx`'s own `finish()`), which needs a real
  * history entry to return to — one this screen's own push leaves behind and

@@ -17,7 +17,7 @@ who is the same person.
 |---|---|---|
 | S05 | Counterparty chip → *new* | S05, with the counterparty attached |
 | S12 | Add | S12 |
-| S37 | New / edit | S37 |
+| S12 | New / row Edit | S12, search preserved |
 | S13 | Edit | S13 |
 | S29b | Counterparty proposal review | S29b |
 
@@ -52,7 +52,7 @@ decision, so the pair is never queried again.
 
 ### Lightweight creation and callers
 
-S37 and S05's Who picker both enter this editor. On creation the only required
+S12's directory and S05's Who picker both enter this editor. On creation the only required
 fields are Name and **Person / Shop or service**; no kind is silently selected
 from spelling or the API's default. Shop or service stores `company`. Contact,
 Note and settlement preference are optional under More details; the latter is

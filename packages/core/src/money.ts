@@ -1219,7 +1219,7 @@ export const ageInDays = (oldestDate: AccountingDate, today: AccountingDate): nu
 /**
  * §6.6's direction, in words — `DebtDirectionTag` and S12's own sort/filter
  * both need this exact rule (positive means *they owe you*) and neither
- * should restate it: `debt-screen.tsx`'s segment filter calls this rather
+ * should restate it: `counterparties-screen.tsx`'s segment filter calls this rather
  * than `money.cmp` directly, the same "no component outside the design
  * system formats money" rule `tests/architecture.test.ts` holds packages/ui
  * to (P5, §6.6).

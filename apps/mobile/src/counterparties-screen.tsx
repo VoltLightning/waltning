@@ -43,6 +43,7 @@ import { UnsettledBanner } from "@waltning/ui/shell/unsettled-banner";
 import { EmptyState } from "@waltning/ui/states/empty-state";
 import { ErrorState } from "@waltning/ui/states/error-state";
 import { Skeleton } from "@waltning/ui/states/skeleton";
+import { text } from "@waltning/ui/theme/fonts";
 import { makeStyles } from "@waltning/ui/theme/styles";
 import { space } from "@waltning/ui/tokens";
 import { router } from "expo-router";
@@ -51,7 +52,19 @@ import { Text, View } from "react-native";
 import { mobileDiagnostics } from "./diagnostics.ts";
 import { openUnsettled } from "./open-unsettled.ts";
 
-type DirectionSegment = "all" | "theyOwe" | "youOwe";
+/**
+ * **Open, or everyone.** S12 absorbed S37: one screen holds both the parties
+ * with something outstanding and the whole saved directory, because they were
+ * always the same list read two ways — *"a reference-only shop appears in
+ * neither debt group merely because it was saved"* was S37's whole reason to
+ * exist, and a switcher says that without a second screen to navigate to.
+ *
+ * The direction filter that used to sit here — all / they owe / you owe —
+ * went with the merge. The hero above already states both directions and the
+ * per-currency card states each one by name, so a third way to say it was
+ * chrome; what nothing said was which parties are in the directory at all.
+ */
+type CounterpartySegment = "open" | "everyone";
 
 type DebtRow = {
   counterpartyId: string;
@@ -98,27 +111,26 @@ function handleAdd() {
 }
 
 /**
- * S12's segment filter. `figures.value` is the ordinary case; a `null` net
- * (P1 — a held currency has no rate) classifies from the raw balances
- * instead: any positive line puts the row under *they owe*, any negative
- * under *you owe*, and a counterparty holding both shows under both rather
- * than being hidden by a net that was never computed.
+ * Whether a row has anything outstanding.
+ *
+ * `figures.value` is the ordinary case; a `null` net (P1 — a held currency has
+ * no rate) asks the raw balances instead, so a party whose net could never be
+ * computed is still *open* if any line it holds is non-zero. Hiding them
+ * behind a fold that failed is the one outcome that would be wrong in both
+ * directions at once.
  */
-function matchesDirectionSegment(row: DebtRow, segment: DirectionSegment): boolean {
-  if (segment === "all") return true;
-  if (row.figures.value !== null) {
-    return money.debtDirection(row.figures.value, row.figures.decimals) === segment;
-  }
-  return row.balances.some((line) => money.debtDirection(line.balance, line.decimals) === segment);
+function isOpen(row: DebtRow): boolean {
+  if (row.figures.value !== null) return !money.isZero(row.figures.value);
+  return row.balances.some((line) => !money.isZero(line.balance));
 }
 
-export default function Debt() {
+export default function Counterparties() {
   const t = useT();
   const styles = useStyles();
   const ledger = useLedgerController();
   const snapshot = usePhoneLedger(ledger);
   const today = deviceRuntime().capture().date;
-  const [segment, setSegment] = useState<DirectionSegment>("all");
+  const [segment, setSegment] = useState<CounterpartySegment>("open");
 
   // H1 — `snapshot.revision` in deps: `listCounterpartyBalances` is a live
   // controller read, never cached in the snapshot, so a `useMemo` keyed only
@@ -214,16 +226,76 @@ export default function Debt() {
     [directionTotalsResult],
   );
 
-  const visibleRows = useMemo(() => {
-    const filtered = rows.filter((row) => matchesDirectionSegment(row, segment));
-    // S12 §3's own mock: one list, sorted by name — kind is never a sort
-    // key. A company still carries its own `AgeingBar` (O15) beside its row,
-    // but that is a per-row decoration, not a grouping the list performs (L1
-    // — the prior comment claimed "companies by age desc, then by name", which
-    // matched neither the mock, which lists a person first, nor the code,
-    // which had no name tiebreak for two companies of the same age).
-    return [...filtered].sort((a, b) => a.name.localeCompare(b.name));
-  }, [rows, segment]);
+  /**
+   * **Open is a filter; Everyone is the directory.** The two are not the same
+   * list with a predicate flipped: `listCounterpartyBalances` only ever
+   * returns parties money has moved with, so a shop somebody saved and has
+   * not spent at yet exists in `snapshot.counterparties` and nowhere else.
+   * That gap is exactly what S37 was a separate screen for.
+   *
+   * A directory-only party folds to zero because its balance list is empty,
+   * which is the honest figure rather than a blank: it says *nothing
+   * outstanding*, which is what being in the directory and not in the debt
+   * list means.
+   *
+   * Sorted by name, never by kind — the grouping below is what kind decides,
+   * and a company still carries its own `AgeingBar` (O15) as a per-row
+   * decoration rather than a sort key.
+   */
+  const visibleRows = useMemo((): readonly DebtRow[] => {
+    if (segment === "open") {
+      return [...rows.filter(isOpen)].sort((a, b) => a.name.localeCompare(b.name));
+    }
+    if (!pivot) return [];
+    const rateOf = makeRateOf(ledger.readRate, pivot, today);
+    const withBalances = new Map(rows.map((row) => [row.counterpartyId, row]));
+    const everyone = snapshot.counterparties
+      .filter((counterparty) => !counterparty.archived)
+      .map(
+        (counterparty): DebtRow =>
+          withBalances.get(counterparty.id) ?? {
+            counterpartyId: counterparty.id,
+            name: counterparty.name,
+            kind: counterparty.kind,
+            figures: resolveCounterpartyFigures(
+              { settlementCurrency: counterparty.settlementCurrency, balances: [] },
+              pivot,
+              rateOf,
+              snapshot.currencies,
+            ),
+            balances: [],
+            ageDays: null,
+            ageBucket: null,
+          },
+      );
+    return everyone.sort((a, b) => a.name.localeCompare(b.name));
+  }, [ledger.readRate, pivot, rows, segment, snapshot.counterparties, snapshot.currencies, today]);
+
+  /**
+   * **People and companies, by legal nature.** Only in *Everyone*: the open
+   * list answers "what is outstanding" and splitting it by kind would put a
+   * question about obligations behind a question about who somebody is. The
+   * directory is the other way round — what it is *for* is finding a saved
+   * party, and the first thing anybody knows about one is whether it is a
+   * person or a business.
+   *
+   * An empty group draws nothing rather than an empty heading (S37 §3).
+   */
+  const groups = useMemo(() => {
+    if (segment === "open") return [{ key: "open" as const, label: null, rows: visibleRows }];
+    return [
+      {
+        key: "person" as const,
+        label: t("counterparties.groupPeople"),
+        rows: visibleRows.filter((row) => row.kind === "person"),
+      },
+      {
+        key: "company" as const,
+        label: t("counterparties.groupCompanies"),
+        rows: visibleRows.filter((row) => row.kind === "company"),
+      },
+    ].filter((group) => group.rows.length > 0);
+  }, [segment, t, visibleRows]);
 
   const unsettledModel = useUnsettledBanner(snapshot.unsettledClearing);
   const openTarget = unsettledModel?.openTarget ?? null;
@@ -243,15 +315,14 @@ export default function Debt() {
   );
 
   const segments = useMemo(
-    (): readonly [Segment, Segment, Segment] => [
-      { value: "all", label: t("counterparties.segmentAll") },
-      { value: "theyOwe", label: t("counterparties.segmentTheyOwe") },
-      { value: "youOwe", label: t("counterparties.segmentYouOwe") },
+    (): readonly [Segment, Segment] => [
+      { value: "open", label: t("counterparties.segmentOpen") },
+      { value: "everyone", label: t("counterparties.segmentEveryone") },
     ],
     [t],
   );
   const handleSegmentChange = useCallback(
-    (next: string) => setSegment(next as DirectionSegment),
+    (next: string) => setSegment(next as CounterpartySegment),
     [],
   );
 
@@ -415,9 +486,20 @@ export default function Debt() {
           // row and the next; a row abuts the one below it exactly as it did
           // before `ScrollView` came out (`root` used to have only this list
           // as a distant sibling, never every row as one).
-          <View style={styles.rows}>
-            {visibleRows.map((row) => (
-              <DebtCounterpartyRow key={row.counterpartyId} row={row} onSelect={handleSelect} />
+          <View style={styles.groups}>
+            {groups.map((group) => (
+              <View key={group.key} style={styles.group}>
+                {group.label === null ? null : <Text style={styles.groupLabel}>{group.label}</Text>}
+                <View style={styles.rows}>
+                  {group.rows.map((row) => (
+                    <DebtCounterpartyRow
+                      key={row.counterpartyId}
+                      row={row}
+                      onSelect={handleSelect}
+                    />
+                  ))}
+                </View>
+              </View>
             ))}
           </View>
         )}
@@ -438,4 +520,8 @@ const useStyles = makeStyles((theme) => ({
   // No `gap` — rows abut, the same as before `ScrollView` came out; `root`'s
   // own `gap` is between this block and the ones above it, not within it.
   rows: {},
+  /** Between *People* and *Companies* — the space a heading needs to belong to what follows it. */
+  groups: { gap: space.x4 },
+  group: { gap: space.xs },
+  groupLabel: { color: theme.textMuted, ...text.ui("label", 600) },
 }));

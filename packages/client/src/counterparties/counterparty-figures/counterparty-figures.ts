@@ -7,7 +7,7 @@
  * every app source file to be platform-bound, a test, or a route; this reads
  * `readRate` and a `today` (both the screen already has) and is shareable
  * logic with no platform dependency, so it lives beside `counterparty-net.ts`
- * rather than in `apps/mobile/src`. Two screens (`debt-screen.tsx`,
+ * rather than in `apps/mobile/src`. Two screens (`counterparties-screen.tsx`,
  * `counterparty-detail-screen.tsx`, `counterparty-editor-screen.tsx`) import
  * it; `packages/ui`'s `CounterpartyRow`/`BalanceLedger` only ever render
  * whatever figure this module already resolved.

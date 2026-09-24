@@ -44,7 +44,7 @@ export default function TabsLayout() {
         <TabTrigger name="today" href="/" />
         <TabTrigger name="accounts" href="/accounts" />
         <TabTrigger name="ledger" href="/ledger" />
-        <TabTrigger name="debt" href="/debt" />
+        <TabTrigger name="counterparties" href="/counterparties" />
         <TabTrigger name="settings" href="/settings" />
       </TabList>
     </Tabs>

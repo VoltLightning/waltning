@@ -101,12 +101,16 @@ function debtRow(opts: {
 /* ── create_counterparty ─────────────────────────────────────────────────── */
 
 describe("create_counterparty", () => {
-  it("lands the row, defaults kind to person, and queues one entry", () => {
+  it("lands the row with the kind it was given, and queues one entry", () => {
     const result = write(createCounterpartyExecutor, {
       id: "55555555-5555-4555-8555-555555555555",
       name: "Piotr",
+      kind: "person",
     });
 
+    // Stated, never defaulted: `kind` lost its `person` default when the
+    // agent started proposing counterparties — O15 ages companies and not
+    // people, so an unstated kind was quietly wrong for every shop.
     expect(result.row.kind).toBe("person");
     expect(entries()).toHaveLength(1);
   });
@@ -116,6 +120,7 @@ describe("create_counterparty", () => {
       write(createCounterpartyExecutor, {
         id: "66666666-6666-4666-8666-666666666666",
         name: "  NINA  ",
+        kind: "person",
       }),
     ).toThrow(/collides with existing counterparty "Nina"/);
     // The crash window: the outbox entry commits before the replica throws.
@@ -123,7 +128,7 @@ describe("create_counterparty", () => {
   });
 
   it("replays idempotently — twice is once", () => {
-    const input = { id: "77777777-7777-4777-8777-777777777777", name: "Darek" };
+    const input = { id: "77777777-7777-4777-8777-777777777777", name: "Darek", kind: "person" };
     write(createCounterpartyExecutor, input);
 
     expect(() => write(createCounterpartyExecutor, input)).not.toThrow();
@@ -152,12 +157,14 @@ describe("create_counterparty", () => {
     write(createCounterpartyExecutor, {
       id: "99999999-9999-4999-8999-999999999999",
       name: "łukasz",
+      kind: "person",
     });
 
     expect(() =>
       write(createCounterpartyExecutor, {
         id: "aaaaaaaa-1111-4aaa-8aaa-aaaaaaaaaaaa",
         name: "ŁUKASZ",
+        kind: "person",
       }),
     ).toThrow(/collides with existing counterparty "łukasz"/);
   });
@@ -175,6 +182,7 @@ describe("create_counterparty", () => {
       write(createCounterpartyExecutor, {
         id: "bbbbbbbb-1111-4bbb-8bbb-bbbbbbbbbbbb",
         name: "Ola",
+        kind: "person",
       }),
     ).not.toThrow();
   });
@@ -260,6 +268,7 @@ describe("update_counterparty", () => {
     write(createCounterpartyExecutor, {
       id: "cdcdcdcd-1111-4cdc-8cdc-cdcdcdcdcdcd",
       name: "Ola",
+      kind: "person",
     });
     const archived = counterparty(OLA);
 
@@ -675,6 +684,7 @@ describe("unmerge_counterparties", () => {
     write(createCounterpartyExecutor, {
       id: "b3b3b3b3-3333-4b3b-8b3b-b3b3b3b3b3b3",
       name: "Ola",
+      kind: "person",
     });
 
     expect(() => write(unmergeCounterpartiesExecutor, { mergeId: merge.row.merge.id })).toThrow(

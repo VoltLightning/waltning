@@ -127,7 +127,8 @@ Auto column: ✅ eligible for a bounded auto-mode grant, ❌ never.
 | `rename_category` · `reparent_category` · `convert_leaf_group` | ❌ | |
 | `archive_category` | ❌ | S19's fourth verb, and it was missing here. Archiving is not deletion — a leaf with history keeps it and stops being offerable (`TAXONOMY.md` R2). Refused on a group with unarchived children |
 | `merge_categories` | ❌ | Not reversible in one step (J12) |
-| `create_counterparty` · `update_counterparty` | ✅ | `update_counterparty`'s patch also archives — no separate `archive_counterparty` exists — refused while any §7 balance is open (S15 §6) |
+| `create_counterparty` | ❌ | **The agent proposes one, the way it proposes a category.** A counterparty is a row a person will see in their directory for years, matched against by name, and merged by hand when two spellings turn out to be one party (§6.6.1) — an entry created unattended is one nobody chose the spelling of. `kind` carries no default for the same reason: `person` and `company` differ in ageing (O15) and in how the directory groups them, so the model states which it means or the proposal is incomplete |
+| `update_counterparty` | ✅ | The patch also archives — no separate `archive_counterparty` exists — refused while any §7 balance is open (S15 §6) |
 | `merge_counterparties` · `unmerge_counterparties` | ❌ | Reversible, and still never automatic (S15). Backed by `counterparty_merges` — winner, loser, the transaction ids moved, and when — which is what makes unmerge exact rather than a re-derivation (S15 §9.2) |
 | `record_distinct_counterparties` | ✅ | The *these are different* decision, recorded in `counterparty_distinct_pairs` (`a_id < b_id`, one row per pair) so `MatchWarning` never asks about the same pair twice (S15 §9.1) |
 

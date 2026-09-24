@@ -1,17 +1,20 @@
-# S12 · Debt
+# S12 · Counterparties
 
-**Surface** both · **Journeys** J7, J8 · **Frequency** weekly
+**Surface** both · **Journeys** J2, J7, J8 · **Frequency** weekly
 **Design** [S12.html](design/S12.html)
 **Status** specified · tier 2
 
-> Absorbs the former S26 (Debt overview · web). Portfolio scale and counterparty
-> list are the same concept at different densities.
+> Absorbs the former S26 (Debt overview · web) and the former S37 (People &
+> companies). All three were the same list read at different densities and
+> with different filters; a switcher says that without three screens to
+> navigate between.
 
 ---
 
 ## 1. Purpose
 
-Who owes you, and whom you owe, across every currency.
+Who you deal with, and what is outstanding — the saved directory and the open
+balances in one place, because the second is a filter over the first.
 
 ## 2. Entry and exit
 
@@ -24,12 +27,17 @@ Who owes you, and whom you owe, across every currency.
 **Exits** — a counterparty → S13 · add → S15 · unallocated clearing → the
 transaction that needs allocating.
 
-**Directory boundary:** S37 contains all People & companies. S12 defaults to
-parties with any non-zero per-currency debt balance; offsetting converted totals
-do not hide them. Settled shows parties with debt history and no open balance. A
-reference-only shop or person appears in neither debt group merely because it
-was saved. Existing debt rows can still be inspected after settlement. Directory
-navigation is available from Settings; this screen remains about obligations.
+**Open or Everyone, and that switcher is what absorbed S37.** *Open* is the
+parties carrying any non-zero per-currency balance; offsetting converted totals
+do not hide them, and a balance whose fold failed (P1) still counts as open
+rather than vanishing behind a figure nobody could compute. *Everyone* is the
+saved directory — every party, grouped **People** and **Companies** by legal
+nature, including the ones money has never moved with. A shop saved and not yet
+spent at exists only there, which is the gap that used to need a second screen.
+
+Archived parties appear in neither; they are finished, not filtered. Existing
+balance rows stay inspectable after settlement, through the party's own detail
+(S13).
 
 
 ## 3. Layout
