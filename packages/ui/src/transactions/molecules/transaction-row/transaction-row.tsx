@@ -173,7 +173,7 @@ export function TransactionRow({
         list — announced a enteredName and never the amount, the category, the date
         or the business marker. The figure is the reason the row exists.
 
-        `net-worth-strip` documents the same defect and the same fix, found
+        the old net-worth strip had the same defect and the same fix, found
         the same way: nothing failed, because a test reading `textContent`
         still sees content a reader can never reach. Only the *accessible
         name* shows it, which is what `entry-row.test.tsx` asserts.

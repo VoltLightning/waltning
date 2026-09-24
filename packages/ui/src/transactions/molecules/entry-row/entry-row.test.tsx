@@ -39,7 +39,7 @@ function draw(props: Partial<Parameters<typeof EntryRow>[0]> = {}) {
  * The ledger used to wrap this row in a `Pressable` carrying
  * `accessibilityLabel={row.enteredName}`, and a label on a pressable *replaces* the
  * name composed from its content — so the main list of a money app announced
- * a entered name and never the amount. `net-worth-strip` documents the same defect
+ * a entered name and never the amount. the old net-worth strip had the same defect
  * and the same fix; nothing asserted it here, which is how it survived.
  */
 it("reads the figure as part of the row's own name", () => {

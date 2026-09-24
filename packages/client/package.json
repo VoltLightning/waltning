@@ -4,6 +4,8 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./accounts/use-holdings": "./src/accounts/holdings/use-holdings.ts",
+    "./accounts/holdings": "./src/accounts/holdings/holdings.ts",
     "./accounts/use-accounts": "./src/accounts/use-accounts.ts",
     "./appearance/create-appearance": "./src/appearance/create-appearance/create-appearance.ts",
     "./appearance/preview-reset": "./src/appearance/preview-reset/preview-reset.ts",

@@ -68,3 +68,16 @@ export const WithItsOwnStepper: Story = {
 export const NothingYet: Story = {
   args: { spend: money.ZERO, inflow: money.ZERO, net: money.ZERO },
 };
+
+/**
+ * **Compact — S04's shape, under `HoldingsCard`.** The total is the hero
+ * there, so the month's label and figure share one line, one size down.
+ */
+export const Compact: Story = {
+  args: {
+    spend: money.toMoney("5670.18"),
+    inflow: money.toMoney("9200.00"),
+    net: money.toMoney("3529.82"),
+    layout: "compact",
+  },
+};

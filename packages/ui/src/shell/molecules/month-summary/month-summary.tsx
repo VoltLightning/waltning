@@ -5,7 +5,7 @@
  * **The month is the daily question.** A total you own moves slowly and is
  * checked occasionally; what changed since the first is what the app is opened
  * for. So the period stepper, the period's own net, and the two figures it is
- * made of live in one card at the top of the ground, and `NetWorthStrip`
+ * made of live in one card beneath the total, and `HoldingsCard`
  * carries the total above it in a line.
  *
  * **`net` leads and its two components sit under it, because that is what it
@@ -98,6 +98,13 @@ export type MonthSummaryProps = {
    * *you owe* reads as owing a negative amount.
    */
   signed?: boolean;
+  /**
+   * `"hero"` (default) stacks the label over a display-size figure — S12's
+   * own hero. `"compact"` puts label and figure on one line, one size down:
+   * S04's card under `HoldingsCard`, where the total is the hero and the
+   * month is part of its answer rather than a second one (S04 §3).
+   */
+  layout?: "hero" | "compact";
 };
 
 export function MonthSummary({
@@ -110,6 +117,7 @@ export function MonthSummary({
   otherCurrencies = 0,
   labels,
   signed = true,
+  layout = "hero",
 }: MonthSummaryProps) {
   const t = useT();
   const styles = useStyles();
@@ -135,7 +143,7 @@ export function MonthSummary({
         `signed` — a kept month is a gain, and the `+` is the difference
         between "you have 3 529,82" and "you kept 3 529,82".
       */}
-      <View style={styles.hero}>
+      <View style={layout === "compact" ? styles.compact : styles.hero}>
         <Text style={styles.heroLabel}>{labels?.net ?? t("shell.keptSoFar")}</Text>
         {/*
           **`medium`, which is larger than `large`.** The size names do not
@@ -145,7 +153,13 @@ export function MonthSummary({
           draws it at 40. `medium` had zero callers before this one, which is
           what a name nobody reaches for looks like.
         */}
-        <Amount value={net} currency={currency} decimals={decimals} size="medium" signed={signed} />
+        <Amount
+          value={net}
+          currency={currency}
+          decimals={decimals}
+          size={layout === "compact" ? "large" : "medium"}
+          signed={signed}
+        />
       </View>
 
       <FlowBar inflow={inflow} spend={spend} />
@@ -179,6 +193,13 @@ export function MonthSummary({
 
 const useStyles = makeStyles((theme) => ({
   hero: { gap: space.xs },
+  compact: {
+    flexDirection: "row",
+    alignItems: "baseline",
+    justifyContent: "space-between",
+    flexWrap: "wrap",
+    gap: space.md,
+  },
   /**
    * **Primary text, not muted** — the only label in this card that is. It
    * names the screen's hero figure, and a muted label over a 38pt number read
