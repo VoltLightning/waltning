@@ -28,7 +28,15 @@ back to the caller on save or cancel.
 
 ### Mobile — 390pt
 
-Scrolling column, ordered by how often each region is the reason you came.
+Scrolling column, using the same warm ground, compact identity strip and
+light cards as Accounts and Counterparties. The page header names the
+transaction and its date once. The hero pairs a 40pt brand mark with direction
+and account above the amount. Fields form two cards: everyday details
+(category, date, account, counterparty, entered name, note), then obligations
+and reporting flags (money owed, role when applicable, business, one-off).
+One Save sits on the ground after both field cards. A breakdown with no lines
+is a compact labelled row with **+ Add**, becoming a card when a line is added.
+Delete is a content-width action below the breakdown, separated by space.
 
 ```
   Went out                          ← the direction, in words (P5)
@@ -42,10 +50,13 @@ Scrolling column, ordered by how often each region is the reason you came.
   │ Category      Food › Eating out       │
   │ Date          6 Aug 2026              │
   │ Account       Cash · PLN              │
-  │ Scope         Mine            [BIZ]   │
-  │ Who           Shop A                  │
-  │ Money owed    Friend A owes me         │
+  │ Counterparty  Shop A                  │
+  │ Payee         Shop A                  │
   │ Note          —                       │
+  └───────────────────────────────────────┘
+  ┌ obligations and reporting ────────────┐
+  │ Money owed    Friend A owes me         │
+  │ Business                       [ ○ ]  │
   │ One-off                        [ ○ ]  │
   └───────────────────────────────────────┘
 
@@ -106,17 +117,18 @@ reads the transaction's own category.
 
 ### Web — ≥1024px
 
-Two columns. Fields left, evidence right — receipt viewer at usable size with
-the extraction beside it, and the audit history beneath. The width buys a
-readable receipt, which is the one thing a phone genuinely cannot give you.
+The currently implemented fields and breakdown occupy a left-aligned column
+capped at 680px, keeping labels and values close. When receipt and audit
+components are available, evidence takes a second column: receipt viewer at
+usable size with extraction beside it, and audit history beneath.
 
 ## 4. Components
 
 | Component | Notes |
 |---|---|
-| `Card` | §3 draws four boxes — `fields`, `receipt`, `breakdown`, `history`. Two are cards today: `fields` and `breakdown`; the receipt and history boxes have nothing to render on the phone yet — no receipts, no audit log — and become cards when they do. The hero figure and its FX basis sit bare on the ground, never in a card |
+| `Card` | §3 draws four boxes — `fields`, `receipt`, `breakdown`, `history`. The fields are two cards today, and a non-empty `breakdown` is a third; the receipt and history boxes have nothing to render on the phone yet — no receipts, no audit log — and become cards when they do. The hero figure and its FX basis sit bare on the ground, never in a card |
 | `FxAmount` | Full basis, all four provenance variants |
-| `BrandIcon` | Beside the hero's account line, not a row inside `FieldsCard` — that card draws every field through one generic labelled row, and singling out Entered name for an icon would be the special case it exists to avoid. Same catalogue and never-blank fallback as S04/S10 (§14.4b) |
+| `BrandIcon` | In the hero's identity strip above the amount, not a row inside `FieldsCard` — that card draws every field through one generic labelled row, and singling out Entered name for an icon would be the special case it exists to avoid. Same catalogue and never-blank fallback as S04/S10 (§14.4b) |
 | `AuditHistory` | Renders a **diff**, not a sentence. Marks `agent`, `import`, `migration` actors distinctly (§5.6). **A `conflict_detected` row is a write the server *refused*, not one it applied**, and renders as its own kind — the rejected value struck through beside the value that stood. Rendering it as an ordinary diff would say a change happened when none did, on the one screen you consult precisely because you already distrust the row. Read-only: putting a discarded value back is an ordinary edit you make deliberately (S35 §8) |
 | `WhoPicker` | Same choices, matching and draft-preserving exits as S05 |
 | `Chip` | Every editable field |

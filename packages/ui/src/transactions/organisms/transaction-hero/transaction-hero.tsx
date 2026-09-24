@@ -15,13 +15,9 @@
  * neither: it left one account and arrived in another, and naming one side
  * would be picking a side.
  *
- * **`BrandIcon` sits here, not in `FieldsCard`'s Entered name row (`SPEC.md`
- * §14.4b).** `FieldsCard` draws every field through one generic labelled-row
- * renderer; singling out Entered name for an icon slot would be a special case in a
- * component built specifically to avoid one field-row from another. This
- * screen's one identity anchor already exists — the hero — so the mark
- * lives beside it, the same "amount resolves first" reasoning this file
- * already states, extended to "and here is what it was for".
+ * The identity strip pairs the brand mark with direction and account, above
+ * the amount. The page header already names the transaction; repeating it
+ * here would compete with the figure. This follows CounterpartyCard's strip.
  */
 
 import type * as money from "@waltning/core/money";
@@ -65,7 +61,21 @@ export function TransactionHero({
 
   return (
     <View style={styles.root}>
-      {direction === undefined ? null : <Text style={styles.kicker}>{t(direction)}</Text>}
+      <View style={styles.identity}>
+        {enteredName === undefined ? null : (
+          <BrandIcon
+            {...(brandKey !== undefined ? { brandKey } : {})}
+            enteredName={enteredName}
+            size={40}
+          />
+        )}
+        <View style={styles.context}>
+          {direction === undefined ? null : <Text style={styles.kicker}>{t(direction)}</Text>}
+          <Text style={styles.subtitle}>
+            {accountName} · {currency}
+          </Text>
+        </View>
+      </View>
       <Amount
         value={amount}
         currency={currency}
@@ -73,25 +83,14 @@ export function TransactionHero({
         size="hero"
         kind={type ? TRANSACTION_AMOUNT_KIND[type] : "auto"}
       />
-      <View style={styles.subtitleRow}>
-        {enteredName === undefined ? null : (
-          <BrandIcon
-            {...(brandKey !== undefined ? { brandKey } : {})}
-            enteredName={enteredName}
-            size={20}
-          />
-        )}
-        <Text style={styles.subtitle}>
-          {accountName} · {currency}
-        </Text>
-      </View>
     </View>
   );
 }
 
 const useStyles = makeStyles((theme) => ({
-  root: { gap: space.xs },
+  root: { gap: space.xl, paddingVertical: space.x3 },
   kicker: { color: theme.textMuted, ...text.ui("kicker") },
-  subtitleRow: { flexDirection: "row", alignItems: "center", gap: space.sm },
+  identity: { flexDirection: "row", alignItems: "center", gap: space.xl },
+  context: { flex: 1, gap: space.xxs },
   subtitle: { color: theme.textMuted, ...text.ui("body") },
 }));

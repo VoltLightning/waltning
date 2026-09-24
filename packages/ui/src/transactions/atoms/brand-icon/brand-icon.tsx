@@ -52,8 +52,8 @@ export type BrandIconProps = {
    * which is where this started.
    */
   category?: string | null | undefined;
-  /** Row (24) and widget (20) — `design-system/05`'s own `ServiceIcon` sizing, reused here. */
-  size?: 24 | 20;
+  /** Row (24), widget (20), and transaction detail identity (40). */
+  size?: 24 | 20 | 40;
 };
 
 export function BrandIcon({ brandKey, enteredName, category, size = 24 }: BrandIconProps) {
@@ -70,7 +70,7 @@ export function BrandIcon({ brandKey, enteredName, category, size = 24 }: BrandI
     const ink = { color: theme.textOnAccent };
     return (
       <View style={[styles.badge, box, fill]} {...DECORATIVE}>
-        <Text style={[styles.mark, ink]} numberOfLines={1}>
+        <Text style={[styles.mark, size === 40 ? styles.largeMark : null, ink]} numberOfLines={1}>
           {entry.mark}
         </Text>
       </View>
@@ -87,7 +87,7 @@ export function BrandIcon({ brandKey, enteredName, category, size = 24 }: BrandI
   const ink = { color: tint?.onSolid ?? monogram.ink };
   return (
     <View style={[styles.badge, box, fill]} {...DECORATIVE}>
-      <Text style={[styles.mark, ink]} numberOfLines={1}>
+      <Text style={[styles.mark, size === 40 ? styles.largeMark : null, ink]} numberOfLines={1}>
         {monogram.letter}
       </Text>
     </View>
@@ -126,4 +126,5 @@ const useStyles = makeStyles(() => ({
     justifyContent: "center",
   },
   mark: { ...text.ui("caption", 700) },
+  largeMark: { ...text.ui("displayThree", 600) },
 }));

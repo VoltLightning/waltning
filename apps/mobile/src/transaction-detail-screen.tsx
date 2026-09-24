@@ -55,8 +55,9 @@ import { resolveFieldErrorMessage } from "@waltning/ui/i18n/field-error-messages
 import { dayLabel } from "@waltning/ui/i18n/locales";
 import { useLocale, useT } from "@waltning/ui/i18n/provider";
 import { Button } from "@waltning/ui/primitives/button";
-import { Card } from "@waltning/ui/shell/card";
 import { ErrorState } from "@waltning/ui/states/error-state";
+import { makeStyles } from "@waltning/ui/theme/styles";
+import { space } from "@waltning/ui/tokens";
 import {
   FieldsCard,
   type TransactionFields,
@@ -66,6 +67,7 @@ import { LinesCard, type LinesCardDraftLine } from "@waltning/ui/transactions/li
 import { TransactionHero } from "@waltning/ui/transactions/transaction-hero";
 import { router, useLocalSearchParams } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
+import { View } from "react-native";
 import { PushedPage } from "./pushed-page";
 
 /**
@@ -132,6 +134,7 @@ function handleCreateAccountFromDetail() {
 
 export default function TransactionDetail() {
   const t = useT();
+  const styles = useStyles();
   const locale = useLocale();
   const ledger = useLedgerController();
   // Subscribed — an account renamed or a category created elsewhere while
@@ -341,16 +344,16 @@ export default function TransactionDetail() {
       title={detail.enteredName === "" ? t("routes.transaction") : detail.enteredName}
       subtitle={dayLabel(detail.date, locale)}
     >
-      <TransactionHero
-        amount={detail.amount}
-        currency={detail.currency}
-        decimals={detail.decimals}
-        type={detail.type}
-        accountName={detail.accountName}
-        enteredName={detail.enteredName}
-        brandKey={detail.brandKey}
-      />
-      <Card>
+      <View style={styles.content}>
+        <TransactionHero
+          amount={detail.amount}
+          currency={detail.currency}
+          decimals={detail.decimals}
+          type={detail.type}
+          accountName={detail.accountName}
+          enteredName={detail.enteredName}
+          brandKey={detail.brandKey}
+        />
         <FieldsCard
           fields={toFields(detail)}
           accounts={pickerAccounts}
@@ -368,8 +371,7 @@ export default function TransactionDetail() {
           {...(fieldsErrors ? { fieldErrors: fieldsErrors } : {})}
           onSave={handleSaveFields}
         />
-      </Card>
-      <Card title={t("transactions.lines")}>
+
         <LinesCard
           lines={detail.lines}
           total={money.abs(detail.amount)}
@@ -378,8 +380,10 @@ export default function TransactionDetail() {
           {...(linesErrors ? { fieldErrors: linesErrors } : {})}
           onSave={handleSaveLines}
         />
-      </Card>
-      <Button label={t("transactions.delete")} onPress={handleDelete} variant="danger" />
+        <View style={styles.deleteAction}>
+          <Button label={t("transactions.delete")} onPress={handleDelete} variant="danger" />
+        </View>
+      </View>
       <CategorySheet
         visible={categorySheetOpen}
         kind={categoryKind}
@@ -407,3 +411,8 @@ export default function TransactionDetail() {
     </PushedPage>
   );
 }
+
+const useStyles = makeStyles(() => ({
+  content: { width: "100%", maxWidth: 680, alignSelf: "flex-start", gap: space.x3 },
+  deleteAction: { alignItems: "flex-start", paddingTop: space.xl },
+}));
