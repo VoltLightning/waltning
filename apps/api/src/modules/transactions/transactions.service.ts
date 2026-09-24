@@ -116,7 +116,13 @@ export async function searchTransactions(
     categoryIds.length > 0 ? inArray(transactions.categoryId, [...categoryIds]) : undefined,
     scopeCondition(filter.scope ?? "all"),
     filter.counterpartyId !== undefined
-      ? eq(transactions.obligationCounterpartyId, filter.counterpartyId)
+      ? // §6.6.1 — either link, so the server answers "every row naming this
+        // counterparty" the same way the phone does. A debt figure asks a
+        // narrower question and has its own filter.
+        or(
+          eq(transactions.counterpartyId, filter.counterpartyId),
+          eq(transactions.obligationCounterpartyId, filter.counterpartyId),
+        )
       : undefined,
     filter.obligationRole !== undefined
       ? eq(transactions.obligationRole, filter.obligationRole)

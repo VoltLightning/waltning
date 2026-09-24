@@ -61,11 +61,16 @@ export function useCounterpartyHistory(
   return useMemo(() => {
     if (counterpartyId === undefined) return { debtHistory: EMPTY_PAGE, everyHistory: EMPTY_PAGE };
     return {
+      // **Two different questions, and S13 asks both.** Debts-only is the
+      // obligation and nothing else — it explains the number in the card
+      // above it. *All activity* is every row naming them (§6.6.1), either
+      // link, which is what a saved shop's history *is* now that naming one
+      // owes nothing.
       debtHistory: ledger.searchTransactions({
         obligationCounterpartyId: counterpartyId,
         obligationRole: "debt",
       }),
-      everyHistory: ledger.searchTransactions({ obligationCounterpartyId: counterpartyId }),
+      everyHistory: ledger.searchTransactions({ involvesCounterpartyId: counterpartyId }),
     };
   }, [ledger, counterpartyId, revision]);
 }

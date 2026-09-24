@@ -272,9 +272,23 @@ describe("TransactionDetail", () => {
       }),
     );
 
+    // §6.6.1 — **two rows, because they are two questions.** *Counterparty* is
+    // who it was with; naming somebody there owes them nothing, and no role
+    // appears. *Owes* is the obligation, and only that one brings a role with
+    // it. S09 is the one surface where the two can name different parties —
+    // paying a shop for a friend — which is why the rows are separate rather
+    // than one field with a role hanging off it.
     fireEvent.click(screen.getByRole("button", { name: "Counterparty" }));
     fireEvent.click(screen.getByRole("button", { name: "Nina" }));
     expect(screen.getByRole("button", { name: "Counterparty: Nina" })).toBeDefined();
+    expect(
+      screen.queryByRole("button", { name: "Role" }),
+      "naming somebody owes them nothing",
+    ).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Owes" }));
+    fireEvent.click(screen.getByRole("button", { name: "Nina" }));
+    expect(screen.getByRole("button", { name: "Owes: Nina" })).toBeDefined();
 
     fireEvent.click(screen.getByRole("button", { name: "Role" }));
     fireEvent.click(screen.getByRole("radio", { name: "Debt — expected back" }));

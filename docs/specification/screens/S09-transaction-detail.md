@@ -77,10 +77,17 @@ again: a sign and a colour are two ways of saying the same thing to a reader
 who can see both. A transfer says neither, because naming one side of a move
 between two of your own accounts would be picking a side.
 
-**Who and Money owed are independent rows.** S05's picker and relationship
-controls apply here, with `SPEC.md` §6.6.1 defining the atomic write. Ordinary
-reference rows show Who with tracking off; debt rows retain their separate
-party. Imported/legacy debt rows with no merchant link retain entered name text as Who,
+**Counterparty and Owes are two rows, and this screen is the only place they
+can name different parties.** `SPEC.md` §6.6.1 defines the pair: *Counterparty*
+is the identity link — who the transaction was with — and naming somebody there
+owes them nothing, so no role appears. *Owes* is the obligation, and only it
+brings a role with it. Paying a shop for a friend names the shop on the first
+row and the friend on the second; S05's one chip row cannot express that, which
+is why it writes the same party to both when a role is chosen and leaves this
+screen to separate them.
+
+One picker serves both rows — the same directory, asked twice — rather than two
+components holding two copies of one list. Imported/legacy debt rows with no merchant link retain entered name text as Who,
 never silently promote the debtor into a merchant. Show the entered name snapshot and
 current linked name when they differ. Cancelling edits restores both identities;
 Save applies them together. Changing an obligation shows its balance consequence

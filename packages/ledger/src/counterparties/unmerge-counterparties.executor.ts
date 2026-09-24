@@ -121,8 +121,29 @@ function unmergeCounterparties(
   const restored =
     movedIds.length === 0
       ? []
-      : chunkIds(movedIds).flatMap((batch) =>
-          tx
+      : chunkIds(movedIds).flatMap((batch) => {
+          // **Both links, each restored only where it still names the
+          // winner** — §6.6.1, and the same `eq(…, winnerId)` guard the
+          // obligation already carried: a deliberate reassignment made after
+          // the merge is somebody's decision, and unmerge undoes its own
+          // move rather than every move since.
+          //
+          // Per link rather than one `set`, for the reason the merge gives:
+          // a row whose identity moved and whose obligation never did must
+          // not come back with an obligation it never had.
+          const identity = tx
+            .update(transactions)
+            .set({ counterpartyId: merge.loserId })
+            .where(
+              and(
+                inArray(transactions.id, batch),
+                isNull(transactions.deletedAt),
+                eq(transactions.counterpartyId, merge.winnerId),
+              ),
+            )
+            .returning({ id: transactions.id })
+            .all();
+          const obligation = tx
             .update(transactions)
             .set({ obligationCounterpartyId: merge.loserId })
             .where(
@@ -133,8 +154,11 @@ function unmergeCounterparties(
               ),
             )
             .returning({ id: transactions.id })
-            .all(),
-        );
+            .all();
+          // One row restored, however many of its links moved.
+          const rows = new Set([...identity, ...obligation].map((row) => row.id));
+          return [...rows].map((id) => ({ id }));
+        });
 
   const skipped = movedIds.length - restored.length;
 

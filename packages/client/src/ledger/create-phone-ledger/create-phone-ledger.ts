@@ -472,8 +472,13 @@ export type PhoneSearchFilter = {
   currency?: CurrencyCode;
   from?: AccountingDate;
   to?: AccountingDate;
-  /** S13's whole history — every row whose obligation names this counterparty, any role. */
+  /** Strictly the obligation — what a debt balance and a settlement ask. */
   obligationCounterpartyId?: Id<"counterparties">;
+  /**
+   * S13's whole history — **every row naming this counterparty, either link**
+   * (§6.6.1), returned once however many of its two columns name them.
+   */
+  involvesCounterpartyId?: Id<"counterparties">;
   /** S13 §3's default toggle — `debt` only until "· N other rows" is opened. */
   obligationRole?: "debt" | "contribution";
 };
@@ -985,6 +990,7 @@ type ForwardedLedgerFilterKeys =
   | "scope"
   | "currency"
   | "obligationCounterpartyId"
+  | "involvesCounterpartyId"
   | "obligationRole";
 
 type LedgerFilterKeys = keyof Omit<PhoneSearchFilter, "from" | "to">;
@@ -1274,6 +1280,8 @@ export type TransactionFilterDraft = {
   from?: string;
   to?: string;
   obligationCounterpartyId?: string;
+  /** Either link — S13's *All activity* (§6.6.1). Never the rail's own filter. */
+  involvesCounterpartyId?: string;
   obligationRole?: "debt" | "contribution";
 };
 
@@ -2433,6 +2441,9 @@ export function createPhoneLedger(
           ...(filter.obligationCounterpartyId !== undefined
             ? { obligationCounterpartyId: id<"counterparties">(filter.obligationCounterpartyId) }
             : {}),
+          ...(filter.involvesCounterpartyId !== undefined
+            ? { involvesCounterpartyId: id<"counterparties">(filter.involvesCounterpartyId) }
+            : {}),
           ...(filter.obligationRole ? { obligationRole: filter.obligationRole } : {}),
         },
         cursor
@@ -3056,7 +3067,12 @@ export function createPhoneLedger(
         let cursor: PhoneSearchCursor | undefined;
         for (;;) {
           const page = port.searchTransactions(
-            { obligationCounterpartyId: id<"counterparties">(draft.loserId) },
+            // **Either link (§6.6.1).** The executor refuses to archive a
+            // loser any live transaction still names, and an identity-only
+            // row it was never told about is exactly such a row — paging by
+            // the obligation alone would make merging impossible for every
+            // shop somebody has actually bought from.
+            { involvesCounterpartyId: id<"counterparties">(draft.loserId) },
             cursor,
           );
           movedTransactionIds.push(...page.rows.map((row) => row.id));

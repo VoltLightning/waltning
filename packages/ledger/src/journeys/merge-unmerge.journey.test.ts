@@ -101,6 +101,65 @@ describe("merge_counterparties / unmerge_counterparties — S15 §5 and §9's re
     }
   });
 
+  /**
+   * **§6.6.1 — both links, or a merge strands the one it forgot.** A row can
+   * name a counterparty as who it was *with* and owe them nothing: an
+   * ordinary purchase from a saved shop. Merging two spellings of that shop
+   * has to carry those rows too, or the identity link goes on pointing at a
+   * counterparty that just archived — invisible on every screen, and only
+   * discoverable by reading the row.
+   *
+   * Broken once each way: moving only the obligation leaves `counterparty_id`
+   * on the loser and the archive guard refuses the merge outright, which is
+   * the failure this test would have caught the day the column was added.
+   */
+  it("moves and restores the identity link, not only the obligation", () => {
+    const j = setup();
+    try {
+      const identityOnly = id<"transactions">("aaaaaaaa-1111-4aaa-8aaa-aaaaaaaaaaaa");
+      j.session.createTransaction(
+        {
+          id: identityOnly,
+          date: accountingDate("2026-04-02"),
+          type: "expense",
+          accountId: ID.accountPln,
+          amountOriginal: money.toMoney("18.00"),
+          currency: PIVOT,
+          enteredName: "Shop A",
+          note: "",
+          isBusiness: false,
+          isCapital: false,
+          source: "manual",
+          // Named, owing nothing — the state `reference` used to carry.
+          counterpartyId: ID.cpB,
+        },
+        j.capture,
+      );
+
+      j.session.mergeCounterparties(
+        {
+          mergeId: MERGE_1,
+          winnerId: ID.cpA,
+          loserId: ID.cpB,
+          movedTransactionIds: [ID.txn1, ID.txn2, TXN3, identityOnly],
+        },
+        j.capture,
+      );
+
+      const merged = transactionRows(j).find((r) => r.id === identityOnly);
+      expect(merged?.counterpartyId, "identity followed the merge").toBe(ID.cpA);
+      expect(merged?.obligationCounterpartyId, "and no obligation was invented").toBeNull();
+
+      j.session.unmergeCounterparties({ mergeId: MERGE_1 }, j.capture);
+
+      const restored = transactionRows(j).find((r) => r.id === identityOnly);
+      expect(restored?.counterpartyId, "identity came back").toBe(ID.cpB);
+      expect(restored?.obligationCounterpartyId, "still no obligation").toBeNull();
+    } finally {
+      j.close();
+    }
+  });
+
   it("R2 H1 — unmerge repoints every originally-moved id back to the loser, overwriting a reassignment made after the merge", () => {
     const j = setup();
     try {
