@@ -12,6 +12,7 @@ import { useSharedValue } from "react-native-reanimated";
 import { text } from "../../../theme/fonts.ts";
 import { makeStyles } from "../../../theme/styles.ts";
 import { space } from "../../../tokens.ts";
+import { COLLAPSE_TRAVEL } from "../../molecules/pager-header/collapse.ts";
 import { PagerFrame } from "./pager-frame";
 
 function noop() {}
@@ -30,6 +31,8 @@ type FrameStoryProps = {
   filter?: string;
   hasPrevious?: boolean;
   hasNext?: boolean;
+  /** Scrolled past the header's collapse: the arrows arrive only then. */
+  scrolled?: boolean;
 };
 
 function Page({ name }: { name: string }) {
@@ -55,9 +58,10 @@ function Frame({
   filter,
   hasPrevious = true,
   hasNext = true,
+  scrolled = false,
 }: FrameStoryProps) {
   const styles = useStyles();
-  const scrollY = useSharedValue(0);
+  const scrollY = useSharedValue(scrolled ? COLLAPSE_TRAVEL : 0);
   const [active, setActive] = useState("list");
   const [query, setQuery] = useState(searchQuery);
   const handlePage = useCallback((key: string) => setActive(key), []);
@@ -104,8 +108,15 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/** At rest on the List page, both arrows live. */
+/**
+ * At rest on the List page: the title, its picker caret and search. The
+ * arrows are not drawn at rest — they arrive as the header collapses
+ * (`pager-header.tsx`).
+ */
 export const AtRest: Story = {};
+
+/** Scrolled: the header has collapsed to one row and the arrows have arrived. */
+export const Scrolled: Story = { args: { scrolled: true } };
 
 /** Search open with a query and its match count. */
 export const Searching: Story = {
@@ -115,5 +126,5 @@ export const Searching: Story = {
 /** Opened from an account: the filter chip says which, and clears in place. */
 export const Filtered: Story = { args: { filter: "From Bank A" } };
 
-/** The first month with anything in it: there is no previous to step to. */
-export const FirstPeriod: Story = { args: { hasPrevious: false } };
+/** Scrolled, in the first month with anything in it: there is no previous to step to. */
+export const FirstPeriod: Story = { args: { hasPrevious: false, scrolled: true } };

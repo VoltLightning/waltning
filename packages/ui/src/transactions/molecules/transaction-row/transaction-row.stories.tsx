@@ -8,8 +8,9 @@
  *
  * Every list reaches it through `EntryRow`, which draws a transfer with both
  * legs as a `TransferRow` instead — so the transfer here is a single leg, the
- * shape a row with only one side takes. The phone draws every row without its
- * date (the day header says it); the desk ledger keeps it.
+ * shape a row with only one side takes. Today's pages draw rows without their
+ * date (the day header says it); S10's ledger and a counterparty's history
+ * keep it. The desk ledger is a table and does not use this component.
  *
  * The cases are the ones that have been wrong: a transfer leg, which sign
  * alone would paint green or red; a business row, which `05` §5.2 requires to
@@ -54,7 +55,8 @@ export const UnrecognisedBrand: Story = {
 };
 
 /**
- * The desk column, dates shown. This is the story that shows whether the
+ * The dated column, as S10's ledger and a counterparty's history draw it. This
+ * is the story that shows whether the
  * figures line up — and whether the *identity* column does too: every row
  * reaches this component through `EntryRow` with `brandKey` read, `null`
  * included — a read never omits the field, it only sometimes resolves to
@@ -68,15 +70,25 @@ export const Ledger: Story = {
 };
 
 /**
- * The phone's column: no date on any row — the day header above says it, and
- * a date on every row was the repetition `DayGroup` exists to remove. No other
- * story drew a row this way, though every phone list does.
+ * Today's column: no date on any row — the day header above says it, and a
+ * date on every row was the repetition `DayGroup` exists to remove. No other
+ * story drew a row this way, though every one of Today's pages does.
  */
-export const PhoneColumn: Story = { render: renderPhoneColumn };
+export const TodayColumn: Story = { render: renderTodayColumn };
 
-/** An obligation's role, as a counterparty's history names it. */
+/**
+ * An obligation's role, as a counterparty's history names it: a contribution
+ * is money a person put into a shared account (SPEC §6.6).
+ */
 export const WithRoleTag: Story = {
-  args: { enteredName: "Dinner with Friend A", roleTag: "Contribution", withDate: false },
+  args: {
+    enteredName: "Friend A",
+    category: null,
+    account: "Shared A",
+    amount: money.toMoney("300.00"),
+    type: "income",
+    roleTag: "contribution",
+  },
 };
 
 /** A name and category longer than the row: they truncate, the figure never does. */
@@ -173,11 +185,11 @@ function renderLedger() {
   return <Surface>{LEDGER.map(renderRow)}</Surface>;
 }
 
-function renderPhoneColumn() {
-  return <Surface>{LEDGER.map(renderPhoneRow)}</Surface>;
+function renderTodayColumn() {
+  return <Surface>{LEDGER.map(renderTodayRow)}</Surface>;
 }
 
-function renderPhoneRow(row: TransactionRowProps) {
+function renderTodayRow(row: TransactionRowProps) {
   return (
     <TransactionRow
       key={`${row.date}-${row.enteredName}-${row.account}`}

@@ -50,14 +50,15 @@ const CAFE = row("t3", {
   amount: toMoney("-18.90"),
 });
 const SALARY = row("t4", {
+  date: "2026-09-11",
   type: "income",
   enteredName: "Employer A",
   categoryName: "Salary",
   amount: toMoney("6200.00"),
 });
 
-function day(key: string, label: string, total: DayTotal, first = false): ListEntry {
-  return { key, kind: "day", date: "2026-09-10", label, total, first };
+function day(key: string, date: string, label: string, total: DayTotal, first = false): ListEntry {
+  return { key, kind: "day", date, label, total, first };
 }
 
 function placed(entry: LedgerEntry, place: DayRowPlaceName): ListEntry {
@@ -99,7 +100,13 @@ type Story = StoryObj<typeof meta>;
 export const ADay: Story = {
   args: {
     entries: [
-      day("d1", "Thursday 10 September", { pivot: toMoney("-188.40"), approximate: false }, true),
+      day(
+        "d1",
+        "2026-09-10",
+        "Thursday 10 September",
+        { pivot: toMoney("-188.40"), approximate: false },
+        true,
+      ),
       placed(MARKET, "first"),
       placed(TRAM, "middle"),
       placed(CAFE, "last"),
@@ -111,28 +118,40 @@ export const ADay: Story = {
 export const OnlyRow: Story = {
   args: {
     entries: [
-      day("d1", "Friday 11 September", { pivot: toMoney("6200.00"), approximate: false }, true),
+      day(
+        "d1",
+        "2026-09-11",
+        "Friday 11 September",
+        { pivot: toMoney("6200.00"), approximate: false },
+        true,
+      ),
       placed(SALARY, "only"),
     ],
   },
 };
 
-/** Some of the day was converted at an estimated rate, so the total says it is approximate. */
-export const ApproximateTotal: Story = {
-  args: {
-    entries: [
-      day("d1", "Thursday 10 September", { pivot: toMoney("-412.08"), approximate: true }, true),
-      placed(row("t5", { enteredName: "Hotel A", amount: toMoney("-95.00") }), "only"),
-    ],
-  },
-};
-
-/** No rate has arrived for the day: a dash stands in for a figure the list cannot state. */
+/**
+ * No rate for a leg: a transfer into a foreign account whose destination the
+ * ledger could not price. The day cannot state a total, so a dash stands in
+ * for the figure (S04 §5).
+ */
 export const NoRate: Story = {
   args: {
     entries: [
-      day("d1", "Thursday 10 September", { pivot: null }, true),
-      placed(row("t6", { enteredName: "Hotel A", amount: toMoney("-95.00") }), "only"),
+      day("d1", "2026-09-10", "Thursday 10 September", { pivot: null }, true),
+      placed(
+        row("t6", {
+          type: "transfer",
+          enteredName: "",
+          categoryName: null,
+          toAccountName: "Wallet · USD",
+          amount: toMoney("-400.00"),
+          toAmount: toMoney("98.10"),
+          toCurrency: currencyCode("USD"),
+          toDecimals: 2,
+        }),
+        "only",
+      ),
     ],
   },
 };
@@ -141,7 +160,7 @@ export const NoRate: Story = {
 export const Filtered: Story = {
   args: {
     entries: [
-      day("d1", "Thursday 10 September", { pivot: "filtered" }, true),
+      day("d1", "2026-09-10", "Thursday 10 September", { pivot: "filtered" }, true),
       placed(MARKET, "first"),
       placed(TRAM, "last"),
     ],
@@ -164,7 +183,10 @@ export const QuietDays: Story = {
   },
 };
 
-/** Several quiet days in a row collapse into one line, in the past and ahead. */
+/**
+ * Several quiet days in a row collapse into one line, in the past and ahead.
+ * A single quiet day is never a run — `QuietDays` above is how it draws.
+ */
 export const QuietRuns: Story = {
   args: {
     entries: [
@@ -179,8 +201,8 @@ export const QuietRuns: Story = {
       {
         key: "r2",
         kind: "run",
-        label: "27 September",
-        days: 1,
+        label: "27–30 September",
+        days: 4,
         from: "2026-09-27",
         ahead: true,
       },

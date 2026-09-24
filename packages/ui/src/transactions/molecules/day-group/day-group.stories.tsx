@@ -74,13 +74,14 @@ export const ADay: Story = {};
 export const OneRow: Story = { args: { total: total("-124.50"), children: rows([MARKET]) } };
 
 /**
- * A mixed day: income, a business row, a contribution someone owes you, and a
- * transfer between your own accounts. It came out ahead, so its total is green.
+ * A mixed day: salary, a business row, a friend's contribution to a shared
+ * account, and a transfer between your own accounts (whose two legs cancel).
+ * It came out ahead, so its total is green.
  */
 export const MixedDay: Story = {
   args: {
     label: "Friday 11 September",
-    total: total("5835.50"),
+    total: total("6435.50"),
     children: rows([
       row("t3", {
         type: "income",
@@ -95,9 +96,11 @@ export const MixedDay: Story = {
         amount: toMoney("-64.50"),
       }),
       row("t5", {
-        enteredName: "Dinner with Friend A",
-        categoryName: "Eating out",
-        amount: toMoney("-300.00"),
+        type: "income",
+        enteredName: "Friend A",
+        categoryName: null,
+        accountName: "Shared A",
+        amount: toMoney("300.00"),
         obligationRole: "contribution",
       }),
       row("t6", {
@@ -134,7 +137,7 @@ export const OnlyTransfers: Story = {
 };
 
 /**
- * A filtered day has no figure of its own to state (S04 §7) — the rows on
- * screen are a subset a query chose, so their sum is not the day's own.
+ * No total: a day the ledger could not price (a leg with no rate) states no
+ * figure rather than a wrong one — Today passes none.
  */
-export const Filtered: Story = { args: { total: undefined } };
+export const NoTotal: Story = { args: { total: undefined } };

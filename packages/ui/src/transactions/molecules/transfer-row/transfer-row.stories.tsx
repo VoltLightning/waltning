@@ -48,8 +48,8 @@ export const CrossCurrency: Story = {
   },
 };
 
-/** The phone's row: no date — the day header above says it. */
-export const PhoneRow: Story = { args: { withDate: false } };
+/** As Today draws it: no date — the day header above says it. */
+export const TodayRow: Story = { args: { withDate: false } };
 
 /** Long account names on both sides: they truncate, the two figures never do. */
 export const LongAccountNames: Story = {
