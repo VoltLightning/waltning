@@ -85,7 +85,7 @@ function coalescedAmounts(t: (typeof TRANSACTIONS)[number]): {
 
 /**
  * §7's rows, with `side` and `currency` resolved the way a caller would:
- * from `counterparty_id`, `counterparty_role`, and `coalesce(debt_currency,
+ * from `obligation_counterparty_id`, `obligation_role`, and `coalesce(debt_currency,
  * currency)`. `side` is a rule on `type` alone — see the comment on
  * `debtDeltaOnCarryingLeg` in `counterparty-balance.ts` for why a transfer's
  * counterparty always sits on the `to` leg here, not case-by-case per row.
@@ -187,14 +187,14 @@ describe("class-F figures agree to eight decimals, SQL against money.ts", () => 
     for (const t of TRANSACTIONS) {
       await scratch.sql`insert into transactions
         (id, date, type, account_id, to_account_id, amount_original, to_amount,
-         currency, to_currency, fx_rate, to_fx_rate, counterparty_id, counterparty_role,
+         currency, to_currency, fx_rate, to_fx_rate, obligation_counterparty_id, obligation_role,
          debt_currency, debt_amount, deleted_at)
         values (
           ${t.id}, ${t.date}, ${t.type}, ${t.accountId}, ${t.toAccountId ?? null},
           ${t.amountOriginal}, ${t.toAmount ?? null},
           ${t.currency}, ${t.toCurrency ?? null},
           ${"1"}, ${t.toAccountId ? "1" : null},
-          ${t.counterpartyId ?? null}, ${t.counterpartyRole ?? null},
+          ${t.counterpartyId ?? null}, ${t.obligationRole ?? null},
           ${t.debtCurrency ?? null}, ${t.debtAmount ?? null},
           ${t.deleted ? scratch.sql`now()` : null}
         )`;

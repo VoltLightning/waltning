@@ -36,7 +36,7 @@ function tx(suffix: string, over: Record<string, unknown>) {
     amountOriginal: money.toMoney("100"),
     currency: PLN,
     fxRate: money.pivotPerUnit("1"),
-    payee: "",
+    enteredName: "",
     note: "",
     ...over,
   };
@@ -65,10 +65,10 @@ it("counts the matching rows of each day, and names no others", () => {
   stores.ledger.replica.db
     .insert(transactions)
     .values([
-      tx("01", { payee: "Market B" }),
-      tx("02", { payee: "Market B" }),
-      tx("03", { date: accountingDate("2026-09-09"), payee: "Market B" }),
-      tx("04", { date: accountingDate("2026-09-09"), payee: "Shop A" }),
+      tx("01", { enteredName: "Market B" }),
+      tx("02", { enteredName: "Market B" }),
+      tx("03", { date: accountingDate("2026-09-09"), enteredName: "Market B" }),
+      tx("04", { date: accountingDate("2026-09-09"), enteredName: "Shop A" }),
     ])
     .run();
 
@@ -87,17 +87,17 @@ it("adds up to what the search field says", () => {
   stores.ledger.replica.db
     .insert(transactions)
     .values([
-      tx("01", { payee: "Market B" }),
-      tx("02", { payee: "market b", date: accountingDate("2026-09-07") }),
-      tx("03", { payee: "Shop A", note: "market run" }),
-      tx("04", { payee: "Shop A" }),
+      tx("01", { enteredName: "Market B" }),
+      tx("02", { enteredName: "market b", date: accountingDate("2026-09-07") }),
+      tx("03", { enteredName: "Shop A", note: "market run" }),
+      tx("04", { enteredName: "Shop A" }),
       // **On the boundary, deliberately.** The first version of this test
       // compared `readMatchDays`' half-open period against `searchTransactions`
       // with `to: period.end` — and `structuralWhere` compares `to` with `lte`,
       // so the two bounds differed by a day. It passed because the fixture had
       // no row there: a test named for an invariant, vacuous at exactly the
       // boundary the invariant is about.
-      tx("05", { payee: "Market B", date: accountingDate("2026-10-01") }),
+      tx("05", { enteredName: "Market B", date: accountingDate("2026-10-01") }),
     ])
     .run();
 
@@ -123,13 +123,13 @@ it("reads a bare amount as an amount and an amount inside words as text", () => 
   stores.ledger.replica.db
     .insert(transactions)
     .values([
-      tx("01", { payee: "Shop A", amountOriginal: money.toMoney("48.90") }),
-      tx("02", { payee: "Shop A 2024", amountOriginal: money.toMoney("2024") }),
+      tx("01", { enteredName: "Shop A", amountOriginal: money.toMoney("48.90") }),
+      tx("02", { enteredName: "Shop A 2024", amountOriginal: money.toMoney("2024") }),
     ])
     .run();
 
   expect(counted("48,90")).toEqual({ "2026-09-04": 1 });
-  // The row *named* "Shop A 2024" matches by payee; the one costing 2 024 does
+  // The row *named* "Shop A 2024" matches by entered name; the one costing 2 024 does
   // not, because the query is not only an amount.
   expect(counted("Shop A 2024")).toEqual({ "2026-09-04": 1 });
 });
@@ -137,7 +137,7 @@ it("reads a bare amount as an amount and an amount inside words as text", () => 
 it("finds nothing for an empty query rather than everything", () => {
   stores.ledger.replica.db
     .insert(transactions)
-    .values([tx("01", { payee: "Market B" })])
+    .values([tx("01", { enteredName: "Market B" })])
     .run();
   // The empty needle matches every row. A caller that let it through would
   // draw a grid claiming every day matched a search nobody typed.
@@ -149,9 +149,9 @@ it("bounds itself to the period it was asked for", () => {
   stores.ledger.replica.db
     .insert(transactions)
     .values([
-      tx("01", { payee: "Market B" }),
-      tx("02", { payee: "Market B", date: accountingDate("2026-08-31") }),
-      tx("03", { payee: "Market B", date: accountingDate("2026-10-01") }),
+      tx("01", { enteredName: "Market B" }),
+      tx("02", { enteredName: "Market B", date: accountingDate("2026-08-31") }),
+      tx("03", { enteredName: "Market B", date: accountingDate("2026-10-01") }),
     ])
     .run();
 

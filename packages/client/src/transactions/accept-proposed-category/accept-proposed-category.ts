@@ -26,8 +26,8 @@
  * callers computed differently before this existed.
  */
 
-import type { CategoryProposal } from "@waltning/core/capture/payee-memory";
-import { PROPOSAL_DISPLAY_THRESHOLD } from "@waltning/core/capture/payee-memory";
+import type { CategoryProposal } from "@waltning/core/capture/entered-name-memory";
+import { PROPOSAL_DISPLAY_THRESHOLD } from "@waltning/core/capture/entered-name-memory";
 
 /** The one shape this needs from a category — `PhoneCategory`'s own two fields that matter here. */
 export type AcceptProposedCategoryCandidate = { id: string; kind: "income" | "expense" };

@@ -48,7 +48,7 @@ beforeEach(() => {
         amountOriginal: money.toMoney("10"),
         currency: USD,
         fxRate: money.pivotPerUnit("1"),
-        payee: "Café A",
+        enteredName: "Café A",
       },
       {
         id: id<"transactions">("44444444-4444-4444-8444-444444444444"),
@@ -58,7 +58,7 @@ beforeEach(() => {
         amountOriginal: money.toMoney("5"),
         currency: USD,
         fxRate: money.pivotPerUnit("1"),
-        payee: "Gone",
+        enteredName: "Gone",
         deletedAt: new Date("2026-08-24T10:00:00Z"),
       },
     ])

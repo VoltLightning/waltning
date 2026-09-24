@@ -144,12 +144,12 @@ describe("allocate_shares — the split lands", () => {
     const mine = rows.find((row) => row.id === share(1));
     const hers = rows.find((row) => row.id === share(2));
 
-    expect(mine?.counterpartyId).toBeNull();
-    expect(mine?.counterpartyRole).toBeNull();
+    expect(mine?.obligationCounterpartyId).toBeNull();
+    expect(mine?.obligationRole).toBeNull();
     expect(mine?.categoryId).toBe(FOOD);
     // §6.6 — the role is what puts it in the debt ledger at all.
-    expect(hers?.counterpartyId).toBe(NINA);
-    expect(hers?.counterpartyRole).toBe("debt");
+    expect(hers?.obligationCounterpartyId).toBe(NINA);
+    expect(hers?.obligationRole).toBe("debt");
     // Every row is an expense out of the pot, never a transfer back into it.
     expect(rows.filter((row) => row.accountId === POT).every((row) => row.type === "expense")).toBe(
       true,
@@ -168,9 +168,9 @@ describe("allocate_shares — the split lands", () => {
     const rows = s.ledger.replica.db.select().from(transactions).all();
     // Without it the ledger holds rows reading `—`, and the list you scroll
     // is where you would go looking for whose share it was.
-    expect(rows.find((row) => row.id === share(2))?.payee).toBe("Nina");
+    expect(rows.find((row) => row.id === share(2))?.enteredName).toBe("Nina");
     // Yours is nobody's, so it carries no name — the category says what it was.
-    expect(rows.find((row) => row.id === share(1))?.payee).toBe("");
+    expect(rows.find((row) => row.id === share(1))?.enteredName).toBe("");
   });
 
   it("leaves the remainder on the pot when the split does not sum (J08 §4)", () => {

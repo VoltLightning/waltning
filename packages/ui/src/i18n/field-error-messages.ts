@@ -27,12 +27,12 @@ export const KNOWN_PATHS = [
   "amountOriginal",
   "accountId",
   "categoryId",
-  "payee",
+  "enteredName",
   "date",
   "note",
   "isBusiness",
-  "counterpartyId",
-  "counterpartyRole",
+  "obligationCounterpartyId",
+  "obligationRole",
 ];
 
 /**

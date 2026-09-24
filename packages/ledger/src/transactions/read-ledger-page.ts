@@ -203,7 +203,7 @@ function matchingRows<TRun, TSchema extends typeof ledgerSchema>(
     for a query matching nothing at all: the work was in the scan, so the early
     `break` bought nothing. Ten pages of a dense query cost 1.28 s.
 
-    `matchesText` reads `payee`, `note`, `amount_original` and the line
+    `matchesText` reads `enteredName`, `note`, `amount_original` and the line
     descriptions. Nothing else in a display row can decide a match, so nothing
     else needs reading to find one — `countOnly` already takes exactly this
     shape for exactly this reason. The joins and the money fold are paid for
@@ -212,7 +212,7 @@ function matchingRows<TRun, TSchema extends typeof ledgerSchema>(
   const candidates = db
     .select({
       id: transactions.id,
-      payee: transactions.payee,
+      enteredName: transactions.enteredName,
       note: transactions.note,
       amountOriginal: transactions.amountOriginal,
     })

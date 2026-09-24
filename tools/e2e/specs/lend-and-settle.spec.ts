@@ -39,7 +39,7 @@ test("lending to a counterparty, then settling in full, clears the debt", async 
   await page.getByRole("button", { name: "Counterparty", exact: true }).click();
   await page.getByRole("radio", { name: "Nina" }).click();
   await page.getByRole("radio", { name: "Debt — expected back" }).click();
-  // The picker stays open for review after a pick — J02's own `+ Payee`
+  // The picker stays open for review after a pick — J02's own `+ EnteredName`
   // flow closes the same way (`journeys/j02-daily-capture.test.tsx`).
   await page.getByRole("button", { name: "Close" }).click();
 

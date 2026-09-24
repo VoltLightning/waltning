@@ -8,8 +8,8 @@
  * real ledger.
  *
  * **Every name here is invented.** This is a public repository and the ledger it
- * is built for is not; `Bank A`, `Card B` and a payee called `Grocer` are the
- * whole cast. No amount, payee or account name corresponds to anything.
+ * is built for is not; `Bank A`, `Card B` and a entered name called `Grocer` are the
+ * whole cast. No amount, entered name or account name corresponds to anything.
  *
  * Idempotent, like the seed: everything keys on a stable `fixture:` external id,
  * so a second run updates rather than duplicating. Deliberately *not* wired into
@@ -90,7 +90,7 @@ const ACCOUNTS: FixtureAccount[] = [
 ];
 
 /**
- * Payee, category leaf, amount, and which account it lands on.
+ * Entered name, category leaf, amount, and which account it lands on.
  *
  * `days` is where in the month the thing happens — a salary on the 27th, rent
  * on the 5th, groceries four times across the month. Anchoring to real days of
@@ -100,7 +100,7 @@ const ACCOUNTS: FixtureAccount[] = [
  * through it.
  */
 type Pattern = {
-  payee: string;
+  enteredName: string;
   category: string;
   type: "income" | "expense";
   account: string;
@@ -119,7 +119,7 @@ const PATTERNS: Pattern[] = [
   // are not — they are public brands, and the point of naming them is that the
   // offline matcher (§14.4b) has something real to recognise.
   {
-    payee: "Employer",
+    enteredName: "Employer",
     category: "Salary",
     type: "income",
     account: "bank-a",
@@ -127,7 +127,7 @@ const PATTERNS: Pattern[] = [
     days: [27],
   },
   {
-    payee: "Client One",
+    enteredName: "Client One",
     category: "Services",
     type: "income",
     account: "bank-b",
@@ -135,7 +135,7 @@ const PATTERNS: Pattern[] = [
     days: [12],
   },
   {
-    payee: "Client Two",
+    enteredName: "Client Two",
     category: "Services",
     type: "income",
     account: "bank-b",
@@ -146,7 +146,7 @@ const PATTERNS: Pattern[] = [
 
   // ── subscriptions, every one of them a catalogue hit ──────────────────
   {
-    payee: "Netflix",
+    enteredName: "Netflix",
     category: "Media & streaming",
     type: "expense",
     account: "card-a",
@@ -154,7 +154,7 @@ const PATTERNS: Pattern[] = [
     days: [3],
   },
   {
-    payee: "Spotify",
+    enteredName: "Spotify",
     category: "Media & streaming",
     type: "expense",
     account: "card-a",
@@ -162,7 +162,7 @@ const PATTERNS: Pattern[] = [
     days: [3],
   },
   {
-    payee: "YouTube Premium",
+    enteredName: "YouTube Premium",
     category: "Media & streaming",
     type: "expense",
     account: "card-a",
@@ -170,7 +170,7 @@ const PATTERNS: Pattern[] = [
     days: [8],
   },
   {
-    payee: "Anthropic",
+    enteredName: "Anthropic",
     category: "Software & tools",
     type: "expense",
     account: "card-a",
@@ -180,7 +180,7 @@ const PATTERNS: Pattern[] = [
 
   // ── the fixed monthly shape ───────────────────────────────────────────
   {
-    payee: "Landlord",
+    enteredName: "Landlord",
     category: "Rent",
     type: "expense",
     account: "bank-a",
@@ -188,7 +188,7 @@ const PATTERNS: Pattern[] = [
     days: [5],
   },
   {
-    payee: "Utility Co",
+    enteredName: "Utility Co",
     category: "Utilities",
     type: "expense",
     account: "bank-a",
@@ -198,7 +198,7 @@ const PATTERNS: Pattern[] = [
 
   // ── week to week ──────────────────────────────────────────────────────
   {
-    payee: "Lidl",
+    enteredName: "Lidl",
     category: "Groceries",
     type: "expense",
     account: "bank-a",
@@ -206,7 +206,7 @@ const PATTERNS: Pattern[] = [
     days: [2, 16, 29],
   },
   {
-    payee: "Żabka",
+    enteredName: "Żabka",
     category: "Groceries",
     type: "expense",
     account: "cash",
@@ -214,7 +214,7 @@ const PATTERNS: Pattern[] = [
     days: [9, 23],
   },
   {
-    payee: "ORLEN",
+    enteredName: "ORLEN",
     category: "Fuel & parking",
     type: "expense",
     account: "bank-a",
@@ -222,19 +222,19 @@ const PATTERNS: Pattern[] = [
     days: [7, 21],
   },
   {
-    payee: "Uber",
+    enteredName: "Uber",
     category: "Taxi",
     type: "expense",
     account: "card-a",
     amount: "24.00",
     days: [6, 20],
   },
-  // **Deliberately not in the catalogue.** An unmatched payee is the other
+  // **Deliberately not in the catalogue.** An unmatched entered name is the other
   // half of the feature: it must fall back to a monogram rather than borrow
   // somebody else's mark, and a fixture where everything matches would never
   // show that.
   {
-    payee: "Corner Cafe",
+    enteredName: "Corner Cafe",
     category: "Eating out",
     type: "expense",
     account: "cash",
@@ -242,7 +242,7 @@ const PATTERNS: Pattern[] = [
     days: [4, 11, 18, 25],
   },
   {
-    payee: "Allegro",
+    enteredName: "Allegro",
     category: "Household supplies",
     type: "expense",
     account: "bank-a",
@@ -253,7 +253,7 @@ const PATTERNS: Pattern[] = [
   // Occasional and large — the shape a "this month against the usual" figure
   // has to survive without calling every month an anomaly.
   {
-    payee: "IKEA",
+    enteredName: "IKEA",
     category: "Furniture & appliances",
     type: "expense",
     account: "bank-a",
@@ -300,13 +300,15 @@ function vary(amount: string, key: string): string {
 }
 
 /**
- * The brand fields a payee resolves to, or nothing.
+ * The brand fields a entered name resolves to, or nothing.
  *
  * `brand_key` and `brand_source` are a valid pair or both absent
  * (`transactions_brand_shape`), so this returns them together or not at all.
  */
-function brandOf(payee: string): { brandKey: string; brandSource: "auto" } | Record<string, never> {
-  const matched = matchBrand(payee);
+function brandOf(
+  enteredName: string,
+): { brandKey: string; brandSource: "auto" } | Record<string, never> {
+  const matched = matchBrand(enteredName);
   return matched === undefined ? {} : { brandKey: matched, brandSource: "auto" };
 }
 
@@ -425,7 +427,7 @@ async function apply(today: AccountingDate, months: number): Promise<void> {
         if (day > length) continue;
         if (isCurrent && day > todayDay) continue;
 
-        const externalId = `${PREFIX}${pattern.account}-${pattern.payee}-${year}-${month + 1}-${day}`;
+        const externalId = `${PREFIX}${pattern.account}-${pattern.enteredName}-${year}-${month + 1}-${day}`;
         const amount = vary(pattern.amount, externalId);
 
         await db
@@ -439,12 +441,12 @@ async function apply(today: AccountingDate, months: number): Promise<void> {
             amountOriginal: money.toMoney(amount),
             currency: account.currency,
             fxRate: money.pivotPerUnit(TO_PIVOT[account.currency] ?? "1"),
-            payee: pattern.payee,
+            enteredName: pattern.enteredName,
             // **Matched, not asserted.** `resolveBrand` is the same function
             // `create_transaction`'s executor calls, so the fixture exercises
             // the offline matcher rather than hand-writing its answer — which
             // is the only way a wrong alias in the catalogue shows up here.
-            ...brandOf(pattern.payee),
+            ...brandOf(pattern.enteredName),
           })
           .onConflictDoUpdate({
             target: transactions.externalId,

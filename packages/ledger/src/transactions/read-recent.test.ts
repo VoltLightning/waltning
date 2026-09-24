@@ -35,7 +35,7 @@ beforeEach(() => {
         amountOriginal: money.toMoney(String(index + 1)),
         currency: USD,
         fxRate: money.pivotPerUnit("1"),
-        payee: `Placeholder ${index}`,
+        enteredName: `Placeholder ${index}`,
         isBusiness: index === 5,
         createdAt: new Date(
           index === 2 || index === 3 ? "2026-08-23T10:00:03Z" : `2026-08-23T10:00:0${index}Z`,
@@ -53,7 +53,7 @@ describe("readRecent", () => {
     const result = readRecent(stores.ledger.replica.db, 5);
 
     expect(result).toHaveLength(5);
-    expect(result.map((row) => row.payee)).toEqual([
+    expect(result.map((row) => row.enteredName)).toEqual([
       "Placeholder 6",
       "Placeholder 5",
       "Placeholder 3",

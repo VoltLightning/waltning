@@ -3,7 +3,7 @@
  *
  * `computations.md` §13 uses Postgres's `pg_trgm` for the server-side search
  * index; this is the same algorithm run client-side for D2's on-device
- * payee→category kNN, not a reimplementation of §13's search feature. Padding
+ * entered name→category kNN, not a reimplementation of §13's search feature. Padding
  * matches `pg_trgm`'s convention — two blanks before the string, one after —
  * so a short word's edges still contribute trigrams.
  */

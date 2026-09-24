@@ -20,7 +20,7 @@ function noop() {}
  * **On the band, because that is the only ground this bar has.**
  *
  * `DeskBand`'s `commandBar` slot is its sole mount site, and the bar paints no
- * fill of its own — so its hint, reason and payee render straight onto
+ * fill of its own — so its hint, reason and entered name render straight onto
  * `theme.shell`. These stories used to render it on the page ground, which is
  * a background it never has: the axe pass then measured every ink against the
  * wrong pairing and passed, while on the real band those inks sat at 1.45:1.
@@ -74,11 +74,11 @@ const RESOLVED: CaptureParse = {
   accountId: "acc-cash",
   categoryId: null,
   date: accountingDate("2026-09-02"), // "yesterday" against `TODAY`.
-  payee: "coffee",
+  enteredName: "coffee",
   unmatched: [],
 };
 
-/** S05 §3's own worked example, fully resolved — amount, account, date and payee, ready for Enter. */
+/** S05 §3's own worked example, fully resolved — amount, account, date and entered name, ready for Enter. */
 export const Resolved: Story = {
   args: { value: "48.90 cash coffee yesterday", parse: RESOLVED },
 };

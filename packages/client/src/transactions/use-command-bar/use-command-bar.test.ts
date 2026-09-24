@@ -1,8 +1,8 @@
 /** @vitest-environment jsdom */
 
 import { act, renderHook } from "@testing-library/react";
+import type { EnteredNameHistoryRow } from "@waltning/core/capture/entered-name-memory";
 import { type CaptureContext, parseCapture } from "@waltning/core/capture/grammar";
-import type { PayeeHistoryRow } from "@waltning/core/capture/payee-memory";
 import { accountingDate } from "@waltning/core/date";
 import { id } from "@waltning/core/id";
 import { describe, expect, it, vi } from "vitest";
@@ -42,13 +42,13 @@ function fakeController(
   overrides: { createTransaction?: (draft: CommandBarDraft) => CreateTransactionResult } = {},
 ): CommandBarController & {
   createTransaction: ReturnType<typeof vi.fn<(draft: CommandBarDraft) => CreateTransactionResult>>;
-  listPayeeHistory: ReturnType<typeof vi.fn<() => readonly PayeeHistoryRow[]>>;
+  listEnteredNameHistory: ReturnType<typeof vi.fn<() => readonly EnteredNameHistoryRow[]>>;
 } {
   return {
     createTransaction: vi.fn(
       overrides.createTransaction ?? (() => ({ id: id("11111111-1111-4111-8111-111111111111") })),
     ),
-    listPayeeHistory: vi.fn(() => []),
+    listEnteredNameHistory: vi.fn(() => []),
   };
 }
 
@@ -63,7 +63,7 @@ describe("useCommandBar", () => {
       amount: "48.90000000",
       accountId: "acc-cash",
       date: "2026-09-02",
-      payee: "coffee",
+      enteredName: "coffee",
     });
 
     act(() => result.current.submit());
@@ -73,12 +73,12 @@ describe("useCommandBar", () => {
       amount: "48.90000000",
       accountId: "acc-cash",
       categoryId: null,
-      payee: "coffee",
+      enteredName: "coffee",
       date: "2026-09-02",
       note: "",
       isBusiness: false,
-      counterpartyId: null,
-      counterpartyRole: null,
+      obligationCounterpartyId: null,
+      obligationRole: null,
     });
     // A save clears the bar — the next line starts from nothing.
     expect(result.current.text).toBe("");
@@ -105,9 +105,9 @@ describe("useCommandBar", () => {
     ["1 234.56 cash coffee", "1234.56000000"],
     ["1.234,56 cash coffee", "1.23400000"],
     // L1 — a four-digit head never starts a thousands chain: this is 1234
-    // with `567` in the payee, not 1 234 567.
+    // with `567` in the entered name, not 1 234 567.
     ["1234 567 cash", "1234.00000000"],
-    // L1 — the first number is the amount, the second is payee text (S05 §3).
+    // L1 — the first number is the amount, the second is entered name text (S05 §3).
     ["1000 2000 cash", "1000.00000000"],
     // L1 — a real chain is still one figure.
     ["1 234 567 cash coffee", "1234567.00000000"],
@@ -169,14 +169,14 @@ describe("useCommandBar", () => {
 
   it("D2 auto-fills the category at or above the display threshold", () => {
     const controller = fakeController();
-    controller.listPayeeHistory.mockReturnValue([
-      { payee: "coffee", categoryId: "cat-food", date: accountingDate("2026-08-01") },
+    controller.listEnteredNameHistory.mockReturnValue([
+      { enteredName: "coffee", categoryId: "cat-food", date: accountingDate("2026-08-01") },
     ]);
     const { result } = renderHook(() => useCommandBar(controller, parse, CATEGORIES));
 
     act(() => result.current.setText("48.90 cash coffee"));
 
-    // An exact fold match is confidence 1 (`payee-memory.ts`) — at the
+    // An exact fold match is confidence 1 (`entered-name-memory.ts`) — at the
     // display threshold, so the draft's own category is the proposal's.
     expect(result.current.categoryAutoFilled).toBe(true);
     expect(result.current.categoryId).toBe("cat-food");
@@ -191,9 +191,9 @@ describe("useCommandBar", () => {
     const controller = fakeController();
     // History votes for `cat-gym`, which `CATEGORIES` does not carry — the
     // same shape an archived category's history row would produce, since
-    // `readPayeeHistory` does not itself exclude archived categories.
-    controller.listPayeeHistory.mockReturnValue([
-      { payee: "gym", categoryId: "cat-gym-archived", date: accountingDate("2026-08-01") },
+    // `readEnteredNameHistory` does not itself exclude archived categories.
+    controller.listEnteredNameHistory.mockReturnValue([
+      { enteredName: "gym", categoryId: "cat-gym-archived", date: accountingDate("2026-08-01") },
     ]);
     const { result } = renderHook(() => useCommandBar(controller, parse, CATEGORIES));
 
@@ -210,8 +210,8 @@ describe("useCommandBar", () => {
 
   it("H1b — never auto-fills a proposal of the wrong kind (income, offered categories are expense-only)", () => {
     const controller = fakeController();
-    controller.listPayeeHistory.mockReturnValue([
-      { payee: "payday", categoryId: "cat-salary", date: accountingDate("2026-08-01") },
+    controller.listEnteredNameHistory.mockReturnValue([
+      { enteredName: "payday", categoryId: "cat-salary", date: accountingDate("2026-08-01") },
     ]);
     const { result } = renderHook(() => useCommandBar(controller, parse, CATEGORIES));
 
@@ -222,8 +222,8 @@ describe("useCommandBar", () => {
 
   it("M3 — undoCategory dismisses an applied proposal without discarding the line", () => {
     const controller = fakeController();
-    controller.listPayeeHistory.mockReturnValue([
-      { payee: "coffee", categoryId: "cat-food", date: accountingDate("2026-08-01") },
+    controller.listEnteredNameHistory.mockReturnValue([
+      { enteredName: "coffee", categoryId: "cat-food", date: accountingDate("2026-08-01") },
     ]);
     const { result } = renderHook(() => useCommandBar(controller, parse, CATEGORIES));
 
@@ -236,7 +236,7 @@ describe("useCommandBar", () => {
     // The line itself is untouched — Undo is not Discard.
     expect(result.current.text).toBe("48.90 cash coffee");
 
-    // A different payee earns its own proposal a fresh chance.
+    // A different entered name earns its own proposal a fresh chance.
     act(() => result.current.setText("48.90 cash coffee two"));
     expect(result.current.categoryAutoFilled).toBe(true);
   });

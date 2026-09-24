@@ -91,7 +91,7 @@ export type TransactionAmountIsMoney = Expect<
  * in the type system.
  *
  * A `string` is **not** a `Money`, which is the half that does the work: it is
- * what makes `add(payee, note)` fail to compile. If this ever inverts, the brand
+ * what makes `add(enteredName, note)` fail to compile. If this ever inverts, the brand
  * has been widened to an alias and every guarantee above it is decoration.
  */
 export type MoneyIsAString = Expect<Extends<money.Money, string>>;

@@ -127,6 +127,20 @@
       "when": 1790209444936,
       "tag": "0017_account_hidden_and_in_total",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1790215149735,
+      "tag": "0018_obligation_and_entered_name",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1790215149736,
+      "tag": "0019_obligation_views",
+      "breakpoints": true
     }
   ]
 }

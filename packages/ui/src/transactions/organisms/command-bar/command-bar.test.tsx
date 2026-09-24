@@ -24,7 +24,7 @@ const RESOLVED: CaptureParse = {
   accountId: "acc-cash",
   categoryId: null,
   date: accountingDate("2026-09-02"),
-  payee: "coffee",
+  enteredName: "coffee",
   unmatched: [],
 };
 
@@ -62,7 +62,7 @@ it("an empty bar shows no preview at all", () => {
   expect(screen.queryByText("coffee")).toBeNull();
 });
 
-it("Resolved: renders the amount, the account, the date and the payee", () => {
+it("Resolved: renders the amount, the account, the date and the enteredName", () => {
   render(<CommandBar {...props({ value: "48.90 cash coffee yesterday", parse: RESOLVED })} />);
   expect(screen.getByText("48.90")).toBeDefined();
   expect(screen.getByText("PLN")).toBeDefined();
@@ -86,8 +86,8 @@ it("Partial: shows whatever D1 resolved, plus why it stopped there", () => {
   render(<CommandBar {...props({ value: "48.90 taxi", parse: PARTIAL })} />);
   expect(screen.getByText("48.90")).toBeDefined();
   expect(screen.getByText("No account matched — name one to continue.")).toBeDefined();
-  // Nothing to name for the payee or the category — this is D1's own refusal, not a draft.
-  expect(screen.queryByText(/Payee:/)).toBeNull();
+  // Nothing to name for the entered name or the category — this is D1's own refusal, not a draft.
+  expect(screen.queryByText(/EnteredName:/)).toBeNull();
 });
 
 it("Refused: a line with no amount resolves nothing, and says so", () => {
@@ -342,7 +342,7 @@ it("M3 — the listbox contains options and nothing else", () => {
     />,
   );
   const listbox = screen.getByRole("listbox");
-  // Every direct child is an option; the amount, the payee line and the
+  // Every direct child is an option; the amount, the entered name line and the
   // provenance caption all live outside it.
   const children = Array.from(listbox.children);
   expect(children).toHaveLength(3);

@@ -3,16 +3,16 @@
  * YouTube or another recognised merchant shows its real mark immediately —
  * including when it was created with no internet."*
  *
- * **Exact match on the folded whole payee, not a substring search.**
+ * **Exact match on the folded whole entered name, not a substring search.**
  * `findName` (`capture/names.ts`) already does word-boundary substring
  * matching for the capture grammar, where a merchant name is one token among
- * others in a longer sentence; a transaction's `payee` field is the merchant
+ * others in a longer sentence; a transaction's `entered_name` field is the merchant
  * name itself; end to end, so the simpler exact-match index is what "normalised
  * alias → key" means here. A fuzzy/substring brand match is future work
  * (tier 1.5, matching D2's own scope note), not this catalogue's job today.
  *
- * **Never normalises `payee` itself.** `SPEC.md`: *"the payee remains
- * evidence and is never normalised away."* This module reads `payee` and
+ * **Never normalises `entered_name` itself.** `SPEC.md`: *"the entered name remains
+ * evidence and is never normalised away."* This module reads `entered_name` and
  * returns a `key`; nothing here writes back to the field it read.
  *
  * **"Normalised", precisely.** `fold` (`capture/names.ts`) lower-cases and
@@ -50,9 +50,9 @@ const ALIAS_INDEX: ReadonlyMap<string, string> = new Map(
   ),
 );
 
-/** The catalogue key `payee` matches, or `undefined` — folded, exact-match only (see the file header). */
-export function matchBrand(payee: string): string | undefined {
-  const folded = fold(normaliseSpace(payee));
+/** The catalogue key `entered_name` matches, or `undefined` — folded, exact-match only (see the file header). */
+export function matchBrand(enteredName: string): string | undefined {
+  const folded = fold(normaliseSpace(enteredName));
   if (folded === "") return undefined;
   return ALIAS_INDEX.get(folded);
 }
@@ -68,17 +68,17 @@ export type ResolvedBrand = { brandKey: string | null; brandSource: BrandSource 
  *
  * - `assertedKey` present (already catalogue-validated at the Zod boundary,
  *   `registry/inputs.ts`) → `manual`. A person or a future editor said so;
- *   the payee is not consulted.
- * - Otherwise, `payee` matched → `auto`.
- * - Otherwise, both `null` — an unrecognised payee is not blank at the
+ *   the entered name is not consulted.
+ * - Otherwise, `entered_name` matched → `auto`.
+ * - Otherwise, both `null` — an unrecognised entered name is not blank at the
  *   `brand_key` level; `BrandIcon`'s monogram fallback is what keeps the
  *   *screen* from being blank.
  */
-export function resolveBrand(payee: string, assertedKey: string | undefined): ResolvedBrand {
+export function resolveBrand(enteredName: string, assertedKey: string | undefined): ResolvedBrand {
   if (assertedKey !== undefined) {
     return { brandKey: assertedKey, brandSource: "manual" };
   }
-  const matched = matchBrand(payee);
+  const matched = matchBrand(enteredName);
   if (matched !== undefined) {
     return { brandKey: matched, brandSource: "auto" };
   }
@@ -94,21 +94,21 @@ export type CurrentBrand = { brandKey: string | null; brandSource: BrandSource |
  * asserted", and a clear has to stay cleared. `brand_source: "none"` is what
  * makes the last one possible — a *deliberate* "no brand", distinct from
  * `null`/`null` (never matched at all) and, like `"manual"`, sticky against a
- * later payee edit. Without it a clear falls back to "let the payee decide",
- * the payee still folds to the same alias, and the wrong mark returns on the
+ * later entered name edit. Without it a clear falls back to "let the entered name decide",
+ * the entered name still folds to the same alias, and the wrong mark returns on the
  * next write — correctable only by editing evidence §14.4b says is never
  * normalised away.
  *
  * The caller calls this only when the patch asserts a `brandKey` or *changes*
- * the payee (`update-transaction.executor.ts`'s own gate — an unrelated field
+ * the entered name (`update-transaction.executor.ts`'s own gate — an unrelated field
  * change must not recompute or rewrite either column). `undefined` back means
  * "leave both columns alone."
  *
- * - `brandKeyValue` is `null` → explicit clear: `{ null, "none" }`. The payee
+ * - `brandKeyValue` is `null` → explicit clear: `{ null, "none" }`. The entered name
  *   is not consulted, now or on a later edit.
  * - `brandKeyValue` is a string → `manual`, the same catalogue-validated
  *   assertion `resolveBrand` gives a fresh row.
- * - `brandKeyValue` is `undefined` (the patch has no opinion, so only `payee`
+ * - `brandKeyValue` is `undefined` (the patch has no opinion, so only `entered_name`
  *   changed) → re-matched **only** while the current source is `null` or
  *   `"auto"`; `"manual"` and `"none"` are both sticky, by the same rule for a
  *   different reason each — a person's own choice, and a person's own choice
@@ -116,7 +116,7 @@ export type CurrentBrand = { brandKey: string | null; brandSource: BrandSource |
  */
 export function resolveBrandPatch(
   current: CurrentBrand,
-  payee: string,
+  enteredName: string,
   brandKeyValue: string | null | undefined,
 ): ResolvedBrand | undefined {
   if (brandKeyValue === null) {
@@ -126,7 +126,7 @@ export function resolveBrandPatch(
     return { brandKey: brandKeyValue, brandSource: "manual" };
   }
   if (current.brandSource === null || current.brandSource === "auto") {
-    return resolveBrand(payee, undefined);
+    return resolveBrand(enteredName, undefined);
   }
   return undefined;
 }

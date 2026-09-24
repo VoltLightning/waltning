@@ -48,13 +48,13 @@ import {
 } from "./ledger-table";
 
 /**
- * Two of the ten are payees the bundled catalogue recognises (§14.4b) — so
+ * Two of the ten are entered names the bundled catalogue recognises (§14.4b) — so
  * every screenshot below carries both halves of what `BrandIcon` does: the
  * catalogue's own accent badge for `ORLEN` and `YouTube`, and the monogram
- * fallback for the eight it has never heard of. A fixture of unknown payees
+ * fallback for the eight it has never heard of. A fixture of unknown entered names
  * only would screenshot the fallback and call it the feature.
  */
-const PAYEES = [
+const ENTERED_NAMES = [
   "Corner Bakery",
   "ORLEN",
   "Monthly invoice",
@@ -84,11 +84,11 @@ function generateRows(count: number): LedgerTableRow[] {
     // no checkbox, which is what makes `RangeSelected` a real test of H6's
     // "the range skips it" rather than a fixture where every row is alike.
     const isTransfer = i % 6 === 5;
-    const payee = PAYEES[i % PAYEES.length] ?? "";
+    const enteredName = ENTERED_NAMES[i % ENTERED_NAMES.length] ?? "";
     rows.push({
       id: `row-${i}`,
       date: `2026-${month}-${String(day).padStart(2, "0")}`,
-      payee,
+      enteredName,
       category: CATEGORIES[i % CATEGORIES.length] ?? "",
       account: ACCOUNTS[i % ACCOUNTS.length] ?? "",
       scope: SCOPES[i % SCOPES.length] ?? "",
@@ -103,8 +103,8 @@ function generateRows(count: number): LedgerTableRow[] {
       // The shipped offline matcher, never a hand-written key — the same
       // resolution `create_transaction` runs at write time, so a story can
       // never screenshot a badge the real write path would not have
-      // produced for that payee.
-      brandKey: matchBrand(payee) ?? null,
+      // produced for that entered name.
+      brandKey: matchBrand(enteredName) ?? null,
       selectable: !isTransfer,
     });
   }

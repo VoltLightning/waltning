@@ -162,7 +162,7 @@ invent a share for you to make the arithmetic close.
 - **§6.4** — a clearing account trends to zero. Every row this screen writes
   moves the pot toward zero, and the pot reaching zero is what tells you the
   split is complete.
-- **§6.6** — every counterparty row is written with `counterparty_role = 'debt'`,
+- **§6.6** — every counterparty row is written with `obligation_role = 'debt'`,
   set at write time and never inferred. That is what puts it in the debt ledger,
   ages it if the counterparty is a company, and makes it settleable in S14.
 - **§6.7** — a contribution is not a debt. This screen writes no contributions:

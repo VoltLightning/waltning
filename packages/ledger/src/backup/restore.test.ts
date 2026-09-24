@@ -199,8 +199,8 @@ describe("what a restore refuses", () => {
 
   /**
    * A restored file is the one thing here an attacker chooses, so its values
-   * are bound rather than interpolated. A payee that is a `DROP TABLE` is a
-   * payee.
+   * are bound rather than interpolated. A entered name that is a `DROP TABLE` is a
+   * entered name.
    */
   it("treats a restored value as a value, never as SQL", () => {
     const { backup } = exported();
@@ -220,7 +220,7 @@ describe("what a restore refuses", () => {
 
     const accounts = restored.ledger.replica.db.select().from(ledgerSchema.accounts).all();
     expect(accounts[0]?.name).toBe(`'); DROP TABLE transactions; --`);
-    // And the table the payee named is still there, with its rows.
+    // And the table the entered name named is still there, with its rows.
     expect(restored.ledger.replica.db.select().from(ledgerSchema.transactions).all()).toHaveLength(
       3,
     );

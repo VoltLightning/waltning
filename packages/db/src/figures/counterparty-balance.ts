@@ -1,7 +1,7 @@
 /**
  * §7, server side. One row per counterparty, per currency — never a
  * cross-currency sum, and structurally excludes contributions (§6.7) and
- * references, since only `counterparty_role = 'debt'` accrues a balance.
+ * references, since only `obligation_role = 'debt'` accrues a balance.
  */
 
 import type { Money } from "@waltning/core/money";
@@ -76,17 +76,17 @@ export async function counterpartyBalances(db: DbHandle): Promise<CounterpartyBa
   const balance = sql<Money>`sum(${debtDeltaOnCarryingLeg})::numeric(20,8)::text`;
   const rows = await db
     .select({
-      counterpartyId: sql<string>`${transactions.counterpartyId}`,
+      counterpartyId: sql<string>`${transactions.obligationCounterpartyId}`,
       currency: debtCurrency,
       balance,
     })
     .from(transactions)
-    .innerJoin(counterparties, eq(transactions.counterpartyId, counterparties.id))
+    .innerJoin(counterparties, eq(transactions.obligationCounterpartyId, counterparties.id))
     .where(
-      sql`${transactions.counterpartyId} is not null and ${transactions.counterpartyRole} = 'debt' and ${live}`,
+      sql`${transactions.obligationCounterpartyId} is not null and ${transactions.obligationRole} = 'debt' and ${live}`,
     )
-    .groupBy(transactions.counterpartyId, debtCurrency, counterparties.archived)
+    .groupBy(transactions.obligationCounterpartyId, debtCurrency, counterparties.archived)
     .having(sql`not (${counterparties.archived} and sum(${debtDeltaOnCarryingLeg}) = 0)`)
-    .orderBy(transactions.counterpartyId, debtCurrency);
+    .orderBy(transactions.obligationCounterpartyId, debtCurrency);
   return rows;
 }

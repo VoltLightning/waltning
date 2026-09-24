@@ -281,7 +281,7 @@ describe("scale after every op — SPEC.md §7.2", () => {
             amountOriginal: "20.00",
             currency: PIVOT,
             counterpartyId: ID.cpA,
-            counterpartyRole: "debt",
+            obligationRole: "debt",
           }),
           j.capture,
         );

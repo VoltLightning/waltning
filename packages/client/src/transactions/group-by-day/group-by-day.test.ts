@@ -2,8 +2,8 @@ import { accountingDate } from "@waltning/core/date";
 import { describe, expect, it } from "vitest";
 import { groupByDay } from "./group-by-day.ts";
 
-function row(date: string, payee: string) {
-  return { date: accountingDate(date), payee };
+function row(date: string, enteredName: string) {
+  return { date: accountingDate(date), enteredName };
 }
 
 const LABELS = {
@@ -20,7 +20,7 @@ describe("groupByDay", () => {
       LABELS,
     );
     expect(sections.map((s) => s.label)).toEqual(["Today", "Yesterday", "2026-08-20"]);
-    expect(sections.map((s) => s.rows.map((r) => r.payee))).toEqual([["A"], ["B"], ["C"]]);
+    expect(sections.map((s) => s.rows.map((r) => r.enteredName))).toEqual([["A"], ["B"], ["C"]]);
   });
 
   it("groups every row of one contiguous date into one section", () => {
@@ -29,7 +29,7 @@ describe("groupByDay", () => {
       LABELS,
     );
     expect(sections).toHaveLength(2);
-    expect(sections[0]?.rows.map((r) => r.payee)).toEqual(["A", "B"]);
+    expect(sections[0]?.rows.map((r) => r.enteredName)).toEqual(["A", "B"]);
   });
 
   it("returns nothing for an empty page", () => {

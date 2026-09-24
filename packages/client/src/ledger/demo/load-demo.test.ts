@@ -60,7 +60,7 @@ describe("the plan", () => {
     const second = demoTransactions(TODAY, 26);
     expect(first).toEqual(second);
 
-    const rents = first.filter((r) => r.payee === "Landlord").map((r) => r.amount);
+    const rents = first.filter((r) => r.enteredName === "Landlord").map((r) => r.amount);
     expect(new Set(rents).size, "rent is not the same figure every month").toBeGreaterThan(3);
   });
 
@@ -406,9 +406,9 @@ describe("the people money moves between", () => {
     expect(outcome.refused).toBe(0);
     const withCounterparty = vi
       .mocked(t.createTransaction)
-      .mock.calls.filter(([draft]) => draft.counterpartyId !== null);
+      .mock.calls.filter(([draft]) => draft.obligationCounterpartyId !== null);
     expect(withCounterparty).toHaveLength(DEMO_DEBTS.length);
-    expect(withCounterparty.every(([draft]) => draft.counterpartyRole !== null)).toBe(true);
+    expect(withCounterparty.every(([draft]) => draft.obligationRole !== null)).toBe(true);
   });
 
   /** One of the three is settled, which is a settlement written after its debt. */

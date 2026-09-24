@@ -20,7 +20,7 @@ function row(n: number): PhoneSearchTransaction {
     id: id<"transactions">(`00000000-0000-4000-8000-00000000000${n}`),
     date: accountingDate(`2026-08-2${n}`),
     type: "expense",
-    payee: `Row ${n}`,
+    enteredName: `Row ${n}`,
     note: "",
     categoryName: null,
     brandKey: null,
@@ -39,7 +39,7 @@ function row(n: number): PhoneSearchTransaction {
     toDecimals: null,
     isBusiness: false,
     isCapital: false,
-    counterpartyRole: null,
+    obligationRole: null,
   };
 }
 
@@ -53,7 +53,9 @@ function fakeController() {
         const start = cursor === undefined ? 0 : rows.findIndex((r) => r.id === cursor.id) + 1;
         const matched =
           filter.text !== undefined
-            ? rows.filter((r) => r.payee.toLowerCase().includes(filter.text?.toLowerCase() ?? ""))
+            ? rows.filter((r) =>
+                r.enteredName.toLowerCase().includes(filter.text?.toLowerCase() ?? ""),
+              )
             : rows;
         const page = matched.slice(start, start + 1);
         const last = page[page.length - 1];
@@ -102,15 +104,15 @@ describe("useTransactionSearch", () => {
     const controller = fakeController();
     const { result } = renderHook(() => useTransactionSearch(controller, {}));
 
-    expect(result.current.rows.map((r) => r.payee)).toEqual(["Row 1"]);
+    expect(result.current.rows.map((r) => r.enteredName)).toEqual(["Row 1"]);
     expect(result.current.hasMore).toBe(true);
 
     act(() => result.current.loadMore());
-    expect(result.current.rows.map((r) => r.payee)).toEqual(["Row 1", "Row 2"]);
+    expect(result.current.rows.map((r) => r.enteredName)).toEqual(["Row 1", "Row 2"]);
     expect(result.current.hasMore).toBe(true);
 
     act(() => result.current.loadMore());
-    expect(result.current.rows.map((r) => r.payee)).toEqual(["Row 1", "Row 2", "Row 3"]);
+    expect(result.current.rows.map((r) => r.enteredName)).toEqual(["Row 1", "Row 2", "Row 3"]);
     expect(result.current.hasMore).toBe(false);
 
     // A no-op past the end — never throws, never re-appends.
@@ -127,7 +129,7 @@ describe("useTransactionSearch", () => {
     const controller = fakeController();
     const { result } = renderHook(() => useTransactionSearch(controller, {}, { loadAll: true }));
 
-    expect(result.current.rows.map((r) => r.payee)).toEqual(["Row 1", "Row 2", "Row 3"]);
+    expect(result.current.rows.map((r) => r.enteredName)).toEqual(["Row 1", "Row 2", "Row 3"]);
     expect(result.current.hasMore).toBe(false);
     expect(result.current.capped).toBe(false);
   });
@@ -138,7 +140,7 @@ describe("useTransactionSearch", () => {
       useTransactionSearch(controller, {}, { loadAll: true, cap: 2 }),
     );
 
-    expect(result.current.rows.map((r) => r.payee)).toEqual(["Row 1", "Row 2"]);
+    expect(result.current.rows.map((r) => r.enteredName)).toEqual(["Row 1", "Row 2"]);
     // The cursor is still set — the reader is told, not silently truncated.
     expect(result.current.capped).toBe(true);
     expect(result.current.hasMore).toBe(true);
@@ -154,7 +156,7 @@ describe("useTransactionSearch", () => {
     const controller = emptyPageController();
     const { result } = renderHook(() => useTransactionSearch(controller, {}, { loadAll: true }));
 
-    expect(result.current.rows.map((r) => r.payee)).toEqual(["Row 1"]);
+    expect(result.current.rows.map((r) => r.enteredName)).toEqual(["Row 1"]);
     expect(result.current.incomplete).toBe(true);
     expect(result.current.capped).toBe(false);
     // The cursor is still set, so the phone's own "there is more" is honest.
@@ -187,7 +189,7 @@ describe("useTransactionSearch", () => {
     expect(result.current.rows).toHaveLength(2);
 
     rerender({ filter: { text: "row 2" } });
-    expect(result.current.rows.map((r) => r.payee)).toEqual(["Row 2"]);
+    expect(result.current.rows.map((r) => r.enteredName)).toEqual(["Row 2"]);
     expect(result.current.hasMore).toBe(false);
   });
 

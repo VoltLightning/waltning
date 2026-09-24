@@ -1,13 +1,13 @@
 /**
  * `CurrencyCode` — four columns held one, and all four were the same type as
- * `payee`.
+ * `entered_name`.
  */
 
 import { describe, expect, it } from "vitest";
 import { currencyCode } from "./money.ts";
 
 describe("a currency code is not any string", () => {
-  it("refuses a payee", () => {
+  it("refuses a enteredName", () => {
     expect(() => currencyCode("Bank A")).toThrow(/ISO 4217/);
   });
 

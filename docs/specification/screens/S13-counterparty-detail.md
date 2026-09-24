@@ -90,7 +90,7 @@ Web adds the ageing bar inline for companies and shows history as a table.
 |---|---|
 | `counterparty_balances` for this id, per currency | — |
 | Both derived totals — theirs and display | — |
-| `search_transactions(counterparty_id)` | — |
+| `search_transactions(obligationCounterpartyId)` | — |
 
 ## 6. States
 

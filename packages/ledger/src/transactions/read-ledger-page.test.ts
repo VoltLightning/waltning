@@ -18,7 +18,7 @@ const OTHER = id<"accounts">("00000000-0000-4000-8000-00000000000b");
 let stores: ScratchStores;
 
 /** `nn` is both the id suffix and the ordering tiebreak, so a day's rows have a total order. */
-function insert(date: string, nn: number, accountId = OWN, payee?: string) {
+function insert(date: string, nn: number, accountId = OWN, enteredName?: string) {
   stores.ledger.replica.db
     .insert(transactions)
     .values({
@@ -30,15 +30,15 @@ function insert(date: string, nn: number, accountId = OWN, payee?: string) {
       amountOriginal: money.toMoney("10"),
       currency: PLN,
       fxRate: money.pivotPerUnit("1"),
-      payee: payee ?? `Row ${nn}`,
+      enteredName: enteredName ?? `Row ${nn}`,
       note: "",
       isBusiness: false,
       isCapital: false,
       toAccountId: null,
       toAmount: null,
       toCurrency: null,
-      counterpartyId: null,
-      counterpartyRole: null,
+      obligationCounterpartyId: null,
+      obligationRole: null,
       brandKey: null,
       deletedAt: null,
     })
@@ -46,7 +46,8 @@ function insert(date: string, nn: number, accountId = OWN, payee?: string) {
 }
 
 const dates = (page: { rows: readonly { date: string }[] }) => page.rows.map((r) => r.date);
-const payees = (page: { rows: readonly { payee: string }[] }) => page.rows.map((r) => r.payee);
+const enteredNames = (page: { rows: readonly { enteredName: string }[] }) =>
+  page.rows.map((r) => r.enteredName);
 
 beforeEach(() => {
   stores = scratchStores();
@@ -104,7 +105,7 @@ describe("readLedgerPage", () => {
     const older = readLedgerPage(stores.ledger.replica.db, { anchor, direction: "older" });
     const newer = readLedgerPage(stores.ledger.replica.db, { anchor, direction: "newer" });
 
-    const all = [...payees(newer), ...payees(older)];
+    const all = [...enteredNames(newer), ...enteredNames(older)];
     expect(new Set(all).size).toBe(9);
     expect(all).toEqual([...all].sort((a, b) => b.localeCompare(a, "en", { numeric: true })));
   });
@@ -124,7 +125,7 @@ describe("readLedgerPage", () => {
         direction: "older",
         ...(cursor === undefined ? {} : { cursor }),
       });
-      seen.push(...payees(page));
+      seen.push(...enteredNames(page));
       cursor = page.nextCursor;
       if (cursor === undefined) break;
     }

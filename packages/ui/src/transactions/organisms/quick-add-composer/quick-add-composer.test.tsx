@@ -70,8 +70,8 @@ function base(): QuickAddComposerProps {
     categoryId: null,
     onOpenCategoryPicker: vi.fn(),
     onPickCategory: vi.fn(),
-    payee: "",
-    onPayeeChange: vi.fn(),
+    enteredName: "",
+    onEnteredNameChange: vi.fn(),
     date: TODAY,
     onDateChange: vi.fn(),
     today: TODAY,
@@ -83,10 +83,10 @@ function base(): QuickAddComposerProps {
     note: "",
     onNoteChange: vi.fn(),
     counterparties: [],
-    counterpartyId: null,
+    obligationCounterpartyId: null,
     onCounterpartyChange: vi.fn(),
-    counterpartyRole: null,
-    onCounterpartyRoleChange: vi.fn(),
+    obligationRole: null,
+    onObligationRoleChange: vi.fn(),
   };
 }
 
@@ -158,7 +158,7 @@ it("opens the category and account pickers through callbacks rather than renderi
 
 it("shows D2's proposal machine-filled until a real pick lands (P2)", () => {
   draw({
-    payee: "Corner Cafe",
+    enteredName: "Corner Cafe",
     categoryProposal: {
       categoryId: "cat-eating-out",
       confidence: 0.9,
@@ -174,7 +174,7 @@ it("shows D2's proposal machine-filled until a real pick lands (P2)", () => {
 it("shows the P2 trail and Undo when the draft holds an applied proposal (H1)", () => {
   const onUndoCategory = vi.fn();
   draw({
-    payee: "Corner Cafe",
+    enteredName: "Corner Cafe",
     categoryId: "cat-eating-out",
     categoryAutoFilled: true,
     onUndoCategory,
@@ -182,7 +182,7 @@ it("shows the P2 trail and Undo when the draft holds an applied proposal (H1)", 
       categoryId: "cat-eating-out",
       confidence: 0.9,
       basis: "neighbours",
-      neighbours: [{ payee: "Corner Café", similarity: 0.95, categoryId: "cat-eating-out" }],
+      neighbours: [{ enteredName: "Corner Café", similarity: 0.95, categoryId: "cat-eating-out" }],
     },
   });
   expect(screen.getByText("From your history: Corner Café")).toBeDefined();
@@ -192,12 +192,12 @@ it("shows the P2 trail and Undo when the draft holds an applied proposal (H1)", 
 
 it("shows a below-threshold proposal as a suggestion in the placeholder, never as a value", () => {
   draw({
-    payee: "Corner",
+    enteredName: "Corner",
     categoryProposal: {
       categoryId: "cat-eating-out",
       confidence: 0.3,
       basis: "neighbours",
-      neighbours: [{ payee: "Corner Café", similarity: 0.4, categoryId: "cat-eating-out" }],
+      neighbours: [{ enteredName: "Corner Café", similarity: 0.4, categoryId: "cat-eating-out" }],
     },
   });
   // The suggestion is the row's placeholder, and the row's name carries it —
@@ -206,18 +206,23 @@ it("shows a below-threshold proposal as a suggestion in the placeholder, never a
   expect(screen.queryByRole("button", { name: /filled automatically/ })).toBeNull();
 });
 
-it("lets someone type a payee through its own sheet, and the More row then says so", () => {
+it("lets someone type a enteredName through its own sheet, and the More row then says so", () => {
   const props = draw();
   openMore();
   fireEvent.click(screen.getByRole("button", { name: "Payee" }));
   fireEvent.change(screen.getByRole("textbox", { name: "Payee" }), {
     target: { value: "Corner Café" },
   });
-  expect(props.onPayeeChange).toHaveBeenCalledWith("Corner Café");
+  expect(props.onEnteredNameChange).toHaveBeenCalledWith("Corner Café");
 });
 
 it("summarises the rarer fields on the More row while they are folded away", () => {
-  draw({ payee: "Corner Café", date: "2026-09-01", isBusiness: true, accountId: "account-a" });
+  draw({
+    enteredName: "Corner Café",
+    date: "2026-09-01",
+    isBusiness: true,
+    accountId: "account-a",
+  });
   expect(
     screen.getByRole("button", {
       name: "More details: Corner Café · September 1, 2026 · Business",
@@ -242,7 +247,7 @@ it("offers a person once the ledger holds one, and never defaults the role (§6.
 });
 
 it("spells out a missing role on the person row rather than leaving it to a form error", () => {
-  draw({ counterparties: [{ id: "cp-a", name: "Corner Café" }], counterpartyId: "cp-a" });
+  draw({ counterparties: [{ id: "cp-a", name: "Corner Café" }], obligationCounterpartyId: "cp-a" });
   openMore();
   expect(screen.getByRole("button", { name: "Person: Corner Café · role?" })).toBeDefined();
 });
@@ -262,7 +267,7 @@ it("renders a field error under the row it names, and the amount's under the fig
 });
 
 it("carries a folded row's error onto the More row so it is never hidden", () => {
-  draw({ fieldErrors: { byField: { payee: ["Too long."] }, formLevel: [] } });
+  draw({ fieldErrors: { byField: { enteredName: ["Too long."] }, formLevel: [] } });
   expect(screen.getByText("Too long.")).toBeDefined();
 });
 

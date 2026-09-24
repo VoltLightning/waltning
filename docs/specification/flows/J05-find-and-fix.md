@@ -76,7 +76,7 @@ a transaction.
 ## 6. Rules
 
 - **The calendar complements the list; it never replaces it** (Q9). The list
-  answers *"find the thing I remember"* — search, payee, amount. The calendar
+  answers *"find the thing I remember"* — search, entered name, amount. The calendar
   answers *"what happened then"* — a period you can point at but not name. Both
   are entry points to the same detail screen.
 - **Audit history is on the detail screen**, not hidden in settings. Who changed

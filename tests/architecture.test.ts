@@ -2675,7 +2675,7 @@ describe("a refusal is never reported as a success", () => {
  * `theme.shell` is a dark ground and the page's inks are tuned for a light
  * one: `textMuted` measures **1.45:1** there and `dangerText` **1.37:1**.
  * `Toast` recorded that number when it moved to `shellText`; `CommandBar` drew
- * its hint, its reason line, its payee and its field errors in the page's inks
+ * its hint, its reason line, its entered name and its field errors in the page's inks
  * anyway, because the pass that fixed the band's *rings* was looking for
  * outlines. Both components render straight onto the band — neither has a fill
  * of its own — so nothing composited in between, and no census walked it.
@@ -2867,7 +2867,7 @@ describe("a component on the band uses the band's inks", () => {
       "on the bar's own surface",
     ],
     [
-      "packages/ui/src/transactions/organisms/command-bar/command-bar.tsx#payee",
+      "packages/ui/src/transactions/organisms/command-bar/command-bar.tsx#enteredName",
       "on the bar's own surface",
     ],
     [

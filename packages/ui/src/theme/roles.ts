@@ -231,7 +231,7 @@ export type Theme = {
    * A refusal drawn on the shell. `dangerText` is a page ink: on the band it
    * measures **1.37:1**, and `CommandBar` — the desk's only capture
    * affordance — drew its field errors in it, along with its hint, its reason
-   * line and its payee at 1.45:1. A bar with no fill of its own renders
+   * line and its entered name at 1.45:1. A bar with no fill of its own renders
    * straight onto `theme.shell`, which is a ground the text census did not
    * walk because "nothing else is drawn on it" had stopped being true.
    */

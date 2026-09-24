@@ -313,7 +313,7 @@ describe("validation reaches a field", () => {
 
   it("leaks no ledger content in the message", async () => {
     // The message carries Zod's issue list. §5.3's posture is that a refusal
-    // about a payee must not become a place the payee is echoed.
+    // about a entered name must not become a place the entered name is echoed.
     const res = await post(JSON.stringify({ name: "Placeholder Ltd", kind: "alien" }));
     expect(await res.text()).not.toContain("Placeholder Ltd");
   });

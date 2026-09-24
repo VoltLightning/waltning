@@ -172,7 +172,7 @@ function toDeskRow(
   return {
     id: row.id,
     date: row.date,
-    payee: row.payee,
+    enteredName: row.enteredName,
     category: row.categoryName ?? "",
     account: accountLabel,
     scope,
@@ -183,7 +183,7 @@ function toDeskRow(
     isBusiness: row.isBusiness,
     // §14.4b — the same key the phone row already draws its `BrandIcon`
     // from, resolved offline at write time. Straight through: this screen
-    // never matches a payee itself.
+    // never matches a entered name itself.
     brandKey: row.brandKey,
     // `transactions_category_shape` — only income and expense ever take a category.
     selectable: row.type === "income" || row.type === "expense",
@@ -638,7 +638,7 @@ export default function Ledger() {
             onChangeCategoryIds={filters.setCategoryIds}
             onChangeScope={filters.setScope}
             onChangeCurrency={filters.setCurrency}
-            onChangeCounterpartyId={filters.setCounterpartyId}
+            onChangeCounterpartyId={filters.setObligationCounterpartyId}
             onChangeFrom={filters.setFrom}
             onChangeTo={filters.setTo}
             onClearAll={filtered ? filters.clearAll : undefined}
@@ -976,14 +976,14 @@ function activeFilterChips(
       onRemove: deps.onRemoveCurrency,
     });
   }
-  if (filter.counterpartyId !== "") {
+  if (filter.obligationCounterpartyId !== "") {
     const counterparty = deps.counterparties.find(
-      (candidate) => candidate.id === filter.counterpartyId,
+      (candidate) => candidate.id === filter.obligationCounterpartyId,
     );
     chips.push({
       key: "counterparty",
-      label: counterparty?.name ?? filter.counterpartyId,
-      excludes: deps.exclusions.counterpartyId,
+      label: counterparty?.name ?? filter.obligationCounterpartyId,
+      excludes: deps.exclusions.obligationCounterpartyId,
       onRemove: deps.onRemoveCounterparty,
     });
   }

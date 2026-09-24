@@ -353,7 +353,7 @@ describe("J02 — daily capture, under ten seconds, offline", () => {
   /**
    * H1 — a proposal at or above `PROPOSAL_DISPLAY_THRESHOLD` **is** the
    * draft's category the moment it fills, never only a suggestion the sheet
-   * has to confirm: the payee chip's fold matches the fixture's prior
+   * has to confirm: the entered name chip's fold matches the fixture's prior
    * "Corner Café" capture exactly (confidence 1), so this test never opens
    * the category sheet at all — Save alone is enough, and the P2 trail
    * (S05 §8) says where the value came from and offers Undo.
@@ -389,7 +389,7 @@ describe("J02 — daily capture, under ten seconds, offline", () => {
 
     const rows = readTransactions(ledger);
     const captured = rows.find(
-      (row) => row.payee === "Corner Café" && row.amountOriginal === "48.90000000",
+      (row) => row.enteredName === "Corner Café" && row.amountOriginal === "48.90000000",
     );
     expect(captured?.categoryId).toBe(fixture.eatingOutCategoryId);
   });
@@ -435,7 +435,7 @@ describe("J02 — daily capture, under ten seconds, offline", () => {
     await waitFor(() => expect(screen.queryByRole("button", { name: "Save income" })).toBeNull());
 
     const rows = readTransactions(ledger);
-    const captured = rows.find((row) => row.payee === "Corner Café" && row.type === "income");
+    const captured = rows.find((row) => row.enteredName === "Corner Café" && row.type === "income");
     expect(captured?.categoryId).toBeNull();
   });
 

@@ -907,7 +907,7 @@ export const breakpoint = { desk: 1024 } as const;
  */
 /**
  * `min` is §10's floor for anything pressed. `row` is the deck's density for a
- * ledger row — 54: a two-line identity of 32 (payee over category) with 11
+ * ledger row — 54: a two-line identity of 32 (entered name over category) with 11
  * above and below — which is what keeps a row from being a control-height
  * strip.
  */

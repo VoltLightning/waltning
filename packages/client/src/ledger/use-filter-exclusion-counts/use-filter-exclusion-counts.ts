@@ -76,7 +76,7 @@ export type LedgerFilterDimension =
   | "categoryIds"
   | "scope"
   | "currency"
-  | "counterpartyId"
+  | "obligationCounterpartyId"
   | "dateRange";
 
 /** How many extra rows each active control is keeping off screen. Absent = the control is not active. */
@@ -110,8 +110,8 @@ function without(filter: LedgerFilterState, dimension: LedgerFilterDimension): L
       return { ...filter, scope: "all" };
     case "currency":
       return { ...filter, currency: "" };
-    case "counterpartyId":
-      return { ...filter, counterpartyId: "" };
+    case "obligationCounterpartyId":
+      return { ...filter, obligationCounterpartyId: "" };
     case "dateRange":
       return { ...filter, from: "", to: "" };
   }
@@ -127,7 +127,7 @@ export function activeFilterDimensions(
   if (filter.categoryIds.length > 0) active.push("categoryIds");
   if (filter.scope !== "all") active.push("scope");
   if (filter.currency !== "") active.push("currency");
-  if (filter.counterpartyId !== "") active.push("counterpartyId");
+  if (filter.obligationCounterpartyId !== "") active.push("obligationCounterpartyId");
   if (filter.from !== "" || filter.to !== "") active.push("dateRange");
   return active;
 }

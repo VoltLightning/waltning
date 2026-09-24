@@ -375,7 +375,7 @@ export type Backfill = {
  * `transactions_category_kind_matches_type_*`, C1's
  * `transactions_lines_sum_matches_update` and H1's two
  * `transactions_amount_positive_*` — are created by
- * `REPLICA_BACKFILLS["0010_schema"].objects` below, and nothing else in this
+ * `REPLICA_BACKFILLS["0017_schema"].objects` below, and nothing else in this
  * package writes a trigger.
  *
  * **Not for want of a hand-written `.sql`.** `drizzle/replica` holds two —
@@ -702,7 +702,7 @@ export const REPLICA_BACKFILLS: Readonly<Record<string, Backfill>> = {
       );
     },
   },
-  "0010_schema": {
+  "0017_schema": {
     /**
      * **The replica's nine hand-written triggers, all of them, in one place.**
      * H1a's four `*_category_not_archived_*` (an archived category is never
@@ -726,19 +726,20 @@ export const REPLICA_BACKFILLS: Readonly<Record<string, Backfill>> = {
      * `set-transaction-lines.executor.ts`'s sum check for the third and its
      * `assertRestatedAmountPositive` for the fourth.
      *
-     * **On `0010_schema` because that is the last step that rebuilds
-     * `transactions` — not because it is the head.** It is not the head:
-     * `0011_dashboard_layout_seed`, `0012_schema` and `0013_schema` all run
-     * after it, and none of them rebuilds this table — `0013_schema` touches
-     * it, but only to add an index — one of the two that step creates — which
-     * leaves its triggers where they are. What matters is the rebuild. `0010_schema` rebuilds
-     * `transactions` copy-rename-drop to add `brand_key`/`brand_source`
-     * (§14.4b), and SQLite drops a table's triggers with the table — so a
-     * hook one step earlier created two triggers the very next step deleted,
-     * and four more written into the tail of `0010_schema.sql` would go the
-     * same way one rebuild later. This key moves when, and only when, a later
-     * step rebuilds `transactions`; the file doc above states that as the
-     * rule, and `migrate.test.ts` and `backfills.test.ts` both ask
+     * **On `0017_schema` because that is the last step that rebuilds
+     * `transactions` — not because it is the head.** It sat on `0010_schema`
+     * until the obligation rename, which rebuilds the table again: SQLite
+     * cannot rename a column a CHECK mentions, so renaming `counterparty_id`,
+     * `counterparty_role` and `payee` is another copy-rename-drop — and
+     * `DROP TABLE` takes that table's triggers with it, silently. Leaving the
+     * key on `0010_schema` would have created all nine and dropped them seven
+     * steps later, which is the exact failure the WA017 pair already had once
+     * (created by `0009_schema`, deleted eleven lines into `0010_schema`'s
+     * rebuild). Steps in between that merely *touch* the table do not count —
+     * `0013_schema` adds an index and leaves its triggers where they are.
+     * What matters is the rebuild. This key moves when, and only when, a
+     * later step rebuilds `transactions`; the file doc above states that as
+     * the rule, and `migrate.test.ts` and `backfills.test.ts` both ask
      * `sqlite_master` after the *whole* chain so the next rebuild cannot
      * repeat it quietly.
      */

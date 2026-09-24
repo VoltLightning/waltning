@@ -135,7 +135,7 @@ function netWorthOf(accounts: readonly FakeAccount[]): readonly PhoneNetWorth[] 
 /**
  * `money.unsettledClearing` (§8) over the clearing-kind fake accounts.
  *
- * **Fakes a non-null oldest id, no payee, on purpose.** This fixture never
+ * **Fakes a non-null oldest id, no entered name, on purpose.** This fixture never
  * folds real legs through `fifoOldestOpen` — a `null` id would now read as
  * "the oldest open entry is the account's opening balance" (H2), a specific
  * claim this generic fake has no basis for. Naming a fake transaction id
@@ -158,7 +158,7 @@ function unsettledOf(accounts: readonly FakeAccount[]): readonly PhoneClearingAc
     oldestUnconsumedTransactionId: id<"transactions">(`unsettled-${row.accountId}`),
     oldestDate: accountingDate("2026-08-01"),
     oldestUnconsumedRemainder: row.balance,
-    oldestUnconsumedPayee: null,
+    oldestUnconsumedEnteredName: null,
   }));
 }
 
@@ -422,7 +422,7 @@ function fakeController(options: FakeControllerOptions = {}) {
       const byDay = new Map<string, number>();
       for (const row of ledgerRows) {
         if (row.date < period.start || row.date >= period.end) continue;
-        if (!row.payee.toLowerCase().includes(needle)) continue;
+        if (!row.enteredName.toLowerCase().includes(needle)) continue;
         byDay.set(row.date, (byDay.get(row.date) ?? 0) + 1);
       }
       return [...byDay.entries()]
@@ -594,14 +594,14 @@ const SECOND_CLEARING_ACCOUNT: FakeAccount = {
 const RECENT_ROW: PhoneRecentTransaction = {
   id: id<"transactions">("77777777-7777-4777-8777-777777777777"),
   date: accountingDate("2026-09-03"),
-  payee: "Shop A",
+  enteredName: "Shop A",
   categoryName: "Food",
   accountName: PLN_ACCOUNT.name,
   amount: toMoney("-48.90"),
   currency: currencyCode("PLN"),
   decimals: 2,
   isBusiness: false,
-  // §14.4b — nothing recognised for this payee; `BrandIcon` draws its monogram.
+  // §14.4b — nothing recognised for this entered name; `BrandIcon` draws its monogram.
   brandKey: null,
 };
 
@@ -852,7 +852,7 @@ describe("Today", () => {
           oldestUnconsumedTransactionId: null,
           oldestDate: accountingDate("2026-08-01"),
           oldestUnconsumedRemainder: CLEARING_ACCOUNT.balance,
-          oldestUnconsumedPayee: null,
+          oldestUnconsumedEnteredName: null,
         },
       ],
     });
@@ -869,7 +869,7 @@ describe("Today", () => {
 
   /**
    * §8's own reason for existing — `find_unsettled`'s third field — once
-   * `readUnsettledClearing` names a payee: the banner names the transaction
+   * `readUnsettledClearing` names a entered name: the banner names the transaction
    * rather than the account, so you know *which* night went unsplit. Where
    * it opens is the pot regardless (J08 §4).
    */
@@ -898,7 +898,7 @@ describe("Today", () => {
           oldestUnconsumedTransactionId: oldestId,
           oldestDate: accountingDate("2026-08-05"),
           oldestUnconsumedRemainder: CLEARING_ACCOUNT.balance,
-          oldestUnconsumedPayee: "Dinner",
+          oldestUnconsumedEnteredName: "Dinner",
         },
       ],
     });
@@ -943,7 +943,7 @@ describe("Today", () => {
           oldestUnconsumedTransactionId: id<"transactions">("77777777-7777-4777-8777-777777777777"),
           oldestDate: accountingDate("2026-08-01"),
           oldestUnconsumedRemainder: toMoney("-150"),
-          oldestUnconsumedPayee: "Hotel",
+          oldestUnconsumedEnteredName: "Hotel",
         },
       ],
     });
@@ -1482,12 +1482,17 @@ describe("Today — the pager, with a month in it", () => {
   const TODAY = deviceRuntime().capture().date;
   const MONTH = TODAY.slice(0, 7);
 
-  function row(day: string, payee: string, amount: string, month = MONTH): PhoneSearchTransaction {
+  function row(
+    day: string,
+    enteredName: string,
+    amount: string,
+    month = MONTH,
+  ): PhoneSearchTransaction {
     return {
       id: id<"transactions">(`33333333-3333-4333-8333-33${month.replace("-", "")}${day.slice(-2)}`),
       date: accountingDate(`${month}-${day}`),
       type: amount.startsWith("-") ? "expense" : "income",
-      payee,
+      enteredName,
       note: "",
       categoryName: "Groceries",
       brandKey: null,
@@ -1506,7 +1511,7 @@ describe("Today — the pager, with a month in it", () => {
       toDecimals: null,
       isBusiness: false,
       isCapital: false,
-      counterpartyRole: null,
+      obligationRole: null,
     };
   }
 

@@ -293,11 +293,11 @@ export function loadDemo(
         accountId,
         categoryId: categoryIds.get(row.category) ?? null,
         date: row.date,
-        payee: row.payee,
+        enteredName: row.enteredName,
         note: "",
         isBusiness: false,
-        counterpartyId: null,
-        counterpartyRole: null,
+        obligationCounterpartyId: null,
+        obligationRole: null,
       }),
     );
     if (id === null) outcome.refused += 1;
@@ -341,11 +341,11 @@ export function loadDemo(
         accountId,
         categoryId: categoryIds.get(debt.category) ?? null,
         date,
-        payee: debt.payee,
+        enteredName: debt.enteredName,
         note: "",
         isBusiness: false,
-        counterpartyId,
-        counterpartyRole: debt.role,
+        obligationCounterpartyId: counterpartyId,
+        obligationRole: debt.role,
       }),
     );
     if (id === null) {
@@ -403,11 +403,11 @@ export function loadDemo(
         toCurrency: currencyCode("PLN"),
         categoryId: null,
         date: addDays(accountingDate(today), -2),
-        payee: "",
+        enteredName: "",
         note: "",
         isBusiness: false,
-        counterpartyId: null,
-        counterpartyRole: null,
+        obligationCounterpartyId: null,
+        obligationRole: null,
       }),
     );
     if (funded === null) outcome.refused += 1;

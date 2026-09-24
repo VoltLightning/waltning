@@ -25,7 +25,7 @@ import { toMoney } from "./money.ts";
 /** The six sortable fields `packages/ui`'s table maps its columns onto. */
 type PerfRow = SortableRow & {
   date: string;
-  payee: string;
+  enteredName: string;
   category: string;
   account: string;
   scope: string;
@@ -33,14 +33,20 @@ type PerfRow = SortableRow & {
 
 const KEYS: readonly SortKey<PerfRow>[] = [
   "date",
-  "payee",
+  "enteredName",
   "category",
   "account",
   "scope",
   "amount",
 ];
 
-const PAYEES = ["Corner Bakery", "Rewe", "Cash withdrawal", "Bank A · PLN", "Electric co-op"];
+const ENTERED_NAMES = [
+  "Corner Bakery",
+  "Rewe",
+  "Cash withdrawal",
+  "Bank A · PLN",
+  "Electric co-op",
+];
 
 const LARGEST_ID = "the-largest";
 
@@ -59,7 +65,7 @@ function generateRows(count: number): PerfRow[] {
     rows.push({
       id: last ? LARGEST_ID : `row-${i}`,
       date: `2026-08-${day}`,
-      payee: PAYEES[i % PAYEES.length] ?? "",
+      enteredName: ENTERED_NAMES[i % ENTERED_NAMES.length] ?? "",
       category: `Category ${i % 12}`,
       account: `Account ${i % 4}`,
       scope: i % 3 === 0 ? "Business" : i % 3 === 1 ? "Shared" : "Mine",

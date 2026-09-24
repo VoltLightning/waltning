@@ -90,7 +90,7 @@ export async function typeAmount(page: Page, amount: string): Promise<void> {
   await page.getByRole("textbox", { name: "How much?" }).fill(amount);
 }
 
-/** S05 §3 — payee, date, scope and person wait behind one row. */
+/** S05 §3 — entered name, date, scope and person wait behind one row. */
 export async function openMoreDetails(page: Page): Promise<void> {
   await page.getByRole("button", { name: /^More details/ }).click();
 }

@@ -117,7 +117,9 @@ function fakeController(
       }
       row = {
         ...row,
-        ...("payee" in input.patch ? { payee: input.patch.payee ?? row.payee } : {}),
+        ...("enteredName" in input.patch
+          ? { enteredName: input.patch.enteredName ?? row.enteredName }
+          : {}),
         ...("accountId" in input.patch
           ? {
               accountId: input.patch.accountId ?? row.accountId,
@@ -152,16 +154,16 @@ const DETAIL: NonNullable<FakeDetail> = {
   id: id<"transactions">(TXN),
   date: accountingDate("2026-08-06"),
   type: "expense",
-  payee: "Café A",
+  enteredName: "Café A",
   note: "",
   isBusiness: false,
   accountId: ACCOUNT,
   accountName: "Cash · PLN",
   categoryId: null,
   categoryName: null,
-  counterpartyId: null,
+  obligationCounterpartyId: null,
   counterpartyName: null,
-  counterpartyRole: null,
+  obligationRole: null,
   isCapital: false,
   brandKey: null,
   amount: toMoney("-48.90"),
@@ -193,7 +195,9 @@ describe("TransactionDetail", () => {
     withLedger(<TransactionDetail />);
 
     fireEvent.click(screen.getByRole("button", { name: "Payee: Café A" }));
-    fireEvent.change(screen.getByLabelText("Payee"), { target: { value: "Café A · Downtown" } });
+    fireEvent.change(screen.getByLabelText("Payee"), {
+      target: { value: "Café A · Downtown" },
+    });
     // The only `Save` on screen: `LinesCard` renders none while it holds no
     // lines and none have been added.
     fireEvent.click(screen.getByRole("button", { name: "Save" }));

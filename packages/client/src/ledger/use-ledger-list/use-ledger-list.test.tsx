@@ -19,7 +19,7 @@ function row(date: string, n: number): PhoneSearchTransaction {
     id: id<"transactions">(`00000000-0000-4000-8000-0000000${String(n).padStart(5, "0")}`),
     date: accountingDate(date),
     type: "expense",
-    payee: `Row ${n}`,
+    enteredName: `Row ${n}`,
     note: "",
     categoryName: null,
     brandKey: null,
@@ -38,7 +38,7 @@ function row(date: string, n: number): PhoneSearchTransaction {
     toDecimals: null,
     isBusiness: false,
     isCapital: false,
-    counterpartyRole: null,
+    obligationRole: null,
   };
 }
 

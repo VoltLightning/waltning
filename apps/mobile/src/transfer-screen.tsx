@@ -475,8 +475,8 @@ export default function Transfer() {
       date,
       note,
       isBusiness: false,
-      counterpartyId: null,
-      counterpartyRole: null,
+      obligationCounterpartyId: null,
+      obligationRole: null,
       toAccountId,
       // One currency, one figure (§7.5's *to_amount equals amount_original*)
       // — restated at the write, so no path through the draft can send two.

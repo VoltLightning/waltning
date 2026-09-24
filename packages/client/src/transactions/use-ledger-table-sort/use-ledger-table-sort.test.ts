@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import { useLedgerTableSort } from "./use-ledger-table-sort.ts";
 
 /** A caller's own column vocabulary — the hook never names one (see its file doc). */
-type Column = "date" | "payee" | "amount";
+type Column = "date" | "enteredName" | "amount";
 
 describe("useLedgerTableSort", () => {
   it("starts at the natural order by default", () => {
@@ -16,13 +16,13 @@ describe("useLedgerTableSort", () => {
   it("cycles a column asc → desc → natural on repeated clicks", () => {
     const { result } = renderHook(() => useLedgerTableSort<Column>());
 
-    act(() => result.current.onSortColumn("payee"));
-    expect(result.current.sort).toEqual({ column: "payee", direction: "asc" });
+    act(() => result.current.onSortColumn("enteredName"));
+    expect(result.current.sort).toEqual({ column: "enteredName", direction: "asc" });
 
-    act(() => result.current.onSortColumn("payee"));
-    expect(result.current.sort).toEqual({ column: "payee", direction: "desc" });
+    act(() => result.current.onSortColumn("enteredName"));
+    expect(result.current.sort).toEqual({ column: "enteredName", direction: "desc" });
 
-    act(() => result.current.onSortColumn("payee"));
+    act(() => result.current.onSortColumn("enteredName"));
     expect(result.current.sort).toBeNull();
   });
 

@@ -5,39 +5,39 @@ import { BrandIcon } from "./brand-icon";
 
 describe("BrandIcon", () => {
   it("shows the catalogue's own mark for a recognised brand", () => {
-    render(<BrandIcon brandKey="orlen" payee="ORLEN" />);
+    render(<BrandIcon brandKey="orlen" enteredName="ORLEN" />);
     expect(screen.getByText("O")).toBeDefined();
   });
 
   it("shows a different mark for a different recognised brand", () => {
-    render(<BrandIcon brandKey="youtube" payee="YouTube" />);
+    render(<BrandIcon brandKey="youtube" enteredName="YouTube" />);
     expect(screen.getByText("YT")).toBeDefined();
   });
 
-  it("falls back to the payee's monogram for an unrecognised key — never blank", () => {
-    render(<BrandIcon brandKey={null} payee="Corner Café" />);
+  it("falls back to the enteredName's monogram for an unrecognised key — never blank", () => {
+    render(<BrandIcon brandKey={null} enteredName="Corner Café" />);
     expect(screen.getByText("C")).toBeDefined();
   });
 
-  it("falls back to the payee's monogram when brandKey is absent entirely", () => {
-    render(<BrandIcon payee="Corner Café" />);
+  it("falls back to the enteredName's monogram when brandKey is absent entirely", () => {
+    render(<BrandIcon enteredName="Corner Café" />);
     expect(screen.getByText("C")).toBeDefined();
   });
 
   it("falls back even for a key this build's catalogue no longer carries", () => {
     // Invented — never a real merchant not already in the catalogue
     // (CLAUDE.md: placeholders only).
-    render(<BrandIcon brandKey="waltco" payee="Waltco" />);
+    render(<BrandIcon brandKey="waltco" enteredName="Waltco" />);
     expect(screen.getByText("W")).toBeDefined();
   });
 
-  it("the fallback for a blank payee is never blank either", () => {
-    render(<BrandIcon brandKey={null} payee="" />);
+  it("the fallback for a blank enteredName is never blank either", () => {
+    render(<BrandIcon brandKey={null} enteredName="" />);
     expect(screen.getByText("?")).toBeDefined();
   });
 
   /**
-   * The badge is decorative: the row around it already announces the payee.
+   * The badge is decorative: the row around it already announces the entered name.
    * Only the web attribute is assertable here — `accessibilityElementsHidden`
    * (iOS) and `importantForAccessibility` (Android) are native props
    * react-native-web does not render into the DOM — so this pins the one of
@@ -45,14 +45,14 @@ describe("BrandIcon", () => {
    * are there.
    */
   it("is hidden from the accessibility tree — aria-hidden on the web target", () => {
-    const { container } = render(<BrandIcon brandKey="orlen" payee="ORLEN" />);
+    const { container } = render(<BrandIcon brandKey="orlen" enteredName="ORLEN" />);
     const badge = container.querySelector("[aria-hidden]");
     expect(badge, "the recognised badge carries aria-hidden").not.toBeNull();
     expect(badge?.textContent).toBe("O");
   });
 
-  it("the monogram fallback is hidden the same way — the payee text says who it is", () => {
-    const { container } = render(<BrandIcon brandKey={null} payee="Corner Café" />);
+  it("the monogram fallback is hidden the same way — the enteredName text says who it is", () => {
+    const { container } = render(<BrandIcon brandKey={null} enteredName="Corner Café" />);
     const badge = container.querySelector("[aria-hidden]");
     expect(badge, "the fallback badge carries aria-hidden too").not.toBeNull();
     expect(badge?.textContent).toBe("C");

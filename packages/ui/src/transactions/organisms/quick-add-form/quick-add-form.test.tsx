@@ -42,8 +42,8 @@ const restingDraft: Omit<QuickAddDraft, "amount" | "accountId"> = {
   date: TODAY,
   note: "",
   isBusiness: false,
-  counterpartyId: null,
-  counterpartyRole: null,
+  obligationCounterpartyId: null,
+  obligationRole: null,
 };
 
 const BASE_PROPS: QuickAddFormProps = {

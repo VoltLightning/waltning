@@ -48,7 +48,7 @@ beforeAll(() => {
       currency: PLN,
       fxRate: money.pivotPerUnit("1"),
       // One row in 500 matches; the rest are noise the scan must still walk.
-      payee: n % 500 === 0 ? "Market B" : `Shop ${n % 97}`,
+      enteredName: n % 500 === 0 ? "Market B" : `Shop ${n % 97}`,
       note: "",
     });
   }

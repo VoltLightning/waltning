@@ -2,7 +2,7 @@ import { accounts } from "./accounts.pg.ts";
 import { categories } from "./categories.pg.ts";
 import { counterparties } from "./counterparties.pg.ts";
 import { currencies } from "./currencies.pg.ts";
-import { brandSource, counterpartyRole, txnSource, txnType } from "./enums.pg.ts";
+import { brandSource, obligationRole, txnSource, txnType } from "./enums.pg.ts";
 import { pgKit as k } from "./kit.ts";
 import { recurringTransactions } from "./recurring-transactions.pg.ts";
 
@@ -50,8 +50,10 @@ export const transactionsColumns = () => ({
   categoryId: k
     .uuid<"categories">("category_id")
     .references(() => categories.id, { onDelete: "restrict" }),
-  counterpartyId: k.uuid<"counterparties">("counterparty_id").references(() => counterparties.id),
-  counterpartyRole: counterpartyRole("counterparty_role"),
+  obligationCounterpartyId: k
+    .uuid<"counterparties">("obligation_counterparty_id")
+    .references(() => counterparties.id),
+  obligationRole: obligationRole("obligation_role"),
   debtCurrency: k.currency("debt_currency").references(() => currencies.code),
   debtAmount: k.money("debt_amount"),
   amountOriginal: k.money("amount_original").notNull(),
@@ -64,7 +66,7 @@ export const transactionsColumns = () => ({
   toAmount: k.money("to_amount"),
   toCurrency: k.currency("to_currency").references(() => currencies.code),
   toFxRate: k.pivotPerUnit("to_fx_rate"),
-  payee: k.text("payee").notNull().default(""),
+  enteredName: k.text("entered_name").notNull().default(""),
   note: k.text("note").notNull().default(""),
   /**
    * `SPEC.md` §14.4b — Waltning-owned, never an upstream slug. Nullable:

@@ -79,7 +79,7 @@ visible at the moment of entry rather than discovered in a report.
 | Reference rate for the settlement date | — |
 
 Settlement is an ordinary transaction, not a special entity — `settle_debt`
-writes exactly one, with `counterparty_role = 'debt'`. That is what keeps
+writes exactly one, with `obligation_role = 'debt'`. That is what keeps
 balances derived and unable to drift from history.
 
 **Not `create_transaction`.** `operations.md`'s `settle_debt` row already says

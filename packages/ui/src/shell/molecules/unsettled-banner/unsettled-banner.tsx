@@ -10,7 +10,7 @@
  *
  * **Eight messages, not one with holes.** Each of the three axes changes the
  * sentence rather than a placeholder inside it — an opening balance has no
- * payee to name, a differing remainder has two figures to state instead of
+ * entered name to name, a differing remainder has two figures to state instead of
  * one, and a second unsettled account adds a count — and a message assembled
  * from fragments would translate into Polish as word order that is not Polish.
  *
@@ -36,7 +36,7 @@ export type UnsettledBannerModel = {
   decimals: number;
   balance: money.Money;
   remainder: money.Money;
-  payee: string | null;
+  enteredName: string | null;
   isOpening: boolean;
   remainderDiffers: boolean;
   more: number;
@@ -80,12 +80,12 @@ export function UnsettledBanner({ model, onOpen, actionLabel }: UnsettledBannerP
               currency: model.currency,
               count: model.more,
             })
-          : model.payee
+          : model.enteredName
             ? t(namedKey, {
                 remainder,
                 amount,
                 currency: model.currency,
-                payee: model.payee,
+                enteredName: model.enteredName,
                 count: model.more,
               })
             : t(model.more > 0 ? "shell.unsettledMore" : "shell.unsettled", {

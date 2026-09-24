@@ -24,7 +24,7 @@ import {
   transactionLines,
   transactions,
 } from "@waltning/db/schema";
-import type { CounterpartyRole } from "@waltning/schema/enums";
+import type { ObligationRole } from "@waltning/schema/enums";
 import { and, asc, desc, eq, gte, inArray, isNull, lt, lte, or, type SQL } from "drizzle-orm";
 
 export type TransactionRow = {
@@ -32,7 +32,7 @@ export type TransactionRow = {
   /** Bare `YYYY-MM-DD`. No timezone was applied and none should be. */
   date: string;
   type: "income" | "expense" | "transfer" | "adjustment";
-  payee: string;
+  enteredName: string;
   /** Signed per §1, as a decimal string in the account's currency. */
   amount: money.Money;
   currency: string;
@@ -53,7 +53,7 @@ export type SearchScope = "all" | "mine" | "shared" | "business";
  * The structural filters, and **no `text`**.
  *
  * §13's free-text match is a trigram search: `pg_trgm` plus a GIN index over
- * `payee`, `note`, `receipts.merchant` and `transaction_lines.description`.
+ * `entered_name`, `note`, `receipts.merchant` and `transaction_lines.description`.
  * That is a migration, and this branch holds none. Until it lands, `text` is
  * not a field here and not a field on `search_transactions`'s input — a
  * caller that sends one gets a validation error naming it, rather than a
@@ -71,7 +71,7 @@ export type SearchTransactionsFilter = {
   from?: AccountingDate | undefined;
   to?: AccountingDate | undefined;
   counterpartyId?: Id<"counterparties"> | undefined;
-  counterpartyRole?: CounterpartyRole | undefined;
+  obligationRole?: ObligationRole | undefined;
 };
 
 function scopeCondition(scope: SearchScope): SQL | undefined {
@@ -116,10 +116,10 @@ export async function searchTransactions(
     categoryIds.length > 0 ? inArray(transactions.categoryId, [...categoryIds]) : undefined,
     scopeCondition(filter.scope ?? "all"),
     filter.counterpartyId !== undefined
-      ? eq(transactions.counterpartyId, filter.counterpartyId)
+      ? eq(transactions.obligationCounterpartyId, filter.counterpartyId)
       : undefined,
-    filter.counterpartyRole !== undefined
-      ? eq(transactions.counterpartyRole, filter.counterpartyRole)
+    filter.obligationRole !== undefined
+      ? eq(transactions.obligationRole, filter.obligationRole)
       : undefined,
     cursor
       ? or(
@@ -137,7 +137,7 @@ export async function searchTransactions(
       id: transactions.id,
       date: transactions.date,
       type: transactions.type,
-      payee: transactions.payee,
+      enteredName: transactions.enteredName,
       amount: signedFromLeg,
       currency: transactions.currency,
       accountName: accounts.name,
@@ -171,7 +171,7 @@ export type TransactionDetail = {
   id: string;
   date: string;
   type: "income" | "expense" | "transfer" | "adjustment";
-  payee: string;
+  enteredName: string;
   note: string;
   isBusiness: boolean;
   accountId: string;
@@ -200,7 +200,7 @@ export async function getTransactionById(
       id: transactions.id,
       date: transactions.date,
       type: transactions.type,
-      payee: transactions.payee,
+      enteredName: transactions.enteredName,
       note: transactions.note,
       isBusiness: transactions.isBusiness,
       accountId: transactions.accountId,

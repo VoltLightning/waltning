@@ -7,7 +7,7 @@ import { UnsettledBanner } from "./unsettled-banner";
  * All eight `shell.unsettled*` messages, one story each.
  *
  * The component's own doc says why there are eight and not one with holes:
- * each of the three axes — an opening balance with no payee, a remainder that
+ * each of the three axes — an opening balance with no entered name, a remainder that
  * differs from the balance, a second unsettled account — changes the sentence
  * rather than a placeholder inside it. Eight sentences that nothing ever
  * rendered are eight sentences nobody has read, in either theme; the three
@@ -17,7 +17,7 @@ import { UnsettledBanner } from "./unsettled-banner";
  * The model shape is `packages/client`'s `unsettledBannerModel` output,
  * restated here structurally the same way the component restates it — and the
  * combinations are what that function can actually return, not every product
- * of three booleans: `isOpening` means there is no payee, so it never pairs
+ * of three booleans: `isOpening` means there is no entered name, so it never pairs
  * with `remainderDiffers`, which is a statement about a named leg.
  */
 const BASE = {
@@ -26,7 +26,7 @@ const BASE = {
   decimals: 2,
   balance: money.toMoney("480.00"),
   remainder: money.toMoney("480.00"),
-  payee: null,
+  enteredName: null,
   isOpening: false,
   remainderDiffers: false,
   more: 0,
@@ -42,7 +42,7 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/** `shell.unsettled` — no payee on the oldest leg, so the account names itself. */
+/** `shell.unsettled` — no entered name on the oldest leg, so the account names itself. */
 export const Account: Story = {};
 
 /** `shell.unsettledMore` — S04 §3's one banner, never a stack: the rest become a count. */
@@ -50,27 +50,27 @@ export const AccountAndMore: Story = {
   args: { model: { ...BASE, more: 2 } },
 };
 
-/** `shell.unsettledNamed` — the oldest open leg has a payee, and its remainder is the whole balance. */
+/** `shell.unsettledNamed` — the oldest open leg has a entered name, and its remainder is the whole balance. */
 export const Named: Story = {
-  args: { model: { ...BASE, payee: "Grocer" } },
+  args: { model: { ...BASE, enteredName: "Grocer" } },
 };
 
 /** `shell.unsettledNamedMore`. */
 export const NamedAndMore: Story = {
-  args: { model: { ...BASE, payee: "Grocer", more: 3 } },
+  args: { model: { ...BASE, enteredName: "Grocer", more: 3 } },
 };
 
 /**
  * `shell.unsettledNamedDiffers` — H3. With a second entry open, the oldest
  * one's remainder is less than the account balance, so both figures are
- * stated: naming the balance beside that payee would overstate what their leg
+ * stated: naming the balance beside that entered name would overstate what their leg
  * accounts for.
  */
 export const NamedDiffers: Story = {
   args: {
     model: {
       ...BASE,
-      payee: "Grocer",
+      enteredName: "Grocer",
       remainder: money.toMoney("120.00"),
       remainderDiffers: true,
     },
@@ -82,7 +82,7 @@ export const NamedDiffersAndMore: Story = {
   args: {
     model: {
       ...BASE,
-      payee: "Grocer",
+      enteredName: "Grocer",
       remainder: money.toMoney("120.00"),
       remainderDiffers: true,
       more: 2,
@@ -92,7 +92,7 @@ export const NamedDiffersAndMore: Story = {
 
 /**
  * `shell.unsettledOpening` — H2. The oldest open entry is the account's own
- * opening balance, which has no payee to name and no transaction to open.
+ * opening balance, which has no entered name to name and no transaction to open.
  */
 export const Opening: Story = {
   args: { model: { ...BASE, isOpening: true } },
@@ -108,5 +108,5 @@ export const OpeningAndMore: Story = {
  * `debt-screen.tsx` still passes for itself. Same route either way.
  */
 export const AllocateLabel: Story = {
-  args: { model: { ...BASE, payee: "Grocer" }, actionLabel: "Allocate" },
+  args: { model: { ...BASE, enteredName: "Grocer" }, actionLabel: "Allocate" },
 };

@@ -721,13 +721,13 @@ it("hides the recents under a search or a group, which are narrower answers", ()
   expect(screen.queryByText("You used these last")).toBeNull();
 });
 
-it("says where the suggestion comes from when the draft names its payee", () => {
+it("says where the suggestion comes from when the draft names its enteredName", () => {
   render(
     <CategorySheet
       visible
       kind="expense"
       tree={TREE}
-      payee="Café A"
+      enteredName="Café A"
       proposal={{ categoryId: EATING_OUT.id, confidence: 0.9, basis: "exact", neighbours: [] }}
       onPick={vi.fn()}
       onDismiss={vi.fn()}

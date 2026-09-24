@@ -80,8 +80,8 @@ between two of your own accounts would be picking a side.
 **Who and Money owed are independent rows.** S05's picker and relationship
 controls apply here, with `SPEC.md` §6.6.1 defining the atomic write. Ordinary
 reference rows show Who with tracking off; debt rows retain their separate
-party. Imported/legacy debt rows with no merchant link retain payee text as Who,
-never silently promote the debtor into a merchant. Show the payee snapshot and
+party. Imported/legacy debt rows with no merchant link retain entered name text as Who,
+never silently promote the debtor into a merchant. Show the entered name snapshot and
 current linked name when they differ. Cancelling edits restores both identities;
 Save applies them together. Changing an obligation shows its balance consequence
 before Save. Existing contribution rows say **Contribution from**, not Debt.
@@ -109,7 +109,7 @@ readable receipt, which is the one thing a phone genuinely cannot give you.
 |---|---|
 | `Card` | §3 draws four boxes — `fields`, `receipt`, `breakdown`, `history`. Two are cards today: `fields` and `breakdown`; the receipt and history boxes have nothing to render on the phone yet — no receipts, no audit log — and become cards when they do. The hero figure and its FX basis sit bare on the ground, never in a card |
 | `FxAmount` | Full basis, all four provenance variants |
-| `BrandIcon` | Beside the hero's account line, not a row inside `FieldsCard` — that card draws every field through one generic labelled row, and singling out Payee for an icon would be the special case it exists to avoid. Same catalogue and never-blank fallback as S04/S10 (§14.4b) |
+| `BrandIcon` | Beside the hero's account line, not a row inside `FieldsCard` — that card draws every field through one generic labelled row, and singling out Entered name for an icon would be the special case it exists to avoid. Same catalogue and never-blank fallback as S04/S10 (§14.4b) |
 | `AuditHistory` | Renders a **diff**, not a sentence. Marks `agent`, `import`, `migration` actors distinctly (§5.6). **A `conflict_detected` row is a write the server *refused*, not one it applied**, and renders as its own kind — the rejected value struck through beside the value that stood. Rendering it as an ordinary diff would say a change happened when none did, on the one screen you consult precisely because you already distrust the row. Read-only: putting a discarded value back is an ordinary edit you make deliberately (S35 §8) |
 | `WhoPicker` | Same choices, matching and draft-preserving exits as S05 |
 | `Chip` | Every editable field |
@@ -122,7 +122,7 @@ readable receipt, which is the one thing a phone genuinely cannot give you.
 
 | Reads | Writes |
 |---|---|
-| `get_counterparties` · `get_payee_suggestions` | `create_counterparty` (S15) |
+| `get_counterparties` · `get_entered_name_suggestions` | `create_counterparty` (S15) |
 | `get_transaction` | `update_transaction` |
 | `get_audit_log(entity, id)` | `set_transaction_lines` |
 | The receipt and its extraction | `delete_transaction` — soft |

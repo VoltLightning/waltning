@@ -182,14 +182,14 @@ describe("the phone ledger session", () => {
     session.createTransaction(expenseInput(), capture);
 
     const before = session.getTransaction(transactionId);
-    expect(before).toMatchObject({ id: transactionId, payee: "", version: 1 });
+    expect(before).toMatchObject({ id: transactionId, enteredName: "", version: 1 });
 
     session.updateTransaction(
-      { id: transactionId, version: before?.version ?? 0, patch: { payee: "Corner shop" } },
+      { id: transactionId, version: before?.version ?? 0, patch: { enteredName: "Corner shop" } },
       capture,
     );
     const afterUpdate = session.getTransaction(transactionId);
-    expect(afterUpdate).toMatchObject({ payee: "Corner shop", version: 2 });
+    expect(afterUpdate).toMatchObject({ enteredName: "Corner shop", version: 2 });
 
     session.setTransactionLines(
       {
@@ -493,7 +493,7 @@ describe("the phone ledger session", () => {
     session.close();
   });
 
-  it("listPayeeHistory exposes D2's reader — D4b's proposal calls it", () => {
+  it("listEnteredNameHistory exposes D2's reader — D4b's proposal calls it", () => {
     const session = createLocalLedgerSession(options());
     session.createAccount(accountInput(), capture);
     session.createTransaction(expenseInput(), capture);
@@ -508,12 +508,12 @@ describe("the phone ledger session", () => {
 
     session.categorizeBatch({ transactionIds: [transactionId], categoryId }, capture);
     session.updateTransaction(
-      { id: transactionId, version: 2, patch: { payee: "Corner shop" } },
+      { id: transactionId, version: 2, patch: { enteredName: "Corner shop" } },
       capture,
     );
 
-    expect(session.listPayeeHistory()).toEqual([
-      { payee: "Corner shop", categoryId, date: accountingDate("2026-08-23") },
+    expect(session.listEnteredNameHistory()).toEqual([
+      { enteredName: "Corner shop", categoryId, date: accountingDate("2026-08-23") },
     ]);
     session.close();
   });

@@ -61,8 +61,11 @@ export function useCounterpartyHistory(
   return useMemo(() => {
     if (counterpartyId === undefined) return { debtHistory: EMPTY_PAGE, everyHistory: EMPTY_PAGE };
     return {
-      debtHistory: ledger.searchTransactions({ counterpartyId, counterpartyRole: "debt" }),
-      everyHistory: ledger.searchTransactions({ counterpartyId }),
+      debtHistory: ledger.searchTransactions({
+        obligationCounterpartyId: counterpartyId,
+        obligationRole: "debt",
+      }),
+      everyHistory: ledger.searchTransactions({ obligationCounterpartyId: counterpartyId }),
     };
   }, [ledger, counterpartyId, revision]);
 }

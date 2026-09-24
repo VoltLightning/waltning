@@ -68,8 +68,8 @@ const meta = {
     categoryId: null,
     onOpenCategoryPicker: noop,
     onPickCategory: noop,
-    payee: "",
-    onPayeeChange: noop,
+    enteredName: "",
+    onEnteredNameChange: noop,
     date: TODAY,
     onDateChange: noop,
     today: TODAY,
@@ -81,10 +81,10 @@ const meta = {
     note: "",
     onNoteChange: noop,
     counterparties: [],
-    counterpartyId: null,
+    obligationCounterpartyId: null,
     onCounterpartyChange: noop,
-    counterpartyRole: null,
-    onCounterpartyRoleChange: noop,
+    obligationRole: null,
+    onObligationRoleChange: noop,
   },
 } satisfies Meta<typeof QuickAddComposer>;
 
@@ -114,7 +114,7 @@ export const WithProposal: Story = {
   args: {
     raw: "48,90",
     accountId: "account-a",
-    payee: "Corner shop",
+    enteredName: "Corner shop",
     categoryId: "cat-eating-out",
     categoryAutoFilled: true,
     onUndoCategory: noop,
@@ -139,12 +139,12 @@ export const LowConfidence: Story = {
   args: {
     raw: "48,90",
     accountId: "account-a",
-    payee: "New café",
+    enteredName: "New café",
     categoryProposal: {
       categoryId: "cat-eating-out",
       confidence: 0.62,
       basis: "neighbours",
-      neighbours: [{ payee: "Corner shop", similarity: 0.4, categoryId: "cat-eating-out" }],
+      neighbours: [{ enteredName: "Corner shop", similarity: 0.4, categoryId: "cat-eating-out" }],
     },
   },
 };
@@ -163,7 +163,7 @@ export const LastUsedAccount: Story = {
  * §6.6 — a counterparty offered once the ledger holds one, its role picked in
  * the same sheet.
  *
- * `QuickAddComposer` is fully controlled — `counterpartyId`/`counterpartyRole`
+ * `QuickAddComposer` is fully controlled — `obligationCounterpartyId`/`obligationRole`
  * only ever reflect props — so a story that wires `onCounterpartyChange` to a
  * no-op never re-renders with the pick and the role sheet's radiogroup is
  * unreachable. `render` holds both in local state instead, the way
@@ -192,20 +192,25 @@ export const WithCounterparty: Story = {
 };
 
 function WithCounterpartyDemo(args: QuickAddComposerProps) {
-  const [counterpartyId, setCounterpartyId] = useState(args.counterpartyId);
-  const [counterpartyRole, setCounterpartyRole] = useState(args.counterpartyRole);
-  const handleCounterpartyChange = useCallback((next: string) => setCounterpartyId(next), []);
-  const handleCounterpartyRoleChange = useCallback(
-    (next: QuickAddComposerProps["counterpartyRole"]) => setCounterpartyRole(next),
+  const [obligationCounterpartyId, setObligationCounterpartyId] = useState(
+    args.obligationCounterpartyId,
+  );
+  const [obligationRole, setObligationRole] = useState(args.obligationRole);
+  const handleCounterpartyChange = useCallback(
+    (next: string) => setObligationCounterpartyId(next),
+    [],
+  );
+  const handleObligationRoleChange = useCallback(
+    (next: QuickAddComposerProps["obligationRole"]) => setObligationRole(next),
     [],
   );
   return (
     <QuickAddComposer
       {...args}
-      counterpartyId={counterpartyId}
+      obligationCounterpartyId={obligationCounterpartyId}
       onCounterpartyChange={handleCounterpartyChange}
-      counterpartyRole={counterpartyRole}
-      onCounterpartyRoleChange={handleCounterpartyRoleChange}
+      obligationRole={obligationRole}
+      onObligationRoleChange={handleObligationRoleChange}
     />
   );
 }

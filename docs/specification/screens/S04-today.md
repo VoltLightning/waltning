@@ -533,7 +533,7 @@ happened*.
 | `QuietRun` | Two or more consecutive empty days: `QuietDay`'s own line — muted text, a hairline, muted text — carrying the span and its length, and nothing to press. The span is **one date range**, not two dates — the language collapses whatever its ends share (`September 7 – 8, 2026`, `7–8 września 2026`), because a row whose whole content is that nothing happened must not spend two lines spelling the month and the year twice. **Collapsed on every runtime**: where `Intl` has no range formatter — Hermes, on both phones — the range is built from the date's own parts, so the phone reads the same collapsed range the desk does rather than both dates in full, cut off at 390pt |
 | `ExpectedGroup` | A future day. Dashed border, muted type, figures in neither the income nor the expense colour — it is not money yet |
 | `TransactionRow` | `TransferRow` for transfers; `BIZ` tag where business |
-| `BrandIcon` | `TransactionRow`'s leading mark for a recognised merchant (§14.4b). Offline, never blank: an unmatched payee falls back to its monogram |
+| `BrandIcon` | `TransactionRow`'s leading mark for a recognised merchant (§14.4b). Offline, never blank: an unmatched entered name falls back to its monogram |
 | `FxAmount` | Any foreign row — `local · rate · display`, the rate for that row's own date (P1) |
 | `Banner(warn)` | Unsettled clearing — rendered **only when non-zero**, with one action |
 | `TodayPill` | Floats over the list when the list's **anchor** is not today — which is what a jump moves, and a jump is what §6 says this exists for. Deliberately not *scrolled away from today*: paging backwards walks day by day and can be walked back, where a jump loaded a neighbourhood with nothing between it and here. The only way back from a jump (§6). Top-centre **of the list**, not of the page: the add button owns the bottom corners and settles against either side edge at any height (`02-tokens` §2.9), and `DayRibbon` owns the band above the list — a pill resolved against the whole page lands on the strip's first cells, which are both data and 44pt targets. A floating control over an infinite list covers something; it covers a sliver of content the reader can scroll, never chrome they cannot. Its edge says *above the page*, not `shadow-float`, which §2.5 keeps for the add button and the toast — the things above the whole screen rather than above one list |
@@ -755,7 +755,7 @@ matches outside the month. Two questions, both worth answering, and the field is
 the only place the wider one is asked.
 
 **The counting is the search's own, not a second reading of it.** §13's text
-rule cannot be pushed into SQL — a query is matched against payee, note, every
+rule cannot be pushed into SQL — a query is matched against entered name, note, every
 line's description and, when the whole query is one, an amount — so the per-day
 counts are produced by the same matcher that produces the list. Two readings of
 what a search means is how the field's total and the grid under it come to

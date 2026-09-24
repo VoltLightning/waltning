@@ -47,7 +47,7 @@ erDiagram
 | **Ledger** | `transactions`, `transaction_lines`, `transaction_tags`, `tags`, `receipts` | `transactions` |
 | **Structure** | `accounts`, `account_groups`, `categories`, `category_mappings`, `counterparties` | — reference data |
 | **Money** | `currencies`, `fx_rates` | `currencies` |
-| **Debt** | `debt_reassignments` (+ `counterparty_role` on `transactions`) | `counterparties` |
+| **Debt** | `debt_reassignments` (+ `obligation_role` on `transactions`) | `counterparties` |
 | **Ingestion** | `import_batches`, `import_rows` | `import_batches` |
 | **Schedule** | `recurring_transactions`, `targets` | — |
 | **Tax** | `tax_jurisdictions`, `tax_residency`, `tax_schemes`, `tax_lines`, `category_tax_map`, `tax_period_locks`, `ryczalt_rates` | `tax_schemes` |
@@ -81,7 +81,7 @@ pivot value. `amount_pivot` and `to_amount_pivot` are **generated columns** —
 `fx_rate` has deliberately **no default**: a forgotten rate must be a `NOT NULL`
 violation, not a silent `1.0`.
 
-**4 · Debt is the negation of cash flow.** `counterparty_role ∈ {debt,
+**4 · Debt is the negation of cash flow.** `obligation_role ∈ {debt,
 contribution, reference}` and `debtDelta(tx, side) = −signed(tx, side)`. The
 `side` argument is required and is frequently `'to'` — a repayment arrives as a
 transfer *into* your bank, whose counterparty sits on the destination leg.

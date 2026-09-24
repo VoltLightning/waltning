@@ -45,11 +45,11 @@
  * re-read every time.
  */
 
-import { fold } from "@waltning/core/capture/names";
 import {
   type CategoryProposal,
   PROPOSAL_DISPLAY_THRESHOLD,
-} from "@waltning/core/capture/payee-memory";
+} from "@waltning/core/capture/entered-name-memory";
+import { fold } from "@waltning/core/capture/names";
 import { useCallback, useMemo, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import Animated from "react-native-reanimated";
@@ -118,10 +118,10 @@ export type CategorySheetProps = {
   /** D2's own proposal, already computed by the caller — this sheet never proposes on its own. */
   proposal?: CategoryProposal;
   /**
-   * The payee the draft names, when it names one — the suggestion then says
+   * The entered name the draft names, when it names one — the suggestion then says
    * why it is there: *Because you are at Café A*.
    */
-  payee?: string;
+  enteredName?: string;
   /**
    * The categories used last, newest first (`recentCategories`) — drawn as
    * *You used these last* over the grid. **The grid itself never moves** (§9.1):
@@ -192,7 +192,7 @@ export function CategorySheet({
   tree,
   usage,
   proposal,
-  payee,
+  enteredName,
   recent,
   onPick,
   onCreate,
@@ -407,7 +407,9 @@ export function CategorySheet({
         <ProposalRow
           leaf={proposedLeaf}
           confidence={proposal?.confidence ?? 0}
-          {...(payee === undefined || payee.trim() === "" ? {} : { payee: payee.trim() })}
+          {...(enteredName === undefined || enteredName.trim() === ""
+            ? {}
+            : { enteredName: enteredName.trim() })}
           onPick={handlePick}
         />
       ) : null}
@@ -540,7 +542,7 @@ type ProposalRowProps = {
   leaf: CategoryTreeNode;
   confidence: number;
   /** Where the suggestion comes from, when the draft says. */
-  payee?: string;
+  enteredName?: string;
   onPick: (categoryId: string) => void;
 };
 
@@ -552,7 +554,7 @@ type ProposalRowProps = {
  * `RadioGroup`'s dot). Amber on a 93% match would teach "amber usually means
  * fine", which is the one thing P4 cannot afford to mean.
  */
-function ProposalRow({ leaf, confidence, payee, onPick }: ProposalRowProps) {
+function ProposalRow({ leaf, confidence, enteredName, onPick }: ProposalRowProps) {
   const t = useT();
   const styles = useStyles();
   const confident = confidence >= PROPOSAL_DISPLAY_THRESHOLD;
@@ -580,7 +582,9 @@ function ProposalRow({ leaf, confidence, payee, onPick }: ProposalRowProps) {
         ]}
       >
         <Text style={[styles.proposalKicker, confident ? styles.proposalKickerConfident : null]}>
-          {payee === undefined ? t("categories.suggested") : t("categories.becauseAt", { payee })}
+          {enteredName === undefined
+            ? t("categories.suggested")
+            : t("categories.becauseAt", { enteredName })}
         </Text>
         <View style={styles.proposalBody}>
           <Text style={styles.proposalName}>{leaf.name}</Text>

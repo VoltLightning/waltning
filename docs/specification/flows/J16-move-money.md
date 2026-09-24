@@ -102,7 +102,7 @@ transfer *into* a shared account is subtracted from your spending — which is w
 `to_amount_pivot` exists.
 
 **A transfer to a clearing or loan account is a debt movement.** It carries a
-`counterparty_role` and belongs to J07's arithmetic, where `debtDelta` takes the
+`obligation_role` and belongs to J07's arithmetic, where `debtDelta` takes the
 **destination** side — the defect C15 fixed. This journey hands off rather than
 duplicating it.
 

@@ -16,7 +16,7 @@ const meta = {
     rows: [
       {
         id: "t1",
-        payee: "Grocer",
+        enteredName: "Grocer",
         meta: "Groceries",
         amount: money.toMoney("120.00"),
         currency: "PLN",
@@ -25,7 +25,7 @@ const meta = {
       },
       {
         id: "t2",
-        payee: "Employer",
+        enteredName: "Employer",
         meta: "Salary",
         amount: money.toMoney("6500.00"),
         currency: "PLN",
@@ -34,7 +34,7 @@ const meta = {
       },
       {
         id: "t3",
-        payee: "Coffee shop",
+        enteredName: "Coffee shop",
         meta: "Dining",
         amount: money.toMoney("18.50"),
         currency: "PLN",

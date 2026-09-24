@@ -15,9 +15,9 @@
  * neither: it left one account and arrived in another, and naming one side
  * would be picking a side.
  *
- * **`BrandIcon` sits here, not in `FieldsCard`'s Payee row (`SPEC.md`
+ * **`BrandIcon` sits here, not in `FieldsCard`'s Entered name row (`SPEC.md`
  * §14.4b).** `FieldsCard` draws every field through one generic labelled-row
- * renderer; singling out Payee for an icon slot would be a special case in a
+ * renderer; singling out Entered name for an icon slot would be a special case in a
  * component built specifically to avoid one field-row from another. This
  * screen's one identity anchor already exists — the hero — so the mark
  * lives beside it, the same "amount resolves first" reasoning this file
@@ -45,7 +45,7 @@ export type TransactionHeroProps = {
   type?: TransactionType;
   accountName: string;
   /** Drives `BrandIcon`'s fallback monogram when nothing matched. Absent renders no icon at all — same "absent means unread, not unmatched" rule `TransactionRow` states for its own `brandKey`. */
-  payee?: string;
+  enteredName?: string;
   brandKey?: string | null;
 };
 
@@ -55,7 +55,7 @@ export function TransactionHero({
   decimals = 2,
   type,
   accountName,
-  payee,
+  enteredName,
   brandKey,
 }: TransactionHeroProps) {
   const styles = useStyles();
@@ -74,8 +74,12 @@ export function TransactionHero({
         kind={type ? TRANSACTION_AMOUNT_KIND[type] : "auto"}
       />
       <View style={styles.subtitleRow}>
-        {payee === undefined ? null : (
-          <BrandIcon {...(brandKey !== undefined ? { brandKey } : {})} payee={payee} size={20} />
+        {enteredName === undefined ? null : (
+          <BrandIcon
+            {...(brandKey !== undefined ? { brandKey } : {})}
+            enteredName={enteredName}
+            size={20}
+          />
         )}
         <Text style={styles.subtitle}>
           {accountName} · {currency}

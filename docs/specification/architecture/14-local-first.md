@@ -195,15 +195,15 @@ never did.
 
 **`version` is the gate, not the answer.** It is per *row*, and the question
 above is per *field*. A row counter can only say that something moved, so on its
-own it collides disjoint edits: a laptop fixing a payee bumps the row, and a
+own it collides disjoint edits: a laptop fixing an entered name bumps the row, and a
 phone's queued `category` edit then arrives "stale" and is reported as a
 conflict this section promises to merge. On a tax-sensitive field it is worse
-than a misfire — `08`'s H16 **blocks** a stale tax-sensitive field, so a payee
+than a misfire — `08`'s H16 **blocks** a stale tax-sensitive field, so an entered name
 typo corrected elsewhere permanently blocks an unrelated queued edit while
 reporting that another device changed `is_business`. Nothing did.
 
 **Identity fields are a semantic group.** For the specified Who extension
-(`SPEC.md` §6.6.1), a write touching payee text, its saved-party link, the
+(`SPEC.md` §6.6.1), a write touching entered name text, its saved-party link, the
 relationship party or role carries prior values for all four and checks them
 together. A concurrent merchant/debt edit must not become a hybrid identity;
 unrelated category/note edits retain ordinary per-field behavior. Old outbox

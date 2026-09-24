@@ -18,9 +18,9 @@ import {
   BRAND_SOURCE,
   CATEGORY_KIND,
   COUNTERPARTY_KIND,
-  COUNTERPARTY_ROLE,
   FX_SOURCE,
   IMPORT_ROW_STATUS,
+  OBLIGATION_ROLE,
   OWNERSHIP,
   TAX_LINE_KIND,
   TXN_SOURCE,
@@ -35,7 +35,7 @@ export const txnType = pgEnum("txn_type", TXN_TYPE);
 export const txnSource = pgEnum("txn_source", TXN_SOURCE);
 export const actor = pgEnum("actor", ACTOR);
 export const counterpartyKind = pgEnum("counterparty_kind", COUNTERPARTY_KIND);
-export const counterpartyRole = pgEnum("counterparty_role", COUNTERPARTY_ROLE);
+export const obligationRole = pgEnum("obligation_role", OBLIGATION_ROLE);
 export const fxSource = pgEnum("fx_source", FX_SOURCE);
 export const importRowStatus = pgEnum("import_row_status", IMPORT_ROW_STATUS);
 export const taxLineKind = pgEnum("tax_line_kind", TAX_LINE_KIND);

@@ -50,8 +50,8 @@ export type QuickAddCategory = { id: string; name: string; kind: "income" | "exp
 /** A counterparty the form can attach a role to (§6.6). */
 export type QuickAddCounterparty = { id: string; name: string };
 
-const COUNTERPARTY_ROLES = ["debt", "contribution", "reference"] as const;
-type CounterpartyRole = (typeof COUNTERPARTY_ROLES)[number];
+const OBLIGATION_ROLES = ["debt", "contribution", "reference"] as const;
+type ObligationRole = (typeof OBLIGATION_ROLES)[number];
 
 /**
  * The user-owned subset of `CreateTransactionInput` — everything Quick add
@@ -69,8 +69,8 @@ export type QuickAddDraft = {
   date: string;
   note: string;
   isBusiness: boolean;
-  counterpartyId: string | null;
-  counterpartyRole: CounterpartyRole | null;
+  obligationCounterpartyId: string | null;
+  obligationRole: ObligationRole | null;
 };
 
 export type QuickAddFormProps = {
@@ -148,8 +148,8 @@ export function QuickAddForm({
   const [date, setDate] = useState(today);
   const [note, setNote] = useState("");
   const [isBusiness, setIsBusiness] = useState(false);
-  const [counterpartyId, setCounterpartyId] = useState<string | null>(null);
-  const [counterpartyRole, setCounterpartyRole] = useState<CounterpartyRole | null>(null);
+  const [obligationCounterpartyId, setObligationCounterpartyId] = useState<string | null>(null);
+  const [obligationRole, setObligationRole] = useState<ObligationRole | null>(null);
 
   const styles = useStyles();
   const selected = accounts.find((account) => account.id === accountId);
@@ -188,9 +188,12 @@ export function QuickAddForm({
   const handleDateChange = useCallback((next: string) => setDate(next), []);
   const handleNoteChange = useCallback((next: string) => setNote(next), []);
   const handleBusinessChange = useCallback((next: boolean) => setIsBusiness(next), []);
-  const handleCounterpartyChange = useCallback((next: string) => setCounterpartyId(next), []);
+  const handleCounterpartyChange = useCallback(
+    (next: string) => setObligationCounterpartyId(next),
+    [],
+  );
   const handleRoleChange = useCallback((next: string) => {
-    setCounterpartyRole(isCounterpartyRole(next) ? next : null);
+    setObligationRole(isObligationRole(next) ? next : null);
   }, []);
   // Drawn order: the figure, the account, then the date under *More*.
   const check = useSubmitCheck({
@@ -210,16 +213,16 @@ export function QuickAddForm({
       date,
       note,
       isBusiness,
-      counterpartyId,
-      counterpartyRole,
+      obligationCounterpartyId,
+      obligationRole,
     });
   }, [
     accountId,
     amount,
     blocked,
     effectiveCategoryId,
-    counterpartyId,
-    counterpartyRole,
+    obligationCounterpartyId,
+    obligationRole,
     date,
     dateValid,
     isBusiness,
@@ -339,15 +342,15 @@ export function QuickAddForm({
                 label={t("transactions.counterparty")}
                 placeholder={t("transactions.noCounterparty")}
                 options={counterpartyOptions}
-                value={counterpartyId}
+                value={obligationCounterpartyId}
                 onChange={handleCounterpartyChange}
                 searchable
               />
-              {counterpartyId ? (
+              {obligationCounterpartyId ? (
                 <RadioGroup
                   label={t("transactions.role")}
                   options={roleOptions}
-                  value={counterpartyRole}
+                  value={obligationRole}
                   onChange={handleRoleChange}
                 />
               ) : null}
@@ -364,8 +367,8 @@ export function QuickAddForm({
   );
 }
 
-function isCounterpartyRole(value: string): value is CounterpartyRole {
-  return (COUNTERPARTY_ROLES as readonly string[]).includes(value);
+function isObligationRole(value: string): value is ObligationRole {
+  return (OBLIGATION_ROLES as readonly string[]).includes(value);
 }
 
 const useStyles = makeStyles((theme) => ({

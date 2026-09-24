@@ -527,7 +527,7 @@ describe("DeskCommandBar (DESK2)", () => {
         type: "expense",
         accountId: CASH.id,
         amountOriginal: "48.90000000",
-        payee: "coffee",
+        enteredName: "coffee",
         date: "2026-09-02",
       });
       // A save clears the bar for the next line.

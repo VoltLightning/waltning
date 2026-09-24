@@ -327,8 +327,8 @@ This SQL stays the authoritative, server-side definition; `E9` differentials
 
 ```sql
 balance(c, ccy) = Σ −signed(t, side) over T
-                  where counterparty_id = c
-                    ∧ counterparty_role = 'debt'
+                  where obligation_counterparty_id = c
+                    ∧ obligation_role = 'debt'
                     ∧ coalesce(debt_currency, currency) = ccy
 ```
 
@@ -342,7 +342,8 @@ using the source leg inverts the sign. **`debtDelta` must take the side.**
 **`side` is resolved from `type` alone: `'to'` for `transfer`, `'from'`
 otherwise.** Nothing on the row marks *which* of its two accounts is "the
 counterparty's" — a debt-role transfer is an ordinary transfer between two
-real, owned/shared accounts that also happens to carry `counterparty_id` —
+real, owned/shared accounts that also happens to carry an
+`obligation_counterparty_id` —
 so this cannot be read off `account_id` versus `to_account_id` case by case.
 Every debt-role transfer this repository's fixtures or the Money Manager
 migration produce is a repayment landing on the `to` leg; there is no shipped
@@ -546,7 +547,7 @@ Totalled by period and by `account_groups.institution` (added in `0004`).
 
 ## 13 · Search
 
-Trigram (`pg_trgm`) over `payee`, `note`, `receipts.merchant` and
+Trigram (`pg_trgm`) over `entered_name`, `note`, `receipts.merchant` and
 `transaction_lines.description`. Ranked by similarity, then date descending.
 
 Trigram rather than `tsvector` **because the archive is permanently mixed.**
@@ -581,7 +582,7 @@ alone.
 The exclusions are the rule, not a shortfall of it. The amount match runs
 *beside* the text match rather than instead of it, so every spelling the
 grammar accepts adds rows to what S10 §3 and S04 §7 promise is the total of what you
-filtered to. A currency token cannot be told from an ordinary payee word
+filtered to. A currency token cannot be told from an ordinary entered name word
 without knowing every currency in the ledger, and a point cannot be told from a
 decimal mark without knowing what was meant — so a grammar loose enough to
 accept `48,90 zł` is loose enough to make `100 lat` match every row costing
@@ -611,7 +612,7 @@ threshold on a poisoned row.
 confidence = agreement(retrieved neighbours) adjusted by rule proximity
 ```
 
-— the share of the *k* retrieved prior payees that carry the proposed category.
+— the share of the *k* retrieved prior entered names that carry the proposed category.
 The model's own figure is a tiebreak only. `model_id` is persisted on
 `import_rows` beside it, so a threshold stays interpretable after §11.4's model
 config changes.

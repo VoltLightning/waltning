@@ -44,7 +44,7 @@ beforeAll(async () => {
       amountOriginal: money.toMoney("48.90"),
       currency: PLN,
       fxRate: money.pivotPerUnit("1"),
-      payee: "Café A",
+      enteredName: "Café A",
       note: "Meeting",
     },
     {
@@ -76,7 +76,7 @@ describe("getTransactionById", () => {
 
     expect(row).toMatchObject({
       id: TXN,
-      payee: "Café A",
+      enteredName: "Café A",
       accountName: "Bank A · PLN",
       categoryName: "Food",
       amount: "-48.90000000",

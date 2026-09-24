@@ -720,7 +720,7 @@ describe("CounterpartyDetail (S13)", () => {
         listCounterparties: () => [NINA_COUNTERPARTY],
         listCounterpartyBalances: () => [NINA_ROW],
         searchTransactions: (filter) =>
-          filter.counterpartyRole === "debt"
+          filter.obligationRole === "debt"
             ? { rows: [], nextCursor: undefined, total: { count: 1, currencies: [] } }
             : { rows: [], nextCursor: undefined, total: { count: 2, currencies: [] } },
       }),

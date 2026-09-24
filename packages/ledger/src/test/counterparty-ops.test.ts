@@ -79,7 +79,7 @@ function debtRow(opts: {
   id: string;
   type: "income" | "expense";
   amount: string;
-  counterpartyId: Id<"counterparties">;
+  obligationCounterpartyId: Id<"counterparties">;
   role?: "debt" | "contribution" | "reference";
 }) {
   s.ledger.replica.db
@@ -92,8 +92,8 @@ function debtRow(opts: {
       amountOriginal: money.toMoney(opts.amount),
       currency: EUR,
       fxRate: money.pivotPerUnit("1"),
-      counterpartyId: opts.counterpartyId,
-      counterpartyRole: opts.role ?? "debt",
+      obligationCounterpartyId: opts.obligationCounterpartyId,
+      obligationRole: opts.role ?? "debt",
     })
     .run();
 }
@@ -218,7 +218,7 @@ describe("update_counterparty", () => {
       id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
       type: "income",
       amount: "120",
-      counterpartyId: NINA,
+      obligationCounterpartyId: NINA,
     });
     const before = counterparty(NINA);
 
@@ -283,7 +283,7 @@ describe("merge_counterparties", () => {
       id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
       type: "income",
       amount: "40",
-      counterpartyId: OLA,
+      obligationCounterpartyId: OLA,
     });
 
     const result = write(mergeCounterpartiesExecutor, {
@@ -297,7 +297,7 @@ describe("merge_counterparties", () => {
     expect(result.row.loser.archived).toBe(true);
     expect(result.row.merge.movedTransactionIds).toEqual(["bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"]);
     const moved = s.ledger.replica.db
-      .select({ counterpartyId: transactions.counterpartyId })
+      .select({ counterpartyId: transactions.obligationCounterpartyId })
       .from(transactions)
       .where(eq(transactions.id, id<"transactions">("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb")))
       .all()[0];
@@ -345,12 +345,12 @@ describe("merge_counterparties", () => {
       id: "bbbbbbbb-2222-4bbb-8bbb-bbbbbbbbbbbb",
       type: "income",
       amount: "10",
-      counterpartyId: OLA,
+      obligationCounterpartyId: OLA,
     });
     // Reassigned to NINA after the controller would have read it.
     s.ledger.replica.db
       .update(transactions)
-      .set({ counterpartyId: NINA })
+      .set({ obligationCounterpartyId: NINA })
       .where(eq(transactions.id, id<"transactions">("bbbbbbbb-2222-4bbb-8bbb-bbbbbbbbbbbb")))
       .run();
 
@@ -448,7 +448,7 @@ describe("merge_counterparties", () => {
       id: "c1c1c1c1-1111-4c1c-8c1c-c1c1c1c1c1c1",
       type: "income",
       amount: "10",
-      counterpartyId: OLA,
+      obligationCounterpartyId: OLA,
     });
 
     expect(() =>
@@ -484,8 +484,8 @@ describe("merge_counterparties", () => {
           amountOriginal: money.toMoney("1"),
           currency: EUR,
           fxRate: money.pivotPerUnit("1"),
-          counterpartyId: OLA,
-          counterpartyRole: "debt" as const,
+          obligationCounterpartyId: OLA,
+          obligationRole: "debt" as const,
         })),
       )
       .run();
@@ -502,7 +502,7 @@ describe("merge_counterparties", () => {
       s.ledger.replica.db
         .select()
         .from(transactions)
-        .where(eq(transactions.counterpartyId, MAREK))
+        .where(eq(transactions.obligationCounterpartyId, MAREK))
         .all(),
     ).toHaveLength(1200);
 
@@ -514,7 +514,7 @@ describe("merge_counterparties", () => {
       s.ledger.replica.db
         .select()
         .from(transactions)
-        .where(eq(transactions.counterpartyId, OLA))
+        .where(eq(transactions.obligationCounterpartyId, OLA))
         .all(),
     ).toHaveLength(1200);
   });
@@ -550,7 +550,7 @@ describe("unmerge_counterparties", () => {
       id: "ffffffff-ffff-4fff-8fff-ffffffffffff",
       type: "income",
       amount: "10",
-      counterpartyId: OLA,
+      obligationCounterpartyId: OLA,
     });
     const merge = write(mergeCounterpartiesExecutor, {
       mergeId: "10101010-1010-4101-8101-101010101010",
@@ -567,7 +567,7 @@ describe("unmerge_counterparties", () => {
     expect(result.row.skipped).toBe(0);
     expect(result.row.loser.archived).toBe(false);
     const restored = s.ledger.replica.db
-      .select({ counterpartyId: transactions.counterpartyId })
+      .select({ counterpartyId: transactions.obligationCounterpartyId })
       .from(transactions)
       .where(eq(transactions.id, id<"transactions">("ffffffff-ffff-4fff-8fff-ffffffffffff")))
       .all()[0];
@@ -579,7 +579,7 @@ describe("unmerge_counterparties", () => {
       id: "20202020-2020-4202-8202-202020202020",
       type: "income",
       amount: "10",
-      counterpartyId: OLA,
+      obligationCounterpartyId: OLA,
     });
     const merge = write(mergeCounterpartiesExecutor, {
       mergeId: "30303030-3030-4303-8303-303030303030",
@@ -623,7 +623,7 @@ describe("unmerge_counterparties", () => {
       id: "80808080-2222-4808-8808-808080808080",
       type: "income",
       amount: "10",
-      counterpartyId: OLA,
+      obligationCounterpartyId: OLA,
     });
     const merge = write(mergeCounterpartiesExecutor, {
       mergeId: "90909090-2222-4909-8909-909090909090",
@@ -634,7 +634,7 @@ describe("unmerge_counterparties", () => {
     // A deliberate reassignment, unrelated to the merge, made after it.
     s.ledger.replica.db
       .update(transactions)
-      .set({ counterpartyId: NINA })
+      .set({ obligationCounterpartyId: NINA })
       .where(eq(transactions.id, id<"transactions">("80808080-2222-4808-8808-808080808080")))
       .run();
 
@@ -643,7 +643,7 @@ describe("unmerge_counterparties", () => {
     expect(result.row.restoredTransactions).toBe(0);
     expect(result.row.skipped).toBe(1);
     const row = s.ledger.replica.db
-      .select({ counterpartyId: transactions.counterpartyId })
+      .select({ counterpartyId: transactions.obligationCounterpartyId })
       .from(transactions)
       .where(eq(transactions.id, id<"transactions">("80808080-2222-4808-8808-808080808080")))
       .all()[0];
@@ -663,7 +663,7 @@ describe("unmerge_counterparties", () => {
       id: "b1b1b1b1-1111-4b1b-8b1b-b1b1b1b1b1b1",
       type: "income",
       amount: "10",
-      counterpartyId: OLA,
+      obligationCounterpartyId: OLA,
     });
     const merge = write(mergeCounterpartiesExecutor, {
       mergeId: "b2b2b2b2-2222-4b2b-8b2b-b2b2b2b2b2b2",
@@ -685,7 +685,7 @@ describe("unmerge_counterparties", () => {
     // the moved transaction still on the winner.
     expect(counterparty(OLA)?.archived).toBe(true);
     const row = s.ledger.replica.db
-      .select({ counterpartyId: transactions.counterpartyId })
+      .select({ counterpartyId: transactions.obligationCounterpartyId })
       .from(transactions)
       .where(eq(transactions.id, id<"transactions">("b1b1b1b1-1111-4b1b-8b1b-b1b1b1b1b1b1")))
       .all()[0];
@@ -746,7 +746,7 @@ describe("settle_debt", () => {
       id: "50505050-5050-4505-8505-505050505050",
       type: "income",
       amount: "120",
-      counterpartyId: NINA,
+      obligationCounterpartyId: NINA,
     });
 
     const result = write(settleDebtExecutor, {
@@ -772,7 +772,7 @@ describe("settle_debt", () => {
       id: "70707070-7070-4707-8707-707070707070",
       type: "income",
       amount: "50",
-      counterpartyId: NINA,
+      obligationCounterpartyId: NINA,
     });
 
     const result = write(settleDebtExecutor, {
@@ -795,7 +795,7 @@ describe("settle_debt", () => {
       id: "90909090-9090-4909-8909-909090909090",
       type: "income",
       amount: "50",
-      counterpartyId: NINA,
+      obligationCounterpartyId: NINA,
     });
 
     const result = write(settleDebtExecutor, {
@@ -862,7 +862,7 @@ describe("settle_debt", () => {
       id: "e0e0e0e0-e0e0-4e0e-8e0e-e0e0e0e0e0e0",
       type: "income",
       amount: "0.001",
-      counterpartyId: NINA,
+      obligationCounterpartyId: NINA,
     });
 
     // R4 — the refusal below is decided entirely by the *pre-existing*
@@ -913,7 +913,7 @@ describe("settle_debt", () => {
       id: "11111111-2222-4333-8444-555555555501",
       type: "expense",
       amount: "0.006",
-      counterpartyId: NINA,
+      obligationCounterpartyId: NINA,
     });
 
     const result = write(settleDebtExecutor, {
@@ -940,7 +940,7 @@ describe("settle_debt", () => {
       id: "c0c0c0c0-c0c0-4c0c-8c0c-c0c0c0c0c0c0",
       type: "income",
       amount: "500",
-      counterpartyId: NINA,
+      obligationCounterpartyId: NINA,
       role: "contribution",
     });
 
@@ -964,7 +964,7 @@ describe("settle_debt", () => {
       id: "e1e1e1e1-1111-4e1e-8e1e-e1e1e1e1e1e1",
       type: "income",
       amount: "50",
-      counterpartyId: NINA,
+      obligationCounterpartyId: NINA,
     });
 
     expect(() =>
@@ -991,7 +991,7 @@ describe("settle_debt", () => {
       id: "e3e3e3e3-3333-4e3e-8e3e-e3e3e3e3e3e3",
       type: "income",
       amount: "50",
-      counterpartyId: NINA,
+      obligationCounterpartyId: NINA,
     });
 
     expect(() =>

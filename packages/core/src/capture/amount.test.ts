@@ -103,7 +103,7 @@ describe("L1 — a grouping chain starts from a 1–3 digit head, and only from 
     expect(found?.span).toEqual([0, 4]);
   });
 
-  it("'1000 2000 cash' takes the first number only — the second is payee text, not a second thousands group", () => {
+  it("'1000 2000 cash' takes the first number only — the second is enteredName text, not a second thousands group", () => {
     const found = findAmount("1000 2000 cash");
     expect(found?.amount).toBe("1000.00000000");
     expect(found?.span).toEqual([0, 4]);

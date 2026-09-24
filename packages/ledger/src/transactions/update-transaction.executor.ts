@@ -207,7 +207,7 @@ function patchTransaction(input: UpdateTransactionInput, tx: ReplicaTx): LocalTr
    * `SPEC.md` §14.4b. `resolveBrandPatch` is the single place this decision is
    * made — see its own doc for the four cases (explicit assign, explicit clear
    * to a sticky `"none"`, re-match, or leave alone). It is called only when
-   * the patch actually asserts a `brandKey` or *changes* the payee; an
+   * the patch actually asserts a `brandKey` or *changes* the entered name; an
    * `undefined` return means neither column is written.
    *
    * **`!== undefined`, not `"brandKey" in`.** A caller that spreads an
@@ -217,20 +217,21 @@ function patchTransaction(input: UpdateTransactionInput, tx: ReplicaTx): LocalTr
    * `undefined` is "this patch has no opinion", the same reading every other
    * optional field in the patch gets.
    *
-   * **The payee gate compares values, not presence.** §14.4b: *"re-runs the
-   * match when `payee` changes"*. A patch that re-sends the payee it already
+   * **The entered name gate compares values, not presence.** §14.4b: *"re-runs the
+   * match when `entered_name` changes"*. A patch that re-sends the entered name it already
    * read — what a form does when it submits every field — must leave a `NULL`
    * source alone rather than resolving it afresh, or "never matched" would
    * quietly become "matched" on an edit to some unrelated field.
    */
   const assertedBrandKey = input.patch.brandKey;
   const brandKeyTouched = assertedBrandKey !== undefined;
-  const payeeChanged = input.patch.payee !== undefined && input.patch.payee !== current.payee;
+  const enteredNameChanged =
+    input.patch.enteredName !== undefined && input.patch.enteredName !== current.enteredName;
   const brandFields =
-    brandKeyTouched || payeeChanged
+    brandKeyTouched || enteredNameChanged
       ? (resolveBrandPatch(
           { brandKey: current.brandKey, brandSource: current.brandSource },
-          input.patch.payee ?? current.payee,
+          input.patch.enteredName ?? current.enteredName,
           assertedBrandKey,
         ) ?? {})
       : {};

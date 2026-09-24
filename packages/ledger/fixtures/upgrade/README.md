@@ -71,12 +71,16 @@ there to copy. `v11` is the pair `DESK4` left behind: upgrading it runs
 `0011_dashboard_layout_seed` — a seed `INSERT` into a database that already
 holds rows, which is the only way to prove the seed is not skipped for a
 database that is upgrading rather than new — and then `0012_schema`'s
-one-active index, against a table that now has a row in it. **`v13` is the
-current head**, so its upgrade is a no-op — what it catches is drift: a
-`fixture:dump` that stops producing what is committed here. Whichever pair is
-named here stops being "the current head, so its upgrade is a no-op" the
-moment a later migration lands; `pnpm --filter @waltning/ledger fixture:dump`
-is what a PR adding one runs to leave the next PR an honest head pair again.
-This line and `upgrade.journey.test.ts`'s own header comment are the two
-hand-maintained places that name versions, and both go stale exactly this way
-when a PR skips that step.
+one-active index, against a table that now has a row in it. **`v17` is the
+pair this branch left behind** — the ledger as it stood before the obligation
+and entered-name renames — and it is also the first pair dumped by a build
+that ships the taxonomy, so it arrives holding those 74 categories rather
+than gaining them. `v13` is the pair four migrations behind it, left
+uncommitted by `0014`–`0016` and so never dumped at those versions: the gap
+between 13 and 17 is what skipping this step looks like. Whichever pair is
+named here stops being the head the moment a later migration lands; `pnpm
+--filter @waltning/ledger fixture:dump` is what a PR adding one runs to leave
+the next PR an honest head pair again. This line and
+`upgrade.journey.test.ts`'s own header comment are the two hand-maintained
+places that name versions, and both go stale exactly this way when a PR skips
+that step.

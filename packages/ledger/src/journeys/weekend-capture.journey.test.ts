@@ -34,7 +34,7 @@ function captureUsd(j: ReturnType<typeof openJourney>, date: string) {
       accountId: ID.accountUsd,
       amountOriginal: money.toMoney("100.00"),
       currency: USD,
-      payee: "",
+      enteredName: "",
       note: "",
       isBusiness: false,
       isCapital: false,

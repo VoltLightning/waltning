@@ -247,7 +247,7 @@ when you break something.
   only evidence the change is an improvement.
 - **`Test` sends a fixed trivial prompt** and reports latency and success. It
   never sends ledger content: a connectivity check must not be the thing that
-  leaks a payee.
+  leaks an entered name.
 - Expanding a row shows `max_tokens`, the cache-breakpoint setting, and the last
   ten calls with their latencies.
 

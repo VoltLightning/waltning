@@ -49,7 +49,7 @@
  * past their types here, named once each with the reason beside them; RNW
  * forwards all three verbatim (`forwardedProps`).
  *
- * **The listbox holds options and nothing else.** `<Amount>`, the payee line
+ * **The listbox holds options and nothing else.** `<Amount>`, the entered name line
  * and the two captions sit outside it: a listbox containing text nodes that
  * are not options makes the option count a lie, and a reader stepping the
  * list would hear the amount announced as a choice. The partial branch's
@@ -66,8 +66,8 @@
  * component only exposes `focus()` through its ref for that caller to reach.
  */
 
+import type { CategoryProposal } from "@waltning/core/capture/entered-name-memory";
 import type { CaptureParse } from "@waltning/core/capture/grammar";
-import type { CategoryProposal } from "@waltning/core/capture/payee-memory";
 import type { CurrencyCode } from "@waltning/core/money";
 import * as money from "@waltning/core/money";
 import {
@@ -287,11 +287,11 @@ export const CommandBar = forwardRef<CommandBarHandle, CommandBarProps>(function
    * line, with Undo." The marker glyph is the chip's own half of that (`Chip`
    * primitive's `common.autoFilled`, matched); this caption is the line —
    * `categories.fromHistory`, the same string `quick-add-composer.tsx`'s own
-   * trail row prints, naming the payee the proposal actually came from.
+   * trail row prints, naming the entered name the proposal actually came from.
    */
   const categoryFromHistory =
     categoryMachineFilled !== undefined && parse?.ok === true
-      ? t("categories.fromHistory", { payee: parse.payee })
+      ? t("categories.fromHistory", { enteredName: parse.enteredName })
       : undefined;
 
   /**
@@ -459,8 +459,9 @@ export const CommandBar = forwardRef<CommandBarHandle, CommandBarProps>(function
                   size="body"
                   kind="spend"
                 />
-                <Text style={styles.payee}>
-                  {t("transactions.payee")}: {parse.payee === "" ? "—" : parse.payee}
+                <Text style={styles.enteredName}>
+                  {t("transactions.enteredName")}:{" "}
+                  {parse.enteredName === "" ? "—" : parse.enteredName}
                 </Text>
               </View>
               {amountScaleCaption === undefined ? null : (
@@ -701,7 +702,7 @@ const useStyles = makeStyles((theme) => ({
   preview: { gap: space.xs, paddingHorizontal: space.x3 },
   hint: { color: theme.textMuted, ...text.ui("caption"), paddingHorizontal: space.x3 },
   row: { flexDirection: "row", alignItems: "center", gap: space.md, flexWrap: "wrap" },
-  payee: { color: theme.textMuted, ...text.ui("bodySm") },
+  enteredName: { color: theme.textMuted, ...text.ui("bodySm") },
   trailCaption: { color: theme.textMuted, ...text.ui("caption") },
   reason: { color: theme.textMuted, ...text.ui("bodySm") },
   fieldError: { color: theme.dangerText, ...text.ui("caption"), paddingHorizontal: space.x3 },

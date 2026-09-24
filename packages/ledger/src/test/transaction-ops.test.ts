@@ -58,7 +58,7 @@ beforeEach(() => {
       accountId: ACCOUNT,
       amountOriginal: "18",
       currency: PLN,
-      payee: "Coffee",
+      enteredName: "Coffee",
     },
   });
 });
@@ -79,12 +79,16 @@ describe("update_transaction", () => {
       executor: updateTransactionExecutor,
       registry: ledgerRegistry,
       capture,
-      input: { id: TXN, version: before?.version ?? 0, patch: { payee: "Coffee at the station" } },
+      input: {
+        id: TXN,
+        version: before?.version ?? 0,
+        patch: { enteredName: "Coffee at the station" },
+      },
     });
     vi.useRealTimers();
     const after = readTxn();
 
-    expect(after?.payee).toBe("Coffee at the station");
+    expect(after?.enteredName).toBe("Coffee at the station");
     expect(after?.amountOriginal).toBe(before?.amountOriginal);
     expect(after?.version).toBe((before?.version ?? 0) + 1);
     expect(after?.updatedAt).not.toEqual(before?.updatedAt);
@@ -104,10 +108,10 @@ describe("update_transaction", () => {
         executor: updateTransactionExecutor,
         registry: ledgerRegistry,
         capture,
-        input: { id: TXN, version: 999, patch: { payee: "x" } },
+        input: { id: TXN, version: 999, patch: { enteredName: "x" } },
       }),
     ).toThrow(/stale/);
-    expect(readTxn()?.payee).toBe("Coffee");
+    expect(readTxn()?.enteredName).toBe("Coffee");
   });
 
   it("refuses to patch a deleted row", () => {
@@ -122,7 +126,7 @@ describe("update_transaction", () => {
         executor: updateTransactionExecutor,
         registry: ledgerRegistry,
         capture,
-        input: { id: TXN, version: readTxn()?.version ?? 0, patch: { payee: "x" } },
+        input: { id: TXN, version: readTxn()?.version ?? 0, patch: { enteredName: "x" } },
       }),
     ).toThrow(/deleted/);
   });
@@ -218,7 +222,7 @@ describe("update_transaction", () => {
 describe("brand recognition (§14.4b)", () => {
   const ORLEN = id<"transactions">("00000000-0000-4000-8000-000000000b01");
 
-  it("matches a recognised payee and sources it 'auto', with no caller input", () => {
+  it("matches a recognised enteredName and sources it 'auto', with no caller input", () => {
     writeLocally(stores.ledger, {
       executor: createTransactionExecutor,
       registry: ledgerRegistry,
@@ -230,7 +234,7 @@ describe("brand recognition (§14.4b)", () => {
         accountId: ACCOUNT,
         amountOriginal: "184.30",
         currency: PLN,
-        payee: "ORLEN",
+        enteredName: "ORLEN",
       },
     });
     const row = stores.ledger.replica.db
@@ -242,14 +246,14 @@ describe("brand recognition (§14.4b)", () => {
     expect(row?.brandSource).toBe("auto");
   });
 
-  it("leaves both fields null for an unrecognised payee — never one alone", () => {
-    // `TXN` (beforeEach) is payee "Coffee", which matches nothing.
+  it("leaves both fields null for an unrecognised enteredName — never one alone", () => {
+    // `TXN` (beforeEach) is entered name "Coffee", which matches nothing.
     const row = readTxn();
     expect(row?.brandKey).toBeNull();
     expect(row?.brandSource).toBeNull();
   });
 
-  it("an asserted brandKey wins over the payee and is sourced 'manual'", () => {
+  it("an asserted brandKey wins over the enteredName and is sourced 'manual'", () => {
     writeLocally(stores.ledger, {
       executor: createTransactionExecutor,
       registry: ledgerRegistry,
@@ -261,7 +265,7 @@ describe("brand recognition (§14.4b)", () => {
         accountId: ACCOUNT,
         amountOriginal: "10",
         currency: PLN,
-        payee: "Corner Café",
+        enteredName: "Corner Café",
         brandKey: "youtube",
       },
     });
@@ -289,20 +293,20 @@ describe("brand recognition (§14.4b)", () => {
           currency: PLN,
           // Invented — never a real merchant not already in the catalogue
           // (CLAUDE.md: placeholders only).
-          payee: "Waltco",
+          enteredName: "Waltco",
           brandKey: "waltco",
         },
       }),
     ).toThrow(/brand catalogue/);
   });
 
-  it("re-matches a patched payee when the row carries no manual assignment (source null)", () => {
+  it("re-matches a patched enteredName when the row carries no manual assignment (source null)", () => {
     const before = readTxn();
     writeLocally(stores.ledger, {
       executor: updateTransactionExecutor,
       registry: ledgerRegistry,
       capture,
-      input: { id: TXN, version: before?.version ?? 0, patch: { payee: "ORLEN" } },
+      input: { id: TXN, version: before?.version ?? 0, patch: { enteredName: "ORLEN" } },
     });
     const after = readTxn();
     expect(after?.brandKey).toBe("orlen");
@@ -310,21 +314,21 @@ describe("brand recognition (§14.4b)", () => {
   });
 
   /**
-   * §14.4b re-runs the match *"when `payee` changes"* — a patch that re-sends
-   * the payee it already read, which is what a form doing a full-object
+   * §14.4b re-runs the match *"when `entered_name` changes"* — a patch that re-sends
+   * the entered name it already read, which is what a form doing a full-object
    * submit does, is not a change and must resolve nothing.
    *
    * The row is set up in the one state where the two readings differ: a
-   * payee that folds to a catalogue alias with both brand columns `NULL` —
+   * entered name that folds to a catalogue alias with both brand columns `NULL` —
    * what a row synced from a build whose catalogue was narrower looks like.
    * A presence-based gate re-matches it into `orlen`/`auto` on an unrelated
    * edit; a value-based one leaves it exactly as the writer left it.
    */
-  it("a patch re-sending the same payee does not re-match — the gate is a change, not presence", () => {
+  it("a patch re-sending the same enteredName does not re-match — the gate is a change, not presence", () => {
     const created = readTxn();
     stores.ledger.replica.db
       .update(transactions)
-      .set({ payee: "ORLEN", brandKey: null, brandSource: null })
+      .set({ enteredName: "ORLEN", brandKey: null, brandSource: null })
       .where(eq(transactions.id, TXN))
       .run();
 
@@ -335,12 +339,12 @@ describe("brand recognition (§14.4b)", () => {
       input: {
         id: TXN,
         version: created?.version ?? 0,
-        patch: { payee: "ORLEN", note: "an unrelated edit" },
+        patch: { enteredName: "ORLEN", note: "an unrelated edit" },
       },
     });
     const after = readTxn();
     expect(after?.note).toBe("an unrelated edit");
-    expect(after?.brandKey, "the payee did not change, so nothing was resolved").toBeNull();
+    expect(after?.brandKey, "the enteredName did not change, so nothing was resolved").toBeNull();
     expect(after?.brandSource).toBeNull();
   });
 
@@ -353,7 +357,7 @@ describe("brand recognition (§14.4b)", () => {
     const created = readTxn();
     stores.ledger.replica.db
       .update(transactions)
-      .set({ payee: "ORLEN", brandKey: null, brandSource: null })
+      .set({ enteredName: "ORLEN", brandKey: null, brandSource: null })
       .where(eq(transactions.id, TXN))
       .run();
 
@@ -373,31 +377,31 @@ describe("brand recognition (§14.4b)", () => {
     expect(after?.brandSource).toBeNull();
   });
 
-  it("re-matches a patched payee when the row carries an 'auto' match already", () => {
+  it("re-matches a patched enteredName when the row carries an 'auto' match already", () => {
     const before = readTxn();
     // Land on an "auto" match first.
     writeLocally(stores.ledger, {
       executor: updateTransactionExecutor,
       registry: ledgerRegistry,
       capture,
-      input: { id: TXN, version: before?.version ?? 0, patch: { payee: "ORLEN" } },
+      input: { id: TXN, version: before?.version ?? 0, patch: { enteredName: "ORLEN" } },
     });
     const auto = readTxn();
     expect(auto?.brandSource).toBe("auto");
 
-    // A further payee edit re-matches again — "auto" is not sticky.
+    // A further entered name edit re-matches again — "auto" is not sticky.
     writeLocally(stores.ledger, {
       executor: updateTransactionExecutor,
       registry: ledgerRegistry,
       capture,
-      input: { id: TXN, version: auto?.version ?? 0, patch: { payee: "YouTube" } },
+      input: { id: TXN, version: auto?.version ?? 0, patch: { enteredName: "YouTube" } },
     });
     const after = readTxn();
     expect(after?.brandKey).toBe("youtube");
     expect(after?.brandSource).toBe("auto");
   });
 
-  it("a manual assignment is sticky against a later payee edit", () => {
+  it("a manual assignment is sticky against a later enteredName edit", () => {
     const before = readTxn();
     writeLocally(stores.ledger, {
       executor: updateTransactionExecutor,
@@ -415,7 +419,7 @@ describe("brand recognition (§14.4b)", () => {
       input: {
         id: TXN,
         version: manual?.version ?? 0,
-        patch: { payee: "Some other payee entirely" },
+        patch: { enteredName: "Some other enteredName entirely" },
       },
     });
     const after = readTxn();
@@ -425,7 +429,7 @@ describe("brand recognition (§14.4b)", () => {
 
   /**
    * §14.4b's clear. `brandKey: null` writes `brand_source 'none'` rather
-   * than falling back through the match, because the payee still folds to a
+   * than falling back through the match, because the entered name still folds to a
    * catalogue alias and the whole point of clearing a wrong match is that it
    * does not come straight back on the next write.
    */
@@ -438,7 +442,7 @@ describe("brand recognition (§14.4b)", () => {
       input: {
         id: TXN,
         version: before?.version ?? 0,
-        patch: { payee: "ORLEN", brandKey: "youtube" },
+        patch: { enteredName: "ORLEN", brandKey: "youtube" },
       },
     });
     const manual = readTxn();
@@ -454,8 +458,8 @@ describe("brand recognition (§14.4b)", () => {
     expect(cleared?.brandKey).toBeNull();
     expect(cleared?.brandSource).toBe("none");
 
-    // The payee ("ORLEN") still folds to a catalogue alias — a further,
-    // unrelated payee edit must not bring the match back.
+    // The entered name ("ORLEN") still folds to a catalogue alias — a further,
+    // unrelated entered name edit must not bring the match back.
     writeLocally(stores.ledger, {
       executor: updateTransactionExecutor,
       registry: ledgerRegistry,
@@ -467,7 +471,7 @@ describe("brand recognition (§14.4b)", () => {
     expect(after?.brandSource).toBe("none");
   });
 
-  it("'none' stays sticky across a payee edit too", () => {
+  it("'none' stays sticky across a enteredName edit too", () => {
     const before = readTxn();
     writeLocally(stores.ledger, {
       executor: updateTransactionExecutor,
@@ -482,7 +486,7 @@ describe("brand recognition (§14.4b)", () => {
       executor: updateTransactionExecutor,
       registry: ledgerRegistry,
       capture,
-      input: { id: TXN, version: cleared?.version ?? 0, patch: { payee: "ORLEN" } },
+      input: { id: TXN, version: cleared?.version ?? 0, patch: { enteredName: "ORLEN" } },
     });
     const after = readTxn();
     expect(after?.brandKey).toBeNull();
@@ -527,7 +531,7 @@ describe("brand recognition (§14.4b)", () => {
           accountId: ACCOUNT,
           amountOriginal: "184.30",
           currency: PLN,
-          payee: "ORLEN",
+          enteredName: "ORLEN",
           source: "import",
         },
       },
@@ -646,7 +650,7 @@ describe("a crash between the two stores", () => {
         executor: failingUpdate,
         registry,
         capture,
-        input: { id: TXN, version: before?.version ?? 0, patch: { payee: "Crashed" } },
+        input: { id: TXN, version: before?.version ?? 0, patch: { enteredName: "Crashed" } },
       }),
     ).toThrow("the replica half failed");
 
@@ -663,14 +667,14 @@ describe("a crash between the two stores", () => {
     expect(entries[2]?.state).toBe("blocked");
     expect(entries[2]?.blockedKind).toBe("terminal");
     expect(entries[2]?.blockedReason).toBe("the replica half failed");
-    expect(readTxn()?.payee).toBe(before?.payee);
+    expect(readTxn()?.enteredName).toBe(before?.enteredName);
 
     // The entry survives a relaunch, replayable — nothing was lost, only
     // deferred.
     stores.reopen();
     const entriesAfterReopen = stores.ledger.outbox.db.select().from(outbox).all();
     expect(entriesAfterReopen).toHaveLength(3);
-    expect(readTxn()?.payee).toBe(before?.payee);
+    expect(readTxn()?.enteredName).toBe(before?.enteredName);
   });
 });
 
@@ -1334,7 +1338,7 @@ describe("supersede_transaction", () => {
           accountId: ACCOUNT,
           amountOriginal: "18.5",
           currency: PLN,
-          payee: "Coffee",
+          enteredName: "Coffee",
           source: "import",
         },
       },
@@ -1367,7 +1371,7 @@ describe("supersede_transaction", () => {
             accountId: ACCOUNT,
             amountOriginal: "18.5",
             currency: PLN,
-            payee: "Coffee",
+            enteredName: "Coffee",
             source: "import",
           },
         },
@@ -1389,7 +1393,7 @@ describe("supersede_transaction", () => {
         accountId: ACCOUNT,
         amountOriginal: "42",
         currency: PLN,
-        payee: "Rent",
+        enteredName: "Rent",
       },
     });
     const otherBefore = stores.ledger.replica.db
@@ -1414,7 +1418,7 @@ describe("supersede_transaction", () => {
             accountId: ACCOUNT,
             amountOriginal: "18.5",
             currency: PLN,
-            payee: "Coffee",
+            enteredName: "Coffee",
             source: "import",
           },
         },
@@ -1456,7 +1460,7 @@ describe("supersede_transaction", () => {
             accountId: ACCOUNT,
             amountOriginal: "18.505",
             currency: PLN,
-            payee: "Coffee",
+            enteredName: "Coffee",
             source: "import",
           },
         },
@@ -1482,7 +1486,7 @@ describe("supersede_transaction", () => {
         accountId: ACCOUNT,
         amountOriginal: "42",
         currency: PLN,
-        payee: "Rent",
+        enteredName: "Rent",
       },
     });
     writeLocally(stores.ledger, {
@@ -1515,7 +1519,7 @@ describe("supersede_transaction", () => {
             accountId: ACCOUNT,
             amountOriginal: "18.5",
             currency: PLN,
-            payee: "Coffee",
+            enteredName: "Coffee",
             source: "import",
           },
         },
@@ -1554,7 +1558,7 @@ describe("categorize_batch", () => {
         accountId: ACCOUNT,
         amountOriginal: "5",
         currency: PLN,
-        payee: "Bread",
+        enteredName: "Bread",
       },
     });
   });
@@ -1664,7 +1668,7 @@ describe("categorize_batch", () => {
           accountId: ACCOUNT,
           amountOriginal: "9200",
           currency: PLN,
-          payee: "Salary",
+          enteredName: "Salary",
         },
       });
     });
@@ -1775,8 +1779,8 @@ describe("categorize_batch", () => {
  * column is a rule with a hole in it, and `transaction_lines` is the half the
  * parent row hides.
  *
- * The defect this closes: D2's payee memory proposed a leaf a payee last sat
- * on, `readPayeeHistory` did not exclude archived ones, the desk command bar
+ * The defect this closes: D2's entered name memory proposed a leaf a entered name last sat
+ * on, `readEnteredNameHistory` did not exclude archived ones, the desk command bar
  * auto-filled the id, rendered it as "Category?" because no picker offers an
  * archived category, and Enter saved it.
  */
@@ -1811,7 +1815,7 @@ describe("an archived category", () => {
           accountId: ACCOUNT,
           amountOriginal: "9",
           currency: PLN,
-          payee: "Gym",
+          enteredName: "Gym",
           categoryId: ARCHIVED,
         },
       }),
@@ -1861,7 +1865,7 @@ describe("an archived category", () => {
           amountOriginal: toMoney("9"),
           currency: PLN,
           fxRate: pivotPerUnit("1"),
-          payee: "Gym",
+          enteredName: "Gym",
           categoryId: ARCHIVED,
           createdAt: new Date(),
           updatedAt: new Date(),

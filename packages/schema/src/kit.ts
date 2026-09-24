@@ -137,7 +137,7 @@ export const pgKit = {
    * as `HH:MM:SS`; `timeOfDayFromDb` narrows it at the read boundary.
    */
   timeOfDay: (name: string) => pgTime(name).$type<TimeOfDay>(),
-  /** An ISO 4217 code, and not the same type as `payee`. */
+  /** An ISO 4217 code, and not the same type as `entered_name`. */
   currency: (name: string) => pgText(name).$type<CurrencyCode>(),
   /**
    * A foreign key, branded with **the table it points at**.

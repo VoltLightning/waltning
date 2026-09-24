@@ -412,7 +412,7 @@ export const en = {
     noCounterparty: "No counterparty",
     role: "Role",
     /** §6.6 — the counterparty chip's own value while a role is unresolved. Never defaulted. */
-    counterpartyRoleMissing: "{{name}} · role?",
+    obligationRoleMissing: "{{name}} · role?",
     /** §6.6 — what naming a counterparty on this row means. */
     "role.debt": "Debt — expected back",
     "role.contribution": "Contribution to a shared account",
@@ -519,9 +519,9 @@ export const en = {
     /** The visible chip a filter arrives with from another screen (S10 §7 shared). */
     accountFilterFrom: "From {{account}}",
     /** S09's `FieldsCard`, and D4b's own chip label — a person types it there, D2 only ever reads it back. */
-    payee: "Payee",
-    /** D4b's chip row, empty — S05 §3: `[+ payee]`, typed, optional. */
-    addPayee: "+ Payee",
+    enteredName: "Payee",
+    /** D4b's chip row, empty — S05 §3: `[+ entered name]`, typed, optional. */
+    addEnteredName: "+ Payee",
     /** S05 §3 — the composer's own words, on the deck's anatomy. */
     addExpenseTitle: "Add an expense",
     addIncomeTitle: "Add income",
@@ -658,8 +658,8 @@ export const en = {
     /* ── S10 §3 web (DESK3) — the desk table ──────────────────────────── */
     /** `<LedgerTable>`'s own accessible name — a table with no visible title needs one. */
     ledgerTable: "Ledger table",
-    /** The selection checkbox's accessible name — `payee` arrives already resolved, "—" included. */
-    selectRow: "Select {{payee}}",
+    /** The selection checkbox's accessible name — `enteredName` arrives already resolved, "—" included. */
+    selectRow: "Select {{enteredName}}",
     /** `<LedgerSelectionBar>` — count is the same word whatever the count. */
     selectedCount: "{{count}} selected",
     /** `<CategorizeSelectionConfirm>`'s own summary line. */
@@ -822,7 +822,7 @@ export const en = {
     youOweLabel: "You owe",
     owedNet: "You owe, on balance",
     unallocated: "{{amount}} {{currency}} unallocated",
-    unallocatedNamed: "{{amount}} {{currency}} unallocated · {{payee}} · {{date}}",
+    unallocatedNamed: "{{amount}} {{currency}} unallocated · {{enteredName}} · {{date}}",
     allocate: "Allocate",
     add: "+ Add",
     emptyFirstRunTitle: "No one yet",
@@ -940,8 +940,8 @@ export const en = {
     useLeaf: 'Use "{{name}}"',
     /** Heading over D2's proposal row. */
     suggested: "Suggested",
-    /** The suggestion, when the draft names its payee. */
-    becauseAt: "Because you are at {{payee}}",
+    /** The suggestion, when the draft names its entered name. */
+    becauseAt: "Because you are at {{enteredName}}",
     recentTitle: "You used these last",
     allTitle: "All categories",
     /** §14's 0.85 display threshold, rendered as text — never tint alone (P5). */
@@ -952,7 +952,7 @@ export const en = {
      * value reads as sourced rather than as a black box (S05 §8). Paired with
      * `states.undo` on the same row.
      */
-    fromHistory: "From your history: {{payee}}",
+    fromHistory: "From your history: {{enteredName}}",
     noMatchTitle: "No matching category",
     noMatchBody: 'Nothing here matches "{{query}}".',
     /** The create row's group chooser, shown when no group chip narrowed the sheet first. */
@@ -1222,16 +1222,17 @@ export const en = {
      * for the one case where showing only the remainder would look like it
      * disagreed with the figure a tap on `Open` leads to.
      */
-    unsettledNamed: "{{remainder}} {{currency}} unallocated · {{payee}}",
-    unsettledNamedMore: "{{remainder}} {{currency}} unallocated · {{payee}} · and {{count}} more",
+    unsettledNamed: "{{remainder}} {{currency}} unallocated · {{enteredName}}",
+    unsettledNamedMore:
+      "{{remainder}} {{currency}} unallocated · {{enteredName}} · and {{count}} more",
     unsettledNamedDiffers:
-      "{{remainder}} {{currency}} unallocated · {{payee}} ({{amount}} {{currency}} account balance)",
+      "{{remainder}} {{currency}} unallocated · {{enteredName}} ({{amount}} {{currency}} account balance)",
     unsettledNamedDiffersMore:
-      "{{remainder}} {{currency}} unallocated · {{payee}} ({{amount}} {{currency}} account balance) · and {{count}} more",
+      "{{remainder}} {{currency}} unallocated · {{enteredName}} ({{amount}} {{currency}} account balance) · and {{count}} more",
     /**
      * H2 — the oldest unconsumed entry is the account's own opening balance,
      * not a transaction (`oldestUnconsumedTransactionId` is `null`): there is
-     * no payee to name, so this says so rather than falling back to a payee
+     * no entered name to name, so this says so rather than falling back to a entered name
      * that does not exist. `Open` still falls back to the account's own
      * filtered ledger, same as before this entry existed.
      */

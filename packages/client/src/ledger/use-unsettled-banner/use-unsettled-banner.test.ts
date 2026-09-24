@@ -4,7 +4,7 @@
  *
  * The model was extracted at its third use, and the reason each of its four
  * rules exists is a case the original grew one screen at a time: the H2
- * opening balance with no payee, the H3 remainder that is less than the
+ * opening balance with no entered name, the H3 remainder that is less than the
  * balance, the `more` fold that keeps one banner instead of a stack, and
  * `openTarget`, which now names the pot whatever the oldest leg is. Each
  * of those is one branch here and eight sentences downstream, so a screen test
@@ -30,7 +30,7 @@ function clearing(overrides: Partial<PhoneClearingAccount> = {}): PhoneClearingA
     oldestUnconsumedTransactionId: TX,
     oldestDate: null,
     oldestUnconsumedRemainder: toMoney("480.00"),
-    oldestUnconsumedPayee: "Grocer",
+    oldestUnconsumedEnteredName: "Grocer",
     ...overrides,
   };
 }
@@ -40,11 +40,11 @@ describe("unsettledBannerModel", () => {
     expect(unsettledBannerModel([])).toBeNull();
   });
 
-  it("names the oldest open leg's payee and its remainder", () => {
+  it("names the oldest open leg's enteredName and its remainder", () => {
     const model = unsettledBannerModel([clearing()]);
     expect(model).toMatchObject({
       name: "Clearing · Bank A",
-      payee: "Grocer",
+      enteredName: "Grocer",
       balance: toMoney("480.00"),
       remainder: toMoney("480.00"),
       isOpening: false,
@@ -60,7 +60,7 @@ describe("unsettledBannerModel", () => {
     expect(model?.remainder).toEqual(toMoney("120.00"));
     expect(model?.balance).toEqual(toMoney("480.00"));
     // Both figures are stated downstream, because naming the balance beside
-    // this payee would overstate what their leg accounts for.
+    // this entered name would overstate what their leg accounts for.
     expect(model?.remainderDiffers).toBe(true);
   });
 
@@ -78,12 +78,12 @@ describe("unsettledBannerModel", () => {
     expect(model?.remainderDiffers).toBe(false);
   });
 
-  it("H2 — an opening balance is `isOpening` and has no payee", () => {
+  it("H2 — an opening balance is `isOpening` and has no enteredName", () => {
     const model = unsettledBannerModel([
-      clearing({ oldestUnconsumedTransactionId: null, oldestUnconsumedPayee: null }),
+      clearing({ oldestUnconsumedTransactionId: null, oldestUnconsumedEnteredName: null }),
     ]);
     expect(model?.isOpening).toBe(true);
-    expect(model?.payee).toBeNull();
+    expect(model?.enteredName).toBeNull();
   });
 
   /**

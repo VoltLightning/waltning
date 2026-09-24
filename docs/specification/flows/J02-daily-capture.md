@@ -46,7 +46,7 @@ S04 Today  ──tap +──→  S05 Quick add
         │              │            │              │
         └──────────────┴────────────┴──────┬───────┘
                                            │
-                    chips: account · category · payee · date · scope · note
+                    chips: account · category · entered name · date · scope · note
                           │              └─ counterparty, when attached
                           │
                      S06 Category sheet   (if category tapped)
@@ -60,19 +60,19 @@ Switching modes mid-draft never discards what is already there.
 
 **Three fill and stop; the fourth converses.** Keypad, voice and photo produce a
 draft in one pass. `💬` is an agentic loop (`SPEC.md` §11.4) — *"coffee at that
-place near the office"* can search recent payees and **ask you which one**,
+place near the office"* can search recent entered names and **ask you which one**,
 which a single pass cannot do.
 
 **The ten-second target belongs to the keypad path**, which uses no model at
 all. Choosing to converse is choosing a slower, better interaction; the budget
 follows the path rather than the screen.
 
-**The chip row is the whole model.** Account, category, payee, date, scope,
+**The chip row is the whole model.** Account, category, entered name, date, scope,
 note, and counterparty when present. Each chip is empty, filled, or
 **machine-filled** — and the third state is visually distinct, because P2 says
-anything a model produced declares itself. The payee chip matters beyond its
+anything a model produced declares itself. The entered name chip matters beyond its
 own field: D2's memory proposes a category from it, so a keypad row with no
-payee is a row that memory can never fire on.
+entered name is a row that memory can never fire on.
 
 ## 4. Branches
 
@@ -89,7 +89,7 @@ payee is a row that memory can never fire on.
 
 ### 4.1 Attaching a counterparty is three different acts
 
-`counterparty_role` (`SPEC.md` §6.6) is not a detail the interface can infer, so
+`obligation_role` (`SPEC.md` §6.6) is not a detail the interface can infer, so
 the chip asks. Wording, not enum values:
 
 | Chip reads | Role | Effect |

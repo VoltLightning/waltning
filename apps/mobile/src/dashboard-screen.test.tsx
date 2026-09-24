@@ -111,7 +111,7 @@ const ACCOUNT: PhoneAccount = {
 const RECENT: PhoneRecentTransaction = {
   id: id<"transactions">("22222222-2222-4222-8222-222222222222"),
   date: accountingDate("2026-08-12"),
-  payee: "Grocer",
+  enteredName: "Grocer",
   categoryName: "Groceries",
   accountName: "Bank A · PLN",
   amount: toMoney("-120.00"),

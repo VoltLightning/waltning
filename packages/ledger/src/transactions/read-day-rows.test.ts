@@ -21,7 +21,7 @@ function tx(suffix: string, over: Record<string, unknown> = {}) {
     date: DAY,
     type: "expense" as const,
     accountId: ACCOUNT,
-    payee: `Payee ${suffix}`,
+    enteredName: `EnteredName ${suffix}`,
     amountOriginal: money.toMoney("10"),
     currency: PLN,
     fxRate: money.pivotPerUnit("1"),
@@ -50,7 +50,7 @@ it("returns the day's rows and nothing from either side of it", () => {
     .run();
 
   const rows = readDayRows(db, DAY);
-  expect(rows.map((row) => row.payee)).toEqual(["Payee 01", "Payee 02"]);
+  expect(rows.map((row) => row.enteredName)).toEqual(["EnteredName 01", "EnteredName 02"]);
 });
 
 it("is bounded by the date, never by a row count", () => {

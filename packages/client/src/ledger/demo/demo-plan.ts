@@ -128,7 +128,7 @@ export const DEMO_CATEGORIES: readonly DemoCategory[] = [
 ];
 
 export type DemoPattern = {
-  payee: string;
+  enteredName: string;
   category: string;
   type: "income" | "expense";
   account: string;
@@ -141,7 +141,7 @@ export type DemoPattern = {
 
 export const DEMO_PATTERNS: readonly DemoPattern[] = [
   {
-    payee: "Employer",
+    enteredName: "Employer",
     category: "Salary",
     type: "income",
     account: "bank-a",
@@ -149,7 +149,7 @@ export const DEMO_PATTERNS: readonly DemoPattern[] = [
     days: [27],
   },
   {
-    payee: "Client One",
+    enteredName: "Client One",
     category: "Services",
     type: "income",
     account: "bank-b",
@@ -157,7 +157,7 @@ export const DEMO_PATTERNS: readonly DemoPattern[] = [
     days: [12],
   },
   {
-    payee: "Client Two",
+    enteredName: "Client Two",
     category: "Services",
     type: "income",
     account: "bank-b",
@@ -167,7 +167,7 @@ export const DEMO_PATTERNS: readonly DemoPattern[] = [
   },
 
   {
-    payee: "Netflix",
+    enteredName: "Netflix",
     category: "Media & streaming",
     type: "expense",
     account: "card-a",
@@ -175,7 +175,7 @@ export const DEMO_PATTERNS: readonly DemoPattern[] = [
     days: [3],
   },
   {
-    payee: "Spotify",
+    enteredName: "Spotify",
     category: "Media & streaming",
     type: "expense",
     account: "card-a",
@@ -183,7 +183,7 @@ export const DEMO_PATTERNS: readonly DemoPattern[] = [
     days: [3],
   },
   {
-    payee: "YouTube Premium",
+    enteredName: "YouTube Premium",
     category: "Media & streaming",
     type: "expense",
     account: "card-a",
@@ -191,7 +191,7 @@ export const DEMO_PATTERNS: readonly DemoPattern[] = [
     days: [8],
   },
   {
-    payee: "Anthropic",
+    enteredName: "Anthropic",
     category: "Software & tools",
     type: "expense",
     account: "card-a",
@@ -200,7 +200,7 @@ export const DEMO_PATTERNS: readonly DemoPattern[] = [
   },
 
   {
-    payee: "Landlord",
+    enteredName: "Landlord",
     category: "Rent",
     type: "expense",
     account: "bank-a",
@@ -208,7 +208,7 @@ export const DEMO_PATTERNS: readonly DemoPattern[] = [
     days: [5],
   },
   {
-    payee: "Utility Co",
+    enteredName: "Utility Co",
     category: "Utilities",
     type: "expense",
     account: "bank-a",
@@ -217,7 +217,7 @@ export const DEMO_PATTERNS: readonly DemoPattern[] = [
   },
 
   {
-    payee: "Lidl",
+    enteredName: "Lidl",
     category: "Groceries",
     type: "expense",
     account: "bank-a",
@@ -225,7 +225,7 @@ export const DEMO_PATTERNS: readonly DemoPattern[] = [
     days: [2, 16, 29],
   },
   {
-    payee: "Żabka",
+    enteredName: "Żabka",
     category: "Groceries",
     type: "expense",
     account: "cash",
@@ -233,7 +233,7 @@ export const DEMO_PATTERNS: readonly DemoPattern[] = [
     days: [9, 23],
   },
   {
-    payee: "ORLEN",
+    enteredName: "ORLEN",
     category: "Fuel & parking",
     type: "expense",
     account: "bank-a",
@@ -241,17 +241,17 @@ export const DEMO_PATTERNS: readonly DemoPattern[] = [
     days: [7, 21],
   },
   {
-    payee: "Uber",
+    enteredName: "Uber",
     category: "Taxi",
     type: "expense",
     account: "card-a",
     amount: "24.00",
     days: [6, 20],
   },
-  // Deliberately not in the catalogue — an unmatched payee has to fall back to
+  // Deliberately not in the catalogue — an unmatched entered name has to fall back to
   // a monogram, and a ledger where everything matched would never show that.
   {
-    payee: "Corner Cafe",
+    enteredName: "Corner Cafe",
     category: "Eating out",
     type: "expense",
     account: "cash",
@@ -259,7 +259,7 @@ export const DEMO_PATTERNS: readonly DemoPattern[] = [
     days: [4, 11, 18, 25],
   },
   {
-    payee: "Allegro",
+    enteredName: "Allegro",
     category: "Household supplies",
     type: "expense",
     account: "bank-a",
@@ -268,7 +268,7 @@ export const DEMO_PATTERNS: readonly DemoPattern[] = [
     every: 2,
   },
   {
-    payee: "IKEA",
+    enteredName: "IKEA",
     category: "Furniture & appliances",
     type: "expense",
     account: "bank-a",
@@ -315,7 +315,7 @@ export type DemoDebt = {
   role: "debt" | "contribution";
   account: string;
   category: string;
-  payee: string;
+  enteredName: string;
   type: "income" | "expense";
   amount: string;
   daysAgo: number;
@@ -330,7 +330,7 @@ export const DEMO_DEBTS: readonly DemoDebt[] = [
     role: "debt",
     account: "bank-a",
     category: "Eating out",
-    payee: "Dinner · split",
+    enteredName: "Dinner · split",
     type: "expense",
     amount: "240.00",
     daysAgo: 12,
@@ -340,7 +340,7 @@ export const DEMO_DEBTS: readonly DemoDebt[] = [
     role: "debt",
     account: "card-a",
     category: "Taxi",
-    payee: "Train tickets",
+    enteredName: "Train tickets",
     type: "expense",
     amount: "96.50",
     daysAgo: 4,
@@ -351,7 +351,7 @@ export const DEMO_DEBTS: readonly DemoDebt[] = [
     role: "debt",
     account: "bank-a",
     category: "Services",
-    payee: "Deposit forwarded",
+    enteredName: "Deposit forwarded",
     type: "income",
     amount: "1400.00",
     daysAgo: 21,
@@ -362,7 +362,7 @@ export const DEMO_DEBTS: readonly DemoDebt[] = [
     role: "debt",
     account: "bank-a",
     category: "Software & tools",
-    payee: "Studio B · invoice",
+    enteredName: "Studio B · invoice",
     type: "expense",
     amount: "600.00",
     daysAgo: 45,
@@ -373,7 +373,7 @@ export const DEMO_DEBTS: readonly DemoDebt[] = [
     role: "contribution",
     account: "cash",
     category: "Eating out",
-    payee: "Studio B · lunch",
+    enteredName: "Studio B · lunch",
     type: "expense",
     amount: "58.00",
     daysAgo: 30,
@@ -384,7 +384,7 @@ export const DEMO_DEBTS: readonly DemoDebt[] = [
 export type DemoTransaction = {
   account: string;
   category: string;
-  payee: string;
+  enteredName: string;
   type: "income" | "expense";
   amount: string;
   date: string;
@@ -450,9 +450,9 @@ export function demoTransactions(today: string, months: number): readonly DemoTr
         rows.push({
           account: pattern.account,
           category: pattern.category,
-          payee: pattern.payee,
+          enteredName: pattern.enteredName,
           type: pattern.type,
-          amount: vary(pattern.amount, `${pattern.payee}-${date}`),
+          amount: vary(pattern.amount, `${pattern.enteredName}-${date}`),
           date,
         });
       }

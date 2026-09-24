@@ -304,7 +304,7 @@ describe("every other guard is identifiable", () => {
   /**
    * H1a — `0001_database_objects.sql`. Broken once, here: an archived leaf is
    * one no picker offers and no chip can name, so a row pointing at one is
-   * invisible in the composer that wrote it. D2's payee memory is what reached
+   * invisible in the composer that wrote it. D2's entered name memory is what reached
    * for it (history remembers a leaf across its archiving), and this is the
    * guard that holds when the two client refusals above it do not.
    */

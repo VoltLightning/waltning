@@ -76,7 +76,7 @@ makes `Uncategorized` visibly a queue.
 
 **Positions never move.** Leaves sort by their seeded `sort` within a group and
 stay there — no recency reordering, no usage ranking. What was used last is a
-section above the grid (§9.1), and **a suggestion names its payee** — *Because
+section above the grid (§9.1), and **a suggestion names its entered name** — *Because
 you are at Café A* — when the draft has one, so the reader knows why it is
 there before judging it. This screen is opened
 several times a day by a thumb, and a target that has stopped moving can be hit
@@ -193,7 +193,7 @@ double-checking; the ordinary path is one tap on the leaf itself.
    regardless of the selected group, and one keystroke away — **and from a
    section above the grid, not a reordering of it.** *You used these last*
    draws the four categories used most recently (`recentCategories`, read off
-   D2's own payee history) over an *All categories* line, and only over the
+   D2's own entered name history) over an *All categories* line, and only over the
    whole grid: a group or a search is already a narrower answer. Four, in two
    rows, so once the history holds four the section's height never changes and
    the grid under it stays exactly where the thumb left it. A recent is a

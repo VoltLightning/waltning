@@ -2,8 +2,8 @@
  * `parseCapture` — D1's deterministic capture grammar.
  *
  * Amount first (`amount.ts`), then account, category and date bind by name
- * or pattern, and whatever text is left over is the payee. No model, no
- * fuzzy match (the fuzzy tier is the payee memory — `screens/S05-quick-add.md` §3
+ * or pattern, and whatever text is left over is the entered name. No model, no
+ * fuzzy match (the fuzzy tier is the entered name memory — `screens/S05-quick-add.md` §3
  * names it explicitly). When the shape does not resolve, the reason says
  * which piece is missing, so the screen can offer *interpret with model*
  * instead of silently spending 2–5s (`screens/S05-quick-add.md` §3).
@@ -43,7 +43,7 @@ export type CaptureParse =
       accountId: string;
       categoryId: string | null;
       date: AccountingDate;
-      payee: string;
+      enteredName: string;
       unmatched: readonly string[];
     }
   | {
@@ -91,7 +91,7 @@ function remainingTokens(
   return tokens.filter((t) => !consumed.some((c) => overlaps(c, t.span))).map((t) => t.text);
 }
 
-/** Strip leading/trailing punctuation from the joined payee — letters and digits stay, in any language. */
+/** Strip leading/trailing punctuation from the joined entered name — letters and digits stay, in any language. */
 const PUNCTUATION_EDGES = /^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu;
 
 export function parseCapture(text: string, context: CaptureContext): CaptureParse {
@@ -175,12 +175,12 @@ export function parseCapture(text: string, context: CaptureContext): CapturePars
   }
 
   const remaining = remainingTokens(tokens, consumed);
-  const payee = remaining.join(" ").replace(PUNCTUATION_EDGES, "");
+  const enteredName = remaining.join(" ").replace(PUNCTUATION_EDGES, "");
 
-  // "unmatched tokens > 6 or > 60% of tokens and the payee would be empty" —
+  // "unmatched tokens > 6 or > 60% of tokens and the entered name would be empty" —
   // Task 4's literal threshold.
   const tooMuchUnmatched =
-    remaining.length > 6 || (remaining.length / tokens.length > 0.6 && payee === "");
+    remaining.length > 6 || (remaining.length / tokens.length > 0.6 && enteredName === "");
 
   if (tooMuchUnmatched) {
     return {
@@ -197,7 +197,7 @@ export function parseCapture(text: string, context: CaptureContext): CapturePars
     accountId,
     categoryId,
     date,
-    payee,
+    enteredName,
     unmatched: remaining,
   };
 }

@@ -18,7 +18,7 @@ sequenceDiagram
 
     V->>UI: "coffee at that place near the office"
     UI->>AG: start turn
-    AG->>REG: search_transactions(payee~, recent)
+    AG->>REG: search_transactions(entered_name~, recent)
     REG->>DB: trigram search
     DB-->>AG: prior Corner Café rows
     AG-->>V: "the café near the office?"
@@ -90,7 +90,7 @@ sequenceDiagram
     UI->>IMP: create batch
     IMP->>DB: insert import_rows (raw, unmutated)
     loop per batch of ~50
-        IMP->>DB: retrieve k similar prior payees
+        IMP->>DB: retrieve k similar prior entered names
         IMP->>M: classify (cached prefix + rows after breakpoint)
         M-->>IMP: {category, confidence, reason} per row
         IMP->>DB: store model_id, rule_snapshot, retrieved_ids

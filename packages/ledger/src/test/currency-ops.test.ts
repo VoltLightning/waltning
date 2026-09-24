@@ -186,7 +186,7 @@ describe("archive_currency", () => {
 
   // BLOCKER — a live transaction can reference a currency through
   // `debt_currency` alone (§7, `coalesce(debt_currency, currency)`): a
-  // `currency: USD` transaction with `counterpartyRole: 'debt'` and
+  // `currency: USD` transaction with `obligationRole: 'debt'` and
   // `debtCurrency: EUR` names EUR, and archiving EUR must be refused just as
   // it would be if EUR were the transaction's own `currency`.
   it("refuses a currency a live transaction references only through debt_currency", () => {
@@ -200,7 +200,7 @@ describe("archive_currency", () => {
         amountOriginal: money.toMoney("10.00"),
         currency: USD,
         fxRate: money.pivotPerUnit("1"),
-        counterpartyRole: "debt",
+        obligationRole: "debt",
         debtCurrency: EUR,
         debtAmount: money.toMoney("10.00"),
       })

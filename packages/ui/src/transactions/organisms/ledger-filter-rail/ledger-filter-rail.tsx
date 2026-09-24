@@ -77,7 +77,7 @@ export type LedgerFilterRailValue<Scope extends string = string> = {
   /** `""` — every currency. */
   currency: string;
   /** `""` — every counterparty. */
-  counterpartyId: string;
+  obligationCounterpartyId: string;
   from: string;
   to: string;
 };
@@ -103,7 +103,7 @@ export type LedgerFilterRailExclusions = {
   categoryIds?: number | undefined;
   scope?: number | undefined;
   currency?: number | undefined;
-  counterpartyId?: number | undefined;
+  obligationCounterpartyId?: number | undefined;
   dateRange?: number | undefined;
 };
 
@@ -222,11 +222,11 @@ export function LedgerFilterRail<Scope extends string = string>({
         label={t("transactions.filterCounterparty")}
         placeholder={t("transactions.filterEveryCounterparty")}
         options={options.counterparties}
-        value={value.counterpartyId}
+        value={value.obligationCounterpartyId}
         onChange={onChangeCounterpartyId}
         searchable
       />
-      <ExcludesNote count={exclusions?.counterpartyId} />
+      <ExcludesNote count={exclusions?.obligationCounterpartyId} />
 
       {/*
         §4's arbitrary date range, which the stepper above cannot express —

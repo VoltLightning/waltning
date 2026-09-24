@@ -237,7 +237,7 @@ describe("createTransactionInput", () => {
   it("supplies the column's own defaults", () => {
     const parsed = createTransactionInput.parse(expense);
 
-    expect(parsed.payee).toBe("");
+    expect(parsed.enteredName).toBe("");
     expect(parsed.note).toBe("");
     expect(parsed.isBusiness).toBe(false);
     expect(parsed.isCapital).toBe(false);
@@ -485,25 +485,25 @@ describe("createTransactionInput", () => {
       // at all, so leaving it unsaid is not a smaller claim.
       const noRole = createTransactionInput.safeParse({
         ...expense,
-        counterpartyId: COUNTERPARTY_ID,
+        obligationCounterpartyId: COUNTERPARTY_ID,
       });
       const noCounterparty = createTransactionInput.safeParse({
         ...expense,
-        counterpartyRole: "debt",
+        obligationRole: "debt",
       });
 
-      expect(paths(noRole)).toContain("counterpartyRole");
-      expect(paths(noCounterparty)).toContain("counterpartyId");
+      expect(paths(noRole)).toContain("obligationRole");
+      expect(paths(noCounterparty)).toContain("obligationCounterpartyId");
     });
 
     it("accepts the pair", () => {
       const parsed = createTransactionInput.parse({
         ...expense,
-        counterpartyId: COUNTERPARTY_ID,
-        counterpartyRole: "debt",
+        obligationCounterpartyId: COUNTERPARTY_ID,
+        obligationRole: "debt",
       });
 
-      expect(parsed.counterpartyRole).toBe("debt");
+      expect(parsed.obligationRole).toBe("debt");
     });
   });
 });
@@ -731,9 +731,9 @@ describe("update_transaction", () => {
     const parsed = updateTransactionInput.parse({
       id: TXN_ID,
       version: 3,
-      patch: { payee: "Coffee" },
+      patch: { enteredName: "Coffee" },
     });
-    expect(parsed.patch).toEqual({ payee: "Coffee" });
+    expect(parsed.patch).toEqual({ enteredName: "Coffee" });
     expect(() => updateTransactionInput.parse({ id: TXN_ID, patch: {} })).toThrow();
   });
 

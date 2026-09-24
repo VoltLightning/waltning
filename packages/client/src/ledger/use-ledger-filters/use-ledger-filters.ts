@@ -14,7 +14,7 @@
  * (`JSON.stringify`) only changes when a value actually did.
  *
  * **Every dimension §4 names lives here, not only the ones the phone sheet
- * draws.** `currency` and `counterpartyId` are the desk rail's own two extra
+ * draws.** `currency` and `obligationCounterpartyId` are the desk rail's own two extra
  * controls (S10 §4: "account · category · scope · currency · date range ·
  * counterparty"); the phone sheet simply does not render them yet. Filing
  * them anywhere else would make the desk rail's state a second filter object
@@ -54,7 +54,7 @@ export type LedgerFilterState = {
   /** `""` — every currency. A bare code otherwise. */
   currency: string;
   /** `""` — every counterparty. */
-  counterpartyId: string;
+  obligationCounterpartyId: string;
   from: string;
   to: string;
 };
@@ -65,7 +65,7 @@ export const EMPTY_LEDGER_FILTER: LedgerFilterState = {
   categoryIds: [],
   scope: "all",
   currency: "",
-  counterpartyId: "",
+  obligationCounterpartyId: "",
   from: "",
   to: "",
 };
@@ -78,8 +78,8 @@ export const EMPTY_LEDGER_FILTER: LedgerFilterState = {
  * same query with one dimension emptied, and re-deriving the reshape there
  * would be the second place a field could be forgotten.
  *
- * **`counterpartyId` is absent when unset rather than `""`** — the port
- * reads any *present* `counterpartyId` as a filter, so an empty string would
+ * **`obligationCounterpartyId` is absent when unset rather than `""`** — the port
+ * reads any *present* `obligationCounterpartyId` as a filter, so an empty string would
  * match no row at all instead of every row. `currency` and the dates are the
  * other way round: `""` is what the port already reads as "no filter".
  */
@@ -90,7 +90,9 @@ export function ledgerFilterDraft(filter: LedgerFilterState): TransactionFilterD
     categoryIds: filter.categoryIds,
     scope: filter.scope,
     currency: filter.currency,
-    ...(filter.counterpartyId === "" ? {} : { counterpartyId: filter.counterpartyId }),
+    ...(filter.obligationCounterpartyId === ""
+      ? {}
+      : { obligationCounterpartyId: filter.obligationCounterpartyId }),
     from: filter.from,
     to: filter.to,
   };
@@ -118,7 +120,7 @@ export type UseLedgerFiltersResult = {
   setCategoryIds: (ids: readonly string[]) => void;
   setScope: (scope: PhoneTransactionScope) => void;
   setCurrency: (code: string) => void;
-  setCounterpartyId: (id: string) => void;
+  setObligationCounterpartyId: (id: string) => void;
   setFrom: (value: string) => void;
   setTo: (value: string) => void;
   /** Both ends in one update — the desk rail's period stepper never wants a half-set range on screen. */
@@ -154,8 +156,8 @@ export function useLedgerFilters(initial?: Partial<LedgerFilterState>): UseLedge
   const setCurrency = useCallback((code: string) => {
     setFilter((current) => ({ ...current, currency: code }));
   }, []);
-  const setCounterpartyId = useCallback((counterpartyId: string) => {
-    setFilter((current) => ({ ...current, counterpartyId }));
+  const setObligationCounterpartyId = useCallback((obligationCounterpartyId: string) => {
+    setFilter((current) => ({ ...current, obligationCounterpartyId }));
   }, []);
   const setFrom = useCallback((value: string) => {
     setFilter((current) => ({ ...current, from: value }));
@@ -185,7 +187,7 @@ export function useLedgerFilters(initial?: Partial<LedgerFilterState>): UseLedge
     setFilter((current) => ({ ...current, currency: "" }));
   }, []);
   const removeCounterparty = useCallback(() => {
-    setFilter((current) => ({ ...current, counterpartyId: "" }));
+    setFilter((current) => ({ ...current, obligationCounterpartyId: "" }));
   }, []);
   const removeDateRange = useCallback(() => {
     setFilter((current) => ({ ...current, from: "", to: "" }));
@@ -205,7 +207,7 @@ export function useLedgerFilters(initial?: Partial<LedgerFilterState>): UseLedge
     filter.categoryIds.length > 0 ||
     filter.scope !== "all" ||
     filter.currency !== "" ||
-    filter.counterpartyId !== "" ||
+    filter.obligationCounterpartyId !== "" ||
     filter.from !== "" ||
     filter.to !== "";
 
@@ -219,7 +221,7 @@ export function useLedgerFilters(initial?: Partial<LedgerFilterState>): UseLedge
     setCategoryIds,
     setScope,
     setCurrency,
-    setCounterpartyId,
+    setObligationCounterpartyId,
     setFrom,
     setTo,
     setRange,
