@@ -84,8 +84,10 @@ describe("what a change can reach", () => {
 
   it("runs a changed component's own stories", () => {
     if (!requireIndex()) return;
+    // Its own story, and PagerFrame's — the frame draws the header, so a
+    // change to the header can move the frame's pixels too.
     expect(decide(["packages/ui/src/shell/molecules/pager-header/pager-header.tsx"])).toBe(
-      "Shell/PagerHeader",
+      "Shell/PagerHeader|Shell/PagerFrame",
     );
   });
 
