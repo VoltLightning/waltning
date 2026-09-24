@@ -258,7 +258,13 @@ export function GroundPanel({
   const scroller = useAnimatedRef<Animated.ScrollView>();
   const contentTop = useRef<View>(null);
   const room = useKeyboardRoom(panel, scroller, contentTop);
-  const offset = useScrollViewOffset(scroller);
+  // **Only a page-scrolling panel has a scroller to observe.** In
+  // `scroll="own"` the ref is never attached — the screen's own list scrolls —
+  // and Reanimated warns *animatedRef is not initialized* on every mount when
+  // handed one. `null` is typed (`Maybe<AnimatedRef>`) and handled — both
+  // platforms return early in the observing effect — and the hook still runs,
+  // so the hook order does not change between modes.
+  const offset = useScrollViewOffset(scroll === "own" ? null : scroller);
   const edge = useAnimatedStyle(() => ({ opacity: edgeOpacity(offset.value) }), [offset]);
 
   if (scroll === "own") {
@@ -335,7 +341,11 @@ export function GroundPanel({
         cutting straight across it, so on a tab root it traces the lift instead
         of contradicting it.
       */}
-      <Animated.View style={[styles.topEdge, edge]} pointerEvents="none" />
+      <Animated.View
+        testID="ground-panel-top-edge"
+        style={[styles.topEdge, edge]}
+        pointerEvents="none"
+      />
     </View>
   );
 }
