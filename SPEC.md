@@ -1121,8 +1121,10 @@ transactions            id, date, type, account_id, to_account_id, category_id,
                                                               -- business rows only (§13.2)
                         entered_name, note, is_business,
                         source, external_id, deleted_at
-dashboard_layouts       id, name, is_active, is_preset, sort  -- §14.5
-dashboard_widgets       id, layout_id, kind, slot, size, config, sort
+dashboard_layouts       id, name, is_active, is_preset, sort,
+                        external_id                           -- §14.5
+dashboard_widgets       id, layout_id, kind, slot, size, config, sort,
+                        external_id
 targets                 id, category_id, period, amount, currency,
                         active_from, active_to                -- not budgets (§14.7)
 agent_auto_grants       id, session_id, operation_class, granted_at,
@@ -4568,13 +4570,23 @@ already says who this is.
 The dashboard is a **configurable grid of widgets**, not a fixed page.
 
 ```
-dashboard_layouts   id, name, is_active, is_preset, sort
-dashboard_widgets   id, layout_id →dashboard_layouts, kind, slot, size, config, sort
+dashboard_layouts   id, name, is_active, is_preset, sort, external_id
+dashboard_widgets   id, layout_id →dashboard_layouts, kind, slot, size, config, sort,
+                    external_id
 ```
 
 **Layouts are rows, not constants.** Presets ship as seeded `is_preset` rows, so
 switching between them preserves each one's per-widget configuration instead of
-overwriting a single stored grid. It also makes *"put family spending on my
+overwriting a single stored grid.
+
+**A shipped row is named by `external_id`, never by an id written into a
+migration.** `seed:<key>` — `seed:standing` for the preset, `seed:standing:debt`
+for one of its widgets — is what makes a row on the phone and a row on the
+server the same row, exactly as it already does for the category tree (§6.3).
+The two engines mint their own uuids and never compare them. The one list both
+read is `@waltning/core/dashboard`; a preset that changes changes there, and a
+migration that had to name ids to say which row it meant is what the key
+replaces. It also makes *"put family spending on my
 dashboard"* an ordinary audited write through the operation registry (§11.0)
 rather than a special case the agent cannot reach.
 

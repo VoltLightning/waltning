@@ -6,10 +6,14 @@
  *   (`./brand-aliases.ts`) insert `ON CONFLICT DO NOTHING`, `architecture/14`
  *   §14.6's rule: *"reference data is bootstrapped, never restored"*, so a
  *   second run never reverts a row someone has edited.
- * - **The category tree** — keyed on a stable `seed:<key>` external id and
- *   upserted, because `TAXONOMY.md` is the definition of that tree rather
- *   than a starting point for it: a renamed or re-parented leaf in the
- *   taxonomy is a change this seed is expected to carry through.
+ * - **The category tree and the shipped dashboard** — keyed on a stable
+ *   `seed:<key>` external id and upserted, because `TAXONOMY.md` and
+ *   `@waltning/core/dashboard` are the *definitions* of those lists rather
+ *   than starting points for them: a renamed leaf, or a widget that moves in
+ *   the preset grid, is a change this seed is expected to carry through.
+ *   Neither ever identifies a row by a uuid — that is what the key is for,
+ *   and it is why `dashboard.ts` exists beside a migration that already
+ *   inserts the same rows.
  */
 
 import { existsSync } from "node:fs";
@@ -22,6 +26,7 @@ import { requireRow } from "../rows.ts";
 import { categories } from "../schema.ts";
 import { seedBrandAliases } from "./brand-aliases.ts";
 import { seedCurrencies } from "./currencies.ts";
+import { seedDashboard } from "./dashboard.ts";
 
 const rootEnv = fileURLToPath(new URL("../../../../.env", import.meta.url));
 if (existsSync(rootEnv)) process.loadEnvFile(rootEnv);
@@ -118,6 +123,9 @@ async function main() {
 
   const brandAliasCount = await seedBrandAliases(db);
   console.log(`  brand aliases   ${brandAliasCount}`);
+
+  const dash = await seedDashboard(db);
+  console.log(`  dashboard       ${dash.layouts} layout · ${dash.widgets} widgets`);
 
   const inc = await seedTree(incomeTree, 0);
   console.log(`  income          ${inc.groups} groups · ${inc.leaves} leaves`);

@@ -38,6 +38,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fold } from "@waltning/core/capture/names";
+import { layoutKey, PRESET_LAYOUT } from "@waltning/core/dashboard";
 import Database from "better-sqlite3";
 import { type SQL, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/better-sqlite3";
@@ -64,6 +65,15 @@ import { ledgerSchema as schema } from "../schema-map.ts";
  * gets a row here and inherits the check, which is the only way a rule
  * survives the PR that stops thinking about it.
  */
+/**
+ * **Each row brings its own fixture**, and it did not always. This table was
+ * one entry long and the test seeded five `counterparties` inline, which read
+ * as a table of columns and behaved as a test of `name_folded`. The second
+ * entry — a dashboard key, filled on a different table — had nowhere to put
+ * its rows, and the choice was to generalise or to exempt the step from the
+ * coverage rule two describes above. Exempting it would have made the rule
+ * "every fill is proven, unless proving it is awkward".
+ */
 const FILLED_COLUMNS = [
   {
     tag: "0006_schema",
@@ -74,6 +84,35 @@ const FILLED_COLUMNS = [
     /** The column the fill derives from — empty here means there was nothing to derive. */
     source: "name",
     /**
+     * Four names the fill has to get exactly right, not merely move off the
+     * sentinel: an ASCII one, one whose fold needs more than SQLite's
+     * ASCII-only `lower()`, one in decomposed form, and one carrying
+     * surrounding whitespace — `fold()` does not trim, so an untrimmed
+     * backfill and the trimmed value the write path stores differ by exactly
+     * the spaces, which is invisible to "not the sentinel". Plus one already
+     * archived, because the fill covers every row rather than the live ones:
+     * `counterparties_name_uq` is partial, so an archived row is outside the
+     * index — and still needs a real value, or unarchiving it later would
+     * restore a row the index cannot accept.
+     */
+    seed: (run: (statement: SQL) => void) => {
+      const when = 1_767_225_600;
+      for (const [id, name] of [
+        ["cp-a", "Nina Placeholder"],
+        ["cp-b", "Łukasz Placeholder"],
+        ["cp-c", "Józef Placeholder".normalize("NFD")],
+        ["cp-d", "  Marek Placeholder  "],
+      ] as const) {
+        run(
+          sql`insert into "counterparties" ("id", "name", "created_at", "updated_at") values (${id}, ${name}, ${when}, ${when})`,
+        );
+      }
+      run(
+        sql`insert into "counterparties" ("id", "name", "archived", "created_at", "updated_at") values ('cp-archived', 'Archived Placeholder', 1, ${when}, ${when})`,
+      );
+    },
+    rows: 5,
+    /**
      * What the write path would have written for that source, exactly — the
      * expression `create-counterparty.executor.ts` and
      * `update-counterparty.executor.ts` both use. A backfill that agreed with
@@ -82,6 +121,45 @@ const FILLED_COLUMNS = [
      * unique index built over the column is precisely where that surfaces.
      */
     expected: (source: string) => fold(source.trim()),
+  },
+  {
+    /**
+     * The preset layout's own key. Derived from nothing on the row — every
+     * `is_preset` row is `seed:standing` — so `source` is only what the
+     * projection reads back beside it.
+     */
+    tag: "0018_schema",
+    table: "dashboard_layouts",
+    column: "external_id",
+    /** `ADD COLUMN` with no default leaves NULL, not an empty string. */
+    sentinel: null,
+    source: "name",
+    /**
+     * Nothing to seed: `0011_dashboard_layout_seed.sql` is part of the chain
+     * this test runs, so the preset is already there by the time the step
+     * under test arrives — which is also the only state a real database is
+     * ever in when it does.
+     */
+    seed: () => {},
+    rows: 1,
+    expected: () => layoutKey(PRESET_LAYOUT),
+  },
+  {
+    /**
+     * A widget's key, which *is* derived: `seed:<layout>:<kind>`. This is the
+     * half worth asserting row by row — a backfill that built the key from
+     * `slot` instead would pass every sentinel check and rename all five rows
+     * the next time a release moved a widget in the grid.
+     */
+    tag: "0018_schema",
+    table: "dashboard_widgets",
+    column: "external_id",
+    sentinel: null,
+    source: "kind",
+    /** The chain's own `0011_` seeds these five — see the layout entry above. */
+    seed: () => {},
+    rows: PRESET_LAYOUT.widgets.length,
+    expected: (source: string) => `${layoutKey(PRESET_LAYOUT)}:${source}`,
   },
 ] as const;
 
@@ -362,7 +440,7 @@ describe("a hook fills every row with the value the write path would have writte
    */
   it.each(FILLED_COLUMNS)(
     "$tag fills $table.$column exactly, on every row, archived included",
-    ({ tag, table, column, sentinel, source, expected }) => {
+    ({ tag, table, column, sentinel, source, seed, rows: expectedRows, expected }) => {
       const stepIndex = REPLICA_STEPS.findIndex((step) => step.tag === tag);
       expect(stepIndex, `${tag} is a generated replica file`).toBeGreaterThanOrEqual(0);
 
@@ -380,31 +458,9 @@ describe("a hook fills every row with the value the write path would have writte
         migrations: REPLICA_MIGRATIONS.slice(0, stepIndex),
       });
 
-      // Four names the fill has to get exactly right, not merely move off the
-      // sentinel: an ASCII one, one whose fold needs more than SQLite's
-      // ASCII-only `lower()`, one in decomposed form, and one carrying
-      // surrounding whitespace — `fold()` does not trim, so an untrimmed
-      // backfill and the trimmed value the write path stores differ by
-      // exactly the spaces, which is invisible to "not the sentinel".
-      const when = 1_767_225_600;
-      for (const [id, name] of [
-        ["cp-a", "Anna Placeholder"],
-        ["cp-b", "Łukasz Placeholder"],
-        ["cp-c", "Józef Placeholder".normalize("NFD")],
-        ["cp-d", "  Marek Placeholder  "],
-      ] as const) {
-        ledger.replica.db.run(
-          sql`insert into "counterparties" ("id", "name", "created_at", "updated_at") values (${id}, ${name}, ${when}, ${when})`,
-        );
-      }
-
-      // And one already archived, because the fill covers every row rather
-      // than the live ones: `counterparties_name_uq` is partial, so an
-      // archived row is outside the index — and still needs a real value, or
-      // unarchiving it later would restore a row the index cannot accept.
-      ledger.replica.db.run(
-        sql`insert into "counterparties" ("id", "name", "archived", "created_at", "updated_at") values ('cp-archived', 'Archived Placeholder', 1, ${when}, ${when})`,
-      );
+      seed((statement) => {
+        ledger.replica.db.run(statement);
+      });
 
       migrateReplica(ledger.replica, { fs: noopFs });
 
@@ -413,7 +469,7 @@ describe("a hook fills every row with the value the write path would have writte
       );
       ledger.close();
 
-      expect(rows.length, "rows to check").toBe(5);
+      expect(rows.length, "rows to check").toBe(expectedRows);
       const stranded = rows.filter(
         (row) => row.filled === sentinel && (row.source ?? "").trim() !== "",
       );

@@ -9,6 +9,7 @@
     "./brands/*": "./src/brands/*.ts",
     "./capture/*": "./src/capture/*.ts",
     "./currencies": "./src/currencies.ts",
+    "./dashboard": "./src/dashboard.ts",
     "./date": "./src/date.ts",
     "./diagnostics": "./src/diagnostics.ts",
     "./id": "./src/id.ts",

@@ -102,6 +102,7 @@
  */
 
 import { fold } from "@waltning/core/capture/names";
+import { layoutKey, PRESET_LAYOUT } from "@waltning/core/dashboard";
 import { errorFromThrown } from "@waltning/core/diagnostics";
 import { RATE_MAX_EXCLUSIVE, RATE_MIN_EXCLUSIVE } from "@waltning/core/money";
 import { type SQL, sql } from "drizzle-orm";
@@ -641,6 +642,13 @@ BEGIN
 END`,
 ];
 
+/**
+ * `seed:standing`, derived rather than repeated — the backfill below and
+ * `bootstrap-dashboard.ts` must agree on what names the preset, and two string
+ * literals agreeing is the upkeep this whole change exists to remove.
+ */
+const PRESET_KEY = layoutKey(PRESET_LAYOUT);
+
 export const REPLICA_BACKFILLS: Readonly<Record<string, Backfill>> = {
   "0006_schema": {
     check: (db) => {
@@ -748,6 +756,42 @@ export const REPLICA_BACKFILLS: Readonly<Record<string, Backfill>> = {
       for (const statement of CATEGORY_KIND_TRIGGERS) tx.run(sql.raw(statement));
       for (const statement of LINE_SUM_TRIGGERS) tx.run(sql.raw(statement));
       for (const statement of AMOUNT_POSITIVE_TRIGGERS) tx.run(sql.raw(statement));
+    },
+  },
+  "0018_schema": {
+    /**
+     * **The preset's `seed:<key>`, attached to the rows an installed database
+     * already has — and found by what they *are*, never by the uuid they were
+     * seeded with.**
+     *
+     * `0011_dashboard_layout_seed.sql` wrote six literal uuids, and the
+     * obvious backfill is to name them again here. That would be the third
+     * copy of the same list: two migrations and a hook, each frozen at a
+     * different moment, all claiming to know which row is `Standing`. So this
+     * asks the database instead — the preset is the row with `is_preset`, and
+     * its widgets are the rows pointing at it — which is true of a database
+     * seeded by that migration and of one seeded by any later mechanism.
+     *
+     * A widget's key is built from its `kind`, matching
+     * `@waltning/core/dashboard`'s `widgetKey`. `kind` is unique within the
+     * shipped layout, and unlike `slot` it does not change when a release
+     * moves a widget in the grid.
+     *
+     * Runs on every installed database and on none that is fresh: a fresh one
+     * has no rows yet when this step runs, and `bootstrapDashboard` writes the
+     * keys itself a moment later at session start.
+     */
+    fill: (tx) => {
+      tx.run(
+        sql.raw(
+          `update "dashboard_layouts" set "external_id" = '${PRESET_KEY}' where "is_preset" = 1 and "external_id" is null`,
+        ),
+      );
+      tx.run(
+        sql.raw(
+          `update "dashboard_widgets" set "external_id" = '${PRESET_KEY}:' || "kind" where "external_id" is null and "layout_id" in (select "id" from "dashboard_layouts" where "is_preset" = 1)`,
+        ),
+      );
     },
   },
 };

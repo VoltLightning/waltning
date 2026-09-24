@@ -78,6 +78,13 @@ export function openJourney(options?: {
    * the version a branch leaves behind. See `LocalLedgerSessionOptions`.
    */
   migrations?: LocalLedgerSessionOptions<Run>["migrations"];
+  /**
+   * How the shipped taxonomy's ids are minted. `LocalLedgerSessionOptions`
+   * has carried this seam since the taxonomy shipped and nothing reached it,
+   * because nothing forwarded it through here — so every journey, and every
+   * fixture dump, got `randomId` and 74 unrepeatable uuids.
+   */
+  mintId?: LocalLedgerSessionOptions<Run>["mintId"];
 }): Journey {
   const dir = mkdtempSync(join(tmpdir(), "waltning-journey-"));
   const paths: LedgerPaths = { replica: join(dir, "replica.db"), outbox: join(dir, "outbox.db") };
@@ -89,6 +96,7 @@ export function openJourney(options?: {
     removeDatabase: (path) => rmSync(path, { force: true }),
     bootstrapCurrencies: options?.bootstrap ?? [],
     ...(options?.migrations ? { migrations: options.migrations } : {}),
+    ...(options?.mintId ? { mintId: options.mintId } : {}),
     // No journey built on this harness is about a pre-journal store — that
     // gets its own construction in `upgrade.journey.test.ts`.
     preJournalStores: "refuse",
