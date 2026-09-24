@@ -140,8 +140,8 @@ it("draws no card for a kind nobody holds an account in", () => {
   for (const kind of [
     "Card",
     "Clearing",
-    "Loan (receivable)",
-    "Loan (payable)",
+    "Owed to you",
+    "You owe",
     "Investment",
     "Deposit",
     "Other",
