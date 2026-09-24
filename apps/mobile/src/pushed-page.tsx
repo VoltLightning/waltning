@@ -18,6 +18,7 @@ import { BackMark } from "@waltning/ui/shell/back-mark";
 import { GroundPanel, type GroundPanelProps } from "@waltning/ui/shell/card";
 import { PageHeader } from "@waltning/ui/shell/page-header";
 import { router } from "expo-router";
+import type { ReactNode } from "react";
 
 /**
  * The way back, and where it goes when there is no back.
@@ -42,15 +43,21 @@ export type PushedHeaderProps = {
   title: string;
   /** The deck gives every screen one; it says what the screen is for before a row is read. */
   subtitle?: string;
+  /** `PageHeader`'s own — a band the page below continues. */
+  tint?: string;
+  /** `PageHeader`'s own — words drawn in the title's place. */
+  titleNode?: ReactNode;
 };
 
-export function PushedHeader({ title, subtitle }: PushedHeaderProps) {
+export function PushedHeader({ title, subtitle, tint, titleNode }: PushedHeaderProps) {
   const t = useT();
 
   return (
     <PageHeader
       title={title}
       {...(subtitle === undefined ? {} : { subtitle })}
+      {...(tint === undefined ? {} : { tint })}
+      {...(titleNode === undefined ? {} : { titleNode })}
       action={
         <IconButton label={t("common.back")} onPress={goBack}>
           <BackMark />
@@ -64,6 +71,8 @@ export type PushedPageProps = PushedHeaderProps & {
   children: GroundPanelProps["children"];
   /** Passed straight through — a screen with its own virtualized list still needs `"own"`. */
   scroll?: GroundPanelProps["scroll"];
+  /** Passed straight through — a header that folds as the page moves. */
+  onScroll?: GroundPanelProps["onScroll"];
 };
 
 /**
@@ -74,11 +83,29 @@ export type PushedPageProps = PushedHeaderProps & {
  * without one, which is how eleven screens ended up with a navigation band
  * nobody chose.
  */
-export function PushedPage({ title, subtitle, children, scroll }: PushedPageProps) {
+export function PushedPage({
+  title,
+  subtitle,
+  tint,
+  titleNode,
+  children,
+  scroll,
+  onScroll,
+}: PushedPageProps) {
   return (
     <>
-      <PushedHeader title={title} {...(subtitle === undefined ? {} : { subtitle })} />
-      <GroundPanel {...(scroll === undefined ? {} : { scroll })}>{children}</GroundPanel>
+      <PushedHeader
+        title={title}
+        {...(subtitle === undefined ? {} : { subtitle })}
+        {...(tint === undefined ? {} : { tint })}
+        {...(titleNode === undefined ? {} : { titleNode })}
+      />
+      <GroundPanel
+        {...(scroll === undefined ? {} : { scroll })}
+        {...(onScroll === undefined ? {} : { onScroll })}
+      >
+        {children}
+      </GroundPanel>
     </>
   );
 }

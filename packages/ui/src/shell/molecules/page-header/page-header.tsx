@@ -43,9 +43,20 @@ export type PageHeaderProps = {
   subtitle?: string;
   /** One control at the right — the way back, or a composer's ✕. Never two. */
   action?: ReactNode;
+  /**
+   * The band's fill, when the page below opens with a band of its own that
+   * this header continues — S09's category wash. Absent, the ground.
+   */
+  tint?: string;
+  /**
+   * Words drawn in the title's place — S09's date, which trades places with
+   * the name and amount as the page scrolls. `title` still names the band for
+   * assistive technology; this is only what is drawn.
+   */
+  titleNode?: ReactNode;
 };
 
-export function PageHeader({ title, subtitle, action }: PageHeaderProps) {
+export function PageHeader({ title, subtitle, action, tint, titleNode }: PageHeaderProps) {
   const styles = useStyles();
   const insets = useSafeArea();
 
@@ -57,14 +68,25 @@ export function PageHeader({ title, subtitle, action }: PageHeaderProps) {
     paddingTop: gutter + insets.top,
     paddingLeft: gutter + space.xs + insets.left,
     paddingRight: gutter + space.xs + insets.right,
+    ...(tint === undefined ? {} : { backgroundColor: tint }),
   };
 
   return (
     <View style={[styles.band, clearance]}>
       <View style={styles.words}>
-        <Text style={styles.title} numberOfLines={1} maxFontSizeMultiplier={textCap("displayTwo")}>
-          {title}
-        </Text>
+        {titleNode !== undefined ? (
+          <View accessible accessibilityRole="header" accessibilityLabel={title}>
+            {titleNode}
+          </View>
+        ) : (
+          <Text
+            style={styles.title}
+            numberOfLines={1}
+            maxFontSizeMultiplier={textCap("displayTwo")}
+          >
+            {title}
+          </Text>
+        )}
         {subtitle === undefined ? null : (
           <Text style={styles.subtitle} numberOfLines={1}>
             {subtitle}

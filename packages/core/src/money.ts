@@ -787,7 +787,16 @@ export type SpendByCategoryTransactionRow = {
   /** The transaction's own category — read only for a row with no lines. */
   categoryId: string | null;
   amountOriginal: Money;
+  /** §6.8's one-off — dropped only when the caller asks for a comparison. */
+  isCapital: boolean;
 };
+
+/**
+ * **A comparison leaves one-offs out; a record keeps them** (§5). S01's donut
+ * is a record of where the money went and passes nothing; S09's *usual month*
+ * is a comparison and passes `excludeCapital`.
+ */
+export type SpendByCategoryOptions = { excludeCapital?: boolean };
 
 export type SpendByCategoryLineRow = {
   transactionId: string;
@@ -833,11 +842,13 @@ export const spendByCategory = (
   lines: readonly SpendByCategoryLineRow[],
   period: Period,
   scope: LedgerScope,
+  options: SpendByCategoryOptions = {},
 ): readonly SpendByCategoryRow[] => {
   const eligible = new Map<string, SpendByCategoryTransactionRow>();
   for (const row of transactions) {
     if (!inScope(row, scope)) continue;
     if (row.type !== "expense") continue;
+    if (options.excludeCapital === true && row.isCapital) continue;
     if (!inPeriod(row.date, period)) continue;
     eligible.set(row.id, row);
   }

@@ -27,10 +27,9 @@
  * capture sheet: you rarely know at the till that a purchase would distort a
  * trend, and marking it later never moves a balance.
  *
- * **A read, not snapshot state.** `controller.getTransaction(id)` is called
- * once on mount and again after every successful write — there is no
- * subscription for one row, so a save that changes nothing this screen
- * shows (an unrelated write elsewhere) never triggers an extra read.
+ * **Two reads of one row.** The draft's base — mount and this screen's own
+ * writes, whose `version` every save sends — and the live row, re-read with
+ * each ledger revision for the header and the context cards (see `live`).
  */
 
 import type {
@@ -39,8 +38,10 @@ import type {
 } from "@waltning/client/ledger/create-phone-ledger";
 import { deviceRuntime } from "@waltning/client/ledger/device-runtime";
 import { parseTransactionRoute } from "@waltning/client/ledger/preview-routes";
+import type { TransactionContextCard } from "@waltning/client/ledger/transaction-context";
 import { useLedgerController } from "@waltning/client/ledger/use-ledger-controller";
 import { usePhoneLedger } from "@waltning/client/ledger/use-phone-ledger";
+import { useTransactionContext } from "@waltning/client/ledger/use-transaction-context";
 import type { FieldError } from "@waltning/client/transport/field-errors";
 import { mapFieldErrors } from "@waltning/client/transport/field-errors";
 import { id as brandId } from "@waltning/core/id";
@@ -55,17 +56,23 @@ import { resolveFieldErrorMessage } from "@waltning/ui/i18n/field-error-messages
 import { dayLabel } from "@waltning/ui/i18n/locales";
 import { useLocale, useT } from "@waltning/ui/i18n/provider";
 import { Button } from "@waltning/ui/primitives/button";
-import { Card } from "@waltning/ui/shell/card";
 import { ErrorState } from "@waltning/ui/states/error-state";
+import { useTheme } from "@waltning/ui/theme/provider";
+import { makeStyles } from "@waltning/ui/theme/styles";
+import { space } from "@waltning/ui/tokens";
+import { ContextStrip, type ContextStripCard } from "@waltning/ui/transactions/context-strip";
 import {
   FieldsCard,
   type TransactionFields,
   type TransactionFieldsPatch,
 } from "@waltning/ui/transactions/fields-card";
+import { HeroHeaderTitle } from "@waltning/ui/transactions/hero-header-title";
 import { LinesCard, type LinesCardDraftLine } from "@waltning/ui/transactions/lines-card";
-import { TransactionHero } from "@waltning/ui/transactions/transaction-hero";
+import { heroTint, TransactionHero } from "@waltning/ui/transactions/transaction-hero";
+import { useHeroScroll } from "@waltning/ui/transactions/use-hero-scroll";
 import { router, useLocalSearchParams } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
+import { View } from "react-native";
 import { PushedPage } from "./pushed-page";
 
 /**
@@ -130,8 +137,55 @@ function handleCreateAccountFromDetail() {
   router.push({ pathname: "/account/new", params: { returnTo: "accounts" } });
 }
 
+/**
+ * The context figures onto `ContextStrip`'s cards — names from the directory
+ * and the account list, and the two ways out a card offers. Figures pass
+ * through untouched; `computations.md` §6a is `useTransactionContext`'s.
+ */
+function toStripCards(
+  context: readonly TransactionContextCard[],
+  names: {
+    counterparty: string | null;
+    fromAccount: string;
+    toAccount: string | null;
+    categoryName: (id: string) => string | null;
+  },
+  actions: { onOpenCounterparty: () => void; onLink: () => void },
+): ContextStripCard[] {
+  const cards: ContextStripCard[] = [];
+  for (const card of context) {
+    switch (card.kind) {
+      case "who":
+        cards.push({
+          ...card,
+          name: names.counterparty ?? "—",
+          onOpenAll: actions.onOpenCounterparty,
+        });
+        break;
+      case "pair":
+        cards.push({
+          ...card,
+          fromName: names.fromAccount,
+          toName: names.toAccount ?? "—",
+        });
+        break;
+      case "category": {
+        const name = names.categoryName(card.categoryId);
+        if (name === null) break;
+        cards.push({ ...card, name });
+        break;
+      }
+      case "link":
+        cards.push({ kind: "link", onLink: actions.onLink });
+        break;
+    }
+  }
+  return cards;
+}
+
 export default function TransactionDetail() {
   const t = useT();
+  const styles = useStyles();
   const locale = useLocale();
   const ledger = useLedgerController();
   // Subscribed — an account renamed or a category created elsewhere while
@@ -172,6 +226,20 @@ export default function TransactionDetail() {
     if (!transactionId) return;
     setDetail(ledger.getTransaction(transactionId));
   }, [ledger, transactionId]);
+  /*
+    **Two reads of one row, for two jobs.** `detail` is the row the draft was
+    started from: read on mount and after this screen's own writes, and its
+    `version` is what a save sends — so a write from elsewhere while the draft
+    is open is refused as a conflict rather than silently overwritten by a
+    draft that never saw it. `live` is the row as the ledger holds it now,
+    read in the same render as the context cards so the share and the totals
+    are always one moment; the header and the cards draw from it.
+  */
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the revision is the signal, not a value read.
+  const live = useMemo(
+    () => (transactionId ? ledger.getTransaction(transactionId) : null),
+    [ledger, transactionId, snapshot.revision],
+  );
 
   const handleOpenCategoryPicker = useCallback(() => setCategorySheetOpen(true), []);
   const handleDismissCategorySheet = useCallback(() => setCategorySheetOpen(false), []);
@@ -284,6 +352,35 @@ export default function TransactionDetail() {
     setFieldsErrors(toFormLevel(t, result.fieldErrors));
   }, [detail, ledger, t, transactionId]);
 
+  const theme = useTheme();
+  const heroScroll = useHeroScroll();
+  const context = useTransactionContext(ledger, live, snapshot.revision);
+  const handleOpenCounterparty = useCallback(() => {
+    if (detail?.counterpartyId) router.push(`/counterparty/${detail.counterpartyId}`);
+  }, [detail?.counterpartyId]);
+  const handleLinkCounterparty = useCallback(() => setPickerTarget("identity"), []);
+  const stripCards = useMemo(
+    () =>
+      live === null
+        ? []
+        : toStripCards(
+            context,
+            {
+              // Read with the row, so an archived counterparty or a closed
+              // destination account keeps its name (the snapshot lists omit both).
+              counterparty: live.counterpartyIdentityName,
+              fromAccount: live.accountName,
+              toAccount: live.toAccountName,
+              categoryName: (id) =>
+                id === live.categoryId
+                  ? live.categoryName
+                  : (live.lines.find((line) => line.categoryId === id)?.categoryName ?? null),
+            },
+            { onOpenCounterparty: handleOpenCounterparty, onLink: handleLinkCounterparty },
+          ),
+    [context, live, handleLinkCounterparty, handleOpenCounterparty],
+  );
+
   const today = useMemo(() => deviceRuntime().capture().date, []);
   const categoryKind = detail?.type === "income" ? "income" : "expense";
   // Same-currency only: reassigning across a currency boundary would also
@@ -320,6 +417,8 @@ export default function TransactionDetail() {
     );
   }
 
+  // The header draws the row as it is now; the fields draw the draft's base.
+  const shown = live ?? detail;
   const effectiveAccountId = pickedAccountId ?? detail.accountId;
   // The pick until it is saved, the saved row afterwards — `accountId`'s own rule.
   // The pick until it is saved, the saved row afterwards — `accountId`'s own
@@ -338,19 +437,35 @@ export default function TransactionDetail() {
 
   return (
     <PushedPage
-      title={detail.enteredName === "" ? t("routes.transaction") : detail.enteredName}
-      subtitle={dayLabel(detail.date, locale)}
+      title={dayLabel(shown.date, locale)}
+      tint={heroTint(shown.categoryName, theme).fill}
+      titleNode={
+        <HeroHeaderTitle
+          scrollY={heroScroll.scrollY}
+          date={dayLabel(shown.date, locale)}
+          name={shown.enteredName === "" ? t("routes.transaction") : shown.enteredName}
+          amount={shown.amount}
+          currency={shown.currency}
+          decimals={shown.decimals}
+          type={shown.type}
+        />
+      }
+      onScroll={heroScroll.onScroll}
     >
       <TransactionHero
-        amount={detail.amount}
-        currency={detail.currency}
-        decimals={detail.decimals}
-        type={detail.type}
-        accountName={detail.accountName}
-        enteredName={detail.enteredName}
-        brandKey={detail.brandKey}
+        amount={shown.amount}
+        currency={shown.currency}
+        decimals={shown.decimals}
+        type={shown.type}
+        accountName={shown.accountName}
+        toAccountName={shown.toAccountName}
+        categoryName={shown.categoryName}
+        enteredName={shown.enteredName}
+        brandKey={shown.brandKey}
+        scrollY={heroScroll.scrollY}
       />
-      <Card>
+      <View style={styles.content}>
+        <ContextStrip cards={stripCards} />
         <FieldsCard
           fields={toFields(detail)}
           accounts={pickerAccounts}
@@ -368,8 +483,7 @@ export default function TransactionDetail() {
           {...(fieldsErrors ? { fieldErrors: fieldsErrors } : {})}
           onSave={handleSaveFields}
         />
-      </Card>
-      <Card title={t("transactions.lines")}>
+
         <LinesCard
           lines={detail.lines}
           total={money.abs(detail.amount)}
@@ -378,8 +492,10 @@ export default function TransactionDetail() {
           {...(linesErrors ? { fieldErrors: linesErrors } : {})}
           onSave={handleSaveLines}
         />
-      </Card>
-      <Button label={t("transactions.delete")} onPress={handleDelete} variant="danger" />
+        <View style={styles.deleteAction}>
+          <Button label={t("transactions.delete")} onPress={handleDelete} variant="danger" />
+        </View>
+      </View>
       <CategorySheet
         visible={categorySheetOpen}
         kind={categoryKind}
@@ -407,3 +523,8 @@ export default function TransactionDetail() {
     </PushedPage>
   );
 }
+
+const useStyles = makeStyles(() => ({
+  content: { width: "100%", maxWidth: 680, alignSelf: "flex-start", gap: space.x3 },
+  deleteAction: { alignItems: "flex-start", paddingTop: space.xl },
+}));

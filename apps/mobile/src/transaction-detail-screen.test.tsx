@@ -6,7 +6,7 @@
  * undo, and a row that no longer exists.
  */
 
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import {
   createPhoneLedger,
   type PhoneLedgerPort,
@@ -161,9 +161,12 @@ const DETAIL: NonNullable<FakeDetail> = {
   isBusiness: false,
   accountId: ACCOUNT,
   accountName: "Cash · PLN",
+  toAccountId: null,
+  toAccountName: null,
   categoryId: null,
   categoryName: null,
   counterpartyId: null,
+  counterpartyIdentityName: null,
   obligationCounterpartyId: null,
   counterpartyName: null,
   obligationRole: null,
@@ -190,7 +193,13 @@ beforeEach(() => {
 describe("TransactionDetail", () => {
   it("shows the hero amount and the fields of the row it was pushed for", () => {
     withLedger(<TransactionDetail />);
-    expect(screen.getByText("-48.90")).toBeDefined();
+    // The band says the figure; the header line it folds into only draws it,
+    // hidden from assistive technology, which hears the header by its date.
+    const spoken = screen
+      .getAllByText("-48.90")
+      .filter((node) => node.closest('[aria-hidden="true"]') === null);
+    expect(spoken).toHaveLength(1);
+    expect(screen.getByRole("heading", { name: "August 6, 2026" })).toBeDefined();
     expect(screen.getByRole("button", { name: "Payee: Café A" })).toBeDefined();
   });
 
@@ -222,6 +231,30 @@ describe("TransactionDetail", () => {
       },
     });
     withLedger(<TransactionDetail />, controller);
+
+    fireEvent.click(screen.getByRole("button", { name: "Payee: Café A" }));
+    fireEvent.change(screen.getByLabelText("Payee"), { target: { value: "Bakery A" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(screen.getByRole("alert").textContent).toBe(
+      "This transaction changed elsewhere — reload it before saving.",
+    );
+  });
+
+  /**
+   * **A write from elsewhere is a conflict, never silently undone.** The
+   * header re-reads the row on every ledger change, but the draft keeps the
+   * version it started from — so a save after another device's edit is
+   * refused, where sending the fresh version would have written the stale
+   * draft over it.
+   */
+  it("refuses a save after the row changed elsewhere, rather than overwriting it", () => {
+    const controller = fakeController(DETAIL);
+    withLedger(<TransactionDetail />, controller);
+
+    act(() => {
+      controller.updateTransaction(id<"transactions">(TXN), 1, { note: "Elsewhere" });
+    });
 
     fireEvent.click(screen.getByRole("button", { name: "Payee: Café A" }));
     fireEvent.change(screen.getByLabelText("Payee"), { target: { value: "Bakery A" } });
@@ -288,7 +321,8 @@ describe("TransactionDetail", () => {
       "naming somebody owes them nothing",
     ).toBeNull();
 
-    fireEvent.click(screen.getByRole("button", { name: "Owes" }));
+    // Nobody owes yet, so the chip asks; once somebody is named it is a row.
+    fireEvent.click(screen.getByRole("button", { name: "Someone owes" }));
     fireEvent.click(screen.getByRole("button", { name: "Nina" }));
     expect(screen.getByRole("button", { name: "Owes: Nina" })).toBeDefined();
 
@@ -300,7 +334,7 @@ describe("TransactionDetail", () => {
   /** §6.8's one-off, whose only producer is this screen. */
   it("offers the one-off flag, off until it is set here", () => {
     withLedger(<TransactionDetail />);
-    const toggle = screen.getByRole("switch", { name: "One-off" });
+    const toggle = screen.getByRole("checkbox", { name: "One-off" });
     expect(toggle.getAttribute("aria-checked")).toBe("false");
     fireEvent.click(toggle);
     expect(toggle.getAttribute("aria-checked")).toBe("true");

@@ -326,6 +326,20 @@ export const pl: Messages = {
     total: "Sumuje się do",
     linesUnbalanced: "Pozycje muszą sumować się do kwoty transakcji.",
     notFound: "Ta transakcja już nie istnieje.",
+    /** S09 — the chip that opens the obligation picker when nobody is named yet. */
+    someoneOwes: "Ktoś jest winien",
+    /** S09 §3 — the context cards (`computations.md` §6a). */
+    contextLabel: "Co to znaczy",
+    contextInMonth: "{{month}} · {{times}}×",
+    contextSeeAll: "Pokaż wszystko",
+    contextUsual: "zwykle",
+    contextOneOff: "Jednorazowe — pominięte w porównaniach",
+    /** §5 — another row in the card was a one-off and is not in its figures. */
+    contextOneOffsLeftOut: "Bez wydatków jednorazowych",
+    contextThisOne: "ta transakcja",
+    contextLinkTitle: "Z kim to było?",
+    contextLinkBody: "Połącz z kimś z katalogu, aby widzieć, jak często tam bywasz.",
+    contextLinkAction: "Wybierz",
     transfer: "Przelew",
     realized: "Zrealizowany",
     referenceRate: "referencyjny {{rate}} · {{source}} · {{date}}",

@@ -11,6 +11,7 @@ import type {
   Money,
   Period,
   PeriodSpendRow,
+  SpendByCategoryOptions,
   SpendByCategoryRow,
 } from "@waltning/core/money";
 import { type IdGenerator, randomId } from "@waltning/core/random";
@@ -187,6 +188,11 @@ import {
 } from "./transactions/create-transaction.executor.ts";
 import { deleteTransactionExecutor } from "./transactions/delete-transaction.executor.ts";
 import { type AuditLogResult, readAuditLog } from "./transactions/read-audit-log.ts";
+import {
+  type ContextRow,
+  type ContextRowsQuery,
+  readContextRows,
+} from "./transactions/read-context-rows.ts";
 import { readDayFlows } from "./transactions/read-day-flows.ts";
 import { readDayRows } from "./transactions/read-day-rows.ts";
 import { readEnteredNameHistory } from "./transactions/read-entered-name-history.ts";
@@ -309,7 +315,13 @@ export type LocalLedgerSession = {
   /** Every row on one day — the entries the calendar opens. Bounded by the date. */
   readDayRows: (date: AccountingDate) => readonly SignedLedgerRow[];
   /** §6, per currency and category — `S01`'s donut. `scope` is the desk band's own segment. `DESK4`. */
-  readSpendByCategory: (period: Period, scope: LedgerScope) => readonly SpendByCategoryRow[];
+  /** S09's *Who* and *Pair* rows — `computations.md` §6a. */
+  readContextRows: (query: ContextRowsQuery) => readonly ContextRow[];
+  readSpendByCategory: (
+    period: Period,
+    scope: LedgerScope,
+    options?: SpendByCategoryOptions,
+  ) => readonly SpendByCategoryRow[];
   /** §12, per bucket and currency — `S01`'s line chart. `buckets` and `scope` are screen state, same reasoning as `readPeriodSpend`. `DESK4`. */
   readIncomeVsExpense: (
     buckets: readonly IncomeExpenseBucket[],
@@ -747,8 +759,9 @@ export function createLocalLedgerSession<TRun>(
     readNearestActivity: (period) => readNearestActivity(requireOpen().replica.db, period),
     readMatchDays: (period, text) => readMatchDays(requireOpen().replica.db, period, text),
     readDayRows: (date) => readDayRows(requireOpen().replica.db, date),
-    readSpendByCategory: (period, scope) =>
-      readSpendByCategory(requireOpen().replica.db, period, scope),
+    readContextRows: (query) => readContextRows(requireOpen().replica.db, query),
+    readSpendByCategory: (period, scope, options) =>
+      readSpendByCategory(requireOpen().replica.db, period, scope, options),
     readIncomeVsExpense: (buckets, scope) =>
       readIncomeVsExpense(requireOpen().replica.db, buckets, scope),
     readActiveDashboardLayout: () => readActiveLayout(requireOpen().replica.db),

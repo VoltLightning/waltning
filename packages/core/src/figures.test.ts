@@ -513,6 +513,26 @@ describe("spendByCategory — §6 (DESK4)", () => {
   const TRANSPORT = "cat-transport";
   const DISCOUNT = "cat-discount";
 
+  it("keeps a one-off in the record and leaves it out of a comparison (§5)", () => {
+    const row = (id: string, amount: string, isCapital: boolean) => ({
+      id,
+      type: "expense" as const,
+      date: accountingDate("2026-08-05"),
+      ownership: "own" as const,
+      isBusiness: false,
+      currency: PLN,
+      decimals: 2,
+      categoryId: GROCERIES,
+      amountOriginal: m(amount),
+      isCapital,
+    });
+    const rows = [row("t1", "100", false), row("t2", "900", true)];
+    expect(money.spendByCategory(rows, [], period, "mine")[0]?.amount).toBe(m("1000"));
+    expect(
+      money.spendByCategory(rows, [], period, "mine", { excludeCapital: true })[0]?.amount,
+    ).toBe(m("100"));
+  });
+
   it("attributes a plain expense row to its own category", () => {
     const rows: money.SpendByCategoryTransactionRow[] = [
       {
@@ -525,6 +545,7 @@ describe("spendByCategory — §6 (DESK4)", () => {
         decimals: 2,
         categoryId: GROCERIES,
         amountOriginal: m("100"),
+        isCapital: false,
       },
     ];
     expect(money.spendByCategory(rows, [], period, "mine")).toEqual([
@@ -553,6 +574,7 @@ describe("spendByCategory — §6 (DESK4)", () => {
         decimals: 2,
         categoryId: null,
         amountOriginal: m("100"),
+        isCapital: false,
       },
     ];
     const lines: money.SpendByCategoryLineRow[] = [
@@ -586,6 +608,7 @@ describe("spendByCategory — §6 (DESK4)", () => {
         // reappears as a fifth, phantom row.
         categoryId: GROCERIES,
         amountOriginal: m("40"),
+        isCapital: false,
       },
     ];
     const lines: money.SpendByCategoryLineRow[] = [
@@ -608,6 +631,7 @@ describe("spendByCategory — §6 (DESK4)", () => {
         decimals: 2,
         categoryId: null,
         amountOriginal: m("15"),
+        isCapital: false,
       },
     ];
     const lines: money.SpendByCategoryLineRow[] = [
@@ -630,6 +654,7 @@ describe("spendByCategory — §6 (DESK4)", () => {
         decimals: 2,
         categoryId: GROCERIES,
         amountOriginal: m("500"),
+        isCapital: false,
       },
       {
         id: "transfer",
@@ -641,6 +666,7 @@ describe("spendByCategory — §6 (DESK4)", () => {
         decimals: 2,
         categoryId: null,
         amountOriginal: m("500"),
+        isCapital: false,
       },
       {
         id: "shared",
@@ -652,6 +678,7 @@ describe("spendByCategory — §6 (DESK4)", () => {
         decimals: 2,
         categoryId: GROCERIES,
         amountOriginal: m("500"),
+        isCapital: false,
       },
       {
         id: "out-of-period",
@@ -663,6 +690,7 @@ describe("spendByCategory — §6 (DESK4)", () => {
         decimals: 2,
         categoryId: GROCERIES,
         amountOriginal: m("500"),
+        isCapital: false,
       },
     ];
     expect(money.spendByCategory(rows, [], period, "mine")).toEqual([]);
@@ -680,6 +708,7 @@ describe("spendByCategory — §6 (DESK4)", () => {
         decimals: 2,
         categoryId: GROCERIES,
         amountOriginal: m("100"),
+        isCapital: false,
       },
       {
         id: "t-usd",
@@ -691,6 +720,7 @@ describe("spendByCategory — §6 (DESK4)", () => {
         decimals: 2,
         categoryId: GROCERIES,
         amountOriginal: m("40"),
+        isCapital: false,
       },
     ];
     expect(money.spendByCategory(rows, [], period, "mine")).toEqual([
@@ -721,6 +751,7 @@ describe("spendByCategory — §6 (DESK4)", () => {
         decimals: 2,
         categoryId: GROCERIES,
         amountOriginal: m("100"),
+        isCapital: false,
       },
     ];
     expect(money.spendByCategory(rows, [], period, "mine")).toEqual([]);
@@ -745,6 +776,7 @@ describe("spendByCategory — §6 (DESK4)", () => {
         decimals: 2,
         categoryId: null,
         amountOriginal: m("100"),
+        isCapital: false,
       },
     ];
     const lines: money.SpendByCategoryLineRow[] = [
@@ -774,6 +806,7 @@ describe("spendByCategory — §6 (DESK4)", () => {
         decimals: 2,
         categoryId: GROCERIES,
         amountOriginal: m("10"),
+        isCapital: false,
       },
       {
         id: "t-business",
@@ -785,6 +818,7 @@ describe("spendByCategory — §6 (DESK4)", () => {
         decimals: 2,
         categoryId: DINING,
         amountOriginal: m("20"),
+        isCapital: false,
       },
       {
         id: "t-shared",
@@ -796,6 +830,7 @@ describe("spendByCategory — §6 (DESK4)", () => {
         decimals: 2,
         categoryId: TRANSPORT,
         amountOriginal: m("40"),
+        isCapital: false,
       },
     ];
     const totalOf = (scope: money.LedgerScope) =>

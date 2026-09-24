@@ -1,43 +1,10 @@
 /**
- * `<FieldsCard>` — `screens/S09-transaction-detail.md` §3 mobile, the block
- * of fields under the hero.
- *
- * **A row, not a button.** S09 §4 draws every editable field as a labelled
- * row inside the card: the kicker on the left in `textMuted`, the value on
- * the right in `text`, a drawn chevron — `Select`'s own mark, not a new one
- * — and a hairline between rows, the same anatomy `BalanceRow` and
- * `TransactionRow` already use. A `Chip` per field read as a row of centred,
- * filled buttons; nothing here fills a background.
- *
- * **Every field S09 §3 draws, including the two that were deferred.**
- * `update_transaction`'s patch carries `obligationCounterpartyId`, `obligationRole`
- * and `isCapital`, and `readTransaction` now reads all three back — so the
- * counterparty row and §6.8's one-off toggle are controls that write
- * somewhere rather than into a void, which is why they were held back.
- *
- * **The role is a row of its own, and only once a counterparty is set.** A
- * role with nobody to hold it is not a state the ledger has (§6.6), and a
- * radio group under an empty field would offer one. The counterparty itself
- * opens the screen's picker, like category and account.
- *
- * **One `Save`, not autosave per keystroke.** S09 §7 reads *"Save is implicit
- * per field"*; the plan this card was built from is explicit instead — a
- * person can open several fields, change them, and commit one patch. The
- * spec is the one that should have said this and did not; it changes
- * alongside this file rather than silently.
- *
- * **Category, account and scope never accordion.** `category` opens
- * `CategorySheet` and `account` opens `AccountPicker` — both composed by the
- * screen, never by this card (`architecture/11`: a domain does not import a
- * sibling domain), the same escape `QuickAddForm`/`QuickAddComposer` already
- * use — so neither chevron ever turns. `isBusiness` is a `Toggle`, already a
- * direct, one-tap control; wrapping it behind a row that has to be tapped
- * open first would cost a tap for nothing.
- *
- * **A stale-version refusal is a `formLevel` message, not a field one** — it
- * names no single row, because every row is stale at once. The screen resolves
- * `transactions.changedElsewhere` through `useT()` before it reaches here,
- * matching `QuickAddForm`'s own `fieldErrors` contract.
+ * S09's editable fields — one card of rows, then the flags as chips
+ * (`screens/S09-transaction-detail.md` §3). *Someone owes* opens the
+ * obligation picker and, once somebody is named, becomes an *Owes* row inside
+ * the card with its role beneath; *Business* and *One-off* are on/off chips.
+ * One Save commits the draft, and appears only once there is something to
+ * commit. Pickers are composed by the screen so each domain owns its controls.
  */
 
 import { accountingDate, isAccountingDate } from "@waltning/core/date";
@@ -47,16 +14,17 @@ import { Pressable, Text, View } from "react-native";
 import Animated from "react-native-reanimated";
 import { useT } from "../../../i18n/provider";
 import { Button } from "../../../primitives/atoms/button/button";
+import { Chip } from "../../../primitives/atoms/chip/chip";
 import { DateField } from "../../../primitives/atoms/date-field/date-field";
 import { RadioGroup, type RadioGroupProps } from "../../../primitives/atoms/radio/radio";
 import { TextField } from "../../../primitives/atoms/text-field/text-field";
-import { Toggle } from "../../../primitives/atoms/toggle/toggle";
 import { useDisclosureMotion } from "../../../primitives/disclosure-motion.ts";
 import type { FieldErrorMap } from "../../../primitives/field-errors.ts";
 import { useInteraction } from "../../../primitives/interaction.ts";
 import { DatePicker } from "../../../primitives/molecules/date-picker/date-picker";
 import { usePressScale } from "../../../primitives/press-scale.ts";
 import { useBreakpoint } from "../../../primitives/use-breakpoint.ts";
+import { Card } from "../../../shell/molecules/card/card";
 import { text } from "../../../theme/fonts.ts";
 import { makeStyles } from "../../../theme/styles.ts";
 import { focus, hairline, space, touchTarget } from "../../../tokens.ts";
@@ -215,6 +183,8 @@ export function FieldsCard({
   const handleToggleRole = useCallback(() => toggleField("role"), [toggleField]);
   const handleRoleChange = useCallback((next: string) => setRole(isRole(next) ? next : null), []);
   const handleToggleNote = useCallback(() => toggleField("note"), [toggleField]);
+  const handleToggleBusiness = useCallback(() => setIsBusiness((current) => !current), []);
+  const handleToggleCapital = useCallback(() => setIsCapital((current) => !current), []);
   const handleOpenIdentityPicker = useCallback(
     () => onOpenCounterpartyPicker("identity"),
     [onOpenCounterpartyPicker],
@@ -293,142 +263,157 @@ export function FieldsCard({
         </View>
       ) : null}
 
-      <FieldDisclosureRow
-        first
-        label={t("transactions.category")}
-        value={categoryName}
-        placeholder={t("transactions.noCategory")}
-        onPress={onOpenCategoryPicker}
-      />
-
-      <FieldDisclosureRow
-        label={t("transactions.date")}
-        value={date}
-        placeholder={t("transactions.date")}
-        open={open.has("date")}
-        onPress={handleToggleDate}
-      >
-        <DateField
-          label={t("transactions.date")}
-          value={date}
-          onChange={setDate}
-          today={today}
-          {...(dateValid ? {} : { error: t("transactions.invalidDate") })}
-        />
-      </FieldDisclosureRow>
-      {pickingDate ? (
-        <DatePicker
-          prompt={t("transactions.date")}
-          value={isAccountingDate(date) ? accountingDate(date) : accountingDate(today)}
-          onChange={setDate}
-          today={accountingDate(today)}
-          onDismiss={closeDatePicker}
-        />
-      ) : null}
-
-      <FieldDisclosureRow
-        label={t("transactions.account")}
-        value={selectedAccountName}
-        placeholder={t("transactions.account")}
-        onPress={onOpenAccountPicker}
-      />
-
-      {/* Who it was *with* — the commoner fact, and the plainer label. */}
-      <FieldDisclosureRow
-        label={t("transactions.counterparty")}
-        value={counterpartyName}
-        placeholder={t("transactions.noCounterparty")}
-        onPress={handleOpenIdentityPicker}
-      />
-
-      {/*
-        And who it *owes*, which is a different question with a different
-        answer often enough to deserve its own row: paying a shop for a friend
-        names the shop above and the friend here.
-      */}
-      <FieldDisclosureRow
-        label={t("transactions.obligationParty")}
-        value={obligationCounterpartyName}
-        placeholder={t("transactions.noObligation")}
-        onPress={handleOpenObligationPicker}
-      />
-
-      {obligationCounterpartyId === null ? null : (
-        <FieldDisclosureRow
-          label={t("transactions.role")}
-          value={role === null ? null : t(`transactions.role.${role}`)}
-          placeholder={t("transactions.chooseRole")}
-          open={open.has("role")}
-          onPress={handleToggleRole}
-        >
-          <RadioGroup
-            label={t("transactions.role")}
-            options={roleOptions}
-            value={role ?? NO_OBLIGATION}
-            onChange={handleRoleChange}
+      <Card>
+        <View>
+          <FieldDisclosureRow
+            first
+            label={t("transactions.category")}
+            value={categoryName}
+            placeholder={t("transactions.noCategory")}
+            onPress={onOpenCategoryPicker}
           />
-        </FieldDisclosureRow>
-      )}
 
-      <View style={styles.separated}>
-        <Toggle label={t("transactions.business")} value={isBusiness} onChange={setIsBusiness} />
-      </View>
+          <FieldDisclosureRow
+            label={t("transactions.date")}
+            value={date}
+            placeholder={t("transactions.date")}
+            open={open.has("date")}
+            onPress={handleToggleDate}
+          >
+            <DateField
+              label={t("transactions.date")}
+              value={date}
+              onChange={setDate}
+              today={today}
+              {...(dateValid ? {} : { error: t("transactions.invalidDate") })}
+            />
+          </FieldDisclosureRow>
+          {pickingDate ? (
+            <DatePicker
+              prompt={t("transactions.date")}
+              value={isAccountingDate(date) ? accountingDate(date) : accountingDate(today)}
+              onChange={setDate}
+              today={accountingDate(today)}
+              onDismiss={closeDatePicker}
+            />
+          ) : null}
 
-      {/*
-        §6.8's one-off. Not on the capture sheet and never will be: you rarely
-        know at the till that a purchase would distort a trend, and marking it
-        later is the ordinary path. It moves no balance — only what a
-        comparison counts.
-      */}
-      <View style={styles.separated}>
-        <Toggle
-          label={t("transactions.capital")}
+          <FieldDisclosureRow
+            label={t("transactions.account")}
+            value={selectedAccountName}
+            placeholder={t("transactions.account")}
+            onPress={onOpenAccountPicker}
+          />
+
+          {/* Who it was *with* — the commoner fact, and the plainer label. */}
+          <FieldDisclosureRow
+            label={t("transactions.counterparty")}
+            value={counterpartyName}
+            placeholder={t("transactions.noCounterparty")}
+            onPress={handleOpenIdentityPicker}
+          />
+
+          <FieldDisclosureRow
+            label={t("transactions.enteredName")}
+            value={enteredName}
+            placeholder="—"
+            open={open.has("enteredName")}
+            onPress={handleToggleEnteredName}
+          >
+            <TextField
+              label={t("transactions.enteredName")}
+              value={enteredName}
+              onChangeText={setEnteredName}
+              maxLength={200}
+            />
+          </FieldDisclosureRow>
+
+          <FieldDisclosureRow
+            label={t("common.note")}
+            value={note}
+            placeholder="—"
+            open={open.has("note")}
+            onPress={handleToggleNote}
+          >
+            <TextField
+              label={t("common.note")}
+              value={note}
+              onChangeText={setNote}
+              maxLength={2000}
+              counter
+            />
+          </FieldDisclosureRow>
+
+          {/*
+            And who it *owes*, a different question with a different answer
+            often enough to deserve its own row: paying a shop for a friend
+            names the shop above and the friend here. Drawn only once somebody
+            is named — until then the *Someone owes* chip below asks.
+          */}
+          {obligationCounterpartyId === null ? null : (
+            <>
+              <FieldDisclosureRow
+                label={t("transactions.obligationParty")}
+                value={obligationCounterpartyName}
+                placeholder={t("transactions.noObligation")}
+                onPress={handleOpenObligationPicker}
+              />
+
+              <FieldDisclosureRow
+                label={t("transactions.role")}
+                value={role === null ? null : t(`transactions.role.${role}`)}
+                placeholder={t("transactions.chooseRole")}
+                open={open.has("role")}
+                onPress={handleToggleRole}
+              >
+                <RadioGroup
+                  label={t("transactions.role")}
+                  options={roleOptions}
+                  value={role ?? NO_OBLIGATION}
+                  onChange={handleRoleChange}
+                />
+              </FieldDisclosureRow>
+            </>
+          )}
+        </View>
+      </Card>
+
+      <View style={styles.flags}>
+        {obligationCounterpartyId === null ? (
+          <Chip placeholder={t("transactions.someoneOwes")} onPress={handleOpenObligationPicker} />
+        ) : null}
+        <Chip
+          placeholder={t("transactions.business")}
+          selected={isBusiness}
+          role="checkbox"
+          onPress={handleToggleBusiness}
+        />
+        {/*
+          §6.8's one-off. Not on the capture sheet and never will be: you
+          rarely know at the till that a purchase would distort a trend, and
+          marking it later is the ordinary path. It moves no balance — only
+          what a comparison counts — and its hint says so once it is on.
+        */}
+        <Chip
+          placeholder={t("transactions.capital")}
           hint={t("transactions.capitalHint")}
-          value={isCapital}
-          onChange={setIsCapital}
+          selected={isCapital}
+          role="checkbox"
+          onPress={handleToggleCapital}
         />
       </View>
+      {isCapital ? <Text style={styles.hint}>{t("transactions.capitalHint")}</Text> : null}
 
-      <FieldDisclosureRow
-        label={t("transactions.enteredName")}
-        value={enteredName}
-        placeholder="—"
-        open={open.has("enteredName")}
-        onPress={handleToggleEnteredName}
-      >
-        <TextField
-          label={t("transactions.enteredName")}
-          value={enteredName}
-          onChangeText={setEnteredName}
-          maxLength={200}
-        />
-      </FieldDisclosureRow>
-
-      <FieldDisclosureRow
-        label={t("common.note")}
-        value={note}
-        placeholder="—"
-        open={open.has("note")}
-        onPress={handleToggleNote}
-      >
-        <TextField
-          label={t("common.note")}
-          value={note}
-          onChangeText={setNote}
-          maxLength={2000}
-          counter
-        />
-      </FieldDisclosureRow>
-
-      <View style={styles.actions}>
-        <Button
-          label={t("common.save")}
-          onPress={handleSave}
-          disabled={!hasChanges}
-          loading={saving}
-          variant="primary"
-        />
-      </View>
+      {hasChanges ? (
+        <View style={styles.actions}>
+          <Button
+            label={t("common.save")}
+            onPress={handleSave}
+            loading={saving}
+            variant="primary"
+          />
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -516,7 +501,7 @@ function FieldDisclosureRow({
 }
 
 const useStyles = makeStyles((theme) => ({
-  root: {},
+  root: { gap: space.x3 },
   separated: { borderTopWidth: hairline.width, borderTopColor: theme.hairline },
   row: {
     flexDirection: "row",
@@ -531,9 +516,9 @@ const useStyles = makeStyles((theme) => ({
     outlineColor: theme.focusRing,
     outlineOffset: focus.offset,
   },
-  label: { color: theme.textMuted, ...text.ui("body") },
+  label: { color: theme.textMuted, ...text.ui("bodySm") },
   valueGroup: { flexDirection: "row", alignItems: "center", gap: space.sm, flexShrink: 1 },
-  value: { color: theme.text, ...text.ui("body"), flexShrink: 1, textAlign: "right" },
+  value: { color: theme.text, ...text.ui("bodySm", 500), flexShrink: 1, textAlign: "right" },
   valueMuted: { color: theme.textMuted },
   chevron: { width: 16, height: 16, alignItems: "center", justifyContent: "center" },
   /** Two borders rotated 45° — `Select`'s own drawn chevron, unchanged. */
@@ -549,5 +534,7 @@ const useStyles = makeStyles((theme) => ({
   editor: { paddingBottom: space.md },
   formLevel: { gap: space.xs },
   formLevelMessage: { color: theme.dangerText, ...text.ui("caption") },
-  actions: { flexDirection: "row", justifyContent: "flex-end", paddingTop: space.md },
+  actions: { flexDirection: "row", justifyContent: "flex-end" },
+  flags: { flexDirection: "row", flexWrap: "wrap", gap: space.md },
+  hint: { color: theme.textMuted, ...text.ui("caption"), marginTop: -space.md },
 }));
