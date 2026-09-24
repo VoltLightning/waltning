@@ -20,14 +20,11 @@ const tabsShell = readFileSync(resolve(app, "../src/tabs-shell.tsx"), "utf8");
 describe("phone-alone preview presentation", () => {
   it("keeps the accepted Today slice visible in source", () => {
     expect(today).toContain('label: t("routes.createAccount")');
-    // The total is the lead currency's `mine`, in a strip, with the register
-    // one tap away. It was `snapshot.netWorth.map` into a stack of `DualTotal`
-    // heroes — the mine/ours split C2 introduced, still right and no longer
-    // the shape a phone band should spend two fifths of the screen on. What must not come back is
-    // a *summed* total (below); how many figures the strip shows is a layout
-    // decision this test has no business pinning.
-    expect(today).toContain("<NetWorthStrip");
-    expect(today).toContain("leadNetWorth.mine");
+    // The total is the hero, through `useHoldings` — §3's fold, every figure
+    // converted at today's rate or left out and counted as left out, loans
+    // apart. What must not come back is an *unconverted* sum (below).
+    expect(today).toContain("<HoldingsCard");
+    expect(today).toContain("useHoldings(");
     // The last days are the List's own read and fold, drawn as day groups —
     // not a *Recent* card with a *Show all* door into the page one swipe away.
     expect(today).toContain("useRecentDays(");
@@ -40,9 +37,9 @@ describe("phone-alone preview presentation", () => {
     // The route file composes `<TabsShell>` and wires none of it itself.
     expect(tabsLayout).toContain("<TabsShell");
     expect(tabsLayout).not.toContain('router.push("/quick-add")');
-    // The hero is per-currency figures, never a summed total. `snapshot.total`
-    // was a `money.sum` over every balance labelled USD, which only held
-    // because a throw refused any account that was not in dollars.
+    // Never a sum across currencies without a rate. `snapshot.total` was a
+    // `money.sum` over every balance labelled USD, which only held because a
+    // throw refused any account that was not in dollars.
     expect(today).not.toContain("snapshot.total");
   });
 

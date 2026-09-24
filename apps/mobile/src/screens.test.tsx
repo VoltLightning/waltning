@@ -696,10 +696,10 @@ describe("Today", () => {
     expect(summary.getByText("nothing")).toBeDefined();
   });
 
-  it("shows mine and ours from net worth, per currency — never a summed total", () => {
+  it("titles the total mine, with ours under it, where something is shared", () => {
     withLedger(<Today />, fakeController({ accounts: [PLN_ACCOUNT, SHARED_ACCOUNT] }));
 
-    expect(screen.getByText("mine")).toBeDefined();
+    expect(screen.getByText("Mine")).toBeDefined();
     expect(screen.getByText("ours")).toBeDefined();
     const rendered = document.body.textContent ?? "";
     // mine: PLN_ACCOUNT alone (50). ours: both accounts (50 + 100 = 150).
@@ -713,13 +713,13 @@ describe("Today", () => {
    *
    * And with nothing to contrast it against, the surviving figure is named by
    * what it is rather than whose it is: *mine* alone points at an *ours* the
-   * screen does not have (`design-system/05`, `NetWorthStrip`).
+   * screen does not have (S04 §3, `HoldingsCard`).
    */
   it("shows one figure, not ours repeated, when the ledger holds no shared account", () => {
     withLedger(<Today />, fakeController({ accounts: [PLN_ACCOUNT] }));
 
-    expect(screen.getByText("what you hold")).toBeDefined();
-    expect(screen.queryByText("mine")).toBeNull();
+    expect(screen.getByText("What you hold")).toBeDefined();
+    expect(screen.queryByText("Mine")).toBeNull();
     expect(screen.queryByText("ours")).toBeNull();
   });
 

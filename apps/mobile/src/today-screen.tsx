@@ -1,3 +1,4 @@
+import { useHoldings } from "@waltning/client/accounts/use-holdings";
 import { deviceRuntime } from "@waltning/client/ledger/device-runtime";
 import { isPagerPageKey } from "@waltning/client/ledger/pager-date";
 import { useDayFlows } from "@waltning/client/ledger/use-day-flows";
@@ -29,6 +30,7 @@ import {
   yearMonth,
 } from "@waltning/core/date";
 import * as money from "@waltning/core/money";
+import { HoldingsCard, type HoldingsLens } from "@waltning/ui/accounts/holdings-card";
 import { CategorySheet } from "@waltning/ui/categories/category-sheet";
 import { SpendRows } from "@waltning/ui/dashboard/spend-rows";
 import { Amount } from "@waltning/ui/fx/amount";
@@ -44,7 +46,6 @@ import { PressableScaled } from "@waltning/ui/primitives/pressable-scaled";
 import { Card, GroundPanel } from "@waltning/ui/shell/card";
 import { GatewayGrid } from "@waltning/ui/shell/molecules/gateway-grid/gateway-grid";
 import { MonthSummary } from "@waltning/ui/shell/month-summary";
-import { NetWorthStrip } from "@waltning/ui/shell/net-worth-strip";
 import { PagerFrame } from "@waltning/ui/shell/organisms/pager-frame/pager-frame";
 import { PeriodPicker } from "@waltning/ui/shell/period-picker";
 import {
@@ -143,17 +144,14 @@ function handleOpenTransaction(id: string) {
  * remounting with this screen — `onAdd`, `addDisabled` and the device's
  * `floatPosition` preference all moved with it.
  *
- * **The figures, and which of them the period moves.** `snapshot.netWorth` is
- * `money.netWorth` (A1) per currency; the lead currency's `mine` goes in
- * `NetWorthStrip` and the rest are a line saying the figure is partial, with
- * S16 a tap away for all of them. `FxStatusChip`/`CurrencyChip` are not
- * rendered: there is no rate and no display currency on the phone (arc-phone
- * excludes FX entirely), and a chip with nothing true to say is worse than an
- * empty slot.
+ * **The figures, and which of them the period moves.** The hero is
+ * `HoldingsCard` over `useHoldings` — §3, every counted account in the pivot
+ * at today's rate, loans apart — and the month's figures are the lead
+ * currency's, in the compact card beneath it.
  *
  * The period (which month is shown) is this component's own state, never the
  * store's. Everything in `MonthSummary` moves when it steps, and so does
- * *where it went*; the strip does not, because a balance is as of now.
+ * *where it went*; the hero does not, because a balance is as of now.
  */
 const GATEWAY_ICON = 16;
 /** How many of the latest days Summary draws before the List takes over. */
@@ -617,30 +615,43 @@ export default function Today() {
     openUnsettled(openTarget);
   }, [openTarget]);
 
-  const handleOpenAccounts = useCallback(() => router.push("/accounts"), []);
+  /**
+   * S16 on the lens a breakdown row was on. The nonce is what lets a second
+   * tap on the same lens apply again: the Accounts tab stays mounted, and a
+   * lens switched by hand in between would otherwise keep the request out.
+   */
+  const handleOpenHoldings = useCallback((lens: HoldingsLens) => {
+    router.push({ pathname: "/accounts", params: { view: lens, nonce: String(Date.now()) } });
+  }, []);
 
   /**
-   * The total, in a line. It led this screen as a 54pt hero in a band that
-   * spent about 350pt of an 844pt phone on it — and a figure that moves slowly
-   * is not what the app is opened to find out. The register it summarises is
-   * one tap away, where every currency and the shared totals live.
+   * The hero: what you hold, broken down in place (S04 §3). `holdings()` is
+   * §3's fold — own accounts, counted, at today's rate, loans apart — and it
+   * is a balance, so the period stepper does not move it.
    */
-  // Each of the three pieces below is memoised for the same reason `body` is:
+  const holdings = useHoldings(
+    ledger,
+    snapshot.accounts,
+    snapshot.currencies,
+    today,
+    snapshot.revision,
+  );
+  // Each of the pieces below is memoised for the same reason `body` is:
   // `pages` is built from them, so a fresh element here is a fresh page node
   // there, and a tab tap re-renders every page in the pager.
-  const netWorthStrip = useMemo(
+  const holdingsCard = useMemo(
     () =>
-      leadNetWorth ? (
-        <NetWorthStrip
-          mine={leadNetWorth.mine}
-          ours={leadNetWorth.hasShared ? leadNetWorth.ours : null}
-          currency={leadNetWorth.currency}
-          decimals={leadNetWorth.decimals}
-          otherCurrencies={snapshot.netWorth.length - 1}
-          onPress={handleOpenAccounts}
+      holdings === null || snapshot.accounts.length === 0 ? null : (
+        <HoldingsCard
+          {...holdings}
+          byCurrency={holdings.byCurrency.map((row) => ({
+            ...row,
+            name: snapshot.currencies.find((currency) => currency.code === row.currency)?.name,
+          }))}
+          onOpenAccounts={handleOpenHoldings}
         />
-      ) : null,
-    [leadNetWorth, snapshot.netWorth.length, handleOpenAccounts],
+      ),
+    [holdings, snapshot.accounts.length, snapshot.currencies, handleOpenHoldings],
   );
 
   /**
@@ -657,7 +668,7 @@ export default function Today() {
     [periodSpendRows, leadNetWorth],
   );
 
-  /** The hero, and §5's three figures in the shape `net = inflow − spend`. */
+  /** Under the hero, compact: §5's three figures in the shape `net = inflow − spend`. */
   const monthCard = useMemo(
     () =>
       leadNetWorth ? (
@@ -668,6 +679,7 @@ export default function Today() {
           currency={leadNetWorth.currency}
           decimals={leadNetWorth.decimals}
           otherCurrencies={periodOtherCurrencies}
+          layout="compact"
         />
       ) : null,
     [leadNetWorth, leadPeriodSpend, periodOtherCurrencies],
@@ -961,12 +973,12 @@ export default function Today() {
         free; on the ground it has to be said. With no accounts both are
         `null`, so the first run is unaffected.
       */}
-        {netWorthStrip}
+        {holdingsCard}
         {monthCard}
         {ledgerBody}
       </>
     ),
-    [notice, noticeToken, handleDismissToast, netWorthStrip, monthCard, ledgerBody],
+    [notice, noticeToken, handleDismissToast, holdingsCard, monthCard, ledgerBody],
   );
 
   /**

@@ -11,8 +11,8 @@
  * **The press belongs to the row, and the row has no `accessibilityLabel`.**
  * One on a wrapping `Pressable` *replaces* the name a reader composes from the
  * content, which is how the ledger came to announce a entered name and never the
- * amount, the category or the date — the same defect `net-worth-strip`
- * documents, on the list this app is mostly made of. The content is the name.
+ * amount, the category or the date — the same defect the old net-worth strip
+ * had, on the list this app is mostly made of. The content is the name.
  *
  * **The shape is declared here rather than imported.** `packages/ui` never
  * depends on `@waltning/client`, so the row arrives structurally, the way

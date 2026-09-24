@@ -971,6 +971,7 @@ describe("a card groups rows or holds a figure — never a whole screen", () => 
    */
   const UI_CARD_COMPONENTS = [
     "BackupCard",
+    "HoldingsCard",
     "MonthSummary",
     "RestoreCard",
     "SettingsMenu",
