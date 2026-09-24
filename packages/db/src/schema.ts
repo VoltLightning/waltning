@@ -1003,10 +1003,20 @@ export const dashboardLayouts = pgTable("dashboard_layouts", dashboardLayoutsCol
   uniqueIndex("dashboard_layouts_name_uq").on(normalized(t.name)),
   // Exactly one active layout, by the same trick as the pivot currency.
   uniqueIndex("dashboard_layouts_one_active").on(sql`(true)`).where(sql`${t.isActive}`),
+  // What makes re-seeding a no-op rather than a second preset — the same
+  // partial-unique shape `categories_external_id_uq` uses, and for the same
+  // reason: a layout somebody made in S24 carries no key and must not collide
+  // with every other one that carries none either.
+  uniqueIndex("dashboard_layouts_external_id_uq")
+    .on(t.externalId)
+    .where(sql`${t.externalId} is not null`),
 ]);
 
 export const dashboardWidgets = pgTable("dashboard_widgets", dashboardWidgetsColumns(), (t) => [
   index("dashboard_widgets_layout_idx").on(t.layoutId),
+  uniqueIndex("dashboard_widgets_external_id_uq")
+    .on(t.externalId)
+    .where(sql`${t.externalId} is not null`),
 ]);
 
 /* ------------------------------------------------------------------ *

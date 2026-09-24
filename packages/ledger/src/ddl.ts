@@ -609,6 +609,15 @@ export const REPLICA_STEPS: readonly {
       `CREATE INDEX \`transactions_date_idx\` ON \`transactions\` (\`date\`)`,
     ],
   },
+  {
+    tag: "0018_schema",
+    statements: [
+      `ALTER TABLE \`dashboard_layouts\` ADD \`external_id\` text`,
+      `CREATE UNIQUE INDEX \`dashboard_layouts_external_id_uq\` ON \`dashboard_layouts\` (\`external_id\`)`,
+      `ALTER TABLE \`dashboard_widgets\` ADD \`external_id\` text`,
+      `CREATE UNIQUE INDEX \`dashboard_widgets_external_id_uq\` ON \`dashboard_widgets\` (\`external_id\`)`,
+    ],
+  },
 ];
 
 /** One step per file in `drizzle/outbox`, filename order — the queue, its index, and the counter `claimSeq` allocates from. */

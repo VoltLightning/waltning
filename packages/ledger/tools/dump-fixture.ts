@@ -50,6 +50,7 @@ import { accountingDate } from "@waltning/core/date";
 import { id } from "@waltning/core/id";
 import * as money from "@waltning/core/money";
 import { currencyCode } from "@waltning/core/money";
+import type { IdGenerator } from "@waltning/core/random";
 import { FX_SOURCE } from "@waltning/schema/enums";
 import Database from "better-sqlite3";
 import { asc, eq, sql } from "drizzle-orm";
@@ -102,6 +103,37 @@ const FIXED_OUTBOX_IDS = [
   "00000000-0000-4000-8000-000000000003",
 ];
 
+/**
+ * The taxonomy's ids, as a counter rather than `randomId`.
+ *
+ * **A fixture that cannot be reproduced is not a fixture.** The header above
+ * claims every id in this script is fixed, and it was — right up until the
+ * taxonomy started shipping with the app. `bootstrapTaxonomy` runs at every
+ * session start and mints 74 category ids through `randomId`, so two dumps of
+ * the identical database differed in 150 lines, and the head pair's whole job
+ * — catching drift, by reproducing the committed bytes — quietly stopped
+ * working the day it was added.
+ *
+ * **Counted, not written down.** `LocalLedgerSessionOptions.mintId` exists for
+ * exactly this and says so: *"a test passes its own so a seeded tree is
+ * reproducible without any id ever being written down in source."* Nothing had
+ * ever reached it, because `openJourney` did not forward it. A committed
+ * fixture still holds the uuids this produces, but they are *derived* here
+ * rather than chosen, and the row they belong to is found by its
+ * `seed:<key>` `external_id` everywhere it matters.
+ *
+ * The `0c` prefix keeps this range clear of `seed.ts`'s own ids and of the
+ * dashboard seed's `…d0NN`, so a collision cannot make two different rows look
+ * like one.
+ */
+function countingIds(): IdGenerator {
+  let minted = 0;
+  return () => {
+    minted += 1;
+    return `0c000000-0000-4000-8000-${minted.toString(16).padStart(12, "0")}`;
+  };
+}
+
 function dumpFile(path: string): string {
   const sqlite = new Database(path);
   try {
@@ -145,7 +177,10 @@ export function dumpFixture(options: DumpFixtureOptions = {}): void {
       ? OUTBOX_MIGRATIONS
       : chainThrough(OUTBOX_MIGRATIONS, options.outboxThrough, "outbox");
 
-  const j = openJourney({ migrations: { replica: replicaChain, outbox: outboxChain } });
+  const j = openJourney({
+    migrations: { replica: replicaChain, outbox: outboxChain },
+    mintId: countingIds(),
+  });
   try {
     seedCurrency(j, PIVOT, { isPivot: true });
     seedCurrency(j, "EUR");

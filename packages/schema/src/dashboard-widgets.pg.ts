@@ -16,6 +16,8 @@ export const dashboardWidgetsColumns = () => ({
   size: widgetSize("size").notNull().default("m"),
   config: k.json<WidgetConfig>("config").notNull().default({}),
   sort: k.integer("sort").notNull().default(0),
+  /** `seed:<layout>:<kind>` — see `dashboard-layouts`' own field. */
+  externalId: k.text("external_id"),
 });
 
 export const dashboardWidgets = k.table("dashboard_widgets", dashboardWidgetsColumns());

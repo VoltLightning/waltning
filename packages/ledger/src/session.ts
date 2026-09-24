@@ -161,6 +161,7 @@ import {
 import { setPinnedExecutor } from "./currencies/set-pinned.executor.ts";
 import { setRateSourceExecutor } from "./currencies/set-rate-source.executor.ts";
 import { updateCurrencyExecutor } from "./currencies/update-currency.executor.ts";
+import { bootstrapDashboard } from "./dashboard/bootstrap-dashboard.ts";
 import { type LocalDashboardLayout, readActiveLayout } from "./dashboard/read-active-layout.ts";
 import {
   describeLedgerError,
@@ -608,6 +609,10 @@ function start<TRun>(
     // now did not. Beside the currencies rather than in a migration for the
     // reasons `bootstrap-taxonomy.ts` sets out; idempotent on `seed:<key>`.
     bootstrapTaxonomy(ledger.replica.db, options.mintId ?? randomId);
+    // §14.5's preset, by the same rule and for the same reason — a shipped row
+    // found by `seed:<key>`, with its id minted here rather than written into
+    // a migration (`bootstrap-dashboard.ts`).
+    bootstrapDashboard(ledger.replica.db, options.mintId ?? randomId);
     stage = "recover";
     const recovery = recoverOnLaunch(ledger, ledgerRegistry);
 

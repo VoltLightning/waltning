@@ -34,7 +34,7 @@ const PIVOT = { currency: "PLN", decimals: 2 };
  * Invented names, never the ledger's (`CLAUDE.md`) — and not named after their
  * own kind, which S16 §3 asks of a register and the old fixture ignored.
  */
-const POPULATED: readonly AccountRegisterAccount[] = [
+export const POPULATED: readonly AccountRegisterAccount[] = [
   account({
     id: "bank-1",
     name: "Everyday",
@@ -102,6 +102,54 @@ const POPULATED: readonly AccountRegisterAccount[] = [
     kind: "clearing",
     balance: money.toMoney("340"),
     pivotBalance: money.toMoney("340"),
+  }),
+  /**
+   * **The kind that exists so nothing has to be filed as a lie**, and a second
+   * deposit so that section is a run rather than a single row.
+   */
+  account({
+    id: "other-1",
+    name: "Travel card",
+    kind: "other",
+    currency: "EUR",
+    balance: money.toMoney("120"),
+    pivotBalance: money.toMoney("518.40"),
+  }),
+  account({
+    id: "deposit-1",
+    name: "Rainy day",
+    kind: "deposit",
+    balance: money.toMoney("9000"),
+    pivotBalance: money.toMoney("9000"),
+  }),
+  /**
+   * **Both loan directions, and both signs.** The register sorts these two
+   * last and draws money owed to you positive and money you owe negative —
+   * neither of which a story could show while no loan account existed. These
+   * are also the only rows here that carry a negative pivot figure, so they
+   * are what proves the money colours and the subtotal's own sign.
+   */
+  account({
+    id: "loan-out-1",
+    name: "Lent to a friend",
+    kind: "loan_receivable",
+    balance: money.toMoney("4000"),
+    pivotBalance: money.toMoney("4000"),
+  }),
+  account({
+    id: "loan-in-1",
+    name: "Car loan",
+    kind: "loan_payable",
+    balance: money.toMoney("-18000"),
+    pivotBalance: money.toMoney("-18000"),
+  }),
+  account({
+    id: "loan-in-2",
+    name: "Renovation",
+    kind: "loan_payable",
+    currency: "EUR",
+    balance: money.toMoney("-2400"),
+    pivotBalance: money.toMoney("-10368"),
   }),
 ];
 

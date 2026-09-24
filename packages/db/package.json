@@ -20,7 +20,7 @@
     "fx": "tsx src/fx/backfill.ts",
     "recreate": "tsx src/reset.ts",
     "grant": "tsx src/reset.ts --grant-only",
-    "fixture": "tsx src/seed/fixture.ts"
+    "fixture": "tsx src/seed/fixture.cli.ts"
   },
   "dependencies": {
     "@waltning/core": "workspace:*",

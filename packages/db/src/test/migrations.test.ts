@@ -7,6 +7,7 @@
  */
 
 import { readFileSync } from "node:fs";
+import { layoutKey, PRESET_LAYOUT, widgetKey } from "@waltning/core/dashboard";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { type Scratch, scratchDatabase } from "./scratch.ts";
 
@@ -75,29 +76,37 @@ describe("migrations apply from empty", () => {
   });
 
   /**
-   * L5 — the two seeds claim in prose, in both SQL headers, that they write
-   * "the identical row and ids". Until this test, nothing compared them: the
-   * server side was checked here, the replica side in
-   * `packages/ledger/src/test/dashboard.test.ts`, and a typo in one id would
-   * have passed both.
+   * **What replaced the two-lists test, and why it is a better question.**
    *
-   * Read from the two files rather than the two databases: the replica's
-   * SQLite is another package's fixture, and what is actually being asserted
-   * is that the two migrations agree — which is a property of their text.
+   * L5 used to read both seed migrations and assert they named the same six
+   * uuids, because both headers claimed *"the identical row and ids"*. The
+   * test was honest upkeep for a design that should not have needed it: a
+   * migration's statements are frozen, so those ids could only ever be
+   * written down, and two files written down separately agree exactly as long
+   * as somebody keeps checking. That is the *"second list to keep in step
+   * with the first"* `bootstrap-taxonomy.ts` already refuses for categories.
+   *
+   * So the ids stopped being the identity. `@waltning/core/dashboard` is the
+   * one list, both engines mint their own ids from it, and `external_id`
+   * carries `seed:<key>`. The question worth asking is no longer "do the two
+   * files agree on a uuid" — nothing reads those uuids — but "does the seeded
+   * layout carry the key the other engine will look it up by". That is
+   * falsifiable against the database, which the old one never was.
    */
-  it("seeds the same ids the replica's own migration seeds", () => {
-    const uuids = (url: URL): readonly string[] =>
-      [...readFileSync(url, "utf8").matchAll(/'([0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12})'/g)]
-        .map((match) => match[1] ?? "")
-        .sort();
+  it("keys the seeded layout and every widget by seed:<key>, not by a uuid", async () => {
+    const [layout] = await s.sql<{ external_id: string | null }[]>`
+      SELECT external_id FROM dashboard_layouts WHERE is_preset = true`;
+    expect(layout?.external_id, "the preset layout's stable key").toBe(layoutKey(PRESET_LAYOUT));
 
-    const server = uuids(new URL("../../drizzle/0014_dashboard_layout_seed.sql", import.meta.url));
-    const replica = uuids(
-      new URL("../../../ledger/drizzle/replica/0011_dashboard_layout_seed.sql", import.meta.url),
+    const widgets = await s.sql<{ external_id: string | null }[]>`
+      SELECT w.external_id
+      FROM   dashboard_widgets w
+      JOIN   dashboard_layouts l ON l.id = w.layout_id
+      WHERE  l.is_preset = true
+      ORDER  BY w.sort`;
+    expect(widgets.map((w) => w.external_id)).toEqual(
+      PRESET_LAYOUT.widgets.map((widget) => widgetKey(PRESET_LAYOUT, widget)),
     );
-
-    expect(server.length, "the server seed names no ids").toBeGreaterThan(0);
-    expect(replica, "the replica seed's ids").toEqual(server);
   });
 
   it("creates the tax_ledger view and the export role", async () => {
