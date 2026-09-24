@@ -108,6 +108,12 @@ export type DemoTarget = {
    * 532 transactions declined for `needsRate`.
    */
   pivot: string;
+  /**
+   * Runs `write` as one batch: the snapshot is rebuilt once when it returns,
+   * not after every row inside it. Optional — a target without it still gets
+   * every write, one rebuild each.
+   */
+  batch?: (write: () => void) => void;
 };
 
 export type DemoOutcome = {
@@ -169,6 +175,18 @@ export function rateWindows(from: string, to: string): readonly { from: string; 
   return out;
 }
 
+/** History rows per chunk — small enough that a chunk never holds the screen for long. */
+const HISTORY_CHUNK = 60;
+
+/**
+ * Hands the thread back for one turn, so a pending repaint or tap is served
+ * between chunks. A macrotask rather than a resolved promise: a microtask runs
+ * before the renderer gets the thread, which would yield to nothing.
+ */
+function yieldToScreen(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, 0));
+}
+
 /** L11's own cap, restated where the loader has to respect it. */
 const MAX_RATE_WINDOW_DAYS = 366;
 
@@ -185,11 +203,13 @@ function convertDemo(amount: string, from: CurrencyCode, to: CurrencyCode): stri
   return ((Number(amount) * fromRate) / toRate).toFixed(2);
 }
 
-export function loadDemo(
+export async function loadDemo(
   target: DemoTarget,
   today: string,
   months: number = DEMO_MONTHS,
-): DemoOutcome {
+  /** History rows written so far, of how many — called after every chunk. */
+  onProgress?: (written: number, of: number) => void,
+): Promise<DemoOutcome> {
   const outcome: DemoOutcome = {
     rates: 0,
     accounts: 0,
@@ -291,62 +311,6 @@ export function loadDemo(
     }
     accountIds.set(account.ref, id);
     outcome.accounts += 1;
-  }
-
-  // ── transactions ──────────────────────────────────────────────────────
-  for (const row of demoTransactions(today, months)) {
-    const accountId = accountIds.get(row.account);
-    if (accountId === undefined) {
-      outcome.refused += 1;
-      continue;
-    }
-    // A transfer names its destination and no category (§7.5); everything
-    // else is an ordinary income or expense with one.
-    // **A transfer states its destination leg in full, and is refused without
-    // it.** `transactions_to_amount_shape` requires `to_amount` and
-    // `to_currency` on a transfer and forbids them anywhere else — a leg that
-    // named only the account was rejected silently, so the money left one
-    // account and arrived nowhere: the first pass of these patterns drained
-    // the current account and left cash exactly where it was.
-    const toAccount =
-      row.toAccount === undefined
-        ? undefined
-        : DEMO_ACCOUNTS.find((account) => account.ref === row.toAccount);
-    const toAccountId = row.toAccount === undefined ? undefined : accountIds.get(row.toAccount);
-    if (row.toAccount !== undefined && (toAccountId === undefined || toAccount === undefined)) {
-      outcome.refused += 1;
-      continue;
-    }
-    const from = DEMO_ACCOUNTS.find((account) => account.ref === row.account);
-    const toLeg: { toAccountId: string; toCurrency: CurrencyCode; toAmount: string } | undefined =
-      toAccount === undefined || from === undefined || toAccountId === undefined
-        ? undefined
-        : {
-            toAccountId,
-            toCurrency: toAccount.currency,
-            // Same currency is the amount itself; across currencies the demo's
-            // own reference table converts, so a złoty leaving a PLN account
-            // arrives as the euro it actually buys rather than as the same
-            // number with a different symbol.
-            toAmount: convertDemo(row.amount, from.currency, toAccount.currency),
-          };
-    const id = accepted(() =>
-      target.createTransaction({
-        type: row.type,
-        amount: row.amount,
-        accountId,
-        categoryId: row.type === "transfer" ? null : (categoryIds.get(row.category) ?? null),
-        date: row.date,
-        enteredName: row.enteredName,
-        note: "",
-        isBusiness: false,
-        obligationCounterpartyId: null,
-        obligationRole: null,
-        ...(toLeg ?? {}),
-      }),
-    );
-    if (id === null) outcome.refused += 1;
-    else outcome.transactions += 1;
   }
 
   // ── counterparties, and the debts that give them a balance ────────────
@@ -461,6 +425,83 @@ export function loadDemo(
     );
     if (funded === null) outcome.refused += 1;
     else outcome.transactions += 1;
+  }
+
+  // ── transactions: the history, in chunks ─────────────────────────────
+  //
+  // **Last, and in chunks that hand the thread back.** Nine hundred writes in
+  // one synchronous run held the JS thread for the whole of it: the screen
+  // could not repaint, the button could not say it was working, and a device
+  // that looked frozen was reloaded — which killed the run before it reached
+  // the people, so the Counterparties tab stayed empty on every real phone.
+  // Everything a screen needs to be complete is written above; this is only
+  // the history, and each chunk is one `batch` — one snapshot rebuild rather
+  // than one per row — followed by a yield so the screen can draw progress.
+  const history = [...demoTransactions(today, months)];
+  for (let at = 0; at < history.length; at += HISTORY_CHUNK) {
+    const chunk = history.slice(at, at + HISTORY_CHUNK);
+    const writeChunk = () => {
+      for (const row of chunk) {
+        const accountId = accountIds.get(row.account);
+        if (accountId === undefined) {
+          outcome.refused += 1;
+          continue;
+        }
+        // A transfer names its destination and no category (§7.5); everything
+        // else is an ordinary income or expense with one.
+        // **A transfer states its destination leg in full, and is refused without
+        // it.** `transactions_to_amount_shape` requires `to_amount` and
+        // `to_currency` on a transfer and forbids them anywhere else — a leg that
+        // named only the account was rejected silently, so the money left one
+        // account and arrived nowhere: the first pass of these patterns drained
+        // the current account and left cash exactly where it was.
+        const toAccount =
+          row.toAccount === undefined
+            ? undefined
+            : DEMO_ACCOUNTS.find((account) => account.ref === row.toAccount);
+        const toAccountId = row.toAccount === undefined ? undefined : accountIds.get(row.toAccount);
+        if (row.toAccount !== undefined && (toAccountId === undefined || toAccount === undefined)) {
+          outcome.refused += 1;
+          continue;
+        }
+        const from = DEMO_ACCOUNTS.find((account) => account.ref === row.account);
+        const toLeg:
+          | { toAccountId: string; toCurrency: CurrencyCode; toAmount: string }
+          | undefined =
+          toAccount === undefined || from === undefined || toAccountId === undefined
+            ? undefined
+            : {
+                toAccountId,
+                toCurrency: toAccount.currency,
+                // Same currency is the amount itself; across currencies the demo's
+                // own reference table converts, so a złoty leaving a PLN account
+                // arrives as the euro it actually buys rather than as the same
+                // number with a different symbol.
+                toAmount: convertDemo(row.amount, from.currency, toAccount.currency),
+              };
+        const id = accepted(() =>
+          target.createTransaction({
+            type: row.type,
+            amount: row.amount,
+            accountId,
+            categoryId: row.type === "transfer" ? null : (categoryIds.get(row.category) ?? null),
+            date: row.date,
+            enteredName: row.enteredName,
+            note: "",
+            isBusiness: false,
+            obligationCounterpartyId: null,
+            obligationRole: null,
+            ...(toLeg ?? {}),
+          }),
+        );
+        if (id === null) outcome.refused += 1;
+        else outcome.transactions += 1;
+      }
+    };
+    if (target.batch === undefined) writeChunk();
+    else target.batch(writeChunk);
+    onProgress?.(Math.min(at + HISTORY_CHUNK, history.length), history.length);
+    await yieldToScreen();
   }
 
   return outcome;

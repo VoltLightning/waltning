@@ -1561,6 +1561,8 @@ export type PhoneLedgerController = {
   getSnapshot: () => PhoneLedgerSnapshot;
   subscribe: (listener: () => void) => () => void;
   refresh: () => void;
+  /** Runs `write` with one snapshot rebuild at the end instead of one per write inside it. */
+  batch: (write: () => void) => void;
   /** S09's whole subject, read fresh — not carried in the snapshot. */
   getTransaction: (id: Id<"transactions">) => PhoneTransactionDetail | null;
   /** S09's audit history, read fresh — not carried in the snapshot. */
@@ -2357,7 +2359,7 @@ export function createPhoneLedger(
   /** The same toggle as `archivedRequested`, for `loadArchivedCounterparties()`. */
   let archivedCounterpartiesRequested = false;
 
-  const refresh = () => {
+  const refreshNow = () => {
     emitClientDiagnostic(diagnostics, {
       scope: "client_state",
       update: "phone_ledger_refresh",
@@ -2433,6 +2435,43 @@ export function createPhoneLedger(
     }
   };
 
+  /**
+   * **Every write rebuilds the snapshot, unless it is inside a `batch`.**
+   *
+   * A rebuild reads every account's balance, net worth, the category tree
+   * and the recent rows — right for one tap of *Save*, and quadratic for a
+   * loader: nine hundred demo rows paid for nine hundred rebuilds, each over a
+   * ledger one row larger than the last. Inside a batch a write marks the
+   * snapshot stale instead, and the batch rebuilds it once as it closes, so
+   * every subscriber still sees one consistent snapshot per batch and never a
+   * half-written one.
+   *
+   * Nested batches rebuild once, at the outermost close. A write that throws
+   * still closes the batch; the `finally` is what keeps the snapshot from
+   * being left stale for good.
+   */
+  let batching = 0;
+  let stale = false;
+  const refresh = () => {
+    if (batching > 0) {
+      stale = true;
+      return;
+    }
+    refreshNow();
+  };
+  const batch = (write: () => void) => {
+    batching += 1;
+    try {
+      write();
+    } finally {
+      batching -= 1;
+      if (batching === 0 && stale) {
+        stale = false;
+        refreshNow();
+      }
+    }
+  };
+
   refresh();
 
   return {
@@ -2444,6 +2483,7 @@ export function createPhoneLedger(
       };
     },
     refresh,
+    batch,
     readPeriodSpend: (period) => port.readPeriodSpend(period),
     readDayFlows: (period) => port.readDayFlows(period),
     readMatchDays: (period, text) => port.readMatchDays(period, text),
