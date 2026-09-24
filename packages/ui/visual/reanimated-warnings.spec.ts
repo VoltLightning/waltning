@@ -15,7 +15,7 @@ const STORIES = [
 ];
 
 for (const story of STORIES) {
-  test(`${story.id} mounts without a Reanimated warning`, async ({ page }) => {
+  test(`${story.id} mounts without "animatedRef is not initialized"`, async ({ page }) => {
     const warnings: string[] = [];
     page.on("console", (message) => {
       if (message.type() === "warning" || message.type() === "error") {
@@ -32,3 +32,24 @@ for (const story of STORIES) {
     expect(warnings.filter((text) => text.includes("not initialized"))).toEqual([]);
   });
 }
+
+/**
+ * **And the page kind still observes its scroller.** Passing `null` is also
+ * what would silence the warning if the condition were inverted — and every
+ * page-scrolling screen would lose its top edge with nothing to say so, since
+ * the edge is invisible at rest. Scrolled past the edge's travel, it shows.
+ */
+test("a page-scrolling panel's top edge follows its scroll", async ({ page }) => {
+  await page.goto(
+    "/iframe.html?id=shell-groundpanel--tall-content-story&globals=appearance:light&viewMode=story",
+  );
+  await expect(page.getByText("Row 1", { exact: true })).toBeVisible();
+  const edge = page.getByTestId("ground-panel-top-edge");
+  await expect(edge).toHaveCSS("opacity", "0");
+  await page.getByTestId("ground-panel-scroll").evaluate((node) => {
+    node.scrollTop = 200;
+  });
+  await expect
+    .poll(async () => Number(await edge.evaluate((node) => getComputedStyle(node).opacity)))
+    .toBeGreaterThan(0);
+});
