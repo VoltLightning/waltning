@@ -31,7 +31,6 @@ import {
 } from "@waltning/core/date";
 import * as money from "@waltning/core/money";
 import { HoldingsCard, type HoldingsLens } from "@waltning/ui/accounts/holdings-card";
-import { CategorySheet } from "@waltning/ui/categories/category-sheet";
 import { SpendRows } from "@waltning/ui/dashboard/spend-rows";
 import { Amount } from "@waltning/ui/fx/amount";
 import {
@@ -236,20 +235,7 @@ export default function Today() {
     setToastToken((token) => token + 1);
     setToastDismissed(false);
   }
-  const handleDismissToast = useCallback(() => {
-    setToastDismissed(true);
-    setRefusal(null);
-  }, []);
-  /**
-   * A write this screen made and the ledger refused.
-   *
-   * **The same slot as the arrival toast, not a second one.** Two toasts fight
-   * for one corner; and a refusal is the more recent event, so it wins the slot
-   * while it is on screen.
-   */
-  const [refusal, setRefusal] = useState<string | null>(null);
-  /** Its own counter, so a second refusal with the same wording still shows. */
-  const [refusalToken, setRefusalToken] = useState(0);
+  const handleDismissToast = useCallback(() => setToastDismissed(true), []);
   const hasAccounts = snapshot.accounts.length > 0;
 
   // The error a failed refresh set stays on the snapshot until the next
@@ -363,44 +349,6 @@ export default function Today() {
    * move the ledger — only picking a month does.
    */
   const [pickerYear, setPickerYear] = useState<number | null>(null);
-  /**
-   * The short swipe's sheet (S04 §7).
-   *
-   * **The screen owns it, not the list.** A sheet is a layer over the whole
-   * screen, and a page inside a pager cannot open one without it sliding
-   * horizontally with the page under it. The list knows which row was swiped;
-   * this knows where a sheet goes.
-   */
-  const [categorize, setCategorize] = useState<{
-    transactionId: string;
-    kind: "income" | "expense";
-  } | null>(null);
-  const handleCategorize = useCallback(
-    (id: string, kind: "income" | "expense") => setCategorize({ transactionId: id, kind }),
-    [],
-  );
-  const dismissCategorize = useCallback(() => setCategorize(null), []);
-  const handlePickCategory = useCallback(
-    (categoryId: string) => {
-      if (categorize === null) return;
-      const result = ledger.categorizeBatch({
-        transactionIds: [categorize.transactionId],
-        categoryId,
-      });
-      // **A refusal says so.** Closing on a rejected write is the failure that
-      // looks like health — the row unchanged, the sheet gone, and every reason
-      // to believe it worked. Keeping the sheet open and saying nothing is the
-      // second half of the same failure: taps that do nothing, forever, with no
-      // message. So the sheet closes either way and the toast carries the
-      // refusal, which is where this screen already puts one.
-      if ("fieldErrors" in result) {
-        setRefusal(result.fieldErrors[0]?.message ?? t("common.couldNotSave"));
-        setRefusalToken((token) => token - 1);
-      }
-      setCategorize(null);
-    },
-    [categorize, ledger, t],
-  );
   /** §6's *the only way back from a jump* — the pill's whole job. */
   const returnToToday = useCallback(() => pager.showDay(today), [pager.showDay, today]);
   /**
@@ -962,13 +910,9 @@ export default function Today() {
    * it went to, which is what said it was the chrome rebuilding everything
    * rather than the destination drawing itself.
    */
-  /**
-   * What the toast is saying, and the token that re-arms its window. A refusal
-   * carries its own token so a second refusal with the same wording still shows
-   * (`Toast`'s H1).
-   */
-  const notice = refusal ?? (typeof message === "string" && !toastDismissed ? message : null);
-  const noticeToken = refusal === null ? toastToken : refusalToken;
+  /** What the toast is saying, and the token that re-arms its window (`Toast`'s H1). */
+  const notice = typeof message === "string" && !toastDismissed ? message : null;
+  const noticeToken = toastToken;
 
   const body = useMemo(
     () => (
@@ -1490,7 +1434,6 @@ export default function Today() {
             : { pivotCurrency: pivotCurrency.code, pivotDecimals: pivotCurrency.decimals })}
           onPickDay={handlePickDay}
           onOpenTransaction={handleOpenTransaction}
-          onCategorize={handleCategorize}
           onReturnToToday={returnToToday}
           query={pager.state.query}
           accountId={filteredAccount?.id ?? null}
@@ -1509,7 +1452,6 @@ export default function Today() {
       snapshot.revision,
       pivotCurrency,
       handlePickDay,
-      handleCategorize,
       returnToToday,
       pager.state.query,
       scrollY,
@@ -1704,18 +1646,6 @@ export default function Today() {
         onNewer={newerYears}
         onPick={pickYear}
         onDismiss={closeYearPicker}
-      />
-      {/*
-        The short swipe's destination (§7). Rendered beside the picker rather
-        than inside a page: both are layers over the screen, and a layer that
-        lived in a pager page would slide sideways with it.
-      */}
-      <CategorySheet
-        visible={categorize !== null}
-        kind={categorize?.kind ?? "expense"}
-        tree={snapshot.categoryTree}
-        onPick={handlePickCategory}
-        onDismiss={dismissCategorize}
       />
     </>
   );

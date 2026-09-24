@@ -66,6 +66,7 @@ export function EntryRow({ row, onPress, withAccount, withDate }: EntryRowProps)
         toAmount={row.toAmount}
         toCurrency={row.toCurrency}
         toDecimals={row.toDecimals ?? row.decimals}
+        {...(withDate === undefined ? {} : { withDate })}
       />
     );
   }
