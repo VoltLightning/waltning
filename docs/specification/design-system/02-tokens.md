@@ -727,6 +727,15 @@ and the sheet rise are all currently unbranched (§10).
 [Phosphor Icons](https://phosphoricons.com) — `fill` for brand and emphasis,
 `duotone` for navigation. Icon-only buttons always carry an accessible label.
 
+**The app icon** is a sage wallet with a golden bolt on beige `#F4EBDD`, drawn
+once in `apps/mobile/assets/icon/icon.svg`. Expo cuts every platform size from
+two images, so those two are all the repo keeps: `icon.png` (1024, opaque —
+App Store Connect refuses an icon with an alpha channel) and
+`adaptive-foreground.png` (1024, transparent, the art scaled to 81% so it stays
+inside Android's 66/108 safe zone under any launcher mask), with the beige as
+the adaptive background. The bolt is the one yellow in the product, and it is
+the icon's, never the interface's.
+
 ### 2.9 The moving parts of the screen
 
 Three behaviours are specified here because they are tokens of the *shell*

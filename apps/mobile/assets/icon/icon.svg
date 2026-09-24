@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-labelledby="title desc">
+  <title id="title">Waltning wallet</title>
+  <desc id="desc">A sage-green wallet on warm beige, with a golden lightning bolt overlapping its lower-right corner.</desc>
+
+  <!-- Full-bleed background; the operating system supplies the app-icon mask. -->
+  <path id="background" fill="#F4EBDD" d="M0 0h1024v1024H0z"/>
+
+  <g id="wallet">
+    <path id="back" fill="#64805B" d="M288 248h432c39.8 0 72 32.2 72 72v280H200V336c0-48.6 39.4-88 88-88Z"/>
+    <path id="opening" fill="#3F593B" d="M286 268h440c25.4 0 46 20.6 46 46v30H258c-13.3 0-24-10.7-24-24 0-28.7 23.3-52 52-52Z"/>
+    <path id="body" fill="#587451" d="M272 310h464c35.3 0 64 28.7 64 64v282c0 39.8-32.2 72-72 72H280c-44.2 0-80-35.8-80-80V338c16.5-17.8 40.4-28 72-28Z"/>
+    <rect id="clasp" x="640" y="408" width="176" height="132" rx="36" fill="#64805B"/>
+    <circle id="button" cx="699" cy="474" r="27" fill="#819972"/>
+  </g>
+
+  <path id="lightning" fill="#F2C14E" d="M759 545c8-8 20 0 16 10l-25 67h51c11 0 16 12 8 20L681 764c-8 8-20 0-16-10l30-82h-43c-11 0-16-12-8-20Z"/>
+</svg>
