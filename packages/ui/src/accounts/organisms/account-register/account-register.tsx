@@ -1025,7 +1025,16 @@ const useStyles = makeStyles((theme) => ({
     paddingTop: space.x3,
     paddingBottom: space.xs,
   },
-  sectionHeadShut: { paddingBottom: space.x3 },
+  /**
+   * A fixed height rather than padding alone: padding lets the tallest item
+   * set the height (a subtotal, the mark, or only the caret By currency), so
+   * the label moved up to 5pt as a section shut. At the open head's 44 plus
+   * the 12 it gains, the label keeps its place in every lens.
+   */
+  sectionHeadShut: {
+    minHeight: touchTarget.min + space.x3 - space.xs,
+    paddingBottom: space.x3,
+  },
   sectionMark: {
     width: 19,
     height: 19,
