@@ -31,12 +31,13 @@ import { useLocale, useT } from "../../../i18n/provider";
 import { Button } from "../../../primitives/atoms/button/button";
 import { categoryTintFor } from "../../../primitives/monogram.ts";
 import { horizontalScrollProps } from "../../../primitives/nested-scroll.ts";
+import { useSafeArea } from "../../../primitives/safe-area";
 import { useBreakpoint } from "../../../primitives/use-breakpoint.ts";
 import { Card } from "../../../shell/molecules/card/card";
 import { text } from "../../../theme/fonts.ts";
 import { useTheme } from "../../../theme/provider";
 import { makeStyles } from "../../../theme/styles.ts";
-import { radius, space } from "../../../tokens.ts";
+import { gutter, radius, space } from "../../../tokens.ts";
 import { MonthBars, type MonthBarsMonth } from "../../molecules/month-bars/month-bars";
 
 type Figures = {
@@ -77,7 +78,7 @@ export type ContextStripCard =
 export type ContextStripProps = { cards: readonly ContextStripCard[] };
 
 /** How much of the next card a phone shows, so the row reads as swipeable. */
-const PEEK = 44;
+const PEEK = 28;
 
 export function ContextStrip({ cards }: ContextStripProps) {
   const styles = useStyles();
@@ -85,11 +86,24 @@ export function ContextStrip({ cards }: ContextStripProps) {
   const phone = useBreakpoint() === "phone";
   const [width, setWidth] = useState(0);
   const [page, setPage] = useState(0);
+  const insets = useSafeArea();
 
+  /*
+    **The scroller runs edge to edge; the cards keep the gutter.** Inside the
+    page's padding the scroller clipped every card at the gutter, so a swipe
+    showed cards sliced by an invisible wall. The strip takes the padding
+    back, and gives it to the scroller's content instead: the first card still
+    starts on the gutter, the next one's edge shows at the screen's, and a
+    swiped card slides out past the screen rather than into a margin.
+  */
+  const lead = gutter + insets.left;
+  const trail = gutter + insets.right;
   const handleLayout = useCallback((event: LayoutChangeEvent) => {
     setWidth(event.nativeEvent.layout.width);
   }, []);
-  const cardWidth = Math.max(0, width - PEEK);
+  const cardWidth = Math.max(0, width - lead - space.lg - PEEK);
+  const step = cardWidth + space.lg;
+  const snaps = cards.map((_card, index) => index * step);
   const handleScroll = useCallback(
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
       if (cardWidth === 0) return;
@@ -117,19 +131,21 @@ export function ContextStrip({ cards }: ContextStripProps) {
     );
   }
 
+  const bleed = { marginLeft: -lead, marginRight: -trail };
+  const offsets = { paddingLeft: lead, paddingRight: trail };
   return (
     <View accessibilityLabel={t("transactions.contextLabel")} style={styles.strip}>
-      <View onLayout={handleLayout}>
+      <View onLayout={handleLayout} style={bleed}>
         {width === 0 ? null : (
           <ScrollView
             {...horizontalScrollProps(styles.scroller)}
             horizontal
             showsHorizontalScrollIndicator={false}
-            snapToInterval={cardWidth + space.lg}
+            snapToOffsets={snaps}
             decelerationRate="fast"
             onScroll={handleScroll}
             scrollEventThrottle={32}
-            contentContainerStyle={styles.pager}
+            contentContainerStyle={[styles.pager, offsets]}
           >
             {rendered}
           </ScrollView>
