@@ -522,6 +522,8 @@ export const DEMO_COUNTERPARTIES: readonly DemoCounterparty[] = [
   // his own alphabet.
   { ref: "de-owing", name: "Jürgen", kind: "person", settlementCurrency: "EUR" },
   { ref: "by-owed", name: "Алесь", kind: "person", settlementCurrency: null },
+  // And a dollar debt, so S12's totals carry a third currency.
+  { ref: "us-owing", name: "John Henry", kind: "person", settlementCurrency: "USD" },
 ];
 
 /**
@@ -587,6 +589,16 @@ export const DEMO_DEBTS: readonly DemoDebt[] = [
     type: "expense",
     amount: "84.00",
     daysAgo: 9,
+  },
+  {
+    counterparty: "us-owing",
+    role: "debt",
+    account: "bank-b",
+    category: "Taxi",
+    enteredName: "Airport taxi · shared",
+    type: "expense",
+    amount: "45.00",
+    daysAgo: 3,
   },
   // Money that arrived and is owed back — filed under `Borrowed`, the income
   // leaf for exactly that.
