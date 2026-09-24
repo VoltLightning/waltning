@@ -56,7 +56,7 @@ import {
   TRANSACTION_AMOUNT_KIND,
   type TransactionType,
 } from "../../molecules/transaction-row/transaction-row";
-import { BAND_FADE } from "./fold.ts";
+import { bandOpacity } from "./fold.ts";
 
 /** How far the figure rises on arrival. */
 const RISE = 12;
@@ -135,7 +135,7 @@ export function TransactionHero({
   const foldStyle = useAnimatedStyle(() => {
     const y = scrollY?.value ?? 0;
     return {
-      opacity: interpolate(y, [...BAND_FADE], [1, 0], "clamp"),
+      opacity: bandOpacity(y),
       transform: [{ translateY: reduced ? 0 : Math.max(0, y) * 0.33 }],
     };
   }, [reduced, scrollY]);

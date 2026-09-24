@@ -25,11 +25,21 @@ import type { CurrencyCode, Money } from "@waltning/core/money";
 import * as money from "@waltning/core/money";
 import type { ObligationRole, TxnType } from "@waltning/schema/enums";
 import { and, asc, eq, isNull } from "drizzle-orm";
+import { alias } from "drizzle-orm/sqlite-core";
 import type { ReplicaDb } from "../open.ts";
 import { ledgerSchema } from "../schema-map.ts";
 
 const { accounts, categories, counterparties, currencies, transactionLines, transactions } =
   ledgerSchema;
+
+/**
+ * The second join on each table, by its own name — a transfer's destination
+ * and the identity counterparty. Read here rather than looked up in a list the
+ * screen holds, because those lists leave archived rows out: a transfer to a
+ * closed account would otherwise lose its destination's name.
+ */
+const destinations = alias(accounts, "destination_account");
+const identities = alias(counterparties, "identity_counterparty");
 
 export type LocalTransactionLine = {
   id: Id<"transactionLines">;
@@ -51,6 +61,7 @@ export type LocalTransactionDetail = {
   accountName: string;
   /** A transfer's destination; `null` on every other type. S09's *Pair* card (`computations.md` §6a). */
   toAccountId: Id<"accounts"> | null;
+  toAccountName: string | null;
   categoryId: Id<"categories"> | null;
   categoryName: string | null;
   /**
@@ -59,6 +70,8 @@ export type LocalTransactionDetail = {
    * reverse, is what the detail screen exists to make visible.
    */
   counterpartyId: Id<"counterparties"> | null;
+  /** `counterpartyId`'s own name — `counterpartyName` below is the obligation's. */
+  counterpartyIdentityName: string | null;
   obligationCounterpartyId: Id<"counterparties"> | null;
   counterpartyName: string | null;
   obligationRole: ObligationRole | null;
@@ -95,9 +108,11 @@ export function readTransaction<TRun, TSchema extends typeof ledgerSchema>(
       accountId: transactions.accountId,
       accountName: accounts.name,
       toAccountId: transactions.toAccountId,
+      toAccountName: destinations.name,
       categoryId: transactions.categoryId,
       categoryName: categories.name,
       counterpartyId: transactions.counterpartyId,
+      counterpartyIdentityName: identities.name,
       obligationCounterpartyId: transactions.obligationCounterpartyId,
       counterpartyName: counterparties.name,
       obligationRole: transactions.obligationRole,
@@ -114,6 +129,8 @@ export function readTransaction<TRun, TSchema extends typeof ledgerSchema>(
     .innerJoin(currencies, eq(transactions.currency, currencies.code))
     .leftJoin(categories, eq(transactions.categoryId, categories.id))
     .leftJoin(counterparties, eq(transactions.obligationCounterpartyId, counterparties.id))
+    .leftJoin(destinations, eq(transactions.toAccountId, destinations.id))
+    .leftJoin(identities, eq(transactions.counterpartyId, identities.id))
     .where(and(eq(transactions.id, id), isNull(transactions.deletedAt)))
     .get();
 

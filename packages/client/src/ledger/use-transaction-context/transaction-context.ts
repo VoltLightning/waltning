@@ -7,8 +7,14 @@
  * currencies (§6's reason).
  *
  * **One-offs are left out of every figure** (§5: a comparison excludes
- * `is_capital`). When the transaction itself is one, its `share` is `null`
- * and the card says why instead of drawing a slice it did not contribute.
+ * `is_capital`), and each card says so: `oneOffsLeftOut` when any other row
+ * was dropped, `ownOneOff` when this one was — its `share` is then `null`
+ * rather than a slice it did not contribute.
+ *
+ * **The share comes from the same read as the bars.** *Who* and *Pair* take
+ * it from the window's own row for this transaction, and *Category* from §6's
+ * fold run over this transaction alone — so a share can never be a different
+ * moment, or a different sum, from the bar it is drawn inside.
  *
  * Plain reads over the replica, synchronous, no conversion — so nothing here
  * waits on a rate and nothing is wrong offline.
@@ -16,6 +22,7 @@
 
 import {
   type AccountingDate,
+  addDays,
   monthRange,
   shiftMonth,
   type YearMonth,
@@ -25,9 +32,9 @@ import type { Id } from "@waltning/core/id";
 import type { CurrencyCode, Money } from "@waltning/core/money";
 import * as money from "@waltning/core/money";
 import type {
+  PhoneContextRow,
+  PhoneContextRowsQuery,
   PhoneLedgerController,
-  PhoneSearchFilter,
-  PhoneSearchTransaction,
   PhoneTransactionDetail,
 } from "../create-phone-ledger/create-phone-ledger.ts";
 
@@ -41,11 +48,15 @@ export type ContextMonth = { month: YearMonth; total: Money };
 type Figures = {
   currency: CurrencyCode;
   decimals: number;
-  /** `null` when the transaction is a one-off, and so counted nowhere here. */
+  /** This transaction's part of its own month; `null` when it counts nowhere. */
   share: Money | null;
+  /** This transaction is a one-off, and so left out of every figure here. */
+  ownOneOff: boolean;
+  /** Some other row in the figures was a one-off and was left out (§5). */
+  oneOffsLeftOut: boolean;
 };
 
-/** How often, and how much — six months of one counterparty (§6a *Who*). */
+/** How often, and how much — six months with one counterparty (§6a *Who*). */
 export type WhoContext = Figures & {
   kind: "who";
   counterpartyId: Id<"counterparties">;
@@ -79,11 +90,12 @@ export type TransactionContextCard = WhoContext | PairContext | CategoryContext 
 
 export type TransactionContextLedger = Pick<
   PhoneLedgerController,
-  "searchTransactions" | "readSpendByCategory"
+  "readContextRows" | "readSpendByCategory"
 >;
 
 type Subject = Pick<
   PhoneTransactionDetail,
+  | "id"
   | "type"
   | "date"
   | "amount"
@@ -94,6 +106,7 @@ type Subject = Pick<
   | "categoryId"
   | "accountId"
   | "toAccountId"
+  | "isBusiness"
   | "lines"
 >;
 
@@ -103,23 +116,29 @@ export function readTransactionContext(
   subject: Subject,
 ): readonly TransactionContextCard[] {
   const month = yearMonth(subject.date.slice(0, 7));
-  const base = {
+  const window = {
     currency: subject.currency,
-    decimals: subject.decimals,
-    share: subject.isCapital ? null : money.abs(subject.amount),
+    from: monthRange(shiftMonth(month, 1 - CONTEXT_MONTHS)).from,
+    to: monthRange(month).to,
   };
+  const figures = { currency: subject.currency, decimals: subject.decimals };
 
   if (subject.type === "transfer") {
     if (subject.toAccountId === null) return [];
-    const to = subject.toAccountId;
-    const rows = readWindow(ledger, month, {
-      accountIds: [subject.accountId],
-      currency: subject.currency,
-    }).filter(
-      (row) =>
-        row.type === "transfer" && row.accountId === subject.accountId && row.toAccountId === to,
-    );
-    return [{ kind: "pair", toAccountId: to, ...byMonth(rows, month), ...base }];
+    const rows = ledger.readContextRows({
+      ...window,
+      kind: "pair",
+      accountId: subject.accountId,
+      toAccountId: subject.toAccountId,
+    });
+    return [
+      {
+        kind: "pair",
+        toAccountId: subject.toAccountId,
+        ...figures,
+        ...byMonth(rows, month, subject.id),
+      },
+    ];
   }
   if (subject.type !== "expense" && subject.type !== "income") return [];
 
@@ -127,61 +146,107 @@ export function readTransactionContext(
   if (subject.counterpartyId === null) {
     cards.push({ kind: "link" });
   } else {
-    const rows = readWindow(ledger, month, {
-      involvesCounterpartyId: subject.counterpartyId,
-      currency: subject.currency,
-    }).filter((row) => row.type === subject.type && row.currency === subject.currency);
+    const query: PhoneContextRowsQuery = {
+      ...window,
+      kind: "who",
+      counterpartyId: subject.counterpartyId,
+      type: subject.type,
+    };
     cards.push({
       kind: "who",
       counterpartyId: subject.counterpartyId,
-      ...byMonth(rows, month),
-      ...base,
+      ...figures,
+      ...byMonth(ledger.readContextRows(query), month, subject.id),
     });
   }
 
-  if (subject.type === "expense" && subject.categoryId !== null) {
-    cards.push(readCategory(ledger, subject, subject.categoryId, month, base));
+  if (subject.type === "expense") {
+    const category = cardCategory(subject);
+    if (category !== null) cards.push(readCategory(ledger, subject, category, month));
   }
   return cards;
 }
 
-/** Every page of one six-month window, one-offs left out. */
-function readWindow(
-  ledger: TransactionContextLedger,
-  month: YearMonth,
-  filter: PhoneSearchFilter,
-): PhoneSearchTransaction[] {
-  const window = {
-    ...filter,
-    from: monthRange(shiftMonth(month, 1 - CONTEXT_MONTHS)).from,
-    to: monthRange(month).to,
-  };
-  const rows: PhoneSearchTransaction[] = [];
-  let page = ledger.searchTransactions(window);
-  rows.push(...page.rows);
-  while (page.nextCursor !== undefined) {
-    page = ledger.searchTransactions(window, page.nextCursor);
-    rows.push(...page.rows);
-  }
-  return rows.filter((row) => !row.isCapital);
-}
-
+/**
+ * Six months of totals, one-offs left out and counted; the share is this
+ * transaction's own row in the same read — absent from it (deleted since), and
+ * there is nothing to draw.
+ */
 function byMonth(
-  rows: readonly PhoneSearchTransaction[],
+  rows: readonly PhoneContextRow[],
   month: YearMonth,
-): { months: ContextMonth[]; count: number } {
+  self: Id<"transactions">,
+): Pick<WhoContext, "months" | "count" | "share" | "ownOneOff" | "oneOffsLeftOut"> {
   const months: ContextMonth[] = [];
   for (let back = CONTEXT_MONTHS - 1; back >= 0; back--) {
     months.push({ month: shiftMonth(month, -back), total: money.ZERO });
   }
   let count = 0;
+  let share: Money | null = null;
+  let ownOneOff = false;
+  let oneOffsLeftOut = false;
   for (const row of rows) {
+    if (row.isCapital) {
+      if (row.id === self) ownOneOff = true;
+      else oneOffsLeftOut = true;
+      continue;
+    }
     const slot = months.find((entry) => row.date.startsWith(entry.month));
     if (slot === undefined) continue;
-    slot.total = money.add(slot.total, money.abs(row.amount));
+    const amount = money.abs(row.amountOriginal);
+    slot.total = money.add(slot.total, amount);
     if (slot.month === month) count += 1;
+    if (row.id === self) share = amount;
   }
-  return { months, count };
+  return { months, count, share, ownOneOff, oneOffsLeftOut };
+}
+
+/**
+ * The category the card is about. §6 reads a lined transaction through its
+ * lines and ignores its own category, so the card does too: its own category
+ * when a line carries it, else the category its lines put the most into.
+ */
+function cardCategory(subject: Subject): Id<"categories"> | null {
+  if (subject.lines.length === 0) return subject.categoryId;
+  if (subject.lines.some((line) => line.categoryId === subject.categoryId)) {
+    return subject.categoryId;
+  }
+  let best: { id: Id<"categories">; amount: Money } | null = null;
+  for (const row of attributionOf(subject)) {
+    if (row.categoryId === null || !money.isPositive(row.amount)) continue;
+    if (best === null || money.dec(row.amount).greaterThan(best.amount)) {
+      best = { id: row.categoryId as Id<"categories">, amount: row.amount };
+    }
+  }
+  return best?.id ?? null;
+}
+
+/** §6's own fold over this one transaction — signed lines and all. */
+function attributionOf(subject: Subject): readonly money.SpendByCategoryRow[] {
+  const id = String(subject.id);
+  return money.spendByCategory(
+    [
+      {
+        id,
+        type: "expense",
+        date: subject.date,
+        ownership: "own",
+        isBusiness: subject.isBusiness,
+        currency: subject.currency,
+        decimals: subject.decimals,
+        categoryId: subject.categoryId,
+        amountOriginal: money.abs(subject.amount),
+        isCapital: false,
+      },
+    ],
+    subject.lines.map((line) => ({
+      transactionId: id,
+      categoryId: line.categoryId,
+      amount: line.amount,
+    })),
+    { start: subject.date, end: addDays(subject.date, 1) },
+    "all",
+  );
 }
 
 function readCategory(
@@ -189,15 +254,15 @@ function readCategory(
   subject: Subject,
   categoryId: Id<"categories">,
   month: YearMonth,
-  base: Figures,
 ): CategoryContext {
-  const spentIn = (m: YearMonth): Money => {
+  const spentIn = (m: YearMonth, excludeCapital: boolean): Money => {
     const { from } = monthRange(m);
     const end: AccountingDate = monthRange(shiftMonth(m, 1)).from;
+    const rows = excludeCapital
+      ? ledger.readSpendByCategory({ start: from, end }, "all", { excludeCapital: true })
+      : ledger.readSpendByCategory({ start: from, end }, "all");
     let total = money.ZERO;
-    for (const row of ledger.readSpendByCategory({ start: from, end }, "all", {
-      excludeCapital: true,
-    })) {
+    for (const row of rows) {
       if (row.categoryId === categoryId && row.currency === subject.currency) {
         total = money.add(total, row.amount);
       }
@@ -208,28 +273,32 @@ function readCategory(
   let usualSum = money.ZERO;
   let usualMonths = 0;
   for (let back = 1; back <= USUAL_MONTHS; back++) {
-    const spent = spentIn(shiftMonth(month, -back));
+    const spent = spentIn(shiftMonth(month, -back), true);
     if (!money.isPositive(spent)) continue;
     usualSum = money.add(usualSum, spent);
     usualMonths += 1;
   }
 
-  // §6's attribution: lines win where they exist, so a lined transaction
-  // contributes only its lines in this category.
-  let share = base.share;
-  if (share !== null && subject.lines.length > 0) {
-    share = subject.lines
-      .filter((line) => line.categoryId === categoryId)
-      .reduce((sum, line) => money.add(sum, money.abs(line.amount)), money.ZERO);
-  }
+  const spent = spentIn(month, true);
+  const own = attributionOf(subject).find((row) => row.categoryId === categoryId)?.amount;
+  const share = subject.isCapital || own === undefined || !money.isPositive(own) ? null : own;
 
   return {
     kind: "category",
     categoryId,
     month,
-    spent: spentIn(month),
+    spent,
     usual: usualMonths === 0 ? null : money.toMoney(money.dec(usualSum).div(usualMonths)),
-    ...base,
+    currency: subject.currency,
+    decimals: subject.decimals,
     share,
+    ownOneOff: subject.isCapital,
+    // §5 — the month's own figure with one-offs in, against the one drawn.
+    oneOffsLeftOut: money
+      .dec(spentIn(month, false))
+      .minus(spent)
+      .minus(subject.isCapital ? (own ?? "0") : "0")
+      .abs()
+      .greaterThan(0),
   };
 }

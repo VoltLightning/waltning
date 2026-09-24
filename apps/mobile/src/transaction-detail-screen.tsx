@@ -27,10 +27,10 @@
  * capture sheet: you rarely know at the till that a purchase would distort a
  * trend, and marking it later never moves a balance.
  *
- * **A read, not snapshot state.** `controller.getTransaction(id)` is called
- * once on mount and again after every successful write — there is no
- * subscription for one row, so a save that changes nothing this screen
- * shows (an unrelated write elsewhere) never triggers an extra read.
+ * **A read, re-taken on every ledger change.** `controller.getTransaction(id)`
+ * runs on mount and whenever the snapshot's revision moves — one row by id,
+ * cheap — because the context cards below recompute on that same signal, and
+ * a row held from mount would draw a stale share inside fresh totals.
  */
 
 import type {
@@ -72,7 +72,7 @@ import { LinesCard, type LinesCardDraftLine } from "@waltning/ui/transactions/li
 import { heroTint, TransactionHero } from "@waltning/ui/transactions/transaction-hero";
 import { useHeroScroll } from "@waltning/ui/transactions/use-hero-scroll";
 import { router, useLocalSearchParams } from "expo-router";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { View } from "react-native";
 import { PushedPage } from "./pushed-page";
 
@@ -146,33 +146,36 @@ function handleCreateAccountFromDetail() {
 function toStripCards(
   context: readonly TransactionContextCard[],
   names: {
-    counterparty: (id: string) => string | null;
-    account: (id: string) => string | null;
+    counterparty: string | null;
     fromAccount: string;
-    categoryName: string | null;
+    toAccount: string | null;
+    categoryName: (id: string) => string | null;
   },
   actions: { onOpenCounterparty: () => void; onLink: () => void },
 ): ContextStripCard[] {
   const cards: ContextStripCard[] = [];
   for (const card of context) {
     switch (card.kind) {
-      case "who": {
-        const name = names.counterparty(card.counterpartyId);
-        if (name === null) break;
-        cards.push({ ...card, name, onOpenAll: actions.onOpenCounterparty });
+      case "who":
+        cards.push({
+          ...card,
+          name: names.counterparty ?? "—",
+          onOpenAll: actions.onOpenCounterparty,
+        });
         break;
-      }
       case "pair":
         cards.push({
           ...card,
           fromName: names.fromAccount,
-          toName: names.account(card.toAccountId) ?? "—",
+          toName: names.toAccount ?? "—",
         });
         break;
-      case "category":
-        if (names.categoryName === null) break;
-        cards.push({ ...card, name: names.categoryName });
+      case "category": {
+        const name = names.categoryName(card.categoryId);
+        if (name === null) break;
+        cards.push({ ...card, name });
         break;
+      }
       case "link":
         cards.push({ kind: "link", onLink: actions.onLink });
         break;
@@ -224,6 +227,16 @@ export default function TransactionDetail() {
     if (!transactionId) return;
     setDetail(ledger.getTransaction(transactionId));
   }, [ledger, transactionId]);
+  /*
+    **Re-read whenever the ledger changes, not only after this screen's own
+    writes.** The context cards recompute on every revision; a row held from
+    mount would draw its old amount as a share of the new totals — a synced
+    edit elsewhere, and the slice no longer fits the bar it sits in.
+  */
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the revision is the signal, not a value read.
+  useEffect(() => {
+    refetch();
+  }, [refetch, snapshot.revision]);
 
   const handleOpenCategoryPicker = useCallback(() => setCategorySheetOpen(true), []);
   const handleDismissCategorySheet = useCallback(() => setCategorySheetOpen(false), []);
@@ -350,22 +363,19 @@ export default function TransactionDetail() {
         : toStripCards(
             context,
             {
-              counterparty: (id) =>
-                snapshot.counterparties.find((row) => row.id === id)?.name ?? null,
-              account: (id) => snapshot.accounts.find((row) => row.id === id)?.name ?? null,
+              // Read with the row, so an archived counterparty or a closed
+              // destination account keeps its name (the snapshot lists omit both).
+              counterparty: detail.counterpartyIdentityName,
               fromAccount: detail.accountName,
-              categoryName: detail.categoryName,
+              toAccount: detail.toAccountName,
+              categoryName: (id) =>
+                id === detail.categoryId
+                  ? detail.categoryName
+                  : (detail.lines.find((line) => line.categoryId === id)?.categoryName ?? null),
             },
             { onOpenCounterparty: handleOpenCounterparty, onLink: handleLinkCounterparty },
           ),
-    [
-      context,
-      detail,
-      handleLinkCounterparty,
-      handleOpenCounterparty,
-      snapshot.accounts,
-      snapshot.counterparties,
-    ],
+    [context, detail, handleLinkCounterparty, handleOpenCounterparty],
   );
 
   const today = useMemo(() => deviceRuntime().capture().date, []);
@@ -443,11 +453,7 @@ export default function TransactionDetail() {
         decimals={detail.decimals}
         type={detail.type}
         accountName={detail.accountName}
-        toAccountName={
-          detail.toAccountId === null
-            ? null
-            : (snapshot.accounts.find((row) => row.id === detail.toAccountId)?.name ?? null)
-        }
+        toAccountName={detail.toAccountName}
         categoryName={detail.categoryName}
         enteredName={detail.enteredName}
         brandKey={detail.brandKey}

@@ -13,7 +13,7 @@
 
 import type * as money from "@waltning/core/money";
 import { Text, View } from "react-native";
-import Animated, { interpolate, type SharedValue, useAnimatedStyle } from "react-native-reanimated";
+import Animated, { type SharedValue, useAnimatedStyle } from "react-native-reanimated";
 import { Amount } from "../../../fx/atoms/amount/amount";
 import { useReducedMotion } from "../../../primitives/reduced-motion.ts";
 import { text } from "../../../theme/fonts.ts";
@@ -23,7 +23,7 @@ import {
   TRANSACTION_AMOUNT_KIND,
   type TransactionType,
 } from "../../molecules/transaction-row/transaction-row";
-import { DATE_OUT, TITLE_IN } from "./fold.ts";
+import { dateOpacity, titleOpacity } from "./fold.ts";
 
 export type HeroHeaderTitleProps = {
   scrollY: SharedValue<number>;
@@ -46,37 +46,38 @@ export function HeroHeaderTitle({
 }: HeroHeaderTitleProps) {
   const styles = useStyles();
   const reduced = useReducedMotion();
-  const dateStyle = useAnimatedStyle(
-    () => ({
-      opacity: interpolate(scrollY.value, [...DATE_OUT], [1, 0], "clamp"),
-      transform: [
-        {
-          translateY: reduced
-            ? 0
-            : -interpolate(scrollY.value, [...DATE_OUT], [0, space.md], "clamp"),
-        },
-      ],
-    }),
-    [reduced],
-  );
-  const compactStyle = useAnimatedStyle(() => {
-    const progress = interpolate(scrollY.value, [...TITLE_IN], [0, 1], "clamp");
+  const dateStyle = useAnimatedStyle(() => {
+    const shown = dateOpacity(scrollY.value);
     return {
-      opacity: progress,
-      transform: [{ translateY: reduced ? 0 : (1 - progress) * space.md }],
+      opacity: shown,
+      transform: [{ translateY: reduced ? 0 : -(1 - shown) * space.md }],
+    };
+  }, [reduced]);
+  const compactStyle = useAnimatedStyle(() => {
+    const shown = titleOpacity(scrollY.value);
+    return {
+      opacity: shown,
+      transform: [{ translateY: reduced ? 0 : (1 - shown) * space.md }],
     };
   }, [reduced]);
 
   return (
     <View style={styles.root}>
-      <Animated.View style={dateStyle}>
+      <Animated.View
+        style={dateStyle}
+        accessibilityElementsHidden
+        importantForAccessibility="no-hide-descendants"
+        {...HIDDEN}
+      >
         <Text style={styles.date} numberOfLines={1}>
           {date}
         </Text>
       </Animated.View>
       <Animated.View
         style={[styles.compact, compactStyle]}
+        accessibilityElementsHidden
         importantForAccessibility="no-hide-descendants"
+        {...HIDDEN}
       >
         <Text style={styles.name} numberOfLines={1}>
           {name}
@@ -92,6 +93,14 @@ export function HeroHeaderTitle({
     </View>
   );
 }
+
+/**
+ * Both lines are drawn words only: `PageHeader` names the band with its
+ * `title` for assistive technology, and the band below says the name and
+ * amount once. `react-native-web` maps neither native hiding prop, so all
+ * three are set (`page-tabs.tsx`'s reason).
+ */
+const HIDDEN: { "aria-hidden": true } = { "aria-hidden": true };
 
 const useStyles = makeStyles((theme) => ({
   root: { flex: 1, justifyContent: "center", minHeight: 28 },

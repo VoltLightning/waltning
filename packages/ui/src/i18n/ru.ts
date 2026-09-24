@@ -297,6 +297,8 @@ export const ru: Messages = {
     contextSeeAll: "Показать все",
     contextUsual: "обычно",
     contextOneOff: "Разовая — не учитывается в сравнениях",
+    /** §5 — another row in the card was a one-off and is not in its figures. */
+    contextOneOffsLeftOut: "Без разовых операций",
     contextThisOne: "эта операция",
     contextLinkTitle: "С кем это было?",
     contextLinkBody: "Свяжите с кем-то из справочника, чтобы видеть, как часто вы там бываете.",

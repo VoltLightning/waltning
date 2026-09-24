@@ -186,7 +186,10 @@ describe("readTransaction", () => {
         enteredName: "",
       })
       .run();
-    expect(readTransaction(db, MOVE)?.toAccountId).toBe(SAVINGS);
+    expect(readTransaction(db, MOVE)).toMatchObject({
+      toAccountId: SAVINGS,
+      toAccountName: "Savings · USD",
+    });
     expect(readTransaction(db, TXN)?.toAccountId).toBeNull();
   });
 

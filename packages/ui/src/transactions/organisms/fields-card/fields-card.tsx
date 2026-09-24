@@ -396,6 +396,7 @@ export function FieldsCard({
         */}
         <Chip
           placeholder={t("transactions.capital")}
+          hint={t("transactions.capitalHint")}
           selected={isCapital}
           role="checkbox"
           onPress={handleToggleCapital}

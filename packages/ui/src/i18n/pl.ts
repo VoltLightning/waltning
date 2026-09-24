@@ -310,6 +310,8 @@ export const pl: Messages = {
     contextSeeAll: "Pokaż wszystko",
     contextUsual: "zwykle",
     contextOneOff: "Jednorazowe — pominięte w porównaniach",
+    /** §5 — another row in the card was a one-off and is not in its figures. */
+    contextOneOffsLeftOut: "Bez wydatków jednorazowych",
     contextThisOne: "ta transakcja",
     contextLinkTitle: "Z kim to było?",
     contextLinkBody: "Połącz z kimś z katalogu, aby widzieć, jak często tam bywasz.",

@@ -101,11 +101,12 @@ the band and the direction line at 3:1.
 
 **The header moves twice, and says the same thing both times.** On arrival
 the brand mark settles and the figure rises into place a beat after it,
-because the figure is where the eye goes. On scroll the band folds as a
-hand-off, never a crossfade: its contents fade and drift at a third of the
-page's speed, then the header's date lifts away, then the name and amount rise
-into the header — so the amount never leaves the screen, and two lines of words
-never share one place at half strength. Reduced motion keeps every fade and
+because the figure is where the eye goes. On scroll the band folds in two
+hand-offs: the header's date lifts away before the name and amount rise into
+the header, so two lines of words never share one place, while the band's own
+figure is still fading as the header's arrives — at every scroll position the
+amount is at least half-visible in one place or the other (`fold.test.ts`
+walks them all). Reduced motion keeps every fade and
 drops every movement.
 
 **The context strip is a row of cards, one question each, swiped sideways**
@@ -121,8 +122,9 @@ with page dots beneath. Which cards appear depends on the transaction:
 The months are the transaction's own month and the five before it, never the
 calendar's current month: opening a March coffee in September shows March in
 context. Every figure is `computations.md` §6a. **One-offs are left out of
-every bar and total, and the card says so**: a one-off transaction's own card
-reads *One-off — left out of comparisons* where its highlighted slice would be.
+every bar and total, and the card says so**: *One-offs left out* when any other
+row was dropped, and *One-off — left out of comparisons* in place of the slice
+when this transaction is one.
 
 **Who** answers *how often, and how much*: the count and total for the month,
 six bars with this transaction's share drawn in the darkest step of the green
@@ -212,12 +214,12 @@ history beneath.
 | The rate and its provenance | `attach_receipt` |
 | **Count of rows sharing this date and pair** | `set_manual_rate(pair, date)` — the day-wide fix |
 
-**This screen is where `is_capital` is set**, as the *One-off* toggle at the
-foot of the fields card. §6.8 defines one-off capital events, S10 splits its
-running total when one is in range, and S25 excludes them from every comparison
-— three consumers, and this is the producer. Off by default, and its hint says
-what turning it on means: *exclude from comparisons — a move, a car, a deposit
-returned*.
+**This screen is where `is_capital` is set**, as the *One-off* chip under the
+fields card. §6.8 defines one-off capital events, S10 splits its running total
+when one is in range, and S25 excludes them from every comparison — three
+consumers, and this is the producer. Off by default. Its hint — *exclude from
+comparisons — a move, a car, a deposit returned* — is the chip's accessibility
+hint, heard before it is turned on, and is drawn under the chips once it is.
 
 It is deliberately **not** on the capture sheet. You rarely know at the till that
 a purchase is the kind that would distort a trend, and S05's budget is ten
@@ -244,8 +246,8 @@ gate — getting it wrong costs a trend line, not a filed figure.
 Tap a field to open it inline; several can be open at once. **Save is one
 button, not implicit per field** — it appears only once something has
 actually changed, and sends only the fields that did. A detail screen with a
-save on every keystroke has no state to disable that button against, which is
-what a person needs before trusting it. Delete lives at the bottom, behind a
+save on every keystroke has no moment where the button is absent, and that
+absence is what tells a person nothing is waiting to be saved. Delete lives at the bottom, behind a
 swipe-free tap.
 
 ### Web

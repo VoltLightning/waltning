@@ -60,6 +60,8 @@ export type ChipProps = {
    * turning one on turns the other off.
    */
   role?: "radio" | "checkbox";
+  /** What choosing it means, read after the label by assistive technology. */
+  hint?: string;
 };
 
 export function Chip({
@@ -70,6 +72,7 @@ export function Chip({
   machineFilled = false,
   disabled = false,
   role = "radio",
+  hint,
 }: ChipProps) {
   const t = useT();
   const { hovered, focused, handlers } = useInteraction();
@@ -106,6 +109,7 @@ export function Chip({
               : placeholder
         }
         accessibilityRole={selectable ? role : "button"}
+        {...(hint === undefined ? {} : { accessibilityHint: hint })}
         accessibilityState={selectable ? { disabled, checked: selected } : { disabled }}
         // And the same fact as the ARIA prop. react-native-web drops both
         // `selected` and `checked` from a Pressable's accessibilityState —

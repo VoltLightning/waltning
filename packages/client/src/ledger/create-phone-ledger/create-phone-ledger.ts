@@ -574,6 +574,30 @@ export type PhoneSearchPage = {
   total: { count: number; currencies: readonly PhoneCurrencyTotal[] };
 };
 
+/**
+ * S09's *Who* and *Pair* read (`computations.md` §6a) — `@waltning/ledger`'s
+ * `ContextRowsQuery`, restated structurally like every shape across this seam.
+ */
+export type PhoneContextRowsQuery = {
+  currency: CurrencyCode;
+  from: AccountingDate;
+  to: AccountingDate;
+} & (
+  | {
+      kind: "who";
+      counterpartyId: Id<"counterparties">;
+      type: "expense" | "income";
+    }
+  | { kind: "pair"; accountId: Id<"accounts">; toAccountId: Id<"accounts"> }
+);
+
+export type PhoneContextRow = {
+  id: Id<"transactions">;
+  date: AccountingDate;
+  amountOriginal: Money;
+  isCapital: boolean;
+};
+
 /** One line of S09's optional breakdown (§10.3) — a receipt-free split too. */
 export type PhoneTransactionLine = {
   id: Id<"transactionLines">;
@@ -609,10 +633,14 @@ export type PhoneTransactionDetail = {
   accountName: string;
   /** A transfer's destination; `null` on every other type. */
   toAccountId: Id<"accounts"> | null;
+  /** Read with the row, so an archived destination keeps its name. */
+  toAccountName: string | null;
   categoryId: Id<"categories"> | null;
   categoryName: string | null;
   /** §6.6.1 — who the transaction was *with*, and the name to draw for it. */
   counterpartyId: Id<"counterparties"> | null;
+  /** `counterpartyId`'s own name, archived or not; `counterpartyName` is the obligation's. */
+  counterpartyIdentityName: string | null;
   /** §6.6 — S09 is where a capture's missing role is corrected. */
   obligationCounterpartyId: Id<"counterparties"> | null;
   counterpartyName: string | null;
@@ -795,6 +823,8 @@ export type PhoneLedgerPort = {
   /** Every row on one day — the entries S04's calendar opens. Bounded by the date. */
   readDayRows: (date: AccountingDate) => PhoneLedgerPage["rows"];
   /** §6, on demand — `S01`'s donut. `DESK4`. */
+  /** S09's *Who* and *Pair* rows — one query, no totals (§6a). */
+  readContextRows: (query: PhoneContextRowsQuery) => readonly PhoneContextRow[];
   readSpendByCategory: (
     period: money.Period,
     scope: money.LedgerScope,
@@ -1612,6 +1642,8 @@ export type PhoneLedgerController = {
    */
   readDayRows: (date: AccountingDate) => PhoneLedgerPage["rows"];
   /** §6, on demand — `S01`'s donut. Same reasoning as `readPeriodSpend` above. `DESK4`. */
+  /** S09's *Who* and *Pair* rows — one query, no totals (§6a). */
+  readContextRows: (query: PhoneContextRowsQuery) => readonly PhoneContextRow[];
   readSpendByCategory: (
     period: money.Period,
     scope: money.LedgerScope,
@@ -2416,6 +2448,7 @@ export function createPhoneLedger(
     readDayRows: (date) => port.readDayRows(date),
     // Forwarded only when given: S01's reads pass two arguments and assert
     // exactly two, and an `undefined` third is still a third.
+    readContextRows: (query) => port.readContextRows(query),
     readSpendByCategory: (period, scope, options) =>
       options === undefined
         ? port.readSpendByCategory(period, scope)

@@ -594,6 +594,8 @@ export const en = {
     contextSeeAll: "See all",
     contextUsual: "usual",
     contextOneOff: "One-off — left out of comparisons",
+    /** §5 — another row in the card was a one-off and is not in its figures. */
+    contextOneOffsLeftOut: "One-offs left out",
     contextThisOne: "this one",
     contextLinkTitle: "Who was this with?",
     contextLinkBody: "Link it to someone in your directory to see how often you go.",

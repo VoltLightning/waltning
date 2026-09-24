@@ -160,9 +160,11 @@ const DETAIL: NonNullable<FakeDetail> = {
   accountId: ACCOUNT,
   accountName: "Cash · PLN",
   toAccountId: null,
+  toAccountName: null,
   categoryId: null,
   categoryName: null,
   counterpartyId: null,
+  counterpartyIdentityName: null,
   obligationCounterpartyId: null,
   counterpartyName: null,
   obligationRole: null,
@@ -189,8 +191,13 @@ beforeEach(() => {
 describe("TransactionDetail", () => {
   it("shows the hero amount and the fields of the row it was pushed for", () => {
     withLedger(<TransactionDetail />);
-    // The band, and the header line it folds into — both carry the figure.
-    expect(screen.getAllByText("-48.90").length).toBeGreaterThan(0);
+    // The band says the figure; the header line it folds into only draws it,
+    // hidden from assistive technology, which hears the header by its date.
+    const spoken = screen
+      .getAllByText("-48.90")
+      .filter((node) => node.closest('[aria-hidden="true"]') === null);
+    expect(spoken).toHaveLength(1);
+    expect(screen.getByRole("heading", { name: "August 6, 2026" })).toBeDefined();
     expect(screen.getByRole("button", { name: "Payee: Café A" })).toBeDefined();
   });
 

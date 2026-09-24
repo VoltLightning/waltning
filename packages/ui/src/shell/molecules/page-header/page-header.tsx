@@ -74,7 +74,11 @@ export function PageHeader({ title, subtitle, action, tint, titleNode }: PageHea
   return (
     <View style={[styles.band, clearance]}>
       <View style={styles.words}>
-        {titleNode ?? (
+        {titleNode !== undefined ? (
+          <View accessible accessibilityRole="header" accessibilityLabel={title}>
+            {titleNode}
+          </View>
+        ) : (
           <Text
             style={styles.title}
             numberOfLines={1}

@@ -301,6 +301,8 @@ export const de: Messages = {
     contextSeeAll: "Alle anzeigen",
     contextUsual: "üblich",
     contextOneOff: "Einmalig — bei Vergleichen ausgelassen",
+    /** §5 — another row in the card was a one-off and is not in its figures. */
+    contextOneOffsLeftOut: "Ohne Einmaliges",
     contextThisOne: "diese Buchung",
     contextLinkTitle: "Mit wem war das?",
     contextLinkBody:

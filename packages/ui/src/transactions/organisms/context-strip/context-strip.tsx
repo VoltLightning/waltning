@@ -39,7 +39,16 @@ import { makeStyles } from "../../../theme/styles.ts";
 import { radius, space } from "../../../tokens.ts";
 import { MonthBars, type MonthBarsMonth } from "../../molecules/month-bars/month-bars";
 
-type Figures = { currency: string; decimals: number; share: money.Money | null };
+type Figures = {
+  currency: string;
+  decimals: number;
+  /** This transaction's part; `null` draws none. */
+  share: money.Money | null;
+  /** This transaction is a one-off and counts nowhere here. */
+  ownOneOff: boolean;
+  /** Another row was a one-off and was left out — §5 says the card says so. */
+  oneOffsLeftOut: boolean;
+};
 
 export type ContextStripCard =
   | (Figures & {
@@ -126,7 +135,12 @@ export function ContextStrip({ cards }: ContextStripProps) {
           </ScrollView>
         )}
       </View>
-      <View style={styles.dots} importantForAccessibility="no-hide-descendants">
+      <View
+        style={styles.dots}
+        accessibilityElementsHidden
+        importantForAccessibility="no-hide-descendants"
+        {...HIDDEN}
+      >
         {cards.map((card, index) => (
           <View key={card.kind} style={[styles.dot, index === page ? styles.dotOn : null]} />
         ))}
@@ -177,7 +191,7 @@ function MonthsCard({ title, card, onOpenAll }: MonthsCardProps) {
       <Amount value={last.total} currency={card.currency} decimals={card.decimals} size="large" />
       <MonthBars months={card.months} share={card.share} />
       <View style={styles.foot}>
-        <ShareNote share={card.share} />
+        <ShareNote card={card} />
         {onOpenAll === undefined ? null : (
           <Button label={t("transactions.contextSeeAll")} variant="ghost" onPress={onOpenAll} />
         )}
@@ -225,7 +239,7 @@ function CategoryCard({ card }: { card: Extract<ContextStripCard, { kind: "categ
         {usualAt === null ? null : <View style={[styles.usualMark, usualAt]} />}
       </View>
       <View style={styles.foot}>
-        <ShareNote share={card.share} />
+        <ShareNote card={card} />
         {card.usual === null ? null : (
           <View style={styles.usual}>
             <Text style={styles.caption}>{t("transactions.contextUsual")}</Text>
@@ -257,20 +271,32 @@ function LinkCard({ onLink }: { onLink: () => void }) {
   );
 }
 
-/** *This one*, or why there is no *this one* — a one-off counts nowhere here. */
-function ShareNote({ share }: { share: money.Money | null }) {
+/**
+ * *This one*, or why there is no *this one* — and, when any other row was a
+ * one-off, that it was left out (§5: a comparison states the exclusion).
+ */
+function ShareNote({ card }: { card: Figures }) {
   const styles = useStyles();
   const t = useT();
-  if (share === null) {
-    return <Text style={styles.caption}>{t("transactions.contextOneOff")}</Text>;
-  }
   return (
-    <View style={styles.titleRow}>
-      <View style={styles.key} />
-      <Text style={styles.caption}>{t("transactions.contextThisOne")}</Text>
+    <View style={styles.notes}>
+      {card.ownOneOff ? (
+        <Text style={styles.caption}>{t("transactions.contextOneOff")}</Text>
+      ) : card.share === null ? null : (
+        <View style={styles.titleRow}>
+          <View style={styles.key} />
+          <Text style={styles.caption}>{t("transactions.contextThisOne")}</Text>
+        </View>
+      )}
+      {card.oneOffsLeftOut ? (
+        <Text style={styles.caption}>{t("transactions.contextOneOffsLeftOut")}</Text>
+      ) : null}
     </View>
   );
 }
+
+/** The dots are drawn position only; `react-native-web` maps neither native hiding prop. */
+const HIDDEN: { "aria-hidden": true } = { "aria-hidden": true };
 
 const useStyles = makeStyles((theme) => ({
   strip: { gap: space.lg },
@@ -314,5 +340,6 @@ const useStyles = makeStyles((theme) => ({
     backgroundColor: theme.text,
   },
   usual: { flexDirection: "row", alignItems: "baseline", gap: space.xs },
+  notes: { gap: space.xxs, flexShrink: 1 },
   linkAction: { flexDirection: "row" },
 }));
