@@ -237,8 +237,8 @@ function DeskCurrency() {
  * `DualTotal`'s C2 caller has not merged (`wave-3-shared.md` task 2's named
  * fallback): *mine* is the subtotal `useLeadCurrency` picked, *ours* is `null`
  * rather than a second figure nobody has computed yet. The whole hero is
- * absent only before the first account, matching `CurrencyTotals` returning
- * nothing rather than a fabricated zero balance in an invented currency — a
+ * absent only before the first account — nothing, rather than a fabricated
+ * zero balance in an invented currency — a
  * ledger that holds *something* always draws a figure, captioned when that
  * something is not the currency asked for.
  *

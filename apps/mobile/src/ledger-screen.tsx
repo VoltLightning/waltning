@@ -16,8 +16,7 @@
  * already refreshes.
  *
  * **The phone branch builds day sections and the `FlatList`** — see
- * `group-by-day.ts`'s own doc for why that split is not `TransactionList`'s
- * job. The desk branch hands `<LedgerTable>` its own flat, sorted row list
+ * `group-by-day.ts`'s own doc for why the grouping is the screen's. The desk branch hands `<LedgerTable>` its own flat, sorted row list
  * instead — a table has no days to group by.
  */
 

@@ -16,7 +16,7 @@
  * total of exactly the same number, printed underneath, teaches the reader that
  * the second line carries no information.
  *
- * **Lives only on the shell**, like `CurrencyTotals` — `emphasis="shell"` on
+ * **Lives only on the shell** — `emphasis="shell"` on
  * both `<Amount>`s and `shellTextMuted` on the labels, not the `text`/
  * `textMuted` a component sitting on `ground` would reach for. Nothing had
  * ever rendered this component under axe until its own story did, before it
@@ -42,13 +42,13 @@
  * not the currency you picked. It sits beneath both shapes, in
  * `shellTextMuted`, because a fallback nobody is told about is a wrong number.
  *
- * **`lead` steps both figures down one size**, for the same reason
- * `CurrencyTotals` steps its own rest down: C2's hero is `money.netWorth`
+ * **`lead` steps both figures down one size**, so the lead currency outranks
+ * the rest: C2's hero is `money.netWorth`
  * *per currency* (mine/ours needs no FX — it is an ownership split within one
  * currency, not a conversion), so a ledger holding two currencies stacks two
  * `DualTotal`s rather than inventing a converted sum, at `size="shell"`.
- * `Today` renders the "held separately" note beneath the stack, the same
- * line and the same reason `CurrencyTotals` prints it. `lead` only has an
+ * `Today` renders the "held separately" note beneath the stack, because
+ * the stack is never summed. `lead` only has an
  * effect at `size="shell"` — `DeskBand`'s `"band"` never stacks by currency,
  * so `mine` there stays `medium` regardless.
  */
