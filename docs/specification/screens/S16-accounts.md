@@ -78,38 +78,66 @@ because a shared account being overdrawn is a real fact.
 
 **An account is not named after its group.** *Cash* holding an account called *Cash* spends a row saying what the card's title already said; the register names the account — *Wallet*, *Travel float*, *Everyday*, *Studio* — and the group names the kind. Where a migration produces the repetition, the row keeps the imported name and the rename is an ordinary edit; nothing is renamed on the user's behalf.
 
-Each group — kind or `SharedGroup` — is a card of grouped rows: the group name
-is the card's title, its per-currency subtotals the card's one header figure,
-and the balance rows the body.
+**The register is one surface, and a kind is a label on it.** Every kind used
+to be its own `Card`, so five kinds drew five bordered boxes each carrying a
+filled header — ten stacked bands for eleven accounts, and the pile is what
+read as noise rather than any one of them. There is one card; the kinds are
+sections inside it.
 
-**The subtotal is drawn as a subtotal.** Muted, beside a muted title — the
-card's header is a label, and its figure belongs with the label rather than
-with the balances under it. Drawn at full ink it is the loudest thing in every
-card, so a reader scanning for *what is in Everyday* lands first on a number
-that is not any account's balance.
+**Two rules, and the difference between them is the hierarchy.** A rule above
+every account but the first of its section, inset to where the name starts —
+three banks with nothing between them is one block of text a reader has to
+parse back into rows. A heavier rule, full-bleed across the surface, between
+one kind and the next. Inset says *the next account*; full width says *a
+different sort of thing*. The account rule is drawn on the **top** of the row:
+below, the last row of a section lands its hairline on the section rule under
+it and every boundary is two lines.
 
-**A group of one states no subtotal.** There is nothing to sum when there is
-one thing to sum: the row below is the total, and a header repeating it prints
-the same figure twice, forty points apart, and asks the reader to notice they
-match.
+**Every kind wears one colour, and it is a grounded one.** `02-tokens` §2.1b's
+`accountKindRamp` — nine kinds, nine hues, so a hue is never reassigned when a
+kind is added. Low chroma and warm-compatible: the category ramp exists to make
+one leaf findable among fifty-nine in a picker and its inks are bright by
+design, which on a register put a blue, a magenta and a lime on a page of
+money. The kind's mark is its `tint` filled with a square of its own `ink`,
+and the section's label takes that same `ink`.
 
-**An account's row is one line.** The name, its tags, and the figure. The
-card's title already names the kind and the figure carries the currency, so a
-second line under the name has nothing left to say — and printing the currency
-code there made every account in the register two lines tall to repeat the
-mark beside it. `SharedGroup` is the exception and keeps the kind, because
-that card is the one holding accounts of mixed kinds.
+**The colour belongs to the axis you grouped on.** In the currency view a
+section holds a bank, a card and a wallet at once, so it carries no mark and
+its label is muted: one hue over accounts of three kinds would be saying
+something untrue.
 
-**The name carries the row.** It is the heaviest thing on it — heavier than
-the figure beside it. A register is read name-first: you find *Everyday*, then
-you read what is in it, and a list whose labels are quieter than its numbers
-inverts that. The search field above the groups stays on the
-ground, and so does **Add account**, the register's own primary, below the last
-group and **above** the archived section. It is offered whether or not the
-register is empty: an action that lives only in the empty state disappears the
-moment the first account exists, which leaves no way to open the second. Above
-the archived section, because a primary sitting under an opened archived list
-reads as belonging to it.
+**Grouped by kind or by currency, and the reader chooses** (`SegmentControl`,
+above the search). By kind is *what sort of money is this*; by currency is
+*what do I hold in euro*. **A section's subtotal is stated in the display
+currency in the kind view and in the section's own currency in the currency
+view** — a kind is the one grouping whose members need not share a unit, so
+its sum exists only once converted; a currency group is already one unit, and
+converting there would print a figure nobody can check by adding the rows in
+front of them. A section states its subtotal whether it holds one account or
+five: the label reads as the section's own line rather than as another
+balance, and a sum that vanished at one member and returned at two is a table
+with a hole in it.
+
+**Every section folds, and none starts folded.** The state is *shut* rather
+than *open* and empty by default: the register's job is to show what exists,
+and a default that hid nine tenths of it would be a list you have to open
+before you can read it.
+
+**The screen opens with what it all comes to.** §1 says the register answers
+which total these accounts feed, and it did not: the screen opened on figures
+in three currencies with nothing adding them up. The total is stated in the
+display currency, on the ground above the search — and the line under it says
+how many accounts it counted, because an account whose currency has no rate
+has no converted value and is therefore not in the sum. A figure over nine of
+ten accounts is stated as exactly that; it is never passed off as ten. **A
+caller with no display currency draws no total at all**, which is the honest
+state for a register that cannot convert: a sum over figures in different
+units is not a number.
+
+**The name carries the row at 500, not 600.** With a rule under every account
+and a mark on every section the page no longer needs weight to separate
+things, and at 600 across eleven rows the whole register read as emphasised —
+which is the same as nothing being emphasised.
 
 The archived toggle sits last and loads its rows lazily (§6), so whether any
 exist is not known until it has been opened once — and an empty result and an
@@ -136,9 +164,10 @@ otherwise buried in an editor.
 
 | Component | Notes |
 |---|---|
-| `Card` | One per kind group and per `SharedGroup` — grouped rows, not a hero figure. The group name is the title, the per-currency subtotals the header figure, the balance rows the body. `SharedGroup`'s is titled *Jointly owned* and carries `edge="accent"` and a `Shared` tag |
+| `Card` | **One for the whole register**, holding every kind as a section. `SharedGroup` keeps its own, titled *Jointly owned* with `edge="accent"` and a `Shared` tag — it is a different total, not a different kind |
 | `SearchField` | Name, kind, currency. Same placement as S06, S10, S12 |
-| `BalanceRow` | Account, its tags, and the figure — one line. `kind` is **optional** and left out inside a kind group, where the card's title already says it and the figure already carries the currency; `SharedGroup` passes it, being the one card of mixed kinds. `FxAmount` for foreign |
+| `SegmentControl` | *By kind* / *By currency*, above the search |
+| `BalanceRow` | Account, its tags, and the figure — one line. `kind` is **optional** and left out inside a kind section, where the section's label already says it and the figure already carries the currency; `SharedGroup` passes it, being the one card of mixed kinds. `first` says it begins its section and so draws no rule above it. `FxAmount` for foreign |
 | `SharedGroup` | Own subtotal, distinct, not diminished — accent left edge and a `Shared` tag, at full weight |
 | `FxAmount` | Every foreign balance carries its basis (P1) |
 | `Tag` | `BIZ` · `archived` · clearing's amber marker |

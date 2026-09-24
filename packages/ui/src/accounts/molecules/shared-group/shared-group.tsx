@@ -87,7 +87,7 @@ export function SharedGroup({ accounts, onSelectAccount }: SharedGroupProps) {
         <SharedAccountRow
           key={account.id}
           account={account}
-          last={index === accounts.length - 1}
+          first={index === 0}
           onSelect={onSelectAccount}
         />
       ))}
@@ -98,17 +98,16 @@ export function SharedGroup({ accounts, onSelectAccount }: SharedGroupProps) {
 type SharedAccountRowProps = {
   account: SharedGroupAccount;
   /**
-   * The last row draws no rule — the card's own edge already ends the list,
-   * and a hairline two pixels inside it reads as a row that failed to render.
-   * `BalanceRow` has taken this since the kind groups grew it; this card was
-   * the one caller that never passed it, so the shared card alone closed with
-   * a stray line under its final balance.
+   * The first row draws no rule above it — the card's own header already
+   * begins the list. `BalanceRow`'s rule moved to the top of the row when the
+   * register grew section labels (there, a rule below the last row landed on
+   * the next section's own), so this is the same flag read from the other end.
    */
-  last: boolean;
+  first: boolean;
   onSelect: (id: string) => void;
 };
 
-function SharedAccountRow({ account, last, onSelect }: SharedAccountRowProps) {
+function SharedAccountRow({ account, first, onSelect }: SharedAccountRowProps) {
   const handlePress = useCallback(() => onSelect(account.id), [account.id, onSelect]);
   return (
     <BalanceRow
@@ -121,7 +120,7 @@ function SharedAccountRow({ account, last, onSelect }: SharedAccountRowProps) {
       unsettled={account.unsettled ?? false}
       expectedBalance={account.expectedBalance ?? null}
       onPress={handlePress}
-      last={last}
+      first={first}
     />
   );
 }

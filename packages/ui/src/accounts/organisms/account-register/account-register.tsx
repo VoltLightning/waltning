@@ -34,7 +34,12 @@ import type { Messages } from "../../../i18n/en.ts";
 import { useT } from "../../../i18n/provider";
 import { Button } from "../../../primitives/atoms/button/button";
 import { IconButton } from "../../../primitives/atoms/icon-button/icon-button";
+import { PressableScaled } from "../../../primitives/atoms/pressable-scaled/pressable-scaled";
 import { SearchField } from "../../../primitives/atoms/search-field/search-field";
+import {
+  SegmentControl,
+  type SegmentControlProps,
+} from "../../../primitives/atoms/segment-control/segment-control";
 import { useInteraction } from "../../../primitives/interaction.ts";
 import { usePressScale } from "../../../primitives/press-scale.ts";
 import { Card } from "../../../shell/molecules/card/card";
@@ -43,10 +48,10 @@ import { EmptyState } from "../../../states/organisms/empty-state/empty-state";
 import { text } from "../../../theme/fonts.ts";
 import { useTheme } from "../../../theme/provider";
 import { makeStyles } from "../../../theme/styles.ts";
-import { focus, space, touchTarget } from "../../../tokens.ts";
+import { focus, hairline, radius, space, touchTarget } from "../../../tokens.ts";
+import { type KindTint, kindTint } from "../../kind-tint.ts";
 import { BalanceRow, type BalanceRowProps } from "../../molecules/balance-row/balance-row";
 import { SharedGroup, type SharedGroupAccount } from "../../molecules/shared-group/shared-group";
-import { subtotalsOf } from "../../subtotals.ts";
 
 export type AccountRegisterAccount = {
   id: string;
@@ -66,6 +71,13 @@ export type AccountRegisterAccount = {
    * guessed one.
    */
   conversion?: BalanceRowProps["conversion"];
+  /**
+   * This account's balance in the display currency — what the register adds
+   * up. Absent where no rate exists, and then the account is simply not in
+   * any total: S16 §3 would rather state a figure over nine of ten accounts
+   * and say so than guess the tenth.
+   */
+  pivotBalance?: money.Money;
 };
 
 export type AccountRegisterProps = {
@@ -117,6 +129,14 @@ export type AccountRegisterProps = {
    * the two must not be the same gesture: one browses, one rewrites.
    */
   onEditAccount?: (id: string) => void;
+  /**
+   * The display currency, and with it the register's own total.
+   *
+   * **Absent draws no total**, which is the honest state for a caller that
+   * cannot convert — a register with no pivot is a list of figures in
+   * different units, and a sum over those is not a number.
+   */
+  pivot?: { currency: string; decimals: number };
 };
 
 /** `bank · cash · card · clearing · loan_receivable · loan_payable · investment · deposit · other`. */
@@ -131,6 +151,23 @@ const KIND_ORDER: readonly AccountKind[] = [
   "deposit",
   "other",
 ];
+
+/** The two axes the register groups on — `05-composites`'s `SegmentControl`. */
+export type RegisterView = "kind" | "currency";
+
+/**
+ * The currencies present, in the order their first account appears.
+ *
+ * **Not alphabetical, and not by size.** The register's own order is the
+ * person's (`reorder_accounts`, §3), and the currency view inherits it rather
+ * than inventing a second one: the currency you keep at the top of your
+ * accounts is the currency that leads here.
+ */
+function currencyOrder(rows: readonly AccountRegisterAccount[]): readonly string[] {
+  const seen: string[] = [];
+  for (const row of rows) if (!seen.includes(row.currency)) seen.push(row.currency);
+  return seen;
+}
 
 const KIND_LABEL_KEY: Record<AccountKind, keyof Messages["accounts"]> = {
   cash: "kindCash",
@@ -158,10 +195,22 @@ export function AccountRegister({
   onTransferFrom,
   onReorder,
   onEditAccount,
+  pivot,
 }: AccountRegisterProps) {
   const t = useT();
+  const theme = useTheme();
   const styles = useStyles();
   const [query, setQuery] = useState("");
+  const [view, setView] = useState<RegisterView>("kind");
+  /**
+   * Which sections are folded away, by section key.
+   *
+   * **Shut rather than open**, so a section that has never been touched draws
+   * expanded: the register's job is to show what exists, and a default that
+   * hid nine tenths of it would be a list you have to open to read. It is
+   * keyed per view, because *Bank* and *Euro* are not the same section.
+   */
+  const [shut, setShut] = useState<Record<string, boolean>>({});
   const [archivedOpen, setArchivedOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const handleToggleEditing = useCallback(() => setEditing((on) => !on), []);
@@ -216,13 +265,74 @@ export function AccountRegister({
     [onReorder, own, shared, archivedAccounts],
   );
 
-  const groups = useMemo(
-    () =>
-      KIND_ORDER.map((kind) => ({ kind, rows: own.filter((row) => row.kind === kind) })).filter(
-        (group) => group.rows.length > 0,
-      ),
-    [own],
+  const handleToggleSection = useCallback((key: string) => {
+    setShut((current) => ({ ...current, [key]: current[key] !== true }));
+  }, []);
+
+  /**
+   * The sections, on whichever axis is showing.
+   *
+   * **The pivot travels with the kind view and not the currency one.** A kind
+   * holds accounts in several currencies, so its subtotal exists only once
+   * they are converted; a currency group is already one unit, and converting
+   * there would print a figure a reader cannot check by adding the rows in
+   * front of them.
+   */
+  const groups = useMemo(() => {
+    const sections =
+      view === "kind"
+        ? KIND_ORDER.map((kind) => ({
+            key: kind,
+            label: t(`accounts.${KIND_LABEL_KEY[kind]}`),
+            tint: kindTint(kind, theme),
+            pivot,
+            rows: own.filter((row) => row.kind === kind),
+          }))
+        : currencyOrder(own).map((currency) => ({
+            key: currency,
+            label: currency,
+            tint: undefined,
+            pivot: undefined,
+            rows: own.filter((row) => row.currency === currency),
+          }));
+    return sections
+      .filter((section) => section.rows.length > 0)
+      .map((section) => ({ ...section, toggle: () => handleToggleSection(section.key) }));
+  }, [view, own, t, theme, pivot, handleToggleSection]);
+
+  /**
+   * What the register adds up to, and what it had to leave out.
+   *
+   * An account with no rate has no pivot value, so it is not in the total —
+   * and the line under the figure says how many were counted rather than
+   * letting a sum over nine of ten accounts pass as a sum over ten.
+   */
+  const counted = useMemo(
+    () => [...own, ...shared].filter((row) => row.pivotBalance !== undefined),
+    [own, shared],
   );
+  const total = useMemo(
+    () =>
+      pivot === undefined || counted.length === 0
+        ? undefined
+        : counted.reduce(
+            (sum, row) => money.add(sum, row.pivotBalance ?? money.ZERO),
+            money.ZERO as money.Money,
+          ),
+    [counted, pivot],
+  );
+  const viewSegments: SegmentControlProps<RegisterView>["segments"] = useMemo(
+    () => [
+      { value: "kind", label: t("accounts.byKind") },
+      { value: "currency", label: t("accounts.byCurrency") },
+    ],
+    [t],
+  );
+  const heroMark = pivot?.currency ?? "";
+  const heroNote = t("accounts.countedOf", {
+    counted: String(counted.length),
+    total: String(own.length + shared.length),
+  });
 
   const sharedForGroup: readonly SharedGroupAccount[] = useMemo(
     () =>
@@ -257,6 +367,32 @@ export function AccountRegister({
 
   return (
     <View style={styles.root}>
+      {/*
+        **What it all comes to, before what it is made of.** S16 §1 says the
+        register answers which total these accounts feed, and it never did:
+        the screen opened on figures in three currencies with nothing adding
+        them up, so the one question you open Accounts to ask had no answer
+        anywhere on it.
+      */}
+      {total === undefined || pivot === undefined ? null : (
+        <View style={styles.hero}>
+          <Text style={styles.heroKicker}>
+            {t("accounts.everythingIn", { currency: heroMark })}
+          </Text>
+          <Amount value={total} currency={pivot.currency} decimals={pivot.decimals} size="medium" />
+          <Text style={styles.heroNote}>{heroNote}</Text>
+        </View>
+      )}
+
+      {/*
+        **Two groupings, because a kind and a currency answer different
+        questions.** By kind is *what sort of money is this*; by currency is
+        *what do I hold in euro* — and only the second has subtotals a reader
+        can check by adding the rows, which is why the pivot travels with the
+        first and not the second.
+      */}
+      <SegmentControl segments={viewSegments} value={view} onChange={setView} />
+
       <SearchField
         value={query}
         onChangeText={setQuery}
@@ -267,17 +403,33 @@ export function AccountRegister({
 
       {nothingMatched ? <Text style={styles.noMatches}>{t("common.noMatches")}</Text> : null}
 
-      {groups.map((group) => (
-        <KindGroup
-          key={group.kind}
-          label={t(`accounts.${KIND_LABEL_KEY[group.kind]}`)}
-          rows={group.rows}
-          onSelectAccount={onSelectAccount}
-          {...(onTransferFrom ? { onTransferFrom } : {})}
-          {...(editing && onReorder ? { onMove: handleMove } : {})}
-          {...(editing && onEditAccount ? { onEditAccount } : {})}
-        />
-      ))}
+      {/*
+        **One surface, sections inside it.** Every kind used to be its own
+        `Card`, so a register of five kinds drew five bordered boxes each
+        carrying a filled header — ten stacked bands for eleven accounts, and
+        the pile is what read as noise rather than any one of them. A kind is
+        a *label* here, with a rule above it; the card is the list.
+      */}
+      <Card>
+        <View style={styles.sections}>
+          {groups.map((group, index) => (
+            <RegisterSection
+              key={group.key}
+              label={group.label}
+              {...(group.tint === undefined ? {} : { tint: group.tint })}
+              rows={group.rows}
+              first={index === 0}
+              open={shut[group.key] !== true}
+              onToggle={group.toggle}
+              {...(group.pivot === undefined ? {} : { pivot: group.pivot })}
+              onSelectAccount={onSelectAccount}
+              {...(onTransferFrom ? { onTransferFrom } : {})}
+              {...(editing && onReorder ? { onMove: handleMove } : {})}
+              {...(editing && onEditAccount ? { onEditAccount } : {})}
+            />
+          ))}
+        </View>
+      </Card>
 
       <SharedGroup accounts={sharedForGroup} onSelectAccount={onSelectAccount} />
 
@@ -316,8 +468,23 @@ export function AccountRegister({
   );
 }
 
-type KindGroupProps = {
+type RegisterSectionProps = {
+  /**
+   * The kind's colour, or absent.
+   *
+   * **Absent in the currency view, and that is the point.** The ramp encodes
+   * *what sort of account this is*; grouped by currency a section holds a
+   * bank, a card and a wallet at once, so a single hue over them would be
+   * saying something untrue. The axis you grouped on is the axis that gets
+   * to wear a colour.
+   */
+  tint?: KindTint | undefined;
   label: string;
+  /** The first section draws no rule above it — the surface's own edge begins the list. */
+  first: boolean;
+  open: boolean;
+  onToggle: () => void;
+  pivot?: { currency: string; decimals: number } | undefined;
   rows: readonly AccountRegisterAccount[];
   onSelectAccount: (id: string) => void;
   onTransferFrom?: (id: string) => void;
@@ -337,89 +504,131 @@ type KindGroupProps = {
   onEditAccount?: (id: string) => void;
 };
 
-function KindGroup({
+function RegisterSection({
+  tint,
   label,
   rows,
+  first,
+  open,
+  onToggle,
+  pivot,
   onSelectAccount,
   onTransferFrom,
   onMove,
   onEditAccount,
-}: KindGroupProps) {
+}: RegisterSectionProps) {
+  const t = useT();
   const styles = useStyles();
-  const subtotals = subtotalsOf(rows);
+  const theme = useTheme();
+  const { focused, handlers } = useInteraction();
+  // Built above the JSX, never inside it — `tests/architecture.test.ts`.
+  const markFill = { backgroundColor: tint?.tint ?? theme.subtleFill };
+  const markDot = { backgroundColor: tint?.ink ?? theme.textMuted };
+  const labelInk = { color: tint?.ink ?? theme.textMuted };
 
   /*
-    **A subtotal is drawn as a subtotal, and a group of one has none.**
+    **The subtotal is what this section holds, in the display currency.**
 
-    Two defects, one line apart on a real device. The figure here was at full
-    ink and one step down, which against the row figures under it is no step
-    at all — so the loudest thing in every card was its total, and a reader
-    scanning for *what is in Everyday* landed on a number that is not any
-    account's balance. Muted is the step the artboard draws and the one the
-    deck gives every other header figure: the card's title is already a muted
-    label, and its figure belongs with it.
+    In the pivot rather than per currency, because a kind is the one grouping
+    whose members need not share a unit: three banks in złoty, euro and
+    dollars have a sum only once they are converted, and printing three
+    figures side by side was the register saying *here are the parts* where a
+    reader asked *how much*. Grouped by currency the question does not arise,
+    and the caller passes no pivot there.
 
-    And a card holding one account printed that account's balance twice, forty
-    points apart, identical — *Cash 840,00 zł* over *Wallet 840,00 zł*. There
-    is no sum to state when there is one thing to sum: the row below **is**
-    the subtotal, and a header repeating it is asking the reader to check
-    whether two numbers that should match do.
+    A section of one still states it. With a rule under every row and a label
+    over every section the header is read as the section's own line rather
+    than as another balance, so a lone account no longer prints its figure
+    twice in two different voices — and a sum that disappears at one member
+    and returns at two is a table with a hole in it.
   */
-  const action =
-    rows.length < 2 ? undefined : (
-      <View style={styles.subtotals}>
-        {subtotals.map((subtotal) => (
+  const subtotal = useMemo(
+    () =>
+      pivot === undefined
+        ? undefined
+        : rows.reduce<money.Money | undefined>(
+            (total, row) =>
+              row.pivotBalance === undefined
+                ? total
+                : money.add(total ?? money.ZERO, row.pivotBalance),
+            undefined,
+          ),
+    [rows, pivot],
+  );
+
+  return (
+    <View style={first ? null : styles.sectionRule}>
+      <PressableScaled
+        accessibilityRole="button"
+        accessibilityLabel={label}
+        accessibilityState={{ expanded: open }}
+        aria-expanded={open}
+        onPress={onToggle}
+        {...handlers}
+        style={[styles.sectionHead, focused ? styles.focused : null]}
+      >
+        {tint === undefined ? null : (
+          <View style={[styles.sectionMark, markFill]}>
+            <View style={[styles.sectionDot, markDot]} />
+          </View>
+        )}
+        <Text style={[styles.sectionLabel, labelInk]} numberOfLines={1}>
+          {label}
+        </Text>
+        {subtotal === undefined || pivot === undefined ? null : (
           <Amount
-            key={subtotal.currency}
-            value={subtotal.balance}
-            currency={subtotal.currency}
-            decimals={subtotal.decimals}
+            value={subtotal}
+            currency={pivot.currency}
+            decimals={pivot.decimals}
             size="small"
             emphasis="muted"
           />
-        ))}
-      </View>
-    );
-
-  return (
-    <Card title={label} {...(action === undefined ? {} : { action })}>
-      {rows.map((row, index) => (
-        <AccountRegisterRow
-          key={row.id}
-          account={row}
-          last={index === rows.length - 1}
-          onSelect={onSelectAccount}
-          {...(onTransferFrom ? { onTransferFrom } : {})}
-          {...(onMove
-            ? { onMove, first: index === 0, lastInGroup: index === rows.length - 1 }
-            : {})}
-          {...(onEditAccount ? { onEditAccount } : {})}
-        />
-      ))}
-    </Card>
+        )}
+        <View style={open ? CARET_UP : CARET_DOWN}>
+          <CaretLeftIcon size={14} color={theme.textMuted} />
+        </View>
+      </PressableScaled>
+      {open
+        ? rows.map((row, index) => (
+            <AccountRegisterRow
+              key={row.id}
+              account={row}
+              first={index === 0}
+              onSelect={onSelectAccount}
+              {...(onTransferFrom ? { onTransferFrom } : {})}
+              {...(onMove ? { onMove, lastInGroup: index === rows.length - 1 } : {})}
+              {...(onEditAccount ? { onEditAccount } : {})}
+            />
+          ))
+        : null}
+      {open && rows.length === 0 ? (
+        <Text style={styles.noMatches}>{t("common.noMatches")}</Text>
+      ) : null}
+    </View>
   );
 }
 
 type AccountRegisterRowProps = {
   account: AccountRegisterAccount;
-  /** The last row in this card draws no rule — the card's edge already ends the list. */
-  last: boolean;
+  /**
+   * First in its section — no rule above it, and no *move up*. One flag,
+   * because both answer the same question about where the row sits.
+   */
+  first: boolean;
   onSelect: (id: string) => void;
   onTransferFrom?: (id: string) => void;
   /** Present only while *Edit* is on; the ends of a group are refused rather than hidden. */
   onMove?: (id: string, by: 1 | -1) => void;
-  first?: boolean;
   lastInGroup?: boolean;
   onEditAccount?: (id: string) => void;
 };
 
 function AccountRegisterRow({
   account,
-  last,
+  first,
   onSelect,
   onTransferFrom,
   onMove,
-  first = false,
   lastInGroup = false,
   onEditAccount,
 }: AccountRegisterRowProps) {
@@ -451,7 +660,7 @@ function AccountRegisterRow({
       unsettled={account.kind === "clearing" && !money.isZero(account.balance)}
       expectedBalance={account.expectedBalance}
       onPress={handlePress}
-      last={last}
+      first={first}
     />
   );
 
@@ -623,7 +832,7 @@ function ArchivedToggle({ open, accounts, total, onToggle }: ArchivedToggleProps
         ? accounts.map((account, index) => (
             <BalanceRow
               key={account.id}
-              last={index === accounts.length - 1}
+              first={index === 0}
               account={account.name}
               kind={t(`accounts.${KIND_LABEL_KEY[account.kind]}`)}
               balance={account.balance}
@@ -638,6 +847,54 @@ function ArchivedToggle({ open, accounts, total, onToggle }: ArchivedToggleProps
 
 const useStyles = makeStyles((theme) => ({
   root: { gap: space.xl },
+  /** The one figure the screen exists to state — on the ground, not in a card. */
+  hero: { gap: space.xxs },
+  heroKicker: {
+    color: theme.textMuted,
+    ...text.ui("kicker"),
+    textTransform: "uppercase",
+  },
+  heroNote: { color: theme.textMuted, ...text.ui("caption") },
+  /**
+   * The sections, flush inside one surface. The wrapper exists for exactly one
+   * reason: `Card` puts `space.xl` between its own children, and these must
+   * touch so that the rule between two kinds is the only thing separating
+   * them. One child, no gap of its own.
+   */
+  sections: { flexDirection: "column" },
+  /**
+   * **Full-bleed and heavier than a row's.** A row's rule is inset to where
+   * its name starts, which is what says *the next account*; a kind boundary
+   * crosses the whole surface, which is what says *a different sort of thing*.
+   * The negative margin is the card's own padding, given back.
+   */
+  sectionRule: {
+    borderTopWidth: hairline.width,
+    borderTopColor: theme.border,
+    marginHorizontal: -space.x3b,
+    paddingHorizontal: space.x3b,
+  },
+  sectionHead: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: space.md,
+    minHeight: touchTarget.min,
+    paddingTop: space.x3,
+    paddingBottom: space.xs,
+  },
+  sectionMark: {
+    width: 19,
+    height: 19,
+    borderRadius: radius.xs,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  sectionDot: { width: 7, height: 7, borderRadius: radius.xs },
+  sectionLabel: {
+    flex: 1,
+    ...text.ui("kicker"),
+    textTransform: "uppercase",
+  },
   noMatches: { color: theme.textMuted, ...text.ui("body") },
   subtotals: { flexDirection: "row", flexWrap: "wrap", gap: space.lg },
   archived: { gap: space.md, marginTop: space.xl },

@@ -71,12 +71,17 @@ export type BalanceRowProps = {
   /** Present only where the row is a target — S16's register, tap to edit. */
   onPress?: () => void;
   /**
-   * The last row in its card draws no rule — the card's own edge ends the
-   * list, and a hairline two pixels inside it reads as a row that failed to
-   * render. Default `false` so an existing caller is unchanged; `S16`'s
-   * register passes it.
+   * The first row of its section draws no rule above it — the section's own
+   * label is already the thing that begins the list, and a hairline between a
+   * label and the row it introduces reads as a divider between two unrelated
+   * things.
+   *
+   * **A rule above, not below, and this is why.** Drawn below, the last row of
+   * a section lands its hairline directly on top of the heavier rule that
+   * begins the next section, and every kind boundary is two lines. Above, the
+   * boundary is drawn once by whoever owns it.
    */
-  last?: boolean;
+  first?: boolean;
 };
 
 export function BalanceRow({
@@ -90,14 +95,14 @@ export function BalanceRow({
   unsettled = false,
   expectedBalance,
   onPress,
-  last = false,
+  first = false,
 }: BalanceRowProps) {
   const t = useT();
   const styles = useStyles();
   const { focused, handlers } = useInteraction();
 
   const content = (
-    <View style={[styles.row, last ? null : styles.ruled]}>
+    <View style={[styles.row, first ? null : styles.ruled]}>
       <View style={styles.identity}>
         <View style={styles.nameLine}>
           <Text style={styles.name}>{account}</Text>
@@ -158,13 +163,18 @@ const useStyles = makeStyles((theme) => ({
     paddingVertical: space.lg,
   },
   /**
-   * A rule *between* rows, never under the last one — a card's own edge
-   * already ends a list, and a hairline two pixels inside it reads as a row
-   * that failed to render. `SettingsMenu` and `BackupCard` take the same
-   * `last` and this row did not, so every account card in the app closed with
-   * a stray line under its final balance.
+   * **A rule between every account, which is the thing a run of them needs.**
+   * Three banks with nothing between them is one block of text a reader has to
+   * parse back into rows; the register had exactly that, and it is what made
+   * it hard to read at any length past one account per kind.
+   *
+   * It is inset by construction: the rule is on the row, and the row already
+   * sits inside the card's own padding, so the line starts where the name
+   * starts. That is what tells it apart from the section rule, which is drawn
+   * full-bleed and heavier — siblings get an inset line, a new kind gets one
+   * that crosses the whole surface.
    */
-  ruled: { borderBottomWidth: hairline.width, borderBottomColor: theme.hairline },
+  ruled: { borderTopWidth: hairline.width, borderTopColor: theme.hairline },
   identity: { flex: 1, gap: space.xxs },
   nameLine: { flexDirection: "row", alignItems: "center", gap: space.md },
   /*
@@ -175,7 +185,14 @@ const useStyles = makeStyles((theme) => ({
     quieter than its numbers is read number-first, which is the opposite of
     how a register is used: you find *Everyday*, then you read what is in it.
   */
-  name: { color: theme.text, ...text.ui("body", 600) },
+  /*
+    500, not 600. The name is still the heaviest thing on its row, but with a
+    rule under every account and a mark on every section the page no longer
+    needs weight to do the separating — and at 600 across eleven rows the
+    whole register read as emphasised, which is the same as nothing being
+    emphasised.
+  */
+  name: { color: theme.text, ...text.ui("body", 500) },
   meta: { color: theme.textMuted, ...text.ui("caption") },
   lastObservedLine: { flexDirection: "row", alignItems: "center", gap: space.xxs },
   /** §10's floor, on the target `Pressable` adds — the row's own content already runs taller in practice. */

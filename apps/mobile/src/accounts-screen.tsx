@@ -58,13 +58,33 @@ function conversionOf(
   };
 }
 
+/**
+ * This account's balance in the display currency — what the register totals.
+ *
+ * **`undefined` where there is no rate**, and then the account is simply not
+ * in any total. S16 §3 would rather state a figure over nine of ten accounts
+ * and say which nine than fold in a tenth at a rate nobody has.
+ */
+function pivotBalanceOf(
+  account: PhoneAccount,
+  pivot: PhoneCurrency | undefined,
+  conversion: AccountRegisterAccount["conversion"],
+): money.Money | undefined {
+  if (pivot === undefined) return undefined;
+  if (account.currency === pivot.code) return account.balance;
+  if (conversion === undefined) return undefined;
+  return money.toPivot(account.balance, conversion.rate);
+}
+
 /** The ledger's own row onto the register's — the one place the two field sets meet. */
 function toRegisterAccount(
   account: PhoneAccount,
   conversion: AccountRegisterAccount["conversion"],
+  pivotBalance: money.Money | undefined,
 ): AccountRegisterAccount {
   return {
     ...(conversion === undefined ? {} : { conversion }),
+    ...(pivotBalance === undefined ? {} : { pivotBalance }),
     id: account.id,
     name: account.name,
     kind: account.kind,
@@ -84,14 +104,22 @@ export default function Accounts() {
   const today = todayIn(Intl.DateTimeFormat().resolvedOptions().timeZone);
   const accounts = useMemo(
     () =>
-      snapshot.accounts.map((account) =>
-        toRegisterAccount(account, conversionOf(ledger, account, pivot, today)),
-      ),
+      snapshot.accounts.map((account) => {
+        const conversion = conversionOf(ledger, account, pivot, today);
+        return toRegisterAccount(account, conversion, pivotBalanceOf(account, pivot, conversion));
+      }),
     [snapshot.accounts, ledger, pivot, today],
   );
   const archivedAccounts = useMemo(
-    () => snapshot.archivedAccounts.map((account) => toRegisterAccount(account, undefined)),
+    () =>
+      snapshot.archivedAccounts.map((account) => toRegisterAccount(account, undefined, undefined)),
     [snapshot.archivedAccounts],
+  );
+  // The register's own total is stated in the pivot or not at all — a sum over
+  // figures in three currencies is not a number.
+  const registerPivot = useMemo(
+    () => (pivot === undefined ? undefined : { currency: pivot.code, decimals: pivot.decimals }),
+    [pivot],
   );
   // `archive_account` has no undo (the shared wave-3 plan says why — no
   // `restore_*` operation exists), so this is a plain `Toast`, not `UndoToast`.
@@ -166,6 +194,7 @@ export default function Accounts() {
         onReorder={handleReorder}
         onEditAccount={handleEditAccount}
         onTransferFrom={handleTransferFrom}
+        {...(registerPivot === undefined ? {} : { pivot: registerPivot })}
       />
       {toast === null ? null : (
         <Toast message={toast} onDismiss={handleDismissToast} token={toastToken} />

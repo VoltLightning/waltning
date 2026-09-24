@@ -150,28 +150,32 @@ describe("BalanceRow", () => {
 });
 
 /**
- * **A rule between rows, never under the last one.** A card's own edge ends a
- * list; a hairline two pixels inside it reads as a row that failed to render.
- * Every account card in the app closed with one, because this row drew its
- * rule unconditionally while `SettingsMenu` and `BackupCard` both take `last`.
+ * **A rule above every account but the first of its section.**
+ *
+ * Three banks with nothing between them is one block of text the eye has to
+ * parse back into rows, which is what made the register hard to read at any
+ * length past one account per kind. The rule is on the *top* of the row for
+ * the reason `balance-row.tsx` gives: drawn below, the last row of a section
+ * lands its hairline on the heavier rule that begins the next one, and every
+ * kind boundary is two lines.
  */
-it("draws a rule between rows and none under the last", () => {
+it("draws a rule above every row but the first of its section", () => {
   const { container, unmount } = render(
     <BalanceRow account="Bank A · PLN" kind="Bank" balance={money.toMoney("0")} currency="PLN" />,
   );
   const between = container.firstElementChild as HTMLElement;
-  expect(getComputedStyle(between).borderBottomWidth).toBe("1px");
+  expect(getComputedStyle(between).borderTopWidth).toBe("1px");
   unmount();
 
-  const { container: end } = render(
+  const { container: head } = render(
     <BalanceRow
       account="Bank A · PLN"
       kind="Bank"
       balance={money.toMoney("0")}
       currency="PLN"
-      last
+      first
     />,
   );
-  const lastRow = end.firstElementChild as HTMLElement;
-  expect(getComputedStyle(lastRow).borderBottomWidth).toBe("0px");
+  const firstRow = head.firstElementChild as HTMLElement;
+  expect(getComputedStyle(firstRow).borderTopWidth).toBe("0px");
 });
