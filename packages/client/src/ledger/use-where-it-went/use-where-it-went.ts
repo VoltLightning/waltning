@@ -97,8 +97,18 @@ export function useWhereItWent(
     // the null bucket rather than standing beside it under the same name.
     const seededBlank = categoryTree.find((node) => node.externalId === SEED_UNCATEGORIZED)?.id;
 
-    const named = rows
-      .filter((row) => row.currency === currency)
+    // Every currency, in the pivot, each transaction at its own stored rate —
+    // the same terms as the *went out* above it, so the bars add up to it. A
+    // bucket that came without a rate keeps its own figure if it is already
+    // the pivot's, and is otherwise left out rather than folded in unconverted.
+    const inPivot = rows.flatMap((row) =>
+      row.amountPivot !== null && row.amountPivot !== undefined
+        ? [{ ...row, amount: row.amountPivot }]
+        : row.currency === currency
+          ? [row]
+          : [],
+    );
+    const named = inPivot
       .map((row) => ({
         // Two lost ids are one row, for the same reason the seed's blank folds
         // into the null bucket: what the reader can act on is "some of this

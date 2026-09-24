@@ -51,7 +51,7 @@ screen that reads it.
 
 ## 3. Layout
 
-**The hero card is S04's `MonthSummary`, with debt's three figures in it.** Label above the number, the number on its own line, a `FlowBar` whose track is *you lent* and whose fill is *you owe* — so the gap that remains is what comes back to you — then the labelled pair beneath. Every figure carries its currency
+**The hero card is S04's `MonthSummary`, with debt's three figures in it.** Label above the number, the number on its own line, a `FlowBar` splitting *you lent* (green, left) against *you owe* (red, right), each its share of the two — then the labelled pair beneath. Every figure carries its currency
 (`design-system/04` §4.1). The two screens a person opens daily should not state a net of two figures in two different shapes; this is the same card, holding a different subtraction.
 
 ### Mobile — 390pt

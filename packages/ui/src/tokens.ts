@@ -71,29 +71,6 @@ export const color = {
    * is the floor that matters: the fill carries the figure.
    */
   track: "#f1ebe0",
-  /**
-   * `<FlowBar>`'s track when the month has flow: income as a **field**, where
-   * `income` is income as **ink**.
-   *
-   * **The bar drew `spend` on `income` at 1.0045:1.** The two money colours are
-   * the same lightness in this palette by design — they are told apart by hue,
-   * which is what a figure needs and what a filled area does not — so the one
-   * component that draws one *on* the other rendered a single uniform rectangle
-   * in light, with no visible boundary at the very place the reader is meant to
-   * see "what you kept". Every contrast check passed: both colours clear the
-   * page, and nothing paired them with each other.
-   *
-   * `green-300`, so the ramp gives the value rather than the palette growing
-   * one. `spend` reads on it at 3.60.
-   *
-   * **This is a fill for a card, and the floor says so rather than the prose.**
-   * It clears 1.5:1 on `ground`, `surface` and `inset` — the three fills a card
-   * or a page can be — and it does **not** clear `subtle` (1.46), `hover`
-   * (1.38) or `pressed` (1.28). A money bar drawn in a chip or under a finger
-   * would be a bar this token cannot carry; `track` is the one held to all
-   * seven.
-   */
-  incomeFill: "#bccaa9",
   /** The fill under a pointer, between `subtle` and `pressed`. */
   hover: "#ece5d7",
   /** The transient fill under a finger. */
@@ -285,8 +262,6 @@ export const darkColor = {
   subtle: "#2b2620",
   /** `track`'s dark half — `subtle`'s value, for the reason above. */
   track: "#2b2620",
-  /** `incomeFill`'s dark half — `spend` reads on it at 3.76. */
-  incomeFill: "#3b4d33",
   hover: "#302a23",
   pressed: "#363027",
   border: "#38332a",

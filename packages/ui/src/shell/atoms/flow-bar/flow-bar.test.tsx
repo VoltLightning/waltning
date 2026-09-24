@@ -1,12 +1,9 @@
 /**
  * @vitest-environment jsdom
  *
- * **A ratio between two hex strings cannot see a component stop using the
- * token.** `theme/theme.test.tsx` proves `incomeFill` and `trackFill` are
- * readable; only this proves the bar reaches for them. The pair matters here
- * more than usual, because the defect these tokens fix — `spend` drawn on
- * `income` at 1.0045:1 — was invisible to every ratio in that file *and* to a
- * screenshot, which recorded the uniform rectangle as the expected picture.
+ * `FlowBar` — what came in against what went out, each its share of the two.
+ * It used to draw spend as a share of income, and a month that took in 3 000
+ * and spent 2 000 read as two thirds red.
  */
 
 import { render } from "@testing-library/react";
@@ -17,7 +14,7 @@ import { FlowBar, flowShare } from "./flow-bar";
 
 /**
  * `getComputedStyle`, not `.style`: `makeStyles` colours land in a generated
- * class, and only a value computed per render (a bar's width) is inline. It
+ * class, and only a value computed per render (a segment's flex) is inline. It
  * reports a hex as `rgb(r, g, b)`.
  */
 function rgb(hex: string): string {
@@ -32,29 +29,29 @@ function track(): HTMLElement {
 }
 
 describe("FlowBar", () => {
-  it("draws the fill on income as a field, never on income as ink", () => {
-    render(<FlowBar inflow={money.toMoney("7850.00")} spend={money.toMoney("4320.18")} />);
-    const bar = track();
-    expect(getComputedStyle(bar).backgroundColor).toBe(rgb(light.incomeFill));
-    // The two money colours are the same lightness: `spend` on `income` is
-    // 1.0045:1, so this assertion is the difference between a bar and a block.
-    expect(getComputedStyle(bar).backgroundColor).not.toBe(rgb(light.income));
-
-    const fill = bar.firstElementChild;
-    if (!(fill instanceof HTMLElement)) throw new Error("no fill rendered");
-    expect(getComputedStyle(fill).backgroundColor).toBe(rgb(light.spend));
+  /** The bug, stated as a number: 3 000 in and 2 000 out is 60% green. */
+  it("gives came-in its share of the two, so a month that kept money reads mostly green", () => {
+    expect(flowShare(money.toMoney("3000"), money.toMoney("2000"))).toBe(0.6);
   });
 
-  it("draws a neutral track and no fill when nothing arrived and nothing left", () => {
+  it("draws came-in green on the left and went-out red on the right", () => {
+    render(<FlowBar inflow={money.toMoney("3000.00")} spend={money.toMoney("2000.00")} />);
+    const [first, second] = Array.from(track().children) as HTMLElement[];
+    expect(getComputedStyle(first as HTMLElement).backgroundColor).toBe(rgb(light.income));
+    expect(getComputedStyle(second as HTMLElement).backgroundColor).toBe(rgb(light.spend));
+    expect((first as HTMLElement).style.flex).toMatch(/^0\.6/);
+  });
+
+  it("draws a neutral track and nothing on it when nothing arrived and nothing left", () => {
     render(<FlowBar inflow={money.ZERO} spend={money.ZERO} />);
     const bar = track();
-    // Not `incomeFill`: a green track on an empty month says "you kept all of
-    // it" about a month in which nothing happened.
+    // Half green and half red would claim a split of zero and zero.
     expect(getComputedStyle(bar).backgroundColor).toBe(rgb(light.trackFill));
     expect(bar.firstElementChild).toBeNull();
   });
 
-  it("fills the track and stops when the month spent more than it took", () => {
-    expect(flowShare(money.toMoney("100.00"), money.toMoney("250.00"))).toBe(1);
+  it("is all red for a month that only spent, and all green for one that only earned", () => {
+    expect(flowShare(money.ZERO, money.toMoney("250.00"))).toBe(0);
+    expect(flowShare(money.toMoney("250.00"), money.ZERO)).toBe(1);
   });
 });

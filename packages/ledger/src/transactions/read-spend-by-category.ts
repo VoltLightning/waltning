@@ -52,6 +52,7 @@ export function readSpendByCategory<TRun, TSchema extends typeof ledgerSchema>(
       decimals: currencies.decimals,
       categoryId: transactions.categoryId,
       amountOriginal: transactions.amountOriginal,
+      fxRate: transactions.fxRate,
       isCapital: transactions.isCapital,
     })
     .from(transactions)

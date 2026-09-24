@@ -69,14 +69,30 @@ describe("HoldingsCard", () => {
     expect(screen.getByRole("button", { name: "Fold it away" })).toBeDefined();
   });
 
-  /** The register's order — bank before card — not the order the fold met them in. */
-  it("lists kinds in the register's order", () => {
-    render(<HoldingsCard {...props()} initiallyOpen />);
-    const names = ["Bank", "Card"].map((name) => screen.getByText(name));
-    expect(
-      (names[0] as HTMLElement).compareDocumentPosition(names[1] as HTMLElement) &
-        Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy();
+  /**
+   * Largest first — the bar and the rows in one order. The register's order
+   * would put bank before investment; here investment is bigger, so it leads.
+   */
+  it("lists kinds largest first, whatever the register's order", () => {
+    render(
+      <HoldingsCard
+        {...props({
+          byKind: [
+            { kind: "bank", count: 1, value: money.toMoney("100") },
+            { kind: "investment", count: 1, value: money.toMoney("900") },
+            { kind: "card", count: 1, value: money.toMoney("-40") },
+          ],
+        })}
+        initiallyOpen
+      />,
+    );
+    const order = ["Investment", "Bank", "Card"].map((name) => screen.getByText(name));
+    for (let at = 1; at < order.length; at += 1) {
+      expect(
+        (order[at - 1] as HTMLElement).compareDocumentPosition(order[at] as HTMLElement) &
+          Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy();
+    }
   });
 
   /** Listed under their own rule — never a row that reads as part of the figure. */
