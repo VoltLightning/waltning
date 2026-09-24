@@ -1,7 +1,7 @@
 # J2 · Daily capture
 
 **Frequency** several times a day · **Surface** mobile
-**Screens** S04, S05, S06, S07a, S08, S15, S16, S37
+**Screens** S04, S05, S06, S07a, S08, S12, S15, S16
 **Status** specified
 
 ---
@@ -21,7 +21,7 @@ path, and no way to record who a shared expense was for.
 
 **Who extension:** S05 may select a saved party, use a new name as text, or
 leave Who empty; none creates debt. Saved entries are maintained via Settings →
-S37 → S15. Track money owed reveals the separate relationship; paying Shop A
+S12 → S15. Track money owed reveals the separate relationship; paying Shop A
 for Friend A retains both identities (`SPEC.md` §6.6.1). Acceptance covers all
 three ordinary paths, cancelling creation, an offline new-party dependency,
 changing/clearing Who without erasing debt, and explicit debt removal on Save.

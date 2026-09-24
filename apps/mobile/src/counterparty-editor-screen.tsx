@@ -116,7 +116,7 @@ export default function CounterpartyEditor() {
     : { name: "", kind: "person", settlementCurrency: null, contact: "", note: "" };
 
   const pivot = snapshot.currencies.find((currency) => currency.isPivot)?.code;
-  // H1 — `snapshot.revision` in deps (same reasoning as `debt-screen.tsx`
+  // H1 — `snapshot.revision` in deps (same reasoning as `counterparties-screen.tsx`
   // and `counterparty-detail-screen.tsx`): `listCounterpartyBalances` is a
   // live controller read, never cached in the snapshot, so a merge or a
   // settle elsewhere never invalidates a near-match candidate's balance here
@@ -303,7 +303,7 @@ export default function CounterpartyEditor() {
         setFieldErrors(mapFieldErrors(resolved, KNOWN_PATHS));
         return;
       }
-      router.dismissTo("/(tabs)/debt");
+      router.dismissTo("/(tabs)/counterparties");
     };
   }, [counterparty, editMode, ledger, t]);
 
@@ -336,7 +336,7 @@ export default function CounterpartyEditor() {
   // the first `refresh()` is still in flight (`snapshot.revision === 0`),
   // `matches` above resolves to `[]` for want of a `pivot` — the near-match
   // check would silently do nothing rather than say why. The same reasoning
-  // `debt-screen.tsx` and `counterparty-detail-screen.tsx` carry (H1).
+  // `counterparties-screen.tsx` and `counterparty-detail-screen.tsx` carry (H1).
   if (snapshot.revision === 0) {
     return (
       <PushedPage

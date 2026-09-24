@@ -37,8 +37,8 @@ import Database from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import { useSyncExternalStore } from "react";
 import Allocate from "../allocate-screen";
+import Counterparties from "../counterparties-screen";
 import CounterpartyDetail from "../counterparty-detail-screen";
-import Debt from "../debt-screen";
 import QuickAdd from "../quick-add-screen";
 import SettingsRatesScreen from "../settings-rates-screen";
 import { TabsShell } from "../tabs-shell";
@@ -241,7 +241,7 @@ export function seedJourneyFixture(ledger: JourneyLedger): JourneyFixture {
 export type JourneyRoute =
   | "today"
   | "quick-add"
-  | "debt"
+  | "counterparties"
   | "counterparty"
   | "transfer"
   | "rates"
@@ -250,7 +250,7 @@ export type JourneyRoute =
 /**
  * The shapes `router.push`/`dismissTo` are ever called with across these
  * journeys' own screens — a bare path (`tabs-shell.tsx`'s `"/quick-add"`,
- * `quick-add-screen.tsx`'s `"/"`, `debt-screen.tsx`'s `` `/counterparty/${id}` ``)
+ * `quick-add-screen.tsx`'s `"/"`, `counterparties-screen.tsx`'s `` `/counterparty/${id}` ``)
  * or `{ pathname, params }` — the shape `open-unsettled.ts` uses for J08's
  * own pot, and the account escape hatch beside it.
  */
@@ -282,7 +282,7 @@ export type JourneyRouterStub = {
 /**
  * `push("/quick-add")`, `push(\`/counterparty/${id}\`)` and `dismissTo("/")`
  * are the calls these journeys' own screens make — `tabs-shell.tsx`'s
- * `handleAdd`, `debt-screen.tsx`'s `handleSelect`, and
+ * `handleAdd`, `counterparties-screen.tsx`'s `handleSelect`, and
  * `quick-add-screen.tsx`'s own Save. `back()` is J02's `✕` discard and
  * `transfer-screen.tsx`'s own Cancel, wired the same way rather than left a
  * no-op. Anything else throws loudly: a route this journey never scripted is
@@ -346,9 +346,9 @@ export type JourneyHarnessProps = {
 };
 
 /**
- * `TabsShell` for the tab-bar screens (`today`, `debt`) — the `+` J02's own
- * journey taps is its furniture, not either screen's own, and `Debt` is
- * `app/(tabs)/debt.tsx`, the same tab group. `counterparty`, `transfer` and
+ * `TabsShell` for the tab-bar screens (`today`, `counterparties`) — the `+` J02's own
+ * journey taps is its furniture, not either screen's own, and `Counterparties`
+ * is `app/(tabs)/counterparties.tsx`, the same tab group. `counterparty`, `transfer` and
  * `rates` are stack pushes in the real app (`app/counterparty/[id].tsx`,
  * `app/transfer.tsx`, `app/settings/rates.tsx` — none under `(tabs)`), so
  * they render bare here, the same way `quick-add.tsx` — also a stack push —
@@ -376,7 +376,15 @@ export function JourneyHarness({ controller, stub }: JourneyHarnessProps) {
         <Allocate />
       ) : (
         <TabsShell
-          slot={route === "today" ? <Today /> : route === "debt" ? <Debt /> : <QuickAdd />}
+          slot={
+            route === "today" ? (
+              <Today />
+            ) : route === "counterparties" ? (
+              <Counterparties />
+            ) : (
+              <QuickAdd />
+            )
+          }
         />
       )}
     </LedgerProvider>

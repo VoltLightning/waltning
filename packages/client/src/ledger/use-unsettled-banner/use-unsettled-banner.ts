@@ -2,7 +2,7 @@
  * §8's unsettled clearing banner, as a model — the shape `S04` §3 draws and
  * `S01` §4 draws again beside `WidgetGrid`.
  *
- * **Extracted at the third use.** `today-screen.tsx` wrote it, `debt-screen.tsx`
+ * **Extracted at the third use.** `today-screen.tsx` wrote it, `counterparties-screen.tsx`
  * repeated its shape, and `S01`'s desk dashboard is the third — at which point
  * "no abstraction before the third use" has fired and a message or FIFO fix
  * landing in three files is the cost of not doing this. The split follows

@@ -1094,13 +1094,30 @@ export type UpdateCounterpartyVersionIsRequired = Expect<
 >;
 
 describe("createCounterpartyInput", () => {
-  it("defaults kind to person and settlementCurrency/contact to null", () => {
-    const parsed = createCounterpartyInput.parse({ id: COUNTERPARTY_ID, name: "Nina" });
+  it("defaults settlementCurrency/contact to null, and refuses an unstated kind", () => {
+    const parsed = createCounterpartyInput.parse({
+      id: COUNTERPARTY_ID,
+      name: "Nina",
+      kind: "person",
+    });
 
-    expect(parsed.kind).toBe("person");
     expect(parsed.settlementCurrency).toBeNull();
     expect(parsed.contact).toBeNull();
     expect(parsed.note).toBe("");
+  });
+
+  /**
+   * **`kind` used to default to `person`, and that was a guess.** O15 ages
+   * companies and not people, and the directory groups by it — so an
+   * unstated kind arriving as `person` is quietly wrong for every shop.
+   * Required instead: a caller says which, the agent included, and an
+   * unstated one is an incomplete proposal rather than one to guess at.
+   */
+  it("refuses a counterparty with no kind", () => {
+    const result = createCounterpartyInput.safeParse({ id: COUNTERPARTY_ID, name: "Shop A" });
+
+    expect(result.success).toBe(false);
+    expect(result.error?.issues.some((issue) => issue.path[0] === "kind")).toBe(true);
   });
 
   it("refuses an empty name", () => {

@@ -14,7 +14,7 @@
  * no field a stale client figure could travel on, so there is nothing to feed
  * a wrong residual *into*. What the ledger suite could not write is exactly
  * what the happy path below proves instead: the screen's own balance re-reads
- * off `snapshot.revision` (`debt-screen.tsx`'s H1, `counterparty-detail-
+ * off `snapshot.revision` (`counterparties-screen.tsx`'s H1, `counterparty-detail-
  * screen.tsx`'s own H1), so the counterparty's figure and the debt tab's row
  * both reflect the settle the moment it lands — never a balance the screen
  * remembers from before the write. That is a plain `it`, not `it.fails`: R2
@@ -43,11 +43,11 @@ import type { JourneyRouterStub } from "./journey-harness";
 
 installPhoneLayout();
 
-const switchTab = { today: vi.fn(), ledger: vi.fn(), debt: vi.fn(), settings: vi.fn() };
-const focused: "today" | "ledger" | "debt" = "debt";
+const switchTab = { today: vi.fn(), ledger: vi.fn(), counterparties: vi.fn(), settings: vi.fn() };
+const focused: "today" | "ledger" | "counterparties" = "counterparties";
 
 vi.mock("expo-router/ui", () => ({
-  useTabTrigger: ({ name }: { name: "today" | "ledger" | "debt" }) => ({
+  useTabTrigger: ({ name }: { name: "today" | "ledger" | "counterparties" }) => ({
     trigger: { isFocused: name === focused },
     switchTab: switchTab[name],
   }),
@@ -125,7 +125,7 @@ async function settle(into: readonly string[], discharges: readonly string[]) {
 describe("J07 — lend and settle", () => {
   it("settles a PLN debt end to end: the debt tab's row clears and the counterparty's own figure reads zero (flows/J07-lend-and-settle.md §2–§6, R2 H4 — not stale)", async () => {
     const { ledger, stub } = setupJourney();
-    stub.pushWithParams("debt", {});
+    stub.pushWithParams("counterparties", {});
 
     render(<JourneyHarness controller={ledger.controller} stub={stub} />);
     await settleLayout();
@@ -167,7 +167,7 @@ describe("J07 — lend and settle", () => {
 
     // S13's own figure — zeroed, not merely re-read stale (R2 H4):
     // `<BalanceLedger>` renders "All settled" once `rows` is empty, off the
-    // very same `snapshot.revision`-keyed read `debt-screen.tsx`'s own H1
+    // very same `snapshot.revision`-keyed read `counterparties-screen.tsx`'s own H1
     // fix argues for. The lend's own history row still reads 100.00 PLN —
     // history is not a running balance — so the settled state is read off
     // this key, never a blanket absence of the figure.
@@ -178,7 +178,7 @@ describe("J07 — lend and settle", () => {
     // the jump is scripted the way the controller ruling allows for a route
     // with no UI control to reach it. The counterparty's row is gone;
     // nothing left to settle.
-    act(() => stub.pushWithParams("debt", {}));
+    act(() => stub.pushWithParams("counterparties", {}));
     expect(document.body.textContent ?? "").not.toContain("100.00 PLN");
   });
 
@@ -216,7 +216,7 @@ describe("J07 — lend and settle", () => {
 
     // S12 — 100 lent by the fixture plus 250 lent here, in the one place
     // §7's *"who owes me money"* is answerable.
-    act(() => stub.pushWithParams("debt", {}));
+    act(() => stub.pushWithParams("counterparties", {}));
     await settleLayout();
     expect(document.body.textContent ?? "").toContain("350.00 PLN");
   });

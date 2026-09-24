@@ -42,13 +42,17 @@ const switchTab = {
   today: vi.fn(),
   accounts: vi.fn(),
   ledger: vi.fn(),
-  debt: vi.fn(),
+  counterparties: vi.fn(),
   settings: vi.fn(),
 };
-let focused: "today" | "accounts" | "ledger" | "debt" | "settings" = "today";
+let focused: "today" | "accounts" | "ledger" | "counterparties" | "settings" = "today";
 
 vi.mock("expo-router/ui", () => ({
-  useTabTrigger: ({ name }: { name: "today" | "accounts" | "ledger" | "debt" | "settings" }) => ({
+  useTabTrigger: ({
+    name,
+  }: {
+    name: "today" | "accounts" | "ledger" | "counterparties" | "settings";
+  }) => ({
     trigger: { isFocused: name === focused },
     switchTab: switchTab[name],
   }),
@@ -199,12 +203,12 @@ describe("TabsShell", () => {
 
   /**
    * Every tab root but Today wears the shell's own title band
-   * (`05-composites` §5.1). Ledger and Debt used to draw nothing at all, so
+   * (`05-composites` §5.1). Ledger and Counterparties used to draw nothing at all, so
    * their content began 22px from the top of the device with no name on it.
    * Two matches: the bar's own label, and the header above the slot.
    */
   it("titles every tab but Today from the shell", async () => {
-    focused = "debt";
+    focused = "counterparties";
     resizeTo(390);
     render(
       <LedgerProvider controller={fakeController()}>
@@ -213,7 +217,7 @@ describe("TabsShell", () => {
     );
     await settleLayout();
 
-    expect(screen.getAllByText("Debt")).toHaveLength(2);
+    expect(screen.getAllByText("Counterparties")).toHaveLength(2);
   });
 
   /**

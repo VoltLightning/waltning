@@ -1588,7 +1588,7 @@ corrupt a balance.
 `transactions.counterparty_id` is on both engines with its own index, the
 registry inputs carry it, and `reference` has been retired. What remains of
 this section as a contract rather than a description is the *screen* work —
-one directory, one detail view, and the merge of S12 and S37.
+one detail view that reads both links, now that S12 holds the directory.
 
 **Who** is the optional person or business involved in an ordinary payment.
 **People & companies** is its saved directory; **Debt** lists obligations,

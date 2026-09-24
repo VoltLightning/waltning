@@ -32,7 +32,7 @@
  *
  * **The unallocated banner is page-level, not a widget** — `S01` §4 draws
  * `Banner(warn)` beside `WidgetGrid`, never inside a `WidgetCard`, the same
- * shape `today-screen.tsx` and `debt-screen.tsx` already render it in. All
+ * shape `today-screen.tsx` and `counterparties-screen.tsx` already render it in. All
  * three now share one model (`packages/client`) and one component
  * (`packages/ui`): this was the third use, which is when the rule says to
  * extract.
@@ -134,7 +134,7 @@ export default function Dashboard() {
   const today = deviceRuntime().capture().date;
   // H1 — `listCounterpartyBalances` is a live controller read, never cached
   // in the snapshot; `snapshot.revision` is the dependency that means "a
-  // write could have changed this" (the same reasoning `debt-screen.tsx`
+  // write could have changed this" (the same reasoning `counterparties-screen.tsx`
   // gives its own identical memo).
   // biome-ignore lint/correctness/useExhaustiveDependencies: snapshot.revision invalidates this memo by identity, not by being read.
   const debtBalances = useMemo(
@@ -418,7 +418,7 @@ export default function Dashboard() {
   }
 
   // Loading — `snapshot.revision === 0` until the first `refresh()` settles,
-  // the same signal `debt-screen.tsx` reads for the identical reason.
+  // the same signal `counterparties-screen.tsx` reads for the identical reason.
   if (snapshot.revision === 0) {
     return (
       <GroundPanel>

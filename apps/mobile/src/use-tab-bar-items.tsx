@@ -44,7 +44,7 @@ import {
 import { useTabTrigger } from "expo-router/ui";
 import { useCallback } from "react";
 
-type TabName = "today" | "accounts" | "ledger" | "debt" | "settings";
+type TabName = "today" | "accounts" | "ledger" | "counterparties" | "settings";
 
 export function useTabBarItems(): {
   /** The phone's bar: Home · Accounts · Debt · Settings. */
@@ -57,13 +57,13 @@ export function useTabBarItems(): {
   const today = useTabTrigger({ name: "today" });
   const accounts = useTabTrigger({ name: "accounts" });
   const ledger = useTabTrigger({ name: "ledger" });
-  const debt = useTabTrigger({ name: "debt" });
+  const counterparties = useTabTrigger({ name: "counterparties" });
   const settings = useTabTrigger({ name: "settings" });
 
   const todayActive = today.trigger?.isFocused ?? false;
   const accountsActive = accounts.trigger?.isFocused ?? false;
   const ledgerActive = ledger.trigger?.isFocused ?? false;
-  const debtActive = debt.trigger?.isFocused ?? false;
+  const counterpartiesActive = counterparties.trigger?.isFocused ?? false;
   const settingsActive = settings.trigger?.isFocused ?? false;
 
   const home: TabBarItem = {
@@ -84,11 +84,11 @@ export function useTabBarItems(): {
     icon: <LedgerTabIcon active={ledgerActive} />,
     active: ledgerActive,
   };
-  const debtItem: TabBarItem = {
-    name: "debt",
-    label: t("routes.debt"),
-    icon: <DebtTabIcon active={debtActive} />,
-    active: debtActive,
+  const counterpartiesItem: TabBarItem = {
+    name: "counterparties",
+    label: t("routes.counterparties"),
+    icon: <DebtTabIcon active={counterpartiesActive} />,
+    active: counterpartiesActive,
   };
   const settingsItem: TabBarItem = {
     name: "settings",
@@ -97,8 +97,14 @@ export function useTabBarItems(): {
     active: settingsActive,
   };
 
-  const items: readonly TabBarItem[] = [home, accountsItem, debtItem, settingsItem];
-  const deskItems: readonly TabBarItem[] = [home, accountsItem, ledgerItem, debtItem, settingsItem];
+  const items: readonly TabBarItem[] = [home, accountsItem, counterpartiesItem, settingsItem];
+  const deskItems: readonly TabBarItem[] = [
+    home,
+    accountsItem,
+    ledgerItem,
+    counterpartiesItem,
+    settingsItem,
+  ];
 
   const onSelect = useCallback(
     (name: string) => {
@@ -106,12 +112,12 @@ export function useTabBarItems(): {
         today: today.switchTab,
         accounts: accounts.switchTab,
         ledger: ledger.switchTab,
-        debt: debt.switchTab,
+        counterparties: counterparties.switchTab,
         settings: settings.switchTab,
       };
       triggers[name as TabName]?.(name, {});
     },
-    [today, accounts, ledger, debt, settings],
+    [today, accounts, ledger, counterparties, settings],
   );
 
   return { items, deskItems, onSelect };
