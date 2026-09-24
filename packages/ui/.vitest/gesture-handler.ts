@@ -34,7 +34,7 @@ export class PanBuilder {
   /**
    * **Which axis the pan owns**, and which one it gives back.
    *
-   * **Recorded, unlike the rest.** `swipeable-row.tsx` needs both of these to
+   * **Recorded, unlike the rest.** A sideways pan needs both of these to
    * sit inside a vertical list at all — without them a pan activates in *any*
    * direction and eats every scroll that begins on a row, which is a bug that
    * shipped. Inert like every other builder here, the axes could be swapped —

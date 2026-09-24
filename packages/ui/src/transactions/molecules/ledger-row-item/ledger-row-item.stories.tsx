@@ -1,10 +1,7 @@
 /**
- * `LedgerRowItem` — an `EntryRow` inside a swipe surface when both swipes are
- * wired and the row is income or spend. A transfer or an adjustment never
- * swipes: neither has a category to set.
- *
- * S10's ledger wires both swipes and keeps each row's date; Today's pages
- * wire no swipe and drop the date, because their day header says it.
+ * `LedgerRowItem` — a ledger row answering a tap. Rows do not swipe (S10 §7).
+ * S10's ledger keeps each row's date; Today's pages drop it, because their
+ * day header says it.
  */
 
 import type { Meta, StoryObj } from "@storybook/react-native-web-vite";
@@ -53,11 +50,11 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/** As S10's ledger draws it: dated, both swipes wired, at rest inside its swipe surface. */
-export const InTheLedger: Story = { args: { onShortSwipe: noop, onLongSwipe: noop } };
+/** As S10's ledger draws it: dated. */
+export const InTheLedger: Story = {};
 
-/** As Today draws it: no date, no swipe — tap only. */
+/** As Today draws it: no date. */
 export const OnToday: Story = { args: { withDate: false } };
 
-/** A transfer never swipes, even with both handlers wired. */
-export const Transfer: Story = { args: { row: TRANSFER, onShortSwipe: noop, onLongSwipe: noop } };
+/** A transfer: one row for both legs. */
+export const Transfer: Story = { args: { row: TRANSFER } };

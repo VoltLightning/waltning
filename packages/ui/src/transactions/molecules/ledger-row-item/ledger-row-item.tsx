@@ -1,73 +1,37 @@
 /**
- * `<LedgerRowItem>` — one row of a ledger list: the entry, and the swipe when
- * the row has something to swipe for.
+ * `<LedgerRowItem>` — one row of a ledger list: the entry, answering a tap.
  *
- * **The rule it carries is which rows can be categorised.** A transfer moves
- * money between your own accounts and an adjustment corrects a balance;
- * neither has a category, by constraint (`transactions_category_shape`), so
- * neither takes a swipe. A gesture that opens a sheet with nothing to choose
- * is worse than no gesture: it teaches that the swipe sometimes does nothing.
+ * **Rows do not swipe** (S10 §7). A sideways drag used to categorise or open
+ * the row depending on how far it went, and nothing on screen said either;
+ * it was removed rather than labelled. Categorising is in the transaction
+ * (S09), and on the desk ledger across a selection.
  *
- * Lived inside `ledger-screen.tsx` while S10 was the only list. S04's List
- * page draws the same rows under the same rule, and a rule about which rows
- * can be categorised is not a property of the screen that happened to need it
- * first — a second copy would be the place the two lists start disagreeing.
- *
- * **It composes, it does not fetch.** `withAccount` is on because both lists
- * span accounts; a list scoped to one would pass it off, and that is the
- * caller's to know.
+ * Shared by S10's ledger and S04's List page, so the two lists draw a row the
+ * same way. **It composes, it does not fetch.** `withAccount` is on because
+ * both lists span accounts; a list scoped to one would pass it off, and that
+ * is the caller's to know. Memoised: a long list re-renders a row only when
+ * its own entry changes.
  */
 
-import { memo, useCallback } from "react";
+import { memo } from "react";
 import { EntryRow } from "../entry-row/entry-row";
 import type { LedgerEntry } from "../entry-row/ledger-entry.ts";
-import { SwipeableRow } from "../swipeable-row/swipeable-row";
 
 export type LedgerRowItemProps = {
   row: LedgerEntry;
   onPress: (id: string) => void;
-  /** Categorise. Absent where the list offers no swipe at all. */
-  onShortSwipe?: ((id: string) => void) | undefined;
-  /** Open the row's detail. */
-  onLongSwipe?: ((id: string) => void) | undefined;
-  /** Draw the account beside the category — off for a list already scoped to one. */
   withAccount?: boolean;
-  /** Draw the date — off inside a `<DayGroup>`, which has already given it. */
   withDate?: boolean;
 };
 
-function LedgerRowItemView({
-  row,
-  onPress,
-  onShortSwipe,
-  onLongSwipe,
-  withAccount = true,
-  withDate,
-}: LedgerRowItemProps) {
-  const shortSwipe = useCallback(() => onShortSwipe?.(row.id), [onShortSwipe, row.id]);
-  const longSwipe = useCallback(() => onLongSwipe?.(row.id), [onLongSwipe, row.id]);
-  const entry = (
+function LedgerRowItemView({ row, onPress, withAccount = true, withDate }: LedgerRowItemProps) {
+  return (
     <EntryRow
       row={row}
       onPress={onPress}
       withAccount={withAccount}
       {...(withDate === undefined ? {} : { withDate })}
     />
-  );
-
-  // Both handlers, or the row is tap-only: a half-wired `SwipeableRow` would
-  // answer one gesture and swallow the other.
-  const swipeable =
-    (row.type === "income" || row.type === "expense") &&
-    onShortSwipe !== undefined &&
-    onLongSwipe !== undefined;
-
-  if (!swipeable) return entry;
-
-  return (
-    <SwipeableRow onShortSwipe={shortSwipe} onLongSwipe={longSwipe}>
-      {entry}
-    </SwipeableRow>
   );
 }
 

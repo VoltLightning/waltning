@@ -1,6 +1,7 @@
 /**
  * S10 · the whole ledger — searchable, filterable, grouped by day, with a
- * running total and a swipe to recategorise. Replaces the stub.
+ * running total. Rows answer a tap only: a sideways drag did two things
+ * nothing on screen named, and was removed rather than labelled (S10 §7).
  *
  * **One screen, both surfaces**, per `wave-3-shared.md` §3 — a real second
  * layout, not a style tweak, branched on `useBreakpoint()` at the top of the
@@ -20,10 +21,7 @@
  * instead — a table has no days to group by.
  */
 
-import type {
-  CategorizeBatchDraft,
-  PhoneSearchTransaction,
-} from "@waltning/client/ledger/create-phone-ledger";
+import type { PhoneSearchTransaction } from "@waltning/client/ledger/create-phone-ledger";
 import { deviceRuntime } from "@waltning/client/ledger/device-runtime";
 import {
   type FilterExclusionCounts,
@@ -296,10 +294,6 @@ export default function Ledger() {
   );
   const { filter } = filters;
   const [sheetOpen, setSheetOpen] = useState(false);
-  const [categorizeSheet, setCategorizeSheet] = useState<{
-    transactionId: string;
-    kind: "income" | "expense";
-  } | null>(null);
 
   /**
    * The desk table loads the whole filtered period, the phone list pages on
@@ -465,28 +459,6 @@ export default function Ledger() {
   const handleOpenSheet = useCallback(() => setSheetOpen(true), []);
   const handleDismissSheet = useCallback(() => setSheetOpen(false), []);
 
-  const handleShortSwipe = useCallback(
-    (id: string) => {
-      const row = search.rows.find((candidate) => candidate.id === id);
-      if (!row || (row.type !== "income" && row.type !== "expense")) return;
-      setCategorizeSheet({ transactionId: id, kind: row.type });
-    },
-    [search.rows],
-  );
-  const handleDismissCategorize = useCallback(() => setCategorizeSheet(null), []);
-  const handlePickCategory = useCallback(
-    (categoryId: string) => {
-      if (!categorizeSheet) return;
-      const categorizeDraft: CategorizeBatchDraft = {
-        transactionIds: [categorizeSheet.transactionId],
-        categoryId,
-      };
-      ledger.categorizeBatch(categorizeDraft);
-      setCategorizeSheet(null);
-    },
-    [categorizeSheet, ledger],
-  );
-
   const accountOptions: SelectOption[] = snapshot.accounts.map((acc) => ({
     value: acc.id,
     label: acc.name,
@@ -583,14 +555,9 @@ export default function Ledger() {
       item.kind === "header" ? (
         <DayHeader label={item.label} />
       ) : (
-        <LedgerRowItem
-          row={item.row}
-          onPress={handlePressRoute}
-          onShortSwipe={handleShortSwipe}
-          onLongSwipe={handlePressRoute}
-        />
+        <LedgerRowItem row={item.row} onPress={handlePressRoute} />
       ),
-    [handleShortSwipe],
+    [],
   );
   const keyExtractor = useCallback((entry: ListEntry) => entry.key, []);
   const handleEndReached = useCallback(() => {
@@ -858,14 +825,6 @@ export default function Ledger() {
         />
         <PeriodField from={filter.from} to={filter.to} today={today} onChange={filters.setRange} />
       </BottomSheet>
-
-      <CategorySheet
-        visible={categorizeSheet !== null}
-        kind={categorizeSheet?.kind ?? "expense"}
-        tree={snapshot.categoryTree}
-        onPick={handlePickCategory}
-        onDismiss={handleDismissCategorize}
-      />
     </GroundPanel>
   );
 }

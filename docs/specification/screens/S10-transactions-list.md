@@ -62,7 +62,6 @@ scrolling one.
 | `SearchField` | Entered name, note, amount, **and receipt contents** — merchant plus line descriptions. A match inside a receipt states which line matched, so the result is explicable rather than surprising |
 | `TransactionRow` / `TransferRow` | `BIZ` where business; `FxAmount` where foreign |
 | `BrandIcon` | The leading mark on both surfaces — `TransactionRow`'s on mobile, and the desk table's identity column, between the date and the entered name. Same component and catalogue as S04 (§14.4b); an unrecognised entered name falls back to its monogram rather than to nothing |
-| `SwipeAction` | Mobile — short swipe categorize, long swipe edit. **Never delete** |
 | `EmptyState(filtered)` | Names the excluding filter and its hidden count |
 | `EmptyState(first-run)` | Nothing has ever existed |
 | `SegmentControl` | Scope — a partition, so subtotals always sum to All |
@@ -82,7 +81,7 @@ act on, and that is what keeps the filter drainable to zero.
 
 | Reads | Writes |
 |---|---|
-| `search_transactions(filter, page)` | `update_transaction` — via swipe-categorize |
+| `search_transactions(filter, page)` | `update_transaction` — from S09, a tap away |
 | Running total for the active filter | `categorize_batch` — web multi-select |
 
 ## 6. States
@@ -99,8 +98,13 @@ act on, and that is what keeps the filter drainable to zero.
 ## 7. Interaction
 
 ### Mobile
-Virtualized infinite scroll. Short swipe → category sheet; long swipe → edit.
-Nothing destructive on a swipe (`design-system/05` §5.6). Pull to refresh.
+Virtualized infinite scroll. **A row answers a tap and nothing else**: it
+opens the transaction (S09), where the category is changed. Rows do not
+swipe. A sideways drag once categorised or edited depending on how far it
+went, and nothing on screen said either — a gesture a reader cannot discover
+is one they trigger by accident, so it was removed rather than labelled. The
+phone has no multi-select; recategorising several rows at once is the desk's
+(§7 web). Pull to refresh.
 
 ### Web
 `J`/`K` move, `Enter` opens. The rail is persistent (§3), so `/` and `F` both
