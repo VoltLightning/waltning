@@ -89,6 +89,12 @@ export const be: Messages = {
     byCurrency: "Па валюце",
     everythingIn: "Усё, ў {{currency}}",
     countedOf: "Палічана {{counted}} з {{total}} рахункаў",
+    whatCounts: "Што бачна і што лічыцца",
+    whatCountsBody:
+      "Рахунак можа быць у спісе і паза сумай. Хаванне прыбірае яго з абодвух — гэта выгляд, а не архіў.",
+    show: "Паказваць",
+    count: "Лічыць",
+    hiddenAccounts: "Схаваныя рахункі",
     kindDeposit: "Уклад",
     kindOther: "Іншае",
     ownership: "Уласнасць",

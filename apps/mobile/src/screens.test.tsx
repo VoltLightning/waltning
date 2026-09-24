@@ -102,6 +102,8 @@ type FakeAccount = {
   ownership: "own" | "shared";
   isBusiness: false;
   archived: false;
+  hidden: boolean;
+  inTotal: boolean;
   expectedBalance: null;
   openingBalance: Money;
   openingDate: null;
@@ -452,6 +454,8 @@ function fakeController(options: FakeControllerOptions = {}) {
           ownership: input.ownership,
           isBusiness: false,
           archived: false,
+          hidden: false,
+          inTotal: true,
           expectedBalance: null,
           openingBalance: input.openingBalance,
           openingDate: null,
@@ -513,6 +517,8 @@ const PLN_ACCOUNT: FakeAccount = {
   ownership: "own",
   isBusiness: false,
   archived: false,
+  hidden: false,
+  inTotal: true,
   expectedBalance: null,
   openingBalance: toMoney("0"),
   openingDate: null,
@@ -532,6 +538,8 @@ const SHARED_ACCOUNT: FakeAccount = {
   ownership: "shared",
   isBusiness: false,
   archived: false,
+  hidden: false,
+  inTotal: true,
   expectedBalance: null,
   openingBalance: toMoney("0"),
   openingDate: null,
@@ -551,6 +559,8 @@ const CLEARING_ACCOUNT: FakeAccount = {
   ownership: "own",
   isBusiness: false,
   archived: false,
+  hidden: false,
+  inTotal: true,
   expectedBalance: null,
   openingBalance: toMoney("0"),
   openingDate: null,
@@ -570,6 +580,8 @@ const SECOND_CLEARING_ACCOUNT: FakeAccount = {
   ownership: "own",
   isBusiness: false,
   archived: false,
+  hidden: false,
+  inTotal: true,
   expectedBalance: null,
   openingBalance: toMoney("0"),
   openingDate: null,

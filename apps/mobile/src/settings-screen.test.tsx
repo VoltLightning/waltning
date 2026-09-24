@@ -54,6 +54,8 @@ function withLedger(over: Partial<PhoneLedgerPort> = {}) {
         ownership: "own",
         isBusiness: false,
         archived: false,
+        hidden: false,
+        inTotal: true,
         expectedBalance: null,
         openingBalance: toMoney("0"),
         openingDate: null,

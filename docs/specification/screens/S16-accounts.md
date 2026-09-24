@@ -134,6 +134,30 @@ caller with no display currency draws no total at all**, which is the honest
 state for a register that cannot convert: a sum over figures in different
 units is not a number.
 
+**An account can be in the list and out of the total**, and those are two
+switches (`set_account_visibility`), reached from the control beside the
+grouping switch. *Show* takes an account out of the register's list; *Count*
+leaves it in the list and out of the total. A vault you want to see but not
+spend is the second; a card you have stopped using is both. One flag could not
+say that, which is why there are two.
+
+**Hiding switches counting off with it**, in the same tap and visibly. The
+operation refuses a hidden account that claims to be counted — a row nobody can
+see still moving the total is a figure with no way to check it, because a
+reader adding the register up by hand gets a different answer and nothing on
+screen explains the difference. A sheet that let a person build that state and
+then bounced it would be offering a control whose only outcome is a refusal.
+
+**A hidden account is never only hidden.** The search finds it — somebody who
+hid an account and then typed its name is asking for it, and answering *no
+matches* about a row the register is deliberately holding back would be lying
+about the ledger. The count of hidden accounts sits below the list as the way
+back in, so no decision made here is one the screen cannot undo.
+
+**Hiding is not archiving, and the sheet says so.** Archiving means the account
+is finished: it refuses an account still holding money and takes it out of
+every picker. This is a view preference on a live account.
+
 **The name carries the row at 500, not 600.** With a rule under every account
 and a mark on every section the page no longer needs weight to separate
 things, and at 600 across eleven rows the whole register read as emphasised —

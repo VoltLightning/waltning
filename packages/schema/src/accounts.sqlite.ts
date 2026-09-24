@@ -27,6 +27,34 @@ export const accountsColumns = () => ({
   memo: k.text("memo").notNull().default(""),
   isBusiness: k.boolean("is_business").notNull().default(false),
   archived: k.boolean("archived").notNull().default(false),
+  /**
+   * **Out of the register's list**, though the account is live and its rows
+   * still count everywhere else.
+   *
+   * Not `archived`, and the two are not degrees of the same thing. Archiving
+   * says the account is *finished* — `archive_account` is the ledger's only
+   * removal, it refuses an account still holding money, and an archived
+   * account leaves the pickers. Hiding says *I do not want to look at this
+   * one*: the account is open, it is captured into, and every figure it feeds
+   * is unchanged. A person with a joint account they never manage wants the
+   * second and would be lied to by the first.
+   */
+  hidden: k.boolean("hidden").notNull().default(false),
+  /**
+   * **In the register's total**, which is a separate question from being in
+   * its list.
+   *
+   * A vault you want to see but not spend is in the list and out of the
+   * total; a card you have stopped using is out of both. Two flags because
+   * they are two answers — folding them into one would make *show me this*
+   * and *count this* the same decision, and they are the pair S16 §3 draws as
+   * two pills.
+   *
+   * **Default `true`**, so an account that has never been touched is counted.
+   * The total is a claim about everything, and a default that quietly left
+   * new accounts out would make it wrong the moment one was created.
+   */
+  inTotal: k.boolean("in_total").notNull().default(true),
   sort: k.integer("sort").notNull().default(0),
   externalId: k.text("external_id"),
   createdAt: k.stamp("created_at"),

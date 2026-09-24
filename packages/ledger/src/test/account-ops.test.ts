@@ -23,6 +23,7 @@ import { readGroups } from "../accounts/read-groups.ts";
 import { reconcileAccountExecutor } from "../accounts/reconcile-account.executor.ts";
 import { reorderAccountsExecutor } from "../accounts/reorder-accounts.executor.ts";
 import { reorderGroupsExecutor } from "../accounts/reorder-groups.executor.ts";
+import { setAccountVisibilityExecutor } from "../accounts/set-account-visibility.executor.ts";
 import { updateAccountExecutor } from "../accounts/update-account.executor.ts";
 import { updateGroupExecutor } from "../accounts/update-group.executor.ts";
 import type { LocalExecutor } from "../executor.ts";
@@ -160,6 +161,77 @@ describe("archive_account", () => {
     expect(() => write(archiveAccountExecutor, { id: ACCOUNT_A, version: 999 })).toThrow(
       /stale version/,
     );
+  });
+});
+
+/* ── set_account_visibility ──────────────────────────────────────────────── */
+
+describe("set_account_visibility", () => {
+  it("starts every account shown and counted", () => {
+    const row = account(ACCOUNT_A);
+    expect(row?.hidden).toBe(false);
+    // The total is a claim about everything, so a new account is in it: a
+    // default that quietly left one out would make the figure wrong the
+    // moment an account was created.
+    expect(row?.inTotal).toBe(true);
+  });
+
+  it("takes an account out of the total and leaves it in the list", () => {
+    const before = account(ACCOUNT_A);
+    const result = write(setAccountVisibilityExecutor, {
+      id: ACCOUNT_A,
+      version: before?.version,
+      hidden: false,
+      inTotal: false,
+    });
+
+    // The pair S16 §3 draws as two pills: a vault you want to see but not spend.
+    expect(result.row.hidden).toBe(false);
+    expect(result.row.inTotal).toBe(false);
+    expect(result.row.version).toBe((before?.version ?? 0) + 1);
+    expect(entries()).toHaveLength(1);
+  });
+
+  it("refuses a hidden account that claims to be counted", () => {
+    // A row nobody can see still moving the total is a figure with no way to
+    // check it — the register would not add up to what it shows, and nothing
+    // on screen would explain the difference. Refused rather than quietly
+    // corrected: an input meaning something other than what it says is the
+    // shape that hides a caller's bug.
+    const before = account(ACCOUNT_A);
+    expect(() =>
+      write(setAccountVisibilityExecutor, {
+        id: ACCOUNT_A,
+        version: before?.version,
+        hidden: true,
+        inTotal: true,
+      }),
+    ).toThrow(/cannot be counted/);
+  });
+
+  it("refuses an archived account, which is already out of the register", () => {
+    const before = account(ACCOUNT_A);
+    write(archiveAccountExecutor, { id: ACCOUNT_A, version: before?.version });
+
+    expect(() =>
+      write(setAccountVisibilityExecutor, {
+        id: ACCOUNT_A,
+        version: (before?.version ?? 0) + 1,
+        hidden: false,
+        inTotal: true,
+      }),
+    ).toThrow(/is archived/);
+  });
+
+  it("refuses a stale version", () => {
+    expect(() =>
+      write(setAccountVisibilityExecutor, {
+        id: ACCOUNT_A,
+        version: 999,
+        hidden: true,
+        inTotal: false,
+      }),
+    ).toThrow(/stale version/);
   });
 });
 

@@ -99,6 +99,8 @@ const CASH_PLN: PhoneAccount = {
   ownership: "own",
   isBusiness: false,
   archived: false,
+  hidden: false,
+  inTotal: true,
   expectedBalance: null,
   openingBalance: toMoney("0"),
   openingDate: null,

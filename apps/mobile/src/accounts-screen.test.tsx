@@ -45,6 +45,10 @@ type Row = {
   isBusiness: boolean;
   balance: string;
   archived?: boolean;
+  /** S16 §3 — out of the register's list. Default shown. */
+  hidden?: boolean;
+  /** S16 §3 — in the register's total. Default counted. */
+  inTotal?: boolean;
 };
 
 function fakeController(rows: readonly Row[]) {
@@ -59,6 +63,8 @@ function fakeController(rows: readonly Row[]) {
     ownership: row.ownership,
     isBusiness: row.isBusiness,
     archived: row.archived ?? false,
+    hidden: row.hidden ?? false,
+    inTotal: row.inTotal ?? true,
     expectedBalance: null,
     openingBalance: toMoney(row.balance),
     openingDate: null,

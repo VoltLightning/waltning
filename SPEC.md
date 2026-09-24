@@ -1095,7 +1095,8 @@ account_groups          id, name, sort
 accounts                id, name, kind, currency, group_id,
                         opening_balance, opening_date, memo,
                         is_business, ownership (own | shared),   -- §6.7
-                        archived, sort, external_id
+                        archived, sort, external_id,
+                        hidden, in_total                      -- S16 §3: the register's view
 categories              id, parent_id →self, name, kind,
                         is_leaf,                              -- group or leaf, never both
                         is_earnings,                          -- income only (§6.7)

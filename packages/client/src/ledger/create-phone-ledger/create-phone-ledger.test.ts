@@ -125,6 +125,8 @@ function account(
     ownership: "own",
     isBusiness: false,
     archived: false,
+    hidden: false,
+    inTotal: true,
     expectedBalance: null,
     openingBalance: money.toMoney(balance),
     openingDate: null,
@@ -180,6 +182,8 @@ function harness(
         ownership: input.ownership,
         isBusiness: input.isBusiness,
         archived: false,
+        hidden: false,
+        inTotal: true,
         expectedBalance: null,
         openingBalance: input.openingBalance,
         openingDate: input.openingDate ?? null,
@@ -253,6 +257,27 @@ function harness(
             openingDate:
               input.patch.openingDate === undefined ? current.openingDate : input.patch.openingDate,
             memo: input.patch.memo ?? current.memo,
+            version: versionOf(input.id),
+          }
+        : candidate,
+    );
+  });
+  const setAccountVisibility = vi.fn<PhoneLedgerPort["setAccountVisibility"]>((input) => {
+    const current = accounts.find((candidate) => candidate.id === input.id);
+    if (!current) throw new Error(`set_account_visibility: no account ${input.id}`);
+    if (current.archived) throw new Error(`set_account_visibility: ${input.id} is archived`);
+    if (versionOf(input.id) !== input.version) {
+      throw new Error(
+        `set_account_visibility: stale version — read ${input.version}, row is at ${versionOf(input.id)}`,
+      );
+    }
+    versions.set(input.id, versionOf(input.id) + 1);
+    accounts = accounts.map((candidate) =>
+      candidate.id === input.id
+        ? {
+            ...candidate,
+            hidden: input.hidden,
+            inTotal: input.inTotal,
             version: versionOf(input.id),
           }
         : candidate,
@@ -364,6 +389,7 @@ function harness(
     setTransactionLines: vi.fn(),
     updateAccount,
     archiveAccount,
+    setAccountVisibility,
     reconcileAccount,
     createGroup,
     readRate: vi.fn(() => null),
@@ -421,6 +447,7 @@ function harness(
     createTransaction,
     updateAccount,
     archiveAccount,
+    setAccountVisibility,
     reconcileAccount,
     createGroup,
     balanceAsOf,

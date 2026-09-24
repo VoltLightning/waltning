@@ -37,6 +37,7 @@ import type {
   RenameCategoryInput,
   ReorderAccountsInput,
   ReparentCategoryInput,
+  SetAccountVisibilityInput,
   SetManualRateInput,
   SetPinnedInput,
   SetRateSourceInput,
@@ -63,6 +64,7 @@ import {
 } from "./accounts/read-unsettled-clearing.ts";
 import { reconcileAccountExecutor } from "./accounts/reconcile-account.executor.ts";
 import { reorderAccountsExecutor } from "./accounts/reorder-accounts.executor.ts";
+import { setAccountVisibilityExecutor } from "./accounts/set-account-visibility.executor.ts";
 import { updateAccountExecutor } from "./accounts/update-account.executor.ts";
 import { BACKUP_FORMAT, parseBackup as parseBackupDocument } from "./backup/document.ts";
 import {
@@ -386,6 +388,8 @@ export type LocalLedgerSession = {
   setTransactionLines: (input: SetTransactionLinesInput, capture: Capture) => LocalTransactionRow;
   updateAccount: (input: UpdateAccountInput, capture: Capture) => LocalAccountRow;
   archiveAccount: (input: ArchiveAccountInput, capture: Capture) => LocalAccountRow;
+  /** S16 §3 — what the register shows, and what its total counts. */
+  setAccountVisibility: (input: SetAccountVisibilityInput, capture: Capture) => LocalAccountRow;
   /** S16 §3 — the whole ordered list; `sort` becomes each id's position. */
   reorderAccounts: (input: ReorderAccountsInput, capture: Capture) => readonly LocalAccountRow[];
   reconcileAccount: (input: ReconcileAccountInput, capture: Capture) => LocalTransactionRow;
@@ -840,6 +844,14 @@ export function createLocalLedgerSession<TRun>(
     archiveAccount: (input, capture) =>
       writeLocally(requireOpen(), {
         executor: archiveAccountExecutor,
+        registry: ledgerRegistry,
+        input,
+        capture,
+        ...(options.diagnostics ? { diagnostics: options.diagnostics } : {}),
+      }).row,
+    setAccountVisibility: (input, capture) =>
+      writeLocally(requireOpen(), {
+        executor: setAccountVisibilityExecutor,
         registry: ledgerRegistry,
         input,
         capture,

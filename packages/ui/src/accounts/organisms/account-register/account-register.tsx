@@ -43,7 +43,7 @@ import {
 import { useInteraction } from "../../../primitives/interaction.ts";
 import { usePressScale } from "../../../primitives/press-scale.ts";
 import { Card } from "../../../shell/molecules/card/card";
-import { ArrowsLeftRightIcon, CaretLeftIcon } from "../../../shell/phosphor";
+import { ArrowsLeftRightIcon, CaretLeftIcon, SlidersHorizontalIcon } from "../../../shell/phosphor";
 import { EmptyState } from "../../../states/organisms/empty-state/empty-state";
 import { text } from "../../../theme/fonts.ts";
 import { useTheme } from "../../../theme/provider";
@@ -52,6 +52,7 @@ import { focus, hairline, radius, space, touchTarget } from "../../../tokens.ts"
 import { type KindTint, kindTint } from "../../kind-tint.ts";
 import { BalanceRow, type BalanceRowProps } from "../../molecules/balance-row/balance-row";
 import { SharedGroup, type SharedGroupAccount } from "../../molecules/shared-group/shared-group";
+import { type VisibilityAccount, VisibilitySheet } from "../visibility-sheet/visibility-sheet";
 
 export type AccountRegisterAccount = {
   id: string;
@@ -78,6 +79,12 @@ export type AccountRegisterAccount = {
    * and say so than guess the tenth.
    */
   pivotBalance?: money.Money;
+  /** S16 §3 — out of the list, though the account is live. Default shown. */
+  hidden?: boolean;
+  /** S16 §3 — in the total, a separate question from being in the list. Default counted. */
+  inTotal?: boolean;
+  /** `set_account_visibility`'s compare-and-swap token. */
+  version?: number;
 };
 
 export type AccountRegisterProps = {
@@ -137,6 +144,14 @@ export type AccountRegisterProps = {
    * different units, and a sum over those is not a number.
    */
   pivot?: { currency: string; decimals: number };
+  /**
+   * `set_account_visibility` — S16 §3's two pills.
+   *
+   * **Absent offers nothing**, the same rule `onReorder` and `onEditAccount`
+   * keep: a screen that cannot write the flags must not draw the control that
+   * changes them.
+   */
+  onSetVisibility?: (id: string, next: { hidden: boolean; inTotal: boolean }) => void;
 };
 
 /** `bank · cash · card · clearing · loan_receivable · loan_payable · investment · deposit · other`. */
@@ -196,6 +211,7 @@ export function AccountRegister({
   onReorder,
   onEditAccount,
   pivot,
+  onSetVisibility,
 }: AccountRegisterProps) {
   const t = useT();
   const theme = useTheme();
@@ -212,6 +228,7 @@ export function AccountRegister({
    */
   const [shut, setShut] = useState<Record<string, boolean>>({});
   const [archivedOpen, setArchivedOpen] = useState(false);
+  const [visibilityOpen, setVisibilityOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const handleToggleEditing = useCallback(() => setEditing((on) => !on), []);
 
@@ -227,8 +244,25 @@ export function AccountRegister({
     () => accounts.filter((row) => matches(row, needle)),
     [accounts, needle],
   );
-  const own = useMemo(() => filtered.filter((row) => row.ownership === "own"), [filtered]);
-  const shared = useMemo(() => filtered.filter((row) => row.ownership === "shared"), [filtered]);
+  /**
+   * **Hidden accounts leave the list, and the search still finds them.**
+   *
+   * A person who hid an account and then typed its name is asking for it, and
+   * a register that answered *no matches* about an account it is deliberately
+   * holding back would be lying about the ledger. So the flag narrows the
+   * resting list and a query overrides it — which is also the only way back to
+   * a hidden account without opening the sheet.
+   */
+  const visible = useMemo(
+    () => filtered.filter((row) => needle !== "" || row.hidden !== true),
+    [filtered, needle],
+  );
+  const own = useMemo(() => visible.filter((row) => row.ownership === "own"), [visible]);
+  const shared = useMemo(() => visible.filter((row) => row.ownership === "shared"), [visible]);
+  const hiddenCount = useMemo(
+    () => accounts.filter((row) => row.hidden === true).length,
+    [accounts],
+  );
   const filteredArchived = useMemo(
     () => archivedAccounts.filter((row) => matches(row, needle)),
     [archivedAccounts, needle],
@@ -307,9 +341,19 @@ export function AccountRegister({
    * and the line under the figure says how many were counted rather than
    * letting a sum over nine of ten accounts pass as a sum over ten.
    */
+  /**
+   * **Three ways out of the total, and they are not the same fact.** No rate
+   * (nothing to add), hidden (not on the screen), or left out by hand. Only
+   * the first is the register's own doing; the line under the figure counts
+   * them all the same way, because a reader adding the rows up wants to know
+   * how many of them the number covers, not why each one is missing.
+   */
   const counted = useMemo(
-    () => [...own, ...shared].filter((row) => row.pivotBalance !== undefined),
-    [own, shared],
+    () =>
+      accounts.filter(
+        (row) => row.pivotBalance !== undefined && row.hidden !== true && row.inTotal !== false,
+      ),
+    [accounts],
   );
   const total = useMemo(
     () =>
@@ -328,10 +372,28 @@ export function AccountRegister({
     ],
     [t],
   );
+  const handleOpenVisibility = useCallback(() => setVisibilityOpen(true), []);
+  const handleCloseVisibility = useCallback(() => setVisibilityOpen(false), []);
+
+  /**
+   * Every account, archived ones apart — the sheet is where a hidden account
+   * is offered back, so it must list the ones the register is not drawing.
+   */
+  const visibilityRows: readonly VisibilityAccount[] = useMemo(
+    () =>
+      accounts.map((row) => ({
+        id: row.id,
+        name: row.name,
+        meta: `${t(`accounts.${KIND_LABEL_KEY[row.kind]}`)} · ${row.currency}`,
+        hidden: row.hidden === true,
+        inTotal: row.inTotal !== false,
+      })),
+    [accounts, t],
+  );
   const heroMark = pivot?.currency ?? "";
   const heroNote = t("accounts.countedOf", {
     counted: String(counted.length),
-    total: String(own.length + shared.length),
+    total: String(accounts.length),
   });
 
   const sharedForGroup: readonly SharedGroupAccount[] = useMemo(
@@ -391,7 +453,16 @@ export function AccountRegister({
         can check by adding the rows, which is why the pivot travels with the
         first and not the second.
       */}
-      <SegmentControl segments={viewSegments} value={view} onChange={setView} />
+      <View style={styles.axis}>
+        <View style={styles.axisControl}>
+          <SegmentControl segments={viewSegments} value={view} onChange={setView} />
+        </View>
+        {onSetVisibility === undefined ? null : (
+          <IconButton label={t("accounts.whatCounts")} onPress={handleOpenVisibility}>
+            <SlidersGlyph />
+          </IconButton>
+        )}
+      </View>
 
       <SearchField
         value={query}
@@ -457,6 +528,31 @@ export function AccountRegister({
           />
         )}
       </View>
+
+      {onSetVisibility === undefined ? null : (
+        <VisibilitySheet
+          visible={visibilityOpen}
+          accounts={visibilityRows}
+          onChange={onSetVisibility}
+          onDismiss={handleCloseVisibility}
+        />
+      )}
+
+      {/*
+        **A hidden account is never only hidden**, or the register would be a
+        screen with no way back from a decision made on it. The count is the
+        door, and it says how many are behind it.
+      */}
+      {onSetVisibility === undefined || hiddenCount === 0 ? null : (
+        <Button
+          label={t("common.fieldValue", {
+            field: t("accounts.hiddenAccounts"),
+            value: String(hiddenCount),
+          })}
+          onPress={handleOpenVisibility}
+          variant="ghost"
+        />
+      )}
 
       <ArchivedToggle
         open={archivedOpen && archivedLoaded}
@@ -737,6 +833,12 @@ function CaretIcon({ up, color }: { up: boolean; color: string }) {
 const CARET_UP = { transform: [{ rotate: "90deg" }] } as const;
 const CARET_DOWN = { transform: [{ rotate: "-90deg" }] } as const;
 
+/** The way into the visibility sheet — what the register shows and counts. */
+function SlidersGlyph() {
+  const theme = useTheme();
+  return <SlidersHorizontalIcon size={18} color={theme.textMuted} />;
+}
+
 /**
  * The transfer glyph — two arrows, opposed, the one S31 and a transfer row draw.
  * It was two bars drawn from views, which at 20pt read as a drag handle: the
@@ -849,6 +951,9 @@ const useStyles = makeStyles((theme) => ({
   root: { gap: space.xl },
   /** The one figure the screen exists to state — on the ground, not in a card. */
   hero: { gap: space.xxs },
+  /** The grouping control, and the way into what it shows — one row. */
+  axis: { flexDirection: "row", alignItems: "center", gap: space.md },
+  axisControl: { flex: 1 },
   heroKicker: {
     color: theme.textMuted,
     ...text.ui("kicker"),

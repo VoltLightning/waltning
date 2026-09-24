@@ -5,6 +5,7 @@ import { createGroupExecutor } from "./accounts/create-group.executor.ts";
 import { reconcileAccountExecutor } from "./accounts/reconcile-account.executor.ts";
 import { reorderAccountsExecutor } from "./accounts/reorder-accounts.executor.ts";
 import { reorderGroupsExecutor } from "./accounts/reorder-groups.executor.ts";
+import { setAccountVisibilityExecutor } from "./accounts/set-account-visibility.executor.ts";
 import { updateAccountExecutor } from "./accounts/update-account.executor.ts";
 import { updateGroupExecutor } from "./accounts/update-group.executor.ts";
 import { archiveCategoryExecutor } from "./categories/archive-category.executor.ts";
@@ -51,6 +52,7 @@ export const ledgerRegistry = localRegistry([
   updateAccountExecutor,
   archiveAccountExecutor,
   reorderAccountsExecutor,
+  setAccountVisibilityExecutor,
   createGroupExecutor,
   updateGroupExecutor,
   reorderGroupsExecutor,

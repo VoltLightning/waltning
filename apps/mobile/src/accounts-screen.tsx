@@ -94,6 +94,9 @@ function toRegisterAccount(
     decimals: account.decimals,
     isBusiness: account.isBusiness,
     expectedBalance: account.expectedBalance,
+    hidden: account.hidden,
+    inTotal: account.inTotal,
+    version: account.version,
   };
 }
 
@@ -180,6 +183,21 @@ export default function Accounts() {
   }, [ledger]);
   const handleDismissToast = useCallback(() => setToast(null), []);
 
+  /**
+   * S16 §3's two pills. The version travels from the row the sheet is looking
+   * at — `set_account_visibility` is compare-and-swap like every other account
+   * write, so two devices deciding what the register shows is an ordinary
+   * conflict and the stale one loses.
+   */
+  const handleSetVisibility = useCallback(
+    (id: string, next: { hidden: boolean; inTotal: boolean }) => {
+      const row = snapshot.accounts.find((account) => account.id === id);
+      if (row === undefined) return;
+      ledger.setAccountVisibility({ id, version: row.version, ...next });
+    },
+    [ledger, snapshot.accounts],
+  );
+
   return (
     // A tab root: the shell draws the title and the line under it, and there
     // is nowhere to go back to.
@@ -195,6 +213,7 @@ export default function Accounts() {
         onEditAccount={handleEditAccount}
         onTransferFrom={handleTransferFrom}
         {...(registerPivot === undefined ? {} : { pivot: registerPivot })}
+        onSetVisibility={handleSetVisibility}
       />
       {toast === null ? null : (
         <Toast message={toast} onDismiss={handleDismissToast} token={toastToken} />

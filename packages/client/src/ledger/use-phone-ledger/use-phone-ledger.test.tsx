@@ -43,6 +43,8 @@ describe("usePhoneLedger", () => {
               ownership: input.ownership,
               isBusiness: input.isBusiness,
               archived: false,
+              hidden: false,
+              inTotal: true,
               expectedBalance: null,
               openingBalance: input.openingBalance,
               openingDate: input.openingDate ?? null,
