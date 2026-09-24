@@ -37,6 +37,7 @@ from:
 | §4a FX margin | **S** | Needs both reference rates; a stale one makes the margin identically zero |
 | §5 Period spend | **R** for the base figure · **S** for shared-boundary netting | Netting needs `to_amount_pivot`, and getting it wrong silently uses the source amount |
 | §6 Spend by category | **S** | Two `UNION ALL` branches; a `LEFT JOIN … COALESCE` counts a four-line transaction four times |
+| §6a Transaction context | **R** | Same-currency folds over the replica; nothing is converted |
 | §7 Counterparty balances | **F** per currency · **R** for ageing | Ageing is FIFO over the full history — reclassified from **S**: that reasoning was the pre-`14-local-first.md` replica not holding the full history, and now it does |
 | §8 Clearing and `find_unsettled` | **F** for the balance · **R** for the oldest-unconsumed pointer · **S** for allocation | The pointer is §7's ageing reclassification applied a second time — the same FIFO fold, the same full-history replica; largest-remainder allocation must not be reimplemented |
 | §9 Duplicate and transfer detection | **S** | Runs server-side on commit, for every path |
@@ -342,6 +343,79 @@ This SQL stays the authoritative, server-side definition; `E9` differentials
   visible under `Shared` and `All` rather than silently absent — but it is not
   yet the single named boundary line this SQL defines, and `E9` is where the
   two converge.
+
+---
+
+## 6a · Transaction context
+
+S09's context cards. Three figures, each about one transaction `x` and the
+six calendar months ending with **`x`'s own month** — `m₀ = month(x.date)`
+and `m₋₁ … m₋₅` before it, never the current month. Each is in `x`'s own
+currency `c` only, and never sums across currencies (§6's reason).
+
+**One-offs are excluded from all three, and each card says so** (§5): a card
+whose figures dropped any other one-off row reads *One-offs left out*; when `x`
+itself is one, its share is not drawn and the card says *One-off — left out of
+comparisons* in its place.
+
+**The share is read with the figures, never beside them.** For *Who* and
+*Pair* it is `x`'s own row in the same read as the bars, so it always fits. For
+*Category* it is §6's fold run over `x` alone — and because another row's
+negative line in `g` can net the month below `x`'s own part, a share larger
+than `spent(m₀)` is not drawn at all. *One-offs left out* covers every month
+the card reads, the usual months included.
+
+**Who** — `x` has an identity counterparty `k` and `x.type ∈ {expense, income}`:
+
+```
+rows(m)   = T where counterparty_id = k    -- the identity link only (§6.6.1):
+                                           -- who it was *with*, never who owes
+               ∧ type = x.type ∧ currency = c
+               ∧ ¬is_capital ∧ month(date) = m
+total(m)  = Σ |amount_original| over rows(m)
+count(m₀) = |rows(m₀)|
+share     = x's own row in rows(m₀), or none when x is a one-off
+```
+
+**Category** — `x.type = expense`, for the category `g` that §6 attributes
+`x` to: `x.category_id` when `x` has no lines or a line carries it, otherwise
+the category its lines put the most into. §6 ignores a lined transaction's own
+category, and so does this card:
+
+```
+spent(m)  = §6's fold for (m, scope = all), leaf g, currency c,
+            with is_capital rows left out before the fold
+usual     = mean of spent(m₋₁ … m₋₃), counting only months where spent > 0
+share     = §6's fold over x alone, leaf g — its signed lines in g where it
+            has lines (a discount line nets), its own amount where it has
+            none; none when x.is_capital, the fold is not positive, or it
+            exceeds spent(m₀)
+```
+
+`usual` takes S05's pace rule (*mean of the previous three months that held
+anything*) with two differences, both deliberate: one-offs are left out, which
+§5 requires of every comparison — **S05's pace does not do this yet and
+disagrees with this card by exactly the one-offs in its window** — and scope
+is `all`, for the reason below. With no qualifying month there is
+no usual and the card shows the month's total alone. **Scope is `all`, not
+S05's `mine`**: S05 measures an own-account draft, while this card highlights
+a row that may sit on a shared account, and a slice larger than the bar it is
+drawn in would be a figure contradicting itself.
+
+**Pair** — `x.type = transfer`, from account `a` to account `b`:
+
+```
+rows(m)   = T where type = transfer ∧ account = a ∧ to_account = b
+               ∧ currency = c ∧ ¬is_capital ∧ month(date) = m
+total(m)  = Σ |amount_original| over rows(m)
+count(m₀) = |rows(m₀)|
+```
+
+One direction only: *Cash → Savings* is a habit, and netting it against
+*Savings → Cash* would describe neither.
+
+All three are class **R** — plain folds over the replica, with no rate
+involved because nothing is converted.
 
 ---
 

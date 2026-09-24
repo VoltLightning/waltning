@@ -52,6 +52,7 @@ import type { FieldErrorMap } from "../../../primitives/field-errors.ts";
 import { useInteraction } from "../../../primitives/interaction.ts";
 import { usePressScale } from "../../../primitives/press-scale.ts";
 import { useSubmitCheck } from "../../../primitives/use-submit-check.ts";
+import { Card } from "../../../shell/molecules/card/card";
 import { text } from "../../../theme/fonts.ts";
 import { makeStyles } from "../../../theme/styles.ts";
 import { focus, hairline, space, touchTarget } from "../../../tokens.ts";
@@ -158,7 +159,7 @@ export function LinesCard({
 
   const formLevelErrors = fieldErrors?.formLevel ?? [];
 
-  return (
+  const content = (
     <View style={styles.root}>
       {formLevelErrors.length > 0 ? (
         <View style={styles.formLevel} accessibilityRole="alert">
@@ -201,6 +202,9 @@ export function LinesCard({
       ) : null}
 
       <View style={styles.actions}>
+        {draft.length === 0 ? (
+          <Text style={styles.totalLabel}>{t("transactions.lines")}</Text>
+        ) : null}
         <Button label={t("transactions.addLine")} onPress={handleAdd} variant="ghost" />
         {/* An empty card with nothing added has nothing to save — a second
             `Save` beside `FieldsCard`'s own, permanently disabled, is a
@@ -216,6 +220,12 @@ export function LinesCard({
         ) : null}
       </View>
     </View>
+  );
+
+  return draft.length > 0 || lines.length > 0 ? (
+    <Card title={t("transactions.lines")}>{content}</Card>
+  ) : (
+    content
   );
 }
 
@@ -389,6 +399,7 @@ const useStyles = makeStyles((theme) => ({
   actions: {
     flexDirection: "row",
     justifyContent: "space-between",
+    alignItems: "center",
     gap: space.xl,
     paddingTop: space.md,
   },

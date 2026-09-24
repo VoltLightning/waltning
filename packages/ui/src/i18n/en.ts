@@ -600,6 +600,20 @@ export const en = {
     linesUnbalanced: "The lines must add up to the transaction's total.",
     /** §6.9: every read path filters `deleted_at` — a soft-deleted row answers this, not a crash. */
     notFound: "This transaction no longer exists.",
+    /** S09 — the chip that opens the obligation picker when nobody is named yet. */
+    someoneOwes: "Someone owes",
+    /** S09 §3 — the context cards (`computations.md` §6a). */
+    contextLabel: "What this means",
+    contextInMonth: "{{month}} · {{times}}×",
+    contextSeeAll: "See all",
+    contextUsual: "usual",
+    contextOneOff: "One-off — left out of comparisons",
+    /** §5 — another row in the card was a one-off and is not in its figures. */
+    contextOneOffsLeftOut: "One-offs left out",
+    contextThisOne: "this one",
+    contextLinkTitle: "Who was this with?",
+    contextLinkBody: "Link it to someone in your directory to see how often you go.",
+    contextLinkAction: "Choose",
     /* ── E5 · S14 settle sheet and S31 transfer ─────────────────────────── */
     /** `FloatingAdd`'s long-press picker (S05 §9.1), S16's row action, and the transfer route's own title. */
     transfer: "Transfer",

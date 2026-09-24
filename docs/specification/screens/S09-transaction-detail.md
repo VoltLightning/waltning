@@ -28,25 +28,44 @@ back to the caller on save or cancel.
 
 ### Mobile — 390pt
 
-Scrolling column, ordered by how often each region is the reason you came.
+Scrolling column in three parts: a coloured header that says what happened,
+a strip of context cards that says what it means, and the details that can be
+corrected. The screen is worth opening because the second part tells you
+something no list row can.
 
 ```
-  Went out                          ← the direction, in words (P5)
-  48,90 zł                          ← display-hero
-  Cash · PLN
+  ┌ header · category tint ───────────────┐
+  │ ‹                          Wed 6 Aug  │
+  │ [C]  Café A                           │   ← BrandIcon 52pt · entered name
+  │      Went out · Cash · PLN            │   ← direction in words (P5) · account
+  │ −48.90 zł                             │   ← display-hero
+  │ 62,40 $ · 4,0231 · 251,04 zł          │   ← FxAmount, when foreign
+  └───────────────────────────────────────┘
 
-  62,40 $ · 4,0231 · 251,04 zł      ← FxAmount, when foreign
-  NBP · 2026-08-04 · synced            provenance stated in full
+  ┌ Café A ─────────────────┐┌ Eating out ─   ← context cards, swiped sideways
+  │ 4 times in August       ││ in August
+  │ 186.40 zł               ││ 312.60 zł
+  │ ▁ ▁ ▂ ▁ ▃ █  ← 6 months ││ ███████░░░░
+  │ Mar … Aug, this one dark││ usual 402.10
+  │         All at Café A › ││
+  └─────────────────────────┘└───────────
+             ● ○
 
-  ┌ fields ───────────────────────────────┐
-  │ Category      Food › Eating out       │
-  │ Date          6 Aug 2026              │
-  │ Account       Cash · PLN              │
-  │ Scope         Mine            [BIZ]   │
-  │ Who           Shop A                  │
-  │ Money owed    Friend A owes me         │
-  │ Note          —                       │
-  │ One-off                        [ ○ ]  │
+  ┌ details ──────────────────────────────┐
+  │ Category      [Eating out]          › │
+  │ Date          6 Aug 2026            › │
+  │ Paid from     Cash · PLN            › │
+  │ Who           Café A                › │
+  │ Payee         Café A                › │
+  │ Note          —                     › │
+  └───────────────────────────────────────┘
+  [+ Someone owes]  [+ Business]  [+ One-off]
+                                   [ Save ]  ← only once something changed
+
+  ┌ breakdown ────────────────── optional ┐
+  │ Espresso               18.90          │
+  │ Croissant              30.00          │
+  │                          [ + Add ]    │
   └───────────────────────────────────────┘
 
   ┌ receipt ──────────────────────────────┐
@@ -54,28 +73,81 @@ Scrolling column, ordered by how often each region is the reason you came.
   │               3 lines · view          │
   └───────────────────────────────────────┘
 
-  ┌ breakdown ────────────────── optional ┐
-  │ Groceries              42,10          │
-  │ Household supplies      6,80          │
-  │                        ──────         │
-  │ total                  48,90 ✓        │
-  │                          [ + Add ]    │
-  └───────────────────────────────────────┘
-
   ┌ history ──────────────────────────────┐
   │ 6 Aug 14:32  user    category changed │
   │              Uncategorized → Eating   │
-  │ 6 Aug 14:06  import  created          │
-  │              rule "Corner Café" · 41h │
-  │                                       │
   │ and 11 earlier changes            ∨   │
   └───────────────────────────────────────┘
+
+  [ Delete ]
 ```
 
-**The direction is a word above the figure.** *Went out* · *Came in* — P5
+**The header is the category's own colour.** The band is `categoryTintFor`'s
+wash for the transaction's category — the same hue its chip wears everywhere
+else. A
+transfer or an uncategorised row has no category, and takes the neutral
+`subtle` fill instead. The figure keeps its money colour on the wash: the band
+is the category's, the amount is the money's, and neither borrows the other's.
+The date is the page header's title, beside the back control, and the header
+takes the same wash so the two read as one band; the name is said once, in
+the band, never again as a title.
+
+**The wash is laid over the ground, not painted instead of it** — 60% of the
+category's wash in light, 45% in dark. A chip wears the wash at full strength
+because it is small; a band the width of the screen at full strength is a slab
+of colour, and a rose or plum category turned the whole top of the page
+purple. Every hue, in both themes, keeps the figure and the name at 4.5:1 on
+the band and the direction line at 3:1.
+
+**The header moves twice, and says the same thing both times.** On arrival
+the brand mark settles and the figure rises into place a beat after it,
+because the figure is where the eye goes. On scroll the band folds in two
+hand-offs: the header's date lifts away before the name and amount rise into
+the header, so two lines of words never share one place, while the band's own
+figure is still fading as the header's arrives — at every scroll position the
+amount is at least half-visible in one place or the other (`fold.test.ts`
+walks them all). Reduced motion keeps every fade and
+drops every movement.
+
+**The context strip is a row of cards, one question each, swiped sideways**
+with page dots beneath. Which cards appear depends on the transaction:
+
+| Transaction | Cards, in order |
+|---|---|
+| Expense or income with a counterparty (*Who*) | **Who** — this counterparty over six months · **Category** — expense only |
+| Expense or income without one | **Link** — *Link Café A to your directory to see every visit*, opening the counterparty picker on *Who* · **Category** — expense only |
+| Transfer | **Pair** — moves between these two accounts over six months |
+| Adjustment | none — the strip is not drawn |
+
+The months are the transaction's own month and the five before it, never the
+calendar's current month: opening a March coffee in September shows March in
+context. Every figure is `computations.md` §6a. **One-offs are left out of
+every bar and total, and the card says so**: *One-offs left out* when any other
+row was dropped, and *One-off — left out of comparisons* in place of the slice
+when this transaction is one.
+
+**Who** answers *how often, and how much*: the count and total for the month,
+six bars with this transaction's share drawn in the darkest step of the green
+ramp, and *All at Café A ›* to S13. **Category** answers *is this a lot*:
+the month's total in the category as a bar against the usual month, this
+transaction's share marked. **Pair** is **Who** for a move between two of your
+own accounts. Cards draw only the transaction's own currency; a counterparty
+paid in two currencies shows the one this row is in.
+
+**Details are one card of rows, and the flags are chips.** Each row opens its
+picker or its inline field exactly as before. *Someone owes*, *Business* and
+*One-off* are chips under the card: dashed and muted when off, filled with
+the accent wash when on. *Someone owes* opens the counterparty picker for the
+obligation; once one is named it becomes an *Owes* row inside the card with
+its role row beneath it, and the chip goes. **Save appears only once something
+has changed** — at rest there is nothing to commit and nothing is drawn; §7's
+one-button rule is unchanged.
+
+**The direction is a word beside the name.** *Went out* · *Came in* — P5
 again: a sign and a colour are two ways of saying the same thing to a reader
 who can see both. A transfer says neither, because naming one side of a move
-between two of your own accounts would be picking a side.
+between two of your own accounts would be picking a side; its line names both
+accounts instead.
 
 **Counterparty and Owes are two rows, and this screen is the only place they
 can name different parties.** `SPEC.md` §6.6.1 defines the pair: *Counterparty*
@@ -106,22 +178,27 @@ reads the transaction's own category.
 
 ### Web — ≥1024px
 
-Two columns. Fields left, evidence right — receipt viewer at usable size with
-the extraction beside it, and the audit history beneath. The width buys a
-readable receipt, which is the one thing a phone genuinely cannot give you.
+The header band runs the full width of the content column. Below it, the
+context cards sit side by side rather than swiped — the width shows all of
+them at once — and the details and breakdown form a column capped at 680px.
+When receipt and audit components are available, evidence takes a second
+column: receipt viewer at usable size with extraction beside it, and audit
+history beneath.
 
 ## 4. Components
 
 | Component | Notes |
 |---|---|
-| `Card` | §3 draws four boxes — `fields`, `receipt`, `breakdown`, `history`. Two are cards today: `fields` and `breakdown`; the receipt and history boxes have nothing to render on the phone yet — no receipts, no audit log — and become cards when they do. The hero figure and its FX basis sit bare on the ground, never in a card |
+| `Card` | §3 draws the context cards and four boxes — `details`, `breakdown`, `receipt`, `history`. The receipt and history boxes have nothing to render on the phone yet — no receipts, no audit log — and become cards when they do. The hero figure and its FX basis sit in the header band, never in a card |
+| `TransactionHero` | The header band: category wash, brand mark, name, direction and account, figure. The date is the page header's title, which takes the same wash |
+| `ContextStrip` | The swiped row of context cards and its page dots; the cards are `CounterpartyMonthsCard`, `CategoryMonthCard`, `TransferPairCard` and `LinkCounterpartyCard` |
 | `FxAmount` | Full basis, all four provenance variants |
-| `BrandIcon` | Beside the hero's account line, not a row inside `FieldsCard` — that card draws every field through one generic labelled row, and singling out Entered name for an icon would be the special case it exists to avoid. Same catalogue and never-blank fallback as S04/S10 (§14.4b) |
+| `BrandIcon` | In the header band beside the name, not a row inside `FieldsCard` — that card draws every field through one generic labelled row, and singling out Entered name for an icon would be the special case it exists to avoid. Same catalogue and never-blank fallback as S04/S10 (§14.4b) |
 | `AuditHistory` | Renders a **diff**, not a sentence. Marks `agent`, `import`, `migration` actors distinctly (§5.6). **A `conflict_detected` row is a write the server *refused*, not one it applied**, and renders as its own kind — the rejected value struck through beside the value that stood. Rendering it as an ordinary diff would say a change happened when none did, on the one screen you consult precisely because you already distrust the row. Read-only: putting a discarded value back is an ordinary edit you make deliberately (S35 §8) |
 | `WhoPicker` | Same choices, matching and draft-preserving exits as S05 |
-| `Chip` | Every editable field |
+| `Chip` | *Someone owes*, *Business*, *One-off* — dashed when off, accent wash when on |
 | `Tag` | `BIZ` · `manual` · `estimated` · `scheduled` |
-| `Button(danger)` | Delete — soft, and the only destructive control on the screen |
+| `Button(danger)` | Delete — soft, and the only destructive control on the screen. Filled, per `design-system/03` §2.6c: with no `restore_transaction` the phone cannot undo it, and that is the licence for the fill |
 | `ConfirmDialog` | Not used — a soft delete does not block on a confirmation |
 | `Toast` | States the delete happened. `UndoToast` is the eventual component once `restore_transaction` exists (§7's follow-up); until then a plain `Toast` does not offer an undo it cannot honour |
 
@@ -131,17 +208,18 @@ readable receipt, which is the one thing a phone genuinely cannot give you.
 |---|---|
 | `get_counterparties` · `get_entered_name_suggestions` | `create_counterparty` (S15) |
 | `get_transaction` | `update_transaction` |
+| The context figures — `computations.md` §6a, class **R** | |
 | `get_audit_log(entity, id)` | `set_transaction_lines` |
 | The receipt and its extraction | `delete_transaction` — soft |
 | The rate and its provenance | `attach_receipt` |
 | **Count of rows sharing this date and pair** | `set_manual_rate(pair, date)` — the day-wide fix |
 
-**This screen is where `is_capital` is set**, as the *One-off* toggle at the
-foot of the fields card. §6.8 defines one-off capital events, S10 splits its
-running total when one is in range, and S25 excludes them from every comparison
-— three consumers, and this is the producer. Off by default, and its hint says
-what turning it on means: *exclude from comparisons — a move, a car, a deposit
-returned*.
+**This screen is where `is_capital` is set**, as the *One-off* chip under the
+fields card. §6.8 defines one-off capital events, S10 splits its running total
+when one is in range, and S25 excludes them from every comparison — three
+consumers, and this is the producer. Off by default. Its hint — *exclude from
+comparisons — a move, a car, a deposit returned* — is the chip's accessibility
+hint, heard before it is turned on, and is drawn under the chips once it is.
 
 It is deliberately **not** on the capture sheet. You rarely know at the till that
 a purchase is the kind that would distort a trend, and S05's budget is ten
@@ -166,10 +244,10 @@ gate — getting it wrong costs a trend line, not a filed figure.
 
 ### Mobile
 Tap a field to open it inline; several can be open at once. **Save is one
-button, not implicit per field** — it stays disabled until something has
+button, not implicit per field** — it appears only once something has
 actually changed, and sends only the fields that did. A detail screen with a
-save on every keystroke has no state to disable that button against, which is
-what a person needs before trusting it. Delete lives at the bottom, behind a
+save on every keystroke has no moment where the button is absent, and that
+absence is what tells a person nothing is waiting to be saved. Delete lives at the bottom, behind a
 swipe-free tap.
 
 ### Web

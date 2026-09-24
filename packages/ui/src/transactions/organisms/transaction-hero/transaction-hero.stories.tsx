@@ -1,8 +1,8 @@
 /**
- * `TransactionHero` — S09's anchor figure, the first thing the detail screen
- * resolves (§6: "the amount resolves first"). Three stories cover the three
- * colours `<Amount>`'s `kind` can carry here: spend, income, and a transfer
- * leg, which is neither.
+ * `TransactionHero` — S09's header band, the first thing the detail screen
+ * resolves (§6: "the amount resolves first"). Expense, income and transfer
+ * cover the three colours `<Amount>`'s `kind` carries on the wash, and the
+ * transfer the neutral fill a row with no category takes.
  */
 
 import type { Meta, StoryObj } from "@storybook/react-native-web-vite";
@@ -17,6 +17,8 @@ const meta = {
     currency: "PLN",
     type: "expense",
     accountName: "Cash",
+    enteredName: "Café A",
+    categoryName: "Eating out",
   },
 } satisfies Meta<typeof TransactionHero>;
 
@@ -26,12 +28,25 @@ type Story = StoryObj<typeof meta>;
 export const Expense: Story = {};
 
 export const Income: Story = {
-  args: { amount: toMoney("2000.00"), type: "income", accountName: "Bank A" },
+  args: {
+    amount: toMoney("2000.00"),
+    type: "income",
+    accountName: "Bank A",
+    enteredName: "Employer A",
+    categoryName: "Salary",
+  },
 };
 
 /** Two legs of one transfer are signed opposite ways and neither is a gain or a loss. */
 export const Transfer: Story = {
-  args: { amount: toMoney("100.00"), type: "transfer", accountName: "Savings" },
+  args: {
+    amount: toMoney("-100.00"),
+    type: "transfer",
+    accountName: "Cash",
+    toAccountName: "Savings",
+    enteredName: "",
+    categoryName: null,
+  },
 };
 
 /** `SPEC.md` §14.4b — recognised offline, no network at render time. */

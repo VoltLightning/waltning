@@ -301,6 +301,20 @@ export const ru: Messages = {
     total: "В сумме",
     linesUnbalanced: "Сумма позиций должна совпадать с суммой операции.",
     notFound: "Этой операции больше нет.",
+    /** S09 — the chip that opens the obligation picker when nobody is named yet. */
+    someoneOwes: "Кто-то должен",
+    /** S09 §3 — the context cards (`computations.md` §6a). */
+    contextLabel: "Что это значит",
+    contextInMonth: "{{month}} · {{times}}×",
+    contextSeeAll: "Показать все",
+    contextUsual: "обычно",
+    contextOneOff: "Разовая — не учитывается в сравнениях",
+    /** §5 — another row in the card was a one-off and is not in its figures. */
+    contextOneOffsLeftOut: "Без разовых операций",
+    contextThisOne: "эта операция",
+    contextLinkTitle: "С кем это было?",
+    contextLinkBody: "Свяжите с кем-то из справочника, чтобы видеть, как часто вы там бываете.",
+    contextLinkAction: "Выбрать",
     transfer: "Перевод",
     realized: "Фактический",
     referenceRate: "опорный {{rate}} · {{source}} · {{date}}",
