@@ -99,6 +99,12 @@ export const pl: Messages = {
     byCurrency: "Według waluty",
     everythingIn: "Wszystko, w {{currency}}",
     countedOf: "Policzono {{counted}} z {{total}} kont",
+    whatCounts: "Co widzisz i co się liczy",
+    whatCountsBody:
+      "Konto może być na liście i poza sumą. Ukrycie usuwa je z obu — to widok, nie archiwizacja.",
+    show: "Pokaż",
+    count: "Licz",
+    hiddenAccounts: "Ukryte konta",
     kindDeposit: "Depozyt",
     kindOther: "Inne",
     ownership: "Własność",

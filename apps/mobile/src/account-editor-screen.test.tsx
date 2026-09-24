@@ -51,6 +51,8 @@ const ACCOUNT = {
   ownership: "own" as const,
   isBusiness: false,
   archived: false,
+  hidden: false,
+  inTotal: true,
   expectedBalance: null,
   openingBalance: toMoney("1240.50"),
   openingDate: null,

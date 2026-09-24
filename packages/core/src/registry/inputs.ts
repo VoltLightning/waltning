@@ -600,6 +600,43 @@ export const archiveAccountInput = z.object({
 export type ArchiveAccountInput = z.output<typeof archiveAccountInput>;
 
 /**
+ * `set_account_visibility` — S16 §3's two pills. What the register shows, and
+ * what its total counts.
+ *
+ * **Two flags, because they are two questions.** A vault you want to see but
+ * not spend is in the list and out of the total; a card you have stopped
+ * using is out of both. Folding them into one would make *show me this* and
+ * *count this* the same decision.
+ *
+ * **Hidden implies not counted, and that is enforced here rather than left to
+ * the caller.** A row nobody can see still moving the total is a figure with
+ * no way to check it: a reader who adds the register up by hand gets a
+ * different answer from the one on screen, and nothing on screen explains the
+ * difference. So `hidden: true` with `inTotal: true` is refused rather than
+ * quietly corrected — an input that silently means something other than what
+ * it says is the shape that hides a caller's bug.
+ *
+ * **Not `archive_account`.** Archiving says the account is finished; it
+ * refuses an account still holding money and takes it out of the pickers.
+ * This says *I do not want to look at this one* — the account stays open,
+ * stays captured into, and every figure outside the register is unchanged.
+ */
+export const setAccountVisibilityInput = z
+  .object({
+    id: zId<"accounts">(),
+    version: z.number().int().positive(),
+    /** Out of the register's list. */
+    hidden: z.boolean(),
+    /** In the register's total — a separate question from being in its list. */
+    inTotal: z.boolean(),
+  })
+  .refine((v) => !(v.hidden && v.inTotal), {
+    message: "a hidden account cannot be counted in the total",
+    path: ["inTotal"],
+  });
+export type SetAccountVisibilityInput = z.output<typeof setAccountVisibilityInput>;
+
+/**
  * `reorder_accounts` — the whole ordered list; `sort` becomes each id's
  * index. A repeated id is refused rather than silently ties every duplicate
  * on one `sort` value — the executor writes `sort = index` per id in the

@@ -91,6 +91,12 @@ export const de: Messages = {
     byCurrency: "Nach Währung",
     everythingIn: "Alles, in {{currency}}",
     countedOf: "{{counted}} von {{total}} Konten gezählt",
+    whatCounts: "Was du siehst, und was zählt",
+    whatCountsBody:
+      "Ein Konto kann in der Liste stehen und aus der Summe heraus. Ausblenden nimmt es aus beidem — das ist eine Ansicht, kein Archivieren.",
+    show: "Zeigen",
+    count: "Zählen",
+    hiddenAccounts: "Ausgeblendete Konten",
     kindDeposit: "Festgeld",
     kindOther: "Sonstiges",
     ownership: "Inhaber",

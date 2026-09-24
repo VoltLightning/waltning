@@ -537,6 +537,13 @@ export const REPLICA_STEPS: readonly {
       `CREATE UNIQUE INDEX \`categories_external_id_uq\` ON \`categories\` (\`external_id\`)`,
     ],
   },
+  {
+    tag: "0016_schema",
+    statements: [
+      `ALTER TABLE \`accounts\` ADD \`hidden\` integer DEFAULT false NOT NULL`,
+      `ALTER TABLE \`accounts\` ADD \`in_total\` integer DEFAULT true NOT NULL`,
+    ],
+  },
 ];
 
 /** One step per file in `drizzle/outbox`, filename order — the queue, its index, and the counter `claimSeq` allocates from. */

@@ -165,6 +165,12 @@ export const en = {
     byCurrency: "By currency",
     everythingIn: "Everything, in {{currency}}",
     countedOf: "{{counted}} of {{total}} accounts counted",
+    whatCounts: "What you see, and what counts",
+    whatCountsBody:
+      "An account can be in the list and out of the total. Hiding one takes it out of both — this is a view, not archiving.",
+    show: "Show",
+    count: "Count",
+    hiddenAccounts: "Hidden accounts",
     kindDeposit: "Deposit",
     kindOther: "Other",
     ownership: "Ownership",

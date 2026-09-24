@@ -32,6 +32,15 @@ export type LocalAccountSummary = {
   ownership: "own" | "shared";
   isBusiness: boolean;
   archived: boolean;
+  /**
+   * S16 §3 — out of the register's list, though the account is live and every
+   * figure it feeds is unchanged. Read rather than filtered here: the register
+   * is the one screen the flag means anything on, and a reader that dropped
+   * the row would leave that screen unable to offer it back.
+   */
+  hidden: boolean;
+  /** S16 §3 — in the register's total, a separate question from being in its list. */
+  inTotal: boolean;
   expectedBalance: Money | null;
   openingBalance: Money;
   openingDate: AccountingDate | null;
@@ -70,6 +79,8 @@ function selectAccountRows<TRun, TSchema extends typeof ledgerSchema>(
       ownership: accounts.ownership,
       isBusiness: accounts.isBusiness,
       archived: accounts.archived,
+      hidden: accounts.hidden,
+      inTotal: accounts.inTotal,
       openingBalance: accounts.openingBalance,
       openingDate: accounts.openingDate,
       memo: accounts.memo,

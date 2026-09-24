@@ -65,11 +65,13 @@ import {
   renameCategoryInput,
   reorderAccountsInput,
   reparentCategoryInput,
+  type SetAccountVisibilityInput,
   type SetManualRateInput,
   type SetPinnedInput,
   type SetRateSourceInput,
   type SetTransactionLinesInput,
   type SettleDebtInput,
+  setAccountVisibilityInput,
   setManualRateInput,
   setPinnedInput,
   setRateSourceInput,
@@ -170,6 +172,10 @@ export type PhoneAccount = {
   ownership: CreateAccountInput["ownership"];
   isBusiness: boolean;
   archived: boolean;
+  /** S16 §3 — out of the register's list, though the account is live. */
+  hidden: boolean;
+  /** S16 §3 — in the register's total, a separate question from being in its list. */
+  inTotal: boolean;
   /** The last balance a reconciliation recorded (S16 §5) — `null` before the first one. */
   expectedBalance: Money | null;
   /** `AccountEditor`'s own fields — shown and, `version` apart, edited. */
@@ -850,6 +856,7 @@ export type PhoneLedgerPort = {
   setTransactionLines: (input: SetTransactionLinesInput, capture: PhoneCapture) => void;
   updateAccount: (input: UpdateAccountInput, capture: PhoneCapture) => void;
   archiveAccount: (input: ArchiveAccountInput, capture: PhoneCapture) => void;
+  setAccountVisibility: (input: SetAccountVisibilityInput, capture: PhoneCapture) => void;
   /** S16 §3 — the whole ordered list, `sort` becoming each id's position. */
   reorderAccounts: (input: ReorderAccountsInput, capture: PhoneCapture) => void;
   reconcileAccount: (input: ReconcileAccountInput, capture: PhoneCapture) => void;
@@ -1347,6 +1354,21 @@ export type ArchiveAccountDraft = {
 };
 
 /**
+ * S16 §3's two pills — what the register shows, and what its total counts.
+ *
+ * Both flags travel together because they are one decision made in one place:
+ * a sheet that sent *show* and *count* as separate writes would let a reader
+ * watch the total change twice for one tap, and would need its own rule about
+ * which order makes `hidden` and `inTotal` legal on the way through.
+ */
+export type SetAccountVisibilityDraft = {
+  id: string;
+  version: number;
+  hidden: boolean;
+  inTotal: boolean;
+};
+
+/**
  * *"I counted, and it says this"* — S16 §5. `categoryId` is optional: absent,
  * the adjustment reads as uncategorised, same as any other transaction.
  */
@@ -1691,6 +1713,9 @@ export type PhoneLedgerController = {
   ) => { id: Id<"accounts"> } | { fieldErrors: readonly FieldError[] };
   archiveAccount: (
     draft: ArchiveAccountDraft,
+  ) => { id: Id<"accounts"> } | { fieldErrors: readonly FieldError[] };
+  setAccountVisibility: (
+    draft: SetAccountVisibilityDraft,
   ) => { id: Id<"accounts"> } | { fieldErrors: readonly FieldError[] };
   /**
    * S16 §3's reordering, behind *Edit*. The **whole** list every time: a
@@ -2678,6 +2703,55 @@ export function createPhoneLedger(
         emitClientDiagnostic(diagnostics, {
           scope: "client_action",
           action: "archive_account",
+          phase: "failure",
+          error: clientFailure(error),
+        });
+        throw error;
+      }
+    },
+    setAccountVisibility: (draft) => {
+      emitClientDiagnostic(diagnostics, {
+        scope: "client_action",
+        action: "set_account_visibility",
+        phase: "start",
+      });
+      try {
+        const capture = runtime.capture();
+        const parsed = setAccountVisibilityInput.safeParse({
+          id: draft.id,
+          version: draft.version,
+          hidden: draft.hidden,
+          inTotal: draft.inTotal,
+        });
+        if (!parsed.success) {
+          return finish(
+            diagnostics,
+            { scope: "client_action", action: "set_account_visibility" },
+            { fieldErrors: fieldErrorsFromZod(parsed.error) ?? [] },
+          );
+        }
+        try {
+          port.setAccountVisibility(parsed.data, capture);
+        } catch (refusal) {
+          if (!(refusal instanceof Error)) throw refusal;
+          const fieldError = accountWriteRefusal(refusal);
+          if (!fieldError) throw refusal;
+          return finish(
+            diagnostics,
+            { scope: "client_action", action: "set_account_visibility" },
+            { fieldErrors: [fieldError] },
+          );
+        }
+        refresh();
+        return finish(
+          diagnostics,
+          { scope: "client_action", action: "set_account_visibility" },
+          { id: parsed.data.id },
+        );
+      } catch (error) {
+        emitClientDiagnostic(diagnostics, {
+          scope: "client_action",
+          action: "set_account_visibility",
           phase: "failure",
           error: clientFailure(error),
         });

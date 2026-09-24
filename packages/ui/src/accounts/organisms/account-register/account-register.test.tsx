@@ -586,3 +586,142 @@ it("regroups by currency without losing an account", () => {
     expect(screen.getByRole("button", { name })).toBeDefined();
   }
 });
+
+/**
+ * **Hidden leaves the list; the total says how many it covers.**
+ *
+ * Three ways out of the total and they are not the same fact — no rate, hidden,
+ * or left out by hand. The line under the figure counts them the same way,
+ * because a reader adding the rows up wants to know how many of them the
+ * number covers, not why each one is missing.
+ */
+it("drops a hidden account from the list and from the total", () => {
+  render(
+    <AccountRegister
+      accounts={[
+        account({
+          id: "bank-1",
+          name: "Everyday",
+          balance: money.toMoney("6200"),
+          pivotBalance: money.toMoney("6200"),
+        }),
+        account({
+          id: "bank-2",
+          name: "Closed card",
+          balance: money.toMoney("2220.10"),
+          pivotBalance: money.toMoney("2220.10"),
+          hidden: true,
+        }),
+      ]}
+      archivedAccounts={[]}
+      pivot={PIVOT}
+      onSelectAccount={vi.fn()}
+      onLoadArchived={vi.fn()}
+      onCreateAccount={vi.fn()}
+      onSetVisibility={vi.fn()}
+    />,
+  );
+  expect(screen.queryByRole("button", { name: "Closed card" })).toBeNull();
+  expect(screen.getByText("1 of 2 accounts counted")).toBeDefined();
+  // 6 200 alone — the hidden account's 2 220.10 is not in the figure.
+  expect(screen.getAllByText("6 200.00").length).toBeGreaterThan(0);
+});
+
+/**
+ * **In the list and out of the total** — the other half of the pair, and the
+ * one a single flag could not express. A vault you want to see but not spend.
+ */
+it("keeps an uncounted account in the list and out of the total", () => {
+  render(
+    <AccountRegister
+      accounts={[
+        account({
+          id: "bank-1",
+          name: "Everyday",
+          balance: money.toMoney("6200"),
+          pivotBalance: money.toMoney("6200"),
+        }),
+        account({
+          id: "invest-1",
+          name: "Vault",
+          kind: "investment",
+          balance: money.toMoney("12500"),
+          pivotBalance: money.toMoney("12500"),
+          inTotal: false,
+        }),
+      ]}
+      archivedAccounts={[]}
+      pivot={PIVOT}
+      onSelectAccount={vi.fn()}
+      onLoadArchived={vi.fn()}
+      onCreateAccount={vi.fn()}
+      onSetVisibility={vi.fn()}
+    />,
+  );
+  expect(screen.getByRole("button", { name: "Vault" })).toBeDefined();
+  expect(screen.getByText("1 of 2 accounts counted")).toBeDefined();
+});
+
+/**
+ * **A hidden account is never only hidden.** Searching finds it — a person who
+ * hid an account and then typed its name is asking for it, and answering *no
+ * matches* about a row the register is deliberately holding back would be
+ * lying about the ledger.
+ */
+it("finds a hidden account by search", () => {
+  render(
+    <AccountRegister
+      accounts={[
+        account({ id: "bank-1", name: "Everyday" }),
+        account({ id: "bank-2", name: "Closed card", hidden: true }),
+      ]}
+      archivedAccounts={[]}
+      onSelectAccount={vi.fn()}
+      onLoadArchived={vi.fn()}
+      onCreateAccount={vi.fn()}
+      onSetVisibility={vi.fn()}
+    />,
+  );
+  expect(screen.queryByRole("button", { name: "Closed card" })).toBeNull();
+
+  fireEvent.change(screen.getByRole("searchbox"), { target: { value: "Closed" } });
+  expect(screen.getByRole("button", { name: "Closed card" })).toBeDefined();
+});
+
+/** A screen that cannot write the flags must not draw the control that changes them. */
+it("offers no visibility control without a way to write one", () => {
+  render(
+    <AccountRegister
+      accounts={[account({ id: "bank-1", name: "Everyday" })]}
+      archivedAccounts={[]}
+      onSelectAccount={vi.fn()}
+      onLoadArchived={vi.fn()}
+      onCreateAccount={vi.fn()}
+    />,
+  );
+  expect(screen.queryByRole("button", { name: "What you see, and what counts" })).toBeNull();
+});
+
+/**
+ * **Hiding takes counting with it**, visibly, in the same tap —
+ * `set_account_visibility` refuses a hidden account that claims to be counted,
+ * so a sheet that let a person build that state would be showing a control
+ * whose only outcome is a refusal.
+ */
+it("switches counting off with showing", () => {
+  const onSetVisibility = vi.fn();
+  render(
+    <AccountRegister
+      accounts={[account({ id: "bank-1", name: "Everyday" })]}
+      archivedAccounts={[]}
+      onSelectAccount={vi.fn()}
+      onLoadArchived={vi.fn()}
+      onCreateAccount={vi.fn()}
+      onSetVisibility={onSetVisibility}
+    />,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "What you see, and what counts" }));
+  fireEvent.click(screen.getByRole("switch", { name: "Show" }));
+
+  expect(onSetVisibility).toHaveBeenCalledWith("bank-1", { hidden: true, inTotal: false });
+});

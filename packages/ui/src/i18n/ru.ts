@@ -91,6 +91,12 @@ export const ru: Messages = {
     byCurrency: "По валюте",
     everythingIn: "Всё, в {{currency}}",
     countedOf: "Учтено {{counted}} из {{total}} счетов",
+    whatCounts: "Что видно и что считается",
+    whatCountsBody:
+      "Счёт может быть в списке и вне суммы. Скрытие убирает его из обоих — это вид, а не архив.",
+    show: "Показывать",
+    count: "Считать",
+    hiddenAccounts: "Скрытые счета",
     kindDeposit: "Вклад",
     kindOther: "Другое",
     ownership: "Владение",

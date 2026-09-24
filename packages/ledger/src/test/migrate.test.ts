@@ -43,7 +43,7 @@ import {
 import { openLedger } from "../open.ts";
 import { ledgerSchema as schema } from "../schema-map.ts";
 
-const { accounts, counterpartyMerges, currencies, outbox, transactions, transactionLines } = schema;
+const { counterpartyMerges, currencies, outbox, transactions, transactionLines } = schema;
 const outboxSchema = { outbox: schema.outbox, outboxSeq: schema.outboxSeq };
 const replicaSchema = {
   accountGroups: schema.accountGroups,
@@ -145,15 +145,19 @@ function seedReferences(ledger: Ledger) {
     .values({ code: currencyCode("PLN"), name: "Placeholder" })
     .onConflictDoNothing()
     .run();
-  ledger.replica.db
-    .insert(accounts)
-    .values({
-      id: id<"accounts">("acc-1"),
-      name: "Bank A · PLN",
-      currency: currencyCode("PLN"),
-    })
-    .onConflictDoNothing()
-    .run();
+  /*
+    **Raw SQL, for the reason `seedTransaction` below gives in full.** Drizzle's
+    insert builder names every column the schema module declares, and several
+    call sites here seed after running only a *prefix* of the chain — so the
+    moment `accounts` grew a column (`hidden`, `in_total`), a schema-aware
+    insert started referencing one the table does not have yet and failing with
+    an error that has nothing to do with what the test is proving. `accounts`
+    is the second table to need this and will not be the last.
+  */
+  ledger.replica.db.run(sql`
+    insert or ignore into accounts (id, name, currency, created_at, updated_at)
+    values ('acc-1', 'Bank A · PLN', 'PLN', 0, 0)
+  `);
 }
 
 /**
