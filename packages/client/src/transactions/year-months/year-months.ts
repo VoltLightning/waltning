@@ -8,11 +8,16 @@
  * the card and the calendar, and the way a screen ends up saying two different
  * things is two implementations.
  *
- * **The lead currency only, and it is not converted.** Arc-phone has no
- * display-currency conversion — that is class **S** — so a year holding PLN and
- * USD cannot be summed into one bar. The rows carry the lead currency's figures
- * and say how many other currencies were left out, which is the same shape
- * `useWhereItWent` uses for the same reason.
+ * **Every currency, in the pivot, each row at its own rate.** A day row carries
+ * its income and spend converted at the rate each transaction was stored with
+ * (`computations.md` §4 — *the row's own date*), so a year of złoty, dollars
+ * and euros is one set of bars without a rate being looked up or invented.
+ * It used to count the *lead* currency only — the first of the net-worth rows —
+ * and a ledger whose lead happened to be the card's euros drew a year of spend
+ * and not one bar of income, because the salary was in złoty.
+ *
+ * A day whose rows came without a rate keeps its own currency: counted if it
+ * is the pivot's, and otherwise left out and named in `otherCurrencies`.
  *
  * **Every month is a row, including the ones with nothing in them.** A list
  * that skipped empty months would be a list that changes length as the ledger
@@ -24,7 +29,7 @@ import * as money from "@waltning/core/money";
 
 export type YearMonthRow = {
   month: YearMonth;
-  /** The month's own income and expense, in the lead currency. */
+  /** The month's own income and expense, in the pivot. */
   inflow: money.Money;
   spend: money.Money;
   net: money.Money;
@@ -39,7 +44,7 @@ const MONTHS_IN_YEAR = 12;
 export function yearMonths(
   flows: readonly money.DayFlowRow[],
   year: number,
-  lead: money.CurrencyCode,
+  pivot: money.CurrencyCode,
   today: YearMonth,
 ): readonly YearMonthRow[] {
   const totals = new Map<string, { inflow: money.Money; spend: money.Money }>();
@@ -47,7 +52,8 @@ export function yearMonths(
 
   for (const flow of flows) {
     const month = flow.date.slice(0, 7);
-    if (flow.currency !== lead) {
+    const figures = inPivot(flow, pivot);
+    if (figures === null) {
       const seen = others.get(month) ?? new Set<string>();
       seen.add(flow.currency);
       others.set(month, seen);
@@ -55,8 +61,8 @@ export function yearMonths(
     }
     const bucket = totals.get(month) ?? { inflow: money.ZERO, spend: money.ZERO };
     totals.set(month, {
-      inflow: money.add(bucket.inflow, flow.inflow),
-      spend: money.add(bucket.spend, flow.spend),
+      inflow: money.add(bucket.inflow, figures.inflow),
+      spend: money.add(bucket.spend, figures.spend),
     });
   }
 
@@ -84,12 +90,55 @@ export function yearMonths(
  * qualifier — the month rows below it have said *+1 other currency* since they
  * were written.
  */
+/**
+ * A day row's figures in the pivot: converted at each row's own rate, or its
+ * own figures when it already is the pivot — `null` when neither holds.
+ */
+function inPivot(
+  flow: money.DayFlowRow,
+  pivot: money.CurrencyCode,
+): { inflow: money.Money; spend: money.Money } | null {
+  if (flow.inflowPivot !== null && flow.spendPivot !== null) {
+    return { inflow: flow.inflowPivot, spend: flow.spendPivot };
+  }
+  return flow.currency === pivot ? { inflow: flow.inflow, spend: flow.spend } : null;
+}
+
+/**
+ * One period's §5 figures, in the pivot — S04's month card.
+ *
+ * **The same fold as a Months row, over whatever period it is handed**, so the
+ * card and the row for the same month cannot disagree: both add the same day
+ * rows, each already converted at its own transactions' rates. The card read
+ * `readPeriodSpend` and kept the lead currency's row alone, which drew
+ * *came in 0,00* on a ledger whose lead was the card's euros.
+ */
+export function periodInPivot(
+  flows: readonly money.DayFlowRow[],
+  pivot: money.CurrencyCode,
+): { inflow: money.Money; spend: money.Money; net: money.Money; otherCurrencies: number } {
+  let inflow = money.ZERO;
+  let spend = money.ZERO;
+  const others = new Set<string>();
+  for (const flow of flows) {
+    const figures = inPivot(flow, pivot);
+    if (figures === null) {
+      others.add(flow.currency);
+      continue;
+    }
+    inflow = money.add(inflow, figures.inflow);
+    spend = money.add(spend, figures.spend);
+  }
+  return { inflow, spend, net: money.sub(inflow, spend), otherCurrencies: others.size };
+}
+
+/** The currencies the year could not count — none, when every row carried its rate. */
 export function otherCurrenciesInYear(
   flows: readonly money.DayFlowRow[],
-  lead: money.CurrencyCode,
+  pivot: money.CurrencyCode,
 ): number {
   const seen = new Set<string>();
-  for (const flow of flows) if (flow.currency !== lead) seen.add(flow.currency);
+  for (const flow of flows) if (inPivot(flow, pivot) === null) seen.add(flow.currency);
   return seen.size;
 }
 

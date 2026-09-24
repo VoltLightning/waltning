@@ -64,6 +64,9 @@ it("returns one row per day that has something on it", () => {
       decimals: 2,
       spend: money.toMoney("42.50"),
       inflow: money.ZERO,
+      // At each row's own stored rate — 1 here, the pivot's own currency.
+      spendPivot: money.toMoney("42.50"),
+      inflowPivot: money.ZERO,
     },
     {
       date: "2026-09-09",
@@ -71,6 +74,8 @@ it("returns one row per day that has something on it", () => {
       decimals: 2,
       spend: money.ZERO,
       inflow: money.toMoney("100"),
+      spendPivot: money.ZERO,
+      inflowPivot: money.toMoney("100"),
     },
   ]);
 });

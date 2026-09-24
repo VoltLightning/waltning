@@ -20,14 +20,13 @@
  * an empty state here would claim the *screen* had nothing, while the register
  * beneath it may be full.
  *
- * **A figure in one currency says what it left out.** S04 — *"empty means
- * nothing happened, not nothing in the lead currency"* — and these three
- * figures are the lead currency's alone. A day holding one 48.20 PLN expense
- * drew *went out 0.00 EUR* under a register listing that expense: true of EUR
- * and false of the day, four pixels from the row that contradicts it. The
- * conversion that would state the whole is class **S** and arc-phone does not
- * do it, so the card carries the Months chart's own note instead of a figure
- * it cannot compute.
+ * **The caller states the whole, and says what it could not.** S04 hands it
+ * every currency in the pivot, each transaction at its own stored rate — the
+ * same fold as that month's Months row — so a złoty salary and a euro card
+ * meet in one *came in* and one *went out*. It used to hand the lead
+ * currency's figures alone, and a ledger whose lead was the euro card drew
+ * *came in 0.00* under a month of income. `otherCurrencies` is what is left
+ * when a row came without its rate: none, ordinarily.
  */
 
 import type * as money from "@waltning/core/money";

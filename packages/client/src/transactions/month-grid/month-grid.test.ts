@@ -19,6 +19,8 @@ function flow(date: string, over: Partial<money.DayFlowRow> = {}): money.DayFlow
     decimals: 2,
     spend: money.ZERO,
     inflow: money.ZERO,
+    spendPivot: null,
+    inflowPivot: null,
     ...over,
   };
 }
