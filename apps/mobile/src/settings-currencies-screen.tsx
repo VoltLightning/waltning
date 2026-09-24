@@ -372,21 +372,25 @@ export default function SettingsCurrenciesScreen() {
         <>
           <Text style={styles.kicker}>{t("fx.groupShown")}</Text>
           <Card>
-            {shownRows.map((row) => (
-              <CurrencyRow
-                key={row.code}
-                row={row}
-                coverage={coverageByCode.get(row.code)}
-                usage={usage.get(row.code) ?? EMPTY_USAGE}
-                expanded={expandedCode === row.code}
-                onToggleExpanded={handleToggleExpanded}
-                onTogglePinned={handleTogglePinned}
-                onChangeSource={handleChangeSource}
-                onArchive={handleArchive}
-                onEdit={handleOpenEdit}
-                onViewRates={handleViewRates}
-              />
-            ))}
+            {/* One child: the card's gap would land between rows, above each rule. */}
+            <View>
+              {shownRows.map((row, index) => (
+                <CurrencyRow
+                  key={row.code}
+                  first={index === 0}
+                  row={row}
+                  coverage={coverageByCode.get(row.code)}
+                  usage={usage.get(row.code) ?? EMPTY_USAGE}
+                  expanded={expandedCode === row.code}
+                  onToggleExpanded={handleToggleExpanded}
+                  onTogglePinned={handleTogglePinned}
+                  onChangeSource={handleChangeSource}
+                  onArchive={handleArchive}
+                  onEdit={handleOpenEdit}
+                  onViewRates={handleViewRates}
+                />
+              ))}
+            </View>
           </Card>
         </>
       ) : null}
@@ -394,21 +398,25 @@ export default function SettingsCurrenciesScreen() {
         <>
           <Text style={styles.kicker}>{t("fx.groupHeld")}</Text>
           <Card>
-            {heldRows.map((row) => (
-              <CurrencyRow
-                key={row.code}
-                row={row}
-                coverage={coverageByCode.get(row.code)}
-                usage={usage.get(row.code) ?? EMPTY_USAGE}
-                expanded={expandedCode === row.code}
-                onToggleExpanded={handleToggleExpanded}
-                onTogglePinned={handleTogglePinned}
-                onChangeSource={handleChangeSource}
-                onArchive={handleArchive}
-                onEdit={handleOpenEdit}
-                onViewRates={handleViewRates}
-              />
-            ))}
+            {/* One child: the card's gap would land between rows, above each rule. */}
+            <View>
+              {heldRows.map((row, index) => (
+                <CurrencyRow
+                  key={row.code}
+                  first={index === 0}
+                  row={row}
+                  coverage={coverageByCode.get(row.code)}
+                  usage={usage.get(row.code) ?? EMPTY_USAGE}
+                  expanded={expandedCode === row.code}
+                  onToggleExpanded={handleToggleExpanded}
+                  onTogglePinned={handleTogglePinned}
+                  onChangeSource={handleChangeSource}
+                  onArchive={handleArchive}
+                  onEdit={handleOpenEdit}
+                  onViewRates={handleViewRates}
+                />
+              ))}
+            </View>
           </Card>
         </>
       ) : null}

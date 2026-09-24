@@ -243,3 +243,24 @@ export const ArchivedEmpty: Story = {
 
 /** `EmptyState(first-run)` — S16 §6, reachable directly from the tab bar. */
 export const Empty: Story = { args: { accounts: [], archivedAccounts: [] } };
+
+/**
+ * `design-system/05` §5.0: a shut section's label sits as far from the rule
+ * below as from the rule above. The first and the last section are shut too,
+ * so both card edges are in the picture.
+ */
+export const SectionsShut: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    for (const name of ["Bank", "Card", "You owe"]) {
+      const head = await canvas.findByRole("button", { name });
+      await userEvent.click(head);
+      await waitFor(() => {
+        if (head.getAttribute("aria-expanded") !== "false") throw new Error(`${name} still open`);
+      });
+    }
+    // The resting state, not the last click's focus ring.
+    const focused = canvasElement.ownerDocument.activeElement;
+    if (focused instanceof HTMLElement) focused.blur();
+  },
+};

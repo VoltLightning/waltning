@@ -687,7 +687,11 @@ function RegisterSection({
         aria-expanded={open}
         onPress={onToggle}
         {...handlers}
-        style={[styles.sectionHead, focused ? styles.focused : null]}
+        style={[
+          styles.sectionHead,
+          open ? null : styles.sectionHeadShut,
+          focused ? styles.focused : null,
+        ]}
       >
         {tint === undefined ? null : (
           <View style={[styles.sectionMark, markFill]}>
@@ -1007,6 +1011,12 @@ const useStyles = makeStyles((theme) => ({
     marginHorizontal: -space.x3b,
     paddingHorizontal: space.x3b,
   },
+  /**
+   * Open, the label belongs to the rows under it: room above, little below
+   * (S16's drawing). Shut, nothing follows, and that same 4 put the label on
+   * the next rule — `sectionHeadShut` gives it the room it has above
+   * (`design-system/05` §5.0).
+   */
   sectionHead: {
     flexDirection: "row",
     alignItems: "center",
@@ -1014,6 +1024,16 @@ const useStyles = makeStyles((theme) => ({
     minHeight: touchTarget.min,
     paddingTop: space.x3,
     paddingBottom: space.xs,
+  },
+  /**
+   * A fixed height rather than padding alone: padding lets the tallest item
+   * set the height (a subtotal, the mark, or only the caret By currency), so
+   * the label moved up to 5pt as a section shut. At the open head's 44 plus
+   * the 12 it gains, the label keeps its place in every lens.
+   */
+  sectionHeadShut: {
+    minHeight: touchTarget.min + space.x3 - space.xs,
+    paddingBottom: space.x3,
   },
   sectionMark: {
     width: 19,
