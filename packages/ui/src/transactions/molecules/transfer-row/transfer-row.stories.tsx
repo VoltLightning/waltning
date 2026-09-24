@@ -58,7 +58,7 @@ function LedgerDemo() {
     <View style={styles.surface}>
       <TransactionRow
         date="2026-08-24"
-        payee="Corner Bakery"
+        enteredName="Corner Bakery"
         category="Eating out"
         account="Cash"
         amount={money.toMoney("-48.90")}
@@ -79,7 +79,7 @@ function LedgerDemo() {
       <View style={styles.separated}>
         <TransactionRow
           date="2026-08-22"
-          payee="Monthly invoice"
+          enteredName="Monthly invoice"
           category="Consulting"
           account="Bank A"
           amount={money.toMoney("9400.00")}

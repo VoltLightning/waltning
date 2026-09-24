@@ -15,14 +15,14 @@ const ROWS: readonly TransactionListItem[] = [
   {
     id: "11111111-1111-4111-8111-111111111111",
     date: "2026-08-16",
-    payee: "Grocer",
+    enteredName: "Grocer",
     amount: money.toMoney("-40.00000000"),
     currency: "PLN",
   },
   {
     id: "22222222-2222-4222-8222-222222222222",
     date: "2026-08-17",
-    payee: "Employer",
+    enteredName: "Employer",
     amount: money.toMoney("2000.00000000"),
     currency: "PLN",
   },

@@ -2,8 +2,8 @@ import type {
   BackupDocument as BackupContents,
   BackupManifest,
 } from "@waltning/core/backup/contract";
+import type { EnteredNameHistoryRow } from "@waltning/core/capture/entered-name-memory";
 import { fold } from "@waltning/core/capture/names";
-import type { PayeeHistoryRow } from "@waltning/core/capture/payee-memory";
 import { jaccard, trigrams } from "@waltning/core/capture/trigrams";
 import {
   type AccountingDate,
@@ -34,7 +34,6 @@ import {
   type ClearManualRateInput,
   type ConvertLeafGroupInput,
   type CounterpartyKind,
-  type CounterpartyRole,
   type CreateAccountInput,
   type CreateCategoryInput,
   type CreateCounterpartyInput,
@@ -55,6 +54,7 @@ import {
   type MergeCounterpartiesInput,
   mergeCategoriesInput,
   mergeCounterpartiesInput,
+  type ObligationRole,
   type ReconcileAccountInput,
   type RecordDistinctCounterpartiesInput,
   type RenameCategoryInput,
@@ -263,7 +263,7 @@ export type PhoneGroup = {
 export type PhoneRecentTransaction = {
   id: Id<"transactions">;
   date: AccountingDate;
-  payee: string;
+  enteredName: string;
   categoryName: string | null;
   accountName: string;
   amount: Money;
@@ -472,10 +472,10 @@ export type PhoneSearchFilter = {
   currency?: CurrencyCode;
   from?: AccountingDate;
   to?: AccountingDate;
-  /** S13's whole history — every row naming this counterparty, any role. */
-  counterpartyId?: Id<"counterparties">;
+  /** S13's whole history — every row whose obligation names this counterparty, any role. */
+  obligationCounterpartyId?: Id<"counterparties">;
   /** S13 §3's default toggle — `debt` only until "· N other rows" is opened. */
-  counterpartyRole?: "debt" | "contribution" | "reference";
+  obligationRole?: "debt" | "contribution" | "reference";
 };
 
 export type PhoneSearchCursor = { date: AccountingDate; id: Id<"transactions"> };
@@ -501,7 +501,7 @@ export type PhoneSearchTransaction = {
   id: Id<"transactions">;
   date: AccountingDate;
   type: "income" | "expense" | "transfer" | "adjustment";
-  payee: string;
+  enteredName: string;
   note: string;
   categoryName: string | null;
   /** `SPEC.md` §14.4b — mirrors `@waltning/ledger`'s `LocalSearchTransaction.brandKey` field-for-field. */
@@ -531,7 +531,7 @@ export type PhoneSearchTransaction = {
   isBusiness: boolean;
   isCapital: boolean;
   /** `null` off any row with no counterparty at all — the ordinary case. */
-  counterpartyRole: "debt" | "contribution" | "reference" | null;
+  obligationRole: "debt" | "contribution" | "reference" | null;
 };
 
 export type PhoneCurrencyTotal = {
@@ -597,7 +597,7 @@ export type PhoneTransactionDetail = {
   id: Id<"transactions">;
   date: AccountingDate;
   type: TransactionType;
-  payee: string;
+  enteredName: string;
   note: string;
   isBusiness: boolean;
   accountId: Id<"accounts">;
@@ -605,9 +605,9 @@ export type PhoneTransactionDetail = {
   categoryId: Id<"categories"> | null;
   categoryName: string | null;
   /** §6.6 — S09 is where a capture's missing role is corrected. */
-  counterpartyId: Id<"counterparties"> | null;
+  obligationCounterpartyId: Id<"counterparties"> | null;
   counterpartyName: string | null;
-  counterpartyRole: CounterpartyRole | null;
+  obligationRole: ObligationRole | null;
   /** §6.8's one-off, excluded from every comparison. S09 is its only producer. */
   isCapital: boolean;
   /** `SPEC.md` §14.4b — mirrors `@waltning/ledger`'s `LocalTransactionDetail.brandKey` field-for-field. */
@@ -754,8 +754,8 @@ export type PhoneLedgerPort = {
   listCategoryTree: () => readonly PhoneCategoryNode[];
   /** `includeArchived` — default `false`, same toggle as `listAccounts`. */
   listCounterparties: (options?: { includeArchived?: boolean }) => readonly PhoneCounterparty[];
-  /** D2's reader, on demand — D4b's proposal recomputes it only when the typed payee changes. */
-  listPayeeHistory: () => readonly PhonePayeeHistoryRow[];
+  /** D2's reader, on demand — D4b's proposal recomputes it only when the typed entered name changes. */
+  listEnteredNameHistory: () => readonly PhoneEnteredNameHistoryRow[];
   /** §7 — S12's list. `today` is the caller's own accounting date, the same one `capture()` computes. */
   listCounterpartyBalances: (today: AccountingDate) => readonly PhoneCounterpartyBalance[];
   /** The whole tree, archived rows included — S19's editor. See `PhoneFullCategoryNode`. */
@@ -982,8 +982,8 @@ type ForwardedLedgerFilterKeys =
   | "categoryIds"
   | "scope"
   | "currency"
-  | "counterpartyId"
-  | "counterpartyRole";
+  | "obligationCounterpartyId"
+  | "obligationRole";
 
 type LedgerFilterKeys = keyof Omit<PhoneSearchFilter, "from" | "to">;
 
@@ -1054,7 +1054,7 @@ export type PhoneClearingAccount = money.ClearingAccountRow & {
   oldestDate: AccountingDate | null;
   /** The oldest entry's own unconsumed magnitude — may be less than `balance` when more than one entry is still open (H3). */
   oldestUnconsumedRemainder: Money | null;
-  oldestUnconsumedPayee: string | null;
+  oldestUnconsumedEnteredName: string | null;
 };
 
 /** S12's two direction totals, per currency. See `money.directionTotals`. */
@@ -1075,7 +1075,7 @@ export type PhoneNearestActivity = {
 };
 
 /** D2's history, read on demand for D4b's proposal — see `proposeCategory`. */
-export type PhonePayeeHistoryRow = PayeeHistoryRow;
+export type PhoneEnteredNameHistoryRow = EnteredNameHistoryRow;
 
 export type PhoneLedgerSnapshot = {
   /**
@@ -1196,16 +1196,16 @@ export type QuickAddDraft = {
   /**
    * D4b's chip. **Optional**, not merely defaulted — `QuickAddForm`'s own
    * draft (`quick-add-form.tsx`, structurally distinct from this type) has no
-   * payee field at all, and both it and D4b's composer call this same
-   * controller method. `createTransactionInput`'s own `payee` already
+   * entered name field at all, and both it and D4b's composer call this same
+   * controller method. `createTransactionInput`'s own `entered_name` already
    * defaults to `""`, so an absent field here is the same "not yet typed"
    * either path can mean.
    */
-  payee?: string;
+  enteredName?: string;
   note: string;
   isBusiness: boolean;
-  counterpartyId: string | null;
-  counterpartyRole: "debt" | "contribution" | "reference" | null;
+  obligationCounterpartyId: string | null;
+  obligationRole: "debt" | "contribution" | "reference" | null;
   /** S31's destination leg (§7.5) — present only when `type === "transfer"`. */
   toAccountId?: string;
   toAmount?: string;
@@ -1269,8 +1269,8 @@ export type TransactionFilterDraft = {
   currency?: string;
   from?: string;
   to?: string;
-  counterpartyId?: string;
-  counterpartyRole?: "debt" | "contribution" | "reference";
+  obligationCounterpartyId?: string;
+  obligationRole?: "debt" | "contribution" | "reference";
 };
 
 export type TransactionSearchCursorDraft = { date: string; id: string };
@@ -1294,7 +1294,7 @@ export type TransactionFieldPatch = {
   date?: string;
   accountId?: string;
   categoryId?: string | null;
-  payee?: string;
+  enteredName?: string;
   note?: string;
   isBusiness?: boolean;
 };
@@ -1629,9 +1629,9 @@ export type PhoneLedgerController = {
   balanceAsOf: (accountId: Id<"accounts">, asOf: AccountingDate) => Money;
   /**
    * D4b's proposal, on demand — the composer calls this only when the typed
-   * payee's fold changes, not on every keystroke or every `refresh()`.
+   * entered name's fold changes, not on every keystroke or every `refresh()`.
    */
-  listPayeeHistory: () => readonly PhonePayeeHistoryRow[];
+  listEnteredNameHistory: () => readonly PhoneEnteredNameHistoryRow[];
   /**
    * S10, on demand — like `readPeriodSpend` above, a query rather than a
    * snapshot field: a filtered, paged list is asked for, not held for every
@@ -2404,7 +2404,7 @@ export function createPhoneLedger(
     listCounterpartyBalances: (today) => port.listCounterpartyBalances(today),
     listCounterpartyMerges: (counterpartyId) => port.listCounterpartyMerges(counterpartyId),
     balanceAsOf: (accountId, asOf) => port.balanceAsOf(accountId, asOf),
-    listPayeeHistory: () => port.listPayeeHistory(),
+    listEnteredNameHistory: () => port.listEnteredNameHistory(),
     searchTransactions: (filter, cursor, options) =>
       port.searchTransactions(
         {
@@ -2426,10 +2426,10 @@ export function createPhoneLedger(
           ...(filter.to !== undefined && isAccountingDate(filter.to)
             ? { to: accountingDate(filter.to) }
             : {}),
-          ...(filter.counterpartyId !== undefined
-            ? { counterpartyId: id<"counterparties">(filter.counterpartyId) }
+          ...(filter.obligationCounterpartyId !== undefined
+            ? { obligationCounterpartyId: id<"counterparties">(filter.obligationCounterpartyId) }
             : {}),
-          ...(filter.counterpartyRole ? { counterpartyRole: filter.counterpartyRole } : {}),
+          ...(filter.obligationRole ? { obligationRole: filter.obligationRole } : {}),
         },
         cursor
           ? { date: accountingDate(cursor.date), id: id<"transactions">(cursor.id) }
@@ -2457,10 +2457,14 @@ export function createPhoneLedger(
                   : {}),
                 ...(filter.scope ? { scope: filter.scope } : {}),
                 ...(filter.currency ? { currency: money.currencyCode(filter.currency) } : {}),
-                ...(filter.counterpartyId
-                  ? { counterpartyId: id<"counterparties">(filter.counterpartyId) }
+                ...(filter.obligationCounterpartyId
+                  ? {
+                      obligationCounterpartyId: id<"counterparties">(
+                        filter.obligationCounterpartyId,
+                      ),
+                    }
                   : {}),
-                ...(filter.counterpartyRole ? { counterpartyRole: filter.counterpartyRole } : {}),
+                ...(filter.obligationRole ? { obligationRole: filter.obligationRole } : {}),
               },
             }
           : {}),
@@ -3048,7 +3052,7 @@ export function createPhoneLedger(
         let cursor: PhoneSearchCursor | undefined;
         for (;;) {
           const page = port.searchTransactions(
-            { counterpartyId: id<"counterparties">(draft.loserId) },
+            { obligationCounterpartyId: id<"counterparties">(draft.loserId) },
             cursor,
           );
           movedTransactionIds.push(...page.rows.map((row) => row.id));
@@ -3713,8 +3717,8 @@ export function createPhoneLedger(
          *
          * H1a — `category === undefined` used to fall through with no
          * refusal at all: `snapshot.categories` (`listCategories`) already
-         * excludes archived rows, so an id that D2 proposed off *payee
-         * history* (`listPayeeHistory`, which does not exclude them) found
+         * excludes archived rows, so an id that D2 proposed off *entered name
+         * history* (`listEnteredNameHistory`, which does not exclude them) found
          * no match here and the row saved a category the picker would never
          * offer, silently. Absent is refused the same as wrong-kind — either
          * way it is not a category this draft may carry — mirrored by the
@@ -3780,11 +3784,11 @@ export function createPhoneLedger(
           currency: account.currency,
           categoryId: draft.categoryId ?? undefined,
           ...(draft.timeOfDay === undefined ? {} : { timeOfDay: draft.timeOfDay }),
-          payee: draft.payee ?? "",
+          enteredName: draft.enteredName ?? "",
           note: draft.note,
           isBusiness: draft.isBusiness,
-          counterpartyId: draft.counterpartyId ?? undefined,
-          counterpartyRole: draft.counterpartyRole ?? undefined,
+          obligationCounterpartyId: draft.obligationCounterpartyId ?? undefined,
+          obligationRole: draft.obligationRole ?? undefined,
           // S31's destination leg (§7.5) — absent on every other caller, and
           // `createTransactionInput`'s own shape refusal is what catches a
           // `type: "transfer"` missing one of these, not this method.
@@ -3953,7 +3957,7 @@ export function createPhoneLedger(
             ...(patch.date !== undefined ? { date: patch.date } : {}),
             ...(patch.accountId !== undefined ? { accountId: patch.accountId } : {}),
             ...("categoryId" in patch ? { categoryId: patch.categoryId } : {}),
-            ...(patch.payee !== undefined ? { payee: patch.payee } : {}),
+            ...(patch.enteredName !== undefined ? { enteredName: patch.enteredName } : {}),
             ...(patch.note !== undefined ? { note: patch.note } : {}),
             ...(patch.isBusiness !== undefined ? { isBusiness: patch.isBusiness } : {}),
           },

@@ -13,7 +13,7 @@ const BASE: LedgerEntry = {
   id: "t1",
   date: "2026-08-14",
   type: "expense",
-  payee: "Market B",
+  enteredName: "Market B",
   categoryName: "Groceries",
   accountName: "Bank A",
   amount: toMoney("-96.00"),

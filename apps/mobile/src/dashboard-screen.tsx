@@ -265,7 +265,7 @@ export default function Dashboard() {
 
   const recentRows = snapshot.recent.map((row) => ({
     id: row.id,
-    payee: row.payee,
+    enteredName: row.enteredName,
     meta: row.categoryName ?? row.accountName,
     amount: row.amount,
     currency: row.currency,

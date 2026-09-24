@@ -28,9 +28,9 @@
  * could report "nothing open" — or the wrong oldest row — while the account
  * still showed money unaccounted for. `id: null` is deliberate: this entry
  * is not a transaction, so it can never be "named" the way a real leg is —
- * `oldestUnconsumedTransactionId` and `oldestUnconsumedPayee` both read
+ * `oldestUnconsumedTransactionId` and `oldestUnconsumedEnteredName` both read
  * `null` when it wins, and the banner says so (`shell.unsettledOpening`)
- * rather than falling back to a payee that does not exist.
+ * rather than falling back to a entered name that does not exist.
  */
 
 import type { AccountingDate } from "@waltning/core/date";
@@ -58,8 +58,8 @@ export type LocalUnsettledClearing = money.ClearingAccountRow & {
   oldestDate: AccountingDate | null;
   /** The oldest entry's own unconsumed magnitude — may be less than `balance` when more than one entry is still open (H3). `null` only alongside a zero balance, which `money.unsettledClearing` already filters out. */
   oldestUnconsumedRemainder: Money | null;
-  /** The oldest leg's payee, for the banner to name a transaction rather than a number (S04 §3) — `""` reads as "no payee recorded", `null` when the oldest entry is the opening balance (no leg to have one). */
-  oldestUnconsumedPayee: string | null;
+  /** The oldest leg's entered name, for the banner to name a transaction rather than a number (S04 §3) — `""` reads as "no entered name recorded", `null` when the oldest entry is the opening balance (no leg to have one). */
+  oldestUnconsumedEnteredName: string | null;
 };
 
 export function readUnsettledClearing<TRun, TSchema extends typeof ledgerSchema>(
@@ -91,7 +91,7 @@ export function readUnsettledClearing<TRun, TSchema extends typeof ledgerSchema>
     .select({
       id: transactions.id,
       date: transactions.date,
-      payee: transactions.payee,
+      enteredName: transactions.enteredName,
       type: transactions.type,
       accountId: transactions.accountId,
       toAccountId: transactions.toAccountId,
@@ -138,7 +138,7 @@ export function readUnsettledClearing<TRun, TSchema extends typeof ledgerSchema>
       oldestUnconsumedTransactionId: oldest?.id ?? null,
       oldestDate: oldest?.date ?? null,
       oldestUnconsumedRemainder: oldest?.remainder ?? null,
-      oldestUnconsumedPayee: oldestLeg?.payee ?? null,
+      oldestUnconsumedEnteredName: oldestLeg?.enteredName ?? null,
     };
   });
 }

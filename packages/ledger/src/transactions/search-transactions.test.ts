@@ -40,7 +40,7 @@ function insertExpense(overrides: ExpenseOverrides = {}) {
     amountOriginal: money.toMoney("10"),
     currency: PLN,
     fxRate: money.pivotPerUnit("1"),
-    payee: "Placeholder",
+    enteredName: "Placeholder",
     note: "",
     isBusiness: false,
     isCapital: false,
@@ -76,10 +76,10 @@ beforeEach(() => {
 });
 
 describe("searchTransactions — text", () => {
-  it("matches folded, diacritic-insensitive payee and note", () => {
+  it("matches folded, diacritic-insensitive enteredName and note", () => {
     // An invented name, and one carrying three of the diacritics `fold()` maps
     // — Ż, ó and ł — so the fold is what the assertions below actually test.
-    insertExpense({ payee: "Sklep Żółty", note: "poranna kawa" });
+    insertExpense({ enteredName: "Sklep Żółty", note: "poranna kawa" });
 
     expect(searchTransactions(stores.ledger.replica.db, { text: "zolty" }).rows).toHaveLength(1);
     expect(searchTransactions(stores.ledger.replica.db, { text: "ŻÓŁTY" }).rows).toHaveLength(1);
@@ -88,37 +88,37 @@ describe("searchTransactions — text", () => {
   });
 
   it("matches an amount exactly, in either decimal mark, and never by digits (§13)", () => {
-    insertExpense({ payee: "Shop A", amountOriginal: money.toMoney("48.90") });
-    insertExpense({ payee: "Landlord", amountOriginal: money.toMoney("1489.00") });
+    insertExpense({ enteredName: "Shop A", amountOriginal: money.toMoney("48.90") });
+    insertExpense({ enteredName: "Landlord", amountOriginal: money.toMoney("1489.00") });
 
-    const payees = (text: string) =>
-      searchTransactions(stores.ledger.replica.db, { text }).rows.map((row) => row.payee);
-    expect(payees("48,90")).toEqual(["Shop A"]);
-    expect(payees("48.90")).toEqual(["Shop A"]);
+    const enteredNames = (text: string) =>
+      searchTransactions(stores.ledger.replica.db, { text }).rows.map((row) => row.enteredName);
+    expect(enteredNames("48,90")).toEqual(["Shop A"]);
+    expect(enteredNames("48.90")).toEqual(["Shop A"]);
     // A substring of the digits is not the amount — and it must not reach the
     // running total either, which folds over the same filtered rows.
-    expect(payees("489")).toEqual([]);
-    expect(payees("4890")).toEqual([]);
-    expect(payees("999")).toEqual([]);
+    expect(enteredNames("489")).toEqual([]);
+    expect(enteredNames("4890")).toEqual([]);
+    expect(enteredNames("999")).toEqual([]);
   });
 
   /**
-   * M6 — a query naming a payee is text-only, even when a number sits in it.
+   * M6 — a query naming a entered name is text-only, even when a number sits in it.
    *
    * `@waltning/core/capture/amount`'s `findAmount` reads the first number
    * *inside* free text, which is right for quick-add and wrong here: it let a
-   * payee-and-year query silently also filter by amount. `parseSearchAmount`
+   * entered name-and-year query silently also filter by amount. `parseSearchAmount`
    * (`search-transactions.ts`) requires the whole query to be the amount.
    */
-  it("does not read an amount out of a query that also names a payee (§13, M6)", () => {
+  it("does not read an amount out of a query that also names a enteredName (§13, M6)", () => {
     // The row is seeded at exactly the number sitting in the query, which is
     // what makes this a real regression test: nothing here matches on text
-    // ("shop a 2024" is not a substring of the payee "Shop A", which is the
+    // ("shop a 2024" is not a substring of the entered name "Shop A", which is the
     // whole point of a *substring* match), so the only way this row could
     // come back is an amount clause reading "2024" out of the middle of the
     // query — which is what capture's `findAmount` did before M6.
-    insertExpense({ payee: "Shop A", amountOriginal: money.toMoney("2024") });
-    insertExpense({ payee: "Shop B", amountOriginal: money.toMoney("999") });
+    insertExpense({ enteredName: "Shop A", amountOriginal: money.toMoney("2024") });
+    insertExpense({ enteredName: "Shop B", amountOriginal: money.toMoney("999") });
 
     expect(searchTransactions(stores.ledger.replica.db, { text: "Shop A 2024" }).rows).toHaveLength(
       0,
@@ -126,7 +126,9 @@ describe("searchTransactions — text", () => {
 
     // And the bare amount still matches, so the clause was narrowed, not lost.
     expect(
-      searchTransactions(stores.ledger.replica.db, { text: "2024" }).rows.map((row) => row.payee),
+      searchTransactions(stores.ledger.replica.db, { text: "2024" }).rows.map(
+        (row) => row.enteredName,
+      ),
     ).toEqual(["Shop A"]);
   });
 
@@ -141,22 +143,22 @@ describe("searchTransactions — text", () => {
    * it gets its own reader, and these four are what it must answer.
    */
   it("reads an ungrouped amount whole — 1500 is not 150 (§13)", () => {
-    insertExpense({ payee: "Shop A", amountOriginal: money.toMoney("1500") });
-    insertExpense({ payee: "Shop B", amountOriginal: money.toMoney("150") });
-    insertExpense({ payee: "Shop C", amountOriginal: money.toMoney("2024") });
-    insertExpense({ payee: "Shop D", amountOriginal: money.toMoney("12345") });
+    insertExpense({ enteredName: "Shop A", amountOriginal: money.toMoney("1500") });
+    insertExpense({ enteredName: "Shop B", amountOriginal: money.toMoney("150") });
+    insertExpense({ enteredName: "Shop C", amountOriginal: money.toMoney("2024") });
+    insertExpense({ enteredName: "Shop D", amountOriginal: money.toMoney("12345") });
 
-    const payees = (text: string) =>
-      searchTransactions(stores.ledger.replica.db, { text }).rows.map((row) => row.payee);
+    const enteredNames = (text: string) =>
+      searchTransactions(stores.ledger.replica.db, { text }).rows.map((row) => row.enteredName);
 
-    expect(payees("1500")).toEqual(["Shop A"]);
-    expect(payees("2024")).toEqual(["Shop C"]);
-    expect(payees("12345")).toEqual(["Shop D"]);
+    expect(enteredNames("1500")).toEqual(["Shop A"]);
+    expect(enteredNames("2024")).toEqual(["Shop C"]);
+    expect(enteredNames("12345")).toEqual(["Shop D"]);
     // Grouping is whitespace and the decimal mark is a comma or a point, so
     // the separated spelling of the same amount finds the same row.
-    expect(payees("1 500,00")).toEqual(["Shop A"]);
-    expect(payees("1\u00a0500,00")).toEqual(["Shop A"]);
-    expect(payees("1500.00")).toEqual(["Shop A"]);
+    expect(enteredNames("1 500,00")).toEqual(["Shop A"]);
+    expect(enteredNames("1\u00a0500,00")).toEqual(["Shop A"]);
+    expect(enteredNames("1500.00")).toEqual(["Shop A"]);
   });
 
   /**
@@ -164,7 +166,7 @@ describe("searchTransactions — text", () => {
    *
    * `"48,90 zł"` and `"1.500,00"` are both amounts a person could reasonably
    * type, and both are text here. §13 says why: a trailing token cannot be
-   * told from an ordinary payee word without the ledger's whole currency
+   * told from an ordinary entered name word without the ledger's whole currency
    * list, and a point cannot be told from a decimal mark without knowing what
    * was meant. A grammar loose enough for the first is loose enough to make
    * `"100 lat"` match every row at `100,00` — M6, one spelling later. So the
@@ -172,23 +174,23 @@ describe("searchTransactions — text", () => {
    * for these queries means nothing.
    */
   it("leaves a currency token and a point-grouped amount as text (§13)", () => {
-    insertExpense({ payee: "Shop A", amountOriginal: money.toMoney("48.90") });
-    insertExpense({ payee: "Shop B", amountOriginal: money.toMoney("1500") });
-    // The payee that makes the currency-token case dangerous rather than
+    insertExpense({ enteredName: "Shop A", amountOriginal: money.toMoney("48.90") });
+    insertExpense({ enteredName: "Shop B", amountOriginal: money.toMoney("1500") });
+    // The entered name that makes the currency-token case dangerous rather than
     // merely unhelpful: a real word beside a number.
-    insertExpense({ payee: "Shop C", amountOriginal: money.toMoney("100") });
+    insertExpense({ enteredName: "Shop C", amountOriginal: money.toMoney("100") });
 
-    const payees = (text: string) =>
-      searchTransactions(stores.ledger.replica.db, { text }).rows.map((row) => row.payee);
+    const enteredNames = (text: string) =>
+      searchTransactions(stores.ledger.replica.db, { text }).rows.map((row) => row.enteredName);
 
-    expect(payees("48,90 zł")).toEqual([]);
-    expect(payees("1.500,00")).toEqual([]);
-    expect(payees("100 lat")).toEqual([]);
+    expect(enteredNames("48,90 zł")).toEqual([]);
+    expect(enteredNames("1.500,00")).toEqual([]);
+    expect(enteredNames("100 lat")).toEqual([]);
 
     // The spellings §13 does accept still find the same rows, so this pins a
     // boundary rather than a broken parser.
-    expect(payees("48,90")).toEqual(["Shop A"]);
-    expect(payees("1 500,00")).toEqual(["Shop B"]);
+    expect(enteredNames("48,90")).toEqual(["Shop A"]);
+    expect(enteredNames("1 500,00")).toEqual(["Shop B"]);
   });
 
   /**
@@ -202,30 +204,30 @@ describe("searchTransactions — text", () => {
    * grouping space to settle it. §13 states both.
    */
   it("groups only at grouping positions, and refuses the ambiguous tail (§13)", () => {
-    insertExpense({ payee: "Shop A", amountOriginal: money.toMoney("1500") });
-    insertExpense({ payee: "Shop B", amountOriginal: money.toMoney("1.5") });
-    insertExpense({ payee: "Shop C", amountOriginal: money.toMoney("0.05") });
+    insertExpense({ enteredName: "Shop A", amountOriginal: money.toMoney("1500") });
+    insertExpense({ enteredName: "Shop B", amountOriginal: money.toMoney("1.5") });
+    insertExpense({ enteredName: "Shop C", amountOriginal: money.toMoney("0.05") });
 
-    const payees = (text: string) =>
-      searchTransactions(stores.ledger.replica.db, { text }).rows.map((row) => row.payee);
+    const enteredNames = (text: string) =>
+      searchTransactions(stores.ledger.replica.db, { text }).rows.map((row) => row.enteredName);
 
     // Grouping at a grouping position is dropped.
-    expect(payees("1 500")).toEqual(["Shop A"]);
+    expect(enteredNames("1 500")).toEqual(["Shop A"]);
     // Spaces anywhere else are not grouping, so the query is text and matches
-    // no payee — note it would be `1500` if every space were simply stripped.
-    expect(payees("1 5 0 0")).toEqual([]);
+    // no entered name — note it would be `1500` if every space were simply stripped.
+    expect(enteredNames("1 5 0 0")).toEqual([]);
     // Ambiguous between 1,5 and 1500, so neither row comes back.
-    expect(payees("1.500")).toEqual([]);
-    expect(payees("1,500")).toEqual([]);
+    expect(enteredNames("1.500")).toEqual([]);
+    expect(enteredNames("1,500")).toEqual([]);
     // A decimal mark with one or two digits after it is unambiguous.
-    expect(payees("1,5")).toEqual(["Shop B"]);
-    expect(payees("0,05")).toEqual(["Shop C"]);
+    expect(enteredNames("1,5")).toEqual(["Shop B"]);
+    expect(enteredNames("0,05")).toEqual(["Shop C"]);
     // And a grouping space settles the mark, so three decimals read fine.
-    expect(payees("1 500,000")).toEqual(["Shop A"]);
+    expect(enteredNames("1 500,000")).toEqual(["Shop A"]);
   });
 
   it("never lets a purely alphabetic query match on amount alone", () => {
-    insertExpense({ payee: "Corner Café" });
+    insertExpense({ enteredName: "Corner Café" });
 
     // No digit in the needle — the amount check must not fire on an empty
     // digit string, or every row would match every text search.
@@ -233,14 +235,14 @@ describe("searchTransactions — text", () => {
   });
 
   /**
-   * H2 — §13: trigram runs "over `payee`, `note`, `receipts.merchant` and
+   * H2 — §13: trigram runs "over `entered_name`, `note`, `receipts.merchant` and
    * `transaction_lines.description`". The phone's substring match had the
    * first two and skipped the fourth entirely, so a line-only word like
    * "toner" found nothing even though the row it belongs to was live on the
    * replica the whole time.
    */
   it("matches a word that lives only in a line's own description", () => {
-    const txnId = insertExpense({ payee: "Shop A", amountOriginal: money.toMoney("48.90") });
+    const txnId = insertExpense({ enteredName: "Shop A", amountOriginal: money.toMoney("48.90") });
     stores.ledger.replica.db
       .insert(transactionLines)
       .values({
@@ -273,14 +275,14 @@ describe("searchTransactions — structural filters, alone and combined", () => 
   beforeEach(() => {
     insertExpense({
       id: "00000000-0000-4000-8000-000000000001",
-      payee: "Groceries own",
+      enteredName: "Groceries own",
       accountId: OWN,
       categoryId: FOOD,
       date: accountingDate("2026-08-01"),
     });
     insertExpense({
       id: "00000000-0000-4000-8000-000000000002",
-      payee: "Business lunch",
+      enteredName: "Business lunch",
       accountId: OWN,
       categoryId: TRAVEL,
       isBusiness: true,
@@ -288,7 +290,7 @@ describe("searchTransactions — structural filters, alone and combined", () => 
     });
     insertExpense({
       id: "00000000-0000-4000-8000-000000000003",
-      payee: "Shared groceries",
+      enteredName: "Shared groceries",
       accountId: SHARED,
       categoryId: FOOD,
       date: accountingDate("2026-08-15"),
@@ -297,12 +299,12 @@ describe("searchTransactions — structural filters, alone and combined", () => 
 
   it("filters by account", () => {
     const result = searchTransactions(stores.ledger.replica.db, { accountIds: [SHARED] });
-    expect(result.rows.map((r) => r.payee)).toEqual(["Shared groceries"]);
+    expect(result.rows.map((r) => r.enteredName)).toEqual(["Shared groceries"]);
   });
 
   it("filters by category", () => {
     const result = searchTransactions(stores.ledger.replica.db, { categoryIds: [TRAVEL] });
-    expect(result.rows.map((r) => r.payee)).toEqual(["Business lunch"]);
+    expect(result.rows.map((r) => r.enteredName)).toEqual(["Business lunch"]);
   });
 
   it("filters by scope — mine, business, shared partition the set", () => {
@@ -311,9 +313,9 @@ describe("searchTransactions — structural filters, alone and combined", () => 
     const shared = searchTransactions(stores.ledger.replica.db, { scope: "shared" });
     const all = searchTransactions(stores.ledger.replica.db, { scope: "all" });
 
-    expect(mine.rows.map((r) => r.payee)).toEqual(["Groceries own"]);
-    expect(business.rows.map((r) => r.payee)).toEqual(["Business lunch"]);
-    expect(shared.rows.map((r) => r.payee)).toEqual(["Shared groceries"]);
+    expect(mine.rows.map((r) => r.enteredName)).toEqual(["Groceries own"]);
+    expect(business.rows.map((r) => r.enteredName)).toEqual(["Business lunch"]);
+    expect(shared.rows.map((r) => r.enteredName)).toEqual(["Shared groceries"]);
     expect(mine.rows.length + business.rows.length + shared.rows.length).toBe(all.rows.length);
   });
 
@@ -322,7 +324,7 @@ describe("searchTransactions — structural filters, alone and combined", () => 
       from: accountingDate("2026-08-05"),
       to: accountingDate("2026-08-12"),
     });
-    expect(result.rows.map((r) => r.payee)).toEqual(["Business lunch"]);
+    expect(result.rows.map((r) => r.enteredName)).toEqual(["Business lunch"]);
   });
 
   it("filters by counterparty — E4's S13 history, any role", () => {
@@ -333,15 +335,15 @@ describe("searchTransactions — structural filters, alone and combined", () => 
       .run();
     insertExpense({
       id: "00000000-0000-4000-8000-000000000004",
-      payee: "Lent for tickets",
-      counterpartyId: nina,
-      counterpartyRole: "debt",
+      enteredName: "Lent for tickets",
+      obligationCounterpartyId: nina,
+      obligationRole: "debt",
       date: accountingDate("2026-08-20"),
     });
 
-    const result = searchTransactions(stores.ledger.replica.db, { counterpartyId: nina });
-    expect(result.rows.map((r) => r.payee)).toEqual(["Lent for tickets"]);
-    expect(result.rows[0]?.counterpartyRole).toBe("debt");
+    const result = searchTransactions(stores.ledger.replica.db, { obligationCounterpartyId: nina });
+    expect(result.rows.map((r) => r.enteredName)).toEqual(["Lent for tickets"]);
+    expect(result.rows[0]?.obligationRole).toBe("debt");
   });
 
   it("filters by counterparty role — S13's debts-only default", () => {
@@ -352,25 +354,25 @@ describe("searchTransactions — structural filters, alone and combined", () => 
       .run();
     insertExpense({
       id: "00000000-0000-4000-8000-000000000005",
-      payee: "Dinner, split four ways",
-      counterpartyId: nina,
-      counterpartyRole: "debt",
+      enteredName: "Dinner, split four ways",
+      obligationCounterpartyId: nina,
+      obligationRole: "debt",
       date: accountingDate("2026-08-06"),
     });
     insertExpense({
       id: "00000000-0000-4000-8000-000000000006",
-      payee: "Just involved",
-      counterpartyId: nina,
-      counterpartyRole: "reference",
+      enteredName: "Just involved",
+      obligationCounterpartyId: nina,
+      obligationRole: "reference",
       date: accountingDate("2026-08-07"),
     });
 
     const debtOnly = searchTransactions(stores.ledger.replica.db, {
-      counterpartyId: nina,
-      counterpartyRole: "debt",
+      obligationCounterpartyId: nina,
+      obligationRole: "debt",
     });
-    const every = searchTransactions(stores.ledger.replica.db, { counterpartyId: nina });
-    expect(debtOnly.rows.map((r) => r.payee)).toEqual(["Dinner, split four ways"]);
+    const every = searchTransactions(stores.ledger.replica.db, { obligationCounterpartyId: nina });
+    expect(debtOnly.rows.map((r) => r.enteredName)).toEqual(["Dinner, split four ways"]);
     expect(every.rows.length).toBe(2);
   });
 
@@ -382,7 +384,7 @@ describe("searchTransactions — structural filters, alone and combined", () => 
       from: accountingDate("2026-07-01"),
       to: accountingDate("2026-08-31"),
     });
-    expect(result.rows.map((r) => r.payee)).toEqual(["Groceries own"]);
+    expect(result.rows.map((r) => r.enteredName)).toEqual(["Groceries own"]);
   });
 });
 
@@ -477,7 +479,7 @@ describe("searchTransactions — countOnly", () => {
    * alone counts one on both paths, or the count is an approximation.
    */
   it("counts a line-description-only match exactly as the full path does", () => {
-    const txnId = insertExpense({ payee: "Shop A", amountOriginal: money.toMoney("48.90") });
+    const txnId = insertExpense({ enteredName: "Shop A", amountOriginal: money.toMoney("48.90") });
     stores.ledger.replica.db
       .insert(transactionLines)
       .values({
@@ -565,8 +567,8 @@ describe("searchTransactions — countOnly", () => {
    * statement — it folds nothing.
    */
   it("a text filter counts by folding names, still without folding money", () => {
-    insertExpense({ payee: "Żabka", note: "poranna kawa" });
-    insertExpense({ payee: "Rewe", note: "" });
+    insertExpense({ enteredName: "Żabka", note: "poranna kawa" });
+    insertExpense({ enteredName: "Rewe", note: "" });
 
     const prepareSpy = vi.spyOn(Database.prototype, "prepare");
     const counted = searchTransactions(stores.ledger.replica.db, { text: "zabka" }, undefined, {
@@ -643,7 +645,7 @@ describe("searchTransactions — transfers", () => {
         fxRate: money.pivotPerUnit("1"),
         toAmount: money.toMoney("31.25"),
         toCurrency: USD,
-        payee: "",
+        enteredName: "",
         note: "",
       })
       .run();
@@ -680,17 +682,17 @@ describe("searchTransactions — offline ordering (date desc, id desc)", () => {
   beforeEach(() => {
     insertExpense({
       id: "00000000-0000-4000-8000-00000000d001",
-      payee: "Shop toner run",
+      enteredName: "Shop toner run",
       date: accountingDate("2026-08-20"),
     });
     insertExpense({
       id: "00000000-0000-4000-8000-00000000d002",
-      payee: "Shop toner run",
+      enteredName: "Shop toner run",
       date: accountingDate("2026-08-20"),
     });
     insertExpense({
       id: "00000000-0000-4000-8000-00000000d000",
-      payee: "Shop toner run",
+      enteredName: "Shop toner run",
       date: accountingDate("2026-08-21"),
     });
   });

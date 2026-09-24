@@ -48,7 +48,7 @@ that would make a stepped-versus-continuous choice mean anything.
 
 Same four scales, same two modes, materially more per cell. Week and month cells
 gain **per-day entry previews** — the top two or three rows by magnitude with
-payee and amount — rather than only a net. That is the whole reason a wide
+entered name and amount — rather than only a net. That is the whole reason a wide
 calendar is worth having: a month grid you can read without opening anything.
 
 Year gains a twelve-column strip with the sparkline at usable height.

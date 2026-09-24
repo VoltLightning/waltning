@@ -108,7 +108,7 @@ export function ComposerRow({
 
 export type ComposerTileProps = { glyph: string; ink: string };
 
-/** A letter in the tile — the same monogram a `BrandIcon` gives an unknown payee. */
+/** A letter in the tile — the same monogram a `BrandIcon` gives an unknown entered name. */
 export function ComposerTileGlyph({ glyph, ink }: ComposerTileProps) {
   const styles = useStyles();
   const color = { color: ink };

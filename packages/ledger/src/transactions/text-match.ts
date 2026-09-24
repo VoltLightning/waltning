@@ -2,7 +2,7 @@
  * §13's text rule, in one place, because there is exactly one of it.
  *
  * **A search cannot be decided in SQL.** The query is folded and compared
- * against payee, note, every line's description, and — when the whole query is
+ * against entered name, note, every line's description, and — when the whole query is
  * an amount and nothing else — `amount_original`, exactly. None of that is a
  * predicate SQLite can plan, so every reader that supports a text filter reads
  * candidates and folds them here.
@@ -58,7 +58,7 @@ const AMBIGUOUS_TAIL = /[.,]\d{3}$/;
  * `@waltning/core/capture/amount`'s `findAmount`, which answers a different
  * question — quick-add reads the *first number inside* a phrase, on purpose
  * (`"2 coffees 18"` binds to `2`), and it groups thousands in threes, so
- * `"1500"` reads there as `150`. Borrowing it here made a payee-and-year
+ * `"1500"` reads there as `150`. Borrowing it here made a entered name-and-year
  * search like `"Shop A 2024"` silently also match every row costing
  * `2 024,00`, and a bare `"1500"` match `150,00`. Two readers because there
  * are two questions; capture's grammar is free to change without moving what
@@ -74,7 +74,7 @@ const AMBIGUOUS_TAIL = /[.,]\d{3}$/;
  * conventions read them, differently, and no grouping space is present to say
  * which. Nothing else either: `"48,90 zł"` and `"1.500,00"` are text,
  * deliberately. §13 gives that reason: a trailing currency token cannot be
- * told from an ordinary payee word without the ledger's whole currency list,
+ * told from an ordinary entered name word without the ledger's whole currency list,
  * so accepting it would make `"100 lat"` match every row at `100,00` — M6
  * again, one spelling later.
  *
@@ -93,21 +93,21 @@ export function parseSearchAmount(text: string): Money | null {
 }
 
 /**
- * Whether `row` matches the folded `needle` — payee, note, one of the
+ * Whether `row` matches the folded `needle` — entered name, note, one of the
  * transaction's own line descriptions, or the source leg's amount
- * **exactly** (§13: "Trigram … over `payee`, `note`, `receipts.merchant` and
+ * **exactly** (§13: "Trigram … over `entered_name`, `note`, `receipts.merchant` and
  * `transaction_lines.description`" — the phone has no receipts table to
  * search yet, but the lines it holds are exactly this list's fourth column,
  * and H2 found them missing). The amount is read by `parseSearchAmount`
  * above, and compared as money.
  */
 export function matchesText(
-  row: { payee: string; note: string; amountOriginal: Money },
+  row: { enteredName: string; note: string; amountOriginal: Money },
   needle: string,
   needleAmount: Money | null,
   lineDescriptions: readonly string[],
 ): boolean {
-  if (fold(row.payee).includes(needle)) return true;
+  if (fold(row.enteredName).includes(needle)) return true;
   if (fold(row.note).includes(needle)) return true;
   if (needleAmount !== null && money.eq(row.amountOriginal, needleAmount)) return true;
   if (lineDescriptions.some((description) => fold(description).includes(needle))) return true;

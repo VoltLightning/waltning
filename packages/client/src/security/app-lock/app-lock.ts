@@ -5,7 +5,7 @@
  * **It is not a login.** The session token (E6) decides whether the phone may
  * talk to the server; this decides whether the person *holding* the phone may
  * read what it already has — every account by name, every counterparty with a
- * balance, the whole ledger with payee text. A stolen unlocked phone is a
+ * balance, the whole ledger with entered name text. A stolen unlocked phone is a
  * total disclosure that never touches the network, and the perimeter does
  * nothing about it. So the gate is the device's own authentication —
  * biometrics with the device passcode as the fallback, never an app PIN —

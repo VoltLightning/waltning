@@ -56,7 +56,7 @@ const neverOperations = namesIn(
 /**
  * Tables and columns. A screen's §5 names the data as well as the operations,
  * and every non-operation the scan currently meets — `agent_tool_calls`,
- * `counterparty_role`, `ksef_id` — is an identifier in this one file.
+ * `obligation_role`, `ksef_id` — is an identifier in this one file.
  *
  * Deliberately every identifier, not only `pgTable` names: half of them are
  * columns. Checked **after** the registry, so a name that is both stays an

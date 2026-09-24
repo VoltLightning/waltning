@@ -11,7 +11,7 @@ const { accounts, categories, currencies, transactions } = ledgerSchema;
 export type LocalRecentTransaction = {
   id: Id<"transactions">;
   date: AccountingDate;
-  payee: string;
+  enteredName: string;
   categoryName: string | null;
   accountName: string;
   amount: Money;
@@ -34,7 +34,7 @@ export function readRecent<TRun, TSchema extends typeof ledgerSchema>(
     .select({
       id: transactions.id,
       date: transactions.date,
-      payee: transactions.payee,
+      enteredName: transactions.enteredName,
       categoryName: categories.name,
       accountName: accounts.name,
       type: transactions.type,

@@ -241,7 +241,7 @@ export const DEVICE_LOCALES: readonly string[] =
  * ref; it never touches `window` itself.
  *
  * **Skipped while another field already has focus.** `N` is a letter someone
- * types into the note field, the payee field, anywhere — stealing focus out
+ * types into the note field, the entered name field, anywhere — stealing focus out
  * from under a keystroke meant for that field would be exactly the kind of
  * global shortcut this pattern is usually criticised for. `INPUT`,
  * `TEXTAREA` and `contentEditable` are the three shapes a typable field takes

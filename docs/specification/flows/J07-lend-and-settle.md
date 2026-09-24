@@ -109,7 +109,7 @@ SETTLE
   repayment a real inflow, so net worth is money you hold, not money you are
   owed. The debt screens are where that gap is legible — and the cost is stated
   rather than hidden: **period spending includes money you expect back.**
-- **Contributions are not debts.** `counterparty_role` keeps them out of
+- **Contributions are not debts.** `obligation_role` keeps them out of
   `counterparty_balances` structurally, so ageing and `find_unsettled` cannot
   see them (§6.7).
 - **One counterparty, one settlement currency, many balances.** The currency

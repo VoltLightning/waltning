@@ -87,7 +87,7 @@ function archiveAndBookLiveTransaction(j: ReturnType<typeof openJourney>, amount
       accountId: ID.accountPln,
       amountOriginal: money.toMoney(amount),
       currency: XAA,
-      payee: "",
+      enteredName: "",
       note: "",
       isBusiness: false,
       isCapital: false,

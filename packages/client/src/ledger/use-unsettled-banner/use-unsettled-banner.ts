@@ -16,11 +16,11 @@
  * - **One banner, never a stack** (`S04` §3, `Banner`'s own "page-level, one
  *   tone, one action"): a second unsettled account folds into `more`.
  * - **H2** — the oldest open entry can be the account's own opening balance
- *   rather than a transaction. That entry has no payee, so it reads
+ *   rather than a transaction. That entry has no entered name, so it reads
  *   differently and lands on the filtered ledger instead of a detail screen.
  * - **H3** — with more than one entry open, the oldest one's remainder can be
  *   less than the whole account balance; showing the balance beside that
- *   payee's name would overstate what the leg accounts for.
+ *   entered name's name would overstate what the leg accounts for.
  * - **`openTarget`** is a description, not a route. `S04` §3: *"Tapping the
  *   unsettled banner goes straight to the unallocated transaction, not to a
  *   list"* — the account fallback is only for a leg §8's fold did not hand
@@ -53,8 +53,8 @@ export type UnsettledBannerModel = {
   balance: money.Money;
   /** The oldest open entry's own unconsumed magnitude — equal to `balance` unless a second entry is open (H3). */
   remainder: money.Money;
-  payee: string | null;
-  /** H2 — the oldest open entry is the account's opening balance, which never has a payee. */
+  enteredName: string | null;
+  /** H2 — the oldest open entry is the account's opening balance, which never has a entered name. */
   isOpening: boolean;
   /** H3 — `remainder` and `balance` are different figures, so both are worth naming. */
   remainderDiffers: boolean;
@@ -77,7 +77,7 @@ export function unsettledBannerModel(
     decimals: unsettled.decimals,
     balance: unsettled.balance,
     remainder,
-    payee: unsettled.oldestUnconsumedPayee ?? null,
+    enteredName: unsettled.oldestUnconsumedEnteredName ?? null,
     isOpening: unsettled.oldestUnconsumedTransactionId === null,
     remainderDiffers:
       unsettled.oldestUnconsumedRemainder != null &&

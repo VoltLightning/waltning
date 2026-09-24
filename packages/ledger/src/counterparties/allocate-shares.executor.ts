@@ -4,7 +4,7 @@
  * **One transaction per share, out of a funded pot.** Paying for a group is a
  * transfer *into* `Clearing · <currency>` (J08 §3); this writes each person's
  * portion back *out* of it, carrying their counterparty and
- * `counterparty_role = 'debt'`. Your own share is the same expense with the
+ * `obligation_role = 'debt'`. Your own share is the same expense with the
  * allocation's category and no counterparty — not a debt, because a
  * receivable against yourself would keep the account from ever reaching zero
  * (§4).
@@ -165,9 +165,9 @@ function allocateShares(input: AllocateSharesInput, tx: ReplicaTx): AllocateShar
         ...(share.counterpartyId === null
           ? {}
           : {
-              counterpartyId: share.counterpartyId,
-              counterpartyRole: "debt" as const,
-              payee: names.get(share.counterpartyId) ?? "",
+              obligationCounterpartyId: share.counterpartyId,
+              obligationRole: "debt" as const,
+              enteredName: names.get(share.counterpartyId) ?? "",
             }),
       }),
       tx,

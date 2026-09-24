@@ -139,7 +139,7 @@ person, which is the whole reason the old account model failed.
 | Per-currency positions and both derived totals | — |
 | `find_unsettled` — clearing accounts ≠ 0 | — |
 
-**Contributions never appear here.** `counterparty_role = 'contribution'` is
+**Contributions never appear here.** `obligation_role = 'contribution'` is
 excluded by the view itself, so a co-owner's house payment cannot be read as
 money owed (§6.7).
 

@@ -45,13 +45,13 @@ function captureFor(
       accountId,
       amountOriginal: money.toMoney("10.00"),
       currency: PIVOT,
-      payee: "",
+      enteredName: "",
       note: "",
       isBusiness: false,
       isCapital: false,
       source: "manual",
-      counterpartyId: ID.cpB,
-      counterpartyRole: "debt",
+      obligationCounterpartyId: ID.cpB,
+      obligationRole: "debt",
     },
     j.capture,
   );
@@ -129,7 +129,7 @@ describe("merge_counterparties / unmerge_counterparties — S15 §5 and §9's re
       const txn1Before = transactionRows(j).find((r) => r.id === ID.txn1);
       if (!txn1Before) throw new Error("expected txn1 on the replica after the merge");
       j.session.updateTransaction(
-        { id: ID.txn1, version: txn1Before.version, patch: { counterpartyId: CP_C } },
+        { id: ID.txn1, version: txn1Before.version, patch: { obligationCounterpartyId: CP_C } },
         j.capture,
       );
 
@@ -138,10 +138,10 @@ describe("merge_counterparties / unmerge_counterparties — S15 §5 and §9's re
       const rows = transactionRows(j);
       // txn1 was reassigned to cpC *after* the merge — unmerge must leave
       // that reassignment alone, not hand it back to the loser (cpB).
-      expect(rows.find((r) => r.id === ID.txn1)?.counterpartyId).toBe(CP_C);
+      expect(rows.find((r) => r.id === ID.txn1)?.obligationCounterpartyId).toBe(CP_C);
       // Neither txn2 nor txn3 was touched after the merge — both restore.
-      expect(rows.find((r) => r.id === ID.txn2)?.counterpartyId).toBe(ID.cpB);
-      expect(rows.find((r) => r.id === TXN3)?.counterpartyId).toBe(ID.cpB);
+      expect(rows.find((r) => r.id === ID.txn2)?.obligationCounterpartyId).toBe(ID.cpB);
+      expect(rows.find((r) => r.id === TXN3)?.obligationCounterpartyId).toBe(ID.cpB);
     } finally {
       j.close();
     }

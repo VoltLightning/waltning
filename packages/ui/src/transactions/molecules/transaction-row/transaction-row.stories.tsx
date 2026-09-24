@@ -4,11 +4,11 @@
  * A ledger is read as a **column**, not as a set of rows, so the stories below
  * are all multi-row: a single row in isolation cannot show the two properties
  * that decide whether the component works — whether the figures align, and
- * whether the eye can find the payee without reading the metadata first.
+ * whether the eye can find the entered name without reading the metadata first.
  *
  * The cases are the ones that have been wrong: a transfer's two legs, which
  * sign alone would paint green and red; a business row, which `05` §5.2
- * requires to be marked in every view; and a missing payee, which imports
+ * requires to be marked in every view; and a missing entered name, which imports
  * routinely produce.
  */
 
@@ -24,7 +24,7 @@ const meta = {
   component: TransactionRow,
   args: {
     date: "2026-08-24",
-    payee: "Corner Bakery",
+    enteredName: "Corner Bakery",
     category: "Eating out",
     account: "Cash",
     amount: money.toMoney("-48.90"),
@@ -39,13 +39,13 @@ type Story = StoryObj<typeof meta>;
 
 export const Expense: Story = {};
 
-/** `SPEC.md` §14.4b — recognised offline, never blank for an unmatched payee. */
+/** `SPEC.md` §14.4b — recognised offline, never blank for an unmatched entered name. */
 export const RecognisedBrand: Story = {
-  args: { payee: "ORLEN", brandKey: "orlen" },
+  args: { enteredName: "ORLEN", brandKey: "orlen" },
 };
 
 export const UnrecognisedBrand: Story = {
-  args: { payee: "Corner Café", brandKey: null },
+  args: { enteredName: "Corner Café", brandKey: null },
 };
 
 /**
@@ -66,7 +66,7 @@ export const Ledger: Story = {
 const LEDGER: TransactionRowProps[] = [
   {
     date: "2026-08-24",
-    payee: "Corner Bakery",
+    enteredName: "Corner Bakery",
     category: "Eating out",
     account: "Cash",
     amount: money.toMoney("-48.90"),
@@ -76,7 +76,7 @@ const LEDGER: TransactionRowProps[] = [
   },
   {
     date: "2026-08-24",
-    payee: "ORLEN",
+    enteredName: "ORLEN",
     category: "Transport",
     account: "Cash",
     amount: money.toMoney("-184.30"),
@@ -86,7 +86,7 @@ const LEDGER: TransactionRowProps[] = [
   },
   {
     date: "2026-08-24",
-    payee: "Monthly invoice",
+    enteredName: "Monthly invoice",
     category: "Consulting",
     account: "Bank A",
     amount: money.toMoney("9400.00"),
@@ -97,7 +97,7 @@ const LEDGER: TransactionRowProps[] = [
   },
   {
     date: "2026-08-23",
-    payee: "To savings",
+    enteredName: "To savings",
     category: null,
     account: "Bank A",
     amount: money.toMoney("-1200.00"),
@@ -107,7 +107,7 @@ const LEDGER: TransactionRowProps[] = [
   },
   {
     date: "2026-08-23",
-    payee: "To savings",
+    enteredName: "To savings",
     category: null,
     account: "Savings",
     amount: money.toMoney("1200.00"),
@@ -117,7 +117,7 @@ const LEDGER: TransactionRowProps[] = [
   },
   {
     date: "2026-08-22",
-    payee: "",
+    enteredName: "",
     category: "Uncategorised",
     account: "Bank A",
     amount: money.toMoney("-7.25"),
@@ -127,7 +127,7 @@ const LEDGER: TransactionRowProps[] = [
   },
   {
     date: "2026-08-21",
-    payee: "Opening balance",
+    enteredName: "Opening balance",
     category: null,
     account: "Savings",
     amount: money.toMoney("12480.20"),
@@ -142,7 +142,7 @@ function renderLedger() {
 }
 
 function renderRow(row: TransactionRowProps) {
-  return <TransactionRow key={`${row.date}-${row.payee}-${row.account}`} {...row} />;
+  return <TransactionRow key={`${row.date}-${row.enteredName}-${row.account}`} {...row} />;
 }
 
 function Surface({ children }: { children: React.ReactNode }) {

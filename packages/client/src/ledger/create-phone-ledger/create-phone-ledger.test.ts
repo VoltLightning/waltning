@@ -87,8 +87,8 @@ function expenseDraft(accountId: string, amount = "10"): QuickAddDraft {
     date: "2026-08-23",
     note: "",
     isBusiness: false,
-    counterpartyId: null,
-    counterpartyRole: null,
+    obligationCounterpartyId: null,
+    obligationRole: null,
   };
 }
 
@@ -212,7 +212,7 @@ function harness(
       {
         id: input.id,
         date: input.date,
-        payee: input.payee,
+        enteredName: input.enteredName,
         categoryName: null,
         accountName: account.name,
         amount: money.neg(input.amountOriginal),
@@ -357,7 +357,7 @@ function harness(
     listCategoryUsage: () => categoryUsage,
     readCategoryReferenceCounts: () => ({ transactions: 0, lines: 0, rules: 0 }),
     listCounterparties: () => [],
-    listPayeeHistory: () => [],
+    listEnteredNameHistory: () => [],
     listNetWorth: () => [],
     readPeriodSpend: () => [],
     readDayFlows: () => [],
@@ -677,8 +677,8 @@ describe("phone ledger controller", () => {
       date: "2026-07-01",
       note: "Freelance invoice",
       isBusiness: true,
-      counterpartyId: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
-      counterpartyRole: "reference",
+      obligationCounterpartyId: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+      obligationRole: "reference",
     });
 
     expect(createTransaction.mock.calls[0]?.[0]).toMatchObject({
@@ -688,8 +688,8 @@ describe("phone ledger controller", () => {
       date: accountingDate("2026-07-01"),
       note: "Freelance invoice",
       isBusiness: true,
-      counterpartyId: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
-      counterpartyRole: "reference",
+      obligationCounterpartyId: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+      obligationRole: "reference",
     });
   });
 
@@ -940,8 +940,8 @@ describe("phone ledger controller", () => {
   });
 
   /**
-   * H1a — the case that reached a saved row: D2's payee memory proposed a
-   * leaf a payee last sat on, the category had since been archived, and
+   * H1a — the case that reached a saved row: D2's entered name memory proposed a
+   * leaf a entered name last sat on, the category had since been archived, and
    * `snapshot.categories` (which excludes archived rows) had no match — so
    * the kind check above simply found nothing to compare and let it through.
    * Absent is now refused the same as wrong-kind, since neither is a category
@@ -1001,8 +1001,8 @@ describe("phone ledger controller", () => {
       date: "2026-08-23",
       note: "",
       isBusiness: false,
-      counterpartyId: null,
-      counterpartyRole: null,
+      obligationCounterpartyId: null,
+      obligationRole: null,
       toAccountId: toId,
       toAmount: "10.125",
       toCurrency: BYN,
@@ -1032,8 +1032,8 @@ describe("phone ledger controller", () => {
       date: "2026-08-23",
       note: "",
       isBusiness: false,
-      counterpartyId: null,
-      counterpartyRole: null,
+      obligationCounterpartyId: null,
+      obligationRole: null,
       toAccountId: toId,
       toAmount: "10.12",
       toCurrency: BYN,
@@ -1750,16 +1750,16 @@ describe("phone ledger controller — transaction detail writes (C5)", () => {
       id: TXN,
       date: accountingDate("2026-08-06"),
       type: "expense",
-      payee: "Café A",
+      enteredName: "Café A",
       note: "",
       isBusiness: false,
       accountId: id<"accounts">("22222222-2222-4222-8222-222222222222"),
       accountName: "Cash · PLN",
       categoryId: null,
       categoryName: null,
-      counterpartyId: null,
+      obligationCounterpartyId: null,
       counterpartyName: null,
-      counterpartyRole: null,
+      obligationRole: null,
       isCapital: false,
       brandKey: null,
       amount: money.toMoney("-48.90"),
@@ -1778,7 +1778,9 @@ describe("phone ledger controller — transaction detail writes (C5)", () => {
       }
       row = {
         ...row,
-        ...("payee" in input.patch ? { payee: input.patch.payee ?? row.payee } : {}),
+        ...("enteredName" in input.patch
+          ? { enteredName: input.patch.enteredName ?? row.enteredName }
+          : {}),
         ...("categoryId" in input.patch ? { categoryId: input.patch.categoryId ?? null } : {}),
         version: row.version + 1,
       };
@@ -1856,7 +1858,7 @@ describe("phone ledger controller — transaction detail writes (C5)", () => {
   it("getTransaction reads through the port, unmodified", () => {
     const { controller, getTransaction } = detailHarness();
     const result = controller.getTransaction(TXN);
-    expect(result?.payee).toBe("Café A");
+    expect(result?.enteredName).toBe("Café A");
     expect(getTransaction).toHaveBeenCalledWith(TXN);
   });
 
@@ -1895,14 +1897,14 @@ describe("phone ledger controller — transaction detail writes (C5)", () => {
 
   it("updateTransaction patches with the version it was given, and refreshes on success", () => {
     const { controller, updateTransaction } = detailHarness();
-    const result = controller.updateTransaction(TXN, 1, { payee: "Café A · Downtown" });
+    const result = controller.updateTransaction(TXN, 1, { enteredName: "Café A · Downtown" });
     expect(idOf(result)).toBe(TXN);
     expect(updateTransaction.mock.calls[0]?.[0]).toMatchObject({
       id: TXN,
       version: 1,
-      patch: { payee: "Café A · Downtown" },
+      patch: { enteredName: "Café A · Downtown" },
     });
-    expect(controller.getTransaction(TXN)?.payee).toBe("Café A · Downtown");
+    expect(controller.getTransaction(TXN)?.enteredName).toBe("Café A · Downtown");
   });
 
   /**
@@ -1914,9 +1916,9 @@ describe("phone ledger controller — transaction detail writes (C5)", () => {
    */
   it("a stale version on update reaches fieldErrors with transactions.changedElsewhere", () => {
     const { controller } = detailHarness();
-    controller.updateTransaction(TXN, 1, { payee: "Café A · Downtown" });
+    controller.updateTransaction(TXN, 1, { enteredName: "Café A · Downtown" });
 
-    const result = controller.updateTransaction(TXN, 1, { payee: "Someone else's edit" });
+    const result = controller.updateTransaction(TXN, 1, { enteredName: "Someone else's edit" });
 
     expect("fieldErrors" in result && result.fieldErrors).toEqual([
       {
@@ -1936,7 +1938,7 @@ describe("phone ledger controller — transaction detail writes (C5)", () => {
 
   it("a stale version on delete reaches fieldErrors, not a throw", () => {
     const { controller } = detailHarness();
-    controller.updateTransaction(TXN, 1, { payee: "Café A · Downtown" });
+    controller.updateTransaction(TXN, 1, { enteredName: "Café A · Downtown" });
 
     const result = controller.deleteTransaction(TXN, 1);
 

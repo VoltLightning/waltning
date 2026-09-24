@@ -162,7 +162,7 @@ describe("the key withheld", () => {
     expect(() => ageDecrypt(file, stranger.identity)).toThrow("does not open this file");
   });
 
-  it("leaves no account name, payee or figure in the ciphertext", () => {
+  it("leaves no account name, enteredName or figure in the ciphertext", () => {
     const { file } = runExport();
     const bytes = Array.from(file);
     for (const secret of ["Bank A", "waltning-ledger", "10.25000000", "PLN"]) {

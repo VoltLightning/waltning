@@ -118,7 +118,7 @@ it once and the answer is positional, not per-feature:
 | Voice (S08) | One pass, refinable | Yes | J02 targets **under 10 seconds** at a till |
 
 **Retrieval is not agency.** The classification tier hands the model the *k* most
-similar prior payees from the ledger and takes one answer. That is a pipeline
+similar prior entered names from the ledger and takes one answer. That is a pipeline
 with context, not a loop — and it is what makes the tier scoreable against
 fixtures, which a loop is not.
 

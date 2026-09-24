@@ -19,7 +19,7 @@ describe("TransactionHero", () => {
     expect(screen.getByText("Cash · PLN")).toBeDefined();
   });
 
-  it("draws no BrandIcon when payee is absent — the screen has not read it yet", () => {
+  it("draws no BrandIcon when enteredName is absent — the screen has not read it yet", () => {
     render(
       <TransactionHero
         amount={money.toMoney("-48.90000000")}
@@ -38,21 +38,21 @@ describe("TransactionHero", () => {
         currency="PLN"
         type="expense"
         accountName="Cash"
-        payee="ORLEN"
+        enteredName="ORLEN"
         brandKey="orlen"
       />,
     );
     expect(screen.getByText("O")).toBeDefined();
   });
 
-  it("falls back to the payee's monogram for an unrecognised payee", () => {
+  it("falls back to the enteredName's monogram for an unrecognised enteredName", () => {
     render(
       <TransactionHero
         amount={money.toMoney("-48.90000000")}
         currency="PLN"
         type="expense"
         accountName="Cash"
-        payee="Corner Café"
+        enteredName="Corner Café"
         brandKey={null}
       />,
     );

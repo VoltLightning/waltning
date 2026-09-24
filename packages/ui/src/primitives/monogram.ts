@@ -6,7 +6,7 @@
  * **In `primitives/`, not `counterparties/`.** `CounterpartyRow`'s own
  * fallback was its first use; `BrandIcon` (`transactions/brand-icon.tsx`,
  * `SPEC.md` §14.4b) needs the identical treatment for an unrecognised
- * payee — "same treatment as CounterpartyRow's fallback" is that
+ * entered name — "same treatment as CounterpartyRow's fallback" is that
  * component's own spec line, not a coincidence — and a second domain
  * needing it is what moves a symbol to the domain-free foundation
  * (`CLAUDE.md`'s architecture rule; `tests/module-boundaries.test.ts`

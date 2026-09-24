@@ -19,7 +19,7 @@ import {
 import { deviceRuntime } from "@waltning/client/ledger/device-runtime";
 import { LedgerProvider } from "@waltning/client/ledger/ledger-provider";
 import { basePort } from "@waltning/client/ledger/test-port";
-import type { PayeeHistoryRow } from "@waltning/core/capture/payee-memory";
+import type { EnteredNameHistoryRow } from "@waltning/core/capture/entered-name-memory";
 import { accountingDate } from "@waltning/core/date";
 import { id } from "@waltning/core/id";
 import { currencyCode, toMoney } from "@waltning/core/money";
@@ -101,7 +101,7 @@ function fakeController(
     accounts?: readonly PhoneAccount[];
     counterparties?: PhoneLedgerPort["listCounterparties"];
     categories?: readonly PhoneCategory[];
-    payeeHistory?: readonly PayeeHistoryRow[];
+    enteredNameHistory?: readonly EnteredNameHistoryRow[];
   } = {},
 ) {
   const port = basePort({
@@ -118,7 +118,7 @@ function fakeController(
     ],
     listCategories: () => overrides.categories ?? [],
     listCounterparties: overrides.counterparties ?? (() => []),
-    listPayeeHistory: () => overrides.payeeHistory ?? [],
+    listEnteredNameHistory: () => overrides.enteredNameHistory ?? [],
     createTransaction: overrides.createTransaction ?? (() => undefined),
   });
   return createPhoneLedger(port, {
@@ -158,7 +158,7 @@ function typeAmount(value: string) {
   fireEvent.change(screen.getByLabelText("How much?"), { target: { value } });
 }
 
-/** The rarer rows — payee, date, scope, person — wait behind one row (S05 §3). */
+/** The rarer rows — entered name, date, scope, person — wait behind one row (S05 §3). */
 function openMore() {
   fireEvent.click(screen.getByRole("button", { name: /^More details/ }));
 }
@@ -261,7 +261,7 @@ describe("QuickAdd — the phone path (Dock + QuickAddComposer)", () => {
 
   /**
    * §6.6, never defaulted — `createTransactionInput`'s own refine reports the
-   * mismatch under `counterpartyRole`, which `QuickAddComposer` did not use to
+   * mismatch under `obligationRole`, which `QuickAddComposer` did not use to
    * read errors before this fix. Save must not let the draft reach the write
    * at all while the role is unresolved, not only render the refusal after.
    */
@@ -306,8 +306,8 @@ describe("QuickAdd — the phone path (Dock + QuickAddComposer)", () => {
   });
 
   /**
-   * M — `categoryProposalDismissed` used to reset on every payee keystroke
-   * (`handleComposerPayeeChange`'s own raw-text reset), so retyping a payee
+   * M — `categoryProposalDismissed` used to reset on every entered name keystroke
+   * (`handleComposerEnteredNameChange`'s own raw-text reset), so retyping a entered name
    * whose *fold* comes back unchanged silently revived a proposal someone
    * had just dismissed with Undo. "CORNER CAFÉ" folds identically to
    * "Corner Café" (`fold`'s own case-only rule here), so this exercises the
@@ -319,10 +319,10 @@ describe("QuickAdd — the phone path (Dock + QuickAddComposer)", () => {
       name: "Eating out",
       kind: "expense",
     };
-    const history: PayeeHistoryRow[] = [
-      { payee: "Corner Café", categoryId: category.id, date: accountingDate("2026-08-01") },
+    const history: EnteredNameHistoryRow[] = [
+      { enteredName: "Corner Café", categoryId: category.id, date: accountingDate("2026-08-01") },
     ];
-    withLedger({ categories: [category], payeeHistory: history });
+    withLedger({ categories: [category], enteredNameHistory: history });
 
     typeAmount("48.90");
     pickCashAccount();
@@ -342,7 +342,7 @@ describe("QuickAdd — the phone path (Dock + QuickAddComposer)", () => {
 
     // Retype — different raw text, the same fold. The chip already carries
     // "Corner Café" as its value, so its accessible name is no longer the
-    // bare "+ Payee" placeholder.
+    // bare "+ Entered name" placeholder.
     fireEvent.click(screen.getByRole("button", { name: /^Payee/ }));
     fireEvent.change(screen.getByRole("textbox", { name: "Payee" }), {
       target: { value: "CORNER CAFÉ" },

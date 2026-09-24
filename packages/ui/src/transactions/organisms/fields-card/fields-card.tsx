@@ -10,7 +10,7 @@
  * filled buttons; nothing here fills a background.
  *
  * **Every field S09 §3 draws, including the two that were deferred.**
- * `update_transaction`'s patch carries `counterpartyId`, `counterpartyRole`
+ * `update_transaction`'s patch carries `obligationCounterpartyId`, `obligationRole`
  * and `isCapital`, and `readTransaction` now reads all three back — so the
  * counterparty row and §6.8's one-off toggle are controls that write
  * somewhere rather than into a void, which is why they were held back.
@@ -81,16 +81,16 @@ export type FieldsCardAccount = {
 };
 
 /** §6.6's three roles, restated structurally — `client` is a sibling package. */
-export type CounterpartyRoleValue = "debt" | "contribution" | "reference";
+export type ObligationRoleValue = "debt" | "contribution" | "reference";
 
 /** The saved values this card diffs every draft against. */
 export type TransactionFields = {
   date: string;
   accountId: string;
   categoryId: string | null;
-  counterpartyId: string | null;
-  counterpartyRole: CounterpartyRoleValue | null;
-  payee: string;
+  obligationCounterpartyId: string | null;
+  obligationRole: ObligationRoleValue | null;
+  enteredName: string;
   note: string;
   isBusiness: boolean;
   isCapital: boolean;
@@ -101,9 +101,9 @@ export type TransactionFieldsPatch = {
   date?: string;
   accountId?: string;
   categoryId?: string | null;
-  counterpartyId?: string | null;
-  counterpartyRole?: CounterpartyRoleValue | null;
-  payee?: string;
+  obligationCounterpartyId?: string | null;
+  obligationRole?: ObligationRoleValue | null;
+  enteredName?: string;
   note?: string;
   isBusiness?: boolean;
   isCapital?: boolean;
@@ -136,7 +136,7 @@ export type FieldsCardProps = {
    * contract, for the same reason: `counterparties/` is a sibling domain and
    * its picker is the screen's to compose (`architecture/11`).
    */
-  counterpartyId: string | null;
+  obligationCounterpartyId: string | null;
   counterpartyName: string | null;
   onOpenCounterpartyPicker: () => void;
   fieldErrors?: FieldErrorMap;
@@ -144,7 +144,7 @@ export type FieldsCardProps = {
   onSave: (patch: TransactionFieldsPatch) => void;
 };
 
-type OpenField = "date" | "payee" | "note" | "role";
+type OpenField = "date" | "enteredName" | "note" | "role";
 
 export function FieldsCard({
   fields,
@@ -155,7 +155,7 @@ export function FieldsCard({
   categoryId,
   categoryName,
   onOpenCategoryPicker,
-  counterpartyId,
+  obligationCounterpartyId,
   counterpartyName,
   onOpenCounterpartyPicker,
   fieldErrors,
@@ -167,11 +167,11 @@ export function FieldsCard({
 
   const [open, setOpen] = useState<ReadonlySet<OpenField>>(new Set());
   const [date, setDate] = useState(fields.date);
-  const [payee, setPayee] = useState(fields.payee);
+  const [enteredName, setEnteredName] = useState(fields.enteredName);
   const [note, setNote] = useState(fields.note);
   const [isBusiness, setIsBusiness] = useState(fields.isBusiness);
   const [isCapital, setIsCapital] = useState(fields.isCapital);
-  const [role, setRole] = useState<CounterpartyRoleValue | null>(fields.counterpartyRole);
+  const [role, setRole] = useState<ObligationRoleValue | null>(fields.obligationRole);
 
   const toggleField = useCallback((field: OpenField) => {
     setOpen((current) => {
@@ -193,7 +193,7 @@ export function FieldsCard({
     if (phone) setPickingDate(true);
     else toggleField("date");
   }, [phone, toggleField]);
-  const handleTogglePayee = useCallback(() => toggleField("payee"), [toggleField]);
+  const handleToggleEnteredName = useCallback(() => toggleField("enteredName"), [toggleField]);
   const handleToggleRole = useCallback(() => toggleField("role"), [toggleField]);
   const handleRoleChange = useCallback((next: string) => setRole(isRole(next) ? next : null), []);
   const handleToggleNote = useCallback(() => toggleField("note"), [toggleField]);
@@ -216,29 +216,30 @@ export function FieldsCard({
     if (dateValid && date !== fields.date) next.date = date;
     if (accountId !== fields.accountId) next.accountId = accountId;
     if (categoryId !== fields.categoryId) next.categoryId = categoryId;
-    if (counterpartyId !== fields.counterpartyId) {
-      next.counterpartyId = counterpartyId;
+    if (obligationCounterpartyId !== fields.obligationCounterpartyId) {
+      next.obligationCounterpartyId = obligationCounterpartyId;
       // §6.6 — a role belongs to the person it is about. Whoever is picked
       // next has their own, and nobody at all has none.
-      if (counterpartyId === null) next.counterpartyRole = null;
+      if (obligationCounterpartyId === null) next.obligationRole = null;
     }
-    if (counterpartyId !== null && role !== fields.counterpartyRole) next.counterpartyRole = role;
+    if (obligationCounterpartyId !== null && role !== fields.obligationRole)
+      next.obligationRole = role;
     if (isCapital !== fields.isCapital) next.isCapital = isCapital;
-    if (payee !== fields.payee) next.payee = payee;
+    if (enteredName !== fields.enteredName) next.enteredName = enteredName;
     if (note !== fields.note) next.note = note;
     if (isBusiness !== fields.isBusiness) next.isBusiness = isBusiness;
     return next;
   }, [
     accountId,
     categoryId,
-    counterpartyId,
+    obligationCounterpartyId,
     date,
     dateValid,
     fields,
     isBusiness,
     isCapital,
     note,
-    payee,
+    enteredName,
     role,
   ]);
   const hasChanges = Object.keys(patch).length > 0;
@@ -309,7 +310,7 @@ export function FieldsCard({
         onPress={onOpenCounterpartyPicker}
       />
 
-      {counterpartyId === null ? null : (
+      {obligationCounterpartyId === null ? null : (
         <FieldDisclosureRow
           label={t("transactions.role")}
           value={role === null ? null : t(`transactions.role.${role}`)}
@@ -346,16 +347,16 @@ export function FieldsCard({
       </View>
 
       <FieldDisclosureRow
-        label={t("transactions.payee")}
-        value={payee}
+        label={t("transactions.enteredName")}
+        value={enteredName}
         placeholder="—"
-        open={open.has("payee")}
-        onPress={handleTogglePayee}
+        open={open.has("enteredName")}
+        onPress={handleToggleEnteredName}
       >
         <TextField
-          label={t("transactions.payee")}
-          value={payee}
-          onChangeText={setPayee}
+          label={t("transactions.enteredName")}
+          value={enteredName}
+          onChangeText={setEnteredName}
           maxLength={200}
         />
       </FieldDisclosureRow>
@@ -389,7 +390,7 @@ export function FieldsCard({
   );
 }
 
-function isRole(value: string): value is CounterpartyRoleValue {
+function isRole(value: string): value is ObligationRoleValue {
   return value === "debt" || value === "contribution" || value === "reference";
 }
 

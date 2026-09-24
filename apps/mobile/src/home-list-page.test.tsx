@@ -26,7 +26,7 @@ function row(date: string, n: number, amount: string, over: Partial<PhoneSearchT
     id: id<"transactions">(`00000000-0000-4000-8000-0000000${String(n).padStart(5, "0")}`),
     date: accountingDate(date),
     type: "expense" as const,
-    payee: `Payee ${n}`,
+    enteredName: `EnteredName ${n}`,
     note: "",
     categoryName: "Groceries",
     brandKey: null,
@@ -45,7 +45,7 @@ function row(date: string, n: number, amount: string, over: Partial<PhoneSearchT
     toDecimals: null,
     isBusiness: false,
     isCapital: false,
-    counterpartyRole: null,
+    obligationRole: null,
     ...over,
   } satisfies PhoneSearchTransaction;
 }
@@ -113,7 +113,7 @@ function draw(
 it("draws a day, its total, and its rows", () => {
   draw(ledgerWith([row("2026-08-14", 1, "-96"), row("2026-08-14", 2, "-48.90")]));
   expect(screen.getByText("August 14, 2026")).toBeTruthy();
-  expect(screen.getByRole("button", { name: /Payee 1/ })).toBeTruthy();
+  expect(screen.getByRole("button", { name: /EnteredName 1/ })).toBeTruthy();
   // −96 and −48,90 folded to the day's own figure.
   expect(screen.getByText(/144[,.]90/)).toBeTruthy();
 });
@@ -190,11 +190,11 @@ it("draws the newer rows above the older ones", () => {
   // scrolling up must find later days rather than the same day twice.
   draw(ledgerWith([row("2026-08-14", 1, "-96")], [row("2026-08-16", 2, "-48.90")]));
   const shown = screen
-    .getAllByRole("button", { name: /Payee/ })
+    .getAllByRole("button", { name: /EnteredName/ })
     .map((node) => node.getAttribute("aria-label") ?? node.textContent ?? "");
   expect(shown, "both rows drawn").toHaveLength(2);
-  expect(shown[0]).toMatch(/Payee 2/);
-  expect(shown[1]).toMatch(/Payee 1/);
+  expect(shown[0]).toMatch(/EnteredName 2/);
+  expect(shown[1]).toMatch(/EnteredName 1/);
 });
 
 /**
@@ -243,7 +243,7 @@ it("wraps a categorisable row in the layer its gestures move", () => {
   // a `translateX` above the button is the wrapper's own signature. Asserting
   // the handler props instead would prove the page passes them, not that
   // `LedgerRowItem` accepted both and built the row it builds when it does.
-  const button = screen.getByRole("button", { name: /Payee 1/ });
+  const button = screen.getByRole("button", { name: /EnteredName 1/ });
   const travelled = button.closest("[style*='translateX']");
   expect(travelled, "an expense takes both gestures (§7)").not.toBeNull();
 });
@@ -262,7 +262,7 @@ it("leaves a transfer tap-only, because it has no category to choose", () => {
     ]),
   );
   // A transfer is drawn by `TransferRow`, which names the two accounts rather
-  // than a payee — the row a transfer has instead of one.
+  // than a entered name — the row a transfer has instead of one.
   // By text, not by role: `TransferRow` is not pressable at all — it states
   // two accounts rather than offering one target — so there is no button here
   // to find.
@@ -332,7 +332,10 @@ it("asks both ways on a jump, and draws the day jumped to as its own line", () =
 
   const asked = vi.mocked(ledger.readLedgerPage).mock.calls.map(([options]) => options.direction);
   expect(asked.sort(), "the neighbourhood, both ways").toEqual(["newer", "older"]);
-  expect(screen.getByRole("button", { name: /Payee 2/ }), "the newer row is here").toBeTruthy();
+  expect(
+    screen.getByRole("button", { name: /EnteredName 2/ }),
+    "the newer row is here",
+  ).toBeTruthy();
   expect(screen.getByText("March 2, 2021"), "and so is the day itself").toBeTruthy();
   expect(screen.getByText("nothing"), "as a quiet line").toBeTruthy();
 });
@@ -418,7 +421,7 @@ it("floats over the rows, not over the strip above them", () => {
     anchor: accountingDate("2021-03-02"),
   });
   const pill = screen.getByRole("button", { name: /Back to today/ });
-  const aRow = screen.getByRole("button", { name: /Payee 1/ });
+  const aRow = screen.getByRole("button", { name: /EnteredName 1/ });
 
   let box: HTMLElement | null = pill;
   while (box !== null && !box.contains(aRow)) box = box.parentElement;
@@ -469,7 +472,7 @@ describe("every entry says which day it is on", () => {
     id: id<"transactions">("44444444-4444-4444-8444-444444444444"),
     date: accountingDate("2026-05-25"),
     type: "expense",
-    payee: "Corner Cafe",
+    enteredName: "Corner Cafe",
     amount: toMoney("-20.00"),
     currency: currencyCode("PLN"),
     accountName: "Cash",

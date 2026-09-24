@@ -107,12 +107,12 @@ function setupGroupExpense() {
     toAmount: "400.00",
     toCurrency: currencyCode("PLN"),
     categoryId: null,
-    payee: "",
+    enteredName: "",
     date: today,
     note: "",
     isBusiness: false,
-    counterpartyId: null,
-    counterpartyRole: null,
+    obligationCounterpartyId: null,
+    obligationRole: null,
   });
   if (!("id" in funded)) throw new Error(`funding refused — ${JSON.stringify(funded.fieldErrors)}`);
   controller.refresh();

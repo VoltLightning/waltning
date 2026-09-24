@@ -4,7 +4,7 @@ import { BrandIcon } from "./brand-icon";
 const meta = {
   title: "Transactions/BrandIcon",
   component: BrandIcon,
-  args: { brandKey: "orlen", payee: "ORLEN" },
+  args: { brandKey: "orlen", enteredName: "ORLEN" },
 } satisfies Meta<typeof BrandIcon>;
 
 export default meta;
@@ -13,12 +13,12 @@ type Story = StoryObj<typeof meta>;
 export const Recognised: Story = {};
 
 export const AnotherRecognised: Story = {
-  args: { brandKey: "youtube", payee: "YouTube Premium" },
+  args: { brandKey: "youtube", enteredName: "YouTube Premium" },
 };
 
-/** §14.4b — never blank: an unmatched payee still renders a mark, the same monogram treatment `CounterpartyRow` gives an unmatched name. */
+/** §14.4b — never blank: an unmatched entered name still renders a mark, the same monogram treatment `CounterpartyRow` gives an unmatched name. */
 export const Unrecognised: Story = {
-  args: { brandKey: null, payee: "Corner Café" },
+  args: { brandKey: null, enteredName: "Corner Café" },
 };
 
 /**
@@ -27,5 +27,5 @@ export const Unrecognised: Story = {
  * `numberOfLines={1}`, so it is the size/mark combination worth a baseline.
  */
 export const WidgetSize: Story = {
-  args: { brandKey: "youtube", payee: "YouTube", size: 20 },
+  args: { brandKey: "youtube", enteredName: "YouTube", size: 20 },
 };

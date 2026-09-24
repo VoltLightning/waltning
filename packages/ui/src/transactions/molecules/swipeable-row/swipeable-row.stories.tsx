@@ -39,7 +39,7 @@ function SwipeDemo() {
       <SwipeableRow onShortSwipe={handleShortSwipe} onLongSwipe={handleLongSwipe}>
         <TransactionRow
           date="2026-08-24"
-          payee="Corner Bakery"
+          enteredName="Corner Bakery"
           category="Eating out"
           account="Cash"
           amount={money.toMoney("-48.90")}

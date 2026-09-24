@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { accountingDate } from "../date.ts";
-import { type PayeeHistoryRow, proposeCategory } from "./payee-memory.ts";
+import { type EnteredNameHistoryRow, proposeCategory } from "./entered-name-memory.ts";
 
-const row = (payee: string, categoryId: string, date: string): PayeeHistoryRow => ({
-  payee,
+const row = (enteredName: string, categoryId: string, date: string): EnteredNameHistoryRow => ({
+  enteredName,
   categoryId,
   date: accountingDate(date),
 });
@@ -43,7 +43,7 @@ describe("proposeCategory", () => {
     expect(result?.categoryId).toBe("groceries");
     expect(result?.confidence).toBeCloseTo(5 / 7, 5);
     expect(result?.neighbours).toHaveLength(7);
-    expect(result?.neighbours.some((n) => n.payee === "Taxi Service")).toBe(false);
+    expect(result?.neighbours.some((n) => n.enteredName === "Taxi Service")).toBe(false);
   });
 
   it("breaks a similarity tie by the more recent date", () => {
@@ -59,7 +59,11 @@ describe("proposeCategory", () => {
       confidence: 1,
       basis: "neighbours",
       neighbours: [
-        { payee: "Zeta Mart Deluxe", similarity: expect.any(Number), categoryId: "groceries" },
+        {
+          enteredName: "Zeta Mart Deluxe",
+          similarity: expect.any(Number),
+          categoryId: "groceries",
+        },
       ],
     });
   });
@@ -86,12 +90,15 @@ describe("proposeCategory", () => {
     expect(result?.categoryId).toBe("dining");
     // The closest neighbour overall is the *groceries* row — the caption
     // must not name it for a `dining` pick.
-    expect(result?.neighbours[0]).toMatchObject({ payee: "Coffee Hous", categoryId: "groceries" });
+    expect(result?.neighbours[0]).toMatchObject({
+      enteredName: "Coffee Hous",
+      categoryId: "groceries",
+    });
     const winningNeighbour = result?.neighbours.find((n) => n.categoryId === result.categoryId);
-    expect(winningNeighbour?.payee).not.toBe("Coffee Hous");
+    expect(winningNeighbour?.enteredName).not.toBe("Coffee Hous");
   });
 
-  it("returns null when no prior payee clears the similarity floor", () => {
+  it("returns null when no prior enteredName clears the similarity floor", () => {
     const history = [
       row("Grocery Store", "groceries", "2026-01-01"),
       row("Bank A", "transfer", "2026-01-02"),
@@ -105,7 +112,7 @@ describe("proposeCategory", () => {
     expect(proposeCategory("Coffee House", [])).toBeNull();
   });
 
-  it("returns null for a blank payee rather than matching another blank one", () => {
+  it("returns null for a blank enteredName rather than matching another blank one", () => {
     const history = [row("   ", "groceries", "2026-01-01")];
 
     expect(proposeCategory("", history)).toBeNull();

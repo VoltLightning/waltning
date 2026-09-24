@@ -99,7 +99,7 @@ function namedMovedRows(
   if (movedTransactionIds.length === 0) return [];
   const named = chunkIds(movedTransactionIds).flatMap((batch) =>
     tx
-      .select({ id: transactions.id, counterpartyId: transactions.counterpartyId })
+      .select({ id: transactions.id, counterpartyId: transactions.obligationCounterpartyId })
       .from(transactions)
       .where(inArray(transactions.id, batch))
       .all(),
@@ -115,7 +115,7 @@ function namedMovedRows(
   return chunkIds(movedTransactionIds).flatMap((batch) =>
     tx
       .update(transactions)
-      .set({ counterpartyId: winnerId })
+      .set({ obligationCounterpartyId: winnerId })
       .where(inArray(transactions.id, batch))
       .returning({ id: transactions.id })
       .all(),
@@ -217,7 +217,9 @@ function mergeCounterparties(
   const [stillLive] = tx
     .select({ id: transactions.id })
     .from(transactions)
-    .where(and(eq(transactions.counterpartyId, input.loserId), isNull(transactions.deletedAt)))
+    .where(
+      and(eq(transactions.obligationCounterpartyId, input.loserId), isNull(transactions.deletedAt)),
+    )
     .limit(1)
     .all();
   if (stillLive) {

@@ -19,14 +19,14 @@ describe("matchBrand", () => {
     expect(matchBrand("YouTube   Premium")).toBe("youtube");
   });
 
-  it("does not match a substring — the whole payee must equal an alias", () => {
+  it("does not match a substring — the whole enteredName must equal an alias", () => {
     // "ORLEN Stacja 123" carries the transaction id a receipt prints; this
     // module's exact-match index does not (yet) reach inside it — see the
     // file header on why that is a deliberate, named gap rather than a bug.
     expect(matchBrand("ORLEN Stacja 123")).toBeUndefined();
   });
 
-  it("returns undefined for an unrecognised payee, including blank", () => {
+  it("returns undefined for an unrecognised enteredName, including blank", () => {
     expect(matchBrand("Corner Café")).toBeUndefined();
     expect(matchBrand("")).toBeUndefined();
     expect(matchBrand("   ")).toBeUndefined();
@@ -46,21 +46,21 @@ describe("matchBrand", () => {
 });
 
 describe("resolveBrand", () => {
-  it("an asserted key wins over the payee, and is sourced manual", () => {
+  it("an asserted key wins over the enteredName, and is sourced manual", () => {
     expect(resolveBrand("Corner Café", "youtube")).toEqual({
       brandKey: "youtube",
       brandSource: "manual",
     });
   });
 
-  it("falls back to matching the payee when nothing was asserted", () => {
+  it("falls back to matching the enteredName when nothing was asserted", () => {
     expect(resolveBrand("ORLEN", undefined)).toEqual({
       brandKey: "orlen",
       brandSource: "auto",
     });
   });
 
-  it("both fields are null, never one alone, for an unmatched payee", () => {
+  it("both fields are null, never one alone, for an unmatched enteredName", () => {
     expect(resolveBrand("Corner Café", undefined)).toEqual({
       brandKey: null,
       brandSource: null,
@@ -84,7 +84,7 @@ describe("resolveBrandPatch", () => {
     }
   });
 
-  it("an explicit null clears to a sticky 'none', regardless of the payee", () => {
+  it("an explicit null clears to a sticky 'none', regardless of the enteredName", () => {
     for (const current of [NEVER_MATCHED, AUTO, MANUAL, NONE]) {
       expect(resolveBrandPatch(current, "ORLEN", null)).toEqual({
         brandKey: null,
@@ -93,14 +93,14 @@ describe("resolveBrandPatch", () => {
     }
   });
 
-  it("re-matches a changed payee when the current source is null (never matched)", () => {
+  it("re-matches a changed enteredName when the current source is null (never matched)", () => {
     expect(resolveBrandPatch(NEVER_MATCHED, "ORLEN", undefined)).toEqual({
       brandKey: "orlen",
       brandSource: "auto",
     });
   });
 
-  it("re-matches a changed payee when the current source is 'auto'", () => {
+  it("re-matches a changed enteredName when the current source is 'auto'", () => {
     expect(resolveBrandPatch(AUTO, "YouTube", undefined)).toEqual({
       brandKey: "youtube",
       brandSource: "auto",
@@ -128,7 +128,7 @@ describe("resolveBrandPatch", () => {
    * reading it as an assertion would write `manual`/`undefined` into a column
    * pair the CHECK exists to keep honest.
    */
-  it("an undefined brandKey is no assertion at all — the payee decides", () => {
+  it("an undefined brandKey is no assertion at all — the enteredName decides", () => {
     expect(resolveBrandPatch(NEVER_MATCHED, "ORLEN", undefined)).toEqual({
       brandKey: "orlen",
       brandSource: "auto",

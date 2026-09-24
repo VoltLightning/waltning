@@ -8,11 +8,13 @@
  * here. Today that is `v8` — the ledger as it stood before `0008_schema`
  * rebuilt `transactions` — `v9`, `v10` (the shape before `0010_schema`,
  * `SPEC.md` §14.4b's brand columns), `v11` (the shape before `DESK4`'s
- * `0011_dashboard_layout_seed` and `0012_schema`), and `v13`, the current
- * head. This line names the current set by hand and goes stale the moment a
- * later PR adds a migration without updating it — it has gone stale before,
- * still naming `v9` as head after `v10` replaced it; the suite itself needs
- * no such edit, only this comment does.
+ * `0011_dashboard_layout_seed` and `0012_schema`), `v13`, and `v17`, the
+ * current head. This line names the current set by hand and goes stale the
+ * moment a later PR adds a migration without updating it — it has gone stale
+ * before, still naming `v9` as head after `v10` replaced it, and again
+ * through `0014`–`0016`, which is why `v17` is the first pair dumped by a
+ * build that ships the taxonomy; the suite itself needs no such edit, only
+ * this comment does.
  *
  * **Loading a fixture is two steps, deliberately not one.** `migrateReplica`
  * and `migrateOutbox` build the tables; the fixture's own SQL is only ever
@@ -37,10 +39,11 @@
  * `INSERT` into a database that already holds data) plus `0012_schema` (the
  * one-active index, which a second active layout would break against) — and
  * `schemaFingerprint` then compares the result against a database built from
- * empty by the whole chain. `v13` sits at the head, so its upgrade is a no-op
- * and the comparison there is two identical builds — what that pair catches
- * instead is drift: a `fixture:dump` that no longer reproduces the committed
- * `INSERT` column lists.
+ * empty by the whole chain. `v13` and `v17` sit above their own dump's head,
+ * so `v17`'s upgrade runs this branch's own step and `v13`'s runs the four
+ * before it — and where a pair sits at the head its comparison is two
+ * identical builds, which catches drift instead: a `fixture:dump` that no
+ * longer reproduces the committed `INSERT` column lists.
  */
 
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
@@ -405,24 +408,27 @@ describe.each(PAIRS)("upgrading from replica-v$version / outbox-v$version", (pai
         };
         const seedsDashboard = pair.version < versionOfTag(DASHBOARD_SEED_TAG);
         /**
-         * The shipped taxonomy, which every one of these fixtures gains.
+         * The shipped taxonomy, which a fixture gains only if it has none.
          *
-         * **Unconditional, unlike the dashboard's**, and that difference is
-         * the point: the dashboard is a migration step, so a fixture dumped
-         * above it already holds those rows, while the taxonomy is a
-         * bootstrap that runs at every launch
-         * (`categories/bootstrap-taxonomy.ts`). So an install that predates
-         * it gains the tree the next time the app opens — which is the
-         * intended outcome, since these are categories it should have
-         * shipped with. Counted from the list rather than written down, so
-         * the number cannot drift from it.
+         * **Keyed on the fixture's own rows, not on a version**, and that is
+         * the difference from the dashboard's seed: the dashboard is a
+         * migration step, so whether a fixture already holds it is decided by
+         * where it was cut in the chain, while the taxonomy is a bootstrap
+         * that runs at every launch (`categories/bootstrap-taxonomy.ts`) and
+         * seeds *a ledger that has not started, and only that one*. So an
+         * install that predates it gains the tree the next time the app opens
+         * — and a pair dumped by a build that already bootstraps it arrives
+         * holding all 74, and gains nothing. `before === 0` is that same
+         * condition, read off the fixture rather than guessed from its
+         * number. Counted from the list rather than written down, so the
+         * number cannot drift from it.
          */
         const taxonomyRowCount = taxonomyRows(randomId).length;
         for (const [table, before] of Object.entries(fixture.replicaCountsBefore)) {
           const after = replicaCountsAfter[table];
           const seeded =
             (seedsDashboard ? (DASHBOARD_SEED_ROWS[table] ?? 0) : 0) +
-            (table === "categories" ? taxonomyRowCount : 0);
+            (table === "categories" && before === 0 ? taxonomyRowCount : 0);
           const expected =
             table === "transactions" ? before + fixture.pendingBefore.length : before + seeded;
           expect(after, `${table}'s row count after the upgrade`).toBe(expected);

@@ -9,7 +9,7 @@ import { LedgerTable, type LedgerTableRow, type LedgerTableSelection } from "./l
 function row(overrides: Partial<LedgerTableRow> & { id: string }): LedgerTableRow {
   return {
     date: "2026-08-24",
-    payee: "Corner Bakery",
+    enteredName: "Corner Bakery",
     category: "Eating out",
     account: "Cash",
     scope: "Mine",
@@ -36,11 +36,11 @@ function selectionOf(selectedIds: readonly string[] = []): LedgerTableSelection 
 }
 
 const ROWS: LedgerTableRow[] = [
-  row({ id: "1", payee: "Corner Bakery", date: "2026-08-24" }),
-  row({ id: "2", payee: "Rewe", date: "2026-08-23", category: "Groceries" }),
+  row({ id: "1", enteredName: "Corner Bakery", date: "2026-08-24" }),
+  row({ id: "2", enteredName: "Rewe", date: "2026-08-23", category: "Groceries" }),
   row({
     id: "3",
-    payee: "",
+    enteredName: "",
     date: "2026-08-22",
     type: "transfer",
     selectable: false,
@@ -51,7 +51,7 @@ const ROWS: LedgerTableRow[] = [
 function noop() {}
 
 describe("LedgerTable", () => {
-  it("renders every row's date, payee, category, account, scope and amount", () => {
+  it("renders every row's date, enteredName, category, account, scope and amount", () => {
     render(
       <LedgerTable
         rows={ROWS}
@@ -86,17 +86,17 @@ describe("LedgerTable", () => {
   /**
    * §14.4b, S10 §4 — the identity column carries the same `BrandIcon` the
    * phone's `TransactionRow` does. Read by the mark it draws, since the
-   * badge is deliberately hidden from the accessibility tree (the payee
+   * badge is deliberately hidden from the accessibility tree (the entered name
    * beside it already says who this is): the catalogue's own `"O"` for a
-   * recognised payee, and `monogramFor`'s first letter for one it has never
+   * recognised entered name, and `monogramFor`'s first letter for one it has never
    * heard of — never blank in either case.
    */
-  it("draws the brand mark for a recognised payee and a monogram for an unknown one", () => {
+  it("draws the brand mark for a recognised enteredName and a monogram for an unknown one", () => {
     render(
       <LedgerTable
         rows={[
-          row({ id: "1", payee: "ORLEN", brandKey: "orlen" }),
-          row({ id: "2", payee: "Corner Bakery", brandKey: null }),
+          row({ id: "1", enteredName: "ORLEN", brandKey: "orlen" }),
+          row({ id: "2", enteredName: "Corner Bakery", brandKey: null }),
         ]}
         sort={null}
         onSortColumn={noop}
@@ -122,7 +122,7 @@ describe("LedgerTable", () => {
     );
 
     fireEvent.click(screen.getByRole("button", { name: "Payee" }));
-    expect(onSortColumn).toHaveBeenCalledWith("payee");
+    expect(onSortColumn).toHaveBeenCalledWith("enteredName");
   });
 
   it("shows a sort indicator only on the active column", () => {
@@ -159,7 +159,7 @@ describe("LedgerTable", () => {
     rerender(
       <LedgerTable
         rows={ROWS}
-        sort={{ column: "payee", direction: "asc" }}
+        sort={{ column: "enteredName", direction: "asc" }}
         onSortColumn={noop}
         selection={selectionOf()}
         onOpenRow={noop}
@@ -251,7 +251,7 @@ describe("LedgerTable", () => {
     expect(scroller.contains(header)).toBe(false);
 
     fireEvent.click(header);
-    expect(onSortColumn).toHaveBeenCalledWith("payee");
+    expect(onSortColumn).toHaveBeenCalledWith("enteredName");
     expect(onOpenRow).not.toHaveBeenCalled();
   });
 

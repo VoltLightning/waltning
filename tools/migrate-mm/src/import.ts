@@ -78,6 +78,9 @@ type Export = {
     category_path: string;
     amount: number;
     amount_usd: number;
+    /** `extract.py`'s own key, and it stays spelled its way — this is the file
+        that tool writes, not a column in the ledger. It lands on
+        `entered_name` below. */
     payee: string;
     note: string;
   }[];
@@ -326,7 +329,7 @@ async function main() {
       fxRate: fx.rate,
       fxRateEstimated: fx.estimated,
       // amountPivot is GENERATED ALWAYS (§7.4) — Postgres computes it.
-      payee: t.payee,
+      enteredName: t.payee,
       note: t.note,
       source: "migration" as const,
       externalId: t.external_id,

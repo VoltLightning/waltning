@@ -29,7 +29,7 @@ backend on its own; it is almost always done mid-import, which does (S02).
 ### Web — ≥1024px
 
 Rule list with hit counts, ordered by priority. Editor beside it: conditions
-(payee regex, amount range, account, currency), actions (category, payee
+(entered name regex, amount range, account, currency), actions (category, entered name
 normalization, note, business flag), priority. A **test panel** shows what the
 rule would match against existing rows.
 
@@ -80,7 +80,7 @@ is savable — it may be for a merchant you have not seen yet — but it is tagg
 
 1. ~~**Priority is an integer, and integers collide.**~~ **Decided: most
    specific wins, then oldest.** Ties break by condition count — a rule matching
-   payee *and* account beats one matching payee alone — and only then by
+   entered name *and* account beats one matching entered name alone — and only then by
    creation order. Deterministic without asking you to hand-manage integers, and
    it matches the intuition that the narrower rule is the one you meant. The
    test panel states which rule would win when more than one matches.
@@ -93,17 +93,17 @@ is savable — it may be for a merchant you have not seen yet — but it is tagg
    only thing the audit trail actually needs.
 3. ~~**Should confirming a model suggestion always offer to write a rule?**~~
    **Decided: offer on demonstrated repetition, not on confirmation.** Nothing
-   is said when you confirm one row. When the same normalized payee has been
+   is said when you confirm one row. When the same normalized entered name has been
    confirmed to the same category **three times with no rule covering it**, one
    prefilled suggestion appears — dismissible, and never raised again for that
-   payee.
+   entered name.
 
    **Rules should accumulate from evidence, not from prompting.** Confidence is
    the wrong trigger: a high score usually means an obvious merchant, and one
    confirmation is thin evidence it will recur — a holiday's worth of one-off
    foreign merchants would each offer to become permanent. Three confirmations
-   of the same payee is the pattern actually worth encoding, and it is a fact
+   of the same entered name is the pattern actually worth encoding, and it is a fact
    the system already has.
 
-   Asked once per payee, ever. That is what keeps it from becoming a prompt you
+   Asked once per entered name, ever. That is what keeps it from becoming a prompt you
    learn to dismiss.

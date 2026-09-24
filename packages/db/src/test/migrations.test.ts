@@ -110,6 +110,44 @@ describe("migrations apply from empty", () => {
       SELECT count(*)::text AS n FROM pg_roles WHERE rolname = 'waltning_export'`;
     expect(Number(role?.n)).toBe(1);
   });
+
+  /**
+   * **A renamed column does not rename itself inside a view, and that is the
+   * whole of this test.** Postgres rewrites a view's *references* when the
+   * column beneath it is renamed, so nothing breaks and nothing complains —
+   * but a view's output column names are fixed at creation and are never
+   * rewritten, and `SELECT t.*` was expanded into a fixed list the day it was
+   * written. So `ALTER TABLE … RENAME COLUMN payee TO entered_name` alone
+   * leaves four views still publishing a column called `payee` over a base
+   * column that no longer exists by that name — a schema that reads as though
+   * the rename never happened, which is worse than one that never started.
+   * `0019_obligation_views.sql` drops and recreates them; this asks whether it
+   * did.
+   *
+   * Broken once to prove it fires: dropping `0019` from the journal leaves all
+   * four rows reading `payee` and every expectation below fails by name.
+   */
+  it("carries the rename into the views, whose output columns a rename does not touch", async () => {
+    const rows = await s.sql<{ table_name: string; column_name: string }[]>`
+      SELECT table_name, column_name
+      FROM   information_schema.columns
+      WHERE  table_schema = 'public'
+        AND  table_name IN ('transactions_valued', 'tax_ledger',
+                            'tax_omission_candidates', 'tax_unvalued_revenue')
+        AND  column_name IN ('payee', 'entered_name',
+                             'counterparty_id', 'obligation_counterparty_id')
+      ORDER  BY table_name, column_name`;
+
+    expect(rows.map((r) => `${r.table_name}.${r.column_name}`)).toEqual([
+      "tax_ledger.entered_name",
+      "tax_ledger.obligation_counterparty_id",
+      "tax_omission_candidates.entered_name",
+      "tax_omission_candidates.obligation_counterparty_id",
+      "tax_unvalued_revenue.entered_name",
+      "transactions_valued.entered_name",
+      "transactions_valued.obligation_counterparty_id",
+    ]);
+  });
 });
 
 describe("verify_t1", () => {

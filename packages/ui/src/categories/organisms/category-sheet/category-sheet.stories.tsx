@@ -155,7 +155,7 @@ export const LowConfidence: Story = {
       categoryId: "delivery",
       confidence: 0.6,
       basis: "neighbours",
-      neighbours: [{ payee: "Rider Eats", similarity: 0.6, categoryId: "delivery" }],
+      neighbours: [{ enteredName: "Rider Eats", similarity: 0.6, categoryId: "delivery" }],
     },
   },
 };

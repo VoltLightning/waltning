@@ -2,7 +2,7 @@ import type { AccountingDate } from "@waltning/core/date";
 import type { Id } from "@waltning/core/id";
 import type { CurrencyCode, Money, PivotPerUnit } from "@waltning/core/money";
 import * as money from "@waltning/core/money";
-import type { CounterpartyRole, TxnType } from "@waltning/schema/enums";
+import type { ObligationRole, TxnType } from "@waltning/schema/enums";
 import { and, eq, gte, inArray, isNull, lte, or, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/sqlite-core";
 import type { ReplicaDb } from "../open.ts";
@@ -66,11 +66,11 @@ export function structuralWhere(filter: TransactionSearchFilter): SQL | undefine
       ? or(eq(transactions.currency, filter.currency), eq(transactions.toCurrency, filter.currency))
       : undefined,
     scopeCondition(filter.scope ?? "all"),
-    filter.counterpartyId !== undefined
-      ? eq(transactions.counterpartyId, filter.counterpartyId)
+    filter.obligationCounterpartyId !== undefined
+      ? eq(transactions.obligationCounterpartyId, filter.obligationCounterpartyId)
       : undefined,
-    filter.counterpartyRole !== undefined
-      ? eq(transactions.counterpartyRole, filter.counterpartyRole)
+    filter.obligationRole !== undefined
+      ? eq(transactions.obligationRole, filter.obligationRole)
       : undefined,
   ];
   return and(...conditions.filter((c): c is SQL => c !== undefined));
@@ -86,7 +86,7 @@ export type SignedLedgerRow = {
   id: Id<"transactions">;
   date: AccountingDate;
   type: TxnType;
-  payee: string;
+  enteredName: string;
   note: string;
   brandKey: string | null;
   categoryName: string | null;
@@ -113,7 +113,7 @@ export type SignedLedgerRow = {
   toDecimals: number | null;
   isBusiness: boolean;
   isCapital: boolean;
-  counterpartyRole: CounterpartyRole | null;
+  obligationRole: ObligationRole | null;
 };
 
 /**
@@ -131,7 +131,7 @@ export function ledgerRowsQuery<TRun, TSchema extends typeof ledgerSchema>(
       id: transactions.id,
       date: transactions.date,
       type: transactions.type,
-      payee: transactions.payee,
+      enteredName: transactions.enteredName,
       note: transactions.note,
       brandKey: transactions.brandKey,
       categoryName: categories.name,
@@ -150,7 +150,7 @@ export function ledgerRowsQuery<TRun, TSchema extends typeof ledgerSchema>(
       toDecimals: toCurrencies.decimals,
       isBusiness: transactions.isBusiness,
       isCapital: transactions.isCapital,
-      counterpartyRole: transactions.counterpartyRole,
+      obligationRole: transactions.obligationRole,
     })
     .from(transactions)
     .innerJoin(accounts, eq(transactions.accountId, accounts.id))

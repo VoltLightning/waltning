@@ -62,7 +62,7 @@ invents a component, extended to: never a second write path).
 | `get_subscriptions` — subscription rules with monthly equivalents and totals (`computations.md` §16) | `update_recurring` — `is_subscription`, `service`, and pause via `enabled` |
 | Service catalog — bundled in `@waltning/core`, not fetched | — |
 
-**Marking is manual, proposal is automatic.** When a rule's payee or
+**Marking is manual, proposal is automatic.** When a rule's entered name or
 counterparty matches the catalog's aliases, the editor proposes the service and
 the subscription flag — proposed, never set silently, the same policy as amount
 drift (S21 Q2). `service` without `is_subscription` is legal: a utility rule
@@ -88,7 +88,7 @@ may carry an icon without appearing here.
   rule; the history of materialized rows keeps the old price.
 - Tapping a row expands: last three charges (actual rows, linked), annual cost,
   started date, and the rule's plain-language restatement from S21.
-- Icon matching is by catalog alias against payee and counterparty. An unknown
+- Icon matching is by catalog alias against entered name and counterparty. An unknown
   service renders a monogram avatar — never blank, never an error, never a
   network fetch.
 
@@ -115,7 +115,7 @@ may carry an icon without appearing here.
 
 2. ~~**Detect subscriptions from transaction history?**~~ **Decided: no —
    propose from the catalog match at rule level only.** Mining the ledger for
-   periodic payees duplicates what recurring rules already are; the 24 migrated
+   periodic entered names duplicates what recurring rules already are; the 24 migrated
    rules plus catalog proposals on new rules cover the real population. A
    history-mining pass can become an agent task later without any schema
    change.

@@ -31,7 +31,7 @@
 import {
   type CategoryProposal,
   PROPOSAL_DISPLAY_THRESHOLD,
-} from "@waltning/core/capture/payee-memory";
+} from "@waltning/core/capture/entered-name-memory";
 import { accountingDate, isAccountingDate, type TimeOfDay } from "@waltning/core/date";
 import type { CurrencyCode } from "@waltning/core/money";
 import { type ReactNode, useCallback, useMemo, useState } from "react";
@@ -74,8 +74,8 @@ import {
   ComposerTileGlyph,
 } from "../../molecules/composer-rows/composer-rows";
 
-const COUNTERPARTY_ROLES = ["debt", "contribution", "reference"] as const;
-type CounterpartyRole = (typeof COUNTERPARTY_ROLES)[number];
+const OBLIGATION_ROLES = ["debt", "contribution", "reference"] as const;
+type ObligationRole = (typeof OBLIGATION_ROLES)[number];
 /** How many categories the chip row offers — the deck draws four. */
 const CHIP_COUNT = 4;
 
@@ -142,8 +142,8 @@ export type QuickAddComposerProps = {
   onOpenCategoryPicker: () => void;
   /** A chip's pick — the same callback the sheet's pick reaches in the screen. */
   onPickCategory: (categoryId: string) => void;
-  payee: string;
-  onPayeeChange: (payee: string) => void;
+  enteredName: string;
+  onEnteredNameChange: (enteredName: string) => void;
   /** `AccountingDate`'s shape (`YYYY-MM-DD`). */
   date: string;
   onDateChange: (date: string) => void;
@@ -163,10 +163,10 @@ export type QuickAddComposerProps = {
   onNoteChange: (note: string) => void;
   /** Offered only when non-empty — S05 §5, the same rule `QuickAddForm` already keeps. */
   counterparties: readonly QuickAddComposerCounterparty[];
-  counterpartyId: string | null;
-  onCounterpartyChange: (counterpartyId: string) => void;
-  counterpartyRole: CounterpartyRole | null;
-  onCounterpartyRoleChange: (role: CounterpartyRole) => void;
+  obligationCounterpartyId: string | null;
+  onCounterpartyChange: (obligationCounterpartyId: string) => void;
+  obligationRole: ObligationRole | null;
+  onObligationRoleChange: (role: ObligationRole) => void;
   /**
    * S15's *+ New* escape — the counterparty sheet's own footer. Optional: a
    * screen that has not wired S15 yet (a story, an older test) still renders.
@@ -185,9 +185,9 @@ export type QuickAddComposerProps = {
 };
 
 /** The fields a capture cannot be saved without. */
-export type QuickAddCheckField = "amount" | "account" | "counterpartyRole";
+export type QuickAddCheckField = "amount" | "account" | "obligationRole";
 
-type OpenSheet = "date" | "time" | "scope" | "payee" | "counterparty" | null;
+type OpenSheet = "date" | "time" | "scope" | "enteredName" | "counterparty" | null;
 
 export function QuickAddComposer({
   raw,
@@ -205,8 +205,8 @@ export function QuickAddComposer({
   onUndoCategory,
   onOpenCategoryPicker,
   onPickCategory,
-  payee,
-  onPayeeChange,
+  enteredName,
+  onEnteredNameChange,
   date,
   onDateChange,
   time,
@@ -218,10 +218,10 @@ export function QuickAddComposer({
   note,
   onNoteChange,
   counterparties,
-  counterpartyId,
+  obligationCounterpartyId,
   onCounterpartyChange,
-  counterpartyRole,
-  onCounterpartyRoleChange,
+  obligationRole,
+  onObligationRoleChange,
   onCreateCounterparty,
   pace,
   fieldErrors,
@@ -246,7 +246,7 @@ export function QuickAddComposer({
   const clearTime = useCallback(() => onTimeChange(""), [onTimeChange]);
   const phone = useBreakpoint() === "phone";
   const handleOpenScopeSheet = useCallback(() => setOpenSheet("scope"), []);
-  const handleOpenPayeeSheet = useCallback(() => setOpenSheet("payee"), []);
+  const handleOpenEnteredNameSheet = useCallback(() => setOpenSheet("enteredName"), []);
   const handleOpenCounterpartySheet = useCallback(() => setOpenSheet("counterparty"), []);
   const handleToggleMore = useCallback(() => setMoreShown((shown) => !shown), []);
 
@@ -304,16 +304,16 @@ export function QuickAddComposer({
   /**
    * H1, S05 §8's P2 trail — the caption and Undo for an applied proposal,
    * named from the proposal's own neighbour (the closest one that voted for
-   * the winning category), not the typed `payee`: an applied proposal can
+   * the winning category), not the typed `entered_name`: an applied proposal can
    * win on a fold match against a differently-spelled history row, and the
    * trail is naming *where the pick came from*.
    */
   const categoryFromHistory = !categoryAutoFilled
     ? undefined
     : t("categories.fromHistory", {
-        payee:
+        enteredName:
           categoryProposal?.neighbours.find((n) => n.categoryId === categoryProposal.categoryId)
-            ?.payee ?? payee,
+            ?.enteredName ?? enteredName,
       });
 
   /**
@@ -335,7 +335,7 @@ export function QuickAddComposer({
   }, [categories, type, categoryId]);
 
   const pickedCounterparty = counterparties.find(
-    (counterparty) => counterparty.id === counterpartyId,
+    (counterparty) => counterparty.id === obligationCounterpartyId,
   );
   /**
    * **§6.6, never defaulted.** A counterparty with no role is not a smaller
@@ -345,8 +345,8 @@ export function QuickAddComposer({
   const counterpartyValue =
     pickedCounterparty === undefined
       ? undefined
-      : counterpartyRole === null
-        ? t("transactions.counterpartyRoleMissing", { name: pickedCounterparty.name })
+      : obligationRole === null
+        ? t("transactions.obligationRoleMissing", { name: pickedCounterparty.name })
         : pickedCounterparty.name;
 
   const amountError = check?.errorFor("amount") ?? fieldErrors?.byField["amountOriginal"]?.[0];
@@ -380,28 +380,28 @@ export function QuickAddComposer({
           onPress: onSetRate,
         };
   const categoryError = fieldErrors?.byField["categoryId"]?.[0];
-  const payeeError = fieldErrors?.byField["payee"]?.[0];
+  const enteredNameError = fieldErrors?.byField["enteredName"]?.[0];
   const dateError = fieldErrors?.byField["date"]?.[0];
   const timeError = fieldErrors?.byField["timeOfDay"]?.[0];
-  const counterpartyError = fieldErrors?.byField["counterpartyId"]?.[0];
-  const counterpartyRoleError =
-    check?.errorFor("counterpartyRole") ?? fieldErrors?.byField["counterpartyRole"]?.[0];
+  const counterpartyError = fieldErrors?.byField["obligationCounterpartyId"]?.[0];
+  const obligationRoleError =
+    check?.errorFor("obligationRole") ?? fieldErrors?.byField["obligationRole"]?.[0];
   /** §6.7's mirror (`create-transaction.executor.ts`'s own refusal), named onto the row the scope renders. */
   const scopeError = fieldErrors?.byField["isBusiness"]?.[0];
   const moreError =
-    payeeError ??
+    enteredNameError ??
     dateError ??
     timeError ??
     scopeError ??
     counterpartyError ??
-    counterpartyRoleError;
+    obligationRoleError;
 
   /** What the collapsed *More details* row says it holds — only the fields that hold something. */
   // In words, like everything else a reader is shown: `2026-08-21` is how the
   // ledger stores a day, not how anyone says one.
   const dateWords = isAccountingDate(date) ? dayLabel(accountingDate(date), locale) : date;
   const moreSummary = [
-    payee.trim() === "" ? null : payee,
+    enteredName.trim() === "" ? null : enteredName,
     date === today ? null : dateWords,
     isBusiness ? t("shell.scopeBusiness") : null,
     pickedCounterparty?.name ?? null,
@@ -469,7 +469,7 @@ export function QuickAddComposer({
           machineFilled={categoryMachineFilled}
           error={categoryError}
         />
-        <Anchored check={check} field="counterpartyRole">
+        <Anchored check={check} field="obligationRole">
           <ComposerRow
             label={t("transactions.moreDetails")}
             value={moreSummary === "" ? undefined : moreSummary}
@@ -483,12 +483,12 @@ export function QuickAddComposer({
         {moreShown ? (
           <>
             <ComposerRow
-              label={t("transactions.payee")}
-              value={payee.trim() === "" ? undefined : payee}
+              label={t("transactions.enteredName")}
+              value={enteredName.trim() === "" ? undefined : enteredName}
               tile={<ComposerTileGlyph glyph="@" ink={theme.textMuted} />}
               tileFill={theme.subtleFill}
-              onPress={handleOpenPayeeSheet}
-              error={payeeError}
+              onPress={handleOpenEnteredNameSheet}
+              error={enteredNameError}
             />
             <ComposerRow
               label={t("transactions.date")}
@@ -521,7 +521,7 @@ export function QuickAddComposer({
                 tile={<ComposerTileGlyph glyph="&" ink={theme.textMuted} />}
                 tileFill={theme.subtleFill}
                 onPress={handleOpenCounterpartySheet}
-                error={counterpartyError ?? counterpartyRoleError}
+                error={counterpartyError ?? obligationRoleError}
               />
             )}
           </>
@@ -632,16 +632,16 @@ export function QuickAddComposer({
       </BottomSheet>
 
       <BottomSheet
-        visible={openSheet === "payee"}
-        title={t("transactions.payee")}
+        visible={openSheet === "enteredName"}
+        title={t("transactions.enteredName")}
         onDismiss={closeSheet}
       >
         {/* A sheet with one field is opened to type into it. */}
         <TextField
           autoFocus
-          label={t("transactions.payee")}
-          value={payee}
-          onChangeText={onPayeeChange}
+          label={t("transactions.enteredName")}
+          value={enteredName}
+          onChangeText={onEnteredNameChange}
           maxLength={200}
         />
       </BottomSheet>
@@ -653,10 +653,10 @@ export function QuickAddComposer({
       >
         <CounterpartyPicker
           counterparties={counterparties}
-          counterpartyId={counterpartyId}
+          obligationCounterpartyId={obligationCounterpartyId}
           onCounterpartyChange={onCounterpartyChange}
-          counterpartyRole={counterpartyRole}
-          onCounterpartyRoleChange={onCounterpartyRoleChange}
+          obligationRole={obligationRole}
+          onObligationRoleChange={onObligationRoleChange}
         />
         {onCreateCounterparty ? (
           <Button
@@ -745,19 +745,19 @@ function ScopeSegments({ shared, isBusiness, onPick }: ScopeSegmentsProps) {
 
 type CounterpartyPickerProps = {
   counterparties: readonly QuickAddComposerCounterparty[];
-  counterpartyId: string | null;
-  onCounterpartyChange: (counterpartyId: string) => void;
-  counterpartyRole: CounterpartyRole | null;
-  onCounterpartyRoleChange: (role: CounterpartyRole) => void;
+  obligationCounterpartyId: string | null;
+  onCounterpartyChange: (obligationCounterpartyId: string) => void;
+  obligationRole: ObligationRole | null;
+  onObligationRoleChange: (role: ObligationRole) => void;
 };
 
 /** §6.6 — the role picker lives in the same sheet, and is never defaulted. */
 function CounterpartyPicker({
   counterparties,
-  counterpartyId,
+  obligationCounterpartyId,
   onCounterpartyChange,
-  counterpartyRole,
-  onCounterpartyRoleChange,
+  obligationRole,
+  onObligationRoleChange,
 }: CounterpartyPickerProps) {
   const t = useT();
   const options = useMemo(
@@ -775,9 +775,9 @@ function CounterpartyPicker({
   );
   const handleRoleChange = useCallback(
     (next: string) => {
-      if (isCounterpartyRole(next)) onCounterpartyRoleChange(next);
+      if (isObligationRole(next)) onObligationRoleChange(next);
     },
-    [onCounterpartyRoleChange],
+    [onObligationRoleChange],
   );
 
   const styles = useStyles();
@@ -787,15 +787,15 @@ function CounterpartyPicker({
         label={t("transactions.counterparty")}
         placeholder={t("transactions.noCounterparty")}
         options={options}
-        value={counterpartyId}
+        value={obligationCounterpartyId}
         onChange={onCounterpartyChange}
         searchable
       />
-      {counterpartyId ? (
+      {obligationCounterpartyId ? (
         <RadioGroup
           label={t("transactions.role")}
           options={roleOptions}
-          value={counterpartyRole}
+          value={obligationRole}
           onChange={handleRoleChange}
         />
       ) : null}
@@ -803,8 +803,8 @@ function CounterpartyPicker({
   );
 }
 
-function isCounterpartyRole(value: string): value is CounterpartyRole {
-  return (COUNTERPARTY_ROLES as readonly string[]).includes(value);
+function isObligationRole(value: string): value is ObligationRole {
+  return (OBLIGATION_ROLES as readonly string[]).includes(value);
 }
 
 const useStyles = makeStyles((theme) => ({

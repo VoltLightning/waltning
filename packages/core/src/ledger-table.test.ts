@@ -11,12 +11,12 @@ import {
 import { toMoney } from "./money.ts";
 
 /** The row `packages/ui`'s table sorts — declared here so the keys under test are real field names. */
-type TestRow = SortableRow & { date: string; payee: string };
+type TestRow = SortableRow & { date: string; enteredName: string };
 
 function row(overrides: Partial<TestRow> & { id: string }): TestRow {
   return {
     date: "2026-01-01",
-    payee: "",
+    enteredName: "",
     amountValue: toMoney("0"),
     currency: "PLN",
     ...overrides,
@@ -26,13 +26,21 @@ function row(overrides: Partial<TestRow> & { id: string }): TestRow {
 describe("sortRows", () => {
   it("sorts a string field ascending and descending", () => {
     const rows = [
-      row({ id: "1", payee: "Zed" }),
-      row({ id: "2", payee: "Abe" }),
-      row({ id: "3", payee: "Mid" }),
+      row({ id: "1", enteredName: "Zed" }),
+      row({ id: "2", enteredName: "Abe" }),
+      row({ id: "3", enteredName: "Mid" }),
     ];
 
-    expect(sortRows(rows, "payee", "asc").map((r) => r.payee)).toEqual(["Abe", "Mid", "Zed"]);
-    expect(sortRows(rows, "payee", "desc").map((r) => r.payee)).toEqual(["Zed", "Mid", "Abe"]);
+    expect(sortRows(rows, "enteredName", "asc").map((r) => r.enteredName)).toEqual([
+      "Abe",
+      "Mid",
+      "Zed",
+    ]);
+    expect(sortRows(rows, "enteredName", "desc").map((r) => r.enteredName)).toEqual([
+      "Zed",
+      "Mid",
+      "Abe",
+    ]);
   });
 
   it("sorts the amount key by decimal value, never by string or float comparison", () => {
@@ -107,13 +115,13 @@ describe("compareByCurrencyThenAmount", () => {
 
 describe("cycleSortState", () => {
   it("cycles a column asc → desc → natural on repeated clicks", () => {
-    let sort = cycleSortState(null, "payee");
-    expect(sort).toEqual({ column: "payee", direction: "asc" });
+    let sort = cycleSortState(null, "enteredName");
+    expect(sort).toEqual({ column: "enteredName", direction: "asc" });
 
-    sort = cycleSortState(sort, "payee");
-    expect(sort).toEqual({ column: "payee", direction: "desc" });
+    sort = cycleSortState(sort, "enteredName");
+    expect(sort).toEqual({ column: "enteredName", direction: "desc" });
 
-    sort = cycleSortState(sort, "payee");
+    sort = cycleSortState(sort, "enteredName");
     expect(sort).toBeNull();
   });
 

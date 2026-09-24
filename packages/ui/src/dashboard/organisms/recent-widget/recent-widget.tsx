@@ -6,7 +6,7 @@
  * for `BalanceRow`: `tests/module-boundaries.test.ts` refuses a domain-to-
  * domain relative import inside `packages/ui/src`, and this row needs none of
  * `TransactionRow`'s duplicate/business/split chrome — a dashboard card names
- * the payee, the category or account, and the figure.
+ * the entered name, the category or account, and the figure.
  */
 
 import type * as money from "@waltning/core/money";
@@ -22,7 +22,7 @@ import { WidgetCard, type WidgetFrame } from "../../molecules/widget-card/widget
 
 export type RecentWidgetRow = {
   id: string;
-  payee: string;
+  enteredName: string;
   /** Category, or the account name when there is none — same fallback the meta line elsewhere uses. */
   meta: string;
   amount: money.Money;
@@ -48,7 +48,7 @@ function Row({ row, onPress }: { row: RecentWidgetRow; onPress?: (id: string) =>
   const body = (
     <View style={styles.rowBody}>
       <View style={styles.rowText}>
-        <Text style={styles.payee}>{row.payee}</Text>
+        <Text style={styles.enteredName}>{row.enteredName}</Text>
         <Text style={styles.rowMeta}>{row.meta}</Text>
       </View>
       <Amount
@@ -127,7 +127,7 @@ const useStyles = makeStyles((theme) => ({
   },
   rowText: { flexShrink: 1, gap: space.xxs },
   separated: { borderTopWidth: hairline.width, borderTopColor: theme.hairline },
-  payee: { color: theme.text, ...text.ui("body") },
+  enteredName: { color: theme.text, ...text.ui("body") },
   rowMeta: { color: theme.textMuted, ...text.ui("caption") },
   empty: { color: theme.textMuted, ...text.ui("body") },
 }));

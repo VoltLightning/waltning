@@ -3,7 +3,7 @@
  * draggable"*). The bulk-accept confidence bar for the import review screen.
  *
  * **0.50–0.99, and it cannot reach 1.00.** A rule that could be set to exact
- * certainty would eventually be, and a tier-1.5 payee match is never that —
+ * certainty would eventually be, and a tier-1.5 entered name match is never that —
  * the floor and the ceiling are both load-bearing, not cosmetic rounding.
  * Value is always shown as a two-decimal figure, because `0.8` beside `0.83`
  * on the same control reads as more precision than the lower one carries.

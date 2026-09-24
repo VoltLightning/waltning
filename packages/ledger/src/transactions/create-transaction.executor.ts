@@ -119,9 +119,9 @@ export function insertTransaction(
   // `SPEC.md` §14.4b — resolved offline, from the bundled catalogue
   // (`@waltning/core/brands/match`), the same way `provisionalFxRate` above
   // resolves a rate the caller did not supply: an asserted `brandKey` wins
-  // (already catalogue-validated at the Zod boundary); otherwise the payee
+  // (already catalogue-validated at the Zod boundary); otherwise the entered name
   // is matched, or the row carries neither field, never one alone.
-  const brand = resolveBrand(input.payee, input.brandKey);
+  const brand = resolveBrand(input.enteredName, input.brandKey);
   const fields = {
     date: input.date,
     type: input.type,
@@ -134,7 +134,7 @@ export function insertTransaction(
     // the rate in effect on this date (§7.6's weekend/holiday row), not an
     // estimate, even though its own date differs from the row's.
     fxRateEstimated: provisional.estimated,
-    payee: input.payee,
+    enteredName: input.enteredName,
     note: input.note,
     brandKey: brand.brandKey,
     brandSource: brand.brandSource,
@@ -148,8 +148,10 @@ export function insertTransaction(
      */
     ...(input.timeOfDay !== undefined ? { timeOfDay: input.timeOfDay } : {}),
     ...(input.categoryId !== undefined ? { categoryId: input.categoryId } : {}),
-    ...(input.counterpartyId !== undefined ? { counterpartyId: input.counterpartyId } : {}),
-    ...(input.counterpartyRole !== undefined ? { counterpartyRole: input.counterpartyRole } : {}),
+    ...(input.obligationCounterpartyId !== undefined
+      ? { obligationCounterpartyId: input.obligationCounterpartyId }
+      : {}),
+    ...(input.obligationRole !== undefined ? { obligationRole: input.obligationRole } : {}),
     ...(input.toAccountId !== undefined ? { toAccountId: input.toAccountId } : {}),
     ...(input.toAmount !== undefined ? { toAmount: input.toAmount } : {}),
     ...(input.toCurrency !== undefined ? { toCurrency: input.toCurrency } : {}),

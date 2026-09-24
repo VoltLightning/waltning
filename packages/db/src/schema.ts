@@ -105,9 +105,9 @@ import {
   brandSource,
   categoryKind,
   counterpartyKind,
-  counterpartyRole,
   fxSource,
   importRowStatus,
+  obligationRole,
   ownership,
   taxLineKind,
   txnSource,
@@ -139,9 +139,9 @@ export {
   brandSource,
   categoryKind,
   counterpartyKind,
-  counterpartyRole,
   fxSource,
   importRowStatus,
+  obligationRole,
   ownership,
   taxLineKind,
   txnSource,
@@ -439,8 +439,8 @@ export const transactions = pgTable("transactions", transactionsColumns(), (t) =
   index("transactions_account_date_idx").on(t.accountId, t.date),
   index("transactions_category_idx").on(t.categoryId),
   index("transactions_to_account_idx").on(t.toAccountId),
-  index("transactions_counterparty_idx").on(t.counterpartyId),
-  index("transactions_payee_idx").on(t.payee),
+  index("transactions_obligation_counterparty_idx").on(t.obligationCounterpartyId),
+  index("transactions_entered_name_idx").on(t.enteredName),
   index("transactions_capital_idx").on(t.isCapital).where(sql`${t.isCapital}`),
   // Excludes soft-deleted rows: otherwise deleting an imported row makes its
   // external_id permanently unusable, and the blocking row is invisible in
@@ -521,11 +521,14 @@ export const transactions = pgTable("transactions", transactionsColumns(), (t) =
     "transactions_category_shape",
     sql`(${t.type} in ('income', 'expense')) or ${t.categoryId} is null`,
   ),
-  // A counterparty reference must say what it means, and a role without a
-  // counterparty is meaningless.
+  // An obligation must say what it means, and a role with nobody on the other
+  // side of it is meaningless. The pair is the whole of the guarantee: nothing
+  // here ties an obligation to who the transaction was *with*, because those
+  // are separate facts — a cash loan to a friend has an obligation and no
+  // third party, a shop purchase has a party and no obligation.
   check(
-    "transactions_counterparty_role_shape",
-    sql`(${t.counterpartyId} is not null) = (${t.counterpartyRole} is not null)`,
+    "transactions_obligation_pair_shape",
+    sql`(${t.obligationCounterpartyId} is not null) = (${t.obligationRole} is not null)`,
   ),
   check(
     "transactions_occurrence_shape",

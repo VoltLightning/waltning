@@ -76,7 +76,7 @@ bank statement exported manually
 | S02c | Confidence below threshold | Stays in *needs review*; never bulk-accepted |
 | S02c | Model proposes an unknown category | **Proposal only** (`SPEC.md` §11.5) — never created silently |
 | S02c | Business row in a shared account | Refused with the reason (§6.7) |
-| S02c | Wants a rule | S20 prefilled from the row's payee, amount range, account |
+| S02c | Wants a rule | S20 prefilled from the row's entered name, amount range, account |
 | S02d | Balances do not match the statement | Named per account before the dashboard, not after |
 
 ## 5. Failure paths

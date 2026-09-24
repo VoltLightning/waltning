@@ -150,8 +150,8 @@ export default function CounterpartyEditor() {
         rateOf,
         snapshot.currencies,
       );
-      const transactionCount = ledger.searchTransactions({ counterpartyId: candidate.id }).total
-        .count;
+      const transactionCount = ledger.searchTransactions({ obligationCounterpartyId: candidate.id })
+        .total.count;
       return {
         id: candidate.id,
         name: candidate.name,

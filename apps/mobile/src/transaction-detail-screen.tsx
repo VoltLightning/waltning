@@ -87,9 +87,9 @@ function toFields(detail: PhoneTransactionDetail): TransactionFields {
     date: detail.date,
     accountId: detail.accountId,
     categoryId: detail.categoryId,
-    counterpartyId: detail.counterpartyId,
-    counterpartyRole: detail.counterpartyRole,
-    payee: detail.payee,
+    obligationCounterpartyId: detail.obligationCounterpartyId,
+    obligationRole: detail.obligationRole,
+    enteredName: detail.enteredName,
     note: detail.note,
     isBusiness: detail.isBusiness,
     isCapital: detail.isCapital,
@@ -307,13 +307,13 @@ export default function TransactionDetail() {
   const effectiveAccountId = pickedAccountId ?? detail.accountId;
   // The pick until it is saved, the saved row afterwards — `accountId`'s own rule.
   const effectiveCounterparty = pickedCounterparty ?? {
-    id: detail.counterpartyId,
+    id: detail.obligationCounterpartyId,
     name: detail.counterpartyName,
   };
 
   return (
     <PushedPage
-      title={detail.payee === "" ? t("routes.transaction") : detail.payee}
+      title={detail.enteredName === "" ? t("routes.transaction") : detail.enteredName}
       subtitle={dayLabel(detail.date, locale)}
     >
       <TransactionHero
@@ -322,7 +322,7 @@ export default function TransactionDetail() {
         decimals={detail.decimals}
         type={detail.type}
         accountName={detail.accountName}
-        payee={detail.payee}
+        enteredName={detail.enteredName}
         brandKey={detail.brandKey}
       />
       <Card>
@@ -335,7 +335,7 @@ export default function TransactionDetail() {
           categoryId={detail.categoryId}
           categoryName={detail.categoryName}
           onOpenCategoryPicker={handleOpenCategoryPicker}
-          counterpartyId={effectiveCounterparty.id}
+          obligationCounterpartyId={effectiveCounterparty.id}
           counterpartyName={effectiveCounterparty.name}
           onOpenCounterpartyPicker={handleOpenCounterpartyPicker}
           {...(fieldsErrors ? { fieldErrors: fieldsErrors } : {})}

@@ -32,7 +32,7 @@ describe("the headline example", () => {
       accountId: "acc-cash",
       categoryId: null,
       date: "2026-09-03",
-      payee: "coffee",
+      enteredName: "coffee",
     });
   });
 });
@@ -45,7 +45,7 @@ describe("S05's examples", () => {
       amount: "48.90000000",
       accountId: "acc-cash",
       date: "2026-09-02",
-      payee: "coffee",
+      enteredName: "coffee",
     });
   });
 
@@ -56,7 +56,7 @@ describe("S05's examples", () => {
       amount: "1240.50000000",
       accountId: "acc-bank-a",
       date: "2026-09-02",
-      payee: "taxi",
+      enteredName: "taxi",
     });
   });
 });
@@ -64,22 +64,22 @@ describe("S05's examples", () => {
 describe("C1 — an ungrouped amount past three digits resolves whole", () => {
   it("'1000 cash coffee'", () => {
     const parsed = parseCapture("1000 cash coffee", baseContext);
-    expect(parsed).toMatchObject({ ok: true, amount: "1000.00000000", payee: "coffee" });
+    expect(parsed).toMatchObject({ ok: true, amount: "1000.00000000", enteredName: "coffee" });
   });
 
   it("'1234.56 cash coffee'", () => {
     const parsed = parseCapture("1234.56 cash coffee", baseContext);
-    expect(parsed).toMatchObject({ ok: true, amount: "1234.56000000", payee: "coffee" });
+    expect(parsed).toMatchObject({ ok: true, amount: "1234.56000000", enteredName: "coffee" });
   });
 
   it("'12345 cash coffee'", () => {
     const parsed = parseCapture("12345 cash coffee", baseContext);
-    expect(parsed).toMatchObject({ ok: true, amount: "12345.00000000", payee: "coffee" });
+    expect(parsed).toMatchObject({ ok: true, amount: "12345.00000000", enteredName: "coffee" });
   });
 
   it("'1 234.56 cash coffee' — already grouped, still whole", () => {
     const parsed = parseCapture("1 234.56 cash coffee", baseContext);
-    expect(parsed).toMatchObject({ ok: true, amount: "1234.56000000", payee: "coffee" });
+    expect(parsed).toMatchObject({ ok: true, amount: "1234.56000000", enteredName: "coffee" });
   });
 
   it("'1.234,56 cash coffee' — two marks never both group: the first is the decimal mark", () => {
@@ -88,30 +88,30 @@ describe("C1 — an ungrouped amount past three digits resolves whole", () => {
     // `1.234` is the first number and the amount; `,56` is a second number
     // token the first-number rule discards, never a second thousands group.
     const parsed = parseCapture("1.234,56 cash coffee", baseContext);
-    expect(parsed).toMatchObject({ ok: true, amount: "1.23400000", payee: "coffee" });
+    expect(parsed).toMatchObject({ ok: true, amount: "1.23400000", enteredName: "coffee" });
   });
 });
 
-describe("L1 — a second number is payee text, never a second thousands group", () => {
-  it("'1234 567 cash' — 567 stays outside the amount, visible in the payee and in `unmatched`", () => {
+describe("L1 — a second number is enteredName text, never a second thousands group", () => {
+  it("'1234 567 cash' — 567 stays outside the amount, visible in the enteredName and in `unmatched`", () => {
     const parsed = parseCapture("1234 567 cash", baseContext);
     expect(parsed).toMatchObject({
       ok: true,
       amount: "1234.00000000",
       accountId: "acc-cash",
-      payee: "567",
+      enteredName: "567",
     });
     expect(parsed.unmatched).toEqual(["567"]);
   });
 
-  it("'1000 2000 cash' — the first number is the amount, the second is the payee (S05 §3's stated rule)", () => {
+  it("'1000 2000 cash' — the first number is the amount, the second is the enteredName (S05 §3's stated rule)", () => {
     const parsed = parseCapture("1000 2000 cash", baseContext);
-    expect(parsed).toMatchObject({ ok: true, amount: "1000.00000000", payee: "2000" });
+    expect(parsed).toMatchObject({ ok: true, amount: "1000.00000000", enteredName: "2000" });
   });
 
   it("'1 234 567 cash coffee' — a real grouping chain is still one figure", () => {
     const parsed = parseCapture("1 234 567 cash coffee", baseContext);
-    expect(parsed).toMatchObject({ ok: true, amount: "1234567.00000000", payee: "coffee" });
+    expect(parsed).toMatchObject({ ok: true, amount: "1234567.00000000", enteredName: "coffee" });
   });
 });
 
@@ -123,14 +123,14 @@ describe("L2 — a line that leads with an ISO date resolves both the date and t
       amount: "48.90000000",
       accountId: "acc-cash",
       date: "2026-08-10",
-      payee: "coffee",
+      enteredName: "coffee",
     });
     // The whole date token is consumed — none of it leaks into `unmatched`,
-    // which otherwise carries every token the payee was built from.
+    // which otherwise carries every token the entered name was built from.
     expect(parsed.unmatched).toEqual(["coffee"]);
   });
 
-  it("mid-line, after the payee — '48.90 cash coffee 2026-08-10' was already right and stays right", () => {
+  it("mid-line, after the enteredName — '48.90 cash coffee 2026-08-10' was already right and stays right", () => {
     const parsed = parseCapture("48.90 cash coffee 2026-08-10", baseContext);
     expect(parsed).toMatchObject({ ok: true, amount: "48.90000000", date: "2026-08-10" });
   });
@@ -221,17 +221,17 @@ describe("a default account fills in when no name is in the text", () => {
   it("resolves via defaultAccountId", () => {
     const context: CaptureContext = { ...baseContext, defaultAccountId: "acc-cash" };
     const parsed = parseCapture("18 lunch", context);
-    expect(parsed).toMatchObject({ ok: true, accountId: "acc-cash", payee: "lunch" });
+    expect(parsed).toMatchObject({ ok: true, accountId: "acc-cash", enteredName: "lunch" });
   });
 });
 
 describe("a category name binds too", () => {
-  it("'coffee 18 cash food' — Food is bound and dropped from the payee", () => {
+  it("'coffee 18 cash food' — Food is bound and dropped from the enteredName", () => {
     const parsed = parseCapture("coffee 18 cash food", baseContext);
     expect(parsed).toMatchObject({
       ok: true,
       categoryId: "cat-food",
-      payee: "coffee",
+      enteredName: "coffee",
     });
   });
 });

@@ -49,7 +49,7 @@ beforeAll(async () => {
       amountOriginal: money.toMoney("10"),
       currency: PLN,
       fxRate: money.pivotPerUnit("1"),
-      payee: "Groceries own",
+      enteredName: "Groceries own",
     },
     {
       id: id<"transactions">("44444444-4444-4444-4444-0000000000a2"),
@@ -61,7 +61,7 @@ beforeAll(async () => {
       amountOriginal: money.toMoney("20"),
       currency: PLN,
       fxRate: money.pivotPerUnit("1"),
-      payee: "Business lunch",
+      enteredName: "Business lunch",
     },
     {
       id: id<"transactions">("44444444-4444-4444-4444-0000000000a3"),
@@ -72,7 +72,7 @@ beforeAll(async () => {
       amountOriginal: money.toMoney("30"),
       currency: PLN,
       fxRate: money.pivotPerUnit("1"),
-      payee: "Shared groceries",
+      enteredName: "Shared groceries",
     },
   ]);
 }, 60_000);
@@ -84,27 +84,27 @@ afterAll(async () => {
 describe("searchTransactions structural filters", () => {
   it("filters by account", async () => {
     const page = await searchTransactions(s.db, { accountIds: [SHARED] }, 50, null);
-    expect(page.rows.map((r) => r.payee)).toEqual(["Shared groceries"]);
+    expect(page.rows.map((r) => r.enteredName)).toEqual(["Shared groceries"]);
   });
 
   it("filters by category", async () => {
     const page = await searchTransactions(s.db, { categoryIds: [TRAVEL] }, 50, null);
-    expect(page.rows.map((r) => r.payee)).toEqual(["Business lunch"]);
+    expect(page.rows.map((r) => r.enteredName)).toEqual(["Business lunch"]);
   });
 
   it("scope=mine excludes shared accounts and business rows", async () => {
     const page = await searchTransactions(s.db, { scope: "mine" }, 50, null);
-    expect(page.rows.map((r) => r.payee).sort()).toEqual(["Groceries own"]);
+    expect(page.rows.map((r) => r.enteredName).sort()).toEqual(["Groceries own"]);
   });
 
   it("scope=shared includes only shared-ownership accounts", async () => {
     const page = await searchTransactions(s.db, { scope: "shared" }, 50, null);
-    expect(page.rows.map((r) => r.payee)).toEqual(["Shared groceries"]);
+    expect(page.rows.map((r) => r.enteredName)).toEqual(["Shared groceries"]);
   });
 
   it("scope=business includes only business rows, regardless of ownership", async () => {
     const page = await searchTransactions(s.db, { scope: "business" }, 50, null);
-    expect(page.rows.map((r) => r.payee)).toEqual(["Business lunch"]);
+    expect(page.rows.map((r) => r.enteredName)).toEqual(["Business lunch"]);
   });
 
   it("filters by date range", async () => {
@@ -114,6 +114,6 @@ describe("searchTransactions structural filters", () => {
       50,
       null,
     );
-    expect(page.rows.map((r) => r.payee)).toEqual(["Business lunch"]);
+    expect(page.rows.map((r) => r.enteredName)).toEqual(["Business lunch"]);
   });
 });

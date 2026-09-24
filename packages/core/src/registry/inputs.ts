@@ -63,7 +63,7 @@ import {
  * `TXN_TYPE` is pinned against `core`'s own `TxnType` in `inputs.test.ts` —
  * through the parsed output, so it is the schema that is checked and not a
  * restatement of it. `ACCOUNT_KIND`, `OWNERSHIP`, `TXN_SOURCE` and
- * `COUNTERPARTY_ROLE` have no core-side counterpart to pin against — the real
+ * `OBLIGATION_ROLE` have no core-side counterpart to pin against — the real
  * fix is moving the value sets down into `core` and having `schema` import
  * them, which is a change to `packages/schema` and belongs in its own diff.
  */
@@ -89,7 +89,7 @@ const TXN_TYPE = ["income", "expense", "transfer", "adjustment"] as const;
 const TXN_SOURCE = ["manual", "import", "receipt", "agent", "migration"] as const;
 
 /** §6.6 — naming a counterparty is not the same as owing them. */
-const COUNTERPARTY_ROLE = ["debt", "contribution", "reference"] as const;
+const OBLIGATION_ROLE = ["debt", "contribution", "reference"] as const;
 
 /** §6.6 — a person or a company; `O15`'s ageing applies to companies only. */
 const COUNTERPARTY_KIND = ["person", "company"] as const;
@@ -322,9 +322,13 @@ export const createTransactionInput = z
      */
     categoryId: zId<"categories">().optional(),
 
-    /** §6.6. Paired with the role by `transactions_counterparty_role_shape`. */
-    counterpartyId: zId<"counterparties">().optional(),
-    counterpartyRole: z.enum(COUNTERPARTY_ROLE).optional(),
+    /**
+     * §6.6 — who the obligation is *with*, which is a separate fact from who
+     * the transaction was with. Paired with the role by
+     * `transactions_obligation_pair_shape`.
+     */
+    obligationCounterpartyId: zId<"counterparties">().optional(),
+    obligationRole: z.enum(OBLIGATION_ROLE).optional(),
 
     /* The destination leg — a transfer, and only a transfer (§7.5). */
     toAccountId: zId<"accounts">().optional(),
@@ -365,12 +369,12 @@ export const createTransactionInput = z
      */
     fee: zFee.optional(),
 
-    payee: z.string().trim().max(200).default(""),
+    enteredName: z.string().trim().max(200).default(""),
     note: z.string().trim().max(2000).default(""),
 
     /**
      * `SPEC.md` §14.4b — an explicit assertion, never the common case. Absent,
-     * `resolveBrand` (`@waltning/core/brands/match`) tries to match `payee`
+     * `resolveBrand` (`@waltning/core/brands/match`) tries to match `entered_name`
      * against the bundled catalogue instead, and the row's `brand_source`
      * records which happened (`manual` here, `auto` there) — never a
      * caller input, the same reason `fxRateEstimated` is not one (see
@@ -421,7 +425,7 @@ export const createTransactionInput = z
     //   `deleted_at`            — `delete_transaction`, soft (§6.9).
     //   `brand_source`          — derived by `resolveBrand`, never asserted:
     //                             `manual` when `brandKey` was supplied here,
-    //                             `auto` when the payee matched instead —
+    //                             `auto` when the entered name matched instead —
     //                             the same split `fx_rate_estimated` draws
     //                             above. `update_transaction`'s own patch
     //                             also reaches the third value, `none` — see
@@ -531,16 +535,18 @@ export const createTransactionInput = z
     // already added above. TAXONOMY R1 lives on the leaf check, not here.
 
     /**
-     * `transactions_counterparty_role_shape` — *"a counterparty reference must
-     * say what it means, and a role without a counterparty is meaningless"*.
+     * `transactions_obligation_pair_shape` — *"an obligation must say what it
+     * means, and a role with nobody on the other side of it is meaningless"*.
      * The role is what decides whether the row reaches `counterparty_balances`
      * at all (§6.6), so leaving it unsaid is not a smaller claim.
      */
-    if ((t.counterpartyId !== undefined) !== (t.counterpartyRole !== undefined)) {
+    if ((t.obligationCounterpartyId !== undefined) !== (t.obligationRole !== undefined)) {
       ctx.addIssue({
         code: "custom",
-        path: [t.counterpartyId === undefined ? "counterpartyId" : "counterpartyRole"],
-        message: "a counterparty and its role travel together (§6.6)",
+        path: [
+          t.obligationCounterpartyId === undefined ? "obligationCounterpartyId" : "obligationRole",
+        ],
+        message: "an obligation and its role travel together (§6.6)",
       });
     }
   });
@@ -828,15 +834,15 @@ const transactionPatch = z
     accountId: zId<"accounts">().optional(),
     amountOriginal: zMoney.optional(),
     categoryId: zId<"categories">().nullable().optional(),
-    counterpartyId: zId<"counterparties">().nullable().optional(),
-    counterpartyRole: z.enum(COUNTERPARTY_ROLE).nullable().optional(),
+    obligationCounterpartyId: zId<"counterparties">().nullable().optional(),
+    obligationRole: z.enum(OBLIGATION_ROLE).nullable().optional(),
     toAccountId: zId<"accounts">().nullable().optional(),
     toAmount: zMoney.nullable().optional(),
     toCurrency: zCurrencyCode.nullable().optional(),
     fxRate: zPivotPerUnit.optional(),
     toFxRate: zPivotPerUnit.nullable().optional(),
     fee: zFee.nullable().optional(),
-    payee: z.string().trim().max(200).optional(),
+    enteredName: z.string().trim().max(200).optional(),
     note: z.string().trim().max(2000).optional(),
     isBusiness: z.boolean().optional(),
     isCapital: z.boolean().optional(),
@@ -846,8 +852,8 @@ const transactionPatch = z
      * `@waltning/core/brands/match`) writes as `{ brandKey: null,
      * brandSource: "none" }` and treats as **sticky**: a wrong catalogue
      * match, once cleared, must not come straight back the next time the
-     * payee happens to fold to the same alias, so this is deliberately not
-     * "let the payee decide again". Present and non-null follows
+     * entered name happens to fold to the same alias, so this is deliberately not
+     * "let the entered name decide again". Present and non-null follows
      * `createTransactionInput.brandKey`'s own catalogue check, below, and is
      * always sourced `manual`.
      */
@@ -1260,7 +1266,7 @@ export const createCounterpartyInput = z.object({
 export type CreateCounterpartyInput = z.output<typeof createCounterpartyInput>;
 export type CounterpartyKind = CreateCounterpartyInput["kind"];
 /** §6.6's three roles, derived from the capture input rather than restated. */
-export type CounterpartyRole = NonNullable<CreateTransactionInput["counterpartyRole"]>;
+export type ObligationRole = NonNullable<CreateTransactionInput["obligationRole"]>;
 
 /**
  * `update_counterparty` — a patch with a version, same shape as

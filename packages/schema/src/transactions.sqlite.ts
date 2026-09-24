@@ -4,7 +4,7 @@ import { accounts } from "./accounts.sqlite.ts";
 import { categories } from "./categories.sqlite.ts";
 import { counterparties } from "./counterparties.sqlite.ts";
 import { currencies } from "./currencies.sqlite.ts";
-import { BRAND_SOURCE, COUNTERPARTY_ROLE, TXN_SOURCE, TXN_TYPE } from "./enums.ts";
+import { BRAND_SOURCE, OBLIGATION_ROLE, TXN_SOURCE, TXN_TYPE } from "./enums.ts";
 import { sqliteKit as k } from "./kit.ts";
 import { recurringTransactions } from "./recurring-transactions.sqlite.ts";
 
@@ -30,14 +30,14 @@ import { recurringTransactions } from "./recurring-transactions.sqlite.ts";
  * on, and it would be shown a row missing figures it is expected to check.
  *
  * Most indexes, all eight foreign-key behaviours and every other check stay
- * in `packages/db`. **`category_id`, `counterparty_id` and `date` are the
+ * in `packages/db`. **`category_id`, `obligation_counterparty_id` and `date` are the
  * exceptions (M2, R2 M4)** — S19's merge preview reads `category_id` straight off the
  * replica, on every render the merge sheet is open for, and
  * `readCounterpartyBalances`/`balancesForCounterparty`
  * (`packages/ledger/src/counterparties/read-counterparty-balances.ts`) scan
- * `transactions` by `counterparty_id` on every settlement, every archive
+ * `transactions` by `obligation_counterparty_id` on every settlement, every archive
  * gate, and every §7 read — the same predicate Postgres already indexes
- * (`transactions_counterparty_idx`) — and the replica had nothing at all
+ * (`transactions_obligation_counterparty_idx`) — and the replica had nothing at all
  * backing either one. `date` joined them when S04 moved two period reads onto
  * the launch screen; see the index's own note below.
  *
@@ -77,8 +77,10 @@ export const transactionsColumns = () => ({
   categoryId: k
     .uuid<"categories">("category_id")
     .references(() => categories.id, { onDelete: "restrict" }),
-  counterpartyId: k.uuid<"counterparties">("counterparty_id").references(() => counterparties.id),
-  counterpartyRole: k.text("counterparty_role", { enum: COUNTERPARTY_ROLE }),
+  obligationCounterpartyId: k
+    .uuid<"counterparties">("obligation_counterparty_id")
+    .references(() => counterparties.id),
+  obligationRole: k.text("obligation_role", { enum: OBLIGATION_ROLE }),
   debtCurrency: k.currency("debt_currency").references(() => currencies.code),
   debtAmount: k.money("debt_amount"),
   amountOriginal: k.money("amount_original").notNull(),
@@ -91,7 +93,7 @@ export const transactionsColumns = () => ({
   toAmount: k.money("to_amount"),
   toCurrency: k.currency("to_currency").references(() => currencies.code),
   toFxRate: k.pivotPerUnit("to_fx_rate"),
-  payee: k.text("payee").notNull().default(""),
+  enteredName: k.text("entered_name").notNull().default(""),
   note: k.text("note").notNull().default(""),
   /**
    * `SPEC.md` §14.4b — see `transactions.pg.ts`'s identical field for the
@@ -130,7 +132,7 @@ export const transactionsColumns = () => ({
 /**
  * Four exceptions to "most indexes and checks stay in `packages/db`":
  * `transactions_category_idx` backs the category reads on the phone,
- * `transactions_counterparty_idx` backs the counterparty-balance reads
+ * `transactions_obligation_counterparty_idx` backs the counterparty-balance reads
  * (R2 M4), `transactions_debt_amount_requires_currency` and
  * `transactions_brand_shape` are each a check that must refuse at capture
  * time rather than only on a server that does not exist yet this arc (L,
@@ -138,7 +140,7 @@ export const transactionsColumns = () => ({
  */
 export const transactions = k.table("transactions", transactionsColumns(), (t) => [
   index("transactions_category_idx").on(t.categoryId),
-  index("transactions_counterparty_idx").on(t.counterpartyId),
+  index("transactions_obligation_counterparty_idx").on(t.obligationCounterpartyId),
   /**
    * Every period read scans this range — §5's `periodSpend`, §6's spend by
    * category, §12's buckets — and S04 now runs two of them on the launch

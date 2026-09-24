@@ -25,7 +25,7 @@ describe("counterparty balance — §7, in SQL", () => {
         ('55555555-5555-5555-5555-555555555555','Counterparty B');
       INSERT INTO transactions
         (id, date, type, account_id, to_account_id, amount_original, to_amount,
-         currency, to_currency, fx_rate, to_fx_rate, counterparty_id, counterparty_role)
+         currency, to_currency, fx_rate, to_fx_rate, obligation_counterparty_id, obligation_role)
         VALUES
           -- Counterparty A, lent 200 PLN (expense, single leg)
           ('66666666-6666-6666-6666-666666666666','2026-09-01','expense',
@@ -74,7 +74,7 @@ describe("counterparty balance — §7, in SQL", () => {
         ('44444444-4444-4444-4444-444444444445','Counterparty C');
       INSERT INTO transactions
         (id, date, type, account_id, amount_original, currency, fx_rate,
-         counterparty_id, counterparty_role)
+         obligation_counterparty_id, obligation_role)
         VALUES
           -- lent 200 PLN
           ('66666666-6666-6666-6666-666666666667','2026-09-01','expense',
@@ -84,7 +84,7 @@ describe("counterparty balance — §7, in SQL", () => {
       -- name what the settlement actually clears, never what changed hands.
       INSERT INTO transactions
         (id, date, type, account_id, amount_original, currency, fx_rate,
-         counterparty_id, counterparty_role, debt_currency, debt_amount)
+         obligation_counterparty_id, obligation_role, debt_currency, debt_amount)
         VALUES
           ('77777777-7777-7777-7777-777777777778','2026-09-02','income',
            '11111111-1111-1111-1111-111111111113',50,'EUR',1,
@@ -114,7 +114,7 @@ describe("counterparty balance — §7, in SQL", () => {
         ('44444444-4444-4444-4444-444444444447','Open & archived', true);
       INSERT INTO transactions
         (id, date, type, account_id, amount_original, currency, fx_rate,
-         counterparty_id, counterparty_role)
+         obligation_counterparty_id, obligation_role)
         VALUES
           -- Settled & archived: lent 100, repaid 100 — nets to zero.
           ('66666666-6666-6666-6666-666666666668','2026-09-01','expense',

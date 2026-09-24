@@ -52,7 +52,7 @@ describe("activeFilterDimensions", () => {
         categoryIds: ["cat-1"],
         scope: "business",
         currency: "PLN",
-        counterpartyId: "cp-1",
+        obligationCounterpartyId: "cp-1",
         from: "2026-09-01",
         to: "2026-09-30",
       }),
@@ -62,7 +62,7 @@ describe("activeFilterDimensions", () => {
       "categoryIds",
       "scope",
       "currency",
-      "counterpartyId",
+      "obligationCounterpartyId",
       "dateRange",
     ]);
   });
@@ -91,7 +91,7 @@ const EVERY_DIMENSION: LedgerFilterState = {
   categoryIds: ["66666666-6666-4666-8666-666666666666"],
   scope: "business",
   currency: "PLN",
-  counterpartyId: "77777777-7777-4777-8777-777777777777",
+  obligationCounterpartyId: "77777777-7777-4777-8777-777777777777",
   from: "2026-09-01",
   to: "2026-09-30",
 };

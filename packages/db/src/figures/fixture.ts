@@ -250,7 +250,7 @@ export type FixtureTx = {
   currency: string;
   toCurrency?: string;
   counterpartyId?: string;
-  counterpartyRole?: "debt";
+  obligationRole?: "debt";
   /** Coalesced over `amountOriginal`/`toAmount` when set (S14). */
   debtCurrency?: string;
   debtAmount?: string;
@@ -331,7 +331,7 @@ export const TRANSACTIONS: readonly FixtureTx[] = [
     amountOriginal: "200",
     currency: "PLN",
     counterpartyId: COUNTERPARTY.id,
-    counterpartyRole: "debt",
+    obligationRole: "debt",
   },
   // repaid 50 as a transfer INTO Bank A: counterparty on the destination leg
   {
@@ -345,7 +345,7 @@ export const TRANSACTIONS: readonly FixtureTx[] = [
     currency: "PLN",
     toCurrency: "PLN",
     counterpartyId: COUNTERPARTY.id,
-    counterpartyRole: "debt",
+    obligationRole: "debt",
   },
   // soft-deleted: large enough that either side including it by mistake fails loudly
   {
@@ -367,7 +367,7 @@ export const TRANSACTIONS: readonly FixtureTx[] = [
     amountOriginal: "30",
     currency: "USD",
     counterpartyId: COUNTERPARTY.id,
-    counterpartyRole: "debt",
+    obligationRole: "debt",
   },
   // §7 ageing — Acme, a company: lent 200 (oldest), lent 300, repaid 200.
   // The repayment fully consumes the 200 (FIFO, oldest-first), so the
@@ -381,7 +381,7 @@ export const TRANSACTIONS: readonly FixtureTx[] = [
     amountOriginal: "200",
     currency: "PLN",
     counterpartyId: COMPANY.id,
-    counterpartyRole: "debt",
+    obligationRole: "debt",
   },
   {
     id: "20000000-0000-4000-8000-000000000012",
@@ -391,7 +391,7 @@ export const TRANSACTIONS: readonly FixtureTx[] = [
     amountOriginal: "300",
     currency: "PLN",
     counterpartyId: COMPANY.id,
-    counterpartyRole: "debt",
+    obligationRole: "debt",
   },
   {
     id: "20000000-0000-4000-8000-000000000013",
@@ -401,7 +401,7 @@ export const TRANSACTIONS: readonly FixtureTx[] = [
     amountOriginal: "200",
     currency: "PLN",
     counterpartyId: COMPANY.id,
-    counterpartyRole: "debt",
+    obligationRole: "debt",
   },
   // §8 — two inflows to Trip clearing, one allocation exhausting the older:
   // the still-unconsumed inflow is the 80 dated second, not the 120 dated
@@ -486,7 +486,7 @@ export const TRANSACTIONS: readonly FixtureTx[] = [
     amountOriginal: "50",
     currency: "PLN",
     counterpartyId: FLIPCO.id,
-    counterpartyRole: "debt",
+    obligationRole: "debt",
   },
   {
     id: "20000000-0000-4000-8000-00000000001e",
@@ -496,7 +496,7 @@ export const TRANSACTIONS: readonly FixtureTx[] = [
     amountOriginal: "80",
     currency: "PLN",
     counterpartyId: FLIPCO.id,
-    counterpartyRole: "debt",
+    obligationRole: "debt",
   },
   {
     id: "20000000-0000-4000-8000-00000000001f",
@@ -506,7 +506,7 @@ export const TRANSACTIONS: readonly FixtureTx[] = [
     amountOriginal: "20",
     currency: "PLN",
     counterpartyId: FLIPCO.id,
-    counterpartyRole: "debt",
+    obligationRole: "debt",
   },
   {
     id: "20000000-0000-4000-8000-000000000020",
@@ -516,7 +516,7 @@ export const TRANSACTIONS: readonly FixtureTx[] = [
     amountOriginal: "100",
     currency: "PLN",
     counterpartyId: FLIPCO.id,
-    counterpartyRole: "debt",
+    obligationRole: "debt",
   },
   {
     id: "20000000-0000-4000-8000-000000000021",
@@ -526,7 +526,7 @@ export const TRANSACTIONS: readonly FixtureTx[] = [
     amountOriginal: "75",
     currency: "PLN",
     counterpartyId: FLIPCO.id,
-    counterpartyRole: "debt",
+    obligationRole: "debt",
   },
   // §7 — a settlement's own currency and amount (S14): Counterparty A pays
   // 50 EUR that discharges 214.05 PLN of the 150 still owed. The PLN balance
@@ -541,7 +541,7 @@ export const TRANSACTIONS: readonly FixtureTx[] = [
     amountOriginal: "50",
     currency: "EUR",
     counterpartyId: COUNTERPARTY.id,
-    counterpartyRole: "debt",
+    obligationRole: "debt",
     debtCurrency: "PLN",
     debtAmount: "214.05",
   },

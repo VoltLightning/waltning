@@ -5,13 +5,13 @@
  * *did **this field** change under you since you read it?* — and `version` is a
  * per-row counter that any update advances. It can only say that *something*
  * moved. Relying on it alone makes disjoint edits collide: a laptop fixing a
- * payee bumps the row, and a phone's queued `category` edit then arrives
+ * entered name bumps the row, and a phone's queued `category` edit then arrives
  * "stale" and is reported as a conflict that §14.2 says must merge with no
  * prompt.
  *
  * That is not a cosmetic misfire. `is_business` is tax-sensitive, and H16 says a
  * tax-sensitive field with a stale version is **blocked** rather than
- * overwritten — so a payee typo fixed on another device permanently blocks an
+ * overwritten — so a entered name typo fixed on another device permanently blocks an
  * unrelated queued edit, and S30 reports that another device changed
  * `is_business`. Nothing did. `defects.md` records the same symptom arriving
  * through the replay door; this is the field-granularity door.

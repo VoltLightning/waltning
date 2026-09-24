@@ -139,8 +139,8 @@ describe("every backfill names a step that exists", () => {
   /**
    * `0009_schema` is exactly this shape: a `check` that refuses a rate its own
    * new `CHECK` cannot accept, and nothing to *derive*, so no `fill`.
-   * `0010_schema` is the other shape — an `objects` hook alone, creating all
-   * **six** of the replica's hand-written triggers. The hook rather than a
+   * `0017_schema` is the other shape — an `objects` hook alone, creating all
+   * **nine** of the replica's hand-written triggers. The hook rather than a
    * `.sql` file because a step's statements are frozen by its checksum once
    * an installed database has run them, so nothing in the chain can
    * re-create a trigger a later rebuild of `transactions` dropped; a hook
@@ -158,8 +158,8 @@ describe("every backfill names a step that exists", () => {
       "0009_schema derives no column value",
     ).toBeUndefined();
     expect(
-      REPLICA_BACKFILLS["0010_schema"]?.objects,
-      "0010_schema creates every trigger no migration step can hold",
+      REPLICA_BACKFILLS["0017_schema"]?.objects,
+      "0017_schema creates every trigger no migration step can hold",
     ).toBeDefined();
   });
 });
@@ -301,8 +301,9 @@ describe("every objects hook creates something the chain would not otherwise hav
    * `pnpm ledger:generate` or the next rebuild of `transactions` would have
    * removed them just as quietly. Every hand-written replica trigger is
    * created by the `objects` hook on the last step that rebuilds
-   * `transactions` now — `0010_schema`, which is no longer the chain's head —
-   * so this is the list of every trigger the replica has.
+   * `transactions` now — `0017_schema`, the obligation rename, which rebuilds
+   * it again because SQLite cannot rename a column a CHECK mentions — so this
+   * is the list of every trigger the replica has.
    *
    * Run the real chain to the end, and ask for every name. After the whole
    * chain, never after the hook's own step, which is precisely the

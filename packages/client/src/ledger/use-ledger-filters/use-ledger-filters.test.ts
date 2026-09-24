@@ -94,18 +94,18 @@ describe("useLedgerFilters", () => {
   });
 
   /**
-   * §4's two extra desk dimensions (DESK3 round 1, M). `counterpartyId` is
+   * §4's two extra desk dimensions (DESK3 round 1, M). `obligationCounterpartyId` is
    * *absent* from the draft when unset rather than `""` — the port reads any
-   * present `counterpartyId` as a filter, so an empty one would match no row
+   * present `obligationCounterpartyId` as a filter, so an empty one would match no row
    * at all instead of every row.
    */
   it("counterparty leaves the draft entirely when unset, and joins it when set", () => {
     const { result } = renderHook(() => useLedgerFilters());
-    expect("counterpartyId" in result.current.draft).toBe(false);
+    expect("obligationCounterpartyId" in result.current.draft).toBe(false);
     expect(result.current.hasActiveFilter).toBe(false);
 
-    act(() => result.current.setCounterpartyId("cp-1"));
-    expect(result.current.draft.counterpartyId).toBe("cp-1");
+    act(() => result.current.setObligationCounterpartyId("cp-1"));
+    expect(result.current.draft.obligationCounterpartyId).toBe("cp-1");
     expect(result.current.hasActiveFilter).toBe(true);
   });
 

@@ -1,9 +1,9 @@
 import { expect, it } from "vitest";
-import type { PayeeHistoryRow } from "./payee-memory.ts";
+import type { EnteredNameHistoryRow } from "./entered-name-memory.ts";
 import { recentCategories } from "./recent-categories.ts";
 
-function row(payee: string, categoryId: string, date: string): PayeeHistoryRow {
-  return { payee, categoryId, date } as PayeeHistoryRow;
+function row(enteredName: string, categoryId: string, date: string): EnteredNameHistoryRow {
+  return { enteredName, categoryId, date } as EnteredNameHistoryRow;
 }
 
 const HISTORY = [

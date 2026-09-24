@@ -47,8 +47,8 @@ const txn = (overrides: {
   date: ReturnType<typeof accountingDate>;
   type: "income" | "expense";
   amountOriginal: money.Money;
-  counterpartyId: ReturnType<typeof id<"counterparties">>;
-  counterpartyRole?: "debt" | "contribution" | "reference";
+  obligationCounterpartyId: ReturnType<typeof id<"counterparties">>;
+  obligationRole?: "debt" | "contribution" | "reference";
   deletedAt?: Date;
   currency?: money.CurrencyCode;
   debtCurrency?: money.CurrencyCode;
@@ -57,7 +57,7 @@ const txn = (overrides: {
   accountId: BANK,
   currency: PLN,
   fxRate: money.pivotPerUnit("1"),
-  counterpartyRole: "debt" as const,
+  obligationRole: "debt" as const,
   ...overrides,
 });
 
@@ -71,7 +71,7 @@ describe("readCounterpartyBalances — §6.6's own table, four events in turn", 
           date: accountingDate("2026-08-01"),
           type: "expense",
           amountOriginal: money.toMoney("200"),
-          counterpartyId: NINA,
+          obligationCounterpartyId: NINA,
         }),
       )
       .run();
@@ -99,14 +99,14 @@ describe("readCounterpartyBalances — §6.6's own table, four events in turn", 
           date: accountingDate("2026-08-01"),
           type: "expense",
           amountOriginal: money.toMoney("200"),
-          counterpartyId: NINA,
+          obligationCounterpartyId: NINA,
         }),
         txn({
           id: id<"transactions">("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"),
           date: accountingDate("2026-08-10"),
           type: "income",
           amountOriginal: money.toMoney("200"),
-          counterpartyId: NINA,
+          obligationCounterpartyId: NINA,
         }),
       ])
       .run();
@@ -122,21 +122,21 @@ describe("readCounterpartyBalances — §6.6's own table, four events in turn", 
           date: accountingDate("2026-08-01"),
           type: "expense",
           amountOriginal: money.toMoney("200"),
-          counterpartyId: NINA,
+          obligationCounterpartyId: NINA,
         }),
         txn({
           id: id<"transactions">("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"),
           date: accountingDate("2026-08-10"),
           type: "income",
           amountOriginal: money.toMoney("200"),
-          counterpartyId: NINA,
+          obligationCounterpartyId: NINA,
         }),
         txn({
           id: id<"transactions">("cccccccc-cccc-4ccc-8ccc-cccccccccccc"),
           date: accountingDate("2026-08-15"),
           type: "income",
           amountOriginal: money.toMoney("200"),
-          counterpartyId: NINA,
+          obligationCounterpartyId: NINA,
         }),
       ])
       .run();
@@ -152,28 +152,28 @@ describe("readCounterpartyBalances — §6.6's own table, four events in turn", 
           date: accountingDate("2026-08-01"),
           type: "expense",
           amountOriginal: money.toMoney("200"),
-          counterpartyId: NINA,
+          obligationCounterpartyId: NINA,
         }),
         txn({
           id: id<"transactions">("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"),
           date: accountingDate("2026-08-10"),
           type: "income",
           amountOriginal: money.toMoney("200"),
-          counterpartyId: NINA,
+          obligationCounterpartyId: NINA,
         }),
         txn({
           id: id<"transactions">("cccccccc-cccc-4ccc-8ccc-cccccccccccc"),
           date: accountingDate("2026-08-15"),
           type: "income",
           amountOriginal: money.toMoney("200"),
-          counterpartyId: NINA,
+          obligationCounterpartyId: NINA,
         }),
         txn({
           id: id<"transactions">("dddddddd-dddd-4ddd-8ddd-dddddddddddd"),
           date: accountingDate("2026-08-20"),
           type: "expense",
           amountOriginal: money.toMoney("200"),
-          counterpartyId: NINA,
+          obligationCounterpartyId: NINA,
         }),
       ])
       .run();
@@ -191,7 +191,7 @@ describe("readCounterpartyBalances — ageing, companies only (O15)", () => {
           date: accountingDate("2026-08-01"),
           type: "expense",
           amountOriginal: money.toMoney("200"),
-          counterpartyId: NINA,
+          obligationCounterpartyId: NINA,
         }),
       )
       .run();
@@ -209,7 +209,7 @@ describe("readCounterpartyBalances — ageing, companies only (O15)", () => {
           date: accountingDate("2026-08-01"),
           type: "expense",
           amountOriginal: money.toMoney("500"),
-          counterpartyId: ACME,
+          obligationCounterpartyId: ACME,
         }),
       )
       .run();
@@ -228,21 +228,21 @@ describe("readCounterpartyBalances — ageing, companies only (O15)", () => {
           date: accountingDate("2026-07-01"),
           type: "expense",
           amountOriginal: money.toMoney("200"),
-          counterpartyId: ACME,
+          obligationCounterpartyId: ACME,
         }),
         txn({
           id: id<"transactions">("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"),
           date: accountingDate("2026-08-15"),
           type: "expense",
           amountOriginal: money.toMoney("300"),
-          counterpartyId: ACME,
+          obligationCounterpartyId: ACME,
         }),
         txn({
           id: id<"transactions">("cccccccc-cccc-4ccc-8ccc-cccccccccccc"),
           date: accountingDate("2026-08-20"),
           type: "income",
           amountOriginal: money.toMoney("200"),
-          counterpartyId: ACME,
+          obligationCounterpartyId: ACME,
         }),
       ])
       .run();
@@ -265,16 +265,16 @@ describe("readCounterpartyBalances — structural exclusions", () => {
           date: accountingDate("2026-08-01"),
           type: "income",
           amountOriginal: money.toMoney("200"),
-          counterpartyId: NINA,
-          counterpartyRole: "contribution",
+          obligationCounterpartyId: NINA,
+          obligationRole: "contribution",
         }),
         txn({
           id: id<"transactions">("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"),
           date: accountingDate("2026-08-02"),
           type: "expense",
           amountOriginal: money.toMoney("30"),
-          counterpartyId: NINA,
-          counterpartyRole: "reference",
+          obligationCounterpartyId: NINA,
+          obligationRole: "reference",
         }),
       ])
       .run();
@@ -291,14 +291,14 @@ describe("readCounterpartyBalances — structural exclusions", () => {
           date: accountingDate("2026-08-01"),
           type: "expense",
           amountOriginal: money.toMoney("200"),
-          counterpartyId: NINA,
+          obligationCounterpartyId: NINA,
         }),
         txn({
           id: id<"transactions">("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"),
           date: accountingDate("2026-08-10"),
           type: "income",
           amountOriginal: money.toMoney("200"),
-          counterpartyId: NINA,
+          obligationCounterpartyId: NINA,
         }),
       ])
       .run();
@@ -321,7 +321,7 @@ describe("readCounterpartyBalances — structural exclusions", () => {
           date: accountingDate("2026-08-01"),
           type: "expense",
           amountOriginal: money.toMoney("200"),
-          counterpartyId: NINA,
+          obligationCounterpartyId: NINA,
         }),
       )
       .run();
@@ -339,7 +339,7 @@ describe("readCounterpartyBalances — structural exclusions", () => {
           date: accountingDate("2026-08-01"),
           type: "expense",
           amountOriginal: money.toMoney("200"),
-          counterpartyId: NINA,
+          obligationCounterpartyId: NINA,
           deletedAt: new Date(),
         }),
       )
@@ -356,14 +356,14 @@ describe("readCounterpartyBalances — structural exclusions", () => {
           date: accountingDate("2026-08-01"),
           type: "expense",
           amountOriginal: money.toMoney("200"),
-          counterpartyId: NINA,
+          obligationCounterpartyId: NINA,
         }),
         txn({
           id: id<"transactions">("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"),
           date: accountingDate("2026-08-02"),
           type: "expense",
           amountOriginal: money.toMoney("500"),
-          counterpartyId: ACME,
+          obligationCounterpartyId: ACME,
         }),
       ])
       .run();
@@ -389,7 +389,7 @@ describe("readCounterpartyBalances — a settlement's own currency and amount (S
           date: accountingDate("2026-08-01"),
           type: "expense",
           amountOriginal: money.toMoney("200"),
-          counterpartyId: NINA,
+          obligationCounterpartyId: NINA,
         }),
         txn({
           id: id<"transactions">("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"),
@@ -399,7 +399,7 @@ describe("readCounterpartyBalances — a settlement's own currency and amount (S
           currency: EUR,
           debtCurrency: PLN,
           debtAmount: money.toMoney("214.05"),
-          counterpartyId: NINA,
+          obligationCounterpartyId: NINA,
         }),
       ])
       .run();
@@ -448,8 +448,8 @@ describe("readCounterpartyBalances — a settlement's own currency and amount (S
         toCurrency: PLN,
         fxRate: money.pivotPerUnit("1"),
         debtCurrency: PLN,
-        counterpartyId: NINA,
-        counterpartyRole: "debt",
+        obligationCounterpartyId: NINA,
+        obligationRole: "debt",
       })
       .run();
     // The `to` leg's own 200, never the `from` leg's 50 (a different
@@ -497,7 +497,7 @@ describe("readCounterpartyBalances — a currency missing its own scale (L)", ()
           type: "expense",
           amountOriginal: money.toMoney("200"),
           currency: currencyCode("JPY"),
-          counterpartyId: NINA,
+          obligationCounterpartyId: NINA,
         }),
       )
       .run();
@@ -525,7 +525,7 @@ describe("the transactions table — debt_amount requires debt_currency (L)", ()
             type: "expense",
             amountOriginal: money.toMoney("200"),
             debtAmount: money.toMoney("200"),
-            counterpartyId: NINA,
+            obligationCounterpartyId: NINA,
           }),
         )
         .run(),

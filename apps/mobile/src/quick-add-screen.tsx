@@ -12,8 +12,8 @@ import { usePhoneLedger } from "@waltning/client/ledger/use-phone-ledger";
 import { acceptProposedCategory } from "@waltning/client/transactions/accept-proposed-category";
 import { useLastUsedAccount } from "@waltning/client/transactions/last-capture";
 import { mapFieldErrors } from "@waltning/client/transport/field-errors";
+import { proposeCategory } from "@waltning/core/capture/entered-name-memory";
 import { fold } from "@waltning/core/capture/names";
-import { proposeCategory } from "@waltning/core/capture/payee-memory";
 import { recentCategories } from "@waltning/core/capture/recent-categories";
 import { accountingDate, clockIn } from "@waltning/core/date";
 import * as money from "@waltning/core/money";
@@ -47,7 +47,7 @@ import { Alert, Text, View } from "react-native";
 import { lastCapture, saveHaptic } from "./platform";
 
 type CreateAccountEscapeDraft = { amount: string; accountId: string | null };
-type CounterpartyRole = "debt" | "contribution" | "reference";
+type ObligationRole = "debt" | "contribution" | "reference";
 
 function handleDeskCancel() {
   router.back();
@@ -229,12 +229,12 @@ export default function QuickAdd() {
   const [composerCategoryId, setComposerCategoryId] = useState<string | null>(null);
   /**
    * H1 — S05 §8's Undo, for a proposal the draft applied on its own. Reset
-   * whenever the payee's *fold* changes (the effect beside `payeeFold`
-   * below): a different payee earns its own proposal a fresh chance, rather
+   * whenever the entered name's *fold* changes (the effect beside `enteredNameFold`
+   * below): a different entered name earns its own proposal a fresh chance, rather
    * than inheriting a dismissal that was never about it.
    */
   const [categoryProposalDismissed, setCategoryProposalDismissed] = useState(false);
-  const [composerPayee, setComposerPayee] = useState("");
+  const [composerEnteredName, setComposerEnteredName] = useState("");
   const [composerDate, setComposerDate] = useState<string>(today);
   // Empty, which is the normal case: a time is set only when someone has one.
   const [composerTime, setComposerTime] = useState<string>("");
@@ -248,9 +248,7 @@ export default function QuickAdd() {
       ? (draft.counterpartyId ?? null)
       : null,
   );
-  const [composerCounterpartyRole, setComposerCounterpartyRole] = useState<CounterpartyRole | null>(
-    null,
-  );
+  const [composerObligationRole, setComposerObligationRole] = useState<ObligationRole | null>(null);
   const [composerCategorySheet, setComposerCategorySheet] = useState<{
     open: boolean;
     kind: "income" | "expense";
@@ -273,28 +271,28 @@ export default function QuickAdd() {
     (account) => account.id === effectiveAccountId,
   );
 
-  const payeeFold = useMemo(() => fold(composerPayee), [composerPayee]);
+  const enteredNameFold = useMemo(() => fold(composerEnteredName), [composerEnteredName]);
   /**
-   * M — reset the Undo dismissal only when the payee's *fold* actually
-   * changes, not on every keystroke. `handleComposerPayeeChange` used to
+   * M — reset the Undo dismissal only when the entered name's *fold* actually
+   * changes, not on every keystroke. `handleComposerEnteredNameChange` used to
    * reset `categoryProposalDismissed` on raw text, so a no-op edit — retype
    * the same fold, or a keystroke `fold` collapses away (case, punctuation,
    * whitespace) — silently revived a proposal someone had just dismissed
    * with S05 §8's own Undo.
    */
-  // biome-ignore lint/correctness/useExhaustiveDependencies: payeeFold is the trigger; the effect body reads no value from it
+  // biome-ignore lint/correctness/useExhaustiveDependencies: enteredNameFold is the trigger; the effect body reads no value from it
   useEffect(() => {
     setCategoryProposalDismissed(false);
-  }, [payeeFold]);
-  // `payeeFold` (not `composerPayee`) is both the dependency and the value
+  }, [enteredNameFold]);
+  // `enteredNameFold` (not `composerEnteredName`) is both the dependency and the value
   // `proposeCategory` is given: `fold` is idempotent, so this is the same
   // match `proposeCategory`'s own internal fold would produce, and it is what
-  // keeps `ledger.listPayeeHistory()` — a replica read — from re-running on
+  // keeps `ledger.listEnteredNameHistory()` — a replica read — from re-running on
   // every keystroke that leaves the fold the same, or on an unrelated
   // re-render (a keypad digit, the hero re-painting).
   const categoryProposal = useMemo(
-    () => proposeCategory(payeeFold, ledger.listPayeeHistory()) ?? undefined,
-    [ledger, payeeFold],
+    () => proposeCategory(enteredNameFold, ledger.listEnteredNameHistory()) ?? undefined,
+    [ledger, enteredNameFold],
   );
   /**
    * H1 — a proposal at or above the display threshold **is** the draft's
@@ -481,7 +479,7 @@ export default function QuickAdd() {
         .filter((category) => category.kind === composerCategorySheet.kind)
         .map((category) => category.id),
     );
-    return recentCategories(ledger.listPayeeHistory(), eligible);
+    return recentCategories(ledger.listEnteredNameHistory(), eligible);
   }, [composerCategorySheet, ledger, snapshot.categories]);
   const categoryUsage = useMemo(
     () => Object.fromEntries(snapshot.categoryUsage),
@@ -491,8 +489,8 @@ export default function QuickAdd() {
     setComposerCategoryId(next);
     setComposerCategorySheet((current) => ({ ...current, open: false }));
   }, []);
-  const handleComposerPayeeChange = useCallback((next: string) => {
-    setComposerPayee(next);
+  const handleComposerEnteredNameChange = useCallback((next: string) => {
+    setComposerEnteredName(next);
   }, []);
   const handleComposerDateChange = useCallback((next: string) => setComposerDate(next), []);
   const handleComposerBusinessChange = useCallback(
@@ -526,8 +524,8 @@ export default function QuickAdd() {
     (next: string) => setComposerCounterpartyId(next),
     [],
   );
-  const handleComposerCounterpartyRoleChange = useCallback((next: CounterpartyRole) => {
-    setComposerCounterpartyRole(next);
+  const handleComposerObligationRoleChange = useCallback((next: ObligationRole) => {
+    setComposerObligationRole(next);
   }, []);
 
   const handleDiscard = useCallback(() => router.back(), []);
@@ -561,8 +559,8 @@ export default function QuickAdd() {
         ? t("common.chooseOne")
         : selectedComposerAccount?.capturable === false &&
           t("transactions.needsRate", { currency: selectedComposerAccount.currency }),
-    counterpartyRole:
-      composerCounterpartyId !== null && composerCounterpartyRole === null && t("common.chooseOne"),
+    obligationRole:
+      composerCounterpartyId !== null && composerObligationRole === null && t("common.chooseOne"),
   });
   const saveComposer = useCallback(() => {
     const amount = parseAmount(composerAmountRaw);
@@ -572,7 +570,7 @@ export default function QuickAdd() {
       amount,
       accountId: effectiveAccountId,
       categoryId: effectiveCategoryId,
-      payee: composerPayee,
+      enteredName: composerEnteredName,
       date: composerDate,
       // Read loosely (`0930`, `9.30`) and sent strictly; what does not read as
       // a time is sent as typed, so the refusal lands on the row that holds it.
@@ -581,8 +579,8 @@ export default function QuickAdd() {
         : { timeOfDay: readTyped(composerTime) ?? composerTime.trim() }),
       note: composerNote,
       isBusiness: composerIsBusiness,
-      counterpartyId: composerCounterpartyId,
-      counterpartyRole: composerCounterpartyRole,
+      obligationCounterpartyId: composerCounterpartyId,
+      obligationRole: composerObligationRole,
     };
     const result = ledger.createTransaction(next);
     if (!("id" in result)) {
@@ -618,12 +616,12 @@ export default function QuickAdd() {
     composerAmountRaw,
     effectiveCategoryId,
     composerCounterpartyId,
-    composerCounterpartyRole,
+    composerObligationRole,
     composerDate,
     composerTime,
     composerIsBusiness,
     composerNote,
-    composerPayee,
+    composerEnteredName,
     composerType,
     effectiveAccountId,
     ledger,
@@ -805,8 +803,8 @@ export default function QuickAdd() {
             onOpenCategoryPicker={handleComposerOpenCategoryPicker}
             onPickCategory={handlePickComposerCategory}
             pace={paceLine}
-            payee={composerPayee}
-            onPayeeChange={handleComposerPayeeChange}
+            enteredName={composerEnteredName}
+            onEnteredNameChange={handleComposerEnteredNameChange}
             date={composerDate}
             time={composerTime}
             onTimeChange={setComposerTime}
@@ -818,10 +816,10 @@ export default function QuickAdd() {
             note={composerNote}
             onNoteChange={handleComposerNoteChange}
             counterparties={snapshot.counterparties}
-            counterpartyId={composerCounterpartyId}
+            obligationCounterpartyId={composerCounterpartyId}
             onCounterpartyChange={handleComposerCounterpartyChange}
-            counterpartyRole={composerCounterpartyRole}
-            onCounterpartyRoleChange={handleComposerCounterpartyRoleChange}
+            obligationRole={composerObligationRole}
+            onObligationRoleChange={handleComposerObligationRoleChange}
             onCreateCounterparty={handleComposerCreateCounterparty}
             {...(fieldErrors === undefined ? {} : { fieldErrors })}
             check={composerCheck}
@@ -848,7 +846,7 @@ export default function QuickAdd() {
         tree={snapshot.categoryTree}
         usage={categoryUsage}
         recent={recentCategoryIds}
-        payee={composerPayee}
+        enteredName={composerEnteredName}
         {...(categoryProposal === undefined ? {} : { proposal: categoryProposal })}
         onPick={handlePickComposerCategory}
         onCreate={handleCreateCategory}

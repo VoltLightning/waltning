@@ -733,7 +733,7 @@ about the device.
 
 What the phone now holds: every account by name, every counterparty **by name
 with per-currency debt balances**, the **whole ledger** — every transaction,
-with payee text, not a recent window (`architecture/14-local-first.md` §14.0)
+with entered name text, not a recent window (`architecture/14-local-first.md` §14.0)
 — and a queue of receipt photographs awaiting upload. It is also an enrolled
 tailnet node, so it sits
 *inside* perimeter ② by construction, and it carries a session token with a
@@ -1106,7 +1106,8 @@ category_mappings       external_id PK, external_path, category_id, note
 counterparties          id, name, kind (person|company), settlement_currency,
                         contact, note, archived, sort         -- debt (§6.6)
 transactions            id, date, type, account_id, to_account_id, category_id,
-                        counterparty_id, counterparty_role,   -- debt (§6.6)
+                        obligation_counterparty_id,           -- debt (§6.6)
+                        obligation_role,
                         is_capital,                           -- one-off (§6.8)
                         amount_original, currency, fx_rate,
                         fx_rate_estimated,                    -- §7.6
@@ -1118,7 +1119,7 @@ transactions            id, date, type, account_id, to_account_id, category_id,
                         counterparty_tax_id, document_ref, ksef_id,
                         ryczalt_rate,                         -- revenue rows (§13.6)
                                                               -- business rows only (§13.2)
-                        payee, note, is_business,
+                        entered_name, note, is_business,
                         source, external_id, deleted_at
 dashboard_layouts       id, name, is_active, is_preset, sort  -- §14.5
 dashboard_widgets       id, layout_id, kind, slot, size, config, sort
@@ -1129,7 +1130,7 @@ agent_auto_grants       id, session_id, operation_class, granted_at,
                         revoked_at                            -- §11.2
 tags / transaction_tags id, name  ·  m2m
 recurring_transactions  id, type, account_id, to_account_id, category_id,
-                        amount_original, currency, payee, note,
+                        amount_original, currency, entered_name, note,
                         rrule, next_date, end_date, enabled
 receipts                id, transaction_id, image_key, ocr_json,
                         merchant, total, currency, purchased_at, confidence
@@ -1198,7 +1199,7 @@ unallocated group expense. That becomes a dashboard warning and an agent tool
 
 **The pot is funded, then spent down** (J08 §3). Paying for a group is a
 transfer *into* the clearing account; each person's share is an expense back
-*out* of it, carrying their counterparty and `counterparty_role = 'debt'`; your
+*out* of it, carrying their counterparty and `obligation_role = 'debt'`; your
 own share is the same expense with a category and no counterparty. The account
 reaches zero exactly when the last share is written.
 
@@ -1225,7 +1226,7 @@ transactions_to_currency_shape        (type = 'transfer') = (to_currency IS NOT 
 transactions_to_fx_rate_shape         (type = 'transfer') = (to_fx_rate IS NOT NULL)
 transactions_fx_rate_positive         fx_rate IS NULL OR fx_rate > 0
 transactions_fee_positive             fee IS NULL OR fee > 0
-transactions_counterparty_role_shape  (counterparty_id IS NOT NULL) = (counterparty_role IS NOT NULL)
+transactions_obligation_pair_shape    (obligation_counterparty_id IS NOT NULL) = (obligation_role IS NOT NULL)
 transactions_occurrence_shape         (recurring_id IS NULL) = (occurrence_date IS NULL)
 transactions_debt_shape               (debt_currency IS NULL) = (debt_amount IS NULL)
 transactions_tax_fx_shape             (tax_fx_rate IS NULL) = (tax_fx_date IS NULL)
@@ -1410,11 +1411,11 @@ notes, as free text.
 counterparties     id, name, kind (person | company),
                    settlement_currency,      -- the currency they prefer to settle in
                    contact, note, archived, sort, created_at
-transactions       + counterparty_id         -- nullable FK
-                   + counterparty_role       -- debt | contribution | reference
+transactions       + obligation_counterparty_id  -- nullable FK
+                   + obligation_role            -- debt | contribution | reference
 ```
 
-**`counterparty_role` decides what a reference *means*.** Naming a counterparty
+**`obligation_role` decides what a reference *means*.** Naming a counterparty
 is not the same as owing them, and three different things want the field:
 
 | Role | Meaning | Debt ledger | Ageing |
@@ -1433,7 +1434,7 @@ balance cannot drift from its history:
 
 ```sql
 CREATE VIEW counterparty_balances AS
-  SELECT t.counterparty_id,
+  SELECT t.obligation_counterparty_id,
          COALESCE(t.debt_currency, t.currency)                     AS currency,
          -- `signed_amount(type, amount_original, to_amount, side)` — the
          -- shape `packages/db/src/figures/signed.sql.ts` ships: `side`
@@ -1453,11 +1454,11 @@ CREATE VIEW counterparty_balances AS
                CASE t.type WHEN 'transfer' THEN 'to' ELSE 'from' END
              ))                                                    AS balance
   FROM   transactions t
-  JOIN   counterparties c ON c.id = t.counterparty_id
-  WHERE  t.counterparty_id IS NOT NULL
-    AND  t.counterparty_role = 'debt'
+  JOIN   counterparties c ON c.id = t.obligation_counterparty_id
+  WHERE  t.obligation_counterparty_id IS NOT NULL
+    AND  t.obligation_role = 'debt'
     AND  t.deleted_at IS NULL
-  GROUP  BY t.counterparty_id, COALESCE(t.debt_currency, t.currency), c.archived
+  GROUP  BY t.obligation_counterparty_id, COALESCE(t.debt_currency, t.currency), c.archived
   -- Archived is filtered here, in HAVING, after the fold — never in WHERE.
   -- Archiving hides a counterparty from pickers, but history keeps working;
   -- `update_counterparty`'s own gate (S15 §6) refuses archiving while a
@@ -1572,7 +1573,7 @@ corrupt a balance.
 
 ### 6.6.1 Who, the directory, and money owed
 
-**Specified, not implemented:** the independent payee link and unified Who
+**Specified, not implemented:** the independent identity link and unified Who
 experience below require schema, contract, executor and screen work. Existing
 counterparty roles retain their meanings; this section is the implementation
 contract, not a claim that the current database has the additional column.
@@ -1585,63 +1586,83 @@ be paid without creating debt. Accounts remain places money is held, never
 entries created to represent a shop or friend. Categories answer what money
 was for; no generic party or extra category is required for an unknown shop.
 
-#### Two identities on one transaction
+#### Two links on one transaction, and which one gets the plain name
 
-Add nullable `transactions.payee_counterparty_id`, an FK to `counterparties`,
-independent of the existing `counterparty_id` and `counterparty_role` pair.
-The new link identifies **Who**. The existing pair identifies the relationship
-that affects debt or shared contributions. `payee` remains the entered text
-snapshot for import provenance, regex rules and historical display.
+A transaction can involve two different counterparties at once: the one it was
+**with**, and the one it creates an **obligation** with. Paying Shop A for a
+friend who will repay you is both at once, so the two are separate links and
+neither is derived from the other.
 
-| Capture | Payee link | Existing relationship pair |
+**Identity takes the plain `counterparty_id`, and the obligation pair says what
+it is.** The obligation is `obligation_counterparty_id` + `obligation_role`;
+the identity link is a nullable FK to `counterparties` named
+`counterparty_id`. Identity is the commoner and plainer fact — most
+transactions name a shop and owe nobody — and a reader meeting the schema cold
+takes the plain name for the plain idea. Naming the obligation link
+`counterparty_id` and identity `with_counterparty_id` was rejected for exactly
+that: it puts the awkward name on the common case. `payee_counterparty_id` was
+rejected because "payee" is false half the time — on income you are the payee —
+and the text column it echoed is now `entered_name`, a provenance snapshot for
+import, regex rules and historical display, never resolved into an identity.
+
+| Capture | Identity link | Obligation pair |
 |---|---|---|
-| Unnamed shop | NULL; empty payee | NULL / NULL |
-| Use free text “Shop A” | NULL; entered payee | NULL / NULL |
-| Select saved Shop A, ordinary purchase | Shop A; name copied to payee | Shop A / reference |
-| Pay Shop A for Friend A, expecting full repayment | Shop A; name copied to payee | Friend A / debt |
-| Friend A contributes to a shared account | Friend A; name copied to payee | Friend A / contribution |
+| Unnamed shop | NULL; empty `entered_name` | NULL / NULL |
+| Use free text “Shop A” | NULL; entered name kept | NULL / NULL |
+| Select saved Shop A, ordinary purchase | Shop A; name copied to `entered_name` | NULL / NULL |
+| Pay Shop A for Friend A, expecting full repayment | Shop A; name copied to `entered_name` | Friend A / debt |
+| Friend A contributes to a shared account | Friend A; name copied to `entered_name` | Friend A / contribution |
 
 A separate merchant table was rejected because a company can also hold debt.
 Keeping only merchant text was rejected because directory rename/merge/history
-would then lose the merchant association whenever a debtor occupies the existing
-FK. Making the relationship role nullable was rejected because `reference`
-already expresses an ordinary involvement without weakening the pair constraint.
+would then lose the merchant association whenever a debtor occupies the
+obligation link.
+
+**`reference` is what an identity link with no obligation replaces.** The role
+exists today to say *this party is involved but nothing is owed*, which is
+exactly what an identity link and an empty obligation pair say — so it is
+retired in the same change that gives its rows the identity column to move
+onto, leaving `obligation_role` as `debt | contribution`. Until then the pair
+above is written `Shop A / reference`, and the third row of the table is the
+one that changes.
 
 The two links may equal one another; they do not have to. Debt calculations
-continue to read only the existing `debt`-role pair. A linked merchant must not
-receive a receivable merely because another person owes the payment back.
-`reference` remains explicit; NULL is not a new spelling of that role.
+read only the `debt`-role obligation. A named merchant must not receive a
+receivable merely because another person owes the payment back.
 
-For newly written or identity-edited rows, a reference pair equals the payee
-link. A linked payee with no debt/contribution uses that same reference pair.
-An unlinked payee may coexist with a debt/contribution pair. Preserve the
-existing pair-shape CHECK; add FKs and an index for the payee link, plus a CHECK
-that a non-null payee link has a relationship pair and that `reference` equals
-that link. Enforce these in both databases and operation validation, with
-refusal tests against both engines. Legacy reference-only rows may have a null
-payee link until backfilled; unrelated edits must not invent an identity.
+**Only the pair-shape CHECK survives, and nothing ties one link to the other.**
+`transactions_obligation_pair_shape` — the obligation id and role are both set
+or both null — is the whole of the guarantee. A CHECK requiring an identity
+wherever there is an obligation was rejected: a cash loan to a friend has an
+obligation and no third party, and a shop purchase has a party and no
+obligation, so any rule joining them would refuse a real capture. The identity
+link gets an FK and an index of its own, in both databases, with refusal tests
+against both engines.
 
-Migration backfills the link **only** from existing reference-role rows; it
-never matches names to debt/contribution rows. Preserve payee text, including
-empty text. New create/update inputs expose `payeeCounterpartyId`; old queued
-operations missing it get a versioned, deterministic upcast matching that
-backfill rule, not a name lookup. Include the field in replica serialization,
-backup/restore, audit, seeds and generated schemas. Treat the two links, role
-and payee text as one identity conflict group when concurrent edits overlap;
+Migration backfills identity **only** from existing `reference`-role rows,
+which is what that role already meant; it never matches names to
+debt/contribution rows, and never invents an identity on an unrelated edit.
+`entered_name` is preserved exactly, including empty text. Create and update
+inputs expose the identity link as `counterpartyId` alongside the obligation's
+`obligationCounterpartyId`/`obligationRole`; a queued operation written before
+the field existed is upcast deterministically by that same backfill rule, never
+by a name lookup. Include the field in replica serialization, backup/restore,
+audit, seeds and generated schemas. Treat both links, the role and
+`entered_name` as one identity conflict group when concurrent edits overlap;
 never silently combine another merchant with an old debtor selection.
 
-Changing or clearing Who preserves a separately selected debt/contribution
-party. Without one, replace/clear the reference pair atomically with Who.
-Turning debt tracking off restores a reference pair to the linked Who, or clears
-both relationship fields if Who is free text/empty. Changing expense to income
+Changing or clearing the identity link leaves a separately chosen
+debt/contribution party exactly where it is, and turning debt tracking off
+clears the obligation pair without touching identity — the two are edited
+independently because they are independent facts. Changing expense to income
 requires re-confirming the debt meaning; it must not silently reverse it.
-Editing payee text freely clears its link unless the person explicitly keeps
-that association. All these changes use the ordinary update operation and its
-existing gates, including closed-period restrictions.
+Editing `entered_name` freely clears its identity link unless the person
+explicitly keeps that association. All these changes use the ordinary update
+operation and its existing gates, including closed-period restrictions.
 
 #### Names, history, and directory maintenance
 
-Selecting an entry copies its current name into the transaction's payee text.
+Selecting an entry copies its current name into the transaction's entered name text.
 Renaming or merging directory entries does not rewrite those snapshots. A
 transaction may show the saved text and a secondary current directory name when
 they differ. Clearing an archived selection is allowed; an unchanged archived
@@ -1656,7 +1677,7 @@ entries appear only in their saved group; similar spellings are not silently
 linked. Dismissing a duplicate warning is not permission to merge. Adding a
 saved entry links the current draft only: no retroactive matching by name.
 
-Names exceeding the directory's 120-character limit remain usable as payee
+Names exceeding the directory's 120-character limit remain usable as entered name
 text up to its existing 200-character limit. Add asks for a shorter saved name;
 it never truncates or changes the transaction snapshot silently. Two distinct
 parties with identical normalized names require an explicit distinguishing
@@ -1672,12 +1693,12 @@ accept the client identity with a visibly disambiguated name on collision, then
 offer reviewed merging. Do not silently redirect either FK to an existing party.
 Other creation refusals block dependent writes with recoverable draft state.
 
-`get_counterparties` supplies saved directory entries; `get_payee_suggestions`
+`get_counterparties` supplies saved directory entries; `get_entered_name_suggestions`
 returns bounded, paginated recent text/category/count suggestions using the local
 ledger or authenticated server. It is read-only and offline-eligible. Explicit
 linked-party history searches match either FK and deduplicate transaction IDs;
 debt reads keep their existing role filter. No count is inferred from the
-current `readPayeeHistory` result: that helper does not return usage counts.
+current `readEnteredNameHistory` result: that helper does not return usage counts.
 
 #### Agent behavior
 
@@ -1704,7 +1725,7 @@ and report that result accurately rather than claiming the payment was saved.
   each; a refused creation leaves the transaction unapplied with its draft intact.
   A name collision admitted under H13 retains its distinct client identity.
 - Merging a party appearing in both FK positions changes each position once;
-  unmerge restores both, without rewriting the payee snapshot.
+  unmerge restores both, without rewriting the entered name snapshot.
 
 Unpaid invoices and partial reimbursement of an ordinary purchase are not
 created by a Who selection. The ledger records money movements; multi-person
@@ -1901,8 +1922,8 @@ invites itself.
 
 #### Contributions are attributed
 
-Each inflow to a shared account carries a `counterparty_id` with
-`counterparty_role = 'contribution'`, so *"he has put in X, I have put in Y"* is
+Each inflow to a shared account carries an `obligation_counterparty_id` with
+`obligation_role = 'contribution'`, so *"he has put in X, I have put in Y"* is
 answerable at any time. Your own contributions are already attributable because
 they arrive as transfers from your accounts.
 
@@ -1975,7 +1996,7 @@ acquired one would sit on a leaf its own composer could not display.
 two refusals are told apart), the replica carries the same guard on both
 tables, every operation that can move a `category_id` — `create_transaction`,
 `update_transaction`, `set_transaction_lines`, `categorize_batch` — refuses it
-by name first, and the derived reads that feed a suggestion — payee memory's
+by name first, and the derived reads that feed a suggestion — entered name memory's
 history among them — exclude archived categories rather than proposing one.
 
 ### 6.10 One transaction per payment event
@@ -1983,7 +2004,7 @@ history among them — exclude archived categories rather than proposing one.
 The unit of a transaction is **the payment**, not the thing bought.
 
 A single card tap at a petrol station covering fuel and a coffee is **one**
-transaction — one payee, one amount, one date — with an optional line breakdown
+transaction — one entered name, one amount, one date — with an optional line breakdown
 underneath (§10.3). It is one movement of money out of one account, and
 splitting it into two rows would invent a second payment that never happened,
 put two entries on the statement reconciliation that only match one, and break
@@ -2757,19 +2778,19 @@ raw row → [1] exact duplicate?  → skip
         → review queue            → refinable in place (S02c)
 ```
 
-**Rules** (`rules` table) match on payee regex, amount range, account, and
-currency; they apply a category, payee normalization, note, and business flag.
+**Rules** (`rules` table) match on entered name regex, amount range, account, and
+currency; they apply a category, entered name normalization, note, and business flag.
 After a few months the recurring set — rent, salary, subscriptions, utilities —
 is entirely rules, and the model only sees novel merchants.
 
 **Rules accumulate from demonstrated repetition, not from prompting.** When the
-same normalized payee has been confirmed to the same category three times with
+same normalized entered name has been confirmed to the same category three times with
 no rule covering it, one prefilled suggestion appears, and is never raised again
-for that payee. Confidence is the wrong trigger — a high score usually means an
+for that entered name. Confidence is the wrong trigger — a high score usually means an
 obvious merchant, and a single confirmation is thin evidence it will recur.
 
 **Conflicts resolve by specificity, then age.** When two rules match, the one
-with more conditions wins — payee *and* account beats payee alone — and only
+with more conditions wins — entered name *and* account beats entered name alone — and only
 then does creation order decide. Priority integers stay as a manual override,
 not as the mechanism, because hand-numbering rules to express "narrower" is a
 bookkeeping task nobody sustains.
@@ -2783,7 +2804,7 @@ keeps the audit trail (§6.1) honest about machine-classified rows.
 first and the model runs once:
 
 ```
-normalize payee → retrieve k most similar prior payees + their categories
+normalize entered name → retrieve k most similar prior entered names + their categories
                 → one call: retrieved context + row batch → schema out
 ```
 
@@ -3113,8 +3134,8 @@ context. It does not require the model to be able to **go looking** for it.
 A deterministic step does it better:
 
 ```
-raw row → normalize payee
-        → retrieve the k most similar prior payees + their categories
+raw row → normalize entered name
+        → retrieve the k most similar prior entered names + their categories
         → one call, that context in the prompt, schema out
 ```
 
@@ -3164,7 +3185,7 @@ Tapping `+` and starting a transaction is the opposite situation. One row, you
 are present, and the interaction *is* the iteration:
 
 > *"coffee at that place near the office"*
-> → searches recent payees near prior transactions
+> → searches recent entered names near prior transactions
 > → *"the café near the office?"*
 > → yes
 > → draft filled, with its trail
@@ -3455,7 +3476,7 @@ is date, description, account, debit, credit, running balance:
 
 | Sheet | Contents |
 |---|---|
-| `Transactions` | Date, Account, Category, Subcategory, Payee, Note, Debit, Credit, Currency, Amount (local), FX rate, Amount (USD), Business, Source |
+| `Transactions` | Date, Account, Category, Subcategory, Entered name, Note, Debit, Credit, Currency, Amount (local), FX rate, Amount (USD), Business, Source |
 | `General Ledger` | Per-account, date-ordered, with running balance — the classic GL view |
 | `Trial Balance` | Every account: opening / movement / closing, per currency and in USD |
 | `By Category` | Pivot-ready: category × month, in USD |
@@ -4207,14 +4228,14 @@ timezone — check these 4 dates."*
 
 | Tier | Needs | Gives you |
 |---|---|---|
-| **1 · Deterministic grammar + on-device memory** | nothing | Amount, account, payee, and a category proposed by fuzzy nearest-neighbour over your own payee history, with an alias table (Polish for imports, a small legacy Cyrillic set). **Always available** |
+| **1 · Deterministic grammar + on-device memory** | nothing | Amount, account, entered name, and a category proposed by fuzzy nearest-neighbour over your own entered name history, with an alias table (Polish for imports, a small legacy Cyrillic set). **Always available** |
 | **2 · Cloud model** | a network | The conversational loop, receipt extraction, and the classifier that reads bank Polish |
 
 **The on-device generative model tier was assessed and dropped.** Four reasons,
 in descending force:
 
 1. **It has no input.** S05 *mobile* has a keypad, voice, camera and the
-   conversational mode — and **no text field**. The grammar that produces a payee
+   conversational mode — and **no text field**. The grammar that produces an entered name
    string is the *web* command bar, which reaches the Pi over Tailscale; "offline"
    there means no server at all. Building tier 2 would first require designing a
    text-entry mode that does not exist.
@@ -4241,8 +4262,8 @@ The addressable slice is roughly 16–70 captures a year, and the saving is at m
 one tap — against S06's finding that a machine-filled chip must be *read*, while
 a stable position is hit from muscle memory.
 
-**Tier 1.5 replaces it, with no model:** exact normalised payee → last confirmed
-category; else trigram nearest-neighbour over distinct payees with the modal
+**Tier 1.5 replaces it, with no model:** exact normalised entered name → last confirmed
+category; else trigram nearest-neighbour over distinct entered names with the modal
 category and neighbour-agreement confidence, computed exactly as §14 defines it;
 plus a hand-written alias table. This is a genuine improvement over
 the bare grammar and it ships no weights.
@@ -4441,14 +4462,14 @@ precisely the leak this system exists to avoid — and would break offline
 rendering, which S34 otherwise has for free since rules and catalog are both
 in the replica (`computations.md` §16 is class **R**). Unknown or missing
 slug → deterministic monogram avatar; never blank, never a fetch, never an
-error. Matching against payee/counterparty **proposes** — never sets — the
+error. Matching against entered name/counterparty **proposes** — never sets — the
 service and flag, the same consent model as amount drift.
 
 ### 14.4b Brand recognition
 
 *"A transaction for ORLEN, YouTube or another recognised merchant shows its
 real mark immediately — including when it was created with no internet —
-while an unknown payee is still never blank."*
+while an unknown entered name is still never blank."*
 
 **Every transaction, not only subscriptions.** §14.4a's `service` slug names
 one recurring rule's own subscription; `brand_key`/`brand_source` name what
@@ -4456,28 +4477,28 @@ one recurring rule's own subscription; `brand_key`/`brand_source` name what
 visit shows the same recognition a monthly rule does. `recurring_transactions`
 carries the identical pair for the same reason `is_subscription`/`service`
 sit there: a rule's occurrences can inherit a recognised mark rather than
-each posted row re-matching its own payee.
+each posted row re-matching its own entered name.
 
 | Column | Meaning |
 |---|---|
 | `brand_key text` (nullable) | A **Waltning-owned** catalogue key — `orlen`, `youtube` — never an upstream `simple-icons` slug. A vendor renaming or removing an icon must never be a silent migration of every transaction that named it |
-| `brand_source enum('auto', 'manual', 'none')` (nullable) | `auto` — matched from the payee, offline, at write time. `manual` — asserted by the caller. `none` — a **deliberate** "no brand": someone cleared a match that was wrong. A key pairs only with `auto` or `manual`; no key pairs with `NULL` (never matched) or `none` (matched, then refused) — a `CHECK` on `transactions` and `recurring_transactions`, on **both engines** (`transactions_brand_shape`, `recurring_transactions_brand_shape`), the same "one shape or the other, never half of each" `transactions_to_amount_shape` already gives a transfer's two legs |
+| `brand_source enum('auto', 'manual', 'none')` (nullable) | `auto` — matched from the entered name, offline, at write time. `manual` — asserted by the caller. `none` — a **deliberate** "no brand": someone cleared a match that was wrong. A key pairs only with `auto` or `manual`; no key pairs with `NULL` (never matched) or `none` (matched, then refused) — a `CHECK` on `transactions` and `recurring_transactions`, on **both engines** (`transactions_brand_shape`, `recurring_transactions_brand_shape`), the same "one shape or the other, never half of each" `transactions_to_amount_shape` already gives a transfer's two legs |
 
-**The payee remains evidence and is never normalised away.** `brand_key` is a
-derived, separate field; correcting a payee from "ORLEN Stacja 123" to
+**The entered name remains evidence and is never normalised away.** `brand_key` is a
+derived, separate field; correcting an entered name from "ORLEN Stacja 123" to
 "ORLEN" does not rewrite history, it only lets a *later* write re-resolve the
 brand.
 
 **A match is correctable, and the correction sticks.** `update_transaction`
 with `brandKey: null` is an explicit clear: it writes `brand_key NULL` with
-`brand_source 'none'`, and the payee is never consulted for that row again.
+`brand_source 'none'`, and the entered name is never consulted for that row again.
 That third value is what makes a wrong match correctable at all — without it
-a clear falls back to "let the payee decide", the payee still folds to the
+a clear falls back to "let the entered name decide", the entered name still folds to the
 same alias, and the wrong mark returns on the next write, correctable only by
 editing evidence. So the re-match rule is: `update_transaction` re-runs the
-match when `payee` **changes** — compared against the value the row already
+match when `entered_name` **changes** — compared against the value the row already
 holds, not merely present in the patch, so a full-object submit that re-sends
-an unchanged payee resolves nothing — **and only while `brand_source` is
+an unchanged entered name resolves nothing — **and only while `brand_source` is
 `NULL` or `auto`**. `manual` and `none` are both sticky: a person's own choice
 of mark, and a person's own choice of no mark, are never quietly re-derived
 out from under them, the same way a subscription's `service` is a proposal and
@@ -4489,7 +4510,7 @@ is what spreading an optional field produces — asserts nothing at all.
 gives `service` for skipping a `CHECK` against the catalogue.** A small
 bundled catalogue in `packages/core` (`brands/catalog.ts`) — key, display
 name, matching aliases, a wordmark for `BrandIcon`'s badge — backs an offline
-matcher (`brands/match.ts`): the incoming payee has any run of whitespace
+matcher (`brands/match.ts`): the incoming entered name has any run of whitespace
 collapsed to one space, is folded (§14.4's own `fold` — case-insensitive, and
 diacritic-insensitive for the Polish set `ąćęłńóśźż` that function maps, *not*
 a general Unicode strip, so `Café` folds to `café` and not `cafe`) and looked
@@ -4514,7 +4535,7 @@ an alias of its own; it exists so one does not have to invent a table the day
 it does.
 
 **Nothing reads it either, today.** The offline matcher
-(`brands/match.ts`) resolves a payee against `BRAND_CATALOG`'s own in-memory
+(`brands/match.ts`) resolves an entered name against `BRAND_CATALOG`'s own in-memory
 index — code, not a query — because `packages/core` cannot open a database
 connection at all (its floor is decimal.js and zod). `brand_aliases` is
 consequently a write-only mirror of the same data this arc: a hand-edited
@@ -4533,13 +4554,13 @@ asset pipeline, the contract test pinning every slug §14.4a itself names —
 is S34's job, and `BrandIcon`'s `brandKey` prop is exactly the seam that
 wiring lands on without another transaction-facing change. Renders on S04's
 Recent list, S09's hero (beside the account line — `FieldsCard` draws every
-field through one generic row and singling out Payee for an icon would be
+field through one generic row and singling out Entered name for an icon would be
 the special case that component exists to avoid), S04's and S10's ledger, and S13's
 counterparty history (the same `TransactionRow`); a screen that has not been
 updated to pass `brandKey` draws no icon at all rather than a fallback
 monogram on every row, which would read as "recognised nothing" on a screen
 that never asked. The badge is decorative on all three targets — hidden from
-the accessibility tree rather than labelled, because the payee text beside it
+the accessibility tree rather than labelled, because the entered name text beside it
 already says who this is.
 
 ### 14.5 Dashboard layout

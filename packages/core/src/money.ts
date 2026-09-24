@@ -41,7 +41,7 @@ declare const MONEY: unique symbol;
  * A decimal amount, as a string — and **a brand, not an alias**.
  *
  * It was `type Money = string`, which documented the intent and enforced none
- * of it: `add(payee, note)` compiled, in a ledger. Every argument this file
+ * of it: `add(enteredName, note)` compiled, in a ledger. Every argument this file
  * makes about rounding modes and half-up-versus-half-even was defended by a
  * type that permitted passing a note where an amount goes.
  *
@@ -191,7 +191,7 @@ declare const CURRENCY: unique symbol;
  *
  * Four columns hold one — `currency`, `to_currency`, `debt_currency`,
  * `settlement_currency` — and all four were `string`, which is also what
- * `payee`, `note` and `memo` are. A currency and a payee were interchangeable
+ * `entered_name`, `note` and `memo` are. A currency and a entered name were interchangeable
  * on the same row.
  *
  * Not a union of known codes: `currencies` is a table a person adds rows to

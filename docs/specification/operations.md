@@ -53,7 +53,7 @@ remember to log itself is an operation that will eventually forget.
 |---|---|
 | Transactions | `search_transactions` · `get_transaction` · `get_audit_log` |
 | Balances | `get_balances` · `get_accounts` |
-| Taxonomy | `get_category_tree` · `get_counterparties` · `get_payee_suggestions` |
+| Taxonomy | `get_category_tree` · `get_counterparties` · `get_entered_name_suggestions` |
 | Analysis | `spend_by_category` · `spend_by_period` · `compare_periods` · `income_vs_expense` |
 | Debt | `counterparty_balances` · `find_unsettled` |
 | Import | `get_import_batch` · `get_import_rows` · `get_rules` |
@@ -78,7 +78,7 @@ need to ask you something about what they found.
 
 **As retrieval**, by the surfaces that are pipelines — classification, receipt,
 voice. The same reads run *before* the model call and their results go into the
-prompt. `search_transactions` for similar prior payees, `get_category_tree`,
+prompt. `search_transactions` for similar prior entered names, `get_category_tree`,
 `get_accounts`. Identical data, no loop, and reproducible (§11.4).
 
 That is why a classification can say *"matches prior Migros rows in this
@@ -106,8 +106,8 @@ Auto column: ✅ eligible for a bounded auto-mode grant, ❌ never.
 
 | Operation | Auto | Notes |
 |---|---|---|
-| `create_transaction` | ❌ | The core write. One payment event, one row (§6.10). Optional `timeOfDay` (§7.0a) — a bare `HH:MM`, and **only** a description of when in the day it happened: it bounds no period, selects no rate and reaches no tax output. Absent is the normal case and is not `00:00`. Optional `brandKey` (§14.4b) — catalogue-validated; absent, the executor matches `payee` against the bundled catalogue offline and sets `brand_source: auto` itself, never the caller |
-| `update_transaction` | ✅ | Field-level; `is_business` flips are audited (§13.1). `timeOfDay` is correctable like any other description — unlike `date`, which is resolved once at capture and immutable (§7.0a); `null` clears it, and clearing is not setting midnight. A patched `payee` re-runs the §14.4b brand match only when it **changes** the value the row holds, and **only while `brand_source` is `NULL` or `auto`** — `manual` and `none` are both sticky. A patched `brandKey` always wins: a key is sourced `manual`, and `null` is a deliberate clear, written as `brand_key NULL` with `brand_source: none` so the same payee cannot put the wrong mark straight back |
+| `create_transaction` | ❌ | The core write. One payment event, one row (§6.10). Optional `timeOfDay` (§7.0a) — a bare `HH:MM`, and **only** a description of when in the day it happened: it bounds no period, selects no rate and reaches no tax output. Absent is the normal case and is not `00:00`. Optional `brandKey` (§14.4b) — catalogue-validated; absent, the executor matches `entered_name` against the bundled catalogue offline and sets `brand_source: auto` itself, never the caller |
+| `update_transaction` | ✅ | Field-level; `is_business` flips are audited (§13.1). `timeOfDay` is correctable like any other description — unlike `date`, which is resolved once at capture and immutable (§7.0a); `null` clears it, and clearing is not setting midnight. A patched `entered_name` re-runs the §14.4b brand match only when it **changes** the value the row holds, and **only while `brand_source` is `NULL` or `auto`** — `manual` and `none` are both sticky. A patched `brandKey` always wins: a key is sourced `manual`, and `null` is a deliberate clear, written as `brand_key NULL` with `brand_source: none` so the same entered name cannot put the wrong mark straight back |
 | `delete_transaction` | ❌ | Soft. Never auto — deletion is the one thing you cannot un-notice |
 | `set_transaction_lines` | ❌ | The optional breakdown (§10.3) — and, with `amount_original`, the transaction's own amount (§6.10). **Not auto-eligible for that reason**: an operation that can move the fact every balance reads is not a breakdown an agent may write unattended, whatever its name says. **Nothing enforces this column yet.** `registry.test.ts` holds every `kind: "write"` at `autoEligible: false` unconditionally, which is a blanket rule this table is scheduled to break — thirteen rows here are ✅ — and it says nothing about *this* operation either way. It has no server-side declaration at all. The row is a decision recorded for whoever writes that declaration, not a claim about running code |
 | `categorize_batch` | ✅ | The bulk path; one `DiffCard` states the affected count |
@@ -147,7 +147,7 @@ Auto column: ✅ eligible for a bounded auto-mode grant, ❌ never.
 |---|---|---|
 | `run_import` · `accept_row` · `skip_row` | ✅ | Undoable as one unit (§8.4) |
 | `propose_rule` · `create_rule` · `update_rule` · `disable_rule` · `reorder_rules` | ❌ | A rule changes future classification |
-| `create_recurring` · `update_recurring` · `disable_recurring` | ❌ | Inputs include `is_subscription` and `service` (§14.4a) — rule fields, not a separate operation, so S34 adds no second write path. When payee or counterparty matches the catalog's aliases, the editor **proposes** both; never set silently (same policy as amount drift). `recurring_transactions.brand_key`/`brand_source` (§14.4b) exist on the table today — with the same `recurring_transactions_brand_shape` CHECK on both engines — and no write path yet; these operations are where one lands |
+| `create_recurring` · `update_recurring` · `disable_recurring` | ❌ | Inputs include `is_subscription` and `service` (§14.4a) — rule fields, not a separate operation, so S34 adds no second write path. When entered name or counterparty matches the catalog's aliases, the editor **proposes** both; never set silently (same policy as amount drift). `recurring_transactions.brand_key`/`brand_source` (§14.4b) exist on the table today — with the same `recurring_transactions_brand_shape` CHECK on both engines — and no write path yet; these operations are where one lands |
 | `materialize_occurrence` | ✅ | Posts an occurrence. The unique index on `(recurring_id, occurrence_date)` stops **this rule** firing twice — it does **not** stop a hand-entered duplicate, whose `recurring_id` is NULL and which is therefore not in the index at all (C8, §14.4) |
 | `link_occurrence` | ❌ | The other half of C8's fix, and it was missing. Stamps `recurring_id` and `occurrence_date` onto a row **you already entered by hand**, which both satisfies the occurrence and puts the row into the index so the question cannot be asked twice. Offered instead of *Post* when an unlinked row matches within ±3 days and ±1% on the same account and currency |
 | `reclassify` | ❌ | **Was referenced in four documents and defined in none.** Re-runs classification against **today's** ledger, so it is expected to differ from the original — which is exactly why it is not called "replay". Replay pins `model_id`, `rule_snapshot` and `retrieved_ids` and reproduces the recorded answer (C10); this does not. Never auto: it rewrites rows you already accepted |
@@ -159,7 +159,7 @@ Auto column: ✅ eligible for a bounded auto-mode grant, ❌ never.
 |---|---|---|
 | `create_layout` · `set_active_layout` · `add_widget` · `update_widget_config` · `remove_widget` | ✅ | *"Put family spending on my dashboard"* is an ordinary write (§11.0) |
 | `export_excel` · `record_export` | ✅ | |
-| `allocate_shares` | ❌ | **J08's whole write, and it was missing** — the journey's path names an ALLOCATE step and no operation performed it. Takes the clearing account, the date, one category and a list of `{id, counterpartyId, amount}`; writes one expense out of the pot per share, each counterparty row carrying `counterparty_role = 'debt'` and the row with a null counterparty — your own — carrying none. **One transaction, so a split is one audited event** rather than rows that might half-exist. **Amounts, not weights**: S36 §6 keeps the remainder on screen throughout, and a screen showing one set of figures while this recomputed another would be that failure with extra steps, so `split-shares.ts` computes the split once and this writes what was read. What it owes in return is reading the pot from live data and **refusing a split larger than it** — which would drive the balance past zero, where a non-zero pot stops meaning *shares are missing*. Refuses a non-clearing account for the same reason (§6.4). Never auto: it creates obligations between people |
+| `allocate_shares` | ❌ | **J08's whole write, and it was missing** — the journey's path names an ALLOCATE step and no operation performed it. Takes the clearing account, the date, one category and a list of `{id, counterpartyId, amount}`; writes one expense out of the pot per share, each counterparty row carrying `obligation_role = 'debt'` and the row with a null counterparty — your own — carrying none. **One transaction, so a split is one audited event** rather than rows that might half-exist. **Amounts, not weights**: S36 §6 keeps the remainder on screen throughout, and a screen showing one set of figures while this recomputed another would be that failure with extra steps, so `split-shares.ts` computes the split once and this writes what was read. What it owes in return is reading the pot from live data and **refusing a split larger than it** — which would drive the balance past zero, where a non-zero pot stops meaning *shares are missing*. Refuses a non-clearing account for the same reason (§6.4). Never auto: it creates obligations between people |
 | `settle_debt` | ❌ | **Was missing, and H9's whole resolution depends on it.** Takes the amount that changed hands and the debt it discharges — never the residual, which the server derives from live data and returns. S14 previously called `create_transaction`, which has no notion of a residual and no channel to return a corrected one |
 | `get_targets` · `create_target` · `update_target` · `delete_target` | ❌ | **These were missing entirely** — `computations.md` §11 defines progress and no operation exposed it. Structural, so never auto-eligible. A target is period-to-date against `spend_to_date(p, scope=mine, capital excluded)`; **not** an envelope budget (N7) — no rollover, no allocation, and going over is information rather than an error |
 | `add_scheme_period` · `add_residency_period` · `update_registration` · `set_ryczalt_rate` | ❌ | **Tax scope. Never eligible** (§11.2) |
@@ -170,7 +170,7 @@ Auto column: ✅ eligible for a bounded auto-mode grant, ❌ never.
 | `run_migration` | ❌ | Runs in one transaction; rolls back entirely on failure (§8.4) |
 | `send_message` · `grant_auto_mode` | ❌ | A grant that could be granted automatically is not a grant |
 | `set_assist_model` · `set_assist_enabled` · `set_all_assists_enabled` | ❌ | **Configuration of the agent itself, and the only `agentVisible: false` operations in the registry** (§11.0). `set_assist_model` was `set_surface_model`; "surface" already means web-or-mobile, so the concept is an **assist** — one of `quick_add · agent · classify · receipt · voice`. The master switch **overrides** rather than clears: per-assist settings survive it |
-| `test_provider` · `run_fixture_score` | ❌ | Both cost money and reach outside the Pi, so neither is auto-eligible. `test_provider` sends a fixed trivial prompt and **never ledger content** — a connectivity check must not be the thing that leaks a payee (S33) |
+| `test_provider` · `run_fixture_score` | ❌ | Both cost money and reach outside the Pi, so neither is auto-eligible. `test_provider` sends a fixed trivial prompt and **never ledger content** — a connectivity check must not be the thing that leaks an entered name (S33) |
 | `write_memory` · `forget_memory` | **n/a** | **The documented exception to the gate** (§11.6). Not ledger state — moves no balance, reaches no tax output. Accountable by being legible on S32 rather than by gating |
 | `consolidate_memory` | ❌ | Rewrites many entries at once; the only way to lose several at a stroke, so it shows its diff |
 
@@ -178,14 +178,16 @@ Auto column: ✅ eligible for a bounded auto-mode grant, ❌ never.
 
 ## Who and directory contracts
 
-`SPEC.md` §6.6.1 owns the specified identity extension. `get_payee_suggestions`
+`SPEC.md` §6.6.1 owns the specified identity extension. `get_entered_name_suggestions`
 is a read, offline-eligible, with bounded query/cursor/limit input and paginated
 text, last active category and usage count output. `get_counterparties` supports
 kind/search/archive filters. Both have equivalent local and server contracts;
 creating a provider gateway must not make a local picker depend on the network.
 
-`create_transaction`, `update_transaction` and `settle_debt` carry the independent
-`payeeCounterpartyId` and existing relationship pair, validated together.
+`create_transaction`, `update_transaction` and `settle_debt` carry the identity
+link `counterpartyId` and the obligation pair
+`obligationCounterpartyId`/`obligationRole`, validated together but never tied
+to one another — the pair-shape rule is the whole constraint.
 `search_transactions` gains an explicit linked-party filter matching either FK
 without duplicates; existing debt-only callers retain their semantics.
 `create_counterparty` remains the sole entry creation operation; naming a shop

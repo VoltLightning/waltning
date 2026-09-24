@@ -27,7 +27,7 @@ export const recurringTransactionsColumns = () => ({
     .currency("currency")
     .notNull()
     .references(() => currencies.code),
-  payee: k.text("payee").notNull().default(""),
+  enteredName: k.text("entered_name").notNull().default(""),
   note: k.text("note").notNull().default(""),
   /** `SPEC.md` §14.4b — see `recurring-transactions.pg.ts`'s identical field. */
   brandKey: k.text("brand_key"),

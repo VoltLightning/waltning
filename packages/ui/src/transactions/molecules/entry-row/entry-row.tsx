@@ -2,7 +2,7 @@
  * `<EntryRow>` — one ledger entry, drawn as whichever row it actually is.
  *
  * A transfer and an expense are two different rows (`TransferRow` states both
- * legs and their rate; `TransactionRow` states a payee and a category), and
+ * legs and their rate; `TransactionRow` states a entered name and a category), and
  * every list that shows a mixed history has to choose between them. That
  * choice was made in `counterparty-detail-screen.tsx`, which meant the next
  * screen to show a mixed list would have made it again — and the two would
@@ -10,7 +10,7 @@
  *
  * **The press belongs to the row, and the row has no `accessibilityLabel`.**
  * One on a wrapping `Pressable` *replaces* the name a reader composes from the
- * content, which is how the ledger came to announce a payee and never the
+ * content, which is how the ledger came to announce a entered name and never the
  * amount, the category or the date — the same defect `net-worth-strip`
  * documents, on the list this app is mostly made of. The content is the name.
  *
@@ -50,8 +50,8 @@ export function EntryRow({ row, onPress, withAccount, withDate }: EntryRowProps)
    * on every row states the obvious. Any other role is worth a word.
    */
   const roleTag =
-    row.counterpartyRole && row.counterpartyRole !== "debt"
-      ? t(`counterparties.role.${row.counterpartyRole}`)
+    row.obligationRole && row.obligationRole !== "debt"
+      ? t(`counterparties.role.${row.obligationRole}`)
       : undefined;
 
   if (row.type === "transfer" && row.toAccountName && row.toAmount && row.toCurrency) {
@@ -72,7 +72,7 @@ export function EntryRow({ row, onPress, withAccount, withDate }: EntryRowProps)
   return (
     <TransactionRow
       date={row.date}
-      payee={row.payee}
+      enteredName={row.enteredName}
       category={row.categoryName}
       amount={row.amount}
       currency={row.currency}

@@ -42,7 +42,7 @@ describe("outbox replay — architecture/08 H13, twice is once", () => {
             accountId: ID.accountPln,
             amountOriginal: money.toMoney(`${10 + index}.00`),
             currency: PIVOT,
-            payee: "",
+            enteredName: "",
             note: "",
             isBusiness: false,
             isCapital: false,

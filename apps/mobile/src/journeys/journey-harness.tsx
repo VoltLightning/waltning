@@ -94,7 +94,7 @@ export type JourneyFixture = {
  * J02 §3's own fixture, built through the controller's real write methods —
  * never a raw table insert, so a refusal here is the same refusal Quick add
  * itself would show. One capturable account, one leaf category under a
- * group, and one prior capture D2's proposal (`payee-memory.ts`) can fire
+ * group, and one prior capture D2's proposal (`entered-name-memory.ts`) can fire
  * on.
  *
  * **`Eating out` lives under a group, not at the root, and that is load-
@@ -157,7 +157,7 @@ export function seedJourneyFixture(ledger: JourneyLedger): JourneyFixture {
     throw new Error("journey fixture: the shipped taxonomy has no 'Eating out'");
   }
 
-  // Yesterday, so `readPayeeHistory`'s own "newest first" ordering has no say
+  // Yesterday, so `readEnteredNameHistory`'s own "newest first" ordering has no say
   // in which row wins — the exact fold match D2 needs is the only reason this
   // proposal fires at confidence 1.
   const prior = controller.createTransaction({
@@ -165,12 +165,12 @@ export function seedJourneyFixture(ledger: JourneyLedger): JourneyFixture {
     amount: "12.50",
     accountId: account.id,
     categoryId: category.id,
-    payee: "Corner Café",
+    enteredName: "Corner Café",
     date: addDays(today, -1),
     note: "",
     isBusiness: false,
-    counterpartyId: null,
-    counterpartyRole: null,
+    obligationCounterpartyId: null,
+    obligationRole: null,
   });
   if (!("id" in prior)) {
     throw new Error(
@@ -200,7 +200,7 @@ export function seedJourneyFixture(ledger: JourneyLedger): JourneyFixture {
 
   // J07 §2's precondition — a counterparty already carrying an open debt, the
   // lend itself booked through the same write S05's own role chip makes
-  // (`counterpartyRole: "debt"`), never a raw balance row.
+  // (`obligationRole: "debt"`), never a raw balance row.
   const counterparty = controller.createCounterparty({
     name: "Placeholder",
     kind: "person",
@@ -218,12 +218,12 @@ export function seedJourneyFixture(ledger: JourneyLedger): JourneyFixture {
     amount: "100.00",
     accountId: account.id,
     categoryId: category.id,
-    payee: "Placeholder",
+    enteredName: "Placeholder",
     date: today,
     note: "",
     isBusiness: false,
-    counterpartyId: counterparty.id,
-    counterpartyRole: "debt",
+    obligationCounterpartyId: counterparty.id,
+    obligationRole: "debt",
   });
   if (!("id" in lend)) {
     throw new Error(`journey fixture: lend refused — ${JSON.stringify(lend.fieldErrors)}`);

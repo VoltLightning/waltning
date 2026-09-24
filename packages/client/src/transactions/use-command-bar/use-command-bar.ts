@@ -20,12 +20,12 @@
  * context.
  *
  * **D2's category proposal is the phone's own call, not a second one.**
- * `quick-add-screen.tsx` folds the typed payee and runs it against
- * `listPayeeHistory()`; `acceptProposedCategory` (this domain's own shared
+ * `quick-add-screen.tsx` folds the typed entered name and runs it against
+ * `listEnteredNameHistory()`; `acceptProposedCategory` (this domain's own shared
  * guard) decides whether it auto-applies — a proposal must name a category
  * among the ones offered (never archived, since that list already excludes
- * them) and of the right kind, or the chip stays unfilled and asks. A payee
- * typed here and a payee typed on the phone earn the same category the same
+ * them) and of the right kind, or the chip stays unfilled and asks. A entered name
+ * typed here and a entered name typed on the phone earn the same category the same
  * way, refused the same way too.
  *
  * **No model path.** A line D1 cannot resolve stays a `CaptureParse` with
@@ -35,10 +35,13 @@
  * the offer).
  */
 
+import type {
+  CategoryProposal,
+  EnteredNameHistoryRow,
+} from "@waltning/core/capture/entered-name-memory";
+import { proposeCategory } from "@waltning/core/capture/entered-name-memory";
 import type { CaptureParse } from "@waltning/core/capture/grammar";
 import { fold } from "@waltning/core/capture/names";
-import type { CategoryProposal, PayeeHistoryRow } from "@waltning/core/capture/payee-memory";
-import { proposeCategory } from "@waltning/core/capture/payee-memory";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { FieldError } from "../../transport/field-errors/field-errors.ts";
 import {
@@ -62,12 +65,12 @@ export type CommandBarDraft = {
   amount: string;
   accountId: string;
   categoryId: string | null;
-  payee: string;
+  enteredName: string;
   date: string;
   note: string;
   isBusiness: boolean;
-  counterpartyId: string | null;
-  counterpartyRole: "debt" | "contribution" | "reference" | null;
+  obligationCounterpartyId: string | null;
+  obligationRole: "debt" | "contribution" | "reference" | null;
 };
 
 /**
@@ -79,7 +82,7 @@ export type CommandBarController = {
   createTransaction: (
     draft: CommandBarDraft,
   ) => { id: string; deferred?: boolean } | { fieldErrors: readonly FieldError[] };
-  listPayeeHistory: () => readonly PayeeHistoryRow[];
+  listEnteredNameHistory: () => readonly EnteredNameHistoryRow[];
 };
 
 export type CommandBarState = {
@@ -97,7 +100,7 @@ export type CommandBarState = {
    * keeps.
    */
   categoryId: string | null;
-  /** D2's own proposal, for a caller to render machine-filled or low-confidence. `undefined` before a payee resolves. */
+  /** D2's own proposal, for a caller to render machine-filled or low-confidence. `undefined` before a entered name resolves. */
   categoryProposal: CategoryProposal | undefined;
   /** True only while `categoryId` is the proposal's own id, applied without a pick. */
   categoryAutoFilled: boolean;
@@ -120,7 +123,7 @@ export function useCommandBar(
   const [fieldErrors, setFieldErrors] = useState<readonly FieldError[] | undefined>(undefined);
   // H1/M3 — the phone's own `categoryProposalDismissed`, moved here: Esc on
   // a highlighted proposal is this bar's Undo (§8's P2), and the same reset
-  // rule holds — a *different* payee earns its own proposal a fresh chance
+  // rule holds — a *different* entered name earns its own proposal a fresh chance
   // rather than inheriting a dismissal that was never about it.
   const [categoryProposalDismissed, setCategoryProposalDismissed] = useState(false);
 
@@ -134,21 +137,21 @@ export function useCommandBar(
 
   const parsed = useMemo(() => (text.trim() === "" ? null : parse(text)), [parse, text]);
 
-  const payee = parsed?.ok === true ? parsed.payee : "";
-  // `fold` is idempotent (`names.ts`) — memoised on the folded payee, not the
+  const enteredName = parsed?.ok === true ? parsed.enteredName : "";
+  // `fold` is idempotent (`names.ts`) — memoised on the folded entered name, not the
   // raw one, the same reason `quick-add-screen.tsx` keys its own proposal off
-  // `payeeFold`: a keystroke `fold` collapses away must not re-run the
-  // replica read behind `listPayeeHistory()`.
-  const payeeFold = useMemo(() => fold(payee), [payee]);
+  // `enteredNameFold`: a keystroke `fold` collapses away must not re-run the
+  // replica read behind `listEnteredNameHistory()`.
+  const enteredNameFold = useMemo(() => fold(enteredName), [enteredName]);
   const categoryProposal = useMemo(() => {
-    if (parsed?.ok !== true || payeeFold.trim() === "") return undefined;
-    return proposeCategory(payeeFold, controller.listPayeeHistory()) ?? undefined;
-  }, [controller, parsed, payeeFold]);
+    if (parsed?.ok !== true || enteredNameFold.trim() === "") return undefined;
+    return proposeCategory(enteredNameFold, controller.listEnteredNameHistory()) ?? undefined;
+  }, [controller, parsed, enteredNameFold]);
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: payeeFold is the trigger; the effect body reads no value from it.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: enteredNameFold is the trigger; the effect body reads no value from it.
   useEffect(() => {
     setCategoryProposalDismissed(false);
-  }, [payeeFold]);
+  }, [enteredNameFold]);
 
   const categoryAutoFilled =
     parsed?.ok === true &&
@@ -174,12 +177,12 @@ export function useCommandBar(
       amount: parsed.amount,
       accountId: parsed.accountId,
       categoryId,
-      payee: parsed.payee,
+      enteredName: parsed.enteredName,
       date: parsed.date,
       note: "",
       isBusiness: false,
-      counterpartyId: null,
-      counterpartyRole: null,
+      obligationCounterpartyId: null,
+      obligationRole: null,
     };
     const result = controller.createTransaction(draft);
     if ("fieldErrors" in result) {

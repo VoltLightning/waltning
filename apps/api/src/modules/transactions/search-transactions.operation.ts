@@ -52,7 +52,7 @@ export const searchTransactionsOperation = defineOperation({
       from: zAccountingDate.optional(),
       to: zAccountingDate.optional(),
       counterpartyId: zId<"counterparties">().optional(),
-      counterpartyRole: z.enum(["debt", "contribution", "reference"]).optional(),
+      obligationRole: z.enum(["debt", "contribution", "reference"]).optional(),
       // Bounded so no caller can ask for the whole ledger by accident; the Pi has
       // 4 GB and the phone renders this into a list.
       limit: z.number().int().min(1).max(200).default(50),
@@ -75,7 +75,7 @@ export const searchTransactionsOperation = defineOperation({
         from: input.from,
         to: input.to,
         counterpartyId: input.counterpartyId,
-        counterpartyRole: input.counterpartyRole,
+        obligationRole: input.obligationRole,
       },
       input.limit,
       input.cursor,

@@ -19,8 +19,8 @@ const DEFAULT_K = 7;
  */
 export const PROPOSAL_DISPLAY_THRESHOLD = 0.85;
 
-export type PayeeHistoryRow = {
-  payee: string;
+export type EnteredNameHistoryRow = {
+  enteredName: string;
   categoryId: string;
   date: AccountingDate;
 };
@@ -38,21 +38,21 @@ export type CategoryProposal = {
    * alone, which named a match for a category it never voted for. Without
    * `categoryId` here, the caller has no way to tell the two apart.
    */
-  neighbours: readonly { payee: string; similarity: number; categoryId: string }[];
+  neighbours: readonly { enteredName: string; similarity: number; categoryId: string }[];
 } | null;
 
 /**
  * `computations.md` §14: not self-reported. An exact fold match to a prior
- * payee reuses its most recent category at confidence 1 — no retrieval
+ * entered name reuses its most recent category at confidence 1 — no retrieval
  * needed. Otherwise, trigram kNN (§13's algorithm, run client-side) over the
- * folded payee history: confidence is the plurality category's share of the
+ * folded entered name history: confidence is the plurality category's share of the
  * *k* nearest neighbours at similarity ≥ 0.2, never the model's own claim.
  * The 0.85 display threshold from §14 is the screen's to apply — this
  * function only returns the number.
  */
 export function proposeCategory(
-  payee: string,
-  history: readonly PayeeHistoryRow[],
+  enteredName: string,
+  history: readonly EnteredNameHistoryRow[],
   k: number = DEFAULT_K,
 ): CategoryProposal {
   if (!Number.isInteger(k) || k < 1) {
@@ -60,13 +60,13 @@ export function proposeCategory(
   }
   if (history.length === 0) return null;
 
-  const target = fold(payee);
-  // A blank or whitespace-only payee has no meaningful trigrams — padding
+  const target = fold(enteredName);
+  // A blank or whitespace-only entered name has no meaningful trigrams — padding
   // alone would make it look identical to any other blank history row (both
   // fold to the single all-space gram), a confident-looking match on nothing.
   if (target.trim().length === 0) return null;
 
-  const exactMatches = history.filter((row) => fold(row.payee) === target);
+  const exactMatches = history.filter((row) => fold(row.enteredName) === target);
   if (exactMatches.length > 0) {
     const mostRecent = mostRecentBy(exactMatches, (row) => row.date);
     return { categoryId: mostRecent.categoryId, confidence: 1, basis: "exact", neighbours: [] };
@@ -74,7 +74,7 @@ export function proposeCategory(
 
   const targetGrams = trigrams(target);
   const scored = history
-    .map((row) => ({ row, similarity: jaccard(targetGrams, trigrams(fold(row.payee))) }))
+    .map((row) => ({ row, similarity: jaccard(targetGrams, trigrams(fold(row.enteredName))) }))
     .filter(({ similarity }) => similarity >= MIN_SIMILARITY)
     .sort((a, b) => b.similarity - a.similarity || compareDate(b.row.date, a.row.date));
 
@@ -104,7 +104,7 @@ export function proposeCategory(
     confidence: winner.count / nearest.length,
     basis: "neighbours",
     neighbours: nearest.map(({ row, similarity }) => ({
-      payee: row.payee,
+      enteredName: row.enteredName,
       similarity,
       categoryId: row.categoryId,
     })),

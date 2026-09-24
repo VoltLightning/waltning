@@ -51,12 +51,13 @@ export const ACTOR = ["user", "agent", "import", "migration"] as const;
 export const COUNTERPARTY_KIND = ["person", "company"] as const;
 
 /**
- * §6.6 — naming a counterparty is not the same as owing them. Only `debt` rows
+ * §6.6 — naming a counterparty is not the same as owing them, which is why
+ * this is an *obligation* role and not a counterparty one. Only `debt` rows
  * reach `counterparty_balances`; `contribution` attributes an inflow to a
  * shared account (§6.7) and carries no settlement expectation; `reference`
  * merely records who was involved.
  */
-export const COUNTERPARTY_ROLE = ["debt", "contribution", "reference"] as const;
+export const OBLIGATION_ROLE = ["debt", "contribution", "reference"] as const;
 
 /**
  * §7.6 — `manual` outranks every synced source for the same pair and date.
@@ -96,7 +97,7 @@ export const WIDGET_SIZE = ["s", "m", "l"] as const;
  * this one has no core-side brand to pin it against either, the same gap
  * that note records.
  *
- * Three values: `auto` (matched from the payee offline),
+ * Three values: `auto` (matched from the entered name offline),
  * `manual` (asserted by the caller), `none` (a deliberate, sticky "no
  * brand" — see `@waltning/core/brands/match`'s `resolveBrandPatch`).
  */
@@ -109,7 +110,7 @@ export type TxnType = (typeof TXN_TYPE)[number];
 export type TxnSource = (typeof TXN_SOURCE)[number];
 export type Actor = (typeof ACTOR)[number];
 export type CounterpartyKind = (typeof COUNTERPARTY_KIND)[number];
-export type CounterpartyRole = (typeof COUNTERPARTY_ROLE)[number];
+export type ObligationRole = (typeof OBLIGATION_ROLE)[number];
 export type FxSource = (typeof FX_SOURCE)[number];
 export type ImportRowStatus = (typeof IMPORT_ROW_STATUS)[number];
 export type TaxLineKind = (typeof TAX_LINE_KIND)[number];

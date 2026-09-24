@@ -29,9 +29,9 @@ const FIELDS: TransactionFields = {
   date: "2026-08-06",
   accountId: "account-a",
   categoryId: "cat-eating-out",
-  counterpartyId: null,
-  counterpartyRole: null,
-  payee: "Café A",
+  obligationCounterpartyId: null,
+  obligationRole: null,
+  enteredName: "Café A",
   note: "",
   isBusiness: false,
   isCapital: false,
@@ -52,7 +52,7 @@ function renderCard(overrides: Partial<Parameters<typeof FieldsCard>[0]> = {}) {
       categoryId="cat-eating-out"
       categoryName="Eating out"
       onOpenCategoryPicker={onOpenCategoryPicker}
-      counterpartyId={null}
+      obligationCounterpartyId={null}
       counterpartyName={null}
       onOpenCounterpartyPicker={onOpenCounterpartyPicker}
       onSave={onSave}
@@ -111,7 +111,7 @@ it("Save sends only the field that changed", () => {
   expect(save).toHaveProperty("disabled", false);
   fireEvent.click(save);
 
-  expect(onSave).toHaveBeenCalledWith({ payee: "Bakery A" });
+  expect(onSave).toHaveBeenCalledWith({ enteredName: "Bakery A" });
 });
 
 it("carries a category change (set by the screen once the sheet picks one) alongside a field change, in one patch", () => {
@@ -146,27 +146,30 @@ it("offers the role only once a counterparty is set", () => {
   expect(screen.queryByRole("button", { name: /^Role/ })).toBeNull();
 
   cleanup();
-  renderCard({ counterpartyId: "cp-nina", counterpartyName: "Nina" });
+  renderCard({ obligationCounterpartyId: "cp-nina", counterpartyName: "Nina" });
   expect(screen.getByRole("button", { name: "Role" })).toBeDefined();
 });
 
 it("carries a counterparty and the role picked for them in one patch", () => {
-  const { onSave } = renderCard({ counterpartyId: "cp-nina", counterpartyName: "Nina" });
+  const { onSave } = renderCard({ obligationCounterpartyId: "cp-nina", counterpartyName: "Nina" });
   fireEvent.click(screen.getByRole("button", { name: "Role" }));
   fireEvent.click(screen.getByRole("radio", { name: "Debt — expected back" }));
   fireEvent.click(screen.getByRole("button", { name: "Save" }));
-  expect(onSave).toHaveBeenCalledWith({ counterpartyId: "cp-nina", counterpartyRole: "debt" });
+  expect(onSave).toHaveBeenCalledWith({
+    obligationCounterpartyId: "cp-nina",
+    obligationRole: "debt",
+  });
 });
 
 /** Clearing the person clears the role with them — a role belongs to someone. */
 it("drops the role when the counterparty is cleared", () => {
   const { onSave } = renderCard({
-    fields: { ...FIELDS, counterpartyId: "cp-nina", counterpartyRole: "debt" },
-    counterpartyId: null,
+    fields: { ...FIELDS, obligationCounterpartyId: "cp-nina", obligationRole: "debt" },
+    obligationCounterpartyId: null,
     counterpartyName: null,
   });
   fireEvent.click(screen.getByRole("button", { name: "Save" }));
-  expect(onSave).toHaveBeenCalledWith({ counterpartyId: null, counterpartyRole: null });
+  expect(onSave).toHaveBeenCalledWith({ obligationCounterpartyId: null, obligationRole: null });
 });
 
 /** §6.8 — this screen is the flag's only producer, and it moves no balance. */

@@ -1538,7 +1538,7 @@ describe("a constraint declared in the schema is present on the device", () => {
    * names no engine exception and `architecture/14` §14.6 requires the phone
    * to refuse at capture time what the server would refuse — but SQLite has
    * no `ALTER TABLE … ADD CONSTRAINT`, so the pairing is only enforced
-   * because `0010_schema` rebuilds the table copy-rename-drop rather than
+   * because `0010_schema` rebuilt the table copy-rename-drop rather than
    * adding two bare columns. This is the break that proves the rebuild
    * shipped, against the real chain and the real file.
    *
@@ -1660,11 +1660,12 @@ describe("a constraint declared in the schema is present on the device", () => {
    * -1)` stops one short of whichever migration is currently last, and the
    * chain's last step has been a `transactions` rebuild since `0008_schema`
    * (which added `transactions_debt_amount_requires_currency`, the CHECK this
-   * test still asserts by name below) — most recently `0010_schema`. The
-   * `slice` deliberately carries no migration number: pinning one is how this
-   * test would silently retarget the day a later rebuild lands, which is
-   * exactly what happened to the sentence above when `0010_schema` replaced
-   * `0008_schema` as the last step.
+   * test still asserts by name below) — most recently `0017_schema`, the
+   * obligation rename. The `slice` deliberately carries no migration number:
+   * pinning one is how this test would silently retarget the day a later
+   * rebuild lands, which is exactly what happened to the sentence above when
+   * `0010_schema` replaced `0008_schema`, and again when `0017_schema`
+   * replaced `0010_schema`.
    */
   it("keeps a child row through the transactions rebuild, and ships the new CHECK", () => {
     const ledger = openAt("rebuild-fk");
@@ -1731,14 +1732,15 @@ describe("a constraint declared in the schema is present on the device", () => {
    * partial rather than systematic.
    *
    * So there is one home and this is the census of it: every hand-written
-   * replica trigger is created by `REPLICA_BACKFILLS["0010_schema"].objects`
-   * — the hook on the last step that *rebuilds* `transactions`, which is not
-   * the chain's head (`0011_dashboard_layout_seed` and `0012_schema` run
-   * after it) — and the hook moves when a later step rebuilds that table.
+   * replica trigger is created by `REPLICA_BACKFILLS["0017_schema"].objects`
+   * — the hook on the last step that *rebuilds* `transactions` — and the hook
+   * moves when a later step rebuilds that table. That has happened once
+   * already since: the obligation rename is a rebuild, because SQLite cannot
+   * rename a column a CHECK mentions, so the key moved off `0010_schema`.
    *
    * The behavioural tests (`transaction-ops.test.ts`) provoke each refusal,
    * which is the better assertion — but each of them opens a store on a
-   * chain that ends where the chain ends today, so an eighteenth migration
+   * chain that ends where the chain ends today, so the next migration
    * rebuilding `transactions` would break them in a way that reads as "the
    * new migration is wrong" rather than "the trigger is gone". This one
    * names the mechanism: a census, off `sqlite_master`, of a database that
@@ -1814,8 +1816,8 @@ describe("a constraint declared in the schema is present on the device", () => {
       "transaction_lines_category_idx",
       "transaction_lines_transaction_idx",
       "transactions_category_idx",
-      "transactions_counterparty_idx",
       "transactions_date_idx",
+      "transactions_obligation_counterparty_idx",
     ]);
   });
 });

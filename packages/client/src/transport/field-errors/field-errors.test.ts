@@ -30,7 +30,7 @@ describe("mapFieldErrors", () => {
   it("prints an empty path's message bare, with no leading colon", () => {
     const map = mapFieldErrors(
       [{ path: "", message: "the row moved under the writer" }],
-      ["payee", "date"],
+      ["enteredName", "date"],
     );
     expect(map.formLevel).toEqual(["the row moved under the writer"]);
   });
@@ -73,7 +73,7 @@ describe("fieldErrorsFromZod", () => {
       accountId: "22222222-2222-4222-8222-222222222222",
       amountOriginal: "48.90",
       currency: "PLN",
-      payee: "coffee",
+      enteredName: "coffee",
     }).error;
     const errors = fieldErrorsFromZod(bad);
     expect(errors).toEqual([
@@ -89,7 +89,7 @@ describe("fieldErrorsFromZod", () => {
       accountId: "22222222-2222-4222-8222-222222222222",
       amountOriginal: "48.90",
       currency: "PLN",
-      payee: "coffee",
+      enteredName: "coffee",
     }).error;
     const shape = fieldErrorsFromZod(bad)?.find((error) => error.messageKey === undefined);
     expect(shape?.path).toBe("date");

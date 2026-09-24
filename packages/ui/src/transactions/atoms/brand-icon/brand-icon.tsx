@@ -3,7 +3,7 @@
  *
  * *"A transaction for ORLEN, YouTube or another recognised merchant shows
  * its real mark immediately — including when it was created with no
- * internet — while an unknown payee is still never blank."*
+ * internet — while an unknown entered name is still never blank."*
  *
  * **A catalogue accent badge today, a real vector mark later.** `packages/ui`
  * carries no dependency floor the way `packages/core` does (`CLAUDE.md`'s
@@ -19,7 +19,7 @@
  * build's catalogue does not carry — falls back to `monogramFor`, the exact
  * treatment `CounterpartyRow`'s own avatar already gives an unmatched name
  * (`design-system/05`: *"same treatment as CounterpartyRow's fallback"*).
- * The payee is what the fallback is derived from; `brandKey` is never
+ * The entered name is what the fallback is derived from; `brandKey` is never
  * invented from it here — that resolution already happened, offline, in
  * `@waltning/core/brands/match`, before this component ever saw a row.
  */
@@ -36,7 +36,7 @@ export type BrandIconProps = {
   /** The catalogue key a row resolved to, or `null`/absent when nothing matched. */
   brandKey?: string | null;
   /** What the fallback monogram is derived from — never used when `brandKey` resolves. */
-  payee: string;
+  enteredName: string;
   /**
    * The row's category, which tints the fallback.
    *
@@ -44,11 +44,11 @@ export type BrandIconProps = {
    * category's.** §14.4b gives the catalogue the first claim — a brand's mark
    * is the thing a reader recognises. Under it, the boards tint every row by
    * what the money was *for*, and a ledger of one green is what we had
-   * instead. The letter stays the payee's: the category is already written on
+   * instead. The letter stays the entered name's: the category is already written on
    * the line beneath, and two names in one tile would be a tile saying
    * neither.
    *
-   * Absent, or a row with no category, falls back to the payee's own tint,
+   * Absent, or a row with no category, falls back to the entered name's own tint,
    * which is where this started.
    */
   category?: string | null | undefined;
@@ -56,7 +56,7 @@ export type BrandIconProps = {
   size?: 24 | 20;
 };
 
-export function BrandIcon({ brandKey, payee, category, size = 24 }: BrandIconProps) {
+export function BrandIcon({ brandKey, enteredName, category, size = 24 }: BrandIconProps) {
   const theme = useTheme();
   const styles = useStyles();
   const entry = brandKey ? brandCatalogEntry(brandKey) : undefined;
@@ -78,8 +78,8 @@ export function BrandIcon({ brandKey, payee, category, size = 24 }: BrandIconPro
   }
 
   // Unrecognised — never blank (§14.4b). The same monogram `CounterpartyRow`
-  // gives an unmatched name, derived from the payee rather than the brand.
-  const monogram = monogramFor(payee, theme);
+  // gives an unmatched name, derived from the entered name rather than the brand.
+  const monogram = monogramFor(enteredName, theme);
   const tint = category ? categoryTintFor(category, theme) : null;
   // The category's *mark* — its solid, under white — so a row's tile is the
   // same colour as that category's icon square in the picker.
@@ -96,10 +96,10 @@ export function BrandIcon({ brandKey, payee, category, size = 24 }: BrandIconPro
 
 /**
  * This badge is never its own accessible stop. The mark is decorative
- * everywhere it appears today (S04, S09, S10, S13) and the payee text beside
+ * everywhere it appears today (S04, S09, S10, S13) and the entered name text beside
  * it already carries the words a screen reader needs — an `accessibilityLabel`
  * here would make the row announce "ORLEN, ORLEN", and would leave a blank
- * payee's `?` fallback with nothing to announce at all.
+ * entered name's `?` fallback with nothing to announce at all.
  *
  * **All three targets, because all three ship.** iOS reads
  * `accessibilityElementsHidden` and Android reads

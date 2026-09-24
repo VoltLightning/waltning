@@ -16,7 +16,7 @@ describe("TransactionRow", () => {
     render(
       <TransactionRow
         date="2026-08-16"
-        payee="Grocer"
+        enteredName="Grocer"
         amount={money.toMoney("-184.30000000")}
         currency="PLN"
       />,
@@ -28,7 +28,7 @@ describe("TransactionRow", () => {
     render(
       <TransactionRow
         date="2026-01-01"
-        payee="X"
+        enteredName="X"
         amount={money.toMoney("1.00000000")}
         currency="PLN"
       />,
@@ -43,7 +43,7 @@ describe("TransactionRow", () => {
     render(
       <TransactionRow
         date="2026-08-16"
-        payee="Client"
+        enteredName="Client"
         amount={money.toMoney("100.00000000")}
         currency="PLN"
         isBusiness
@@ -52,11 +52,11 @@ describe("TransactionRow", () => {
     expect(screen.getByText("biz")).toBeDefined();
   });
 
-  it("falls back rather than rendering a blank payee", () => {
+  it("falls back rather than rendering a blank enteredName", () => {
     render(
       <TransactionRow
         date="2026-08-16"
-        payee=""
+        enteredName=""
         amount={money.toMoney("1.00000000")}
         currency="PLN"
       />,
@@ -71,7 +71,7 @@ describe("TransactionRow", () => {
     render(
       <TransactionRow
         date="2026-08-16"
-        payee="Grocer"
+        enteredName="Grocer"
         amount={money.toMoney("-1.00000000")}
         currency="PLN"
       />,
@@ -83,7 +83,7 @@ describe("TransactionRow", () => {
     render(
       <TransactionRow
         date="2026-08-16"
-        payee="ORLEN"
+        enteredName="ORLEN"
         amount={money.toMoney("-184.30000000")}
         currency="PLN"
         brandKey="orlen"
@@ -92,11 +92,11 @@ describe("TransactionRow", () => {
     expect(screen.getByText("O")).toBeDefined();
   });
 
-  it("falls back to the payee's monogram for an unrecognised payee — never blank", () => {
+  it("falls back to the enteredName's monogram for an unrecognised enteredName — never blank", () => {
     render(
       <TransactionRow
         date="2026-08-16"
-        payee="Corner Café"
+        enteredName="Corner Café"
         amount={money.toMoney("-1.00000000")}
         currency="PLN"
         brandKey={null}
@@ -109,7 +109,7 @@ describe("TransactionRow", () => {
     render(
       <TransactionRow
         date="2026-08-16"
-        payee="Grocer"
+        enteredName="Grocer"
         amount={money.toMoney("-1.00000000")}
         currency="PLN"
       />,
@@ -122,14 +122,14 @@ describe("TransactionRow", () => {
     render(
       <TransactionRow
         date="2026-08-16"
-        payee="Grocer"
+        enteredName="Grocer"
         amount={money.toMoney("-1.00000000")}
         currency="PLN"
         onPress={onPress}
       />,
     );
     // A substring, because the row's accessible name is now its whole
-    // content — the payee *and* the figure. It used to be exactly the payee,
+    // content — the entered name *and* the figure. It used to be exactly the entered name,
     // which is the defect this row carried: an `accessibilityLabel` replaces
     // the composed name, so a reader heard "Grocer, button" and never the
     // amount. This assertion pinned it in place.

@@ -97,7 +97,7 @@ export function readCounterpartyBalances<TRun, TSchema extends typeof ledgerSche
 ): readonly LocalCounterpartyBalance[] {
   const rows = db
     .select({
-      counterpartyId: transactions.counterpartyId,
+      counterpartyId: transactions.obligationCounterpartyId,
       name: counterparties.name,
       kind: counterparties.kind,
       settlementCurrency: counterparties.settlementCurrency,
@@ -112,14 +112,14 @@ export function readCounterpartyBalances<TRun, TSchema extends typeof ledgerSche
       debtAmount: transactions.debtAmount,
     })
     .from(transactions)
-    .innerJoin(counterparties, eq(transactions.counterpartyId, counterparties.id))
-    .where(and(isNull(transactions.deletedAt), eq(transactions.counterpartyRole, "debt")))
+    .innerJoin(counterparties, eq(transactions.obligationCounterpartyId, counterparties.id))
+    .where(and(isNull(transactions.deletedAt), eq(transactions.obligationRole, "debt")))
     // M3 — deterministic input order. `fifoOldestOpen` re-sorts by
     // `(date, id)` internally so this never changes ageing, but the fold
     // below builds `byCounterparty` (and each bucket's own `balances`) by
     // walking these rows in order, and nothing downstream should have to
     // depend on whatever order SQLite happened to return them in.
-    .orderBy(transactions.counterpartyId, transactions.currency)
+    .orderBy(transactions.obligationCounterpartyId, transactions.currency)
     .all();
 
   const decimalsByCurrency = new Map(
@@ -240,8 +240,8 @@ export function balancesForCounterparty(
     .where(
       and(
         isNull(transactions.deletedAt),
-        eq(transactions.counterpartyId, counterpartyId),
-        eq(transactions.counterpartyRole, "debt"),
+        eq(transactions.obligationCounterpartyId, counterpartyId),
+        eq(transactions.obligationRole, "debt"),
       ),
     )
     .all();

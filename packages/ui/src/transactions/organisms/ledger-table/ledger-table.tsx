@@ -1,5 +1,5 @@
 /**
- * `<LedgerTable>` — S10 §3 (web ≥1024px): "Table, not cards" — date · payee ·
+ * `<LedgerTable>` — S10 §3 (web ≥1024px): "Table, not cards" — date · entered name ·
  * category · account · scope · amount, sortable by header, dense enough that
  * a month is scanned rather than scrolled.
  *
@@ -163,14 +163,20 @@ import {
  * in row fields (`SortKey`) rather than in columns. `SORT_KEY` below is the
  * one-line map between the two vocabularies.
  */
-export type LedgerTableColumn = "date" | "payee" | "category" | "account" | "scope" | "amount";
+export type LedgerTableColumn =
+  | "date"
+  | "enteredName"
+  | "category"
+  | "account"
+  | "scope"
+  | "amount";
 /** `null` — the caller's own order, untouched (`@waltning/core/ledger-table`'s own doc). */
 export type LedgerTableSortState = SortState<LedgerTableColumn>;
 
 export type LedgerTableRow = {
   id: string;
   date: string;
-  payee: string;
+  enteredName: string;
   category: string;
   account: string;
   scope: string;
@@ -207,7 +213,7 @@ export type LedgerTableSelection = {
 
 const COLUMNS: readonly LedgerTableColumn[] = [
   "date",
-  "payee",
+  "enteredName",
   "category",
   "account",
   "scope",
@@ -223,7 +229,7 @@ const COLUMNS: readonly LedgerTableColumn[] = [
  */
 const SORT_KEY: Record<LedgerTableColumn, SortKey<LedgerTableRow>> = {
   date: "date",
-  payee: "payee",
+  enteredName: "enteredName",
   category: "category",
   account: "account",
   scope: "scope",
@@ -538,7 +544,7 @@ function LedgerTableHeader({ sort, onSortColumn }: LedgerTableHeaderProps) {
           {/* The brand badge's own width, held open in the header so the
               four columns after it line up with their body cells — see the
               row's `brandCell` comment. Unlabelled, like the checkbox
-              column: a mark has no header word of its own, and `Payee`
+              column: a mark has no header word of its own, and `EnteredName`
               already names the identity column it leads into. */}
           {column === "date" ? <View style={styles.brandCell} /> : null}
         </Fragment>
@@ -552,7 +558,7 @@ function LedgerTableHeader({ sort, onSortColumn }: LedgerTableHeaderProps) {
 // catalogue key each one actually is.
 const COLUMN_LABEL_KEY = {
   date: "transactions.date",
-  payee: "transactions.payee",
+  enteredName: "transactions.enteredName",
   category: "transactions.category",
   account: "transactions.account",
   scope: "transactions.scope",
@@ -564,7 +570,7 @@ const COLUMN_STYLE_KEY: Record<
   "dateCell" | "flexCell" | "scopeCell" | "amountCell"
 > = {
   date: "dateCell",
-  payee: "flexCell",
+  enteredName: "flexCell",
   category: "flexCell",
   account: "flexCell",
   scope: "scopeCell",
@@ -686,7 +692,7 @@ function LedgerTableRowView({
         {row.selectable ? (
           <LedgerRowCheckbox
             checked={selected}
-            label={row.payee}
+            label={row.enteredName}
             onPress={handleToggle}
             keyboardProps={checkboxKeyboardProps}
           />
@@ -694,7 +700,7 @@ function LedgerTableRowView({
       </View>
       <PressableScaled
         accessibilityRole="button"
-        accessibilityLabel={row.payee || row.account}
+        accessibilityLabel={row.enteredName || row.account}
         // The file doc's own "one tab stop" paragraph — the container holds
         // focus, `activeId` holds the ring, and there is only ever one
         // "current row" between them. `tabIndex`, not `focusable={false}`:
@@ -711,14 +717,14 @@ function LedgerTableRowView({
         {/*
           §14.4b, S10 §4 — the same `BrandIcon` and the same catalogue
           `TransactionRow` draws on the phone, in the identity column, ahead
-          of the payee it belongs to. `size={20}`, the "widget" size, rather
+          of the enteredName it belongs to. `size={20}`, the "widget" size, rather
           than the row's own 24: this is a `bodySm` table row, and a 24px
           badge is taller than the text beside it.
 
           Passed unconditionally, never `brandKey === undefined ? null : …`
           — that branch exists on `TransactionRow` for a caller which has not
           read the field yet, and `LedgerTableRow.brandKey` is required, so
-          there is no such caller here. An unmatched payee gets the monogram
+          there is no such caller here. An unmatched enteredName gets the monogram
           fallback, which is what "never blank" means.
 
           **Its own fixed-width cell, with an empty twin in the header.**
@@ -728,10 +734,10 @@ function LedgerTableRowView({
           `amount` left of the headers that name them.
         */}
         <View style={styles.brandCell}>
-          <BrandIcon brandKey={row.brandKey} payee={row.payee} size={20} />
+          <BrandIcon brandKey={row.brandKey} enteredName={row.enteredName} size={20} />
         </View>
         <Text style={[styles.cellText, styles.flexCell]} numberOfLines={1}>
-          {row.payee || "—"}
+          {row.enteredName || "—"}
         </Text>
         <Text style={[styles.cellTextMuted, styles.flexCell]} numberOfLines={1}>
           {row.category || "—"}
@@ -778,7 +784,9 @@ function LedgerRowCheckbox({ checked, label, onPress, keyboardProps }: LedgerRow
   return (
     <PressableScaled
       accessibilityRole="checkbox"
-      accessibilityLabel={t("transactions.selectRow", { payee: label || t("transactions.payee") })}
+      accessibilityLabel={t("transactions.selectRow", {
+        enteredName: label || t("transactions.enteredName"),
+      })}
       accessibilityState={{ checked }}
       aria-checked={checked}
       // Out of the tab order with the row body — see the file doc's "one tab

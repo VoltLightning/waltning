@@ -48,7 +48,7 @@ function expenseRow(overrides: Partial<PhoneSearchTransaction> = {}): PhoneSearc
     id: id<"transactions">("22222222-2222-4222-8222-222222222222"),
     date: TODAY,
     type: "expense",
-    payee: "Corner Bakery",
+    enteredName: "Corner Bakery",
     note: "",
     categoryName: "Eating out",
     accountId: ACCOUNT,
@@ -66,24 +66,24 @@ function expenseRow(overrides: Partial<PhoneSearchTransaction> = {}): PhoneSearc
     toDecimals: null,
     isBusiness: false,
     isCapital: false,
-    // §14.4b — an unrecognised payee, which is what "Corner Bakery" is
+    // §14.4b — an unrecognised entered name, which is what "Corner Bakery" is
     // against the bundled catalogue. `RECOGNISED_ROW` below is the other
     // half.
     brandKey: null,
-    counterpartyRole: null,
+    obligationRole: null,
     ...overrides,
   };
 }
 
 /**
- * A payee the bundled catalogue does recognise (§14.4b, S10 §4) — so the
+ * A entered name the bundled catalogue does recognise (§14.4b, S10 §4) — so the
  * desk table's identity column can be checked against the mark the offline
  * matcher resolved rather than only against the monogram fallback.
  */
 function recognisedRow(): PhoneSearchTransaction {
   return expenseRow({
     id: id<"transactions">("44444444-4444-4444-8444-444444444444"),
-    payee: "ORLEN",
+    enteredName: "ORLEN",
     brandKey: "orlen",
   });
 }
@@ -277,7 +277,7 @@ describe("Ledger at desk width", () => {
    * §14.4b, S10 §4 — the desk table draws the same `BrandIcon` the phone
    * row does, from the key the port already carries. Read by the mark,
    * because the badge is hidden from the accessibility tree: the
-   * catalogue's `"O"` for a payee it knows, `monogramFor`'s `"C"` for one
+   * catalogue's `"O"` for a entered name it knows, `monogramFor`'s `"C"` for one
    * it does not.
    */
   it("draws each row's brand mark in the identity column", () => {
@@ -358,8 +358,16 @@ describe("Ledger at desk width", () => {
 
   it("sorting by a column header reorders the rows", () => {
     const rows = [
-      expenseRow({ id: id("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"), payee: "Zed", date: TODAY }),
-      expenseRow({ id: id("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"), payee: "Abe", date: TODAY }),
+      expenseRow({
+        id: id("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"),
+        enteredName: "Zed",
+        date: TODAY,
+      }),
+      expenseRow({
+        id: id("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"),
+        enteredName: "Abe",
+        date: TODAY,
+      }),
     ];
     const controller = fakeController(() => ({
       rows,
@@ -391,9 +399,9 @@ describe("Ledger at desk width", () => {
 
   it("shift-click selects a range, and a batch categorise lands as one categorize_batch call", () => {
     const rows = [
-      expenseRow({ id: id("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"), payee: "Row A" }),
-      expenseRow({ id: id("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"), payee: "Row B" }),
-      expenseRow({ id: id("cccccccc-cccc-4ccc-8ccc-cccccccccccc"), payee: "Row C" }),
+      expenseRow({ id: id("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"), enteredName: "Row A" }),
+      expenseRow({ id: id("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"), enteredName: "Row B" }),
+      expenseRow({ id: id("cccccccc-cccc-4ccc-8ccc-cccccccccccc"), enteredName: "Row C" }),
     ];
     const categorizeBatch = vi.fn<PhoneLedgerPort["categorizeBatch"]>(() => undefined);
     const controller = fakeController(
@@ -429,7 +437,7 @@ describe("Ledger at desk width", () => {
    * A paged fake, fifty rows at a time, exactly as `search_transactions`
    * pages. The largest amount lives in the *last* generated row: a sort that
    * only ever saw a first page — the C1 bug — could not promote it, and the
-   * `FlatList` renders only its first fifty, so finding that payee on screen
+   * `FlatList` renders only its first fifty, so finding that entered name on screen
    * at all is the assertion.
    */
   function thousandRowPort(count: number) {
@@ -438,7 +446,7 @@ describe("Ledger at desk width", () => {
       const cents = String((i * 37) % 9500).padStart(3, "0");
       return expenseRow({
         id: id<"transactions">(`00000000-0000-4000-8000-${String(i).padStart(12, "0")}`),
-        payee: last ? "Peak payee" : `Row ${i}`,
+        enteredName: last ? "Peak enteredName" : `Row ${i}`,
         amount: (last
           ? "-999999.00000000"
           : `-${cents.slice(0, -2)}.${cents.slice(-2)}0000`) as never,
@@ -468,14 +476,14 @@ describe("Ledger at desk width", () => {
     withLedger(<Ledger />, controller);
     // Row 999 is far past the `FlatList`'s own first window — not on screen
     // until the sort brings it to the top.
-    expect(screen.queryByText("Peak payee")).toBeNull();
+    expect(screen.queryByText("Peak enteredName")).toBeNull();
 
     // One click — ascending. Every row here is an expense, so the largest
     // magnitude is the *smallest* signed amount and sorts to the top.
     fireEvent.click(screen.getByRole("button", { name: "Amount" }));
     const elapsed = performance.now() - started;
 
-    expect(screen.getByText("Peak payee")).toBeDefined();
+    expect(screen.getByText("Peak enteredName")).toBeDefined();
     // Twenty pages of fifty — the whole period, not the first page.
     expect(searchTransactions.mock.calls.length).toBeGreaterThanOrEqual(20);
     /**
@@ -519,7 +527,7 @@ describe("Ledger at desk width", () => {
     const rows = Array.from({ length: 50 }, (_, i) =>
       expenseRow({
         id: id<"transactions">(`00000000-0000-4000-8000-${String(i).padStart(12, "0")}`),
-        payee: `Row ${i}`,
+        enteredName: `Row ${i}`,
       }),
     );
     // First page: fifty rows and a cursor. Second page: a cursor still, and
@@ -689,10 +697,10 @@ describe("Ledger at desk width", () => {
 
   it("a selection spanning income and expense is refused before the tree opens", () => {
     const rows = [
-      expenseRow({ id: id("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"), payee: "An expense" }),
+      expenseRow({ id: id("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"), enteredName: "An expense" }),
       expenseRow({
         id: id("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"),
-        payee: "An income",
+        enteredName: "An income",
         type: "income",
         amount: "9200.00000000" as never,
       }),
@@ -732,8 +740,8 @@ describe("Ledger at desk width", () => {
     const controller = fakeController(() => ({
       rows: [
         reclassified
-          ? expenseRow({ id: ROW, payee: "Row A", type: "transfer", toAccountName: "Cash" })
-          : expenseRow({ id: ROW, payee: "Row A" }),
+          ? expenseRow({ id: ROW, enteredName: "Row A", type: "transfer", toAccountName: "Cash" })
+          : expenseRow({ id: ROW, enteredName: "Row A" }),
       ],
       nextCursor: undefined,
       total: { count: 1, currencies: [] },
@@ -757,7 +765,7 @@ describe("Ledger at desk width", () => {
     const rows = [
       expenseRow({
         id: id("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"),
-        payee: "An income",
+        enteredName: "An income",
         type: "income",
         amount: "9200.00000000" as never,
       }),
@@ -802,7 +810,7 @@ describe("Ledger at desk width", () => {
     const rows = [
       expenseRow({
         id: id("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"),
-        payee: "Old shared row",
+        enteredName: "Old shared row",
         accountId: ARCHIVED_SHARED,
         accountName: "Bank B · EUR",
       }),
@@ -864,14 +872,14 @@ describe("Ledger at desk width", () => {
 
   it("a shift-click range skips a transfer, and the count matches the checkboxes", () => {
     const rows = [
-      expenseRow({ id: id("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"), payee: "Row A" }),
+      expenseRow({ id: id("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"), enteredName: "Row A" }),
       expenseRow({
         id: id("dddddddd-dddd-4ddd-8ddd-dddddddddddd"),
-        payee: "A transfer",
+        enteredName: "A transfer",
         type: "transfer",
         toAccountName: "Cash",
       }),
-      expenseRow({ id: id("cccccccc-cccc-4ccc-8ccc-cccccccccccc"), payee: "Row C" }),
+      expenseRow({ id: id("cccccccc-cccc-4ccc-8ccc-cccccccccccc"), enteredName: "Row C" }),
     ];
     const controller = fakeController(() => ({
       rows,
@@ -898,17 +906,17 @@ describe("Ledger at desk width", () => {
     const rows = [
       expenseRow({
         id: id("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"),
-        payee: "Row A",
+        enteredName: "Row A",
         categoryName: "Groceries",
       }),
       expenseRow({
         id: id("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"),
-        payee: "Row B",
+        enteredName: "Row B",
         categoryName: null,
       }),
       expenseRow({
         id: id("cccccccc-cccc-4ccc-8ccc-cccccccccccc"),
-        payee: "Row C",
+        enteredName: "Row C",
         categoryName: "Eating out",
       }),
     ];

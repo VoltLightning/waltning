@@ -13,7 +13,7 @@ import { TAX_SENSITIVE_FIELDS } from "./gate.ts";
 const TRANSFER = [["amount_original", "to_amount", "fx_rate", "to_fx_rate"]];
 
 const row = {
-  payee: "Bank A · PLN",
+  enteredName: "Bank A · PLN",
   category_id: "cat-food",
   is_business: false,
   amount_original: "100.00000000",
@@ -23,7 +23,7 @@ const row = {
 describe("the defect this replaces", () => {
   /**
    * The whole reason for the change. Phone reads at version 1 and goes offline;
-   * a laptop fixes the payee, taking the row to version 2; the phone's queued
+   * a laptop fixes the entered name, taking the row to version 2; the phone's queued
    * `category_id` edit then arrives carrying a stale version.
    *
    * Under a row-level check this is a conflict. §14.2 says it is a merge, and
@@ -31,9 +31,9 @@ describe("the defect this replaces", () => {
    */
   it("merges a disjoint edit that a stale version reported as a conflict", () => {
     const decision = conflictDecision(
-      false, // version advanced — the laptop's payee fix
+      false, // version advanced — the laptop's enteredName fix
       { category_id: { from: "cat-food", to: "cat-coffee" } },
-      { ...row, payee: "Bank B · PLN" },
+      { ...row, enteredName: "Bank B · PLN" },
     );
 
     expect(decision.kind).toBe("merge");
@@ -41,7 +41,7 @@ describe("the defect this replaces", () => {
 
   /**
    * The same shape on a tax-sensitive field, which is where it stopped being
-   * cosmetic. H16 blocks a tax-sensitive field with a stale version, so a payee
+   * cosmetic. H16 blocks a tax-sensitive field with a stale version, so a entered name
    * typo fixed elsewhere used to block this edit **permanently**, reporting
    * that another device changed `is_business`. Nothing did.
    */
@@ -49,7 +49,7 @@ describe("the defect this replaces", () => {
     const decision = conflictDecision(
       false,
       { is_business: { from: false, to: true } },
-      { ...row, payee: "Bank B · PLN" },
+      { ...row, enteredName: "Bank B · PLN" },
       [],
       TAX_SENSITIVE_FIELDS,
     );
@@ -63,11 +63,11 @@ describe("what still counts as a conflict", () => {
   it("flags the same field changed under the write", () => {
     const decision = conflictDecision(
       false,
-      { payee: { from: "Bank A · PLN", to: "Bank C · PLN" } },
-      { ...row, payee: "Bank B · PLN" },
+      { enteredName: { from: "Bank A · PLN", to: "Bank C · PLN" } },
+      { ...row, enteredName: "Bank B · PLN" },
     );
 
-    expect(decision).toEqual({ kind: "conflict", fields: ["payee"], taxSensitive: false });
+    expect(decision).toEqual({ kind: "conflict", fields: ["enteredName"], taxSensitive: false });
   });
 
   it("marks a tax-sensitive conflict so it always asks", () => {
@@ -91,17 +91,17 @@ describe("what still counts as a conflict", () => {
   it("catches a same-field edit even when the version happens to match", () => {
     const decision = conflictDecision(
       true,
-      { payee: { from: "Bank A · PLN", to: "Bank C · PLN" } },
-      { ...row, payee: "Bank B · PLN" },
+      { enteredName: { from: "Bank A · PLN", to: "Bank C · PLN" } },
+      { ...row, enteredName: "Bank B · PLN" },
     );
 
     expect(decision.kind).toBe("conflict");
   });
 
   it("reports clean only when nothing moved and the version agrees", () => {
-    expect(conflictDecision(true, { payee: { from: "Bank A · PLN", to: "x" } }, row).kind).toBe(
-      "clean",
-    );
+    expect(
+      conflictDecision(true, { enteredName: { from: "Bank A · PLN", to: "x" } }, row).kind,
+    ).toBe("clean");
   });
 });
 
@@ -138,7 +138,7 @@ describe("fields that are not independent", () => {
   it("does not expand when no member of the group moved", () => {
     const decision = conflictDecision(
       false,
-      { payee: { from: "Bank A · PLN", to: "Bank C · PLN" } },
+      { enteredName: { from: "Bank A · PLN", to: "Bank C · PLN" } },
       row,
       TRANSFER,
     );

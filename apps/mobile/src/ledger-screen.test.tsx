@@ -54,7 +54,7 @@ function expenseRow(overrides: Partial<PhoneSearchTransaction> = {}): PhoneSearc
     id: id<"transactions">("22222222-2222-4222-8222-222222222222"),
     date: TODAY,
     type: "expense",
-    payee: "Corner Bakery",
+    enteredName: "Corner Bakery",
     note: "",
     categoryName: "Eating out",
     brandKey: null,
@@ -73,7 +73,7 @@ function expenseRow(overrides: Partial<PhoneSearchTransaction> = {}): PhoneSearc
     toDecimals: null,
     isBusiness: false,
     isCapital: false,
-    counterpartyRole: null,
+    obligationRole: null,
     ...overrides,
   };
 }
@@ -83,7 +83,7 @@ function transferRow(): PhoneSearchTransaction {
     id: id<"transactions">("33333333-3333-4333-8333-333333333333"),
     date: accountingDate("2026-01-05"),
     type: "transfer",
-    payee: "",
+    enteredName: "",
     note: "",
     categoryName: null,
     brandKey: null,
@@ -102,7 +102,7 @@ function transferRow(): PhoneSearchTransaction {
     toDecimals: 2,
     isBusiness: false,
     isCapital: false,
-    counterpartyRole: null,
+    obligationRole: null,
   };
 }
 

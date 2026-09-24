@@ -160,7 +160,16 @@ if [ -f "$terms" ]; then
     # inside ordinary identifiers — one of them is a substring of a field name
     # this ledger uses — so substring matching refused perfectly clean code. A
     # guard that cries wolf gets bypassed, which is worse than not having it.
-    hits=$(git diff --cached -- . | grep -inwFf "$cleaned" || true)
+    #
+    # **Added lines only, and that is the same argument one step further.**
+    # Reading the whole diff counted a *removed* line: the commit that finally
+    # took a name out of a fixture seed was refused by the guard that wanted it
+    # gone, and the only ways past were `--no-verify` or leaving the term where
+    # it was. A deletion cannot leak anything — whatever it removes is already
+    # in history, and history is `git filter-repo`'s problem, not a
+    # pre-commit hook's. `^+` also drops the `+++ b/path` header, so a term in
+    # a file *name* is section 1's business rather than this sweep's.
+    hits=$(git diff --cached -- . | grep '^+' | grep -inwFf "$cleaned" || true)
     if [ -n "$hits" ]; then
       fail "the staged diff contains a term from the private list." \
            "$(printf '%s' "$hits" | head -3 | cut -c1-100)"

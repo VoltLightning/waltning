@@ -25,12 +25,12 @@ export const recurringTransactionsColumns = () => ({
     .currency("currency")
     .notNull()
     .references(() => currencies.code),
-  payee: k.text("payee").notNull().default(""),
+  enteredName: k.text("entered_name").notNull().default(""),
   note: k.text("note").notNull().default(""),
   /**
    * `SPEC.md` §14.4b — the same pair `transactions.pg.ts` carries, so a
    * subscription's occurrences can inherit a recognised mark rather than
-   * each posted row re-matching its own payee. No executor writes these yet
+   * each posted row re-matching its own entered name. No executor writes these yet
    * (no `create_recurring`/`update_recurring` operation exists this arc);
    * the shape guarantee (`recurring_transactions_brand_shape`,
    * `packages/db/src/schema.ts`) is ready for the write path that does.

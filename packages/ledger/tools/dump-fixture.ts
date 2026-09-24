@@ -156,7 +156,9 @@ export function dumpFixture(options: DumpFixtureOptions = {}): void {
     // The last two are legal today and collide only once names are folded
     // past SQLite's ASCII-only `lower()` (R2 C1) — both rows have to survive
     // the upgrade for that finding's journey to have anything to exercise.
-    seedCounterparty(j, ID.cpA, "Anna Placeholder");
+    // Invented, and checked against `.githooks/private-terms.txt` — a fixture
+    // is committed to a public repository, so every name in one is made up.
+    seedCounterparty(j, ID.cpA, "Nina Placeholder");
     seedCounterparty(j, ID.cpB, "Łukasz Placeholder");
     // `CP_LOWER` bypasses `seedCounterparty` on purpose (#116 review, H1):
     // that helper now writes a real `fold()`ed value, correct for every
@@ -191,13 +193,13 @@ export function dumpFixture(options: DumpFixtureOptions = {}): void {
         accountId: ID.accountPln,
         amountOriginal: money.toMoney("120.00"),
         currency: PIVOT,
-        payee: "",
+        enteredName: "",
         note: "",
         isBusiness: false,
         isCapital: false,
         source: "manual",
-        counterpartyId: ID.cpA,
-        counterpartyRole: "reference",
+        obligationCounterpartyId: ID.cpA,
+        obligationRole: "reference",
       },
       CAPTURE,
     );
@@ -210,13 +212,13 @@ export function dumpFixture(options: DumpFixtureOptions = {}): void {
         accountId: ID.accountEur,
         amountOriginal: money.toMoney("45.00"),
         currency: currencyCode("EUR"),
-        payee: "",
+        enteredName: "",
         note: "",
         isBusiness: false,
         isCapital: false,
         source: "manual",
-        counterpartyId: ID.cpB,
-        counterpartyRole: "debt",
+        obligationCounterpartyId: ID.cpB,
+        obligationRole: "debt",
       },
       CAPTURE,
     );
@@ -250,7 +252,7 @@ export function dumpFixture(options: DumpFixtureOptions = {}): void {
           accountId: ID.accountPln,
           amountOriginal: money.toMoney("18.00"),
           currency: PIVOT,
-          payee: "",
+          enteredName: "",
           note: "",
           isBusiness: false,
           isCapital: false,

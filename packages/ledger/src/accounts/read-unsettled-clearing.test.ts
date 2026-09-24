@@ -58,7 +58,7 @@ describe("readUnsettledClearing", () => {
         oldestUnconsumedTransactionId: id<"transactions">("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"),
         oldestDate: accountingDate("2026-08-05"),
         oldestUnconsumedRemainder: "340.00000000",
-        oldestUnconsumedPayee: "",
+        oldestUnconsumedEnteredName: "",
       },
     ]);
   });
@@ -97,7 +97,7 @@ describe("readUnsettledClearing", () => {
           date: accountingDate("2026-08-01"),
           type: "income",
           accountId: trip,
-          payee: "Hotel",
+          enteredName: "Hotel",
           amountOriginal: money.toMoney("120"),
           currency: PLN,
           fxRate: money.pivotPerUnit("1"),
@@ -107,7 +107,7 @@ describe("readUnsettledClearing", () => {
           date: accountingDate("2026-08-05"),
           type: "income",
           accountId: trip,
-          payee: "Dinner",
+          enteredName: "Dinner",
           amountOriginal: money.toMoney("80"),
           currency: PLN,
           fxRate: money.pivotPerUnit("1"),
@@ -117,7 +117,7 @@ describe("readUnsettledClearing", () => {
           date: accountingDate("2026-08-06"),
           type: "expense",
           accountId: trip,
-          payee: "Allocated to Nina",
+          enteredName: "Allocated to Nina",
           amountOriginal: money.toMoney("120"),
           currency: PLN,
           fxRate: money.pivotPerUnit("1"),
@@ -135,7 +135,7 @@ describe("readUnsettledClearing", () => {
       oldestUnconsumedTransactionId: id<"transactions">("cccccccc-cccc-4ccc-8ccc-cccccccccccc"),
       oldestDate: accountingDate("2026-08-05"),
       oldestUnconsumedRemainder: "80.00000000",
-      oldestUnconsumedPayee: "Dinner",
+      oldestUnconsumedEnteredName: "Dinner",
     });
   });
 
@@ -180,14 +180,14 @@ describe("readUnsettledClearing", () => {
       oldestUnconsumedTransactionId: null,
       oldestDate: accountingDate("2026-08-01"),
       oldestUnconsumedRemainder: "60.00000000",
-      oldestUnconsumedPayee: null,
+      oldestUnconsumedEnteredName: null,
     });
   });
 
   /**
    * H3 — two open inflows with nothing consuming either: the oldest entry's
    * own remainder (120) is less than the account's whole balance (200), so a
-   * banner reading the balance beside that entry's payee would overstate
+   * banner reading the balance beside that entry's entered name would overstate
    * what it is actually naming.
    */
   it("names a remainder smaller than the account balance when more than one entry is open", () => {
@@ -203,7 +203,7 @@ describe("readUnsettledClearing", () => {
           date: accountingDate("2026-08-01"),
           type: "income",
           accountId: twoOpen,
-          payee: "First",
+          enteredName: "First",
           amountOriginal: money.toMoney("120"),
           currency: PLN,
           fxRate: money.pivotPerUnit("1"),
@@ -213,7 +213,7 @@ describe("readUnsettledClearing", () => {
           date: accountingDate("2026-08-05"),
           type: "income",
           accountId: twoOpen,
-          payee: "Second",
+          enteredName: "Second",
           amountOriginal: money.toMoney("80"),
           currency: PLN,
           fxRate: money.pivotPerUnit("1"),
@@ -224,7 +224,7 @@ describe("readUnsettledClearing", () => {
     const row = readUnsettledClearing(db).find((candidate) => candidate.accountId === twoOpen);
     expect(row?.balance).toBe("200.00000000");
     expect(row?.oldestUnconsumedRemainder).toBe("120.00000000");
-    expect(row?.oldestUnconsumedPayee).toBe("First");
+    expect(row?.oldestUnconsumedEnteredName).toBe("First");
   });
 
   /**
@@ -245,7 +245,7 @@ describe("readUnsettledClearing", () => {
         date: accountingDate("2026-08-01"),
         type: "expense",
         accountId: negative,
-        payee: "Hotel",
+        enteredName: "Hotel",
         amountOriginal: money.toMoney("150"),
         currency: PLN,
         fxRate: money.pivotPerUnit("1"),
@@ -255,7 +255,7 @@ describe("readUnsettledClearing", () => {
     const row = readUnsettledClearing(db).find((candidate) => candidate.accountId === negative);
     expect(row?.balance).toBe("-150.00000000");
     expect(row?.oldestUnconsumedRemainder).toBe("-150.00000000");
-    expect(row?.oldestUnconsumedPayee).toBe("Hotel");
+    expect(row?.oldestUnconsumedEnteredName).toBe("Hotel");
   });
 
   /**

@@ -142,8 +142,9 @@ const CHECKS: Record<string, () => Promise<unknown>> = {
     }),
   // A category on a type that is neither income nor expense.
   transactions_category_shape: () => insertRow({ type: "adjustment", category_id: CATEGORY.id }),
-  // A counterparty with no role.
-  transactions_counterparty_role_shape: () => insertRow({ counterparty_id: COUNTERPARTY.id }),
+  // An obligation with no role.
+  transactions_obligation_pair_shape: () =>
+    insertRow({ obligation_counterparty_id: COUNTERPARTY.id }),
   // An occurrence date with no recurring rule behind it.
   transactions_occurrence_shape: () => insertRow({ occurrence_date: "2026-08-12" }),
   // A debt amount with no debt currency.

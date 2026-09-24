@@ -53,14 +53,14 @@ export async function oldestOpenDebt(db: DbHandle): Promise<readonly OldestOpenD
   const query = sql`
     WITH legs AS (
       SELECT
-        ${transactions.counterpartyId} AS counterparty_id,
+        ${transactions.obligationCounterpartyId} AS counterparty_id,
         ${debtCurrency} AS currency,
         ${transactions.id} AS transaction_id,
         ${transactions.date} AS date,
         ${debtDeltaOnCarryingLeg} AS delta
       FROM ${transactions}
-      WHERE ${transactions.counterpartyId} IS NOT NULL
-        AND ${transactions.counterpartyRole} = 'debt'
+      WHERE ${transactions.obligationCounterpartyId} IS NOT NULL
+        AND ${transactions.obligationRole} = 'debt'
         AND ${live}
     ),
     balances AS (

@@ -6,7 +6,7 @@ import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { ledgerSchema } from "../schema-map.ts";
 import { type ScratchStores, scratchStores } from "../test/stores.ts";
-import { readPayeeHistory } from "./read-payee-history.ts";
+import { readEnteredNameHistory } from "./read-entered-name-history.ts";
 
 const { accounts, categories, currencies, transactions } = ledgerSchema;
 
@@ -59,30 +59,30 @@ const baseRow = (index: number) => ({
   createdAt: new Date(`2026-08-01T10:00:0${index}Z`),
 });
 
-describe("readPayeeHistory", () => {
-  it("keeps one row per folded payee, its most recent category and date", () => {
+describe("readEnteredNameHistory", () => {
+  it("keeps one row per folded enteredName, its most recent category and date", () => {
     const db = stores.ledger.replica.db;
     db.insert(transactions)
       .values([
         {
           ...baseRow(0),
           date: accountingDate("2026-08-01"),
-          payee: "Coffee House",
+          enteredName: "Coffee House",
           categoryId: DINING,
         },
         {
           ...baseRow(1),
           date: accountingDate("2026-08-02"),
-          payee: "COFFEE HOUSE",
+          enteredName: "COFFEE HOUSE",
           categoryId: GROCERIES,
         },
       ])
       .run();
 
-    const history = readPayeeHistory(db);
+    const history = readEnteredNameHistory(db);
 
     expect(history).toEqual([
-      { payee: "COFFEE HOUSE", categoryId: GROCERIES, date: accountingDate("2026-08-02") },
+      { enteredName: "COFFEE HOUSE", categoryId: GROCERIES, date: accountingDate("2026-08-02") },
     ]);
   });
 
@@ -93,35 +93,35 @@ describe("readPayeeHistory", () => {
         {
           ...baseRow(0),
           date: accountingDate("2026-08-01"),
-          payee: "Deleted Payee",
+          enteredName: "Deleted EnteredName",
           categoryId: GROCERIES,
           deletedAt: new Date("2026-08-01T11:00:00Z"),
         },
         {
           ...baseRow(1),
           date: accountingDate("2026-08-02"),
-          payee: "Uncategorised Payee",
+          enteredName: "Uncategorised EnteredName",
           categoryId: undefined,
         },
         {
           ...baseRow(2),
           type: "transfer",
           date: accountingDate("2026-08-03"),
-          payee: "Transfer Payee",
+          enteredName: "Transfer EnteredName",
           categoryId: GROCERIES,
         },
         {
           ...baseRow(3),
           date: accountingDate("2026-08-04"),
-          payee: "Live Payee",
+          enteredName: "Live EnteredName",
           categoryId: GROCERIES,
         },
       ])
       .run();
 
-    const history = readPayeeHistory(db);
+    const history = readEnteredNameHistory(db);
 
-    expect(history.map((row) => row.payee)).toEqual(["Live Payee"]);
+    expect(history.map((row) => row.enteredName)).toEqual(["Live EnteredName"]);
   });
 
   /**
@@ -130,26 +130,26 @@ describe("readPayeeHistory", () => {
    * category no chip can render and no sheet offers: the desk command bar
    * auto-filled it, displayed "Category?", and saved it on Enter.
    */
-  it("skips a payee whose most recent category has been archived, and falls back to nothing", () => {
+  it("skips a enteredName whose most recent category has been archived, and falls back to nothing", () => {
     const db = stores.ledger.replica.db;
     db.insert(transactions)
       .values([
         {
           ...baseRow(0),
           date: accountingDate("2026-08-01"),
-          payee: "Gym",
+          enteredName: "Gym",
           categoryId: RETIRED,
         },
       ])
       .run();
     archive(RETIRED);
 
-    expect(readPayeeHistory(db)).toEqual([]);
+    expect(readEnteredNameHistory(db)).toEqual([]);
   });
 
   /**
-   * And it is the *category* that is skipped, not the payee: an older row on
-   * a live category is still that payee's most recent live answer.
+   * And it is the *category* that is skipped, not the entered name: an older row on
+   * a live category is still that entered name's most recent live answer.
    */
   it("falls through to the newest row on a category that is still offered", () => {
     const db = stores.ledger.replica.db;
@@ -158,39 +158,39 @@ describe("readPayeeHistory", () => {
         {
           ...baseRow(0),
           date: accountingDate("2026-08-01"),
-          payee: "Gym",
+          enteredName: "Gym",
           categoryId: GROCERIES,
         },
         {
           ...baseRow(1),
           date: accountingDate("2026-08-02"),
-          payee: "Gym",
+          enteredName: "Gym",
           categoryId: RETIRED,
         },
       ])
       .run();
     archive(RETIRED);
 
-    expect(readPayeeHistory(db)).toEqual([
-      { payee: "Gym", categoryId: GROCERIES, date: accountingDate("2026-08-01") },
+    expect(readEnteredNameHistory(db)).toEqual([
+      { enteredName: "Gym", categoryId: GROCERIES, date: accountingDate("2026-08-01") },
     ]);
   });
 
-  it("orders newest first across distinct payees and respects the limit", () => {
+  it("orders newest first across distinct enteredNames and respects the limit", () => {
     const db = stores.ledger.replica.db;
     db.insert(transactions)
       .values(
         Array.from({ length: 3 }, (_, index) => ({
           ...baseRow(index),
           date: accountingDate(`2026-08-0${index + 1}`),
-          payee: `Payee ${index}`,
+          enteredName: `EnteredName ${index}`,
           categoryId: GROCERIES,
         })),
       )
       .run();
 
-    const history = readPayeeHistory(db, 2);
+    const history = readEnteredNameHistory(db, 2);
 
-    expect(history.map((row) => row.payee)).toEqual(["Payee 2", "Payee 1"]);
+    expect(history.map((row) => row.enteredName)).toEqual(["EnteredName 2", "EnteredName 1"]);
   });
 });

@@ -124,12 +124,12 @@ function unmergeCounterparties(
       : chunkIds(movedIds).flatMap((batch) =>
           tx
             .update(transactions)
-            .set({ counterpartyId: merge.loserId })
+            .set({ obligationCounterpartyId: merge.loserId })
             .where(
               and(
                 inArray(transactions.id, batch),
                 isNull(transactions.deletedAt),
-                eq(transactions.counterpartyId, merge.winnerId),
+                eq(transactions.obligationCounterpartyId, merge.winnerId),
               ),
             )
             .returning({ id: transactions.id })

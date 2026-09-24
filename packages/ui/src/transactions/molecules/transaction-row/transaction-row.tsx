@@ -1,7 +1,7 @@
 /**
  * `<TransactionRow>` — `design-system/05` §5.2.
  *
- * Date · payee · category · `Amount`, with the `BIZ` tag when the row is
+ * Date · entered name · category · `Amount`, with the `BIZ` tag when the row is
  * business — §3.3 requires that marker in **every** view a business row appears
  * in, because a row marked in one list and bare in another ends as a tax figure
  * nobody can explain.
@@ -59,7 +59,7 @@ export type TransactionRowProps = {
    * the category glyph.
    */
   withDate?: boolean;
-  payee: string;
+  enteredName: string;
   category?: string | null;
   account?: string | null;
   /** **Already signed** per §1. */
@@ -108,7 +108,7 @@ export const TRANSACTION_AMOUNT_KIND: Record<TransactionType, AmountKind> = {
 export function TransactionRow({
   date,
   withDate = true,
-  payee,
+  enteredName,
   category,
   account,
   amount,
@@ -138,13 +138,13 @@ export function TransactionRow({
       {/* `SPEC.md` §14.4b — absent entirely, not a fallback monogram, for a
           caller that has not passed `brandKey` yet (see the prop's own doc). */}
       {brandKey === undefined ? null : (
-        <BrandIcon brandKey={brandKey} payee={payee} category={category} size={24} />
+        <BrandIcon brandKey={brandKey} enteredName={enteredName} category={category} size={24} />
       )}
       <View style={styles.identity}>
-        <View style={styles.payeeLine}>
+        <View style={styles.enteredNameLine}>
           {/* A blank row reads as missing data; imported rows often have no
-              payee, so the fallback is a dash rather than nothing. */}
-          <Text style={styles.payee}>{payee || "—"}</Text>
+              enteredName, so the fallback is a dash rather than nothing. */}
+          <Text style={styles.enteredName}>{enteredName || "—"}</Text>
           {isBusiness ? <Tag variant="biz">biz</Tag> : null}
           {roleTag === undefined ? null : <Tag>{roleTag}</Tag>}
         </View>
@@ -170,7 +170,7 @@ export function TransactionRow({
         **No `accessibilityLabel`.** One on a `Pressable` *replaces* the name
         composed from its content, so every list built on this row — the
         ledger, a counterparty's history, the recent widget, the transaction
-        list — announced a payee and never the amount, the category, the date
+        list — announced a enteredName and never the amount, the category, the date
         or the business marker. The figure is the reason the row exists.
 
         `net-worth-strip` documents the same defect and the same fix, found
@@ -178,7 +178,7 @@ export function TransactionRow({
         still sees content a reader can never reach. Only the *accessible
         name* shows it, which is what `entry-row.test.tsx` asserts.
 
-        A row with no payee still announces: the date, the category and the
+        A row with no enteredName still announces: the date, the category and the
         figure are all in the content, which is why the old fallback to `date`
         was never carrying anything the content did not already say.
       */}
@@ -235,12 +235,12 @@ const useStyles = makeStyles((theme) => ({
    * few pixels per release until it is not dense.
    */
   identity: { flex: 1 },
-  payeeLine: { flexDirection: "row", alignItems: "center", gap: space.md },
+  enteredNameLine: { flexDirection: "row", alignItems: "center", gap: space.md },
   /**
-   * Medium, where the metadata under it is regular. The payee is what the eye
+   * Medium, where the metadata under it is regular. The entered name is what the eye
    * looks for when scanning a ledger — at the same weight as its own category
    * and account it is just the first of three strings.
    */
-  payee: { color: theme.text, ...text.ui("bodySm", 600) },
+  enteredName: { color: theme.text, ...text.ui("bodySm", 600) },
   meta: { color: theme.textMuted, ...text.ui("caption") },
 }));

@@ -36,10 +36,10 @@ export const Transfer: Story = {
 
 /** `SPEC.md` §14.4b — recognised offline, no network at render time. */
 export const RecognisedBrand: Story = {
-  args: { amount: toMoney("-184.30"), payee: "ORLEN", brandKey: "orlen" },
+  args: { amount: toMoney("-184.30"), enteredName: "ORLEN", brandKey: "orlen" },
 };
 
-/** Never blank — the payee's own monogram, same treatment `CounterpartyRow` gives an unmatched name. */
-export const UnrecognisedPayee: Story = {
-  args: { payee: "Corner Café", brandKey: null },
+/** Never blank — the entered name's own monogram, same treatment `CounterpartyRow` gives an unmatched name. */
+export const UnrecognisedEnteredName: Story = {
+  args: { enteredName: "Corner Café", brandKey: null },
 };

@@ -138,7 +138,7 @@ where a loop is the right shape:
 
 ```
   💬  coffee at that place near the office
-      ⟳ searching recent payees …
+      ⟳ searching recent entered names …
       the café near the office?          [ yes ]  [ no, the other one ]
       → 48,90 zł · Cash · Eating out
         ◉ from: "that place near the office" → Corner Café   Undo
@@ -177,8 +177,8 @@ and Enter to save. No keypad, no dock, no camera.
 
 Parsing is **deterministic first**: first number is the amount, known account
 and category names bind to their chips, relative dates parse, the rest becomes
-the payee — D1's grammar, the one this section's own worked example resolves.
-D2's payee memory proposes the category the same way it does on the phone,
+the entered name — D1's grammar, the one this section's own worked example resolves.
+D2's entered name memory proposes the category the same way it does on the phone,
 machine-filled at or above `computations.md` §14's display threshold and left
 for the category chip to ask about below it.
 
@@ -188,9 +188,9 @@ convention half of Europe types — `1.234,56` resolves to `1.234` — and it is
 the one thing a typed line cannot say for itself before the figure is already
 wrong. The rest of the grammar announces itself in the chips as it resolves.
 
-**A second number is payee text, not a second thousands group.** The
+**A second number is entered name text, not a second thousands group.** The
 first-number rule is the whole rule: `1234 567 cash` is 1 234 złoty with `567`
-in the payee, never one million. A grouping chain only ever starts from a one-
+in the entered name, never one million. A grouping chain only ever starts from a one-
 to three-digit head, because no real thousands separator follows a fourth
 digit.
 
@@ -199,7 +199,7 @@ category sit together in a `listbox` the input owns as a `combobox` — Up, Down
 and Tab all walk it, `aria-activedescendant` names the chip reached, and DOM
 focus stays in the input throughout. The arrows cycle, because they belong to
 the list; Tab leaves the bar past the last chip, because it belongs to the
-page. The amount, the payee and the captions are outside that list: they are
+page. The amount, the entered name and the captions are outside that list: they are
 readings, not choices. The hint above is the input's own `aria-describedby`,
 not loose text beside it.
 
@@ -209,11 +209,11 @@ says, and correcting a field means retyping the line. That is the one place
 this list departs from an ordinary combobox, where Enter would commit the
 active option; here Enter saves the transaction.
 
-**A name the grammar does not recognise is payee text, not a refusal — with a
+**A name the grammar does not recognise is entered name text, not a refusal — with a
 last-used account to fall back on.** §9.2's own four-hour window supplies a
 default account the moment one exists, and an unrecognised token folds into
-the payee the same way "coffee" does in the headline example: `48.90 revolut
-coffee` resolves against the last-used account, payee `revolut coffee`, when
+the entered name the same way "coffee" does in the headline example: `48.90 revolut
+coffee` resolves against the last-used account, entered_name `revolut coffee`, when
 that window is open. The refusal below only ever fires with **no** default
 account *and* no name the grammar recognises — the ordinary state is a filled
 account chip, not a stopped line.
@@ -241,7 +241,7 @@ still, and a numeric keypad on screen would be slower than typing.
 
 ### Who and money owed
 
-**Specified extension:** this replaces the separate Payee/Person capture
+**Specified extension:** this replaces the separate Entered name/Person capture
 controls. Data semantics and migration are owned by `SPEC.md` §6.6.1.
 
 More details contains **Who (optional)**, Date/time, Scope and **Track money
@@ -322,7 +322,7 @@ and dependent transaction intents retain their ordering through sync.
 | Reads | Writes |
 |---|---|
 | `get_accounts`, `get_category_tree` | **`create_transaction`** |
-| `get_counterparties` · `get_payee_suggestions` | `create_category` (via S06, proposed) |
+| `get_counterparties` · `get_entered_name_suggestions` | `create_category` (via S06, proposed) |
 | Rate for the draft's date | `create_counterparty` (via S15) |
 
 `create_transaction` is the operation the agent inherits (§11.0), which is why
@@ -374,7 +374,7 @@ fact.
 - **P2** — every machine-filled field states what produced it, in one line, with
   Undo. The draft is never a black box. On the desk command bar that Undo is a
   control: a ghost button on the provenance line beside *From your history:
-  <payee>*, plus `Esc` while the category chip is the one Tab has reached. The
+  <entered name>*, plus `Esc` while the category chip is the one Tab has reached. The
   keyboard route alone would not satisfy this rule — an Undo reachable only by
   a key nothing on screen names is not one.
 - **P1** — if the draft's currency differs from the display currency, the
@@ -431,7 +431,7 @@ fact.
    The grammar handles the common shape with no latency and no model call: the
    first number is the amount, a known account or category name binds to its
    chip, relative dates parse (`yesterday`, `tue`), and the remaining words
-   become the payee. Chips resolve **live beneath the line**, so an ambiguity is
+   become the entered name. Chips resolve **live beneath the line**, so an ambiguity is
    visible before Enter rather than after.
 
    **This arc builds only the grammar.** A line it cannot resolve shows the

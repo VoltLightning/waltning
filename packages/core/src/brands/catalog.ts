@@ -33,13 +33,13 @@
  * cannot import schema; see `registry/inputs.ts`'s own note on
  * `ACCOUNT_KIND`).
  *
- * **Three values, not two.** `"auto"` (matched from the payee offline, at
+ * **Three values, not two.** `"auto"` (matched from the entered name offline, at
  * write time) and `"manual"` (asserted by the caller) both pair with a
  * non-null `brand_key`. `"none"` is a *deliberate* "no brand", written when a
  * person clears a wrong catalogue match — paired with a `null` key, and —
  * unlike a row that was simply never matched, which is `null`/`null` — sticky
- * against a later payee edit, the same way `"manual"` is. Without it,
- * clearing a match that a payee still folds to has no way to stay cleared
+ * against a later entered name edit, the same way `"manual"` is. Without it,
+ * clearing a match that a entered name still folds to has no way to stay cleared
  * (`match.ts`'s own doc on `resolveBrandPatch`).
  */
 export const BRAND_SOURCE = ["auto", "manual", "none"] as const;
@@ -48,18 +48,18 @@ export type BrandSource = (typeof BRAND_SOURCE)[number];
 export type BrandCatalogEntry = {
   /** Waltning-owned, stable, lower-case, `[a-z0-9_]+`. Never renamed once shipped — `create_transaction`'s own `brand_key` values are permanent. */
   key: string;
-  /** Display name — what a future brand editor shows. Not `BrandIcon`'s accessible name: the badge is decorative and hidden from the accessibility tree, since the payee beside it already says who this is. */
+  /** Display name — what a future brand editor shows. Not `BrandIcon`'s accessible name: the badge is decorative and hidden from the accessibility tree, since the entered name beside it already says who this is. */
   name: string;
   /**
-   * Payee text this brand is recognised from, already folded
+   * Entered name text this brand is recognised from, already folded
    * (`capture/names.ts`'s `fold`) — the offline matcher (`match.ts`) folds
-   * the incoming payee the same way and looks up an exact match, so an
+   * the incoming entered name the same way and looks up an exact match, so an
    * alias here must already be in its folded form or it can never match.
    */
   aliases: readonly string[];
   /** A hex colour, for `BrandIcon`'s badge until a real vector mark exists (see the file header). */
   accent: string;
-  /** One or two characters, for `BrandIcon`'s badge — a wordmark abbreviation, not a monogram of the payee (that fallback is `monogramFor`, for an *unmatched* payee). */
+  /** One or two characters, for `BrandIcon`'s badge — a wordmark abbreviation, not a monogram of the entered name (that fallback is `monogramFor`, for an *unmatched* entered name). */
   mark: string;
 };
 
@@ -132,7 +132,7 @@ export const BRAND_CATALOG: readonly BrandCatalogEntry[] = [
     // Folded (`capture/names.ts`): `ż` → `z`, so the catalogue key and the
     // alias are both ASCII while the display name keeps its diacritic. An
     // alias written `żabka` here could never match, because the matcher folds
-    // the incoming payee before looking it up.
+    // the incoming entered name before looking it up.
     aliases: ["zabka", "zabka polska"],
     accent: "#00723F",
     mark: "Ż",

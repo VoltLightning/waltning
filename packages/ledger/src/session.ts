@@ -1,5 +1,5 @@
 import type { BackupDocument } from "@waltning/core/backup/contract";
-import type { PayeeHistoryRow } from "@waltning/core/capture/payee-memory";
+import type { EnteredNameHistoryRow } from "@waltning/core/capture/entered-name-memory";
 import type { AccountingDate } from "@waltning/core/date";
 import type { Id } from "@waltning/core/id";
 import type {
@@ -188,6 +188,7 @@ import { deleteTransactionExecutor } from "./transactions/delete-transaction.exe
 import { type AuditLogResult, readAuditLog } from "./transactions/read-audit-log.ts";
 import { readDayFlows } from "./transactions/read-day-flows.ts";
 import { readDayRows } from "./transactions/read-day-rows.ts";
+import { readEnteredNameHistory } from "./transactions/read-entered-name-history.ts";
 import { readIncomeVsExpense } from "./transactions/read-income-vs-expense.ts";
 import {
   type LedgerDirection,
@@ -197,7 +198,6 @@ import {
 } from "./transactions/read-ledger-page.ts";
 import { readLedgerYears } from "./transactions/read-ledger-years.ts";
 import { type NearestActivity, readNearestActivity } from "./transactions/read-nearest-activity.ts";
-import { readPayeeHistory } from "./transactions/read-payee-history.ts";
 import { readPeriodSpend } from "./transactions/read-period-spend.ts";
 import { type LocalRecentTransaction, readRecent } from "./transactions/read-recent.ts";
 import { readSpendByCategory } from "./transactions/read-spend-by-category.ts";
@@ -267,9 +267,9 @@ export type LocalLedgerSession = {
   listCounterparties: (options?: ReadCounterpartiesOptions) => readonly LocalCounterparty[];
   /**
    * D2's own reader, exposed here for D4b's proposal — one row per distinct
-   * folded payee, its most recent category. See `readPayeeHistory`.
+   * folded entered name, its most recent category. See `readEnteredNameHistory`.
    */
-  listPayeeHistory: () => readonly PayeeHistoryRow[];
+  listEnteredNameHistory: () => readonly EnteredNameHistoryRow[];
   /** §7, one row per counterparty per currency, ageing on companies (O15) — S12. */
   listCounterpartyBalances: (today: AccountingDate) => readonly LocalCounterpartyBalance[];
   /**
@@ -726,7 +726,7 @@ export function createLocalLedgerSession<TRun>(
     listCategoryTree: () =>
       readCategoryTree(requireOpen().replica.db).filter((category) => !category.archived),
     listCounterparties: (options) => readCounterparties(requireOpen().replica.db, options),
-    listPayeeHistory: () => readPayeeHistory(requireOpen().replica.db),
+    listEnteredNameHistory: () => readEnteredNameHistory(requireOpen().replica.db),
     listCounterpartyBalances: (today) => readCounterpartyBalances(requireOpen().replica.db, today),
     listFullCategoryTree: () => readCategoryTree(requireOpen().replica.db),
     listCategoryUsage: () => readCategoryUsage(requireOpen().replica.db),

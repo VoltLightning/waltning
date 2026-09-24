@@ -24,7 +24,7 @@ export type AmountToken = {
    * The currency token's own span, when one was found.
    *
    * Not in the plan's literal `AmountToken` shape — added because
-   * `grammar.ts` has to exclude the currency word from the payee the same way
+   * `grammar.ts` has to exclude the currency word from the entered name the same way
    * it excludes the amount itself, and it cannot do that without knowing
    * where the currency token sits in the original text.
    */
@@ -50,12 +50,12 @@ export type AmountToken = {
  *
  * `1 234.56` still matches whole (the chain wins, the decimal group is shared
  * by both alternatives), `1234.56` matches whole, and `1234 567` matches
- * `1234` — leaving `567` where the reader can see it, as payee text and in
+ * `1234` — leaving `567` where the reader can see it, as entered name text and in
  * `unmatched`, rather than inside the amount's own span.
  *
- * **The first number is the amount; every later one is payee text.** That is
+ * **The first number is the amount; every later one is entered name text.** That is
  * S05 §3's stated rule, applied unchanged to a second *number* rather than a
- * second thousands group: `1000 2000 cash` saves 1000 with payee `2000`. The
+ * second thousands group: `1000 2000 cash` saves 1000 with entered name `2000`. The
  * grammar has no concept of which number looks like a price (the file doc
  * above), so refusing the line would refuse `2 coffees 18` too.
  */

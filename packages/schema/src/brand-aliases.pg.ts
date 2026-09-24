@@ -19,7 +19,7 @@ import { pgKit as k } from "./kit.ts";
  * conflict path in the first place.
  */
 export const brandAliasesColumns = () => ({
-  /** Already folded (`capture/names.ts`'s `fold`) — the same normalisation `match.ts` applies to an incoming payee before it looks this table up. */
+  /** Already folded (`capture/names.ts`'s `fold`) — the same normalisation `match.ts` applies to an incoming entered name before it looks this table up. */
   alias: k.text("alias").primaryKey(),
   /** Waltning-owned catalogue key — never an upstream slug (`SPEC.md` §14.4b). No FK: the set of valid keys is versioned code, not a table (`brands/catalog.ts`'s own header). */
   brandKey: k.text("brand_key").notNull(),

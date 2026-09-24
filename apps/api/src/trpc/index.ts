@@ -67,7 +67,7 @@ const t = initTRPC.context<Context>().create({
        * `httpStatus` derived from tRPC's own code — so a duplicate name came
        * back as `validation` in the envelope and `500` with a stack beside it.
        * The status contradicted the envelope, and the stack is exactly the
-       * kind of internal detail a response about a *payee name* should never
+       * kind of internal detail a response about a *entered name name* should never
        * carry on a system whose whole argument is that the data stays yours.
        */
       data: {

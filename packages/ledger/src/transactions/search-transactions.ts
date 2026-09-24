@@ -3,7 +3,7 @@ import type { AccountingDate } from "@waltning/core/date";
 import type { Id } from "@waltning/core/id";
 import type { CurrencyCode, Money, PivotPerUnit } from "@waltning/core/money";
 import * as money from "@waltning/core/money";
-import type { CounterpartyRole, TxnType } from "@waltning/schema/enums";
+import type { ObligationRole, TxnType } from "@waltning/schema/enums";
 import { and, count, desc, eq, lt, or } from "drizzle-orm";
 import { alias } from "drizzle-orm/sqlite-core";
 import type { ReplicaDb } from "../open.ts";
@@ -21,7 +21,7 @@ const { accounts, currencies, transactions } = ledgerSchema;
 export type TransactionSearchScope = "all" | "mine" | "shared" | "business";
 
 export type TransactionSearchFilter = {
-  /** Folded and matched against payee, note, every line's description, and the amount, exactly (§13). */
+  /** Folded and matched against entered name, note, every line's description, and the amount, exactly (§13). */
   text?: string;
   /** Matches either leg — a transfer touching a filtered account still shows. */
   accountIds?: readonly Id<"accounts">[];
@@ -32,9 +32,9 @@ export type TransactionSearchFilter = {
   from?: AccountingDate;
   to?: AccountingDate;
   /** S13's whole history — every row naming this counterparty, any role. */
-  counterpartyId?: Id<"counterparties">;
+  obligationCounterpartyId?: Id<"counterparties">;
   /** S13 §3's default toggle — `debt` only until "· N other rows" is opened. */
-  counterpartyRole?: CounterpartyRole;
+  obligationRole?: ObligationRole;
 };
 
 export type TransactionSearchCursor = { date: AccountingDate; id: Id<"transactions"> };
@@ -43,7 +43,7 @@ export type LocalSearchTransaction = {
   id: Id<"transactions">;
   date: AccountingDate;
   type: TxnType;
-  payee: string;
+  enteredName: string;
   note: string;
   /** `SPEC.md` §14.4b — see `readRecent`'s identical field (S10). */
   brandKey: string | null;
@@ -69,7 +69,7 @@ export type LocalSearchTransaction = {
   isBusiness: boolean;
   isCapital: boolean;
   /** `null` off any row with no counterparty at all — the ordinary case. */
-  counterpartyRole: CounterpartyRole | null;
+  obligationRole: ObligationRole | null;
 };
 
 export type CurrencyTotal = {
@@ -205,7 +205,7 @@ export function searchTransactions<TRun, TSchema extends typeof ledgerSchema>(
   const needle = filter.text !== undefined ? fold(filter.text.trim()) : "";
   // M6 — the whole query must *be* an amount, not merely contain one:
   // `parseSearchAmount("Shop A 2024")` is `null`, where capture's `findAmount`
-  // would have read `2024` out of the middle of a payee-and-year search.
+  // would have read `2024` out of the middle of a entered name-and-year search.
   const needleAmount = filter.text === undefined ? null : parseSearchAmount(filter.text);
 
   if (options?.countOnly === true) {
@@ -240,7 +240,7 @@ export function searchTransactions<TRun, TSchema extends typeof ledgerSchema>(
     const candidates = db
       .select({
         id: transactions.id,
-        payee: transactions.payee,
+        enteredName: transactions.enteredName,
         note: transactions.note,
         amountOriginal: transactions.amountOriginal,
       })
@@ -452,7 +452,7 @@ export function readMatchDays<TRun, TSchema extends typeof ledgerSchema>(
     .select({
       id: transactions.id,
       date: transactions.date,
-      payee: transactions.payee,
+      enteredName: transactions.enteredName,
       note: transactions.note,
       amountOriginal: transactions.amountOriginal,
     })
