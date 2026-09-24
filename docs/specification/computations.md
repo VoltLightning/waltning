@@ -337,9 +337,11 @@ itself is one, its share is not drawn and the card says *One-off — left out of
 comparisons* in its place.
 
 **The share is read with the figures, never beside them.** For *Who* and
-*Pair* it is `x`'s own row in the same read as the bars; for *Category* it is
-§6's fold run over `x` alone. A share held from an earlier read, or summed by a
-different rule, can exceed the bar it is drawn inside.
+*Pair* it is `x`'s own row in the same read as the bars, so it always fits. For
+*Category* it is §6's fold run over `x` alone — and because another row's
+negative line in `g` can net the month below `x`'s own part, a share larger
+than `spent(m₀)` is not drawn at all. *One-offs left out* covers every month
+the card reads, the usual months included.
 
 **Who** — `x` has an identity counterparty `k` and `x.type ∈ {expense, income}`:
 
@@ -364,7 +366,8 @@ spent(m)  = §6's fold for (m, scope = all), leaf g, currency c,
 usual     = mean of spent(m₋₁ … m₋₃), counting only months where spent > 0
 share     = §6's fold over x alone, leaf g — its signed lines in g where it
             has lines (a discount line nets), its own amount where it has
-            none; none when x.is_capital or the fold is not positive
+            none; none when x.is_capital, the fold is not positive, or it
+            exceeds spent(m₀)
 ```
 
 `usual` takes S05's pace rule (*mean of the previous three months that held

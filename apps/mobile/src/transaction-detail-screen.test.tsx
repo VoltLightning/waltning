@@ -6,7 +6,7 @@
  * undo, and a row that no longer exists.
  */
 
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import {
   createPhoneLedger,
   type PhoneLedgerPort,
@@ -229,6 +229,30 @@ describe("TransactionDetail", () => {
       },
     });
     withLedger(<TransactionDetail />, controller);
+
+    fireEvent.click(screen.getByRole("button", { name: "Payee: Café A" }));
+    fireEvent.change(screen.getByLabelText("Payee"), { target: { value: "Bakery A" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(screen.getByRole("alert").textContent).toBe(
+      "This transaction changed elsewhere — reload it before saving.",
+    );
+  });
+
+  /**
+   * **A write from elsewhere is a conflict, never silently undone.** The
+   * header re-reads the row on every ledger change, but the draft keeps the
+   * version it started from — so a save after another device's edit is
+   * refused, where sending the fresh version would have written the stale
+   * draft over it.
+   */
+  it("refuses a save after the row changed elsewhere, rather than overwriting it", () => {
+    const controller = fakeController(DETAIL);
+    withLedger(<TransactionDetail />, controller);
+
+    act(() => {
+      controller.updateTransaction(id<"transactions">(TXN), 1, { note: "Elsewhere" });
+    });
 
     fireEvent.click(screen.getByRole("button", { name: "Payee: Café A" }));
     fireEvent.change(screen.getByLabelText("Payee"), { target: { value: "Bakery A" } });

@@ -270,10 +270,20 @@ function readCategory(
     return total;
   };
 
+  // §5 — every month the card draws from, not only this one: a one-off in
+  // the usual months moves the usual, and the card has to say so.
+  let oneOffsLeftOut = false;
+  const noteLeftOut = (m: YearMonth, kept: Money, ownOneOff: Money): void => {
+    const all = money.dec(spentIn(m, false));
+    if (!all.minus(kept).minus(ownOneOff).isZero()) oneOffsLeftOut = true;
+  };
+
   let usualSum = money.ZERO;
   let usualMonths = 0;
   for (let back = 1; back <= USUAL_MONTHS; back++) {
-    const spent = spentIn(shiftMonth(month, -back), true);
+    const m = shiftMonth(month, -back);
+    const spent = spentIn(m, true);
+    noteLeftOut(m, spent, money.ZERO);
     if (!money.isPositive(spent)) continue;
     usualSum = money.add(usualSum, spent);
     usualMonths += 1;
@@ -281,7 +291,20 @@ function readCategory(
 
   const spent = spentIn(month, true);
   const own = attributionOf(subject).find((row) => row.categoryId === categoryId)?.amount;
-  const share = subject.isCapital || own === undefined || !money.isPositive(own) ? null : own;
+  noteLeftOut(month, spent, subject.isCapital ? (own ?? money.ZERO) : money.ZERO);
+  /*
+    **A slice never larger than its bar.** The share is this row's own §6
+    attribution; the month is every row's, and another row's negative line in
+    this category (a discount, a refund split out) can net the month below this
+    row's part. Then there is no honest slice to draw, and none is drawn.
+  */
+  const share =
+    subject.isCapital ||
+    own === undefined ||
+    !money.isPositive(own) ||
+    money.dec(own).greaterThan(spent)
+      ? null
+      : own;
 
   return {
     kind: "category",
@@ -293,12 +316,6 @@ function readCategory(
     decimals: subject.decimals,
     share,
     ownOneOff: subject.isCapital,
-    // §5 — the month's own figure with one-offs in, against the one drawn.
-    oneOffsLeftOut: money
-      .dec(spentIn(month, false))
-      .minus(spent)
-      .minus(subject.isCapital ? (own ?? "0") : "0")
-      .abs()
-      .greaterThan(0),
+    oneOffsLeftOut,
   };
 }

@@ -242,10 +242,41 @@ describe("readTransactionContext — Category", () => {
     expect(card.ownOneOff).toBe(false);
   });
 
+  it("says when a one-off in a usual month was left out", () => {
+    const readSpendByCategory = spending(
+      { "2026-03-01": "100", "2026-02-01": "300" },
+      { "2026-02-01": "900" },
+    );
+    const cards = readTransactionContext(
+      { readContextRows: reading([]), readSpendByCategory },
+      detail({ categoryId: EATING_OUT }),
+    );
+    const card = cards.find((candidate) => candidate.kind === "category");
+    if (card?.kind !== "category") throw new Error("expected a Category card");
+    expect(card.usual).toBe(toMoney("300"));
+    expect(card.oneOffsLeftOut).toBe(true);
+  });
+
+  /** Another row's negative line can net the month below this row's own part. */
+  it("draws no slice larger than the month it sits in", () => {
+    const readSpendByCategory = spending({ "2026-03-01": "10" });
+    const cards = readTransactionContext(
+      { readContextRows: reading([]), readSpendByCategory },
+      detail({ amount: toMoney("-50"), categoryId: EATING_OUT }),
+    );
+    const card = cards.find((candidate) => candidate.kind === "category");
+    if (card?.kind !== "category") throw new Error("expected a Category card");
+    expect(card.spent).toBe(toMoney("10"));
+    expect(card.share).toBeNull();
+  });
+
   /** L3 — §6 ignores a lined row's own category, and so does the card. */
   it("reads a lined row through its lines when none carries its own category", () => {
+    const readSpendByCategory: TransactionContextLedger["readSpendByCategory"] = () => [
+      { currency: PLN, decimals: 2, categoryId: GROCERIES, amount: toMoney("30") },
+    ];
     const cards = readTransactionContext(
-      { readContextRows: reading([]), readSpendByCategory: noSpend },
+      { readContextRows: reading([]), readSpendByCategory },
       detail({
         categoryId: null,
         lines: [line("18.90", EATING_OUT), line("30", GROCERIES)],

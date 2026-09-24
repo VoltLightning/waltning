@@ -27,10 +27,9 @@
  * capture sheet: you rarely know at the till that a purchase would distort a
  * trend, and marking it later never moves a balance.
  *
- * **A read, re-taken on every ledger change.** `controller.getTransaction(id)`
- * runs on mount and whenever the snapshot's revision moves — one row by id,
- * cheap — because the context cards below recompute on that same signal, and
- * a row held from mount would draw a stale share inside fresh totals.
+ * **Two reads of one row.** The draft's base — mount and this screen's own
+ * writes, whose `version` every save sends — and the live row, re-read with
+ * each ledger revision for the header and the context cards (see `live`).
  */
 
 import type {
@@ -72,7 +71,7 @@ import { LinesCard, type LinesCardDraftLine } from "@waltning/ui/transactions/li
 import { heroTint, TransactionHero } from "@waltning/ui/transactions/transaction-hero";
 import { useHeroScroll } from "@waltning/ui/transactions/use-hero-scroll";
 import { router, useLocalSearchParams } from "expo-router";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { View } from "react-native";
 import { PushedPage } from "./pushed-page";
 
@@ -228,15 +227,19 @@ export default function TransactionDetail() {
     setDetail(ledger.getTransaction(transactionId));
   }, [ledger, transactionId]);
   /*
-    **Re-read whenever the ledger changes, not only after this screen's own
-    writes.** The context cards recompute on every revision; a row held from
-    mount would draw its old amount as a share of the new totals — a synced
-    edit elsewhere, and the slice no longer fits the bar it sits in.
+    **Two reads of one row, for two jobs.** `detail` is the row the draft was
+    started from: read on mount and after this screen's own writes, and its
+    `version` is what a save sends — so a write from elsewhere while the draft
+    is open is refused as a conflict rather than silently overwritten by a
+    draft that never saw it. `live` is the row as the ledger holds it now,
+    read in the same render as the context cards so the share and the totals
+    are always one moment; the header and the cards draw from it.
   */
   // biome-ignore lint/correctness/useExhaustiveDependencies: the revision is the signal, not a value read.
-  useEffect(() => {
-    refetch();
-  }, [refetch, snapshot.revision]);
+  const live = useMemo(
+    () => (transactionId ? ledger.getTransaction(transactionId) : null),
+    [ledger, transactionId, snapshot.revision],
+  );
 
   const handleOpenCategoryPicker = useCallback(() => setCategorySheetOpen(true), []);
   const handleDismissCategorySheet = useCallback(() => setCategorySheetOpen(false), []);
@@ -351,31 +354,31 @@ export default function TransactionDetail() {
 
   const theme = useTheme();
   const heroScroll = useHeroScroll();
-  const context = useTransactionContext(ledger, detail, snapshot.revision);
+  const context = useTransactionContext(ledger, live, snapshot.revision);
   const handleOpenCounterparty = useCallback(() => {
     if (detail?.counterpartyId) router.push(`/counterparty/${detail.counterpartyId}`);
   }, [detail?.counterpartyId]);
   const handleLinkCounterparty = useCallback(() => setPickerTarget("identity"), []);
   const stripCards = useMemo(
     () =>
-      detail === null
+      live === null
         ? []
         : toStripCards(
             context,
             {
               // Read with the row, so an archived counterparty or a closed
               // destination account keeps its name (the snapshot lists omit both).
-              counterparty: detail.counterpartyIdentityName,
-              fromAccount: detail.accountName,
-              toAccount: detail.toAccountName,
+              counterparty: live.counterpartyIdentityName,
+              fromAccount: live.accountName,
+              toAccount: live.toAccountName,
               categoryName: (id) =>
-                id === detail.categoryId
-                  ? detail.categoryName
-                  : (detail.lines.find((line) => line.categoryId === id)?.categoryName ?? null),
+                id === live.categoryId
+                  ? live.categoryName
+                  : (live.lines.find((line) => line.categoryId === id)?.categoryName ?? null),
             },
             { onOpenCounterparty: handleOpenCounterparty, onLink: handleLinkCounterparty },
           ),
-    [context, detail, handleLinkCounterparty, handleOpenCounterparty],
+    [context, live, handleLinkCounterparty, handleOpenCounterparty],
   );
 
   const today = useMemo(() => deviceRuntime().capture().date, []);
@@ -414,6 +417,8 @@ export default function TransactionDetail() {
     );
   }
 
+  // The header draws the row as it is now; the fields draw the draft's base.
+  const shown = live ?? detail;
   const effectiveAccountId = pickedAccountId ?? detail.accountId;
   // The pick until it is saved, the saved row afterwards — `accountId`'s own rule.
   // The pick until it is saved, the saved row afterwards — `accountId`'s own
@@ -432,31 +437,31 @@ export default function TransactionDetail() {
 
   return (
     <PushedPage
-      title={dayLabel(detail.date, locale)}
-      tint={heroTint(detail.categoryName, theme).fill}
+      title={dayLabel(shown.date, locale)}
+      tint={heroTint(shown.categoryName, theme).fill}
       titleNode={
         <HeroHeaderTitle
           scrollY={heroScroll.scrollY}
-          date={dayLabel(detail.date, locale)}
-          name={detail.enteredName === "" ? t("routes.transaction") : detail.enteredName}
-          amount={detail.amount}
-          currency={detail.currency}
-          decimals={detail.decimals}
-          type={detail.type}
+          date={dayLabel(shown.date, locale)}
+          name={shown.enteredName === "" ? t("routes.transaction") : shown.enteredName}
+          amount={shown.amount}
+          currency={shown.currency}
+          decimals={shown.decimals}
+          type={shown.type}
         />
       }
       onScroll={heroScroll.onScroll}
     >
       <TransactionHero
-        amount={detail.amount}
-        currency={detail.currency}
-        decimals={detail.decimals}
-        type={detail.type}
-        accountName={detail.accountName}
-        toAccountName={detail.toAccountName}
-        categoryName={detail.categoryName}
-        enteredName={detail.enteredName}
-        brandKey={detail.brandKey}
+        amount={shown.amount}
+        currency={shown.currency}
+        decimals={shown.decimals}
+        type={shown.type}
+        accountName={shown.accountName}
+        toAccountName={shown.toAccountName}
+        categoryName={shown.categoryName}
+        enteredName={shown.enteredName}
+        brandKey={shown.brandKey}
         scrollY={heroScroll.scrollY}
       />
       <View style={styles.content}>
