@@ -1,55 +1,54 @@
 /**
  * `SwipeableRow` — S10 §4, §7. Drag the row: short of ~40px it springs back,
- * past it fires *Categorise*, past ~140px fires *Edit*. Interactive here and
- * on device; inert under the component test (`.vitest/gesture-handler.ts`).
+ * past it fires the short swipe (*categorise*), past ~140px the long swipe
+ * (*open detail*, `LedgerRowItem`'s own name for it). Interactive here and on
+ * a device; inert under the component test (`.vitest/gesture-handler.ts`).
+ *
+ * **There is nothing behind the row to reveal.** The row only moves; no layer
+ * under it says which action a drag will take, so there is no revealed state
+ * to photograph — only the row at rest.
  */
 
 import type { Meta, StoryObj } from "@storybook/react-native-web-vite";
 import * as money from "@waltning/core/money";
-import { useCallback, useState } from "react";
-import { Text, View } from "react-native";
-import { text } from "../../../theme/fonts.ts";
+import { View } from "react-native";
 import { makeStyles } from "../../../theme/styles.ts";
 import { radius, space } from "../../../tokens.ts";
 import { TransactionRow } from "../transaction-row/transaction-row";
 import { SwipeableRow } from "./swipeable-row";
 
-const meta = {
-  title: "Transactions/SwipeableRow",
-  component: SwipeableRow,
-  args: { onShortSwipe: () => undefined, onLongSwipe: () => undefined, children: null },
-} satisfies Meta<typeof SwipeableRow>;
+function noop() {}
 
-export default meta;
-type Story = StoryObj<typeof meta>;
-
-export const Default: Story = {
-  render: SwipeDemo,
-};
-
-function SwipeDemo() {
+function RowAtRest() {
   const styles = useStyles();
-  const [last, setLast] = useState("Drag the row — short swipe categorises, long swipe edits.");
-  const handleShortSwipe = useCallback(() => setLast("Short swipe → Categorise"), []);
-  const handleLongSwipe = useCallback(() => setLast("Long swipe → Edit"), []);
-
   return (
     <View style={styles.surface}>
-      <Text style={styles.hint}>{last}</Text>
-      <SwipeableRow onShortSwipe={handleShortSwipe} onLongSwipe={handleLongSwipe}>
+      <SwipeableRow onShortSwipe={noop} onLongSwipe={noop}>
         <TransactionRow
           date="2026-08-24"
+          withDate={false}
           enteredName="Corner Bakery"
           category="Eating out"
           account="Cash"
           amount={money.toMoney("-48.90")}
           currency="PLN"
           type="expense"
+          brandKey={null}
         />
       </SwipeableRow>
     </View>
   );
 }
+
+const meta = {
+  title: "Transactions/SwipeableRow",
+  component: RowAtRest,
+} satisfies Meta<typeof RowAtRest>;
+
+export default meta;
+type Story = StoryObj<typeof meta>;
+
+export const Default: Story = {};
 
 const useStyles = makeStyles((theme) => ({
   surface: {
@@ -58,7 +57,5 @@ const useStyles = makeStyles((theme) => ({
     borderWidth: 1,
     borderColor: theme.border,
     padding: space.x5,
-    gap: space.x3,
   },
-  hint: { color: theme.textMuted, ...text.ui("caption") },
 }));
