@@ -27,18 +27,26 @@
 
 import type { CurrencyCode } from "@waltning/core/money";
 import * as money from "@waltning/core/money";
+import type { AccountKind } from "@waltning/core/registry/inputs";
 
 export type DemoAccount = {
   /** Referenced by the patterns below, never shown. */
   ref: string;
   name: string;
   currency: CurrencyCode;
-  kind: "bank" | "card" | "cash" | "deposit" | "clearing";
+  /**
+   * **Every `ACCOUNT_KIND`, and `demo-plan.test.ts` refuses a list that
+   * misses one.** This was five of the nine, so the demo ledger — the thing a
+   * reader opens to see what the app *is* — never drew a loan in either
+   * direction, an investment or an `other`, and the register's colour ramp
+   * had four entries nothing rendered.
+   */
+  kind: AccountKind;
   openingBalance: string;
 };
 
 /**
- * Five accounts, three currencies.
+ * Eleven accounts, three currencies, every kind.
  *
  * More than one currency on purpose: a single-currency ledger never exercises
  * a conversion, and the figures a reader most wants to trust are the ones that
@@ -88,6 +96,63 @@ export const DEMO_ACCOUNTS: readonly DemoAccount[] = [
     // balance is a pot nobody laid out, which is not the state J08 is about.
     openingBalance: "0.00",
   },
+  /**
+   * **Both directions of a loan, as two kinds rather than one signed
+   * balance.** `loan_receivable` reads positive while somebody is repaying
+   * you; `loan_payable` reads negative while you still owe. A demo with only
+   * one of them shows half the register's money colours and none of the
+   * question S16 asks by sorting these two sections last — *what of this is
+   * not really mine?*
+   */
+  {
+    ref: "loan-out",
+    name: "Lent to a friend",
+    currency: "PLN" as CurrencyCode,
+    kind: "loan_receivable",
+    openingBalance: "4000.00",
+  },
+  {
+    ref: "loan-in",
+    name: "Car loan",
+    currency: "PLN" as CurrencyCode,
+    kind: "loan_payable",
+    openingBalance: "-18000.00",
+  },
+  /** A holding, in a third currency, so the pivot conversion has something real to do. */
+  {
+    ref: "investment",
+    name: "Brokerage",
+    currency: "USD" as CurrencyCode,
+    kind: "investment",
+    openingBalance: "12500.00",
+  },
+  /** The kind that exists so nothing has to be filed as a lie. */
+  {
+    ref: "other",
+    name: "Travel card",
+    currency: "EUR" as CurrencyCode,
+    kind: "other",
+    openingBalance: "120.00",
+  },
+  /**
+   * A second bank and a second card — a section of one proves no section, and
+   * the register's subtotal, inset rules and collapse control are all things
+   * a one-row group cannot show.
+   */
+  {
+    ref: "bank-c",
+    name: "Studio account",
+    currency: "PLN" as CurrencyCode,
+    kind: "bank",
+    openingBalance: "3100.00",
+  },
+  {
+    ref: "card-b",
+    name: "Card B",
+    currency: "PLN" as CurrencyCode,
+    kind: "card",
+    openingBalance: "0.00",
+  },
 ];
 
 export type DemoCategory = { name: string; kind: "income" | "expense"; group: string | null };
@@ -125,6 +190,16 @@ export const DEMO_CATEGORIES: readonly DemoCategory[] = [
 
   { name: "Shopping", kind: "expense", group: null },
   { name: "Household supplies", kind: "expense", group: "Shopping" },
+
+  // Lending and repaying, so the two loan accounts have somewhere to file
+  // their movement. `Lent out` is a real outgoing (§6.6: a receivable sits
+  // outside net worth), and `Repayment made` is what comes back the other way.
+  { name: "Debt & giving", kind: "expense", group: null },
+  { name: "Lent out", kind: "expense", group: "Debt & giving" },
+  { name: "Repayment made", kind: "expense", group: "Debt & giving" },
+
+  { name: "Returns", kind: "income", group: null },
+  { name: "Investment returns", kind: "income", group: "Returns" },
 ];
 
 export type DemoPattern = {
@@ -275,6 +350,65 @@ export const DEMO_PATTERNS: readonly DemoPattern[] = [
     amount: "820.00",
     days: [13],
     every: 5,
+  },
+  // ── the kinds that had no activity at all ─────────────────────────────
+  //
+  // An opening balance puts a row in the register and proves nothing beyond
+  // that: a loan with no repayments never moves, and an account that never
+  // moves cannot show that its figure, its colour and its sign survive a
+  // month of use. These are the smallest patterns that give the late kinds a
+  // history worth looking at.
+  {
+    enteredName: "Repayment received",
+    category: "Lent out",
+    type: "expense",
+    account: "loan-out",
+    amount: "350.00",
+    days: [12],
+  },
+  {
+    enteredName: "Car loan",
+    category: "Repayment made",
+    type: "income",
+    account: "loan-in",
+    // Income *on the payable*: what you owe reads negative, so a repayment
+    // moves it toward zero. The other way round would draw a debt that grows
+    // every month and read as a rendering bug.
+    amount: "620.00",
+    days: [8],
+  },
+  {
+    enteredName: "Brokerage",
+    category: "Investment returns",
+    type: "income",
+    account: "investment",
+    amount: "180.00",
+    days: [20],
+    every: 3,
+  },
+  {
+    enteredName: "Transit",
+    category: "Taxi",
+    type: "expense",
+    account: "other",
+    amount: "24.00",
+    days: [3, 17],
+  },
+  {
+    enteredName: "Client",
+    category: "Services",
+    type: "income",
+    account: "bank-c",
+    amount: "4800.00",
+    days: [15],
+  },
+  {
+    enteredName: "Software & tools",
+    category: "Software & tools",
+    type: "expense",
+    account: "card-b",
+    amount: "89.00",
+    days: [6],
   },
 ];
 

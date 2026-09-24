@@ -27,6 +27,7 @@ import { type AccountingDate, accountingDate, todayIn } from "@waltning/core/dat
 import type { Id } from "@waltning/core/id";
 import * as money from "@waltning/core/money";
 import { type CurrencyCode, currencyCode } from "@waltning/core/money";
+import type { AccountKind } from "@waltning/schema/enums";
 import { eq, isNotNull, like, sql } from "drizzle-orm";
 import { createDb } from "../client.ts";
 import { accounts, categories, transactions } from "../schema.ts";
@@ -54,11 +55,19 @@ type FixtureAccount = {
   ref: string;
   name: string;
   currency: CurrencyCode;
-  kind: "bank" | "cash" | "card" | "deposit";
+  /**
+   * **Every `ACCOUNT_KIND`, and `fixture.test.ts` refuses a list that misses
+   * one.** Four of the nine — both loan kinds, `investment` and `other` — had
+   * no fixture row at all, which meant the register's colour ramp assigned
+   * them a permanent colour that nothing ever rendered, and the sections that
+   * sort loans last had no loans to sort. A kind with no data is a kind whose
+   * screens are unproven.
+   */
+  kind: AccountKind;
   openingBalance: string;
 };
 
-const ACCOUNTS: FixtureAccount[] = [
+export const ACCOUNTS: FixtureAccount[] = [
   {
     ref: "bank-a",
     name: "Bank A",
@@ -87,6 +96,76 @@ const ACCOUNTS: FixtureAccount[] = [
     kind: "cash",
     openingBalance: "300.00",
   },
+  /**
+   * A pot that group expenses are allocated out of (§6.4) — it holds other
+   * people's money and belongs at zero when the last share is written, so it
+   * opens funded and is spent down by the shares below.
+   */
+  {
+    ref: "clearing",
+    name: "Shared pot",
+    currency: currencyCode("PLN"),
+    kind: "clearing",
+    openingBalance: "600.00",
+  },
+  /**
+   * **Money owed to you, and money you owe, are two kinds rather than one
+   * signed balance** — `loan_receivable` reads positive when somebody is
+   * repaying you and `loan_payable` reads negative while you still owe, and a
+   * register that draws them in one section would have to explain a sign
+   * change it has no way to caption.
+   */
+  {
+    ref: "loan-out",
+    name: "Lent to a friend",
+    currency: currencyCode("PLN"),
+    kind: "loan_receivable",
+    openingBalance: "4000.00",
+  },
+  {
+    ref: "loan-in",
+    name: "Car loan",
+    currency: currencyCode("PLN"),
+    kind: "loan_payable",
+    openingBalance: "-18000.00",
+  },
+  /** A holding whose figure moves without a transaction — S16's `other` end. */
+  {
+    ref: "investment",
+    name: "Brokerage",
+    currency: currencyCode("USD"),
+    kind: "investment",
+    openingBalance: "12500.00",
+  },
+  /** The kind that exists so nothing has to be filed as a lie. */
+  {
+    ref: "other",
+    name: "Travel card",
+    currency: currencyCode("EUR"),
+    kind: "other",
+    openingBalance: "120.00",
+  },
+  /**
+   * **A second bank and a second card, because a section of one proves no
+   * section.** The register groups by kind and draws a subtotal, inset rules
+   * between rows and a collapse control per group — none of which a
+   * one-row-per-kind fixture exercises, which is how the first pass of that
+   * screen looked finished against data that could not show it was not.
+   */
+  {
+    ref: "bank-c",
+    name: "Studio account",
+    currency: currencyCode("PLN"),
+    kind: "bank",
+    openingBalance: "3100.00",
+  },
+  {
+    ref: "card-b",
+    name: "Card B",
+    currency: currencyCode("PLN"),
+    kind: "card",
+    openingBalance: "0.00",
+  },
 ];
 
 /**
@@ -112,7 +191,7 @@ type Pattern = {
   every?: number;
 };
 
-const PATTERNS: Pattern[] = [
+export const PATTERNS: Pattern[] = [
   // ── income ────────────────────────────────────────────────────────────
   // Employers and clients stay abstract: a real one would be *this* ledger's
   // private data, which is the thing the placeholder rule is about. Merchants
@@ -260,6 +339,79 @@ const PATTERNS: Pattern[] = [
     amount: "820.00",
     days: [13],
     every: 5,
+  },
+  // ── the four kinds that had no activity at all ────────────────────────
+  //
+  // Opening balances alone put a row in the register, which is enough to draw
+  // a section and not enough to prove one: a loan with no repayments never
+  // moves, and an account that never moves cannot show that its figure, its
+  // colour and its sign survive a month of use. These are the smallest
+  // patterns that give the four late kinds a history.
+  {
+    enteredName: "Repayment received",
+    category: "Lent out",
+    type: "expense",
+    account: "loan-out",
+    // An expense *on the receivable* — what they owe you goes down as it
+    // comes back. The money arriving in a bank account is the other leg, and
+    // this fixture writes one leg per pattern (see `Pattern`).
+    amount: "350.00",
+    days: [12],
+  },
+  {
+    enteredName: "Car loan",
+    category: "Repayment made",
+    type: "income",
+    account: "loan-in",
+    // Income *on the payable*: what you owe reads negative, so a repayment
+    // moves it toward zero. A fixture that had this the other way round would
+    // draw a debt that grows every month and look like a rendering bug.
+    amount: "620.00",
+    days: [8],
+  },
+  {
+    enteredName: "Brokerage",
+    category: "Investment returns",
+    type: "income",
+    account: "investment",
+    amount: "180.00",
+    days: [20],
+    every: 3,
+  },
+  {
+    enteredName: "Transit",
+    category: "Taxi",
+    type: "expense",
+    account: "other",
+    amount: "24.00",
+    days: [3, 17],
+  },
+  {
+    enteredName: "Shared dinner",
+    category: "Eating out",
+    type: "expense",
+    account: "clearing",
+    amount: "150.00",
+    days: [22],
+    every: 2,
+  },
+  // And the second bank and card, so those sections are not one row of
+  // activity and one row of nothing.
+  {
+    enteredName: "Client",
+    category: "Services",
+    type: "income",
+    account: "bank-c",
+    amount: "4800.00",
+    days: [15],
+  },
+  {
+    enteredName: "Software & tools",
+    category: "Software & tools",
+    type: "expense",
+    account: "card-b",
+    amount: "89.00",
+    days: [6],
   },
 ];
 
@@ -542,6 +694,13 @@ function monthsRequested(argv: readonly string[]): number {
   return months;
 }
 
-if (process.argv.includes("--drop")) await drop();
-else await apply(today, monthsRequested(process.argv));
-process.exit(0);
+/**
+ * **The entry point is in `fixture.cli.ts`, not here**, and the split is the
+ * one `packages/ledger/tools/dump-fixture.cli.ts` already makes for the same
+ * reason: this module has to be *importable* without doing anything.
+ * `fixture.test.ts` reads `ACCOUNTS` to ask whether every `ACCOUNT_KIND` has a
+ * row, and while the top-level `await apply(...)` and `process.exit(0)` lived
+ * here, importing that list seeded a database and killed the test runner
+ * before a single assertion ran.
+ */
+export { apply, drop, monthsRequested, today };

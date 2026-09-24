@@ -154,17 +154,34 @@ export type AccountRegisterProps = {
   onSetVisibility?: (id: string, next: { hidden: boolean; inTotal: boolean }) => void;
 };
 
-/** `bank · cash · card · clearing · loan_receivable · loan_payable · investment · deposit · other`. */
-const KIND_ORDER: readonly AccountKind[] = [
+/**
+ * `bank · cash · card · clearing · investment · deposit · other`, then the two
+ * loan kinds.
+ *
+ * **The places money is held come first; what is owed comes last.** A register
+ * read top to bottom answers *what do I have* before it answers *what of this
+ * is not really mine*, and a loan section in the middle interrupts the first
+ * question to start the second. The two loan kinds stay adjacent and stay in
+ * that order — what is owed **to** you before what you owe — so the pair reads
+ * as one idea with two directions rather than two unrelated groups.
+ *
+ * `register-order.test.ts` holds this against `ACCOUNT_KIND`, and the failure
+ * it guards is worse than a wrong order: the sections are built by mapping
+ * *this* list, not by grouping the rows, so a kind nobody adds here renders
+ * **nowhere** — its accounts drop out of the register with no empty section to
+ * notice and no error to read, while every total that counts them stays
+ * right.
+ */
+export const KIND_ORDER: readonly AccountKind[] = [
   "bank",
   "cash",
   "card",
   "clearing",
-  "loan_receivable",
-  "loan_payable",
   "investment",
   "deposit",
   "other",
+  "loan_receivable",
+  "loan_payable",
 ];
 
 /** The two axes the register groups on — `05-composites`'s `SegmentControl`. */
