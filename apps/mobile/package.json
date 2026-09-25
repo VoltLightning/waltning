@@ -62,7 +62,8 @@
   },
   "devDependencies": {
     "@waltning/api": "workspace:*",
-    "@waltning/schema": "workspace:*"
+    "@waltning/schema": "workspace:*",
+    "babel-preset-expo": "~57.0.12"
   },
   "expo": {
     "install": {
