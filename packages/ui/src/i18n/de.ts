@@ -785,6 +785,9 @@ export const de: Messages = {
     loading: "Verlauf wird geschrieben… {{written}} von {{of}}",
     loaded: "{{transactions}} Zeilen · {{accounts}} Konten · {{people}} Personen",
     refused: " · {{count}} abgelehnt",
+    busyTitle: "Demodaten werden geladen",
+    restarting: "Neustart…",
+    restartNow: "Jetzt neu starten",
   },
   routes: {
     developer: "Entwickler",

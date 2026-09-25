@@ -768,6 +768,9 @@ export const be: Messages = {
     loading: "Запіс гісторыі… {{written}} з {{of}}",
     loaded: "Радкоў: {{transactions}} · рахункаў: {{accounts}} · людзей: {{people}}",
     refused: " · адхілена: {{count}}",
+    busyTitle: "Загрузка дэма-даных",
+    restarting: "Перазапуск…",
+    restartNow: "Перазапусціць зараз",
   },
   routes: {
     developer: "Распрацоўшчык",

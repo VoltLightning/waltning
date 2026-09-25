@@ -142,6 +142,7 @@
     "./shell/unsettled-banner": "./src/shell/molecules/unsettled-banner/unsettled-banner.tsx",
     "./shell/year-picker": "./src/shell/organisms/year-picker/year-picker.tsx",
     "./states/banner": "./src/states/molecules/banner/banner.tsx",
+    "./states/busy-screen": "./src/states/organisms/busy-screen/busy-screen.tsx",
     "./states/empty-state": "./src/states/organisms/empty-state/empty-state.tsx",
     "./states/error-state": "./src/states/organisms/error-state/error-state.tsx",
     "./states/locked-screen": "./src/states/organisms/locked-screen/locked-screen.tsx",

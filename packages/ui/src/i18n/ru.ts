@@ -771,6 +771,9 @@ export const ru: Messages = {
     loading: "Запись истории… {{written}} из {{of}}",
     loaded: "Строк: {{transactions}} · счетов: {{accounts}} · людей: {{people}}",
     refused: " · отклонено: {{count}}",
+    busyTitle: "Загрузка демо-данных",
+    restarting: "Перезапуск…",
+    restartNow: "Перезапустить сейчас",
   },
   routes: {
     developer: "Разработчик",
