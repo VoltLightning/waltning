@@ -24,7 +24,7 @@
  */
 
 import { type AccountingDate, addDays } from "@waltning/core/date";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { View } from "react-native";
 import { monthName, weekdayShort } from "../../../i18n/locales";
 import { useLocale, useT } from "../../../i18n/provider";
@@ -34,7 +34,7 @@ import { Button } from "../../atoms/button/button";
 import { Chip } from "../../atoms/chip/chip";
 import { Wheel, type WheelOption } from "../../atoms/wheel/wheel";
 import { BottomSheet } from "../../organisms/bottom-sheet/bottom-sheet";
-import { clampDay, dateOf, daysIn, partsOf, yearsAround } from "./parts.ts";
+import { clampDay, dateOf, daysIn, partsOf, YEAR_REACH, yearsAround } from "./parts.ts";
 
 /** §3.7a sizes each column to the widest thing in it. */
 const COLUMN = { day: 56, month: 148, year: 76 } as const;
@@ -62,7 +62,20 @@ export function DatePicker({ prompt, value, onChange, today, onDismiss }: DatePi
   useEffect(() => setDraft(value), [value]);
 
   const parts = partsOf(draft);
-  const years = yearsAround(parts.year);
+  // Two hundred rows, built once per window rather than per render — and the
+  // window moves only for a value outside it, so rolling the year rebuilds
+  // nothing and the wheel keeps the rows it has drawn.
+  const todayYear = partsOf(today).year;
+  const outside = parts.year < todayYear - YEAR_REACH || parts.year > todayYear + YEAR_REACH;
+  const anchor = outside ? parts.year : todayYear;
+  const years = useMemo(
+    () =>
+      yearsAround(anchor, todayYear).map((year) => ({
+        value: String(year),
+        label: String(year),
+      })),
+    [anchor, todayYear],
+  );
 
   const days: WheelOption[] = [];
   for (let day = 1; day <= daysIn(parts.year, parts.month); day += 1) {
@@ -147,7 +160,7 @@ export function DatePicker({ prompt, value, onChange, today, onDismiss }: DatePi
         />
         <Wheel
           label={t("common.year")}
-          options={years.map((year) => ({ value: String(year), label: String(year) }))}
+          options={years}
           value={String(parts.year)}
           onChange={handleYear}
           width={COLUMN.year}
