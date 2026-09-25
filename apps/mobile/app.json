@@ -3,11 +3,10 @@
     "name": "Waltning",
     "slug": "waltning",
     "scheme": "waltning",
-    "version": "0.0.0",
+    "version": "0.1.0",
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
     "icon": "./assets/icon/icon.png",
-    "newArchEnabled": true,
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "app.waltning.ios",
