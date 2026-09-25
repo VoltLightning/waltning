@@ -52,16 +52,23 @@ export function dateOf({ year, month, day }: Parted): AccountingDate {
 }
 
 /**
- * The years a ledger entry can name.
+ * The years a ledger entry can name: a century either side of today.
  *
- * Bounded rather than endless because §3.7a makes a year a scale, and bounded
- * *here* rather than at some absolute floor: a window around the value keeps
- * the column short enough to flick through, and re-centres if a date outside
- * it is ever loaded — an imported entry from eight years ago must still be
- * reachable by the wheel that is showing it.
+ * **Anchored on today, not on the value.** The window used to be eight years
+ * around whatever was picked, so it moved as the wheel rolled and a birth year
+ * or an old loan was eight flicks at a time away. A fixed century answers
+ * both, and the list is virtualised (`Wheel`), so its length costs nothing.
+ *
+ * **Widened, never clipped, for a value outside it.** An imported entry from
+ * before the window must still be reachable by the wheel that is showing it.
  */
-export function yearsAround(year: number, back = 8, forward = 1): readonly number[] {
+export function yearsAround(value: number, today: number, reach = YEAR_REACH): readonly number[] {
+  const from = Math.min(today - reach, value);
+  const to = Math.max(today + reach, value);
   const years: number[] = [];
-  for (let y = year - back; y <= year + forward; y += 1) years.push(y);
+  for (let y = from; y <= to; y += 1) years.push(y);
   return years;
 }
+
+/** How many years either side of today the year column runs. */
+export const YEAR_REACH = 100;

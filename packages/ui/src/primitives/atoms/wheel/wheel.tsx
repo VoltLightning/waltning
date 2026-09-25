@@ -24,7 +24,7 @@
  * component that re-renders sixty times a second while a thumb is down.
  */
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { NativeScrollEvent, NativeSyntheticEvent } from "react-native";
 import { ScrollView, Text, View } from "react-native";
 import { text } from "../../../theme/fonts.ts";
@@ -54,6 +54,13 @@ const LIFT_GRACE = 80;
 /** How far a row is from the band, clamped to the classes that exist. */
 const NEAR = 1;
 const MID = 2;
+/**
+ * Every row further out than `MID`, as one class. **Clamped before it is a
+ * prop**: the raw distance of every row changes on every row crossed — 1926 is
+ * a hundred rows from 2026 and a hundred and one from 2027 — so an unclamped
+ * prop re-rendered the whole column through `Row`'s memo.
+ */
+const FAR = 3;
 
 /**
  * Which option a scroll offset is resting on.
@@ -111,8 +118,11 @@ export function Wheel({ label, options, value, onChange, wraps = false, width }:
   // every position. The middle copy is where it sits.
   const copies = wraps ? 3 : 1;
   const offset = wraps ? options.length : 0;
-  const drawn: WheelOption[] = [];
-  for (let copy = 0; copy < copies; copy += 1) drawn.push(...options);
+  const drawn = useMemo(() => {
+    const rows: WheelOption[] = [];
+    for (let copy = 0; copy < copies; copy += 1) rows.push(...options);
+    return rows;
+  }, [copies, options]);
 
   const settle = useRef(false);
 
@@ -292,7 +302,7 @@ export function Wheel({ label, options, value, onChange, wraps = false, width }:
             key={`${option.value}-${Math.floor(index / options.length)}`}
             label={option.label}
             value={option.value}
-            distance={Math.abs((index % options.length) - row)}
+            distance={Math.min(Math.abs((index % options.length) - row), FAR)}
             // One copy speaks: a wrapping drum draws every option three times,
             // and a screen reader should hear *March* once.
             spoken={Math.floor(index / options.length) === (wraps ? 1 : 0)}
@@ -313,8 +323,14 @@ type RowProps = {
 };
 
 /**
- * Its own component so a row re-renders only when its own distance changes —
- * crossing one row restyles three of them, not forty.
+ * Its own **memoised** component so a row re-renders only when its own
+ * distance changes — crossing one row restyles three of them, not every row.
+ *
+ * The memo is what makes a long column cheap. Unmemoised, every row crossed
+ * re-rendered the whole column — tolerable at thirty-one days, and not at the
+ * year column's two hundred and one rows or the minutes' hundred and eighty.
+ * The props are all primitives or the caller's stable `onChange`, so the
+ * default comparison is the right one.
  *
  * **A row can be pressed, and that is the drum's only way in without a
  * scroll.** Rolling was the whole interface: nothing for a screen reader or a
@@ -322,7 +338,7 @@ type RowProps = {
  * by nudging the drum onto it. A press picks the row; the drum follows the
  * value the way it follows a chip.
  */
-function Row({ label, value, distance, spoken, onPick }: RowProps) {
+const Row = memo(function Row({ label, value, distance, spoken, onPick }: RowProps) {
   const styles = useStyles();
   const handlePress = useCallback(() => onPick(value), [onPick, value]);
   const { focused, handlers } = useInteraction();
@@ -355,7 +371,7 @@ function Row({ label, value, distance, spoken, onPick }: RowProps) {
       </Text>
     </PressableScaled>
   );
-}
+});
 
 /** The outer copies of a wrapping drum: drawn, pressable, and not read out. */
 const UNSPOKEN = {

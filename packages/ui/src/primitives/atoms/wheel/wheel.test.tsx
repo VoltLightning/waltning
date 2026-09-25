@@ -17,10 +17,23 @@
  */
 
 import { render } from "@testing-library/react";
+import type { ComponentProps } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { ThemeProvider } from "../../../theme/provider";
 import { light } from "../../../theme/roles.ts";
 import { recentreTo, rowAt, WHEEL_ROW, Wheel, type WheelOption } from "./wheel";
+
+/** Every row's renders, by its label — `Row` draws exactly one `PressableScaled`. */
+const renders = new Map<string, number>();
+vi.mock("../pressable-scaled/pressable-scaled", async (importOriginal) => {
+  const real = await importOriginal<typeof import("../pressable-scaled/pressable-scaled")>();
+  function Counted(props: ComponentProps<typeof real.PressableScaled>) {
+    const name = String(props.accessibilityLabel);
+    renders.set(name, (renders.get(name) ?? 0) + 1);
+    return <real.PressableScaled {...props} />;
+  }
+  return { ...real, PressableScaled: Counted };
+});
 
 /** Bracketed so a count of `[1]` cannot also match inside `[10]`. */
 const DAYS: WheelOption[] = Array.from({ length: 31 }, (_, i) => ({
@@ -89,5 +102,39 @@ describe("Wheel", () => {
     );
     expect(occurrences(cycle.container.textContent ?? "", "[23]"), "a cycle").toBe(3);
     cycle.unmount();
+  });
+
+  /**
+   * **A long column costs a move only the rows whose look changed.** The year
+   * column is 201 rows; moving the band one year restyles the six rows around
+   * it. Unmemoised — or memoised on the raw distance, which every row's
+   * changes — it re-rendered all 201.
+   */
+  it("re-renders only the rows around the band when the value moves", () => {
+    const years: WheelOption[] = Array.from({ length: 201 }, (_, i) => {
+      const year = String(1926 + i);
+      return { value: year, label: year };
+    });
+    const onChange = vi.fn();
+    const view = render(
+      <ThemeProvider theme={light}>
+        <Wheel label="Year" options={years} value="2026" onChange={onChange} width={76} />
+      </ThemeProvider>,
+    );
+    renders.clear();
+    view.rerender(
+      <ThemeProvider theme={light}>
+        <Wheel label="Year" options={years} value="2027" onChange={onChange} width={76} />
+      </ThemeProvider>,
+    );
+    expect([...renders.keys()].sort(), "the rows whose class changed").toEqual([
+      "2024",
+      "2025",
+      "2026",
+      "2027",
+      "2028",
+      "2029",
+    ]);
+    view.unmount();
   });
 });
