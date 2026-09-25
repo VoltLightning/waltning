@@ -64,7 +64,7 @@ const INTERACTIVE = /\b(?:Pressable(?:Scaled)?|(?:SheetAware)?TextInput)\b/;
  * An exact count is the only guard that catches a census halving. Raise it
  * when a component is added; a *drop* is the bug this exists for.
  */
-const INTERACTIVE_COUNT = 61;
+const INTERACTIVE_COUNT = 62;
 
 /**
  * **Components that forward interactivity rather than owning it.** Both rules

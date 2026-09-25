@@ -3619,7 +3619,7 @@ describe("every pressable answers the finger", () => {
   ]);
 
   /** Every bare `<Pressable` tag the scan sees today: 18 hand-wired, 5 backdrops. */
-  const BARE_TAG_COUNT = 22;
+  const BARE_TAG_COUNT = 23;
   /** The docblocks here name `Pressable` constantly; only rendered tags count. */
   const withoutComments = (text: string) =>
     text.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
