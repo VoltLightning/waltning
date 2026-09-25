@@ -187,15 +187,14 @@ function DayCellView({
             />
           </View>
         ) : matches === undefined ? (
-          <View style={[styles.mark, ...markStyle(styles, activity, direction, today)]} />
+          <View style={markStyle(styles, activity, direction, today)} />
         ) : matches === 0 ? (
-          // **A quiet mark's own box, drawn in nothing.** `styles.mark` alone is
-          // a border radius — the size comes from `markNone`/`markSome`, so an
-          // empty `View` was 0×0 and the day number shifted between a searched
+          // **A quiet mark's own box, drawn in nothing.** The size comes from
+          // `markNone`/`markSome`, so an empty `View` was 0×0 and the day number shifted between a searched
           // cell with no match, one with a count, and an unsearched cell. The
           // cell's fixed height stopped the *grid* reflowing and hid that the
           // numbers inside it did not line up.
-          <View style={[styles.mark, styles.markNone, styles.markEmpty]} />
+          <View style={[styles.markNone, styles.markEmpty]} />
         ) : (
           <Text style={[styles.count, today ? styles.countOnFill : null]} numberOfLines={1}>
             {matches}
@@ -232,6 +231,18 @@ function markStyle(
 }
 
 export const DayCell = memo(DayCellView);
+
+/**
+ * **A circle, stated as one: the radius is half the side, never `radius.pill`.**
+ * The marks were `borderRadius: 999` with the size in a second style, and on
+ * Android every one of them drew as a sharp square — the radio's 10px dot,
+ * with the same 999, stays round, so it is not the size. A radius equal to half
+ * the side asks the platform to clamp nothing, and that holds wherever the
+ * difference lies.
+ */
+function dot(size: number) {
+  return { width: size, height: size, borderRadius: size / 2 };
+}
 
 const useStyles = makeStyles((theme) => ({
   cell: {
@@ -285,7 +296,6 @@ const useStyles = makeStyles((theme) => ({
   },
   sub: { ...text.ui("caption", 600), color: theme.textMuted },
   subOnFill: { ...text.ui("caption", 600), color: theme.textOnAccent },
-  mark: { borderRadius: radius.pill },
   /**
    * The count, in the mark's place. `caption` at 600 rather than the day's own
    * size: the number a reader is scanning for is still the date, and a count
@@ -306,13 +316,13 @@ const useStyles = makeStyles((theme) => ({
     textAlign: "center",
   },
   countOnFill: { color: theme.textOnAccent },
-  markNone: { width: 5, height: 5, backgroundColor: theme.insetFill },
+  markNone: { ...dot(5), backgroundColor: theme.insetFill },
   /** The quiet mark's box with nothing in it, so the number does not shift. */
   markUnread: { backgroundColor: "transparent" },
   /** A searched cell with no match: the count's own slot, drawn in nothing. */
   markEmpty: { width: COUNT_BOX, height: COUNT_BOX, backgroundColor: "transparent" },
-  markSome: { width: 8, height: 8 },
-  markHeavy: { width: 12, height: 12 },
+  markSome: dot(8),
+  markHeavy: dot(12),
   // Filled for out, a ring for in — the money colours, unchanged. A saturated
   // pair was drawn and rejected: the figures and the marks disagreeing about
   // what green means is worse than a mark that is quiet at 8px.
