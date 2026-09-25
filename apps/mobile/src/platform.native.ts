@@ -30,7 +30,6 @@ import * as Haptics from "expo-haptics";
 import * as LocalAuthentication from "expo-local-authentication";
 import { getLocales } from "expo-localization";
 import { isAvailableAsync, shareAsync } from "expo-sharing";
-import * as Updates from "expo-updates";
 import { AppState, DevSettings, Platform } from "react-native";
 import { mobileDiagnostics } from "./diagnostics.ts";
 
@@ -403,11 +402,17 @@ export const backupPort: BackupPort = {
  * the line between them. `reloadAsync` also refuses when `expo-updates` is
  * disabled, which is why `app.json` gives it an update URL — with automatic
  * checks off, so the restart reloads the embedded bundle and fetches nothing.
+ *
+ * **Imported at the restart, not at startup.** `expo-updates` looks up its
+ * native module as it loads, and a build made before the module was added has
+ * none — a top-level import crashed every such build on launch. Loaded here, an
+ * older build only refuses the restart, which the caller already answers.
  */
-export function restartApp(): Promise<void> {
+export async function restartApp(): Promise<void> {
   if (__DEV__) {
     DevSettings.reload();
-    return Promise.resolve();
+    return;
   }
-  return Updates.reloadAsync();
+  const Updates = await import("expo-updates");
+  await Updates.reloadAsync();
 }
