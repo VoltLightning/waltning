@@ -28,17 +28,27 @@
  * a transfer moves money between your own accounts, so it is neither a gain
  * nor a loss, and the sign-based `auto` colour would paint one leg green and
  * the other red for exactly that reason.
+ *
+ * **Pressable exactly as `TransactionRow` is.** S09 opens any row, a transfer
+ * included — it draws the pair and its months — but this row took no `onPress`,
+ * so the one row a list could not open was the one that moved money between
+ * two of your accounts. Same role, same hover, focus and press scale; absent
+ * `onPress`, a plain `View`.
  */
 
 import type * as money from "@waltning/core/money";
-import { Text, View } from "react-native";
+import { useCallback } from "react";
+import { Pressable, Text, View } from "react-native";
+import Animated from "react-native-reanimated";
 import { Amount } from "../../../fx/atoms/amount/amount";
 import { useT } from "../../../i18n/provider";
+import { useInteraction } from "../../../primitives/interaction.ts";
+import { usePressScale } from "../../../primitives/press-scale.ts";
 import { ArrowsLeftRightIcon } from "../../../shell/phosphor";
 import { text } from "../../../theme/fonts.ts";
 import { useTheme } from "../../../theme/provider";
 import { makeStyles } from "../../../theme/styles.ts";
-import { radius, space, tabularNums } from "../../../tokens.ts";
+import { focus, radius, space, tabularNums, touchTarget } from "../../../tokens.ts";
 
 export type TransferRowProps = {
   /** Bare `YYYY-MM-DD`. Rendered as given — never through a `Date` (C28). */
@@ -60,6 +70,8 @@ export type TransferRowProps = {
    * row only.
    */
   withDate?: boolean;
+  /** Open the transfer — S09. Absent, the row is a plain `View`. */
+  onPress?: () => void;
 };
 
 export function TransferRow({
@@ -73,6 +85,7 @@ export function TransferRow({
   toCurrency,
   toDecimals = 2,
   withDate = true,
+  onPress,
 }: TransferRowProps) {
   const t = useT();
   const theme = useTheme();
@@ -81,9 +94,12 @@ export function TransferRow({
   // Built above the JSX, never inline — the architecture test's own rule, and
   // `brand-icon.tsx`'s reason for computing its own box the same way.
   const tileFill = { backgroundColor: theme.insetFill };
+  const { hovered, focused, handlers } = useInteraction();
+  const press = usePressScale();
+  const handlePress = useCallback(() => onPress?.(), [onPress]);
 
-  return (
-    <View style={styles.row}>
+  const content = (
+    <>
       {withDate ? <Text style={styles.date}>{date.slice(5)}</Text> : null}
       <View style={[styles.tile, tileFill]}>
         <ArrowsLeftRightIcon size={15} color={theme.textMuted} />
@@ -117,7 +133,27 @@ export function TransferRow({
           </>
         )}
       </View>
-    </View>
+    </>
+  );
+
+  if (!onPress) {
+    return <View style={styles.row}>{content}</View>;
+  }
+
+  return (
+    <Animated.View style={press.style}>
+      {/* No `accessibilityLabel` — the content is the name (`EntryRow`). */}
+      <Pressable
+        accessibilityRole="button"
+        onPress={handlePress}
+        onPressIn={press.onPressIn}
+        onPressOut={press.onPressOut}
+        {...handlers}
+        style={[styles.row, hovered ? styles.hovered : null, focused ? styles.focused : null]}
+      >
+        {content}
+      </Pressable>
+    </Animated.View>
   );
 }
 
@@ -127,6 +163,13 @@ const useStyles = makeStyles((theme) => ({
     alignItems: "center",
     gap: space.xl,
     paddingVertical: space.lg,
+    minHeight: touchTarget.row,
+  },
+  hovered: { backgroundColor: theme.hoverFill },
+  focused: {
+    outlineWidth: focus.width,
+    outlineColor: theme.focusRing,
+    outlineOffset: focus.offset,
   },
   date: {
     color: theme.textMuted,

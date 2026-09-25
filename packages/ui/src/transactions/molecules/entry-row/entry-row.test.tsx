@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 
-import { render } from "@testing-library/react";
+import { fireEvent, render } from "@testing-library/react";
 import { currencyCode, toMoney } from "@waltning/core/money";
 import { expect, it, vi } from "vitest";
 import { I18nProvider } from "../../../i18n/provider";
@@ -65,4 +65,28 @@ it("names the account only when asked", () => {
   const with_ = draw({ withAccount: true });
   expect(with_.getByRole("button", { name: /Bank A/ })).toBeDefined();
   with_.unmount();
+});
+
+/**
+ * **A transfer opens like any other row.** S09 draws a transfer's pair, but
+ * `EntryRow` never handed `TransferRow` the press, so the transfer was the one
+ * row in every list that a tap did nothing to.
+ */
+it("opens a transfer on a tap, as it opens every other row", () => {
+  const onPress = vi.fn();
+  const view = draw({
+    onPress,
+    row: {
+      ...ROW,
+      id: "t2",
+      type: "transfer",
+      amount: toMoney("-150.00"),
+      toAccountName: "Savings",
+      toAmount: toMoney("150.00"),
+      toCurrency: currencyCode("PLN"),
+    },
+  });
+  fireEvent.click(view.getByRole("button", { name: /Savings/ }));
+  expect(onPress).toHaveBeenCalledWith("t2");
+  view.unmount();
 });
