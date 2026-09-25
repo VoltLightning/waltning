@@ -30,7 +30,8 @@ import * as Haptics from "expo-haptics";
 import * as LocalAuthentication from "expo-local-authentication";
 import { getLocales } from "expo-localization";
 import { isAvailableAsync, shareAsync } from "expo-sharing";
-import { AppState, Platform } from "react-native";
+import * as Updates from "expo-updates";
+import { AppState, DevSettings, Platform } from "react-native";
 import { mobileDiagnostics } from "./diagnostics.ts";
 
 const APPEARANCE_KEY = "waltning.appearance";
@@ -391,3 +392,22 @@ export const backupPort: BackupPort = {
   /** `setStringAsync` answers whether it took it, and the card renders the answer. */
   clipboard: (value) => setStringAsync(value),
 };
+
+/**
+ * Start the app over — a true restart, the JS runtime torn down and the bundle
+ * evaluated again, so no screen, store or cached snapshot survives it.
+ *
+ * **Two engines, because neither covers both builds.** `expo-updates` reloads
+ * a release build and refuses a development one; React Native's `DevSettings`
+ * reloads a development build and is a no-op in a release one. `__DEV__` is
+ * the line between them. `reloadAsync` also refuses when `expo-updates` is
+ * disabled, which is why `app.json` gives it an update URL — with automatic
+ * checks off, so the restart reloads the embedded bundle and fetches nothing.
+ */
+export function restartApp(): Promise<void> {
+  if (__DEV__) {
+    DevSettings.reload();
+    return Promise.resolve();
+  }
+  return Updates.reloadAsync();
+}

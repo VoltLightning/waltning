@@ -82,6 +82,25 @@ titled card was a card pretending to be a screen. A row is added here when the
 screen it leads to exists, never before: a menu entry to a placeholder is a
 promise the app cannot keep.
 
+### Developer — preview builds only
+
+A preview build carries one more row, *Developer*, and a production build has
+no such row, so the screen cannot be reached there. It holds two controls:
+*Load demo data* and *Reset preview data*. Reset asks twice, because it deletes
+both stores and nothing undoes that.
+
+**Load covers the whole app, then restarts it.** While the history is written,
+a full-screen busy state covers everything, the tabs included, and states how
+far it has got (*Writing history… 240 of 540*). The hardware back button does
+nothing while it is up. A clean run ends in a true restart, so every screen
+reads the new ledger from scratch. The phone reloads its JavaScript runtime and
+the browser reloads the page.
+
+**A run with refusals does not restart.** It stays on its count (*… · 12
+refused*) with *Restart now* beside it. Restarting would wipe the only sentence
+saying the dataset is smaller than it looks. A restart the platform refuses
+falls back to the same count and button.
+
 ## 3. Layout
 
 **Backup, drill and FX-coverage cards require a backend.** They report on the

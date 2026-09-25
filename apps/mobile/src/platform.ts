@@ -412,3 +412,14 @@ export const backupPort: BackupPort = {
       }
     : null,
 };
+
+/**
+ * Start the app over — every screen, every store, read again from nothing.
+ *
+ * On the web that is the page itself, loaded again. The native half needs a
+ * native module to do the same, which is why this is a port and not a call.
+ */
+export function restartApp(): Promise<void> {
+  window.location.reload();
+  return Promise.resolve();
+}

@@ -811,6 +811,9 @@ export const pl: Messages = {
     loading: "Zapisywanie historii… {{written}} z {{of}}",
     loaded: "{{transactions}} wierszy · {{accounts}} kont · {{people}} osób",
     refused: " · {{count}} odrzucono",
+    busyTitle: "Wczytywanie danych demo",
+    restarting: "Ponowne uruchamianie…",
+    restartNow: "Uruchom ponownie",
   },
   routes: {
     developer: "Deweloper",

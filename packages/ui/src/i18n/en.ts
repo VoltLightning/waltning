@@ -1429,6 +1429,9 @@ export const en = {
     loading: "Writing history… {{written}} of {{of}}",
     loaded: "{{transactions}} rows · {{accounts}} accounts · {{people}} people",
     refused: " · {{count}} refused",
+    busyTitle: "Loading demo data",
+    restarting: "Restarting…",
+    restartNow: "Restart now",
   },
   routes: {
     developer: "Developer",

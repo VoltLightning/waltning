@@ -13,9 +13,15 @@
  * both files, which nothing undoes — so it is the only one that confirms, and
  * it is the only one drawn in the danger colour.
  *
- * **Load reports what it wrote.** A run that was partly refused has to say so
- * rather than present as a smaller dataset, and the count is the only evidence
- * on screen that a press did anything at all.
+ * **Load covers the app, then restarts it.** The whole app sits under a
+ * `BusyScreen` while the history is written — the tabs too, because leaving
+ * halfway is what once left a screen reading a half-written ledger — and a
+ * clean run ends in a true restart, so every screen reads the new ledger from
+ * nothing rather than each deciding for itself whether it noticed.
+ *
+ * **A partly refused run does not restart.** It has to say so rather than
+ * present as a smaller dataset, and a restart would wipe the only sentence
+ * that says it; it stays on the count, with *Restart now* beside it.
  */
 
 import { loadDemo } from "@waltning/client/ledger/demo/load-demo";
@@ -25,11 +31,13 @@ import { todayIn } from "@waltning/core/date";
 import { useT } from "@waltning/ui/i18n/provider";
 import { Button } from "@waltning/ui/primitives/button";
 import { Banner } from "@waltning/ui/states/banner";
+import { BusyScreen } from "@waltning/ui/states/busy-screen";
 import { text } from "@waltning/ui/theme/fonts";
 import { makeStyles } from "@waltning/ui/theme/styles";
 import { radius, space } from "@waltning/ui/tokens";
 import { useCallback, useState } from "react";
 import { Text, View } from "react-native";
+import { restartApp } from "./platform";
 import { PushedPage } from "./pushed-page";
 
 export default function Developer() {
@@ -41,6 +49,7 @@ export default function Developer() {
   /** History rows written so far, of how many — `null` when no load is running. */
   const [progress, setProgress] = useState<{ written: number; of: number } | null>(null);
   const [confirming, setConfirming] = useState(false);
+  const [restarting, setRestarting] = useState(false);
 
   /**
    * **Async, and the screen stays live while it runs.** The loader writes the
@@ -75,6 +84,18 @@ export default function Developer() {
       undefined,
       (written, of) => setProgress({ written, of }),
     );
+    if (outcome.refused === 0) {
+      setRestarting(true);
+      try {
+        await restartApp();
+        return;
+      } catch {
+        // The restart was refused — `reloadAsync` in a build with updates
+        // switched off. Fall through to the count and the button, which is
+        // the reader's way to try again.
+        setRestarting(false);
+      }
+    }
     setProgress(null);
     ledger.refresh();
     setWrote(
@@ -85,6 +106,11 @@ export default function Developer() {
       }) + (outcome.refused > 0 ? t("developer.refused", { count: outcome.refused }) : ""),
     );
   }, [ledger, snapshot.categoryTree, snapshot.currencies, t]);
+
+  const handleRestart = useCallback(() => {
+    setRestarting(true);
+    restartApp().catch(() => setRestarting(false));
+  }, []);
 
   const askReset = useCallback(() => setConfirming(true), []);
   const cancelReset = useCallback(() => setConfirming(false), []);
@@ -103,15 +129,23 @@ export default function Developer() {
         onPress={handleLoad}
         variant="primary"
         size="lg"
-        loading={progress !== null}
         disabled={progress !== null}
       />
-      {progress === null || progress.of === 0 ? null : (
-        <Text style={styles.lede}>
-          {t("developer.loading", { written: progress.written, of: progress.of })}
-        </Text>
+      {wrote === null ? null : (
+        <>
+          <Banner tone="neutral" message={wrote} />
+          <Button label={t("developer.restartNow")} onPress={handleRestart} variant="ghost" />
+        </>
       )}
-      {wrote === null ? null : <Banner tone="neutral" message={wrote} />}
+      <BusyScreen
+        visible={progress !== null || restarting}
+        title={t(restarting ? "developer.restarting" : "developer.busyTitle")}
+        detail={
+          restarting || progress === null || progress.of === 0
+            ? undefined
+            : t("developer.loading", { written: progress.written, of: progress.of })
+        }
+      />
 
       <View style={styles.danger}>
         <Text style={styles.dangerTitle}>{t("preview.resetTitle")}</Text>
