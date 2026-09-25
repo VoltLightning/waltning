@@ -1568,16 +1568,46 @@ accounts (§6.4) gain meaning: a group expense is allocated by attaching each
 share to its counterparty, so `find_unsettled` reports *who* has not settled,
 not merely that something has not.
 
-`loan_receivable` and `loan_payable` remain valid `account_kind` values for
-migration fidelity, but new debt is recorded against counterparties. Direction
-is a property of the balance, not of the account it sits in.
+**A statement means an account; a person means a debt.** A loan from an
+institution — a car loan, a mortgage — has a balance and a statement to
+reconcile against, so it stays a `loan_payable` account, like a card nothing is
+spent from: a payment is a transfer into it for the principal, plus an expense
+under *Interest*. Money between you and a person has no statement, and the
+question it answers is *what does this person owe, in each currency, since
+when* — so it is a debt on the counterparty, never an account. Making a bank a
+counterparty was rejected: it puts a mortgage beside lunch money in the debt
+list and gives interest no home.
+
+**`loan_receivable` is retired for new accounts.** Money a person owes you is a
+debt on them; money an institution owes you is a `deposit` or an `investment`.
+Existing ones keep the kind, archived: the service refuses the kind on
+`create_account` and `update_account`, and `accounts_kind_not_retired` (WA021)
+refuses an *active* one on insert, on a switch to the kind, and on unarchiving
+— an archived one still inserts, because a device syncing down copies every
+row by insert. Direction is a property of the balance, not of the account it
+sits in.
+
+**Transfer, loan or gift is decided by whether the money is still yours.**
+
+| Event | Still yours? | Recorded as |
+|---|---|---|
+| Bank A → Savings | yes, in another of your accounts | a transfer |
+| Lend Nina 300 | yes, but Nina holds it | an expense with *Someone owes*: Nina, `debt` |
+| Nina repays 300 | it comes back | income (or a transfer) with `debt`, Nina |
+| A birthday gift to Nina | no, it is gone | an expense under *Gifts*, *with* Nina, no obligation |
+
+Every type can name a counterparty and carry an obligation, a transfer
+included: a repayment that lands straight in one of your accounts is a
+transfer that names who.
 
 #### Migration opportunity
 
 The counterparty names already exist in the data — as free text in the
 `content` field of loan and clearing transactions (*"‹name› total"*,
 *"coffee for ‹name›"*). Migration extracts distinct names from those rows and
-proposes a counterparty list for review. Extraction is a **suggestion**, never
+proposes a counterparty list for review. Until that review exists, the
+importer brings each person-loan account in **archived** with its balance, so
+the retired kind is never active and nothing is guessed. Extraction is a **suggestion**, never
 an automatic write: the names are inconsistent (first name, first name plus
 initial, nickname) and merging two spellings of one person silently would
 corrupt a balance.

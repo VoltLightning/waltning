@@ -173,9 +173,20 @@ async function main() {
       .where(eq(accounts.externalId, a.external_id))
       .limit(1);
 
+    const kind = toAccountKind(a.kind);
     const values = {
       name: a.name,
-      kind: toAccountKind(a.kind),
+      kind,
+      /*
+        **A person-loan account comes in archived.** Money Manager kept every
+        debt as an account per currency and direction, the names only in notes;
+        §6.6 records a debt on the person instead, and `loan_receivable` is
+        retired for active accounts (WA021). Turning one of these into debts
+        needs the names read out of prose and confirmed row by row — the import
+        system's job, not a guess made here — so until then the account keeps
+        its balance, archived, where nothing new can be written to it.
+      */
+      ...(kind === "loan_receivable" ? { archived: true } : {}),
       currency: currencyCode(a.currency),
       groupId: a.group ? (groupIds.get(a.group) ?? null) : null,
       ownership: a.ownership,

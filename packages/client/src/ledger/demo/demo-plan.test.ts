@@ -9,19 +9,26 @@
  * while the data they drew was not, which is the gap that let a register
  * redesign look finished against a list of four single-row sections.
  *
- * These assert against `ACCOUNT_KIND` rather than a written-down list of nine,
- * so a tenth kind fails here until the demo carries one.
+ * These assert against `NEW_ACCOUNT_KIND` rather than a written-down list, so
+ * a new kind fails here until the demo carries one — and a retired kind
+ * (`loan_receivable`, §6.6) fails here if the demo carries it.
  */
 
-import { ACCOUNT_KIND } from "@waltning/core/registry/inputs";
+import { NEW_ACCOUNT_KIND, RETIRED_ACCOUNT_KIND } from "@waltning/core/registry/inputs";
 import { describe, expect, it } from "vitest";
-import { DEMO_ACCOUNTS, DEMO_CATEGORIES, DEMO_PATTERNS } from "./demo-plan.ts";
+import { DEMO_ACCOUNTS, DEMO_CATEGORIES, DEMO_DEBTS, DEMO_PATTERNS } from "./demo-plan.ts";
 
 describe("the demo ledger's accounts", () => {
-  it("cover every kind", () => {
+  /** Every kind a new account can have — and none that is retired (§6.6). */
+  it("cover every kind a new account can have, and no retired one", () => {
     const present = new Set(DEMO_ACCOUNTS.map((account) => account.kind));
-    const missing = ACCOUNT_KIND.filter((kind) => !present.has(kind));
+    const missing = NEW_ACCOUNT_KIND.filter((kind) => !present.has(kind));
     expect(missing, "kinds the demo never draws").toEqual([]);
+    const retired = DEMO_ACCOUNTS.filter((account) => RETIRED_ACCOUNT_KIND.has(account.kind));
+    expect(
+      retired.map((account) => account.name),
+      "retired kinds",
+    ).toEqual([]);
   });
 
   /**
@@ -37,15 +44,21 @@ describe("the demo ledger's accounts", () => {
   });
 
   /**
-   * §6.6's two directions, and the register's money colours need both signs
-   * to be rendered at all: money owed to you reads positive, money you owe
-   * reads negative.
+   * §6.6's split: a loan from a bank is an account, reading negative while you
+   * still owe; a loan to a person is a debt on them, lent and repaid against
+   * the same counterparty.
    */
-  it("open a payable loan negative and a receivable one positive", () => {
+  it("borrow from a bank as an account and lend to a person as a debt", () => {
     const payable = DEMO_ACCOUNTS.find((a) => a.kind === "loan_payable");
-    const receivable = DEMO_ACCOUNTS.find((a) => a.kind === "loan_receivable");
-    expect(payable?.openingBalance.startsWith("-"), "money you owe").toBe(true);
-    expect(receivable?.openingBalance.startsWith("-"), "money owed to you").toBe(false);
+    expect(payable?.openingBalance.startsWith("-"), "money you owe the bank").toBe(true);
+
+    const lent = DEMO_DEBTS.filter((debt) => debt.category === "Lent out");
+    expect(lent, "a loan to a person").toHaveLength(1);
+    const repaid = DEMO_DEBTS.filter(
+      (debt) => debt.counterparty === lent[0]?.counterparty && debt.type === "income",
+    );
+    expect(repaid.length, "repaid against the same debt").toBeGreaterThan(0);
+    expect(repaid.every((debt) => debt.role === "debt")).toBe(true);
   });
 
   /**

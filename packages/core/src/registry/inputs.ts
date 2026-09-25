@@ -80,6 +80,22 @@ export const ACCOUNT_KIND = [
   "other",
 ] as const;
 
+/**
+ * §6.6 — kinds an existing account may still hold but a new one may not.
+ * Money a person owes you is a debt on that person, so `loan_receivable` is
+ * history: converted accounts keep it, archived. `accounts_kind_not_retired`
+ * (WA021) is the same rule in Postgres.
+ */
+export const RETIRED_ACCOUNT_KIND: ReadonlySet<(typeof ACCOUNT_KIND)[number]> = new Set([
+  "loan_receivable",
+]);
+
+/** The kinds a new account can be given — `ACCOUNT_KIND` less the retired ones. */
+export const NEW_ACCOUNT_KIND = ACCOUNT_KIND.filter((kind) => !RETIRED_ACCOUNT_KIND.has(kind));
+
+const RETIRED_KIND_MESSAGE =
+  "loan_receivable is retired: record money a person owes you as a debt on them (§6.6)";
+
 /** §6.7 — a shared account is ordinary; it just belongs to a different total. */
 const OWNERSHIP = ["own", "shared"] as const;
 
@@ -141,7 +157,10 @@ export const createAccountInput = z
      * `ZTYPE = 0` on all 68 accounts (§6.3), so `other` is the honest value for
      * an account nobody has classified — not a hole to be filled later.
      */
-    kind: z.enum(ACCOUNT_KIND).default("other"),
+    kind: z
+      .enum(ACCOUNT_KIND)
+      .default("other")
+      .refine((kind) => !RETIRED_ACCOUNT_KIND.has(kind), { message: RETIRED_KIND_MESSAGE }),
 
     /**
      * Required, and the reason is a trigger: §6.5 guarantees
@@ -609,7 +628,12 @@ export type CreateTransactionInput = z.output<typeof createTransactionInput>;
 const accountPatch = z
   .object({
     name: z.string().trim().min(1).max(120).optional(),
-    kind: z.enum(ACCOUNT_KIND).optional(),
+    kind: z
+      .enum(ACCOUNT_KIND)
+      .optional()
+      .refine((kind) => kind === undefined || !RETIRED_ACCOUNT_KIND.has(kind), {
+        message: RETIRED_KIND_MESSAGE,
+      }),
     groupId: zId<"accountGroups">().nullable().optional(),
     ownership: z.enum(OWNERSHIP).optional(),
     memo: z.string().trim().max(2000).optional(),

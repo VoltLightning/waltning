@@ -1837,6 +1837,9 @@ describe("phone ledger controller — transaction detail writes (C5)", () => {
       accountName: "Cash · PLN",
       toAccountId: null,
       toAccountName: null,
+      toAmount: null,
+      toCurrency: null,
+      fee: null,
       categoryId: null,
       categoryName: null,
       counterpartyId: null,
@@ -1989,6 +1992,46 @@ describe("phone ledger controller — transaction detail writes (C5)", () => {
       patch: { enteredName: "Café A · Downtown" },
     });
     expect(controller.getTransaction(TXN)?.enteredName).toBe("Café A · Downtown");
+  });
+
+  /**
+   * **Every key the card sends reaches the ledger.** The counterparty, the
+   * obligation pair and the one-off flag were missing from the forwarding, so
+   * S09 saved nothing for them and reported success.
+   */
+  it("updateTransaction forwards the counterparty, the obligation and the one-off flag", () => {
+    const { controller, updateTransaction } = detailHarness();
+    const WHO = "77777777-7777-4777-8777-777777777777";
+    controller.updateTransaction(TXN, 1, {
+      counterpartyId: WHO,
+      obligationCounterpartyId: WHO,
+      obligationRole: "debt",
+      isCapital: true,
+    });
+    expect(updateTransaction.mock.calls[0]?.[0].patch).toEqual({
+      counterpartyId: WHO,
+      obligationCounterpartyId: WHO,
+      obligationRole: "debt",
+      isCapital: true,
+    });
+  });
+
+  /** A transfer's own fields, as S09's one card sends them. */
+  it("updateTransaction forwards a transfer's destination, second leg and fee", () => {
+    const { controller, updateTransaction } = detailHarness();
+    const SAVINGS = "88888888-8888-4888-8888-888888888888";
+    controller.updateTransaction(TXN, 1, {
+      amountOriginal: "450",
+      toAccountId: SAVINGS,
+      toAmount: "450",
+      toCurrency: "PLN",
+      fee: null,
+    });
+    const patch = updateTransaction.mock.calls[0]?.[0].patch;
+    expect(Object.keys(patch ?? {}).sort()).toEqual(
+      ["amountOriginal", "fee", "toAccountId", "toAmount", "toCurrency"].sort(),
+    );
+    expect(patch?.fee, "null takes a fee off").toBeNull();
   });
 
   /**

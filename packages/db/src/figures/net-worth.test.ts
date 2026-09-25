@@ -45,16 +45,23 @@ describe("net worth — §3, in SQL", () => {
    * "loan_receivable")` from the `where` clause: this goes from `100` to
    * `160`, the receivable's opening balance counted as held money on top of
    * the cash that actually left `Wallet` to lend it.
+   *
+   * **A legacy row, written as one.** `accounts_kind_not_retired` (WA021)
+   * refuses a new active `loan_receivable`, so the only such rows are ones
+   * written before it existed — which is exactly the case this exclusion is
+   * still for. The trigger is lifted for that one insert and restored.
    */
   it("excludes a loan_receivable account from both mine and ours (§3)", async () => {
     // `is_pivot` is false — the first test already claimed the one pivot
     // slot (`currencies_one_pivot`) in this shared scratch database.
     await scratch.sql.unsafe(`
       INSERT INTO currencies (code, name, decimals, is_pivot) VALUES ('USD','US Dollar',2,false);
+      ALTER TABLE accounts DISABLE TRIGGER accounts_kind_not_retired;
       INSERT INTO accounts (id, name, currency, kind, ownership, opening_balance)
         VALUES
           ('77777777-7777-7777-7777-777777777777','Wallet · USD','USD','cash','own',100),
           ('88888888-8888-8888-8888-888888888888','Loan to Nina','USD','loan_receivable','own',60);
+      ALTER TABLE accounts ENABLE TRIGGER accounts_kind_not_retired;
     `);
     const rows = await netWorth(scratch.db);
     expect(rows).toEqual(

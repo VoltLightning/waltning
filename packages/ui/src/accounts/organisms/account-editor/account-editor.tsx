@@ -32,6 +32,7 @@ import {
   type AccountColor,
   type AccountKind,
   type CreateAccountInput,
+  RETIRED_ACCOUNT_KIND,
 } from "@waltning/core/registry/inputs";
 import { useCallback, useMemo, useState } from "react";
 import { Text, View } from "react-native";
@@ -225,9 +226,14 @@ export function AccountEditor({
     trimmed,
   ]);
 
+  // A retired kind is offered only to the account already holding it, so its
+  // current value still reads; nothing can be switched onto one (§6.6).
   const kindOptions = useMemo(
-    () => ACCOUNT_KIND.map((value) => ({ value, label: t(`accounts.${KIND_LABEL_KEY[value]}`) })),
-    [t],
+    () =>
+      ACCOUNT_KIND.filter(
+        (value) => !RETIRED_ACCOUNT_KIND.has(value) || value === account.kind,
+      ).map((value) => ({ value, label: t(`accounts.${KIND_LABEL_KEY[value]}`) })),
+    [t, account.kind],
   );
   const ownershipOptions = useMemo(
     (): readonly [{ value: Ownership; label: string }, { value: Ownership; label: string }] => [

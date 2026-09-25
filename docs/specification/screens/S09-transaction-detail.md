@@ -55,12 +55,25 @@ something no list row can.
   │ Category      [Eating out]          › │
   │ Date          6 Aug 2026            › │
   │ Paid from     Cash · PLN            › │
+  │ Amount        48.90                 › │
   │ Who           Café A                › │
   │ Payee         Café A                › │
   │ Note          —                     › │
   └───────────────────────────────────────┘
   [+ Someone owes]  [+ Business]  [+ One-off]
                                    [ Save ]  ← only once something changed
+
+  ┌ details · a transfer ─────────────────┐   ← the same card, its own rows
+  │ Date          14 Jul 2026           › │
+  │ From          Bank A · PLN          › │
+  │ To            Card A · EUR          › │
+  │ Amount        381.64                › │
+  │ Destination amount   88.34          › │   ← only when the currencies differ
+  │ Fee           —                     › │
+  │ Who           —                     › │
+  │ Note          —                     › │
+  └───────────────────────────────────────┘
+  [+ Someone owes]  [+ Business]  [+ One-off]
 
   ┌ breakdown ────────────────── optional ┐
   │ Espresso               18.90          │
@@ -249,6 +262,18 @@ actually changed, and sends only the fields that did. A detail screen with a
 save on every keystroke has no moment where the button is absent, and that
 absence is what tells a person nothing is waiting to be saved. Delete lives at the bottom, behind a
 swipe-free tap.
+
+**One card for every type — a transaction is a transaction.** Expense, income,
+adjustment and transfer open the same page and the same fields card, and every
+one has its **Amount** as a row: as stored, so unsigned except on an
+adjustment, which carries its own sign. A transfer adds what only a transfer
+has — **To**, the **Destination amount** when the two currencies differ, and
+the **Fee** — and leaves out the two rows it cannot have: a category
+(`transactions_category_shape`) and an entered name. Within one currency the
+destination follows the amount, because one currency is one figure (S31
+§7.5). It keeps *Who*, *Someone owes* and the chips: a repayment that lands in
+one of your accounts is a transfer that names the person (`SPEC.md` §6.6).
+No type is sent to another screen to be edited.
 
 ### Web
 `E` edits the focused field, `Esc` cancels, `Cmd+Z` undoes the last field

@@ -104,20 +104,12 @@ export const DEMO_ACCOUNTS: readonly DemoAccount[] = [
     openingBalance: "0.00",
   },
   /**
-   * **Both directions of a loan, as two kinds rather than one signed
-   * balance.** `loan_receivable` reads positive while somebody is repaying
-   * you; `loan_payable` reads negative while you still owe. A demo with only
-   * one of them shows half the register's money colours and none of the
-   * question S16 asks by sorting these two sections last — *what of this is
-   * not really mine?*
+   * **A loan from a bank is an account; a loan to a person is a debt.** The
+   * car loan has a statement to reconcile against, so it is `loan_payable`,
+   * reading negative while you still owe and paid down by transfer. Money
+   * lent to a friend is not here at all: it is Tomasz's debt (`DEMO_DEBTS`),
+   * because `loan_receivable` is retired (§6.6).
    */
-  {
-    ref: "loan-out",
-    name: "Lent to a friend",
-    currency: "PLN" as CurrencyCode,
-    kind: "loan_receivable",
-    openingBalance: "4000.00",
-  },
   {
     ref: "loan-in",
     name: "Car loan",
@@ -199,9 +191,10 @@ export const DEMO_CATEGORIES: readonly DemoCategory[] = [
   { name: "Shopping", kind: "expense", group: null },
   { name: "Household supplies", kind: "expense", group: "Shopping" },
 
-  // Lending and repaying, so the two loan accounts have somewhere to file
-  // their movement. `Lent out` is a real outgoing (§6.6: a receivable sits
-  // outside net worth), and `Repayment made` is what comes back the other way.
+  // Lending and repaying. `Lent out` is the outgoing that opens a debt on a
+  // person (§6.6) and `Repayment made` is paying one of yours down; a person
+  // paying theirs back is the taxonomy's own `Repayment received`, as
+  // `Borrowed` is.
   { name: "Debt & giving", kind: "expense", group: null },
   { name: "Lent out", kind: "expense", group: "Debt & giving" },
   { name: "Repayment made", kind: "expense", group: "Debt & giving" },
@@ -451,16 +444,6 @@ export const DEMO_PATTERNS: readonly DemoPattern[] = [
     amount: "620.00",
     days: [8],
   },
-  // And the friend repays you, into the account the money left from.
-  {
-    enteredName: "Repayment received",
-    category: "",
-    type: "expense",
-    account: "loan-out",
-    toAccount: "bank-a",
-    amount: "150.00",
-    days: [12],
-  },
   // The studio pays its owner, so a business account does not grow forever
   // either. Its own costs are the `card-b` software line above.
   {
@@ -524,6 +507,9 @@ export const DEMO_COUNTERPARTIES: readonly DemoCounterparty[] = [
   { ref: "by-owed", name: "Алесь", kind: "person", settlementCurrency: null },
   // And a dollar debt, so S12's totals carry a third currency.
   { ref: "us-owing", name: "John Henry", kind: "person", settlementCurrency: "USD" },
+  // A real loan to a friend, paid back monthly — lending as a debt on a
+  // person, which is how the app records it (§6.6), not an account.
+  { ref: "lent", name: "Tomasz", kind: "person", settlementCurrency: null },
 ];
 
 /**
@@ -547,6 +533,30 @@ export type DemoDebt = {
 };
 
 export const DEMO_DEBTS: readonly DemoDebt[] = [
+  // Lent to a friend: the money leaves as a debt on him, and comes back a
+  // month at a time against the same debt — 4 000 out, 750 of it repaid.
+  {
+    counterparty: "lent",
+    role: "debt",
+    account: "bank-a",
+    category: "Lent out",
+    enteredName: "Loan to Tomasz",
+    type: "expense",
+    amount: "4000.00",
+    daysAgo: 160,
+  },
+  ...[132, 102, 72, 42, 12].map(
+    (daysAgo): DemoDebt => ({
+      counterparty: "lent",
+      role: "debt",
+      account: "bank-a",
+      category: "Repayment received",
+      enteredName: "Tomasz · repayment",
+      type: "income",
+      amount: "150.00",
+      daysAgo,
+    }),
+  ),
   // They owe you: you paid, on their behalf.
   {
     counterparty: "owing",

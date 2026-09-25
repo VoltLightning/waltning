@@ -638,6 +638,11 @@ export type PhoneTransactionDetail = {
   toAccountId: Id<"accounts"> | null;
   /** Read with the row, so an archived destination keeps its name. */
   toAccountName: string | null;
+  /** A transfer's destination leg, unsigned, in `toCurrency`; `null` on every other type. */
+  toAmount: Money | null;
+  toCurrency: CurrencyCode | null;
+  /** A transfer's fee, in the source currency; `null` when there is none. */
+  fee: Money | null;
   categoryId: Id<"categories"> | null;
   categoryName: string | null;
   /** §6.6.1 — who the transaction was *with*, and the name to draw for it. */
@@ -1334,9 +1339,12 @@ export type CategorizeBatchDraft = { transactionIds: readonly string[]; category
 /**
  * What `FieldsCard` can save — every key optional, so `updateTransaction`
  * sends only what changed (the executor refuses an empty patch). Matches
- * `update_transaction`'s own patch shape, narrowed to the fields the screen
- * exposes this wave: counterparty and `is_capital` are deferred — see
- * `PhoneTransactionDetail`.
+ * `update_transaction`'s own patch shape for every field S09's card exposes.
+ *
+ * **Every key the card sends is forwarded.** The counterparty, the obligation
+ * pair and `isCapital` were typed on the card's side and missing here, so the
+ * controller dropped them without a word: a debt named on S09 was never
+ * written, and the card said nothing had gone wrong.
  */
 export type TransactionFieldPatch = {
   date?: string;
@@ -1345,6 +1353,19 @@ export type TransactionFieldPatch = {
   enteredName?: string;
   note?: string;
   isBusiness?: boolean;
+  isCapital?: boolean;
+  /** §6.6.1 — who it was *with*; `null` clears it. */
+  counterpartyId?: string | null;
+  /** §6.6 — who it *owes*, and in what role; `null` clears both. */
+  obligationCounterpartyId?: string | null;
+  obligationRole?: "debt" | "contribution" | null;
+  /** Unsigned, as `create_transaction` takes it — every type has an amount. */
+  amountOriginal?: string;
+  /** A transfer's own fields: its destination, that leg's figure, and the fee (`null` takes it off). */
+  toAccountId?: string;
+  toAmount?: string;
+  toCurrency?: string;
+  fee?: string | null;
 };
 
 /**
@@ -4067,6 +4088,17 @@ export function createPhoneLedger(
             ...(patch.enteredName !== undefined ? { enteredName: patch.enteredName } : {}),
             ...(patch.note !== undefined ? { note: patch.note } : {}),
             ...(patch.isBusiness !== undefined ? { isBusiness: patch.isBusiness } : {}),
+            ...(patch.isCapital !== undefined ? { isCapital: patch.isCapital } : {}),
+            ...("counterpartyId" in patch ? { counterpartyId: patch.counterpartyId } : {}),
+            ...("obligationCounterpartyId" in patch
+              ? { obligationCounterpartyId: patch.obligationCounterpartyId }
+              : {}),
+            ...("obligationRole" in patch ? { obligationRole: patch.obligationRole } : {}),
+            ...(patch.amountOriginal !== undefined ? { amountOriginal: patch.amountOriginal } : {}),
+            ...(patch.toAccountId !== undefined ? { toAccountId: patch.toAccountId } : {}),
+            ...(patch.toAmount !== undefined ? { toAmount: patch.toAmount } : {}),
+            ...(patch.toCurrency !== undefined ? { toCurrency: patch.toCurrency } : {}),
+            ...("fee" in patch ? { fee: patch.fee } : {}),
           },
         });
         if (!parsed.success) {
