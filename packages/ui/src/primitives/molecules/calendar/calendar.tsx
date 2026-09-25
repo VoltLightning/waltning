@@ -196,6 +196,9 @@ function Day({ date, inMonth, selected, isToday, onPick }: DayProps) {
   );
 }
 
+/** The today mark's side — a circle's radius is geometry, not the spacing scale. */
+const TODAY_MARK = 4;
+
 const useStyles = makeStyles((theme) => ({
   overlay: { flex: 1 },
   backdrop: { ...({ position: "absolute" } as const), top: 0, right: 0, bottom: 0, left: 0 },
@@ -268,9 +271,11 @@ const useStyles = makeStyles((theme) => ({
    */
   dayOutside: { color: theme.textMuted },
   todayMark: {
-    width: 4,
-    height: 4,
-    borderRadius: radius.pill,
+    width: TODAY_MARK,
+    height: TODAY_MARK,
+    // Half the side, not `radius.pill` — `day-cell.tsx`'s `dot`, for the reason
+    // given there: Android drew the day strip's 999-radius marks square.
+    borderRadius: TODAY_MARK / 2,
     backgroundColor: theme.accentIcon,
     marginTop: 2,
   },
