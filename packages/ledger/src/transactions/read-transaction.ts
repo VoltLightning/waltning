@@ -62,6 +62,15 @@ export type LocalTransactionDetail = {
   /** A transfer's destination; `null` on every other type. S09's *Pair* card (`computations.md` §6a). */
   toAccountId: Id<"accounts"> | null;
   toAccountName: string | null;
+  /**
+   * A transfer's destination leg, unsigned as stored, in `toCurrency`; `null`
+   * on every other type. S31 edits a transfer by both legs, so reading one
+   * back needs the second as well as the first.
+   */
+  toAmount: Money | null;
+  toCurrency: CurrencyCode | null;
+  /** A transfer's fee, in the source leg's currency; `null` when there is none. */
+  fee: Money | null;
   categoryId: Id<"categories"> | null;
   categoryName: string | null;
   /**
@@ -120,6 +129,8 @@ export function readTransaction<TRun, TSchema extends typeof ledgerSchema>(
       brandKey: transactions.brandKey,
       amountOriginal: transactions.amountOriginal,
       toAmount: transactions.toAmount,
+      toCurrency: transactions.toCurrency,
+      fee: transactions.fee,
       currency: transactions.currency,
       decimals: currencies.decimals,
       version: transactions.version,
@@ -156,6 +167,7 @@ export function readTransaction<TRun, TSchema extends typeof ledgerSchema>(
     ...rest,
     type,
     amount: money.signed({ type, amountOriginal, toAmount }, "from"),
+    toAmount: type === "transfer" ? toAmount : null,
     lines,
   };
 }

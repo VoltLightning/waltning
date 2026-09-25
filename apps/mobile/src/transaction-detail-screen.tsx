@@ -90,10 +90,20 @@ function toFormLevel(t: ReturnType<typeof useT>, errors: readonly FieldError[]) 
   );
 }
 
-function toFields(detail: PhoneTransactionDetail): TransactionFields {
+/** `toDecimals` is the destination account's scale — a transfer's second leg is in its own currency. */
+function toFields(detail: PhoneTransactionDetail, toDecimals: number): TransactionFields {
   return {
+    type: detail.type,
     date: detail.date,
     accountId: detail.accountId,
+    // As stored: unsigned on every type but an adjustment, whose sign is its own.
+    amount: money.round(
+      detail.type === "adjustment" ? detail.amount : money.abs(detail.amount),
+      detail.decimals,
+    ),
+    toAccountId: detail.toAccountId,
+    toAmount: detail.toAmount === null ? null : money.round(detail.toAmount, toDecimals),
+    fee: detail.fee === null ? null : money.round(detail.fee, detail.decimals),
     categoryId: detail.categoryId,
     counterpartyId: detail.counterpartyId,
     obligationCounterpartyId: detail.obligationCounterpartyId,
@@ -208,7 +218,10 @@ export default function TransactionDetail() {
    * reads `detail.accountId` until then (`effectiveAccountId`, below).
    */
   const [pickedAccountId, setPickedAccountId] = useState<string | null>(null);
-  const [accountPickerOpen, setAccountPickerOpen] = useState(false);
+  /** A transfer's destination, picked the same way — one sheet, two legs. */
+  const [pickedToAccountId, setPickedToAccountId] = useState<string | null>(null);
+  /** Which leg the one `AccountPicker` is answering for; `null` is closed. */
+  const [accountPickerFor, setAccountPickerFor] = useState<"from" | "to" | null>(null);
   /** The same rule again: `counterparties/` is a sibling domain, so its picker is composed here. */
   const [pickedCounterparty, setPickedCounterparty] = useState<{
     identity?: { id: string; name: string };
@@ -244,12 +257,17 @@ export default function TransactionDetail() {
 
   const handleOpenCategoryPicker = useCallback(() => setCategorySheetOpen(true), []);
   const handleDismissCategorySheet = useCallback(() => setCategorySheetOpen(false), []);
-  const handleOpenAccountPicker = useCallback(() => setAccountPickerOpen(true), []);
-  const handleDismissAccountPicker = useCallback(() => setAccountPickerOpen(false), []);
-  const handlePickAccount = useCallback((next: string) => {
-    setPickedAccountId(next);
-    setAccountPickerOpen(false);
-  }, []);
+  const handleOpenAccountPicker = useCallback(() => setAccountPickerFor("from"), []);
+  const handleOpenToAccountPicker = useCallback(() => setAccountPickerFor("to"), []);
+  const handleDismissAccountPicker = useCallback(() => setAccountPickerFor(null), []);
+  const handlePickAccount = useCallback(
+    (next: string) => {
+      if (accountPickerFor === "to") setPickedToAccountId(next);
+      else setPickedAccountId(next);
+      setAccountPickerFor(null);
+    },
+    [accountPickerFor],
+  );
 
   const handleOpenCounterpartyPicker = useCallback(
     (target: "identity" | "obligation") => setPickerTarget(target),
@@ -422,6 +440,7 @@ export default function TransactionDetail() {
   // The header draws the row as it is now; the fields draw the draft's base.
   const shown = live ?? detail;
   const effectiveAccountId = pickedAccountId ?? detail.accountId;
+  const effectiveToAccountId = pickedToAccountId ?? detail.toAccountId;
   // The pick until it is saved, the saved row afterwards — `accountId`'s own rule.
   // The pick until it is saved, the saved row afterwards — `accountId`'s own
   // rule, once per link. A name comes from the directory rather than the row's
@@ -478,10 +497,16 @@ export default function TransactionDetail() {
       <View style={styles.content}>
         {phone ? null : <ContextStrip cards={stripCards} column={COLUMN} />}
         <FieldsCard
-          fields={toFields(detail)}
+          fields={toFields(
+            detail,
+            snapshot.accounts.find((account) => account.id === detail.toAccountId)?.decimals ??
+              detail.decimals,
+          )}
           accounts={pickerAccounts}
           accountId={effectiveAccountId}
           onOpenAccountPicker={handleOpenAccountPicker}
+          toAccountId={effectiveToAccountId}
+          onOpenToAccountPicker={handleOpenToAccountPicker}
           today={today}
           categoryId={detail.categoryId}
           categoryName={detail.categoryName}
@@ -523,10 +548,10 @@ export default function TransactionDetail() {
         onDismiss={handleDismissCounterpartyPicker}
       />
       <AccountPicker
-        visible={accountPickerOpen}
+        visible={accountPickerFor !== null}
         accounts={pickerAccounts}
         groups={pickerGroups}
-        accountId={effectiveAccountId}
+        accountId={accountPickerFor === "to" ? effectiveToAccountId : effectiveAccountId}
         onPick={handlePickAccount}
         onCreateAccount={handleCreateAccountFromDetail}
         onDismiss={handleDismissAccountPicker}

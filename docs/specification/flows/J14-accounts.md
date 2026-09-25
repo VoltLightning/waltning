@@ -43,13 +43,16 @@ S16 Accounts
         ▸ Archive → never deleted; history references it
         ▸ Reorder → within a group
 
-   kinds: cash · bank · card · loan_receivable · loan_payable
+   kinds: cash · bank · card · loan_payable
           · clearing · investment · deposit · other
 ```
 
-`loan_receivable` and `loan_payable` survive **only for migration fidelity**.
-New debt is recorded against counterparties (J7), because direction is a
-property of the balance, not of the account it sits in (O14).
+`loan_receivable` is **retired for new accounts** (`SPEC.md` §6.6): money a
+person owes you is a debt on them (J7), so the kind is offered only to an
+account already holding it. `loan_payable` stays, for a loan from an
+institution — it has a statement to reconcile, and a payment is a transfer
+into it plus an *Interest* expense. Direction is a property of the balance,
+not of the account it sits in (O14).
 
 ## 4. Branches
 

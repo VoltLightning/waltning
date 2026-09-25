@@ -396,3 +396,23 @@ it("still selects something when no currency is capturable", () => {
   );
   expect(screen.getByText(/BYN has no exchange rate yet/)).toBeDefined();
 });
+
+/**
+ * §6.6 — money a person owes you is a debt on them, so a new account is never
+ * *Owed to you*. *You owe* stays: a bank loan is an account with a statement.
+ */
+it("offers no retired kind for a new account", () => {
+  render(
+    <CreateAccountForm
+      currencies={currencies}
+      today={TODAY}
+      groups={groups}
+      onCancel={vi.fn()}
+      onSave={vi.fn()}
+    />,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "More details" }));
+  fireEvent.click(screen.getByRole("button", { name: "Kind: Other" }));
+  expect(screen.queryByRole("radio", { name: "Owed to you" })).toBeNull();
+  expect(screen.getByRole("radio", { name: "You owe" })).toBeDefined();
+});

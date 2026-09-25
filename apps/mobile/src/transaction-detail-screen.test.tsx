@@ -163,6 +163,9 @@ const DETAIL: NonNullable<FakeDetail> = {
   accountName: "Cash · PLN",
   toAccountId: null,
   toAccountName: null,
+  toAmount: null,
+  toCurrency: null,
+  fee: null,
   categoryId: null,
   categoryName: null,
   counterpartyId: null,
@@ -191,6 +194,42 @@ beforeEach(() => {
 });
 
 describe("TransactionDetail", () => {
+  /**
+   * **A transaction is a transaction.** A transfer opens the same fields card
+   * as every other type, with its own rows in it, and saves from it: there is
+   * no second screen a transfer is sent to.
+   */
+  it("edits a transfer on the same card — its legs move together", () => {
+    const updateTransaction = vi.fn<PhoneLedgerPort["updateTransaction"]>();
+    const transfer = {
+      ...DETAIL,
+      type: "transfer" as const,
+      enteredName: "",
+      accountId: ACCOUNT_B,
+      accountName: "Bank A · PLN",
+      toAccountId: ACCOUNT,
+      toAccountName: "Cash · PLN",
+      amount: toMoney("-400.00"),
+      toAmount: toMoney("400.00"),
+      toCurrency: PLN,
+    };
+    withLedger(<TransactionDetail />, fakeController(transfer, { updateTransaction }));
+
+    expect(screen.queryByRole("button", { name: /^Category/ }), "no category").toBeNull();
+    expect(screen.getByRole("button", { name: "From: Bank A · PLN" })).toBeDefined();
+    expect(screen.getByRole("button", { name: "To: Cash · PLN" })).toBeDefined();
+
+    fireEvent.click(screen.getByRole("button", { name: "Amount: 400.00" }));
+    fireEvent.change(screen.getByLabelText("Amount"), { target: { value: "450" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(updateTransaction).toHaveBeenCalledTimes(1);
+    expect(updateTransaction.mock.calls[0]?.[0].patch).toMatchObject({
+      amountOriginal: expect.anything(),
+      toAmount: expect.anything(),
+    });
+  });
+
   it("shows the hero amount and the fields of the row it was pushed for", () => {
     withLedger(<TransactionDetail />);
     // The band says the figure; the header line it folds into only draws it,

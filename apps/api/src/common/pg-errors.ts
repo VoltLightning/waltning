@@ -86,6 +86,13 @@ export const SQLSTATE = {
    * `is_pivot` already has.
    */
   ONE_ACTIVE_LAYOUT: "WA020",
+  /**
+   * §6.6 — `loan_receivable` is retired: an active account of the kind is
+   * refused on insert, on a switch to it, and on unarchiving
+   * (`0024_account_kind_retired.sql`). Money a person owes you is a debt on
+   * them.
+   */
+  ACCOUNT_KIND_RETIRED: "WA021",
 } as const;
 
 export type GuardState = (typeof SQLSTATE)[keyof typeof SQLSTATE];
@@ -136,6 +143,7 @@ export const TRIGGER = {
    */
   LINES_CATEGORY_NOT_ARCHIVED: "transaction_lines_category_not_archived",
   ONE_ACTIVE_LAYOUT: "dashboard_layouts_exactly_one_active",
+  ACCOUNT_KIND_NOT_RETIRED: "accounts_kind_not_retired",
 } as const;
 
 /**
@@ -201,6 +209,10 @@ export const GUARDS: Record<GuardState, Guard> = {
   [SQLSTATE.ONE_ACTIVE_LAYOUT]: {
     code: "validation",
     constraint: TRIGGER.ONE_ACTIVE_LAYOUT,
+  },
+  [SQLSTATE.ACCOUNT_KIND_RETIRED]: {
+    code: "validation",
+    constraint: TRIGGER.ACCOUNT_KIND_NOT_RETIRED,
   },
 };
 

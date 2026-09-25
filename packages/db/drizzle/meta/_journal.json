@@ -169,6 +169,13 @@
       "when": 1790268835298,
       "tag": "0023_account_color",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1790268935298,
+      "tag": "0024_account_kind_retired",
+      "breakpoints": true
     }
   ]
 }

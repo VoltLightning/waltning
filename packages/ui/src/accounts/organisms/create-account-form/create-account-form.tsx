@@ -25,9 +25,9 @@
 import { isAccountingDate } from "@waltning/core/date";
 import type { CurrencyCode } from "@waltning/core/money";
 import {
-  ACCOUNT_KIND,
   type AccountKind,
   type CreateAccountInput,
+  NEW_ACCOUNT_KIND,
 } from "@waltning/core/registry/inputs";
 import { useCallback, useMemo, useState } from "react";
 import { Text, View } from "react-native";
@@ -185,9 +185,11 @@ export function CreateAccountForm({
   // contradiction in the first place, forced off rather than merely warned.
   const businessValue = ownership === "shared" ? false : isBusiness;
 
+  // The kinds a new account can have — `loan_receivable` is retired (§6.6):
+  // money a person owes you is a debt on them.
   const kindOptions = useMemo(
     () =>
-      ACCOUNT_KIND.map((value) => ({
+      NEW_ACCOUNT_KIND.map((value) => ({
         value,
         label: t(`accounts.${KIND_LABEL_KEY[value]}`),
       })),

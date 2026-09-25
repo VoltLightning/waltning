@@ -30,6 +30,15 @@ const ACCOUNTS = [
     ownership: "own" as const,
     groupId: null,
   },
+  {
+    id: "account-c",
+    name: "Card A · EUR",
+    currency: "EUR",
+    kind: "card" as const,
+    capturable: true,
+    ownership: "own" as const,
+    groupId: null,
+  },
 ];
 
 const meta = {
@@ -37,8 +46,13 @@ const meta = {
   component: FieldsCard,
   args: {
     fields: {
+      type: "expense",
       date: "2026-08-06",
       accountId: "account-a",
+      amount: "48.90",
+      toAccountId: null,
+      toAmount: null,
+      fee: null,
       categoryId: "cat-eating-out",
       counterpartyId: null,
       obligationCounterpartyId: null,
@@ -110,8 +124,13 @@ export const ChangedElsewhere: Story = {
 export const WithCounterparty: Story = {
   args: {
     fields: {
+      type: "expense",
       date: "2026-08-06",
       accountId: "account-a",
+      amount: "48.90",
+      toAccountId: null,
+      toAmount: null,
+      fee: null,
       categoryId: "cat-eating-out",
       counterpartyId: null,
       obligationCounterpartyId: "cp-nina",
@@ -123,5 +142,38 @@ export const WithCounterparty: Story = {
     },
     obligationCounterpartyId: "cp-nina",
     counterpartyName: "Nina",
+  },
+};
+
+/**
+ * A transfer — the same card. It adds *To*, the destination figure (two
+ * currencies here) and the fee, and has no category and no entered name. It
+ * keeps the counterparty and *Someone owes*: a repayment can land straight in
+ * an account.
+ */
+export const Transfer: Story = {
+  args: {
+    fields: {
+      type: "transfer",
+      date: "2026-07-14",
+      accountId: "account-b",
+      amount: "381.64",
+      toAccountId: "account-c",
+      toAmount: "88.34",
+      fee: null,
+      categoryId: null,
+      counterpartyId: null,
+      obligationCounterpartyId: null,
+      obligationRole: null,
+      enteredName: "",
+      note: "",
+      isBusiness: false,
+      isCapital: false,
+    },
+    accountId: "account-b",
+    toAccountId: "account-c",
+    onOpenToAccountPicker: noop,
+    categoryId: null,
+    categoryName: null,
   },
 };

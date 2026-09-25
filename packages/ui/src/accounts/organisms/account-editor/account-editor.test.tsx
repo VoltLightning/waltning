@@ -412,3 +412,40 @@ it("renders a form-level refusal, such as a stale version", () => {
   const alert = screen.getByRole("alert");
   expect(alert.textContent).toContain("version: this account changed elsewhere");
 });
+
+/**
+ * §6.6 — a retired kind is offered only to the account already holding it,
+ * so its value still reads; nothing else can be switched onto one.
+ */
+it("offers a retired kind only to the account that already has it", () => {
+  const { unmount } = render(
+    <AccountEditor
+      account={account}
+      today={TODAY}
+      groups={groups}
+      onCancel={noop}
+      onSave={noop}
+      onArchive={noop}
+      onReconcile={noop}
+      onCreateGroup={noopCreateGroup}
+    />,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Kind: Bank" }));
+  expect(screen.queryByRole("radio", { name: "Owed to you" }), "not onto a bank").toBeNull();
+  unmount();
+
+  render(
+    <AccountEditor
+      account={{ ...account, kind: "loan_receivable" }}
+      today={TODAY}
+      groups={groups}
+      onCancel={noop}
+      onSave={noop}
+      onArchive={noop}
+      onReconcile={noop}
+      onCreateGroup={noopCreateGroup}
+    />,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Kind: Owed to you" }));
+  expect(screen.getByRole("radio", { name: "Owed to you" }), "its own value reads").toBeDefined();
+});

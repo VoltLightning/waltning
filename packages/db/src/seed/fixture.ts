@@ -109,19 +109,13 @@ export const ACCOUNTS: FixtureAccount[] = [
     openingBalance: "600.00",
   },
   /**
-   * **Money owed to you, and money you owe, are two kinds rather than one
-   * signed balance** — `loan_receivable` reads positive when somebody is
-   * repaying you and `loan_payable` reads negative while you still owe, and a
-   * register that draws them in one section would have to explain a sign
-   * change it has no way to caption.
+   * **A loan from a bank is an account; a loan to a person is a debt**
+   * (§6.6). The car loan has a statement to reconcile against, so it is
+   * `loan_payable`, reading negative while you still owe. Money lent to a
+   * friend is an obligation on them (`OBLIGATIONS`), not an account:
+   * `loan_receivable` is retired, and `accounts_kind_not_retired` refuses a
+   * new one.
    */
-  {
-    ref: "loan-out",
-    name: "Lent to a friend",
-    currency: currencyCode("PLN"),
-    kind: "loan_receivable",
-    openingBalance: "4000.00",
-  },
   {
     ref: "loan-in",
     name: "Car loan",
@@ -348,17 +342,6 @@ export const PATTERNS: Pattern[] = [
   // colour and its sign survive a month of use. These are the smallest
   // patterns that give the four late kinds a history.
   {
-    enteredName: "Repayment received",
-    category: "Lent out",
-    type: "expense",
-    account: "loan-out",
-    // An expense *on the receivable* — what they owe you goes down as it
-    // comes back. The money arriving in a bank account is the other leg, and
-    // this fixture writes one leg per pattern (see `Pattern`).
-    amount: "350.00",
-    days: [12],
-  },
-  {
     enteredName: "Brokerage",
     category: "Investment returns",
     type: "income",
@@ -424,7 +407,6 @@ export const MOVES: Move[] = [
   // carrying it was refused by the category-kind rule on every run, silently,
   // and the payable sat at its opening figure for the whole fixture.
   { from: "bank-a", to: "loan-in", amount: "620.00", day: 8 },
-  { from: "loan-out", to: "bank-a", amount: "150.00", day: 12 },
   // And the rest of what makes the fixture circulate rather than accumulate:
   // a savings standing order, the second card paid off, and the studio paying
   // its owner. Without these the current account climbed every month with
@@ -461,6 +443,8 @@ const COUNTERPARTIES: FixtureCounterparty[] = [
   // `counterparties_name_uq`'s fold most needs to hold for.
   { ref: "de-owing", name: "Jürgen Platzhalter", kind: "person" },
   { ref: "by-owed", name: "Алесь Заменнік", kind: "person" },
+  // Lent to, and paying it back — lending as a debt on a person (§6.6).
+  { ref: "lent", name: "Tomasz Placeholder", kind: "person" },
 ];
 
 /**
@@ -489,6 +473,30 @@ type FixtureObligation = {
 };
 
 export const OBLIGATIONS: FixtureObligation[] = [
+  // Lent to a friend: the money leaves as a debt on him and comes back against
+  // the same debt, under the taxonomy's `Repayment received`.
+  {
+    counterparty: "lent",
+    role: "debt",
+    account: "bank-a",
+    category: "Lent out",
+    enteredName: "Loan · Tomasz",
+    type: "expense",
+    amount: "4000.00",
+    daysAgo: 160,
+  },
+  ...[132, 102, 72, 42, 12].map(
+    (daysAgo): FixtureObligation => ({
+      counterparty: "lent",
+      role: "debt",
+      account: "bank-a",
+      category: "Repayment received",
+      enteredName: "Tomasz · repayment",
+      type: "income",
+      amount: "350.00",
+      daysAgo,
+    }),
+  ),
   // They owe you — you paid, on their behalf.
   {
     counterparty: "owing",

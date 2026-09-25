@@ -22,7 +22,6 @@ moment of entry rather than in a report months later.
 |---|---|---|
 | Any tab | `+` long-press → Transfer | The tab you came from |
 | S16 | An account row → *Transfer from here* | S16, source prefilled |
-| S09 | Editing an existing transfer | S09 |
 
 **Quick add's kind menu offers Expense and Income only** (S05 §9.1). A transfer
 is two accounts, two amounts and a live rate; the one entry point that offers

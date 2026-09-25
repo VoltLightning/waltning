@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { FieldsCard, type TransactionFields } from "./fields-card";
 
 const ACCOUNTS = [
@@ -26,8 +26,13 @@ const ACCOUNTS = [
 ];
 
 const FIELDS: TransactionFields = {
+  type: "expense",
   date: "2026-08-06",
   accountId: "account-a",
+  amount: "48.90",
+  toAccountId: null,
+  toAmount: null,
+  fee: null,
   categoryId: "cat-eating-out",
   counterpartyId: null,
   obligationCounterpartyId: null,
@@ -187,4 +192,113 @@ it("sends the one-off flag, which is off until it is turned on here", () => {
   fireEvent.click(toggle);
   fireEvent.click(screen.getByRole("button", { name: "Save" }));
   expect(onSave).toHaveBeenCalledWith({ isCapital: true });
+});
+
+/** One card for every type: an expense's amount is a row like any other field. */
+it("edits an expense's amount, unsigned, and sends only that", () => {
+  const { onSave } = renderCard();
+  fireEvent.click(screen.getByRole("button", { name: "Amount: 48.90" }));
+  fireEvent.change(screen.getByLabelText("Amount"), { target: { value: "52.10" } });
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
+  expect(onSave).toHaveBeenCalledWith({ amountOriginal: "52.10" });
+});
+
+it("counts 48.9 and 48.90 as the same amount — nothing to save", () => {
+  renderCard();
+  fireEvent.click(screen.getByRole("button", { name: "Amount: 48.90" }));
+  fireEvent.change(screen.getByLabelText("Amount"), { target: { value: "48.9" } });
+  expect(screen.queryByRole("button", { name: "Save" })).toBeNull();
+});
+
+describe("a transfer — the same card, with a transfer's own rows", () => {
+  const EUR_CARD = {
+    id: "account-c",
+    name: "Card A · EUR",
+    currency: "EUR",
+    kind: "card" as const,
+    capturable: true,
+    ownership: "own" as const,
+    groupId: null,
+  };
+  const TRANSFER: TransactionFields = {
+    ...FIELDS,
+    type: "transfer",
+    accountId: "account-b",
+    amount: "400.00",
+    toAccountId: "account-a",
+    toAmount: "400.00",
+    fee: null,
+    categoryId: null,
+    enteredName: "",
+  };
+  function renderTransfer(overrides: Partial<Parameters<typeof FieldsCard>[0]> = {}) {
+    const onOpenToAccountPicker = vi.fn();
+    const rendered = renderCard({
+      fields: TRANSFER,
+      accounts: [...ACCOUNTS, EUR_CARD],
+      accountId: "account-b",
+      toAccountId: "account-a",
+      onOpenToAccountPicker,
+      categoryId: null,
+      categoryName: null,
+      ...overrides,
+    });
+    return { ...rendered, onOpenToAccountPicker };
+  }
+
+  it("names both legs and the amount, and has no category or entered name", () => {
+    renderTransfer();
+    expect(screen.getByRole("button", { name: "From: Bank A · PLN" })).toBeDefined();
+    expect(screen.getByRole("button", { name: "To: Cash · PLN" })).toBeDefined();
+    expect(screen.getByRole("button", { name: "Amount: 400.00" })).toBeDefined();
+    expect(screen.getByRole("button", { name: "Fee" })).toBeDefined();
+    expect(screen.queryByRole("button", { name: /^Category/ }), "no category").toBeNull();
+    expect(screen.queryByRole("button", { name: /^Payee/ }), "no entered name").toBeNull();
+    // One currency, one figure: no second amount to state.
+    expect(screen.queryByRole("button", { name: /^Destination amount/ })).toBeNull();
+  });
+
+  it("keeps who it was with and who owes — a repayment can land in an account", () => {
+    renderTransfer();
+    expect(screen.getByRole("button", { name: "Counterparty" })).toBeDefined();
+    expect(screen.getByRole("button", { name: "Someone owes" })).toBeDefined();
+  });
+
+  it("opens the destination through the screen's own picker", () => {
+    const { onOpenToAccountPicker } = renderTransfer();
+    fireEvent.click(screen.getByRole("button", { name: "To: Cash · PLN" }));
+    expect(onOpenToAccountPicker).toHaveBeenCalledTimes(1);
+  });
+
+  it("moves both legs together within one currency", () => {
+    const { onSave } = renderTransfer();
+    fireEvent.click(screen.getByRole("button", { name: "Amount: 400.00" }));
+    fireEvent.change(screen.getByLabelText("Amount"), { target: { value: "450" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(onSave).toHaveBeenCalledWith({ amountOriginal: "450", toAmount: "450" });
+  });
+
+  it("asks for the destination figure once the currencies differ, and sends its currency", () => {
+    const { onSave } = renderTransfer({ toAccountId: "account-c" });
+    fireEvent.click(screen.getByRole("button", { name: /^Destination amount/ }));
+    fireEvent.change(screen.getByLabelText("Destination amount"), {
+      target: { value: "93.20" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(onSave).toHaveBeenCalledWith({
+      toAccountId: "account-c",
+      toCurrency: "EUR",
+      toAmount: "93.20",
+    });
+  });
+
+  it("adds a fee, and a typed 0 is no fee", () => {
+    const { onSave } = renderTransfer();
+    fireEvent.click(screen.getByRole("button", { name: "Fee" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Fee" }), { target: { value: "0" } });
+    expect(screen.queryByRole("button", { name: "Save" }), "0 is nothing").toBeNull();
+    fireEvent.change(screen.getByRole("textbox", { name: "Fee" }), { target: { value: "2.50" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(onSave).toHaveBeenCalledWith({ fee: "2.50" });
+  });
 });
