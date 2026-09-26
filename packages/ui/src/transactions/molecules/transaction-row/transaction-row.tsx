@@ -202,7 +202,7 @@ const useStyles = makeStyles((theme) => ({
    * put a hairline under the *last* row of every list — a rule dangling in a
    * card's bottom padding, under nothing. A separator is a property of the gap
    * between two rows, so it belongs to whatever knows there is a next one, and
-   * that is `<TransactionList>`.
+   * that is the list drawing the rows (`DayGroup`'s surface, a card's rows).
    */
   row: {
     flexDirection: "row",

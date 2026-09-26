@@ -382,7 +382,7 @@ describe("TabsShell", () => {
   /**
    * **M-1.** Which held currency it falls back to is a decision, and the
    * decision is the ledger's own order — `design-system/05` row 12's rule for
-   * `CurrencyTotals`, which the hero now shares. Ranking by magnitude would
+   * a multi-currency figure, which the hero follows. Ranking by magnitude would
    * lead with the `EUR` card here, and that comparison cannot be made: the
    * band has no rate between `CHF` and `EUR`, or the display currency would
    * have been honoured in the first place.

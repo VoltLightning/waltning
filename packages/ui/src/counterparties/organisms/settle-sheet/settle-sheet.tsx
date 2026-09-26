@@ -27,7 +27,8 @@
  * mockup): `amount` (what changed hands, in the "Into"/"From" account's own
  * currency) and `dischargesAmount` (how much of the picked balance this
  * clears, in its own currency) are the two facts a person enters — this
- * sheet follows `TransferAmount`'s own shape, two amounts, one derived rate.
+ * sheet follows `design-system/04` §4.3's transfer shape: two amounts, one
+ * derived rate.
  * The residual shown is **always an estimate, before commit** (§5) — the real
  * remainder is `settleDebt`'s own return (H9), computed server-side or by the
  * local executor from live data, never from this sheet's stale snapshot.
@@ -208,10 +209,9 @@ export function SettleSheet({
   const amount = money.toMoney(amountRaw === "" ? "0" : amountRaw.replace(",", "."));
 
   // §6 — the rate two typed amounts imply, never an input. Zero divides by
-  // zero, so an empty discharge has no rate yet, same rule `TransferAmount`
-  // states for a zero source leg. `Money`, not `PivotPerUnit`: this is a
-  // figure for `RateField` to *display*, the same way `TransferAmount`'s own
-  // `realized` is `toMoney`'d rather than branded for conversion arithmetic.
+  // zero, so an empty discharge has no rate yet (§4.3's rule for a zero
+  // source leg). `Money`, not `PivotPerUnit`: this is a figure for
+  // `RateField` to *display*, not one branded for conversion arithmetic.
   const realizedRate = money.isZero(dischargesAmount)
     ? money.ZERO
     : money.toMoney(money.dec(amount).dividedBy(dischargesAmount));

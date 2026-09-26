@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { currencyCode, toMoney } from "@waltning/core/money";
 import { expect, it, vi } from "vitest";
 import { I18nProvider } from "../../../i18n/provider";
@@ -23,53 +23,32 @@ const BASE: LedgerEntry = {
   brandKey: null,
 };
 
-function draw(row: LedgerEntry, handlers: Partial<Parameters<typeof LedgerRowItem>[0]> = {}) {
-  return render(
+function draw(row: LedgerEntry, onPress = vi.fn()) {
+  render(
     <ThemeProvider theme={light}>
       <I18nProvider>
-        <LedgerRowItem
-          row={row}
-          onPress={vi.fn()}
-          onShortSwipe={vi.fn()}
-          onLongSwipe={vi.fn()}
-          {...handlers}
-        />
+        <LedgerRowItem row={row} onPress={onPress} />
       </I18nProvider>
     </ThemeProvider>,
   );
+  return onPress;
 }
 
-it("draws the row's figure, whatever wrapper it ends up in", () => {
-  draw(BASE);
-  expect(screen.getByRole("button", { name: /96/ })).toBeTruthy();
+it("draws the row and answers a tap with its own id", () => {
+  const onPress = draw(BASE);
+  fireEvent.click(screen.getByRole("button", { name: /Market B/ }));
+  expect(onPress).toHaveBeenCalledWith("t1");
 });
 
-it("wraps a categorisable row so the swipe has somewhere to land", () => {
-  const { container } = draw(BASE);
-  const swipeable = container.querySelectorAll("[data-testid], div");
-  expect(swipeable.length).toBeGreaterThan(0);
-  expect(screen.getByRole("button", { name: /Market B/ })).toBeTruthy();
-});
-
-it("leaves a transfer tap-only, because it has no category to choose", () => {
-  // `transactions_category_shape`: a transfer moves money between your own
-  // accounts and has no category, so a swipe would open a sheet with nothing
-  // in it — worse than no swipe, because it teaches that swiping does nothing.
-  const transfer: LedgerEntry = {
+it("draws a transfer as one row naming both accounts", () => {
+  draw({
     ...BASE,
+    id: "t2",
     type: "transfer",
     toAccountName: "Bank B",
     toAmount: toMoney("96.00"),
     toCurrency: currencyCode("PLN"),
     toDecimals: 2,
-  };
-  const onShortSwipe = vi.fn();
-  draw(transfer, { onShortSwipe });
-  expect(onShortSwipe).not.toHaveBeenCalled();
-});
-
-it("stays tap-only when a list offers no swipe at all", () => {
-  // A half-wired SwipeableRow would answer one gesture and swallow the other.
-  draw(BASE, { onShortSwipe: undefined, onLongSwipe: undefined });
-  expect(screen.getByRole("button", { name: /Market B/ })).toBeTruthy();
+  });
+  expect(screen.getAllByText(/Bank B/).length).toBeGreaterThan(0);
 });

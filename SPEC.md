@@ -3934,7 +3934,7 @@ circumstances before it is relied on.
 | Scan | Camera, queue status, extraction review |
 | **Calendar** | Day / week / month / year, with both continuous scroll and stepped paging (§14.4) |
 | **Debt** | Counterparties, per-currency balances, settle flow (§6.6) |
-| Transactions | Search, filter, infinite list, swipe to edit |
+| Transactions | Search, filter, infinite list; a row opens its detail on a tap |
 | Transaction detail | Full edit, receipt view, line splits, audit history |
 | Accounts | Register, balances, archive toggle |
 | Transfer | Two accounts, two amounts; live rate shown, editable inline (§7.5) |
