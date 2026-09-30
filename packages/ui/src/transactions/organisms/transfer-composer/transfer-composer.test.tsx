@@ -78,7 +78,7 @@ function draw(overrides: Partial<TransferComposerProps> = {}) {
 }
 
 const textOf = (wanted: string) =>
-  screen.getByText((_, element) => element?.textContent === wanted);
+  screen.getByText((_, element) => element?.textContent?.replaceAll("\u00a0", " ") === wanted);
 
 it("draws the two legs as rows with their balances, and the amount over them", () => {
   draw();

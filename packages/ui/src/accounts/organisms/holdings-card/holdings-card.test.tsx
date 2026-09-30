@@ -146,4 +146,35 @@ describe("HoldingsCard", () => {
     fireEvent.click(screen.getByText("Bank A"));
     expect(onOpenAccount).toHaveBeenCalledWith("a1");
   });
+  /**
+   * The tester could open Accounts only from the small count; the title and
+   * the figure — what the eye lands on — did nothing.
+   */
+  it("opens Accounts from the title and from the figure, not only the count", () => {
+    const onOpenAccounts = vi.fn();
+    render(<HoldingsCard {...props({ onOpenAccounts })} />);
+    fireEvent.click(screen.getByText("What you hold"));
+    fireEvent.click(screen.getByText("440.00"));
+    fireEvent.click(screen.getByText("3 accounts"));
+    expect(onOpenAccounts).toHaveBeenCalledTimes(3);
+    expect(onOpenAccounts).toHaveBeenCalledWith("kind");
+  });
+
+  /** The disclosure stays its own control: folding the card away is not a navigation. */
+  it("keeps the disclosure separate from the door to Accounts", () => {
+    const onOpenAccounts = vi.fn();
+    render(<HoldingsCard {...props({ onOpenAccounts })} />);
+    fireEvent.click(screen.getByRole("button", { name: "Break it down" }));
+    expect(onOpenAccounts).not.toHaveBeenCalled();
+  });
+
+  /** *held ·* and *owed* are separate parts: a narrow card breaks between them, never inside one. */
+  it("keeps each figure with the word that names it", () => {
+    render(<HoldingsCard {...props()} />);
+    const held = screen.getByText("held").parentElement;
+    const owed = screen.getByText("owed").parentElement;
+    expect(held).not.toBe(owed);
+    expect(held?.textContent).toContain("480.00");
+    expect(owed?.textContent).toContain("40.00");
+  });
 });

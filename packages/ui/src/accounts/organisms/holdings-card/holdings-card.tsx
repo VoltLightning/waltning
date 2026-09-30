@@ -27,7 +27,7 @@
 
 import * as money from "@waltning/core/money";
 import type { AccountColor, AccountKind } from "@waltning/core/registry/inputs";
-import { useCallback, useMemo, useState } from "react";
+import { type ReactNode, useCallback, useMemo, useState } from "react";
 import { Text, View } from "react-native";
 import { Amount } from "../../../fx/atoms/amount/amount";
 import { useT } from "../../../i18n/provider";
@@ -206,32 +206,52 @@ export function HoldingsCard({
         beneath it names its own in ink — two cards on one screen titling their
         figures in two different tones read as two different kinds of card.
       */}
-      <View style={styles.header}>
-        <Text style={styles.title}>
-          {ours === null ? t("accounts.holdingsTitle") : t("accounts.holdingsTitleMine")}
-        </Text>
-        <CountLink label={countLabel} onPress={handleOpenKind} />
-      </View>
+      {/*
+        **The header row and the hero figure are one door to S16.** The count
+        alone was the target, and a reader pressing the figure or the title —
+        the two things the eye lands on — got nothing.
+      */}
+      <Opener onPress={handleOpenKind}>
+        <View style={styles.header}>
+          <Text style={styles.title}>
+            {ours === null ? t("accounts.holdingsTitle") : t("accounts.holdingsTitleMine")}
+          </Text>
+          <View style={styles.countLink}>
+            <Text style={styles.muted}>{countLabel}</Text>
+            <View style={[styles.chevron, styles.chevronRight]} />
+          </View>
+        </View>
+        <Amount value={mine} currency={currency} decimals={decimals} size="medium" fit />
+      </Opener>
       <View style={styles.figures}>
-        <Amount value={mine} currency={currency} decimals={decimals} size="medium" />
         {ours === null ? null : (
           <View style={styles.line}>
-            <Text style={styles.muted}>{t("shell.ours")}</Text>
-            <Amount
-              value={ours}
-              currency={currency}
-              decimals={decimals}
-              size="small"
-              emphasis="muted"
-            />
+            <View style={styles.part}>
+              <Text style={styles.muted}>{t("shell.ours")}</Text>
+              <Amount
+                value={ours}
+                currency={currency}
+                decimals={decimals}
+                size="small"
+                emphasis="muted"
+              />
+            </View>
           </View>
         )}
+        {/*
+          **Wraps between its parts, never inside one.** Each part is a figure
+          and its label in a row that does not wrap, so a narrow card breaks
+          after *held ·* and not between a figure and the word that says what
+          it is.
+        */}
         <View style={styles.line}>
-          <Amount value={held} currency={currency} decimals={decimals} size="small" />
-          <Text style={styles.soft}>{t("accounts.held")}</Text>
+          <View style={styles.part}>
+            <Amount value={held} currency={currency} decimals={decimals} size="small" />
+            <Text style={styles.soft}>{t("accounts.held")}</Text>
+            {money.isPositive(owed) ? <Text style={styles.soft}>·</Text> : null}
+          </View>
           {money.isPositive(owed) ? (
-            <>
-              <Text style={styles.soft}>·</Text>
+            <View style={styles.part}>
               <Amount
                 value={owed}
                 currency={currency}
@@ -240,7 +260,7 @@ export function HoldingsCard({
                 kind="spend"
               />
               <Text style={styles.soft}>{t("accounts.owed")}</Text>
-            </>
+            </View>
           ) : null}
         </View>
       </View>
@@ -386,19 +406,18 @@ function AccountRow({
   );
 }
 
-/** The header's door to S16 — the count is what it opens. */
-function CountLink({ label, onPress }: { label: string; onPress: () => void }) {
+/** The card's door to S16 — its header row and its figure, as one target. */
+function Opener({ onPress, children }: { onPress: () => void; children: ReactNode }) {
   const styles = useStyles();
   const { hovered, focused, handlers } = useInteraction();
   return (
     <PressableScaled
       accessibilityRole="link"
       onPress={onPress}
-      style={[styles.countLink, hovered ? styles.hovered : null, focused ? styles.focused : null]}
+      style={[styles.opener, hovered ? styles.hovered : null, focused ? styles.focused : null]}
       {...handlers}
     >
-      <Text style={styles.muted}>{label}</Text>
-      <View style={[styles.chevron, styles.chevronRight]} />
+      {children}
     </PressableScaled>
   );
 }
@@ -527,14 +546,15 @@ const useStyles = makeStyles((theme) => ({
     borderTopColor: theme.border,
   },
   toggleLabel: { color: theme.accentText, ...text.ui("label", 600) },
+  opener: { gap: space.xs, borderRadius: radius.xs },
   countLink: {
     minHeight: touchTarget.min,
     flexDirection: "row",
     alignItems: "center",
     gap: space.sm,
     paddingHorizontal: space.xs,
-    borderRadius: radius.xs,
   },
+  part: { flexDirection: "row", alignItems: "baseline", gap: space.xs },
   hovered: { backgroundColor: theme.hoverFill },
   focused: {
     outlineWidth: focus.width,

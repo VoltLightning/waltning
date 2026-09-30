@@ -24,7 +24,7 @@ shows today is the list that shows every day before it.
 | Push notification | Unsettled clearing, failed backup | The thing it names |
 
 **Exits** — `+` → S05 · Scan → S07a · say-a-transaction → S05 in voice mode ·
-a row → S09 · *What you hold*'s count → S16, and a breakdown row → S16 on that row's lens · unsettled banner → J8 allocation ·
+a row → S09 · *What you hold*'s header row and its figure → S16 (one target, not the count alone), and a breakdown row → S16 on that row's lens · unsettled banner → J8 allocation ·
 tab bar → S16, S12, S30.
 
 **S04 has no *show all*, and the tab bar has no Ledger or Calendar tab.**
@@ -486,6 +486,11 @@ count one currency, the *lead* — the first of the net-worth rows — and a
 ledger whose lead was the card's euros drew a year of spend and not one bar
 of income, because the salary was in złoty.
 
+**One page, one currency.** The chart's year net, its bars and every row are
+the pivot's figures, and the year net carries the pivot's mark — never the
+lead's. A ledger whose pivot is dollars over a złoty first account reads
+`+4 161,23 $` over rows in `$`.
+
 **Empty means nothing happened.** A month whose rows could not be converted —
 none, when every row carries its rate — keeps its slot at zero height and its
 row says *+1 other currency*; the year's own total carries the same note.
@@ -556,7 +561,7 @@ happened*.
 | `SearchField` | The search itself, pinned under `PageTabs` while one is on, with the live match count and an `✕` that **leaves the search** — it empties the field and closes it in one press, because this field is pinned open and the ✕ is the only way back to an unnarrowed ledger. It is therefore offered whether or not anything is typed, which is the opposite of the clear control's own rule elsewhere (`03` §3.7: a clear button on an empty field is a target with nothing to do). Drawn inline — no border, no fill — on a band that is already a surface. **Under the tabs, not in the header**: the header's shape is a function of the scroll — the title travels, scales and hands its room to a stepper — so a field placed there would either inherit the collapse or fight it, and the period would leave the screen exactly when §7 wants the reader stepping through periods. It stays open for as long as the search is on, which is what says the screen is narrowed |
 | `Pager` | The four pages, swiped or tapped between, over one shared date |
 | `GatewayGrid` | Summary's *Go to* — rows on the ground, two across, each with a figure. Not cards: a card groups rows or holds a hero, and a single destination is neither. Only destinations neither the tab bar **nor the shared bar** carries, which is why Accounts, Debt and the agent are absent from it |
-| `HoldingsCard` | The hero, over `holdings()` (`computations.md` §3.1). Title and account count on one line (the count → S16; *9 of 10 accounts* when one has no rate), the total at display size, a *held · owed* line, the lens's composition bar, and *Break it down*. Open, a `SegmentControl` (*By kind* · *By currency* · *By account*) and rows — swatch, name, count, figure, chevron → S16 on that lens, or an account's own transactions — then, by kind, *Loans · outside the total*. Labelled *mine* only where *ours* is drawn under the figure; otherwise *What you hold* (§6.7). Renders above the error branch, so a failed refresh keeps it (§6) |
+| `HoldingsCard` | The hero, over `holdings()` (`computations.md` §3.1). Title and account count on one line (*9 of 10 accounts* when one has no rate), the total at display size — **the header row and the total are one press target → S16**, with the row's hit area, while *Break it down* stays its own control — and the total is `fit`: one line at any length, shrinking rather than wrapping (`04` §4.1). A *held · owed* line whose two parts (each a figure and its word) wrap between them and never inside one, the lens's composition bar, and *Break it down*. Open, a `SegmentControl` (*By kind* · *By currency* · *By account*) and rows — swatch, name, count, figure, chevron → S16 on that lens, or an account's own transactions — then, by kind, *Loans · outside the total*. Labelled *mine* only where *ours* is drawn under the figure; otherwise *What you hold* (§6.7). Renders above the error branch, so a failed refresh keeps it (§6) |
 | `MonthSummary` | The compact card under the hero, opening month only. Label and signed figure on one line, a `FlowBar`, then the labelled pair. Every currency, in the pivot, each transaction at its own rate — the same fold as that month's Months row, so the two cannot disagree. Draws three zeroes for a period the ledger did not exist in — that is the true answer, not an empty state. **The three labels are a prop**, defaulting to this screen's: S12 §3 holds debt's subtraction in the same card, and a second component would be the same shape twice |
 | `FlowBar` | *Came in* green on the left and *went out* red on the right, each its share of the two, meeting at a 2pt gap. A month that took in 3 000 and spent 2 000 reads 60% green. It was a red fill of spend over a track of income, which painted that month two-thirds red — a ratio of one figure to the other, where a reader sees which colour there is more of. Nothing in and nothing out is an empty neutral track |
 | `SpendRows` | *Where it went* — §6 at leaf granularity, five rows plus a named remainder, bars proportional to the largest row, one colour. Opening month only. In the pivot, each transaction at its own stored rate — the same terms as the *went out* it breaks down, so a category spent in two currencies is one bar and the bars add up to the card above them |

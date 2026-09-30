@@ -1836,6 +1836,40 @@ describe("Today — the pager, with a month in it", () => {
   });
 
   /**
+   * **One page, one currency: the year chart's header named the lead.**
+   *
+   * The twelve monthly rows and the chart's *kept* figure are sums in the
+   * pivot (`computations.md` §4), but the header was labelled with the lead
+   * currency — the first account's. A USD pivot over a PLN account read
+   * *+4 161,23 PLN* over rows in `$`.
+   */
+  it("labels the year's kept figure in the pivot the month rows are in", () => {
+    const months = open("months", `${MONTH}-09`, {
+      currencies: [
+        {
+          code: currencyCode("USD"),
+          name: "US dollar",
+          symbol: "$",
+          decimals: 2,
+          capturable: true,
+          isPivot: true,
+        },
+        {
+          code: currencyCode("PLN"),
+          name: "Polish Złoty",
+          symbol: "zł",
+          decimals: 2,
+          capturable: true,
+          isPivot: false,
+        },
+      ],
+    });
+    // The page says PLN nowhere: every figure on it is the pivot's.
+    expect(months.queryAllByText(/PLN/)).toHaveLength(0);
+    expect(months.getAllByText(/USD/).length).toBeGreaterThan(0);
+  });
+
+  /**
    * **H — the nearest month must be measured from the month, not from the
    * square the reader last touched.**
    *

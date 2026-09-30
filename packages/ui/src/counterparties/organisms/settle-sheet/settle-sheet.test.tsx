@@ -50,7 +50,8 @@ it("derives the rate from the two typed amounts and shows the reference beside i
   expect(screen.getByText("4.2810")).toBeDefined();
   expect(
     screen.getByText(
-      (_, element) => element?.textContent === "reference 4.3120 · nbp · 2026-08-10",
+      (_, element) =>
+        element?.textContent?.replaceAll("\u00a0", " ") === "reference 4.3120 · nbp · 2026-08-10",
     ),
   ).toBeDefined();
 });
@@ -64,10 +65,18 @@ it("states the realized rate's own unit — the account's currency per the disch
 
 it("states the residual before commit — the S14 worked example", () => {
   renderSheet();
-  expect(screen.getByText((_, element) => element?.textContent === "50.00 EUR")).toBeDefined();
+  expect(
+    screen.getByText(
+      (_, element) => element?.textContent?.replaceAll("\u00a0", " ") === "50.00 EUR",
+    ),
+  ).toBeDefined();
   // P5 — direction in words, never by sign alone: the magnitude, not a
   // negative figure, plus which way it runs.
-  expect(screen.getByText((_, element) => element?.textContent === "70.00 EUR")).toBeDefined();
+  expect(
+    screen.getByText(
+      (_, element) => element?.textContent?.replaceAll("\u00a0", " ") === "70.00 EUR",
+    ),
+  ).toBeDefined();
   expect(screen.getByText("you owe them")).toBeDefined();
 });
 
@@ -336,9 +345,11 @@ it("computes the residual's direction at the currency's own scale, not raw 8dp p
     dischargesRaw: "5",
     amountRaw: "5",
   });
-  expect(screen.getAllByText((_, element) => element?.textContent === "0.00 PLN")).not.toHaveLength(
-    0,
-  );
+  expect(
+    screen.getAllByText(
+      (_, element) => element?.textContent?.replaceAll("\u00a0", " ") === "0.00 PLN",
+    ),
+  ).not.toHaveLength(0);
   expect(screen.queryByText("they owe you")).toBeNull();
   expect(screen.queryByText("you owe them")).toBeNull();
 });

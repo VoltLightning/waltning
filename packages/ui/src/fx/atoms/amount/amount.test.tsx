@@ -11,7 +11,7 @@
 import { render, screen } from "@testing-library/react";
 import * as money from "@waltning/core/money";
 import { describe, expect, it } from "vitest";
-import { Amount } from "./amount";
+import { Amount, FIT_MIN_SCALE, fitScale } from "./amount";
 
 /**
  * The group separator, **as Testing Library sees it.**
@@ -113,5 +113,45 @@ describe("Amount", () => {
     const { container } = render(<Amount value={money.toMoney("100.00000000")} currency="USD" />);
     expect(container.textContent).toContain("100.00");
     expect(container.textContent).toContain("USD");
+  });
+
+  /**
+   * `€` alone on its own line, under a figure that had wrapped: the mark was
+   * joined to the figure by a plain space, which is a line-break opportunity.
+   */
+  it("joins the mark to its figure with a no-break space", () => {
+    const { container } = render(<Amount value={money.toMoney("12.50")} currency="EUR" />);
+    expect(container.textContent).toContain("12.50\u00a0EUR");
+    expect(container.textContent).not.toContain("12.50 EUR");
+  });
+
+  it("never holds a breakable space inside a twelve-digit figure", () => {
+    const { container } = render(
+      <Amount value={money.toMoney("-100000000504.20")} currency="EUR" size="hero" fit />,
+    );
+    expect(container.textContent).not.toMatch(/\d [\d,.]/);
+    expect(container.textContent).not.toMatch(/ EUR/);
+  });
+
+  describe("fitScale", () => {
+    const figure = "-100 000 000 504.20";
+    it("leaves a figure that already fits at full size", () => {
+      expect(fitScale("-504.20", "EUR", 38, 12, 300)).toBe(1);
+    });
+    it("shrinks a wide figure until it is inside the width", () => {
+      const scale = fitScale(figure, "EUR", 38, 12, 290);
+      expect(scale).toBeLessThan(0.8);
+      expect(scale).toBeGreaterThan(FIT_MIN_SCALE);
+    });
+    it("stops at the floor rather than shrinking without end", () => {
+      expect(fitScale(figure, "EUR", 38, 12, 40)).toBe(FIT_MIN_SCALE);
+    });
+    it("keeps the widest figure a twelve-digit column can hold readable at 360pt", () => {
+      const widest = "-999 999 999 999.99";
+      expect(fitScale(widest, "EUR", 38, 12, 290)).toBeGreaterThan(FIT_MIN_SCALE);
+    });
+    it("does nothing before the width is known", () => {
+      expect(fitScale(figure, "EUR", 38, 12, 0)).toBe(1);
+    });
   });
 });

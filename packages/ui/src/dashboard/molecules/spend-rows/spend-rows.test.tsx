@@ -9,6 +9,7 @@
 import { render, screen } from "@testing-library/react";
 import * as money from "@waltning/core/money";
 import { describe, expect, it } from "vitest";
+import { I18nProvider } from "../../../i18n/provider";
 import { categoryRamp } from "../../../tokens.ts";
 import { SpendRows } from "./spend-rows";
 
@@ -127,4 +128,30 @@ describe("SpendRows", () => {
     rerender(<SpendRows currency="PLN" rows={[...rows].reverse()} />);
     expect(colourOf("Row 0"), "the tint is the name's, not the row's position").toBe(first);
   });
+
+  /**
+   * A row printed `100 000 005 000.00` beside rows with a comma. Every figure
+   * goes through `<Amount>`'s decimal mark, whatever its size — pinned here at
+   * a billion and above, in each language whose mark is not a dot.
+   */
+  it.each(["de", "ru", "pl"] as const)(
+    "keeps %s's decimal comma at a billion and above",
+    (locale) => {
+      const { container } = render(
+        <I18nProvider locale={locale}>
+          <SpendRows
+            currency="EUR"
+            rows={[
+              { key: "a", label: "Big", amount: money.toMoney("100000005000") },
+              { key: "b", label: "Small", amount: money.toMoney("5000") },
+            ]}
+          />
+        </I18nProvider>,
+      );
+      const shown = container.textContent ?? "";
+      expect(shown).toContain("100 000 005 000,00");
+      expect(shown).toContain("5 000,00");
+      expect(shown).not.toMatch(/\d\.\d/);
+    },
+  );
 });

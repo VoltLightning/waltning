@@ -17,7 +17,8 @@
  */
 
 import * as money from "@waltning/core/money";
-import { Text, type TextStyle } from "react-native";
+import { useCallback, useState } from "react";
+import { type LayoutChangeEvent, Text, type TextStyle, View } from "react-native";
 import { decimalMark } from "../../../i18n/locales.ts";
 import { useLocale } from "../../../i18n/provider";
 import { text, textCap } from "../../../theme/fonts.ts";
@@ -79,7 +80,68 @@ export type AmountProps = {
    * calendar's day. Never where a reader could meet the figure alone.
    */
   bare?: boolean;
+  /**
+   * **One line, shrunk to fit the width it is given.** For a headline figure
+   * that must never break: a twelve-digit balance at `medium` is wider than a
+   * phone, and a `<Text>` that cannot fit wraps between any two digits — which
+   * is how `-100 000 0` / `00 504,20` reached a screen. The figure keeps its
+   * digits and loses point size, down to `FIT_MIN_SCALE`.
+   */
+  fit?: boolean;
 };
+
+/**
+ * The narrowest a fitted figure may get, as a share of its step. Below half a
+ * figure stops being a headline; a balance that needs less than this is wider
+ * than any column the product draws.
+ */
+export const FIT_MIN_SCALE = 0.45;
+
+/** Keeps the estimate below the truth's width: the estimate is a model, the glyphs are not. */
+const FIT_MARGIN = 0.94;
+
+/** Plex Sans digits are 600 units; the separators, sign and mark are the widths below. */
+const DIGIT_EM = 0.6;
+const NARROW_EM = 0.3;
+const SIGN_EM = 0.6;
+const MARK_EM = 0.68;
+
+/**
+ * The scale a figure needs to fit in `width`, from its text alone.
+ *
+ * **Estimated rather than measured, because the platforms disagree.** React
+ * Native's `adjustsFontSizeToFit` measures, but react-native-web ignores it, so
+ * on the web the figure would wrap as before. Digits are tabular (every digit
+ * is the same width — `fonts.test.ts`), which is what makes a width computable
+ * from the characters; the native prop is still set on top, to absorb what the
+ * model gets wrong.
+ */
+export function fitScale(
+  figure: string,
+  mark: string,
+  fontSize: number,
+  markSize: number,
+  width: number,
+): number {
+  const em = [...figure].reduce(
+    (total, char) =>
+      total + (/\d/.test(char) ? DIGIT_EM : char === "-" || char === "+" ? SIGN_EM : NARROW_EM),
+    0,
+  );
+  const markWidth = mark === "" ? 0 : (NARROW_EM + mark.length * MARK_EM) * markSize;
+  const needed = em * fontSize + markWidth;
+  if (needed <= 0 || width <= 0) return 1;
+  return Math.min(1, Math.max(FIT_MIN_SCALE, (width * FIT_MARGIN) / needed));
+}
+
+/** The step's size-bound numbers, together — a figure at half the size has half the leading. */
+function scaleStyle(step: TextStyle, scale: number): TextStyle {
+  return {
+    fontSize: (step.fontSize ?? 0) * scale,
+    ...(step.lineHeight === undefined ? {} : { lineHeight: step.lineHeight * scale }),
+    ...(step.letterSpacing === undefined ? {} : { letterSpacing: step.letterSpacing * scale }),
+  };
+}
 
 /**
  * **`text.display`, not the raw token.** This was `hero: type.displayHero`,
@@ -135,6 +197,7 @@ export function Amount({
   kind = "auto",
   signed = false,
   bare = false,
+  fit = false,
 }: AmountProps) {
   // `cmp` rather than inspecting the string: `-0.00000000` is not a negative
   // balance, and `startsWith("-")` says it is — showing a cleared account in
@@ -178,21 +241,55 @@ export function Amount({
           ? styles.spend
           : null;
 
-  return (
+  const [width, setWidth] = useState(0);
+  const handleLayout = useCallback((event: LayoutChangeEvent) => {
+    setWidth(Math.floor(event.nativeEvent.layout.width));
+  }, []);
+
+  const step = SIZES[size];
+  const scale =
+    fit && step.fontSize !== undefined
+      ? fitScale(`${prefix}${figure}`, bare ? "" : mark, step.fontSize, CURRENCY_SIZE, width)
+      : 1;
+  const scaled = scale === 1 ? null : scaleStyle(step, scale);
+  const fitProps = fit
+    ? { numberOfLines: 1, adjustsFontSizeToFit: true, minimumFontScale: FIT_MIN_SCALE }
+    : null;
+
+  // **A no-break space before the mark.** With a plain one the currency could
+  // wrap onto a line of its own — `€` alone under a figure — and a figure is
+  // one run: digits, separators, mark.
+  const figureText = (
     <Text
       maxFontSizeMultiplier={textCap(STEPS[size])}
-      style={[styles.base, SIZES[size], tone, emphasis === "muted" ? styles.muted : null]}
+      {...fitProps}
+      style={[styles.base, step, scaled, tone, emphasis === "muted" ? styles.muted : null]}
     >
       {prefix}
       {figure}
       {bare ? null : (
-        <Text style={[styles.currency, onShell ? styles.shellCurrency : null]}> {mark}</Text>
+        <Text style={[styles.currency, onShell ? styles.shellCurrency : null]}>
+          {`${NBSP}${mark}`}
+        </Text>
       )}
     </Text>
   );
+  // The width comes from a wrapper rather than the `<Text>`: a text measures
+  // its own content, which is the one width that cannot say what is available.
+  return fit ? (
+    <View style={styles.fit} onLayout={handleLayout}>
+      {figureText}
+    </View>
+  ) : (
+    figureText
+  );
 }
 
+const NBSP = " ";
+const CURRENCY_SIZE = text.ui("caption").fontSize ?? 12;
+
 const useStyles = makeStyles((theme) => ({
+  fit: { alignSelf: "stretch", minWidth: 0 },
   base: {
     color: theme.text,
     // The face comes with the step, from `SIZES` — §2.2 files money under the
