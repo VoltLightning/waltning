@@ -97,6 +97,23 @@ pushed, so the way back from S31 is the tab the reader came from and not an
 abandoned expense draft. An earlier band hung a two-item menu off the title,
 top-right, "out of the thumb zone" — and out of the design.
 
+**The account row is in the first view on a short phone.** The amount is typed
+on the system keyboard, which leaves a 360 × 740 pt phone about 440 pt: the name,
+the kind, the amount card, *From* and Save must all fit in it. A window under
+860 pt tall runs **compact**, decided from the window's height, in text-scale-free points (height over
+the reader's font scale), on the first frame and never from the keyboard's events — a layout that moved when the
+keyboard arrived would collapse under the thumb on every open, and a mobile
+browser's viewport shrinks instead of reporting a keyboard. Compact drops the
+amount card's *How much?* label (the input keeps it for assistive technology),
+steps the figure from `display-hero` to `display-one`, takes
+the padding in, sets the blocks 6 apart instead of 20, leaves out the *Saved on
+your phone* line, and leaves out the day under the name while the draft's day is
+today (a different day is always drawn). So *From* (*Into* on income) is on
+screen directly under the amount, before *Category*, un-errored, saying what to
+pick or what it was filled with. The currency mark beside the figure appears the
+moment an account is known, whether chosen or filled; with none it shows
+nothing.
+
 **Two rows at rest, and the rest behind one.** *From* and *Category* are the
 two choices a capture always needs, and they are drawn as rows in one card: a
 32 tile in the account's or the category's own tint, the field's name over its
@@ -131,7 +148,8 @@ drawn outside `<Amount>`.
 action and it is pressed in motion. The line above it — *Saved on your phone —
 syncs when you're back online* — is what Save means on a phone that may be
 offline (§6): the write goes to the outbox, and Save reads as done because it
-is. The label names the kind (*Save expense*, *Save income*).
+is. A compact window leaves the line out to keep the account row in view.
+The label names the kind (*Save expense*, *Save income*).
 
 ### The fourth mode — conversational capture
 
@@ -307,9 +325,9 @@ and dependent transaction intents retain their ordering through sync.
 |---|---|
 | `ComposerHeader` | The fixed band: the name, the day, the ✕. Clears the top inset itself |
 | `SegmentControl` | The kind — Expense · Income · Transfer. Transfer opens S31 |
-| `AmountCard` | *How much?* over a `TextInput` at `display-hero`, tabular lining numerals, the kind's sign in the kind's colour, the currency affix in the accent; the pace line under it |
+| `AmountCard` | *How much?* over a `TextInput` at `display-hero`, tabular lining numerals, the kind's sign in the kind's colour, the currency affix in the accent; the pace line under it. On a compact window (§3) the label is not drawn and the figure is `display-one`; the pace line stays, because it is the one thing that says what the typed figure is being weighed against |
 | `FigureInput` | The figure inside `AmountCard`, and *Leaves* and *Arrives* on S31. **Drawn as text, with a transparent input over it**: the sign, the digits and the currency are three `Text`s in one row, so they share a baseline on every platform, and the input lying over them only takes the typing. Done the other way round it failed three times on a device — a sign mounted on the first keystroke pushed every later digit sideways; an input whose width was *estimated* per character re-laid its content under each key, which is the figure jumping as it is typed; and a `Text` sign baseline-aligned to a `TextInput` sat on the baseline like an underscore on Android. The caret is drawn after the last digit — standing on the digits' baseline and as tall as they are, never centred in the row, whose box on iOS includes the line's space under the glyphs — and typing is at the end. **The input is unseen, never absent**: opacity `0.02` and a nearly clear ink, because iOS delivers no touch to a view at `0.01` or under — a figure at `0` takes its first focus from `autoFocus` and can never be tapped back into — and Android draws the default ink for a fully transparent one |
-| `ComposerRows` · `ComposerRow` | The card of choices: a 32 tinted tile, label over value, caret. *From* on an expense and *Into* on an income — the account the money leaves or lands in, named for the direction it moves — then *Category* · *More details*, which unfolds *Who* · *Date* · *Scope* · *Track money owed*. **≥44px** (Q3). The account row fills from last-used **only within a short window**, and is otherwise empty, Save refusing until one is chosen — a stale default reads as an answer rather than a question (§9) |
+| `ComposerRows` · `ComposerRow` | The card of choices: a 32 tinted tile, label over value, caret. *From* on an expense and *Into* on an income — the account the money leaves or lands in, named for the direction it moves — then *Category* · *More details*, which unfolds *Who* · *Date* · *Scope* · *Track money owed*. **≥44px** (Q3). The account row fills from last-used **only within a short window**, or — when that names nothing — from the one live account there is; with two or more it is empty, Save refusing until one is chosen — a stale default reads as an answer rather than a question (§9) |
 | `WhoPicker` | Grouped saved entries and recent names; Use text, Add via S15, and clear. Defined in `design-system/05` |
 | `CategoryChips` | This kind's four most-used categories, tinted by name, the picked one always among them |
 | `Banner` | `neutral`, under the rows, when the chosen account's currency has no rate — the refusal, and its one action, *Set a ‹CUR› rate* → S18 |
@@ -418,6 +436,18 @@ fact.
    last four hours the chip fills from it, machine-filled and carrying a trail.
    Beyond that the chip is **empty**, and Save pressed before you choose says
    so on the chip (`design-system/03` §3.10).
+
+   **Exactly one account on offer fills the row, window or no window.** A ledger
+   with one live account has no choice to make, so the row is not a question: it
+   fills, machine-filled like any other default, and a tap still opens the
+   picker. Every live account counts, rated or not: whether an account can take
+   a row today is the needs-rate banner's and Save's question, and filling a
+   pivot-currency account because its foreign neighbour lacks a rate would save
+   a foreign-currency purchase against it. The rule applies only when the
+   last-used rule names nothing; with two or more accounts the row stays empty,
+   and a guess between them is exactly the stale default the window prevents.
+   Leaving the composer asks *Discard?* only when the last-used rule filled the
+   row; the lone account is the ledger, not a guess, and is not worth a question.
 
    The ten-second target holds *within a session* — a shopping trip, an evening —
    and deliberately does not hold across a gap. A stale default is most likely
