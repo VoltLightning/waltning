@@ -107,9 +107,6 @@ export type MonthSummaryProps = {
   layout?: "hero" | "compact";
 };
 
-/** What the label beside a compact card's figure takes, and the gap after it. */
-const COMPACT_LABEL_ROOM = 120;
-
 export function MonthSummary({
   period,
   spend,
@@ -124,16 +121,19 @@ export function MonthSummary({
 }: MonthSummaryProps) {
   const t = useT();
   const styles = useStyles();
-  // The card's own content width, from the one child every layout stretches.
-  // The figures beside a label or a sibling sit in rows, where a figure cannot
-  // learn its room from itself (`Amount`'s `fitWidth`), so the card says.
-  const [width, setWidth] = useState(0);
-  const handleLayout = useCallback((event: LayoutChangeEvent) => {
-    setWidth(Math.floor(event.nativeEvent.layout.width));
+  // **Each figure in a row is given the room it actually gets**, measured off
+  // the wrapper it sits in: a row hands a child its content's width, so a
+  // figure cannot learn its room from itself (`Amount`'s `fitWidth`), and a
+  // guessed label width is wrong in every language but the one it was guessed in.
+  const [heroRoom, setHeroRoom] = useState(0);
+  const handleHeroLayout = useCallback((event: LayoutChangeEvent) => {
+    setHeroRoom(Math.floor(event.nativeEvent.layout.width));
+  }, []);
+  const [pairRoom, setPairRoom] = useState(0);
+  const handlePairLayout = useCallback((event: LayoutChangeEvent) => {
+    setPairRoom(Math.floor(event.nativeEvent.layout.width));
   }, []);
   const compact = layout === "compact";
-  const heroRoom = compact ? Math.max(0, width - COMPACT_LABEL_ROOM) : undefined;
-  const pairRoom = Math.max(0, (width - space.x3) / 2);
 
   return (
     <Card>
@@ -156,7 +156,7 @@ export function MonthSummary({
         `signed` — a kept month is a gain, and the `+` is the difference
         between "you have 3 529,82" and "you kept 3 529,82".
       */}
-      <View style={compact ? styles.compact : styles.hero} onLayout={handleLayout}>
+      <View style={compact ? styles.compact : styles.hero}>
         <Text style={styles.heroLabel}>{labels?.net ?? t("shell.keptSoFar")}</Text>
         {/*
           **`medium`, which is larger than `large`.** The size names do not
@@ -166,21 +166,34 @@ export function MonthSummary({
           draws it at 40. `medium` had zero callers before this one, which is
           what a name nobody reaches for looks like.
         */}
-        <Amount
-          value={net}
-          currency={currency}
-          decimals={decimals}
-          size={compact ? "large" : "medium"}
-          signed={signed}
-          fit
-          {...(heroRoom === undefined ? {} : { fitWidth: heroRoom })}
-        />
+        {compact ? (
+          <View style={styles.heroFigure} onLayout={handleHeroLayout}>
+            <Amount
+              value={net}
+              currency={currency}
+              decimals={decimals}
+              size="large"
+              signed={signed}
+              fit
+              fitWidth={heroRoom}
+            />
+          </View>
+        ) : (
+          <Amount
+            value={net}
+            currency={currency}
+            decimals={decimals}
+            size="medium"
+            signed={signed}
+            fit
+          />
+        )}
       </View>
 
       <FlowBar inflow={inflow} spend={spend} />
 
       <View style={styles.pair}>
-        <View style={styles.pairItem}>
+        <View style={styles.pairItem} onLayout={handlePairLayout}>
           <Text style={styles.pairLabel}>{labels?.inflow ?? t("shell.cameIn")}</Text>
           <Amount
             value={inflow}
@@ -222,9 +235,9 @@ const useStyles = makeStyles((theme) => ({
     flexDirection: "row",
     alignItems: "baseline",
     justifyContent: "space-between",
-    flexWrap: "wrap",
     gap: space.md,
   },
+  heroFigure: { flex: 1, minWidth: 0, alignItems: "flex-end" },
   /**
    * **Primary text, not muted** — the only label in this card that is. It
    * names the screen's hero figure, and a muted label over a 38pt number read
@@ -234,8 +247,8 @@ const useStyles = makeStyles((theme) => ({
    */
   heroLabel: { color: theme.text, ...text.ui("label") },
   pair: { flexDirection: "row", justifyContent: "space-between", gap: space.x3 },
-  pairItem: { gap: space.xxs },
-  pairItemEnd: { gap: space.xxs, alignItems: "flex-end" },
+  pairItem: { flex: 1, minWidth: 0, gap: space.xxs },
+  pairItemEnd: { flex: 1, minWidth: 0, gap: space.xxs, alignItems: "flex-end" },
   pairLabel: { color: theme.textMuted, ...text.ui("caption") },
   otherCurrencies: { color: theme.textMuted, ...text.ui("caption") },
 }));

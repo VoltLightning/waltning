@@ -143,6 +143,16 @@ describe("Amount", () => {
     expect(getComputedStyle(fitted.getByText(/999/)).whiteSpace).toBe("nowrap");
   });
 
+  /** A fitted figure appears once, already sized: unseen until its room is known. */
+  it("hides a fitted figure until it has a width to fit, and shows it once it does", () => {
+    const wide = money.toMoney("999999999999.99");
+    const waiting = render(<Amount value={wide} currency="EUR" fit />);
+    expect(getComputedStyle(waiting.getByText(/999/)).opacity).toBe("0");
+    waiting.unmount();
+    const sized = render(<Amount value={wide} currency="EUR" fit fitWidth={200} />);
+    expect(getComputedStyle(sized.getByText(/999/)).opacity).not.toBe("0");
+  });
+
   describe("fitScale", () => {
     const figure = "-100 000 000 504.20";
     it("leaves a figure that already fits at full size", () => {

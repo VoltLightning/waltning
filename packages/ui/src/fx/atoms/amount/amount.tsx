@@ -18,7 +18,13 @@
 
 import * as money from "@waltning/core/money";
 import { useCallback, useState } from "react";
-import { type LayoutChangeEvent, PixelRatio, Text, type TextStyle, View } from "react-native";
+import {
+  type LayoutChangeEvent,
+  Text,
+  type TextStyle,
+  useWindowDimensions,
+  View,
+} from "react-native";
 import { decimalMark } from "../../../i18n/locales.ts";
 import { useLocale } from "../../../i18n/provider";
 import { text, textCap } from "../../../theme/fonts.ts";
@@ -254,7 +260,7 @@ export function Amount({
   const step = SIZES[size];
   // What the reader's text-size setting makes of the step, capped where the
   // `<Text>` itself is capped: the estimate has to be of the glyphs drawn.
-  const userScale = Math.min(PixelRatio.getFontScale(), textCap(STEPS[size]) ?? Infinity);
+  const userScale = Math.min(useWindowDimensions().fontScale, textCap(STEPS[size]) ?? Infinity);
   const fontSize = (step.fontSize ?? 0) * userScale;
   const markSize = CURRENCY_SIZE * userScale;
   const shown = `${prefix}${figure}`;
@@ -288,7 +294,14 @@ export function Amount({
     <Text
       maxFontSizeMultiplier={textCap(STEPS[size])}
       {...fitProps}
-      style={[styles.base, step, scaled, tone, emphasis === "muted" ? styles.muted : null]}
+      style={[
+        styles.base,
+        step,
+        scaled,
+        tone,
+        emphasis === "muted" ? styles.muted : null,
+        fit && available <= 0 ? styles.unmeasured : null,
+      ]}
     >
       {prefix}
       {figure}
@@ -315,6 +328,9 @@ const CURRENCY_SIZE = text.ui("caption").fontSize ?? 12;
 
 const useStyles = makeStyles((theme) => ({
   fit: { alignSelf: "stretch", flexShrink: 1, minWidth: 0 },
+  // A fitted figure is drawn once its room is known, so it appears already
+  // sized and never snaps down from full size.
+  unmeasured: { opacity: 0 },
   base: {
     color: theme.text,
     // The face comes with the step, from `SIZES` — §2.2 files money under the

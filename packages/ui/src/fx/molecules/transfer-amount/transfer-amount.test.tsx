@@ -42,6 +42,24 @@ describe("TransferAmount", () => {
     expect(shown).not.toMatch(/\d\.\d/);
   });
 
+  /** Rounded once: 8 dp then 4 dp turned 0,07894999 into 0,0790. */
+  it.each([
+    ["100.19", "7.91", "0,0789"],
+    ["100.21", "11.93", "0,1190"],
+    ["100.37", "14.92", "0,1486"],
+  ])("rounds the realized rate of %s to %s once, to %s", (from, to, wanted) => {
+    const { container } = render(
+      <I18nProvider locale="de">
+        <TransferAmount
+          {...example}
+          from={{ ...example.from, amount: money.toMoney(from) }}
+          to={{ ...example.to, amount: money.toMoney(to) }}
+        />
+      </I18nProvider>,
+    );
+    expect(container.textContent).toContain(`realized ${wanted}`);
+  });
+
   it("shows both amounts, because a transfer has two", () => {
     // §7.2: a transfer contributes different figures to each account. A
     // component showing one cannot express that, and summing `amount_original`

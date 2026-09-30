@@ -8,6 +8,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import * as money from "@waltning/core/money";
 import { describe, expect, it, vi } from "vitest";
+import { I18nProvider } from "../../../i18n/provider";
 import { HoldingsCard, type HoldingsCardProps } from "./holdings-card";
 
 function props(overrides: Partial<HoldingsCardProps> = {}): HoldingsCardProps {
@@ -171,8 +172,8 @@ describe("HoldingsCard", () => {
   /** *held ·* and *owed* are separate parts: a narrow card breaks between them, never inside one. */
   it("keeps each figure with the word that names it", () => {
     render(<HoldingsCard {...props()} />);
-    const held = screen.getByText("held").parentElement;
-    const owed = screen.getByText("owed").parentElement;
+    const held = screen.getByText("held").parentElement?.parentElement;
+    const owed = screen.getByText("owed").parentElement?.parentElement;
     expect(held).not.toBe(owed);
     expect(held?.textContent).toContain("480.00");
     expect(owed?.textContent).toContain("40.00");
@@ -191,6 +192,18 @@ describe("HoldingsCard", () => {
     );
     for (const figure of screen.getAllByText(/999/)) {
       expect(getComputedStyle(figure).whiteSpace, figure.textContent ?? "").toBe("nowrap");
+    }
+  });
+
+  /** The label beside a figure is measured, not assumed: the longest language's still sits beside it. */
+  it("keeps the figure and its long Polish word in one part", () => {
+    render(
+      <I18nProvider locale="pl">
+        <HoldingsCard {...props({ owed: money.toMoney("999999999999.99") })} />
+      </I18nProvider>,
+    );
+    for (const figure of screen.getAllByText(/999/)) {
+      expect(getComputedStyle(figure).whiteSpace).toBe("nowrap");
     }
   });
 });

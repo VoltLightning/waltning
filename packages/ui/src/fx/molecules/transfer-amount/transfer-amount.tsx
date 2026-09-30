@@ -61,7 +61,7 @@ export function TransferAmount({ from, to, referenceRate, rateDecimals = 4 }: Tr
   const realized = zeroSource
     ? null
     : money.forDisplay(
-        money.toMoney(money.dec(to.amount).div(money.dec(from.amount))),
+        money.toMoney(money.dec(to.amount).div(money.dec(from.amount)), rateDecimals),
         rateDecimals,
         mark,
       );
@@ -89,7 +89,8 @@ export function TransferAmount({ from, to, referenceRate, rateDecimals = 4 }: Tr
       <View style={styles.rates}>
         <Text style={styles.rate}>realized {realized ?? "—"}</Text>
         <Text style={styles.rate}>
-          reference {money.forDisplay(money.toMoney(referenceRate), rateDecimals, mark)}
+          reference{" "}
+          {money.forDisplay(money.toMoney(referenceRate, rateDecimals), rateDecimals, mark)}
           {/*
             Shown only when it is not zero. A spread of 0,00 on every row trains
             people to stop reading the line, and then the one that is not zero

@@ -29,7 +29,7 @@ import * as money from "@waltning/core/money";
 import type { AccountColor, AccountKind } from "@waltning/core/registry/inputs";
 import { type ReactNode, useCallback, useMemo, useState } from "react";
 import { type LayoutChangeEvent, Text, View } from "react-native";
-import { Amount } from "../../../fx/atoms/amount/amount";
+import { Amount, type AmountKind } from "../../../fx/atoms/amount/amount";
 import { useT } from "../../../i18n/provider";
 import { PressableScaled } from "../../../primitives/atoms/pressable-scaled/pressable-scaled";
 import { SegmentControl } from "../../../primitives/atoms/segment-control/segment-control";
@@ -95,9 +95,6 @@ export type HoldingsCardProps = {
 };
 
 /** Currencies have no colour of their own; the accent, stepped down, tells them apart by lightness. */
-/** What a figure's word and the `·` take beside it, and the gap after them. */
-const PART_LABEL_ROOM = 100;
-
 const CURRENCY_STEPS = [1, 0.62, 0.36, 0.2] as const;
 
 /**
@@ -136,9 +133,9 @@ export function HoldingsCard({
 
   // The room a figure in the line under the total has — measured here, because
   // in that row a figure would only ever measure itself (`Amount`'s `fitWidth`).
-  const [room, setRoom] = useState(0);
+  const [lineWidth, setLineWidth] = useState(0);
   const handleFiguresLayout = useCallback((event: LayoutChangeEvent) => {
-    setRoom(Math.max(0, Math.floor(event.nativeEvent.layout.width) - PART_LABEL_ROOM));
+    setLineWidth(Math.floor(event.nativeEvent.layout.width));
   }, []);
 
   const handleToggle = useCallback(() => setOpen((current) => !current), []);
@@ -256,29 +253,25 @@ export function HoldingsCard({
         */}
         <View style={styles.line}>
           <View style={styles.part}>
-            <Amount
+            <FittedPart
               value={held}
               currency={currency}
               decimals={decimals}
-              size="small"
-              fit
-              fitWidth={room}
+              lineWidth={lineWidth}
+              label={t("accounts.held")}
+              dot={money.isPositive(owed)}
             />
-            <Text style={styles.soft}>{t("accounts.held")}</Text>
-            {money.isPositive(owed) ? <Text style={styles.soft}>·</Text> : null}
           </View>
           {money.isPositive(owed) ? (
             <View style={styles.part}>
-              <Amount
+              <FittedPart
                 value={owed}
                 currency={currency}
                 decimals={decimals}
-                size="small"
+                lineWidth={lineWidth}
+                label={t("accounts.owed")}
                 kind="spend"
-                fit
-                fitWidth={room}
               />
-              <Text style={styles.soft}>{t("accounts.owed")}</Text>
             </View>
           ) : null}
         </View>
@@ -422,6 +415,55 @@ function AccountRow({
       last={last}
       onPress={handlePress}
     />
+  );
+}
+
+/**
+ * A figure and the word beside it (and a dot after *held*), the figure fitted
+ * to the room the word leaves, **measured off the word**: how wide a long
+ * Polish label is depends on the language and the reader's text size.
+ */
+function FittedPart({
+  value,
+  currency,
+  decimals,
+  lineWidth,
+  label,
+  dot = false,
+  kind = "auto",
+}: {
+  value: money.Money;
+  currency: string;
+  decimals: number;
+  lineWidth: number;
+  label: string;
+  dot?: boolean;
+  kind?: AmountKind;
+}) {
+  const styles = useStyles();
+  const [tail, setTail] = useState(0);
+  const handleTailLayout = useCallback((event: LayoutChangeEvent) => {
+    setTail(Math.floor(event.nativeEvent.layout.width));
+  }, []);
+  // Zero until the word has been measured, which keeps the figure unseen
+  // rather than drawn at a size it will not keep.
+  const room = tail === 0 ? 0 : Math.max(1, lineWidth - tail - space.xs);
+  return (
+    <>
+      <Amount
+        value={value}
+        currency={currency}
+        decimals={decimals}
+        size="small"
+        kind={kind}
+        fit
+        fitWidth={room}
+      />
+      <View style={styles.tail} onLayout={handleTailLayout}>
+        <Text style={styles.soft}>{label}</Text>
+        {dot ? <Text style={styles.soft}>{"\u00b7"}</Text> : null}
+      </View>
+    </>
   );
 }
 
@@ -573,6 +615,7 @@ const useStyles = makeStyles((theme) => ({
     gap: space.sm,
     paddingHorizontal: space.xs,
   },
+  tail: { flexDirection: "row", alignItems: "baseline", gap: space.xs },
   part: { flexDirection: "row", alignItems: "baseline", gap: space.xs, flexShrink: 1, minWidth: 0 },
   hovered: { backgroundColor: theme.hoverFill },
   focused: {
