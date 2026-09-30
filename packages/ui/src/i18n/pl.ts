@@ -325,6 +325,7 @@ export const pl: Messages = {
     newLine: "Nowa pozycja",
     total: "Sumuje się do",
     linesUnbalanced: "Pozycje muszą sumować się do kwoty transakcji.",
+    lineAmountMissing: "Wpisz kwotę.",
     notFound: "Ta transakcja już nie istnieje.",
     /** S09 — the chip that opens the obligation picker when nobody is named yet. */
     someoneOwes: "Ktoś jest winien",
@@ -332,6 +333,8 @@ export const pl: Messages = {
     contextLabel: "Co to znaczy",
     contextInMonth: "{{month}} · {{times}}×",
     contextSeeAll: "Pokaż wszystko",
+    contextChange: "Zmień",
+    contextUnsaved: "Jeszcze nie zapisano",
     contextUsual: "zwykle",
     contextOneOff: "Jednorazowe — pominięte w porównaniach",
     /** §5 — another row in the card was a one-off and is not in its figures. */

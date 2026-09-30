@@ -611,6 +611,7 @@ export const en = {
     newLine: "New line",
     total: "Adds up to",
     linesUnbalanced: "The lines must add up to the transaction's total.",
+    lineAmountMissing: "Enter an amount.",
     /** §6.9: every read path filters `deleted_at` — a soft-deleted row answers this, not a crash. */
     notFound: "This transaction no longer exists.",
     /** S09 — the chip that opens the obligation picker when nobody is named yet. */
@@ -619,6 +620,8 @@ export const en = {
     contextLabel: "What this means",
     contextInMonth: "{{month}} · {{times}}×",
     contextSeeAll: "See all",
+    contextChange: "Change",
+    contextUnsaved: "Not saved yet",
     contextUsual: "usual",
     contextOneOff: "One-off — left out of comparisons",
     /** §5 — another row in the card was a one-off and is not in its figures. */

@@ -310,6 +310,7 @@ export const be: Messages = {
     newLine: "Новы радок",
     total: "У суме",
     linesUnbalanced: "Сума пазіцый павінна супадаць з сумай аперацыі.",
+    lineAmountMissing: "Увядзіце суму.",
     notFound: "Гэтай аперацыі больш няма.",
     /** S09 — the chip that opens the obligation picker when nobody is named yet. */
     someoneOwes: "Нехта вінен",
@@ -317,6 +318,8 @@ export const be: Messages = {
     contextLabel: "Што гэта значыць",
     contextInMonth: "{{month}} · {{times}}×",
     contextSeeAll: "Паказаць усё",
+    contextChange: "Змяніць",
+    contextUnsaved: "Яшчэ не захавана",
     contextUsual: "звычайна",
     contextOneOff: "Разовая — не ўлічваецца ў параўнаннях",
     /** §5 — another row in the card was a one-off and is not in its figures. */

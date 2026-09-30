@@ -37,9 +37,8 @@ import {
 import { useCallback, useMemo, useState } from "react";
 import { Text, View } from "react-native";
 import { Amount } from "../../../fx/atoms/amount/amount";
-import { AmountField } from "../../../fx/molecules/amount-field/amount-field";
+import { AmountField, formatAmountDraft } from "../../../fx/molecules/amount-field/amount-field";
 import type { Messages } from "../../../i18n/en.ts";
-import { decimalMark } from "../../../i18n/locales.ts";
 import { useLocale, useT } from "../../../i18n/provider";
 import { Button } from "../../../primitives/atoms/button/button";
 import { DateField } from "../../../primitives/atoms/date-field/date-field";
@@ -182,9 +181,7 @@ export function AccountEditor({
    * whatever the ledger handed over, so an untouched editor produces an empty
    * patch rather than a write of the presented string.
    */
-  const openingBalanceShown = money
-    .forDisplay(account.openingBalance, account.decimals, decimalMark(locale))
-    .replace(/\s/g, "");
+  const openingBalanceShown = formatAmountDraft(account.openingBalance, account.decimals, locale);
   /**
    * **Compared by value, not by spelling.** `"12.50"` typed back into a field
    * showing `"12.50"` is the same money as the stored `"12.50000000"`, and a

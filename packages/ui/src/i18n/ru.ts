@@ -312,6 +312,7 @@ export const ru: Messages = {
     newLine: "Новая строка",
     total: "В сумме",
     linesUnbalanced: "Сумма позиций должна совпадать с суммой операции.",
+    lineAmountMissing: "Введите сумму.",
     notFound: "Этой операции больше нет.",
     /** S09 — the chip that opens the obligation picker when nobody is named yet. */
     someoneOwes: "Кто-то должен",
@@ -319,6 +320,8 @@ export const ru: Messages = {
     contextLabel: "Что это значит",
     contextInMonth: "{{month}} · {{times}}×",
     contextSeeAll: "Показать все",
+    contextChange: "Изменить",
+    contextUnsaved: "Ещё не сохранено",
     contextUsual: "обычно",
     contextOneOff: "Разовая — не учитывается в сравнениях",
     /** §5 — another row in the card was a one-off and is not in its figures. */

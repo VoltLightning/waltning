@@ -152,11 +152,26 @@ export function readTransactionContext(
       counterpartyId: subject.counterpartyId,
       type: subject.type,
     };
+    const read = ledger.readContextRows(query);
+    // A subject read with a counterparty it is not yet saved under (S09: a pick
+    // is a draft until Save) is not in that counterparty's rows, and is part of
+    // what the card is about: count it, and mark its share.
+    const rows = read.some((row) => row.id === subject.id)
+      ? read
+      : [
+          ...read,
+          {
+            id: subject.id,
+            date: subject.date,
+            amountOriginal: money.abs(subject.amount),
+            isCapital: subject.isCapital,
+          },
+        ];
     cards.push({
       kind: "who",
       counterpartyId: subject.counterpartyId,
       ...figures,
-      ...byMonth(ledger.readContextRows(query), month, subject.id),
+      ...byMonth(rows, month, subject.id),
     });
   }
 
