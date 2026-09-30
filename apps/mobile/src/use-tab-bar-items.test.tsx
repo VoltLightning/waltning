@@ -26,7 +26,15 @@ vi.mock("expo-router/ui", () => ({
   }),
 }));
 
+let view: string | undefined;
+const setParams = vi.fn();
+vi.mock("expo-router", () => ({
+  router: { setParams: (params: unknown) => setParams(params) },
+  useGlobalSearchParams: () => ({ view }),
+}));
+
 const { useTabBarItems } = await import("./use-tab-bar-items");
+const { scrollToTopCount } = await import("@waltning/client/ledger/tab-back/scroll-to-top-request");
 
 describe("useTabBarItems", () => {
   it("marks exactly the focused tab active, in a fixed order", () => {
@@ -68,6 +76,29 @@ describe("useTabBarItems", () => {
     act(() => result.current.onSelect("settings"));
     expect(switchTab.settings).toHaveBeenCalledWith("settings", {});
     expect(switchTab.today).not.toHaveBeenCalled();
+  });
+
+  it("a tap on the selected Start tab returns to the overview from another page", () => {
+    focused = "today";
+    view = "list";
+    setParams.mockClear();
+    const { result } = renderHook(() => useTabBarItems());
+
+    act(() => result.current.onSelect("today"));
+    expect(setParams).toHaveBeenCalledWith({ view: "summary" });
+    expect(switchTab.today).not.toHaveBeenCalled();
+  });
+
+  it("a tap on the selected Start tab scrolls the overview to the top", () => {
+    focused = "today";
+    view = undefined;
+    setParams.mockClear();
+    const before = scrollToTopCount();
+    const { result } = renderHook(() => useTabBarItems());
+
+    act(() => result.current.onSelect("today"));
+    expect(scrollToTopCount()).toBe(before + 1);
+    expect(setParams).not.toHaveBeenCalled();
   });
 
   it("renders a distinct label for every tab", () => {

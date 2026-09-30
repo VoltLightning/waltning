@@ -101,7 +101,7 @@
  * spreads the values onto the list's own `contentContainerStyle`.
  */
 
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
 import { Text, View } from "react-native";
 import Animated, {
   useAnimatedRef,
@@ -240,6 +240,13 @@ export type GroundPanelProps = {
    * is placed in. **Read in `scroll="page"` only.**
    */
   topWash?: string;
+  /**
+   * A count that, each time it rises, scrolls the page back to its top. The
+   * shell uses it for a re-tap on the tab you are on (`S04` §2): the count is
+   * the request, so the panel needs no handle and the screen no ref.
+   * **Read in `scroll="page"` only.**
+   */
+  scrollToTopKey?: number;
 };
 
 export function GroundPanel({
@@ -248,6 +255,7 @@ export function GroundPanel({
   clearBottom = true,
   onScroll,
   topWash,
+  scrollToTopKey = 0,
 }: GroundPanelProps) {
   const styles = useStyles();
   const insets = useSafeArea();
@@ -266,6 +274,12 @@ export function GroundPanel({
   // so the hook order does not change between modes.
   const offset = useScrollViewOffset(scroll === "own" ? null : scroller);
   const edge = useAnimatedStyle(() => ({ opacity: edgeOpacity(offset.value) }), [offset]);
+  const seenTopKey = useRef(scrollToTopKey);
+  useEffect(() => {
+    if (seenTopKey.current === scrollToTopKey) return;
+    seenTopKey.current = scrollToTopKey;
+    scroller.current?.scrollTo({ y: 0, animated: true });
+  }, [scrollToTopKey, scroller]);
 
   if (scroll === "own") {
     // **No gutter and no bottom clearance here.** Both belong to the scroller

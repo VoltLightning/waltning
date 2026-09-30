@@ -31,6 +31,7 @@ import { useDisplayCurrency } from "@waltning/client/currencies/display-currency
 import { useDevicePreference } from "@waltning/client/device/use-device-preference";
 import { DEFAULT_DESK_SCOPE, parseDeskScope } from "@waltning/client/ledger/desk-scope";
 import { deviceRuntime } from "@waltning/client/ledger/device-runtime";
+import type { TabName } from "@waltning/client/ledger/tab-back/back-decision";
 import { useLeadCurrency } from "@waltning/client/ledger/use-lead-currency";
 import { useLedgerController } from "@waltning/client/ledger/use-ledger-controller";
 import { usePhoneLedger } from "@waltning/client/ledger/use-phone-ledger";
@@ -66,6 +67,7 @@ import {
   lastCapture,
   subscribeCommandBarHotkey,
 } from "./platform";
+import { useHardwareBack } from "./use-hardware-back.ts";
 import { useTabBarItems } from "./use-tab-bar-items";
 
 function handleAdd() {
@@ -451,6 +453,8 @@ export type TabsShellProps = {
 
 export function TabsShell({ slot }: TabsShellProps) {
   const breakpoint = useBreakpoint();
+  const { deskItems, onSelect } = useTabBarItems();
+  useHardwareBack(deskItems.find((item) => item.active)?.name as TabName | undefined, onSelect);
   const [barHeight, setBarHeight] = useState(0);
   const onBarLayout = useCallback((event: LayoutChangeEvent) => {
     setBarHeight(event.nativeEvent.layout.height);

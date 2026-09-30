@@ -66,6 +66,8 @@ vi.mock("expo-router", () => ({
     return currentStub.router;
   },
   useLocalSearchParams: () => currentStub?.useLocalSearchParams() ?? {},
+  useGlobalSearchParams: () => ({}),
+  useNavigation: () => ({ isFocused: () => true }),
 }));
 
 const { JourneyHarness, createJourneyLedger, createJourneyRouterStub, seedJourneyFixture } =

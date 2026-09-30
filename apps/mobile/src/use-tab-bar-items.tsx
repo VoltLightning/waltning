@@ -32,6 +32,8 @@
  * entry here in one change.
  */
 
+import { decideReselect, type TabName } from "@waltning/client/ledger/tab-back/back-decision";
+import { requestScrollToTop } from "@waltning/client/ledger/tab-back/scroll-to-top-request";
 import { useT } from "@waltning/ui/i18n/provider";
 import type { TabBarItem } from "@waltning/ui/shell/tab-bar";
 import {
@@ -43,8 +45,7 @@ import {
 } from "@waltning/ui/shell/tab-icons";
 import { useTabTrigger } from "expo-router/ui";
 import { useCallback } from "react";
-
-type TabName = "today" | "accounts" | "ledger" | "counterparties" | "settings";
+import { showStartOverview, useStartPage } from "./use-start-page.ts";
 
 export function useTabBarItems(): {
   /** The phone's bar: Home · Accounts · Debt · Settings. */
@@ -60,6 +61,7 @@ export function useTabBarItems(): {
   const counterparties = useTabTrigger({ name: "counterparties" });
   const settings = useTabTrigger({ name: "settings" });
 
+  const startPage = useStartPage();
   const todayActive = today.trigger?.isFocused ?? false;
   const accountsActive = accounts.trigger?.isFocused ?? false;
   const ledgerActive = ledger.trigger?.isFocused ?? false;
@@ -108,6 +110,21 @@ export function useTabBarItems(): {
 
   const onSelect = useCallback(
     (name: string) => {
+      const selected: Record<TabName, boolean> = {
+        today: todayActive,
+        accounts: accountsActive,
+        ledger: ledgerActive,
+        counterparties: counterpartiesActive,
+        settings: settingsActive,
+      };
+      if (selected[name as TabName]) {
+        // The tab you are on: Start returns to its overview first, and then
+        // the page scrolls to its top (`S04` §2).
+        const action = decideReselect({ tab: name as TabName, page: startPage });
+        if (action.kind === "overview") showStartOverview();
+        else requestScrollToTop();
+        return;
+      }
       const triggers: Record<TabName, (typeof today)["switchTab"]> = {
         today: today.switchTab,
         accounts: accounts.switchTab,
@@ -117,7 +134,19 @@ export function useTabBarItems(): {
       };
       triggers[name as TabName]?.(name, {});
     },
-    [today, accounts, ledger, counterparties, settings],
+    [
+      today,
+      accounts,
+      ledger,
+      counterparties,
+      settings,
+      todayActive,
+      accountsActive,
+      ledgerActive,
+      counterpartiesActive,
+      settingsActive,
+      startPage,
+    ],
   );
 
   return { items, deskItems, onSelect };
