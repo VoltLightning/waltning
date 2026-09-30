@@ -329,17 +329,31 @@ export function QuickAddComposer({
    * gone. Ordered by use, then by name so two never-used categories keep a
    * stable order between renders.
    */
+  /**
+   * **The order is the one the composer opened with.** Saving counts the
+   * picked category as used, which would float it to the front of the row in
+   * the very render that precedes the screen closing — a keyed reorder of
+   * tinted `Pressable`s inside a flattened parent, which Fabric on Android
+   * answers with "addViewAt: View already has a parent" and a white screen
+   * for a category used for the first time. A row that rearranges under the
+   * thumb that just pressed Save is no help to anyone either; the next
+   * composer opens with the new order.
+   */
+  const [usageAtOpen] = useState(
+    () => new Map(categories.map((category) => [category.id, category.usage ?? 0])),
+  );
   const chips = useMemo(() => {
+    const usageOf = (category: { id: string }) => usageAtOpen.get(category.id) ?? 0;
     const ofKind = categories
       .filter((category) => category.kind === type)
-      .sort((a, b) => (b.usage ?? 0) - (a.usage ?? 0) || a.name.localeCompare(b.name));
+      .sort((a, b) => usageOf(b) - usageOf(a) || a.name.localeCompare(b.name));
     const top = ofKind.slice(0, CHIP_COUNT);
     const picked = ofKind.find((category) => category.id === categoryId);
     if (picked !== undefined && !top.some((category) => category.id === picked.id)) {
       top.splice(CHIP_COUNT - 1, 1, picked);
     }
     return top.map(({ id, name }) => ({ id, name }));
-  }, [categories, type, categoryId]);
+  }, [categories, type, categoryId, usageAtOpen]);
 
   const pickedCounterparty = counterparties.find(
     (counterparty) => counterparty.id === obligationCounterpartyId,
