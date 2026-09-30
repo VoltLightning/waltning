@@ -95,10 +95,8 @@ export function monthLabel(month: YearMonth, locale: Locale): string {
  * For the header title and the row labels that sit beside a year of their own.
  */
 export function monthTitle(month: YearMonth, locale: Locale): string {
-  const [year, mo] = month.split("-").map(Number) as [number, number];
-  return new Intl.DateTimeFormat(locale, { month: "long", timeZone: "UTC" }).format(
-    new Date(Date.UTC(year, mo - 1, 1)),
-  );
+  const mo = Number(month.split("-")[1]);
+  return monthName(mo - 1, locale);
 }
 
 /**

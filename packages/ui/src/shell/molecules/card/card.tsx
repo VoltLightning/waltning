@@ -275,7 +275,13 @@ export function GroundPanel({
   // platforms return early in the observing effect — and the hook still runs,
   // so the hook order does not change between modes.
   const offset = useScrollViewOffset(scroll === "own" ? null : scroller);
-  const edge = useAnimatedStyle(() => ({ opacity: edgeOpacity(offset.value) }), [offset]);
+  const edge = useAnimatedStyle(
+    // Under a collapsing header the first `collapseInset` points of offset are
+    // the header's own room leaving; the content only passes under the chrome
+    // after that, and a hairline drawn earlier shows as two stray corner arcs.
+    () => ({ opacity: edgeOpacity(offset.value - collapseInset) }),
+    [offset, collapseInset],
+  );
   const seenTopKey = useRef(scrollToTopKey);
   useEffect(() => {
     if (seenTopKey.current === scrollToTopKey) return;

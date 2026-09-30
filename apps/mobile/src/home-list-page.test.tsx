@@ -469,6 +469,31 @@ it("floats over the rows, not over the strip above them", () => {
 });
 
 /**
+ * At rest the strip is drawn the header's travel lower than its box, over the
+ * top of the list's. The pill floats over that same top, so it has to be drawn
+ * as much lower, or the strip covers it and takes its taps.
+ */
+it("draws the pill as far down as the strip, so it never sits under it", () => {
+  draw(ledgerWith([row("2021-03-02", 1, "-96")]), vi.fn(), {
+    anchor: accountingDate("2021-03-02"),
+    inset: COLLAPSE_TRAVEL,
+  });
+  const shift = (el: HTMLElement): string => {
+    let node: HTMLElement | null = el;
+    let found = "";
+    while (node !== null) {
+      if (node.style.transform.includes("translateY")) found = node.style.transform;
+      node = node.parentElement;
+    }
+    return found;
+  };
+  const pill = shift(screen.getByRole("button", { name: /Back to today/ }));
+  const strip = shift(screen.getByRole("button", { name: /March 2, 2021, 1 entry/ }));
+  expect(strip).toBe(`translateY(${COLLAPSE_TRAVEL}px)`);
+  expect(pill).toBe(strip);
+});
+
+/**
  * **A search that matched nothing is not a ledger with nothing in it** (S04 §6,
  * *Empty · filtered*: "Never the first-run wording: the ledger holds rows, this
  * filter does not"). Nor is it a statement about the anchor: the anchor is

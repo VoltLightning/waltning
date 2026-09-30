@@ -277,7 +277,12 @@ offset always draws the same header.
 **The header follows the page on screen.** Each page keeps its own offset and
 lends it to the header only while it is the page the reader is on; arriving on a
 page hands the header that page's offset, so a List at the top is never under a
-header a Summary scroll collapsed.
+header a Summary scroll collapsed. The header reaches that shape by a short
+timing (200 ms) rather than a snap, and at once under reduced motion. A page
+that is not on screen never moves the header, however its own offset changes.
+The Today pill is drawn as far down as the day strip at rest and follows it up,
+so the strip never covers it. The page's top hairline appears only once content
+passes under the collapsed header.
 
 **The header navigates; the page reports.** It carries no figure. A draft put
 the current period's total in the row's trailing half and it did not survive

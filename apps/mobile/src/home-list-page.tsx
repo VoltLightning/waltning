@@ -55,11 +55,12 @@ import { type FlatList, Text, View, type ViewToken } from "react-native";
 import Animated, {
   runOnJS,
   type SharedValue,
-  useAnimatedReaction,
   useAnimatedScrollHandler,
   useAnimatedStyle,
   useSharedValue,
 } from "react-native-reanimated";
+import { pageScrolled } from "./header-offset.ts";
+import { useHeaderArrival } from "./use-header-arrival.ts";
 
 /**
  * S04's List page — the whole ledger, continuous in both directions.
@@ -562,11 +563,10 @@ function HomeListPageView({
         runOnJS(dropSent)();
       },
       onScroll: (event) => {
-        listY.value = event.contentOffset.y;
         // The header follows the page on screen and no other. A page that is
         // not showing does not scroll, but it can be *moved* — a prepend, a
         // re-anchor — and its offset is not the header's business.
-        if (active.value) scrollY.value = event.contentOffset.y;
+        pageScrolled(active, listY, scrollY, event.contentOffset.y);
       },
     },
     [listY, scrollY, active, dropSent],
@@ -574,13 +574,7 @@ function HomeListPageView({
   // **Arriving on this page hands the header this page's offset.** The header
   // reads one number for four pages, so without this it keeps the shape of the
   // page the reader left: a List at the top under a collapsed header.
-  useAnimatedReaction(
-    () => active.value,
-    (now) => {
-      if (now) scrollY.value = listY.value;
-    },
-    [active, listY, scrollY],
-  );
+  useHeaderArrival(active, listY, scrollY);
   /**
    * **The strip rides the header instead of the scroller doing it.** The
    * header overlays the top of this page while it is open, and the room it
@@ -965,13 +959,20 @@ function HomeListPageView({
           believing it (§6).
         */}
         {shown === today ? null : (
-          <TodayPill
-            label={t("shell.today")}
-            accessibilityLabel={t("transactions.backToToday", {
-              date: dayLabel(shown, locale),
-            })}
-            onPress={returnToToday}
-          />
+          /*
+            The pill's layer rides with the strip: at rest the strip is drawn
+            the header's travel lower than its box, over the top of this one,
+            and a pill left where the box says would sit under it.
+          */
+          <Animated.View style={[styles.pillLayer, ride]} pointerEvents="box-none">
+            <TodayPill
+              label={t("shell.today")}
+              accessibilityLabel={t("transactions.backToToday", {
+                date: dayLabel(shown, locale),
+              })}
+              onPress={returnToToday}
+            />
+          </Animated.View>
         )}
       </View>
     </GroundPanel>
@@ -996,6 +997,7 @@ const useStyles = makeStyles((theme) => ({
   floatBox: { flex: 1 },
   // Above the list, which it overlaps by the header's travel at rest.
   ribbon: { zIndex: 1 },
+  pillLayer: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0 },
   content: { flexGrow: 1 },
   // Centred in the page it was given, not stacked at the top of it.
   empty: { flex: 1, justifyContent: "center" },
