@@ -319,7 +319,7 @@ export const en = {
      * own window would contradict the number over its head.
      */
     noMatchesHere: "Nothing here matches \u201C{{query}}\u201D.",
-    accountEmptyTitle: "Nothing in this account yet",
+    accountEmptyTitle: "Nothing in {{account}} yet",
     accountEmptyBody:
       "No transactions have been recorded on it. Clear the filter to see the rest of the ledger.",
     amount: "Amount",

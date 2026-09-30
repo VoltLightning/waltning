@@ -33,7 +33,6 @@ import { TodayPill } from "@waltning/ui/shell/today-pill";
 import { EmptyState } from "@waltning/ui/states/empty-state";
 import { text } from "@waltning/ui/theme/fonts";
 import { makeStyles } from "@waltning/ui/theme/styles";
-import { space, touchTarget } from "@waltning/ui/tokens";
 
 import {
   DayRibbon,
@@ -128,6 +127,8 @@ export type HomeListPageProps = {
    * reaches `toLedgerItems` and `ribbonMarks` as `filtered` too.
    */
   accountId: string | null;
+  /** The carried account's name, which the filtered empty state must say. */
+  accountName: string;
   /**
    * The screen's shared offset, which the header collapses from.
    *
@@ -196,6 +197,7 @@ function HomeListPageView({
   onReturnToToday,
   query,
   accountId,
+  accountName,
   scrollY,
   onTick,
   active,
@@ -334,7 +336,9 @@ function HomeListPageView({
             ? weekdayInitial(day.date, locale)
             : cue === "year"
               ? day.date.slice(0, 4)
-              : monthShort(yearMonth(day.date.slice(0, 7)), locale),
+              : cue === "monthYear"
+                ? `${monthShort(yearMonth(day.date.slice(0, 7)), locale)} ${day.date.slice(2, 4)}`
+                : monthShort(yearMonth(day.date.slice(0, 7)), locale),
         activity: day.activity,
         direction: day.direction,
         ...(day.date === today ? { today: true } : {}),
@@ -886,7 +890,7 @@ function HomeListPageView({
           // wording, which would tell a full ledger it has never been used.
           <EmptyState
             variant="filtered"
-            title={t("transactions.accountEmptyTitle")}
+            title={t("transactions.accountEmptyTitle", { account: accountName })}
             body={t("transactions.accountEmptyBody")}
             primaryAction={clearFilter}
           />
@@ -895,7 +899,7 @@ function HomeListPageView({
         )}
       </View>
     ),
-    [query, accountId, empty, clearFilter, t, styles.empty, styles.nothingHere],
+    [query, accountId, accountName, empty, clearFilter, t, styles.empty, styles.nothingHere],
   );
 
   return (
@@ -921,29 +925,6 @@ function HomeListPageView({
         onLead={leadTo}
         onTick={onTick}
       />
-      {/*
-        **The pill has a band of its own, between the strip and the list.**
-        §4: *Today* appears only while the list's anchor is off today, and it
-        must never cover a row. Floated over the list it sat on the first day
-        header and the first row's title — text the reader is trying to read,
-        at exactly the moment they have just jumped and are looking for it. A
-        band in the layout takes its height from the list instead: the rows
-        start below it, nothing is covered, and the pill is still the first
-        thing under the strip, where the eye already is after a tap that moved
-        the date. It exists only while the pill does, so a list on today
-        loses no height to a control that is not there.
-      */}
-      {shown === today ? null : (
-        <View style={styles.pillBand}>
-          <TodayPill
-            label={t("shell.today")}
-            accessibilityLabel={t("transactions.backToToday", {
-              date: dayLabel(shown, locale),
-            })}
-            onPress={returnToToday}
-          />
-        </View>
-      )}
       <View style={styles.floatBox}>
         <LedgerScroller
           listRef={list}
@@ -960,6 +941,25 @@ function HomeListPageView({
           onViewableItemsChanged={notedScroll.current}
           onScrollToIndexFailed={settleScroll}
         />
+        {/*
+          **The pill floats and never changes the layout.** It is shown while the
+          anchor is off today, and the anchor moves on every scroll settle — so
+          anything that took room from the list for it (a band above the rows)
+          dropped every row by the pill's height one day off today and lifted
+          them again on returning. It sits bottom-left on the line the add
+          button holds bottom-right, with the same clearance, so at the end of
+          the list — where the content already clears the button — it covers
+          nothing (§4).
+        */}
+        {shown === today ? null : (
+          <TodayPill
+            label={t("shell.today")}
+            accessibilityLabel={t("transactions.backToToday", {
+              date: dayLabel(shown, locale),
+            })}
+            onPress={returnToToday}
+          />
+        )}
       </View>
     </GroundPanel>
   );
@@ -975,12 +975,8 @@ export const HomeListPage = memo(HomeListPageView);
 
 const useStyles = makeStyles((theme) => ({
   root: { flex: 1 },
-  // The list's own box, below the pill's band.
+  // The list's own box, and what the pill floats over.
   floatBox: { flex: 1 },
-  // The reserved band under the strip: the pill's own height and a gap above
-  // and below it. `TodayPill`'s layer is absolute, so the band is what gives
-  // it room in the flow.
-  pillBand: { height: touchTarget.min + space.md * 2 },
   content: { flexGrow: 1 },
   // Centred in the page it was given, not stacked at the top of it.
   empty: { flex: 1, justifyContent: "center" },

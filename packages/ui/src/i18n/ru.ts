@@ -179,7 +179,7 @@ export const ru: Messages = {
     aheadRunOne: "{{count}} день · ещё впереди",
     aheadRunMany: "Дней: {{count}} · ещё впереди",
     noMatchesHere: "Ничего не подходит под «{{query}}».",
-    accountEmptyTitle: "На этом счёте пока ничего нет",
+    accountEmptyTitle: "На счёте {{account}} пока ничего нет",
     accountEmptyBody:
       "Операций по нему не записано. Сбросьте фильтр, чтобы увидеть остальную книгу.",
     amount: "Сумма",

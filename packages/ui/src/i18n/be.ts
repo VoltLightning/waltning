@@ -177,7 +177,7 @@ export const be: Messages = {
     aheadRunOne: "{{count}} дзень · яшчэ наперадзе",
     aheadRunMany: "Дзён: {{count}} · яшчэ наперадзе",
     noMatchesHere: "Нічога не падыходзіць пад «{{query}}».",
-    accountEmptyTitle: "На гэтым рахунку пакуль нічога няма",
+    accountEmptyTitle: "На рахунку {{account}} пакуль нічога няма",
     accountEmptyBody: "Аперацый па ім не запісана. Скіньце фільтр, каб убачыць астатнюю кнігу.",
     amount: "Сума",
     account: "Рахунак",

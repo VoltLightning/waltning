@@ -61,7 +61,7 @@ export const Filtered: Story = {
 export const AccountFiltered: Story = {
   args: {
     variant: "filtered",
-    title: "Nothing in this account yet",
+    title: "Nothing in Bank A yet",
     body: "No transactions have been recorded on it. Clear the filter to see the rest of the ledger.",
     primaryAction: { label: "Clear filters", onPress: noop },
   },

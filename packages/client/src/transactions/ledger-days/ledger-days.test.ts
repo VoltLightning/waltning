@@ -518,7 +518,10 @@ describe("ribbonCue", () => {
     expect(cues).toEqual(["month", "weekday", "month", "weekday"]);
   });
 
-  it("says the year where a searched strip crosses one", () => {
-    expect(ribbonCue(d("2026-01-15"), d("2025-12-26"), true)).toBe("year");
+  it("says month and year together where a searched strip crosses a year", () => {
+    // A bare year on 5 March reads as January.
+    const days = ["2025-12-20", "2026-03-05", "2026-03-19"].map(d);
+    const cues = days.map((day, at) => ribbonCue(day, days[at - 1], true));
+    expect(cues).toEqual(["month", "monthYear", "weekday"]);
   });
 });

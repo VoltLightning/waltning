@@ -963,6 +963,28 @@ export default function Today() {
     [t, createAccountAction],
   );
 
+  /**
+   * **What stands in for a page that cannot draw at all**: the balance read
+   * failed (an error, never *create an account*), or there is no account to
+   * draw anything from (§6). Decided on the accounts, not on a net-worth line —
+   * net worth can be empty while accounts exist (only receivables), and a
+   * failed first refresh leaves both empty. `null` when the page can draw.
+   */
+  const unavailable = useMemo(
+    () =>
+      snapshot.error ? (
+        <ErrorState
+          variant="recoverable"
+          what={t("shell.balanceQueryFailed")}
+          why={t("shell.balanceQueryFailedBody")}
+          action={{ label: t("common.retry"), onPress: handleRetry }}
+        />
+      ) : hasAccounts ? null : (
+        noAccountsEmpty
+      ),
+    [snapshot.error, hasAccounts, noAccountsEmpty, t, handleRetry],
+  );
+
   /* ── Calendar ─────────────────────────────────────────────────────────── */
 
   // Half-open, `money.Period`'s own shape: `monthRange` gives the inclusive
@@ -1139,7 +1161,6 @@ export default function Today() {
       );
     }
     if (monthHasEntries) return null;
-    if (!hasAccounts) return noAccountsEmpty;
     if (drawsNothing) {
       return (
         <EmptyState
@@ -1179,8 +1200,6 @@ export default function Today() {
     monthHasEntries,
     drawsNothing,
     ledgerIsEmpty,
-    hasAccounts,
-    noAccountsEmpty,
     loaded,
     nearestToMonth,
     goToNearestMonth,
@@ -1431,38 +1450,35 @@ export default function Today() {
   );
   const listNode = useMemo(
     () =>
-      leadNetWorth ? (
+      unavailable !== null ? (
+        <GroundPanel>{unavailable}</GroundPanel>
+      ) : (
         <HomeListPage
           ledger={ledger}
           anchor={listAnchor}
           onVisibleDay={handleVisibleDay}
           today={today}
           revision={snapshot.revision}
-          {...(pivotCurrency === undefined
-            ? // Unreachable once `currencies` has loaded: the server holds a
-              // partial unique index and a trigger over `is_pivot`, so a
-              // ledger has exactly one pivot. Rendering nothing beats
-              // rendering a figure under a currency this screen guessed.
-              { pivotCurrency: leadNetWorth.currency, pivotDecimals: leadNetWorth.decimals }
-            : { pivotCurrency: pivotCurrency.code, pivotDecimals: pivotCurrency.decimals })}
+          // The pivot, or the lead currency while `currencies` has not loaded;
+          // with accounts but no net-worth line (only receivables) the same
+          // fallback every other page here makes.
+          pivotCurrency={pivotCurrency?.code ?? leadNetWorth?.currency ?? LEAD_FALLBACK}
+          pivotDecimals={pivotCurrency?.decimals ?? leadNetWorth?.decimals ?? 2}
           onPickDay={handlePickDay}
           onOpenTransaction={handleOpenTransaction}
           onReturnToToday={returnToToday}
           query={pager.state.query}
           accountId={filteredAccount?.id ?? null}
+          accountName={filteredAccount?.name ?? ""}
           scrollY={scrollY}
           onTick={dayTickHaptic}
           active={listActive}
           empty={listEmpty}
           onClearFilter={clearAccountFilter}
         />
-      ) : (
-        // No account, so no pivot to total a day in and no list to draw: the
-        // page says so and offers the one thing that changes it (§6, *Empty ·
-        // no accounts*). Returning nothing left the page blank.
-        <GroundPanel>{noAccountsEmpty}</GroundPanel>
       ),
     [
+      unavailable,
       leadNetWorth,
       ledger,
       listAnchor,
@@ -1476,27 +1492,31 @@ export default function Today() {
       scrollY,
       listActive,
       listEmpty,
-      noAccountsEmpty,
       clearAccountFilter,
       filteredAccount?.id,
+      filteredAccount?.name,
     ],
   );
   const calendarNode = useMemo(
-    () => (
-      <GroundPanel onScroll={handleScroll}>
-        <MonthGrid
-          weeks={weeks}
-          headings={dayHeadings}
-          current={pager.state.date}
-          today={today}
-          labelFor={dayName}
-          onPickDay={handlePickDay}
-          {...(dayMatches === undefined ? {} : { matches: dayMatches })}
-        />
-        {calendarEmpty ?? dayPanel}
-      </GroundPanel>
-    ),
+    () =>
+      unavailable !== null ? (
+        <GroundPanel onScroll={handleScroll}>{unavailable}</GroundPanel>
+      ) : (
+        <GroundPanel onScroll={handleScroll}>
+          <MonthGrid
+            weeks={weeks}
+            headings={dayHeadings}
+            current={pager.state.date}
+            today={today}
+            labelFor={dayName}
+            onPickDay={handlePickDay}
+            {...(dayMatches === undefined ? {} : { matches: dayMatches })}
+          />
+          {calendarEmpty ?? dayPanel}
+        </GroundPanel>
+      ),
     [
+      unavailable,
       handleScroll,
       weeks,
       dayHeadings,
@@ -1510,38 +1530,42 @@ export default function Today() {
     ],
   );
   const monthsNode = useMemo(
-    () => (
-      <GroundPanel onScroll={handleScroll}>
-        <View style={sectionStyles.year}>
-          <YearChart
-            year={shownYear}
-            columns={yearColumns}
-            current={month}
-            kept={
-              <Amount
-                value={yearKept}
-                currency={leadNetWorth?.currency ?? ""}
-                decimals={leadNetWorth?.decimals ?? 2}
-                size="caption"
-                signed
-              />
-            }
-            {...(yearKeptNote === undefined ? {} : { keptNote: yearKeptNote })}
-            {...(shownYear > FIRST_YEAR ? { onOlder: previousYear } : {})}
-            {...(shownYear < thisYear ? { onNewer: nextYear } : {})}
-            onPickYear={openYearPicker}
-            labels={chartLabels}
-          />
-          <MonthList
-            rows={monthRows}
-            current={month}
-            labels={flowLabels}
-            onPickMonth={handlePickMonth}
-          />
-        </View>
-      </GroundPanel>
-    ),
+    () =>
+      unavailable !== null ? (
+        <GroundPanel onScroll={handleScroll}>{unavailable}</GroundPanel>
+      ) : (
+        <GroundPanel onScroll={handleScroll}>
+          <View style={sectionStyles.year}>
+            <YearChart
+              year={shownYear}
+              columns={yearColumns}
+              current={month}
+              kept={
+                <Amount
+                  value={yearKept}
+                  currency={leadNetWorth?.currency ?? ""}
+                  decimals={leadNetWorth?.decimals ?? 2}
+                  size="caption"
+                  signed
+                />
+              }
+              {...(yearKeptNote === undefined ? {} : { keptNote: yearKeptNote })}
+              {...(shownYear > FIRST_YEAR ? { onOlder: previousYear } : {})}
+              {...(shownYear < thisYear ? { onNewer: nextYear } : {})}
+              onPickYear={openYearPicker}
+              labels={chartLabels}
+            />
+            <MonthList
+              rows={monthRows}
+              current={month}
+              labels={flowLabels}
+              onPickMonth={handlePickMonth}
+            />
+          </View>
+        </GroundPanel>
+      ),
     [
+      unavailable,
       handleScroll,
       sectionStyles.year,
       shownYear,

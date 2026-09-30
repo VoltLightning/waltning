@@ -460,7 +460,8 @@ export function ribbonMarks<Row extends LedgerDayRow>(
 }
 
 /** What a cell says in the weekday letter's place. */
-export type RibbonCue = "weekday" | "month" | "year";
+/** `monthYear` is a month the strip reaches across a year boundary: a bare year would read as January. */
+export type RibbonCue = "weekday" | "month" | "year" | "monthYear";
 
 /**
  * **What a strip cell says under its day number** (S04 §4).
@@ -471,7 +472,7 @@ export type RibbonCue = "weekday" | "month" | "year";
  * not continuous** — it is the matched days and nothing else, so the 15th of
  * one month stands beside the 26th of another and a bare `15 26 15 26` says
  * nothing about where the reader is. There the cue moves to wherever the month
- * *changes between two neighbours*, and to the first cell, whichever day of the
+ * *changes between two neighbours* (with its year, where the year changes too), and to the first cell, whichever day of the
  * month that is. `previous` is the cell to the left (`undefined` for the first).
  */
 export function ribbonCue(
@@ -483,7 +484,7 @@ export function ribbonCue(
   if (date.endsWith("-01")) return "month";
   if (!filtered) return "weekday";
   if (previous === undefined) return "month";
-  if (previous.slice(0, 4) !== date.slice(0, 4)) return "year";
+  if (previous.slice(0, 4) !== date.slice(0, 4)) return "monthYear";
   return previous.slice(0, 7) !== date.slice(0, 7) ? "month" : "weekday";
 }
 

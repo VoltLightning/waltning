@@ -81,6 +81,7 @@ function draw(
     query?: string | null;
     accountId?: string | null;
     onClearFilter?: () => void;
+    accountName?: string;
   } = {},
 ) {
   render(
@@ -103,6 +104,7 @@ function draw(
           active={active}
           empty={<Text>nothing yet</Text>}
           onClearFilter={over.onClearFilter ?? vi.fn()}
+          accountName={over.accountName ?? "Bank A"}
         />
       </I18nProvider>
     </ThemeProvider>,
@@ -420,27 +422,29 @@ it("draws the ribbon earliest-first, under a list that runs newest-first", () =>
 });
 
 /**
- * **The pill never covers a row** (S04 §4). It sat over the list, top-centre,
- * on the first day header and the first row's title. It now has a band of its
- * own between the strip and the list, so what matters is that no box holding
- * the rows also holds the pill. jsdom has no layout, so the claim is about the
- * tree: the smallest box around both is the page's own, which also holds the
- * strip.
+ * **The pill changes no layout** (S04 §4). It is shown while the anchor is off
+ * today, and the anchor moves on every scroll settle, so a band reserved for it
+ * above the rows dropped every row by the pill's height one day off today and
+ * lifted them again on the way back. jsdom has no layout, so the claim is about
+ * the tree: the pill comes *after* the rows, inside the list's own box (nothing
+ * is inserted before them), and `today-pill.test.tsx` pins that it is absolutely
+ * positioned on the add button's line.
  */
-it("keeps the pill out of the box the rows are in", () => {
+it("floats after the rows in the list's own box, never in a band before them", () => {
   draw(ledgerWith([row("2021-03-02", 1, "-96")]), vi.fn(), {
     anchor: accountingDate("2021-03-02"),
   });
   const pill = screen.getByRole("button", { name: /Back to today/ });
   const aRow = screen.getByRole("button", { name: /EnteredName 1/ });
+  expect(aRow.compareDocumentPosition(pill) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 
   let box: HTMLElement | null = pill;
   while (box !== null && !box.contains(aRow)) box = box.parentElement;
-  expect(box, "the pill and the rows must share a page at all").not.toBeNull();
+  expect(box, "the pill and the rows share a box").not.toBeNull();
   expect(
     box?.contains(screen.getByRole("list")),
-    "the only box holding both is the page, which also holds the strip",
-  ).toBe(true);
+    "that box is the list's own, not the page that also holds the strip",
+  ).toBe(false);
 });
 
 /**
@@ -479,7 +483,7 @@ it("blames the account filter, offers to clear it, and never says first-run", ()
     accountId: "00000000-0000-4000-8000-00000000000a",
     onClearFilter,
   });
-  expect(screen.getByText("Nothing in this account yet")).toBeTruthy();
+  expect(screen.getByText("Nothing in Bank A yet")).toBeTruthy();
   expect(screen.queryByText("nothing yet")).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "Clear filters" }));
   expect(onClearFilter).toHaveBeenCalledTimes(1);

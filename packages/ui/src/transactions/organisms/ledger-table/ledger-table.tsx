@@ -695,7 +695,7 @@ function LedgerTableRowView({
         {row.selectable ? (
           <LedgerRowCheckbox
             checked={selected}
-            label={row.enteredName}
+            label={named.title}
             onPress={handleToggle}
             keyboardProps={checkboxKeyboardProps}
           />

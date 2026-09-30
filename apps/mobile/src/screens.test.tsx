@@ -1107,7 +1107,8 @@ describe("Today", () => {
 
     withLedger(<Today />, controller);
 
-    expect(screen.getByText("Couldn't refresh")).toBeDefined();
+    // Every page says it, so scoped to the one on screen.
+    expect(within(screen.getByRole("tabpanel")).getByText("Couldn't refresh")).toBeDefined();
     // S04 §6: a failed balance query replaces the ground's body and nothing
     // else, so the figures it did not touch stay. Both of them — the strip and
     // the month card render above the error branch for exactly this reason,
@@ -1117,6 +1118,81 @@ describe("Today", () => {
     expect(screen.getByText("Kept so far")).toBeDefined();
     const rendered = document.body.textContent ?? "";
     expect(rendered).toContain("50.00");
+  });
+
+  /**
+   * **A page that cannot draw says why.** A failed first refresh leaves no
+   * accounts *and* an error, and the List, Calendar and Months pages read that
+   * as *create an account* — the wrong instruction for a ledger that simply did
+   * not load (S04 §6).
+   */
+  it.each(["list", "calendar", "months"])(
+    "shows the error, not create-an-account, on %s when the first refresh fails",
+    (view) => {
+      // An empty ledger whose next refresh fails: no accounts *and* an error.
+      let calls = 0;
+      const port = basePort({
+        listAccounts: () => {
+          calls += 1;
+          if (calls > 1) throw new Error("query failed");
+          return [];
+        },
+      });
+      const controller = createPhoneLedger(port, {
+        capture: () => ({
+          date: accountingDate("2026-09-03"),
+          timeZone: "Europe/Warsaw",
+          offsetMinutes: 120,
+          at: new Date("2026-09-03T10:00:00Z"),
+        }),
+        id: () => id("11111111-1111-4111-8111-111111111111"),
+      });
+      try {
+        controller.refresh();
+      } catch {
+        // Expected — asserting the snapshot it leaves behind, not this throw.
+      }
+      liveParams = { view };
+      withLedger(<Today />, controller);
+
+      const page = within(screen.getByRole("tabpanel"));
+      expect(page.getByText("Couldn't refresh")).toBeDefined();
+      expect(page.queryByText("No accounts yet")).toBeNull();
+    },
+  );
+
+  /**
+   * **Accounts without a net-worth line are still accounts.** Net worth can be
+   * empty while an account exists (only receivables), and the List page decided
+   * *no accounts* by it, so it told a reader with an account to create one.
+   */
+  it("draws the List page when accounts exist but net worth is empty", () => {
+    const port = basePort({ listAccounts: () => [PLN_ACCOUNT], listNetWorth: () => [] });
+    const controller = createPhoneLedger(port, {
+      capture: () => ({
+        date: accountingDate("2026-09-03"),
+        timeZone: "Europe/Warsaw",
+        offsetMinutes: 120,
+        at: new Date("2026-09-03T10:00:00Z"),
+      }),
+      id: () => id("11111111-1111-4111-8111-111111111111"),
+    });
+    controller.refresh();
+    liveParams = { view: "list" };
+    withLedger(<Today />, controller);
+
+    const page = within(screen.getByRole("tabpanel"));
+    expect(page.queryByText("No accounts yet")).toBeNull();
+    expect(page.getByText("No transactions yet")).toBeDefined();
+  });
+
+  it("says there is no account on Months too, with no chart", () => {
+    liveParams = { view: "months" };
+    withLedger(<Today />);
+
+    const page = within(screen.getByRole("tabpanel"));
+    expect(page.getByText("No accounts yet")).toBeDefined();
+    expect(page.queryByText(/Jan/)).toBeNull();
   });
 
   /**

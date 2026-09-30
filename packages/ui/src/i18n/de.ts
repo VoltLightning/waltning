@@ -179,7 +179,7 @@ export const de: Messages = {
     aheadRunOne: "{{count}} Tag · noch nicht",
     aheadRunMany: "{{count}} Tage · noch nicht",
     noMatchesHere: "Nichts passt zu „{{query}}“.",
-    accountEmptyTitle: "Noch nichts auf diesem Konto",
+    accountEmptyTitle: "Noch nichts auf {{account}}",
     accountEmptyBody:
       "Hier wurden keine Buchungen erfasst. Hebe den Filter auf, um den Rest des Hauptbuchs zu sehen.",
     amount: "Betrag",

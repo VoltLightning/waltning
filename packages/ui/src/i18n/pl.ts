@@ -188,7 +188,7 @@ export const pl: Messages = {
     aheadRunOne: "{{count}} dzień · jeszcze nie",
     aheadRunMany: "{{count}} dni · jeszcze nie",
     noMatchesHere: "Nic tutaj nie pasuje do \u201E{{query}}\u201D.",
-    accountEmptyTitle: "Na tym koncie nic jeszcze nie ma",
+    accountEmptyTitle: "Na koncie {{account}} nic jeszcze nie ma",
     accountEmptyBody:
       "Nie zapisano na nim żadnych transakcji. Wyczyść filtr, aby zobaczyć resztę księgi.",
     amount: "Kwota",
