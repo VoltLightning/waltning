@@ -66,6 +66,12 @@ with 340 and queue 18 for review — but it must **state both numbers**, because
 silent partial success is how a month goes half-imported and nobody notices
 until reconciliation.
 
+`RenderFailed` is the `recoverable` state for a screen whose render threw: it
+names the screen as stopped, says the ledger is untouched, and offers **Try
+again** (mounts the navigator afresh) and **Restart the app**, because a retry
+can throw again (`architecture/11` §8c). The error goes to the device log and is
+never drawn.
+
 ---
 
 ## 8.3 Offline

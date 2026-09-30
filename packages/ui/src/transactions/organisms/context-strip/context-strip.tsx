@@ -59,6 +59,10 @@ export type ContextStripCard =
       months: readonly MonthBarsMonth[];
       count: number;
       onOpenAll: () => void;
+      /** Re-opens the counterparty picker: one counterparty per transaction, so this replaces it. */
+      onChange?: () => void;
+      /** The counterparty is a pick not yet saved with the transaction. */
+      unsaved?: boolean;
     })
   | (Figures & {
       kind: "pair";
@@ -177,7 +181,15 @@ export function ContextStrip({ cards, column }: ContextStripProps) {
 function ContextCard({ card }: { card: ContextStripCard }) {
   switch (card.kind) {
     case "who":
-      return <MonthsCard title={card.name} card={card} onOpenAll={card.onOpenAll} />;
+      return (
+        <MonthsCard
+          title={card.name}
+          card={card}
+          onOpenAll={card.onOpenAll}
+          {...(card.onChange === undefined ? {} : { onChange: card.onChange })}
+          unsaved={card.unsaved === true}
+        />
+      );
     case "pair":
       return <MonthsCard title={`${card.fromName} → ${card.toName}`} card={card} />;
     case "category":
@@ -191,9 +203,11 @@ type MonthsCardProps = {
   title: string;
   card: Figures & { months: readonly MonthBarsMonth[]; count: number };
   onOpenAll?: () => void;
+  onChange?: () => void;
+  unsaved?: boolean;
 };
 
-function MonthsCard({ title, card, onOpenAll }: MonthsCardProps) {
+function MonthsCard({ title, card, onOpenAll, onChange, unsaved = false }: MonthsCardProps) {
   const styles = useStyles();
   const t = useT();
   const locale = useLocale();
@@ -216,10 +230,15 @@ function MonthsCard({ title, card, onOpenAll }: MonthsCardProps) {
       <Amount value={last.total} currency={card.currency} decimals={card.decimals} size="large" />
       <MonthBars months={card.months} share={card.share} />
       <View style={styles.foot}>
-        <ShareNote card={card} />
-        {onOpenAll === undefined ? null : (
-          <Button label={t("transactions.contextSeeAll")} variant="ghost" onPress={onOpenAll} />
-        )}
+        <ShareNote card={card} unsaved={unsaved} />
+        <View style={styles.actions}>
+          {onChange === undefined ? null : (
+            <Button label={t("transactions.contextChange")} variant="ghost" onPress={onChange} />
+          )}
+          {onOpenAll === undefined ? null : (
+            <Button label={t("transactions.contextSeeAll")} variant="ghost" onPress={onOpenAll} />
+          )}
+        </View>
       </View>
     </Card>
   );
@@ -300,11 +319,12 @@ function LinkCard({ onLink }: { onLink: () => void }) {
  * *This one*, or why there is no *this one* — and, when any other row was a
  * one-off, that it was left out (§5: a comparison states the exclusion).
  */
-function ShareNote({ card }: { card: Figures }) {
+function ShareNote({ card, unsaved = false }: { card: Figures; unsaved?: boolean }) {
   const styles = useStyles();
   const t = useT();
   return (
     <View style={styles.notes}>
+      {unsaved ? <Text style={styles.caption}>{t("transactions.contextUnsaved")}</Text> : null}
       {card.ownOneOff ? (
         <Text style={styles.caption}>{t("transactions.contextOneOff")}</Text>
       ) : card.share === null ? null : (
@@ -367,4 +387,5 @@ const useStyles = makeStyles((theme) => ({
   usual: { flexDirection: "row", alignItems: "baseline", gap: space.xs },
   notes: { gap: space.xxs, flexShrink: 1 },
   linkAction: { flexDirection: "row" },
+  actions: { flexDirection: "row", alignItems: "center", gap: space.sm },
 }));

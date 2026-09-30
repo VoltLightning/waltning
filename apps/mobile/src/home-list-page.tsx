@@ -14,6 +14,7 @@ import {
 import {
   type RibbonDayModel,
   ribbonCell,
+  ribbonCue,
   ribbonDate,
   ribbonDayOn,
   ribbonMarks,
@@ -23,12 +24,19 @@ import {
 import { type AccountingDate, accountingDate, yearMonth } from "@waltning/core/date";
 import { id as brandId } from "@waltning/core/id";
 import type { CurrencyCode } from "@waltning/core/money";
-import { dayLabel, dayRangeLabel, monthShort, weekdayInitial } from "@waltning/ui/i18n/locales";
+import {
+  dayLabel,
+  dayRangeLabel,
+  monthShort,
+  monthYearShort,
+  weekdayInitial,
+} from "@waltning/ui/i18n/locales";
 import { useLocale, useT } from "@waltning/ui/i18n/provider";
 import { useScrollSettle } from "@waltning/ui/primitives/use-scroll-settle";
 import { GroundPanel } from "@waltning/ui/shell/card";
 import { useGroundInset } from "@waltning/ui/shell/ground-inset";
 import { TodayPill } from "@waltning/ui/shell/today-pill";
+import { EmptyState } from "@waltning/ui/states/empty-state";
 import { text } from "@waltning/ui/theme/fonts";
 import { makeStyles } from "@waltning/ui/theme/styles";
 
@@ -125,6 +133,8 @@ export type HomeListPageProps = {
    * reaches `toLedgerItems` and `ribbonMarks` as `filtered` too.
    */
   accountId: string | null;
+  /** The carried account's name, which the filtered empty state must say. */
+  accountName: string;
   /**
    * The screen's shared offset, which the header collapses from.
    *
@@ -170,6 +180,14 @@ export type HomeListPageProps = {
    * an opinion about the app around it.
    */
   empty: React.ReactNode;
+  /**
+   * Drops the carried account filter. The page offers it beside the one
+   * emptiness only it can name: *this account holds nothing* (§6, *Empty ·
+   * filtered*), which is not the ledger's own first-run.
+   */
+  onClearFilter: () => void;
+  /** The side the pill rests on: the one the floating add button is not on. */
+  pillSide: "left" | "right";
 };
 
 const EMPTY = { tops: [], marks: [], dates: [] } as const;
@@ -187,10 +205,13 @@ function HomeListPageView({
   onReturnToToday,
   query,
   accountId,
+  accountName,
   scrollY,
   onTick,
   active,
   empty,
+  onClearFilter,
+  pillSide,
 }: HomeListPageProps) {
   const t = useT();
   const locale = useLocale();
@@ -310,42 +331,49 @@ function HomeListPageView({
    */
   const dayAt = useMemo(() => {
     const drawn = new Map<number, RibbonDay>();
-    const draw = (day: RibbonDayModel): RibbonDay => ({
-      date: day.date,
-      day: Number(day.date.slice(8, 10)),
-      // **The 1st says its month, and 1 January its year** (S04 §4). A strip
-      // with no end is a run of bare numbers two years from anything that
-      // names them; the first of a month is where a reader looks for which.
-      weekday: !day.date.endsWith("-01")
-        ? weekdayInitial(day.date, locale)
-        : day.date.endsWith("-01-01")
-          ? day.date.slice(0, 4)
-          : monthShort(yearMonth(day.date.slice(0, 7)), locale),
-      activity: day.activity,
-      direction: day.direction,
-      ...(day.date === today ? { today: true } : {}),
-      ...(day.date > today ? { ahead: true } : {}),
-      ...(day.generated === true ? { generated: true } : {}),
-      // The full date and what happened, never the bare number the eye
-      // reads: a run of them says nothing about which month or which year.
-      // **`entries` is the *loaded* rows, which is a third reading of the
-      // search and disagrees with the other two.** A day holding forty
-      // matches renders thirty of them in one page, so "30 entries" would
-      // stand under a grid cell reading 40. Under a filter the cell says it
-      // matched and leaves the counting to the pages built to count.
-      // **An unread day says its date and no more**: "nothing" would be a
-      // claim about a day the list has never loaded.
-      label: filtered
-        ? t("transactions.ribbonDayMatched", { date: dayLabel(day.date, locale) })
-        : day.activity === "unread"
-          ? dayLabel(day.date, locale)
-          : day.entries === 0
-            ? t("transactions.ribbonDayEmpty", { date: dayLabel(day.date, locale) })
-            : t(day.entries === 1 ? "transactions.ribbonDayOne" : "transactions.ribbonDayMany", {
-                date: dayLabel(day.date, locale),
-                count: day.entries,
-              }),
-    });
+    const draw = (day: RibbonDayModel, previous: AccountingDate | undefined): RibbonDay => {
+      // **The 1st says its month, and 1 January its year** (S04 §4) — and under
+      // a search, where the strip is not continuous, wherever the month changes
+      // between two neighbours. A run of bare numbers is two years from
+      // anything that names them.
+      const cue = ribbonCue(day.date, previous, filtered);
+      return {
+        date: day.date,
+        day: Number(day.date.slice(8, 10)),
+        weekday:
+          cue === "weekday"
+            ? weekdayInitial(day.date, locale)
+            : cue === "year"
+              ? day.date.slice(0, 4)
+              : cue === "monthYear"
+                ? monthYearShort(yearMonth(day.date.slice(0, 7)), locale)
+                : monthShort(yearMonth(day.date.slice(0, 7)), locale),
+        activity: day.activity,
+        direction: day.direction,
+        ...(day.date === today ? { today: true } : {}),
+        ...(day.date > today ? { ahead: true } : {}),
+        ...(day.generated === true ? { generated: true } : {}),
+        // The full date and what happened, never the bare number the eye
+        // reads: a run of them says nothing about which month or which year.
+        // **`entries` is the *loaded* rows, which is a third reading of the
+        // search and disagrees with the other two.** A day holding forty
+        // matches renders thirty of them in one page, so "30 entries" would
+        // stand under a grid cell reading 40. Under a filter the cell says it
+        // matched and leaves the counting to the pages built to count.
+        // **An unread day says its date and no more**: "nothing" would be a
+        // claim about a day the list has never loaded.
+        label: filtered
+          ? t("transactions.ribbonDayMatched", { date: dayLabel(day.date, locale) })
+          : day.activity === "unread"
+            ? dayLabel(day.date, locale)
+            : day.entries === 0
+              ? t("transactions.ribbonDayEmpty", { date: dayLabel(day.date, locale) })
+              : t(day.entries === 1 ? "transactions.ribbonDayOne" : "transactions.ribbonDayMany", {
+                  date: dayLabel(day.date, locale),
+                  count: day.entries,
+                }),
+      };
+    };
     return (cell: number): RibbonDay => {
       const seen = drawn.get(cell);
       if (seen !== undefined) return seen;
@@ -354,7 +382,10 @@ function HomeListPageView({
         : ribbonDayOn(ribbonDate(cell, run), marks, today);
       // Only under a search with no matches, where the strip draws no cell to
       // ask about: answered with today rather than with a throw.
-      const day = draw(model ?? ribbonDayOn(today, marks, today));
+      const day = draw(
+        model ?? ribbonDayOn(today, marks, today),
+        filtered ? marks.days[cell - 1]?.date : undefined,
+      );
       drawn.set(cell, day);
       return day;
     };
@@ -854,17 +885,30 @@ function HomeListPageView({
   // Which one it is is a question about *this page's* query, so this is the
   // part of the empty state the page decides and the screen cannot. Nothing is
   // drawn until the halves have answered — see `items`.
+  const clearFilter = useMemo(
+    () => ({ label: t("transactions.clearFilters"), onPress: onClearFilter }),
+    [t, onClearFilter],
+  );
   const emptyElement = useMemo(
     () => (
       <View style={styles.empty}>
         {query !== null ? (
           <Text style={styles.nothingHere}>{t("transactions.noMatchesHere", { query })}</Text>
+        ) : accountId !== null ? (
+          // The ledger holds rows; this account does not. Never the first-run
+          // wording, which would tell a full ledger it has never been used.
+          <EmptyState
+            variant="filtered"
+            title={t("transactions.accountEmptyTitle", { account: accountName })}
+            body={t("transactions.accountEmptyBody")}
+            primaryAction={clearFilter}
+          />
         ) : (
           empty
         )}
       </View>
     ),
-    [query, empty, t, styles.empty, styles.nothingHere],
+    [query, accountId, accountName, empty, clearFilter, t, styles.empty, styles.nothingHere],
   );
 
   return (
@@ -890,20 +934,6 @@ function HomeListPageView({
         onLead={leadTo}
         onTick={onTick}
       />
-      {/*
-        **The pill's layer starts where the list does.** §4 puts `TodayPill`
-        *over the list*, top-centre, because the add button owns the bottom
-        corners and either side edge at any height (`02-tokens` §2.9). The
-        ribbon is not the list: §4 lists it separately, under `PageTabs`, and
-        it is chrome that does not scroll. Positioned against the whole panel
-        the pill sat on the ribbon's first cells — covering one weekday letter
-        outright and two 44pt targets carrying the day numbers and their
-        activity marks. A floating control over an infinite list covers
-        *something*; the choice is what, and the honest answer is a sliver of
-        content the reader can move rather than fixed chrome they cannot.
-        This `View` is the whole of it — the pill's `position: absolute` now
-        resolves against the list's box instead of the panel's.
-      */}
       <View style={styles.floatBox}>
         <LedgerScroller
           listRef={list}
@@ -921,10 +951,14 @@ function HomeListPageView({
           onScrollToIndexFailed={settleScroll}
         />
         {/*
-          **After the list, so it paints over it**, and only when the anchor has
-          moved: a pill offering *today* while the list is already on today is a
-          control that does nothing, which is how a reader learns to stop
-          believing it (§6).
+          **The pill floats and never changes the layout.** It is shown while the
+          anchor is off today, and the anchor moves on every scroll settle — so
+          anything that took room from the list for it (a band above the rows)
+          dropped every row by the pill's height one day off today and lifted
+          them again on returning. It sits bottom-left on the line the add
+          button holds bottom-right, with the same clearance, so at the end of
+          the list — where the content already clears the button — it covers
+          nothing (§4).
         */}
         {shown === today ? null : (
           <TodayPill
@@ -933,6 +967,7 @@ function HomeListPageView({
               date: dayLabel(shown, locale),
             })}
             onPress={returnToToday}
+            side={pillSide}
           />
         )}
       </View>
@@ -950,11 +985,7 @@ export const HomeListPage = memo(HomeListPageView);
 
 const useStyles = makeStyles((theme) => ({
   root: { flex: 1 },
-  // The box `TodayPill` resolves its `position: absolute` against, and the
-  // reason it is a box at all — see the JSX. Its own style rather than a second
-  // use of `list`: the two happen to want the same one rule and are not the
-  // same thing, and the next person to change one must not silently change the
-  // other.
+  // The list's own box, and what the pill floats over.
   floatBox: { flex: 1 },
   content: { flexGrow: 1 },
   // Centred in the page it was given, not stacked at the top of it.

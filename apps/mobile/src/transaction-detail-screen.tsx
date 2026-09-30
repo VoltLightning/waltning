@@ -161,7 +161,7 @@ function toStripCards(
     toAccount: string | null;
     categoryName: (id: string) => string | null;
   },
-  actions: { onOpenCounterparty: () => void; onLink: () => void },
+  actions: { onOpenCounterparty: () => void; onLink: () => void; counterpartyUnsaved: boolean },
 ): ContextStripCard[] {
   const cards: ContextStripCard[] = [];
   for (const card of context) {
@@ -171,6 +171,8 @@ function toStripCards(
           ...card,
           name: names.counterparty ?? "—",
           onOpenAll: actions.onOpenCounterparty,
+          onChange: actions.onLink,
+          unsaved: actions.counterpartyUnsaved,
         });
         break;
       case "pair":
@@ -374,10 +376,25 @@ export default function TransactionDetail() {
   const theme = useTheme();
   const phone = useBreakpoint() === "phone";
   const heroScroll = useHeroScroll();
-  const context = useTransactionContext(ledger, live, snapshot.revision);
+  /*
+    **The card follows the pick, not only the saved row.** A counterparty picked
+    here is a draft until `Save` (§6.6.1 — cancelling restores it), so the
+    saved row alone kept offering "Who was this with?" after a choice. The
+    context is read for the row as it would be saved.
+  */
+  const pickedIdentity = pickedCounterparty.identity;
+  const subject = useMemo(
+    () =>
+      live !== null && pickedIdentity !== undefined
+        ? { ...live, counterpartyId: pickedIdentity.id as typeof live.counterpartyId }
+        : live,
+    [live, pickedIdentity],
+  );
+  const context = useTransactionContext(ledger, subject, snapshot.revision);
+  const shownCounterpartyId = pickedIdentity?.id ?? detail?.counterpartyId ?? null;
   const handleOpenCounterparty = useCallback(() => {
-    if (detail?.counterpartyId) router.push(`/counterparty/${detail.counterpartyId}`);
-  }, [detail?.counterpartyId]);
+    if (shownCounterpartyId) router.push(`/counterparty/${shownCounterpartyId}`);
+  }, [shownCounterpartyId]);
   const handleLinkCounterparty = useCallback(() => setPickerTarget("identity"), []);
   const stripCards = useMemo(
     () =>
@@ -388,7 +405,7 @@ export default function TransactionDetail() {
             {
               // Read with the row, so an archived counterparty or a closed
               // destination account keeps its name (the snapshot lists omit both).
-              counterparty: live.counterpartyIdentityName,
+              counterparty: pickedIdentity?.name ?? live.counterpartyIdentityName,
               fromAccount: live.accountName,
               toAccount: live.toAccountName,
               categoryName: (id) =>
@@ -396,9 +413,14 @@ export default function TransactionDetail() {
                   ? live.categoryName
                   : (live.lines.find((line) => line.categoryId === id)?.categoryName ?? null),
             },
-            { onOpenCounterparty: handleOpenCounterparty, onLink: handleLinkCounterparty },
+            {
+              onOpenCounterparty: handleOpenCounterparty,
+              onLink: handleLinkCounterparty,
+              counterpartyUnsaved:
+                pickedIdentity !== undefined && pickedIdentity.id !== live.counterpartyId,
+            },
           ),
-    [context, live, handleLinkCounterparty, handleOpenCounterparty],
+    [context, live, pickedIdentity, handleLinkCounterparty, handleOpenCounterparty],
   );
 
   const today = useMemo(() => deviceRuntime().capture().date, []);

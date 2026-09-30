@@ -222,3 +222,14 @@ export function parseFloatPosition(raw: string): FloatPosition | null {
 export function serializeFloatPosition(position: FloatPosition): string {
   return JSON.stringify(position);
 }
+
+/**
+ * Which half of the frame the button is in — so the one other thing that floats
+ * at the bottom (`TodayPill`) can take the opposite side. A parked tab counts by
+ * its column; the default position is bottom-right.
+ */
+export function floatSide(position: FloatPosition | null, width: number): "left" | "right" {
+  if (position === null) return "right";
+  const centre = position.dock ?? position.x + floating.size / 2;
+  return centre < width / 2 ? "left" : "right";
+}

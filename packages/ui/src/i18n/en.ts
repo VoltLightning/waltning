@@ -319,6 +319,9 @@ export const en = {
      * own window would contradict the number over its head.
      */
     noMatchesHere: "Nothing here matches \u201C{{query}}\u201D.",
+    accountEmptyTitle: "Nothing in {{account}} yet",
+    accountEmptyBody:
+      "No transactions have been recorded on it. Clear the filter to see the rest of the ledger.",
     amount: "Amount",
     account: "Account",
     /**
@@ -501,6 +504,8 @@ export const en = {
     transferArrow: "→",
     transferTo: "To {{account}}",
     transferKind: "Transfer",
+    /** A row with no entered name and no category is titled by what it is. */
+    adjustmentKind: "Adjustment",
     /** Short swipe's action (S10 §4, §7) — announced, not only shown. */
     categorise: "Categorise",
     /** `Skeleton`'s accessible label while a page loads. */
@@ -611,6 +616,7 @@ export const en = {
     newLine: "New line",
     total: "Adds up to",
     linesUnbalanced: "The lines must add up to the transaction's total.",
+    lineAmountMissing: "Enter an amount.",
     /** §6.9: every read path filters `deleted_at` — a soft-deleted row answers this, not a crash. */
     notFound: "This transaction no longer exists.",
     /** S09 — the chip that opens the obligation picker when nobody is named yet. */
@@ -619,6 +625,8 @@ export const en = {
     contextLabel: "What this means",
     contextInMonth: "{{month}} · {{times}}×",
     contextSeeAll: "See all",
+    contextChange: "Change",
+    contextUnsaved: "Not saved yet",
     contextUsual: "usual",
     contextOneOff: "One-off — left out of comparisons",
     /** §5 — another row in the card was a one-off and is not in its figures. */
@@ -1756,6 +1764,10 @@ export const en = {
      * or not another attempt could clear it.
      */
     ledgerFailedTitle: "The ledger could not open",
+    renderFailedTitle: "This screen stopped working",
+    renderFailedBody:
+      "Something went wrong while drawing it. Your ledger is untouched. Try again; if it keeps happening, restart the app.",
+    renderFailedRestart: "Restart the app",
     /**
      * The failing layer's own sentence, shown verbatim on the terminal branch
      * — the migrator writes for a person, so replacing it would lose the one

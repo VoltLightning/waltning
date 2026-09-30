@@ -8,9 +8,12 @@
  * that day's neighbourhood and nothing else. Walking home from 2021 is not a
  * scroll, it is four years of them.
  *
- * **It floats rather than sitting in the layout**, because the list under it is
- * infinite in both directions: a control in the flow would be a control the
- * reader scrolls away from, which is the one thing this must never be.
+ * **It floats, and changes no layout.** The list under it is infinite in both
+ * directions, so the pill must be somewhere the reader never scrolls away from
+ * — and it is shown while the anchor is off today, which changes on every
+ * scroll settle. A band reserved for it above the rows dropped every row by
+ * the pill's height one day off today and lifted them again on the way back;
+ * a floated pill moves nothing.
  *
  * **Not `shadow.float`.** §2.5 reserves that for the add button, and
  * `<Toast>` extended it once to the second thing that sits above the *screen*.
@@ -19,9 +22,12 @@
  * system does. A third float would leave the token meaning "important" rather
  * than "above the page".
  *
- * **Top-centre, not bottom.** The add button owns the bottom corners and is
- * draggable to either side edge at any height (§2.9); the tab bar owns the rest
- * of the bottom. The top of the list is the one region no floating thing claims.
+ * **On the add button's line, on the side it is not.** The button is draggable to
+ * either side edge (§2.9) and defaults to bottom-right; the pill sits opposite it, centred on the same line with the
+ * same inset from the list's bottom edge. The list already ends with the
+ * button's clearance (`useFloatingClearance`), so at the end of the list the
+ * pill covers nothing, exactly as the button does; mid-scroll it overlaps
+ * rows as the button does.
  */
 
 import { useEffect } from "react";
@@ -35,7 +41,7 @@ import { focusBorder } from "../../../theme/focus.ts";
 import { text } from "../../../theme/fonts.ts";
 import { useTheme } from "../../../theme/provider";
 import { makeStyles } from "../../../theme/styles.ts";
-import { motion, radius, space, touchTarget } from "../../../tokens.ts";
+import { floating, motion, radius, space, touchTarget } from "../../../tokens.ts";
 import { CalendarBlankIcon } from "../../phosphor";
 
 /** The slide distance. `<Toast>`'s own: an object settling into place, not travelling. */
@@ -48,9 +54,15 @@ export type TodayPillProps = {
   /** What the pill announces — where the list is, and that this returns it. */
   accessibilityLabel: string;
   onPress: () => void;
+  /**
+   * The side it rests on — **the one the add button is not on.** The button is
+   * draggable to either side edge, and a pill under it would hide the only way
+   * back from a jump. Default `left`: the button's own default is bottom-right.
+   */
+  side?: "left" | "right";
 };
 
-export function TodayPill({ label, accessibilityLabel, onPress }: TodayPillProps) {
+export function TodayPill({ label, accessibilityLabel, onPress, side = "left" }: TodayPillProps) {
   const styles = useStyles();
   const theme = useTheme();
   const { focused, handlers } = useInteraction();
@@ -72,7 +84,7 @@ export function TodayPill({ label, accessibilityLabel, onPress }: TodayPillProps
    * failure for this component, where a fade's failure is a control the reader
    * cannot find.
    */
-  const ty = useSharedValue(reduced ? 0 : -ENTER_OFFSET);
+  const ty = useSharedValue(reduced ? 0 : ENTER_OFFSET);
   useEffect(() => {
     if (reduced) {
       ty.value = 0;
@@ -81,15 +93,13 @@ export function TodayPill({ label, accessibilityLabel, onPress }: TodayPillProps
     ty.value = withTiming(0, { duration: motion.move.duration, easing: easing.move });
   }, [reduced, ty]);
 
-  // Down, not up: it arrives from the chrome above the list, which is where a
-  // reader's eye already is after a tap that moved the date.
+  // Up from below: it arrives from the edge it rests against.
   const entrance = useAnimatedStyle(() => ({ transform: [{ translateY: ty.value }] }));
 
   return (
-    // The row is the positioned layer and the pill is centred in it, so the
-    // pill is as wide as its own words. A `left: 0; right: 0` pill would be a
-    // full-width bar, which is a banner and says something else.
-    <View style={styles.layer}>
+    // The layer is the positioned box and holds the pill at its own width. A
+    // `left: 0; right: 0` pill would be a full-width bar, which is a banner.
+    <View style={[styles.layer, side === "left" ? styles.left : styles.right]}>
       <Animated.View style={entrance}>
         <PressableScaled
           accessibilityRole="button"
@@ -122,18 +132,17 @@ const HIDDEN: { "aria-hidden": true } = { "aria-hidden": true };
 const useStyles = makeStyles((theme) => ({
   layer: {
     position: "absolute",
-    top: space.md,
-    left: 0,
-    right: 0,
-    alignItems: "center",
+    // The add button's line: its inset from the bottom, and its centre — the
+    // button is 56 tall and the pill a 44pt target.
+    bottom: floating.inset + (floating.size - touchTarget.min) / 2,
     // Above the rows it covers. Not `shadow.float`'s layer — see the header.
     zIndex: 1,
-    // The layer spans the page's width and the pill does not, so without this
-    // the empty half of the row would eat taps meant for the list under it.
     // On `style`, not as a prop: the prop is deprecated and warns on every
     // render.
     pointerEvents: "box-none",
   },
+  left: { left: floating.inset },
+  right: { right: floating.inset },
   pill: {
     minHeight: touchTarget.min,
     flexDirection: "row",

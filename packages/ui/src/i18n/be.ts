@@ -177,6 +177,8 @@ export const be: Messages = {
     aheadRunOne: "{{count}} дзень · яшчэ наперадзе",
     aheadRunMany: "Дзён: {{count}} · яшчэ наперадзе",
     noMatchesHere: "Нічога не падыходзіць пад «{{query}}».",
+    accountEmptyTitle: "На рахунку {{account}} пакуль нічога няма",
+    accountEmptyBody: "Аперацый па ім не запісана. Скіньце фільтр, каб убачыць астатнюю кнігу.",
     amount: "Сума",
     account: "Рахунак",
     chooseAccount: "Які?",
@@ -246,6 +248,7 @@ export const be: Messages = {
     transferArrow: "→",
     transferTo: "На {{account}}",
     transferKind: "Перавод",
+    adjustmentKind: "Карэкцыя",
     categorise: "Размеркаваць",
     loadingTransactions: "Загрузка аперацый",
     emptyFirstRunTitle: "Аперацый пакуль няма",
@@ -310,6 +313,7 @@ export const be: Messages = {
     newLine: "Новы радок",
     total: "У суме",
     linesUnbalanced: "Сума пазіцый павінна супадаць з сумай аперацыі.",
+    lineAmountMissing: "Увядзіце суму.",
     notFound: "Гэтай аперацыі больш няма.",
     /** S09 — the chip that opens the obligation picker when nobody is named yet. */
     someoneOwes: "Нехта вінен",
@@ -317,6 +321,8 @@ export const be: Messages = {
     contextLabel: "Што гэта значыць",
     contextInMonth: "{{month}} · {{times}}×",
     contextSeeAll: "Паказаць усё",
+    contextChange: "Змяніць",
+    contextUnsaved: "Яшчэ не захавана",
     contextUsual: "звычайна",
     contextOneOff: "Разовая — не ўлічваецца ў параўнаннях",
     /** §5 — another row in the card was a one-off and is not in its figures. */
@@ -979,6 +985,10 @@ export const be: Messages = {
   },
   startup: {
     ledgerFailedTitle: "Не ўдалося адкрыць улік",
+    renderFailedTitle: "Гэты экран перастаў працаваць",
+    renderFailedBody:
+      "Пры адмалёўцы нешта пайшло не так. Ваш улік не закрануты. Паспрабуйце яшчэ раз; калі паўторыцца, перазапусціце праграму.",
+    renderFailedRestart: "Перазапусціць праграму",
     ledgerFailedBody: "{{message}}",
     ledgerBusyBody: "Улік яшчэ адкрыты ў іншай укладцы. Закрыйце яе і паспрабуйце зноў.",
     ledgerUnavailableBody: "Рухавік уліку не запусціўся. Звычайна дапамагае перазагрузка.",

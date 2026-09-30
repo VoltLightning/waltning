@@ -179,6 +179,9 @@ export const ru: Messages = {
     aheadRunOne: "{{count}} день · ещё впереди",
     aheadRunMany: "Дней: {{count}} · ещё впереди",
     noMatchesHere: "Ничего не подходит под «{{query}}».",
+    accountEmptyTitle: "На счёте {{account}} пока ничего нет",
+    accountEmptyBody:
+      "Операций по нему не записано. Сбросьте фильтр, чтобы увидеть остальную книгу.",
     amount: "Сумма",
     account: "Счёт",
     chooseAccount: "Какой?",
@@ -248,6 +251,7 @@ export const ru: Messages = {
     transferArrow: "→",
     transferTo: "На {{account}}",
     transferKind: "Перевод",
+    adjustmentKind: "Корректировка",
     categorise: "Разнести",
     loadingTransactions: "Загрузка операций",
     emptyFirstRunTitle: "Операций пока нет",
@@ -312,6 +316,7 @@ export const ru: Messages = {
     newLine: "Новая строка",
     total: "В сумме",
     linesUnbalanced: "Сумма позиций должна совпадать с суммой операции.",
+    lineAmountMissing: "Введите сумму.",
     notFound: "Этой операции больше нет.",
     /** S09 — the chip that opens the obligation picker when nobody is named yet. */
     someoneOwes: "Кто-то должен",
@@ -319,6 +324,8 @@ export const ru: Messages = {
     contextLabel: "Что это значит",
     contextInMonth: "{{month}} · {{times}}×",
     contextSeeAll: "Показать все",
+    contextChange: "Изменить",
+    contextUnsaved: "Ещё не сохранено",
     contextUsual: "обычно",
     contextOneOff: "Разовая — не учитывается в сравнениях",
     /** §5 — another row in the card was a one-off and is not in its figures. */
@@ -982,6 +989,10 @@ export const ru: Messages = {
   },
   startup: {
     ledgerFailedTitle: "Не удалось открыть учёт",
+    renderFailedTitle: "Этот экран перестал работать",
+    renderFailedBody:
+      "При отрисовке что-то пошло не так. Ваш учёт не затронут. Попробуйте ещё раз; если повторится, перезапустите приложение.",
+    renderFailedRestart: "Перезапустить приложение",
     ledgerFailedBody: "{{message}}",
     ledgerBusyBody: "Учёт ещё открыт в другой вкладке. Закройте её и попробуйте снова.",
     ledgerUnavailableBody: "Движок учёта не запустился. Обычно помогает перезагрузка.",

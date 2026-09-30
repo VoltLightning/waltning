@@ -133,7 +133,7 @@ export function HoldingsCard({
 
   // The room a figure in the line under the total has — measured here, because
   // in that row a figure would only ever measure itself (`Amount`'s `fitWidth`).
-  const [lineWidth, setLineWidth] = useState(0);
+  const [lineWidth, setLineWidth] = useState<number | null>(null);
   const handleFiguresLayout = useCallback((event: LayoutChangeEvent) => {
     setLineWidth(Math.floor(event.nativeEvent.layout.width));
   }, []);
@@ -435,19 +435,20 @@ function FittedPart({
   value: money.Money;
   currency: string;
   decimals: number;
-  lineWidth: number;
+  lineWidth: number | null;
   label: string;
   dot?: boolean;
   kind?: AmountKind;
 }) {
   const styles = useStyles();
-  const [tail, setTail] = useState(0);
+  const [tail, setTail] = useState<number | null>(null);
   const handleTailLayout = useCallback((event: LayoutChangeEvent) => {
     setTail(Math.floor(event.nativeEvent.layout.width));
   }, []);
-  // Zero until the word has been measured, which keeps the figure unseen
-  // rather than drawn at a size it will not keep.
-  const room = tail === 0 ? 0 : Math.max(1, lineWidth - tail - space.xs);
+  // `null` until the line and the word are both measured, which keeps the
+  // figure unseen rather than drawn at a size it will not keep.
+  const room =
+    tail === null || lineWidth === null ? null : Math.max(0, lineWidth - tail - space.xs);
   return (
     <>
       <Amount

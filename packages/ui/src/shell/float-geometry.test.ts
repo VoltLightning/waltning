@@ -5,6 +5,7 @@ import {
   clampFloat,
   defaultFloat,
   dockFrame,
+  floatSide,
   inDockBand,
   overshootOf,
   parseFloatPosition,
@@ -110,5 +111,18 @@ describe("the floating add button's geometry (§2.9)", () => {
     expect(parseFloatPosition('{"x":"12","y":3,"dock":null}')).toBeNull();
     expect(parseFloatPosition('{"x":1,"y":2}')).toBeNull();
     expect(parseFloatPosition("null")).toBeNull();
+  });
+});
+
+describe("floatSide", () => {
+  it("is right by default and follows where the button was let go", () => {
+    expect(floatSide(null, 390)).toBe("right");
+    expect(floatSide({ x: 16, y: 500, dock: null }, 390)).toBe("left");
+    expect(floatSide({ x: 318, y: 500, dock: null }, 390)).toBe("right");
+  });
+
+  it("reads a parked tab by its column", () => {
+    expect(floatSide({ x: 318, y: 500, dock: 40 }, 390)).toBe("left");
+    expect(floatSide({ x: 16, y: 500, dock: 350 }, 390)).toBe("right");
   });
 });

@@ -153,6 +153,17 @@ describe("Amount", () => {
     expect(getComputedStyle(sized.getByText(/999/)).opacity).not.toBe("0");
   });
 
+  /** *Not measured* and *measured as nothing* are different: the second is drawn, at its floor. */
+  it("draws a figure whose room measured as nothing", () => {
+    const wide = money.toMoney("999999999999.99");
+    const none = render(<Amount value={wide} currency="EUR" fit fitWidth={0} />);
+    expect(getComputedStyle(none.getByText(/999/)).opacity).not.toBe("0");
+    expect(fitScale("-999 999 999 999.99", "EUR", 38, 12, 0)).toBe(FIT_MIN_SCALE);
+    none.unmount();
+    const pending = render(<Amount value={wide} currency="EUR" fit fitWidth={null} />);
+    expect(getComputedStyle(pending.getByText(/999/)).opacity).toBe("0");
+  });
+
   describe("fitScale", () => {
     const figure = "-100 000 000 504.20";
     it("leaves a figure that already fits at full size", () => {
@@ -171,7 +182,7 @@ describe("Amount", () => {
       expect(fitScale(widest, "EUR", 38, 12, 290)).toBeGreaterThan(FIT_MIN_SCALE);
     });
     it("does nothing before the width is known", () => {
-      expect(fitScale(figure, "EUR", 38, 12, 0)).toBe(1);
+      expect(fitScale(figure, "EUR", 38, 12, null)).toBe(1);
     });
   });
 });

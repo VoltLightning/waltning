@@ -7,13 +7,23 @@
  * listing that spending — true of the currency, false of the period.
  */
 
-import { render, screen } from "@testing-library/react";
+import { act, render, screen, within } from "@testing-library/react";
 import * as money from "@waltning/core/money";
 import { describe, expect, it } from "vitest";
 import { I18nProvider } from "../../../i18n/provider";
 import { ThemeProvider } from "../../../theme/provider";
 import { light } from "../../../theme/roles";
 import { MonthSummary } from "./month-summary";
+
+/** Fires the `onLayout` RNW would, from a ResizeObserver jsdom does not have. */
+function layOut(node: Element | null | undefined, width: number) {
+  const handler: unknown =
+    node === null || node === undefined ? undefined : Reflect.get(node, "__reactLayoutHandler");
+  if (typeof handler !== "function") throw new Error("no layout handler on that node");
+  act(() => {
+    handler({ nativeEvent: { layout: { x: 0, y: 0, width, height: 20 } } });
+  });
+}
 
 function draw(overrides: Partial<React.ComponentProps<typeof MonthSummary>> = {}) {
   render(
@@ -62,5 +72,36 @@ describe("MonthSummary", () => {
     for (const figure of screen.getAllByText(/999/)) {
       expect(getComputedStyle(figure).whiteSpace, figure.textContent ?? "").toBe("nowrap");
     }
+  });
+
+  /**
+   * A long label (German at a large text size, any label at an accessibility
+   * size) would leave a figure beside it no room: the figure goes under it, on
+   * its own line, and is drawn.
+   */
+  it("puts the compact figure under a label that takes more than half the row", () => {
+    draw({
+      layout: "compact",
+      labels: { net: "A very long label for the month", inflow: "In", spend: "Out" },
+    });
+    const label = screen.getByText("A very long label for the month");
+    const row = label.parentElement;
+    const figure = label.nextElementSibling;
+    expect(getComputedStyle(row as Element).flexDirection).toBe("row");
+    layOut(row, 300);
+    layOut(label, 200);
+    expect(getComputedStyle(row as Element).flexDirection).toBe("column");
+    layOut(figure, 300);
+    const shown = within(figure as HTMLElement).getByText(/1.200/);
+    expect(getComputedStyle(shown).opacity).not.toBe("0");
+  });
+
+  it("keeps the compact figure beside a short label", () => {
+    draw({ layout: "compact" });
+    const label = screen.getByText("Kept so far");
+    const row = label.parentElement;
+    layOut(row, 300);
+    layOut(label, 90);
+    expect(getComputedStyle(row as Element).flexDirection).toBe("row");
   });
 });

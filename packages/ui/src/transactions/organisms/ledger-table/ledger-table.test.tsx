@@ -69,6 +69,20 @@ describe("LedgerTable", () => {
     expect(screen.getAllByText("Mine").length).toBeGreaterThan(0);
   });
 
+  /** S10 §4 — an unnamed row is titled by its kind, never by a dash in the identity column. */
+  it("titles an unnamed row by its kind when it has no category either", () => {
+    render(
+      <LedgerTable
+        rows={[row({ id: "9", enteredName: "", category: "", type: "income" })]}
+        sort={null}
+        onSortColumn={noop}
+        selection={selectionOf()}
+        onOpenRow={noop}
+      />,
+    );
+    expect(screen.getByText("Income")).toBeDefined();
+  });
+
   /** The table contains its own overscroll, so reaching its end does not scroll the page. */
   it("contains its own overscroll", () => {
     render(

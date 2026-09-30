@@ -97,10 +97,12 @@ export type AmountProps = {
   /**
    * The width `fit` fits to, when the caller knows it. **Needed wherever the
    * figure sits in a row**: a row gives a child its content's width, so the
-   * figure would be measuring itself and shrink for ever. A column parent
+   * figure would be measuring itself and shrink for ever. `null` is *not
+   * measured yet* (the figure stays unseen), `0` is *measured, and none*
+   * (the figure is drawn at its floor). A column parent
    * stretches the figure and needs nothing.
    */
-  fitWidth?: number;
+  fitWidth?: number | null;
 };
 
 /** Keeps the estimate below the truth's width: the estimate is a model, the glyphs are not. */
@@ -142,10 +144,12 @@ export function fitScale(
   mark: string,
   fontSize: number,
   markSize: number,
-  width: number,
+  width: number | null,
 ): number {
   const needed = figureWidth(figure, mark, fontSize, markSize);
-  if (needed <= 0 || width <= 0) return 1;
+  // Not measured yet: full size, and the caller keeps it unseen. Measured as
+  // nothing: the floor, which is as small as a figure gets.
+  if (needed <= 0 || width === null) return 1;
   return Math.min(1, Math.max(FIT_MIN_SCALE, (width * FIT_MARGIN) / needed));
 }
 
@@ -270,11 +274,11 @@ export function Amount({
   // column the wrapper is as wide as the room there is; in a row it is as wide
   // as its own content, and a scale taken from that is a scale taken from
   // itself (`fitWidth` is for those).
-  const [measured, setMeasured] = useState(0);
+  const [measured, setMeasured] = useState<number | null>(null);
   const handleLayout = useCallback((event: LayoutChangeEvent) => {
     setMeasured(Math.floor(event.nativeEvent.layout.width));
   }, []);
-  const available = fitWidth ?? measured;
+  const available = fitWidth === undefined ? measured : fitWidth;
   const scale = fit ? fitScale(shown, shownMark, fontSize, markSize, available) : 1;
   const scaled = scale === 1 ? null : scaleStyle(step, scale);
   const fitProps = fit
@@ -300,7 +304,7 @@ export function Amount({
         scaled,
         tone,
         emphasis === "muted" ? styles.muted : null,
-        fit && available <= 0 ? styles.unmeasured : null,
+        fit && available === null ? styles.unmeasured : null,
       ]}
     >
       {prefix}

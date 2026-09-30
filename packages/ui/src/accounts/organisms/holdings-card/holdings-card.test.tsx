@@ -5,11 +5,21 @@
  * what it draws and where its doors lead.
  */
 
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import * as money from "@waltning/core/money";
 import { describe, expect, it, vi } from "vitest";
 import { I18nProvider } from "../../../i18n/provider";
 import { HoldingsCard, type HoldingsCardProps } from "./holdings-card";
+
+/** Fires the `onLayout` RNW would, from a ResizeObserver jsdom does not have. */
+function layOut(node: Element | null | undefined, width: number) {
+  const handler: unknown =
+    node === null || node === undefined ? undefined : Reflect.get(node, "__reactLayoutHandler");
+  if (typeof handler !== "function") throw new Error("no layout handler on that node");
+  act(() => {
+    handler({ nativeEvent: { layout: { x: 0, y: 0, width, height: 20 } } });
+  });
+}
 
 function props(overrides: Partial<HoldingsCardProps> = {}): HoldingsCardProps {
   return {
@@ -195,15 +205,34 @@ describe("HoldingsCard", () => {
     }
   });
 
-  /** The label beside a figure is measured, not assumed: the longest language's still sits beside it. */
-  it("keeps the figure and its long Polish word in one part", () => {
-    render(
-      <I18nProvider locale="pl">
-        <HoldingsCard {...props({ owed: money.toMoney("999999999999.99") })} />
-      </I18nProvider>,
-    );
-    for (const figure of screen.getAllByText(/999/)) {
-      expect(getComputedStyle(figure).whiteSpace).toBe("nowrap");
-    }
+  /**
+   * The room a figure gets is what its line leaves after its own word, measured:
+   * a wider word leaves a smaller figure, and nothing is drawn until both the
+   * line and the word have been measured.
+   */
+  it("fits the figure to the room its measured word leaves", () => {
+    const sizeAfter = (tail: number) => {
+      const view = render(
+        <I18nProvider locale="pl">
+          <HoldingsCard {...props({ owed: money.toMoney("999999999999.99") })} />
+        </I18nProvider>,
+      );
+      const word = screen.getByText("do spłaty");
+      const part = word?.parentElement?.parentElement;
+      const line = part?.parentElement;
+      const figures = line?.parentElement;
+      const figure = within(part as HTMLElement).getByText(/999/);
+      // Not measured: unseen.
+      expect(getComputedStyle(figure).opacity).toBe("0");
+      // The word's layout alone (the line not yet measured) is still not enough.
+      layOut(word?.parentElement, tail);
+      expect(getComputedStyle(figure).opacity).toBe("0");
+      layOut(figures, 300);
+      expect(getComputedStyle(figure).opacity).not.toBe("0");
+      const size = Number.parseFloat(figure.style.fontSize || "14.5");
+      view.unmount();
+      return size;
+    };
+    expect(sizeAfter(250)).toBeLessThan(sizeAfter(20));
   });
 });
