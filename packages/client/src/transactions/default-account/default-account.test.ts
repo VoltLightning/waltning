@@ -30,15 +30,25 @@ describe("soleEligibleAccount — S05 §9.2's single-account case", () => {
     expect(soleEligibleAccount(TWO)).toBeNull();
   });
 
-  it("does not count an account that cannot take the row, or an archived one", () => {
+  it("counts every live account, rated or not — a rate is the banner's question, not this rule's", () => {
+    // A pivot account beside a foreign one with no rate is a choice of two.
     expect(
       soleEligibleAccount([
         { id: "account-a", capturable: true },
         { id: "account-b", capturable: false },
+      ]),
+    ).toBeNull();
+    // The mirror: a lone rate-less account is still the only one there is.
+    expect(soleEligibleAccount([{ id: "account-b", capturable: false }])).toBe("account-b");
+  });
+
+  it("does not count an archived account, and names nothing for an empty ledger", () => {
+    expect(
+      soleEligibleAccount([
+        { id: "account-a", capturable: true },
         { id: "account-c", capturable: true, archived: true },
       ]),
     ).toBe("account-a");
-    expect(soleEligibleAccount([{ id: "account-b", capturable: false }])).toBeNull();
     expect(soleEligibleAccount([])).toBeNull();
   });
 });

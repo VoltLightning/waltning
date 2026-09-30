@@ -176,7 +176,18 @@ function pickSharedAccount() {
   fireEvent.click(screen.getByRole("radio", { name: "Joint · PLN" }));
 }
 
+/** `react-native-web` re-reads the window on a `resize` — the height a phone's layout decides compactness from. */
+function resizeHeight(height: number) {
+  Object.defineProperty(document.documentElement, "clientHeight", {
+    value: height,
+    configurable: true,
+  });
+  window.dispatchEvent(new Event("resize"));
+}
+
 beforeEach(() => {
+  // Tall by default: the full column. The compact tests name a short phone.
+  resizeHeight(900);
   router.push.mockClear();
   router.back.mockClear();
   router.dismissTo.mockClear();
@@ -192,6 +203,25 @@ describe("QuickAdd — the phone path (Dock + QuickAddComposer)", () => {
     ).toBeDefined();
     expect(screen.getByText("PLN")).toBeDefined();
     expect(screen.getByRole("button", { name: "Save expense" })).toHaveProperty("disabled", false);
+  });
+
+  it("fills a lone account even when its currency has no rate, and lets the banner speak", () => {
+    withLedger({ accounts: [ACCOUNT], capturable: false });
+    expect(
+      screen.getByRole("button", { name: "From: Cash · PLN, filled automatically" }),
+    ).toBeDefined();
+    expect(screen.getByText(/needs an exchange rate/)).toBeDefined();
+  });
+
+  it("leaves a rated account and a rate-less one as a choice of two", () => {
+    withLedger({ accounts: [ACCOUNT, JPY_ACCOUNT] });
+    expect(screen.getByRole("button", { name: "From: Which one?" })).toBeDefined();
+  });
+
+  it("closes without a Discard question when the only thing filled is the lone account", () => {
+    withLedger({ accounts: [ACCOUNT] });
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(router.back).toHaveBeenCalledOnce();
   });
 
   it("leaves the account row a question, unerrored, when two accounts could take it", () => {
@@ -470,6 +500,19 @@ describe("QuickAdd — the kind (S05 §3)", () => {
     fireEvent.click(screen.getByRole("tab", { name: "Transfer" }));
     expect(router.replace).toHaveBeenCalledWith("/transfer");
     alert.mockRestore();
+  });
+
+  it("runs compact on a 740 pt window from the first frame: no footnote, no day line, the row under the amount", () => {
+    resizeHeight(740);
+    withLedger();
+    expect(screen.queryByText("Saved on your phone — syncs when you're back online")).toBeNull();
+    expect(screen.queryByText(weekdayLabel(deviceRuntime().capture().date, "en"))).toBeNull();
+    expect(screen.getByRole("button", { name: /^From/ })).toBeDefined();
+  });
+
+  it("keeps the footnote on a tall window", () => {
+    withLedger();
+    expect(screen.getByText("Saved on your phone — syncs when you're back online")).toBeDefined();
   });
 
   it("stamps the draft's day under the name", () => {

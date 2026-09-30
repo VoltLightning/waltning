@@ -114,9 +114,10 @@ export type QuickAddComposerProps = {
   /** The account row fills machine, carrying the trail — `useLastUsedAccount`'s own result. */
   accountMachineFilled: boolean;
   /**
-   * The keyboard is up and the page is short: the amount card gives up its
-   * label and some air so the account row sits in the first view, under the
-   * amount, instead of under the fold.
+   * The window is short: the amount card gives up its label, its pace line and
+   * some air so the account row sits in the first view, under the amount,
+   * instead of under the fold. Decided from the window's height by the screen,
+   * never from the keyboard's events.
    */
   compact?: boolean;
   /** Opens `AccountPicker` (`accounts/`) — the screen composes it and wires its own pick straight to `accountId`, this only ever asks. */
@@ -455,7 +456,7 @@ export function QuickAddComposer({
           // The code: `AmountCard` draws the pivot's symbol or the code (`04` §4.1).
           currency={selectedAccount?.currency}
           kind={type}
-          context={pace}
+          context={compact ? undefined : pace}
           error={amountError}
           autoFocus
           compact={compact}
@@ -843,7 +844,7 @@ function isObligationRole(value: string): value is ObligationRole {
 const useStyles = makeStyles((theme) => ({
   // The deck's 20 between blocks — the same gap the page keeps between its cards.
   root: { gap: space.x4 },
-  rootCompact: { gap: space.x3 },
+  rootCompact: { gap: space.sm },
   formLevel: { gap: space.xs, paddingHorizontal: space.xs },
   formLevelHeading: { color: theme.dangerText, ...text.ui("body", 600) },
   fieldError: { color: theme.dangerText, ...text.ui("caption") },

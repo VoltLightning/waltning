@@ -26,10 +26,21 @@ export type DefaultAccountCandidate = LastUsedAccountCandidate & {
   archived?: boolean;
 };
 
-/** The one account that can take a row, or `null` when there are none or several. */
+/**
+ * The one account the picker would offer, or `null` when there are none or
+ * several.
+ *
+ * **Every live account counts, rated or not.** Whether an account can take a
+ * row today (`capturable` — its currency has a rate) is a separate question
+ * the needs-rate banner and Save's gate already answer; counting only rated
+ * accounts would fill a pivot-currency account whenever a foreign one lacks a
+ * rate, and a purchase in the foreign currency would be saved against it.
+ * `archived` cannot be true from the screen (the snapshot's account list
+ * already leaves archived ones out); it is checked so the rule stands alone.
+ */
 export function soleEligibleAccount(accounts: readonly DefaultAccountCandidate[]): string | null {
-  const eligible = accounts.filter((account) => account.capturable && account.archived !== true);
-  const [only, ...rest] = eligible;
+  const live = accounts.filter((account) => account.archived !== true);
+  const [only, ...rest] = live;
   return only !== undefined && rest.length === 0 ? only.id : null;
 }
 
