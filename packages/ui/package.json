@@ -110,6 +110,7 @@
     "./shell/atoms/flow-bar/flow-bar": "./src/shell/atoms/flow-bar/flow-bar.tsx",
     "./shell/back-mark": "./src/shell/molecules/page-header/back-mark.tsx",
     "./shell/card": "./src/shell/molecules/card/card.tsx",
+    "./shell/collapse-inset": "./src/shell/atoms/collapse-inset.tsx",
     "./shell/comparison-table": "./src/shell/molecules/comparison-table/comparison-table.tsx",
     "./shell/confirm-dialog": "./src/shell/organisms/confirm-dialog/confirm-dialog.tsx",
     "./shell/currency-totals": "./src/shell/molecules/currency-totals/currency-totals.tsx",

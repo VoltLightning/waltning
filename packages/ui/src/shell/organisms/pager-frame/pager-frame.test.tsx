@@ -6,6 +6,8 @@ import type { SharedValue } from "react-native-reanimated";
 import { expect, it, vi } from "vitest";
 import { ThemeProvider } from "../../../theme/provider";
 import { light } from "../../../theme/roles.ts";
+import { space } from "../../../tokens.ts";
+import { GroundPanel } from "../../molecules/card/card";
 import { COLLAPSE_TRAVEL } from "../../molecules/pager-header/collapse.ts";
 import type { PagerPage } from "../pager/pager";
 import { PagerFrame } from "./pager-frame";
@@ -81,60 +83,110 @@ it("reports a tap on a name the same way a swipe reports itself", () => {
 });
 
 /**
- * The chrome's footprint, read off the rendered styles at a given offset.
+ * The chrome's footprint and the pager's box, read off the rendered styles at a
+ * given offset.
  *
- * Both numbers come from `useAnimatedStyle`, which the jsdom mock evaluates
+ * Both come from `useAnimatedStyle`, which the jsdom mock evaluates
  * immediately and writes as inline style — so the resolved geometry is
  * readable without laying anything out. The chrome is the element carrying a
- * `margin-bottom`; nothing else in this tree sets one.
+ * `margin-bottom`; nothing else in this tree sets one, and the pager's box is
+ * the element that follows it.
  */
-function chromeGeometry(): { height: number; margin: number; pagerShift: number } {
+function geometry(): { height: number; margin: number; pagerStyle: string } {
   const chrome = document.querySelector<HTMLElement>('div[style*="margin-bottom"]');
   if (chrome === null) throw new Error("the chrome carries no margin — it gives nothing back");
   const header = chrome.firstElementChild as HTMLElement | null;
   if (header === null) throw new Error("the chrome has no header");
   const pager = chrome.nextElementSibling as HTMLElement | null;
   if (pager === null) throw new Error("nothing follows the chrome");
-  const shift = /translateY\((-?[\d.]+)px\)/.exec(pager.style.transform);
   return {
     height: Number.parseFloat(header.style.height),
     margin: Number.parseFloat(chrome.style.marginBottom),
-    pagerShift: shift === null ? 0 : Number(shift[1]),
+    pagerStyle: pager.getAttribute("style") ?? "",
   };
 }
 
-it("gives back exactly what the header takes, so the pager never changes size", () => {
+/** The top padding of the first page's scroll content — where its first row starts. */
+function contentTop(): number {
+  const scroller = screen.getAllByTestId("ground-panel-scroll")[0];
+  const content = scroller?.firstElementChild as HTMLElement | null;
+  if (content === null || content === undefined) throw new Error("no scroll content");
+  return Number.parseFloat(content.style.paddingTop);
+}
+
+/** Offsets across the whole travel, both sides of it, and tiny steps around the midpoint. */
+const OFFSETS = [
+  -20,
+  0,
+  1,
+  COLLAPSE_TRAVEL / 2 - 0.5,
+  COLLAPSE_TRAVEL / 2,
+  COLLAPSE_TRAVEL / 2 + 0.5,
+  COLLAPSE_TRAVEL / 2,
+  COLLAPSE_TRAVEL - 1,
+  COLLAPSE_TRAVEL,
+  COLLAPSE_TRAVEL + 400,
+];
+
+it("never moves or resizes the pager, whatever the offset", () => {
   /**
-   * **The guarantee the whole change exists for, asserted where it is applied
-   * rather than where it is defined.**
+   * **The loop this exists to rule out.** The header used to give up its height
+   * by moving the pager — a translate that was a function of the scroll offset
+   * — and a scroller whose own frame is a function of its offset is a feedback
+   * loop under the finger: the drag moves the frame, the frame moves the drag.
+   * At the point where the header changes shape it is an oscillation.
    *
-   * `collapse.test.ts` checks that `headerHeight(p) - chromeSlack(p)` is the
-   * collapsed height — but those are two exported functions and that identity
-   * is true whether or not any component calls either of them. Delete both
-   * animated styles from `pager-frame.tsx` and every other test in this package
-   * still passes, while the feedback loop is back: the header resizes the
-   * scroller it reads, the scroller clamps the offset, and the bar flickers.
-   *
-   * So this reads the resolved styles instead. The chrome's own footprint —
-   * its header's height plus its negative margin — must be the same number at
-   * both ends of the travel, and the pager must be pushed down by exactly what
-   * the margin took away.
+   * So the scroll may change the header and nothing else. The chrome's
+   * footprint (its header's height plus its negative margin) and the pager's
+   * box must be the same at every offset, walked in both directions with tiny
+   * steps around the midpoint — and the room the page leaves for the header
+   * overlay must not depend on the offset either.
    */
-  const { unmount } = draw({ scrollY: { value: 0 } as SharedValue<number> });
-  const open = chromeGeometry();
+  const { unmount } = draw({
+    scrollY: { value: 0 } as SharedValue<number>,
+    pages: [
+      { key: "summary", label: "Summary", node: <GroundPanel>{null}</GroundPanel> },
+      { key: "list", label: "List", node: <Text>list body</Text> },
+    ],
+    activeKey: "summary",
+  });
+  const rest = geometry();
+  const restTop = contentTop();
   unmount();
 
-  draw({ scrollY: { value: COLLAPSE_TRAVEL } as SharedValue<number> });
-  const shut = chromeGeometry();
+  let collapsedAtLeastOnce = false;
+  for (const offset of OFFSETS) {
+    const view = draw({
+      scrollY: { value: offset } as SharedValue<number>,
+      pages: [
+        { key: "summary", label: "Summary", node: <GroundPanel>{null}</GroundPanel> },
+        { key: "list", label: "List", node: <Text>list body</Text> },
+      ],
+      activeKey: "summary",
+    });
+    const here = geometry();
+    if (here.height < rest.height) collapsedAtLeastOnce = true;
+    expect(here.height + here.margin, `the chrome's footprint moved at ${offset}`).toBeCloseTo(
+      rest.height + rest.margin,
+    );
+    expect(here.pagerStyle, `the pager moved or resized at ${offset}`).toBe(rest.pagerStyle);
+    expect(contentTop(), `the page's first row moved at ${offset}`).toBe(restTop);
+    view.unmount();
+  }
+  expect(collapsedAtLeastOnce, "the header never collapsed").toBe(true);
+});
 
-  expect(shut.height, "the header did not collapse").toBeLessThan(open.height);
-  expect(open.height + open.margin, "the chrome's footprint moved").toBeCloseTo(
-    shut.height + shut.margin,
-  );
-  expect(open.pagerShift, "the pager did not take back what the margin gave").toBeCloseTo(
-    -open.margin,
-  );
-  expect(shut.pagerShift).toBeCloseTo(-shut.margin);
+it("leaves the room the expanded header overlays above the first row", () => {
+  draw({
+    pages: [
+      { key: "summary", label: "Summary", node: <GroundPanel>{null}</GroundPanel> },
+      { key: "list", label: "List", node: <Text>list body</Text> },
+    ],
+    activeKey: "summary",
+  });
+  // The design padding, plus exactly the height the header gives up: what
+  // scrolls away as the header collapses, leaving the first row against it.
+  expect(contentTop()).toBe(space.x2 + COLLAPSE_TRAVEL);
 });
 
 it("exposes only the page you are on, with all four mounted", () => {

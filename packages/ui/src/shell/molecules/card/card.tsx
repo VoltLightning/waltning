@@ -121,6 +121,7 @@ import { useSafeArea } from "../../../primitives/safe-area";
 import { text } from "../../../theme/fonts.ts";
 import { makeStyles } from "../../../theme/styles.ts";
 import { gutter, radius, space } from "../../../tokens.ts";
+import { useCollapseInset } from "../../atoms/collapse-inset";
 import { useFloatingClearance } from "../../atoms/floating-clearance";
 
 /**
@@ -260,6 +261,7 @@ export function GroundPanel({
   const styles = useStyles();
   const insets = useSafeArea();
   const floatClearance = useFloatingClearance();
+  const collapseInset = useCollapseInset();
   const panel = useRef<View>(null);
   // An animated ref, because the top edge below reads this scroller's offset
   // on the UI thread — it is an ordinary ref everywhere else it is used.
@@ -296,6 +298,9 @@ export function GroundPanel({
   const deviceBottom = clearBottom ? insets.bottom : 0;
   const wash = topWash === undefined ? null : { backgroundColor: topWash };
   const clearance = {
+    // The room a collapsing header overlays, scrolling away as it collapses
+    // (`atoms/collapse-inset.tsx`). Added to the design padding, not instead.
+    paddingTop: space.x2 + collapseInset,
     paddingLeft: gutter + insets.left,
     paddingRight: gutter + insets.right,
     // `room`: what the keyboard covers of *this* scroller, so the last field

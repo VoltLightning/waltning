@@ -9,6 +9,8 @@ import { type AccountingDate, accountingDate } from "@waltning/core/date";
 import { id } from "@waltning/core/id";
 import { currencyCode, pivotPerUnit, toMoney } from "@waltning/core/money";
 import { I18nProvider } from "@waltning/ui/i18n/provider";
+import { CollapseInsetProvider } from "@waltning/ui/shell/collapse-inset";
+import { COLLAPSE_TRAVEL } from "@waltning/ui/shell/molecules/pager-header/collapse";
 import { ThemeProvider } from "@waltning/ui/theme/provider";
 import { light } from "@waltning/ui/theme/roles";
 import type { DayRowPlace } from "@waltning/ui/transactions/day-group";
@@ -80,28 +82,31 @@ function draw(
     onVisibleDay?: (date: AccountingDate) => void;
     query?: string | null;
     accountId?: string | null;
+    inset?: number;
   } = {},
 ) {
   render(
     <ThemeProvider theme={light}>
       <I18nProvider>
-        <HomeListPage
-          ledger={ledger}
-          anchor={over.anchor ?? TODAY}
-          {...(over.onVisibleDay === undefined ? {} : { onVisibleDay: over.onVisibleDay })}
-          today={TODAY}
-          revision={0}
-          pivotCurrency={PLN}
-          pivotDecimals={2}
-          accountId={over.accountId ?? null}
-          onPickDay={onPickDay}
-          onOpenTransaction={vi.fn()}
-          onReturnToToday={over.onReturnToToday ?? vi.fn()}
-          query={over.query ?? null}
-          scrollY={scrollY}
-          active={active}
-          empty={<Text>nothing yet</Text>}
-        />
+        <CollapseInsetProvider value={over.inset ?? 0}>
+          <HomeListPage
+            ledger={ledger}
+            anchor={over.anchor ?? TODAY}
+            {...(over.onVisibleDay === undefined ? {} : { onVisibleDay: over.onVisibleDay })}
+            today={TODAY}
+            revision={0}
+            pivotCurrency={PLN}
+            pivotDecimals={2}
+            accountId={over.accountId ?? null}
+            onPickDay={onPickDay}
+            onOpenTransaction={vi.fn()}
+            onReturnToToday={over.onReturnToToday ?? vi.fn()}
+            query={over.query ?? null}
+            scrollY={scrollY}
+            active={active}
+            empty={<Text>nothing yet</Text>}
+          />
+        </CollapseInsetProvider>
       </I18nProvider>
     </ThemeProvider>,
   );
@@ -114,6 +119,28 @@ it("draws a day, its total, and its rows", () => {
   expect(screen.getByRole("button", { name: /EnteredName 1/ })).toBeTruthy();
   // −96 and −48,90 folded to the day's own figure.
   expect(screen.getByText(/144[,.]90/)).toBeTruthy();
+});
+
+it("leaves the room the header overlays above the first day, and the strip rides the header", () => {
+  // The header collapses over the top of this page, and the page's box must
+  // not move for it: the list carries the room as its own top padding, and the
+  // strip — which does not scroll — is drawn that far down at rest.
+  draw(ledgerWith([row("2026-08-14", 1, "-96")]), vi.fn(), { inset: COLLAPSE_TRAVEL });
+  let node: HTMLElement | null = screen.getByText("August 14, 2026");
+  let padded = false;
+  while (node !== null) {
+    if (node.style.paddingTop === `${COLLAPSE_TRAVEL}px`) padded = true;
+    node = node.parentElement;
+  }
+  expect(padded, "no scroll content carries the header's room as top padding").toBe(true);
+  const strip = screen.getByRole("button", { name: /August 14, 2026, 1 entry/ });
+  let ride: HTMLElement | null = strip;
+  let offset = "";
+  while (ride !== null) {
+    if (ride.style.transform.includes("translateY")) offset = ride.style.transform;
+    ride = ride.parentElement;
+  }
+  expect(offset).toBe(`translateY(${COLLAPSE_TRAVEL}px)`);
 });
 
 it("names a ribbon cell by its date and what happened, not by the number", () => {

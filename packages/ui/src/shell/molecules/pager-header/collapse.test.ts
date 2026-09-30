@@ -68,6 +68,26 @@ describe("collapseProgress", () => {
     expect(collapseProgress(Number.NaN)).toBe(0);
   });
 
+  it("is a pure, monotonic function of the offset, including in tiny steps back and forth", () => {
+    // The header's shape must depend on the scroll and on nothing else, so the
+    // same offset always draws the same header whatever came before it: a
+    // finger that trembles across the midpoint sees the header follow it, not
+    // a header that remembers which way it last went.
+    const walk = [17, 17.4, 17.9, 18, 18.1, 17.9, 18.1, 18.4, 17.6, 18, 35.9, 36, 36.1, 35.9];
+    const first = new Map<number, number>();
+    for (const offset of walk) {
+      const progress = collapseProgress(offset);
+      const seen = first.get(offset);
+      if (seen === undefined) first.set(offset, progress);
+      else expect(progress, `offset ${offset} drew two headers`).toBe(seen);
+    }
+    for (let offset = -5; offset < COLLAPSE_TRAVEL + 5; offset += 0.25) {
+      expect(collapseProgress(offset + 0.25), `at ${offset}`).toBeGreaterThanOrEqual(
+        collapseProgress(offset),
+      );
+    }
+  });
+
   it("spends exactly the height it gives up", () => {
     // The header rises at the speed of the content under it. A round number
     // here instead would let the two drift apart the day a height changes.

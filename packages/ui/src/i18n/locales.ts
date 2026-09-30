@@ -81,6 +81,27 @@ export function monthLabel(month: YearMonth, locale: Locale): string {
 }
 
 /**
+ * A month's own name, alone — *September*, *wrzesień*, *сентябрь*.
+ *
+ * **The standalone form, which is the point.** `monthLabel` says *September
+ * 2026*, and the obvious way to drop the year — cutting a trailing four digits
+ * off it — is wrong in exactly the languages that put something after the
+ * year: Russian says *апрель 2025 г.*, so the cut left *апрель 2025 г.* with
+ * its year and its abbreviation intact, under a year label of its own. Asking
+ * `Intl` for the month and nothing else yields the nominative name in every
+ * locale without any string surgery — *апрель*, never *апреля* (that is the
+ * form a full date takes, and it is wrong for a title).
+ *
+ * For the header title and the row labels that sit beside a year of their own.
+ */
+export function monthTitle(month: YearMonth, locale: Locale): string {
+  const [year, mo] = month.split("-").map(Number) as [number, number];
+  return new Intl.DateTimeFormat(locale, { month: "long", timeZone: "UTC" }).format(
+    new Date(Date.UTC(year, mo - 1, 1)),
+  );
+}
+
+/**
  * One accounting date, named — "September 5, 2026", "5 września 2026".
  *
  * The same `Intl` argument `monthLabel` makes one line up, and the same

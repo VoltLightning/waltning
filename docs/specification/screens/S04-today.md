@@ -154,6 +154,13 @@ it is one control resizing, not two headers swapping.
   want while reading a month — so the control arrives exactly when the reason
   for it does.
 
+**The title is the month's name alone** — *April*, *kwiecień*, *апрель*,
+*September* — in its standalone, nominative form in every language, never the
+form a full date takes (*апреля*) and never a name that carries its own year
+(*апрель 2025 г.*). The year is the separate label beside or under it, so it is
+stated once. The month's name is never truncated at a 360-point width, expanded
+or collapsed, for the longest month of any language.
+
 The month never moves sideways and never changes colour; it changes size. The
 year travels: it sits under the month at rest at a caption's size and stands
 beside it collapsed at the month's own, and it crosses between the two in one
@@ -243,28 +250,34 @@ that has not happened is disabled rather than absent (§6).
 number, so the header rises at exactly the speed of the content beneath it and
 the two read as one sheet sliding under another.
 
-**The chrome never resizes the page it is reading.** It gives up 36 points of
-height and takes the same 36 back as a negative margin, so its footprint is the
-collapsed one at every offset and the pager below it is the same box the whole
-way; the pager is then moved down by that number as a transform. Without that
-the chrome's height *was* the pager's height, and the pager is the scroller the
-header reads: the offset set the header's height, the height set the scroll
-viewport, and the viewport set the largest offset the scroller would hold. On
-any page whose content is within one collapse of a screenful that closes — the
-scroller pulls the offset back, the header re-opens, and the bar flickers in and
-out for as long as the gesture is held. It also laid out four mounted pages
-every frame. Measured in Chrome, the viewport moved 640 → 676 with the header
-before and holds at 732 across the whole travel after.
+**The header's shape is a function of the scroll, and the scroll is a function
+of nothing the header does.** The header overlays the top of the pager; it never
+moves or resizes the pager's box, so a scroller's frame is the same box at every
+offset. It gives up 36 points of height and takes the same 36 back as a negative
+margin, so the chrome's footprint is the collapsed one at every offset, and the
+expanded header hangs over the top 36 points of the pager. Each page leaves those
+36 points above its first row as room in its own scroll content (List carries it
+as the top padding of its list, and draws its day strip that far down at rest,
+following the header up by the same amount as the offset grows). The room
+scrolls away at exactly the rate the header closes, so at the end of the travel
+the first row sits against the collapsed header with nothing between them — and
+the content moves one-for-one with the finger at every offset, header open,
+closing or closed.
 
-The pager therefore hangs one collapse below the screen while the header is
-open, and the frame clips it. **That is only invisible while a page can be
-scrolled far enough to close the header**: content is lost when a page's
-scrollable travel is shorter than the collapse by more than its own bottom
-padding, because then the header never closes, the pager never rises, and no
-gesture reveals the bottom. Every page in the pager clears that today by ~94
-points of bottom inset from `useGroundInset`, which is the condition to check
-before adding a page that does not use it, or before this shell renders
-anywhere `useFloatingClearance()` is zero.
+A frame that is a function of its own offset is a feedback loop. A header that
+moved the pager to stay beneath it moved the scroller under the finger by the
+amount the finger had just scrolled it, and the scroller read the difference a
+frame late; at the offset where the header changes shape that is an oscillation,
+the whole screen shaking under a held hand. A header that resized the pager did
+the same through the largest offset the scroller would hold. Smoothing the
+offset would hide the loop rather than remove it, so nothing here is debounced:
+collapse progress is a pure, monotonic function of the offset, and the same
+offset always draws the same header.
+
+**The header follows the page on screen.** Each page keeps its own offset and
+lends it to the header only while it is the page the reader is on; arriving on a
+page hands the header that page's offset, so a List at the top is never under a
+header a Summary scroll collapsed.
 
 **The header navigates; the page reports.** It carries no figure. A draft put
 the current period's total in the row's trailing half and it did not survive
