@@ -9,7 +9,7 @@
  * already uses for a fixture no other screen shares.
  */
 
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import {
   createPhoneLedger,
   type PhoneAccount,
@@ -44,6 +44,7 @@ vi.mock("expo-router", () => ({
   useLocalSearchParams: () => useLocalSearchParams(),
 }));
 
+import { lastCapture } from "./platform";
 import QuickAdd from "./quick-add-screen";
 
 const PLN = currencyCode("PLN");
@@ -203,6 +204,20 @@ describe("QuickAdd — the phone path (Dock + QuickAddComposer)", () => {
     ).toBeDefined();
     expect(screen.getByText("PLN")).toBeDefined();
     expect(screen.getByRole("button", { name: "Save expense" })).toHaveProperty("disabled", false);
+  });
+
+  it("still closes without a Discard question inside the last-used window when the lone account is all there is", async () => {
+    await act(async () => {
+      await lastCapture.set({ accountId: ACCOUNT.id, at: Date.now() });
+    });
+    try {
+      withLedger({ accounts: [ACCOUNT] });
+      fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+      expect(router.back).toHaveBeenCalledOnce();
+    } finally {
+      // A capture far outside the window, so the singleton leaves nothing behind.
+      await lastCapture.set({ accountId: ACCOUNT.id, at: 1 });
+    }
   });
 
   it("fills a lone account even when its currency has no rate, and lets the banner speak", () => {

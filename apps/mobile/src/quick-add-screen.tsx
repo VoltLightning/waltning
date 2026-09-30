@@ -10,7 +10,11 @@ import { useCategoryPace } from "@waltning/client/ledger/use-category-pace";
 import { useLedgerController } from "@waltning/client/ledger/use-ledger-controller";
 import { usePhoneLedger } from "@waltning/client/ledger/use-phone-ledger";
 import { acceptProposedCategory } from "@waltning/client/transactions/accept-proposed-category";
-import { useDefaultAccount } from "@waltning/client/transactions/default-account";
+import { isCompactWindow } from "@waltning/client/transactions/compact-window";
+import {
+  soleEligibleAccount,
+  useDefaultAccount,
+} from "@waltning/client/transactions/default-account";
 import { useLastUsedAccount } from "@waltning/client/transactions/last-capture";
 import { mapFieldErrors } from "@waltning/client/transport/field-errors";
 import { proposeCategory } from "@waltning/core/capture/entered-name-memory";
@@ -46,13 +50,6 @@ import { router, useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Alert, Text, useWindowDimensions, View } from "react-native";
 import { lastCapture, saveHaptic } from "./platform";
-
-/**
- * Below this window height the keyboard leaves too little room for the whole
- * column, and the page runs compact (S05 §3). Worked from a 740 pt phone with
- * a 300 pt keyboard; the full column needs about 850.
- */
-const COMPACT_BELOW_HEIGHT = 860;
 
 type CreateAccountEscapeDraft = { amount: string; accountId: string | null };
 type ObligationRole = "debt" | "contribution";
@@ -279,7 +276,11 @@ export default function QuickAdd() {
   const accountMachineFilled = composerAccountId === null && defaultAccountId !== null;
   // Only a fill the machine chose between accounts for is expensive to redo
   // (S05 §7); the one account there is, is the ledger and not a guess.
-  const guessedAccount = composerAccountId === null && lastUsedAccountId !== null;
+  // The lone account is never a guess, window or no window.
+  const guessedAccount =
+    composerAccountId === null &&
+    lastUsedAccountId !== null &&
+    soleEligibleAccount(composerAccounts) === null;
   const selectedComposerAccount = composerAccounts.find(
     (account) => account.id === effectiveAccountId,
   );
@@ -675,7 +676,8 @@ export default function QuickAdd() {
    * under the thumb on every open (and a mobile browser's viewport shrinks
    * instead, reporting no keyboard at all). S05 §3.
    */
-  const compact = useWindowDimensions().height < COMPACT_BELOW_HEIGHT;
+  const window = useWindowDimensions();
+  const compact = isCompactWindow(window.height, window.fontScale);
   const clearBottom = {
     paddingBottom: keyboardUp ? space.md + keyboardHeight : gutter + insets.bottom,
   };

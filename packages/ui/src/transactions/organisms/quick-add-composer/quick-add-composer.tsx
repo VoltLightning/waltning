@@ -114,8 +114,7 @@ export type QuickAddComposerProps = {
   /** The account row fills machine, carrying the trail — `useLastUsedAccount`'s own result. */
   accountMachineFilled: boolean;
   /**
-   * The window is short: the amount card gives up its label, its pace line and
-   * some air so the account row sits in the first view, under the amount,
+   * The window is short: the amount card gives up its label and some air so the account row sits in the first view, under the amount,
    * instead of under the fold. Decided from the window's height by the screen,
    * never from the keyboard's events.
    */
@@ -456,7 +455,7 @@ export function QuickAddComposer({
           // The code: `AmountCard` draws the pivot's symbol or the code (`04` §4.1).
           currency={selectedAccount?.currency}
           kind={type}
-          context={compact ? undefined : pace}
+          context={pace}
           error={amountError}
           autoFocus
           compact={compact}

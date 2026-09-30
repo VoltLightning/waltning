@@ -100,12 +100,12 @@ top-right, "out of the thumb zone" — and out of the design.
 **The account row is in the first view on a short phone.** The amount is typed
 on the system keyboard, which leaves a 360 × 740 pt phone about 440 pt: the name,
 the kind, the amount card, *From* and Save must all fit in it. A window under
-860 pt tall runs **compact**, decided from the window's height on the first
-frame and never from the keyboard's events — a layout that moved when the
+860 pt tall runs **compact**, decided from the window's height, in text-scale-free points (height over
+the reader's font scale), on the first frame and never from the keyboard's events — a layout that moved when the
 keyboard arrived would collapse under the thumb on every open, and a mobile
 browser's viewport shrinks instead of reporting a keyboard. Compact drops the
-amount card's *How much?* label (the input keeps it for assistive technology)
-and its pace line, steps the figure from `display-hero` to `display-one`, takes
+amount card's *How much?* label (the input keeps it for assistive technology),
+steps the figure from `display-hero` to `display-one`, takes
 the padding in, sets the blocks 6 apart instead of 20, leaves out the *Saved on
 your phone* line, and leaves out the day under the name while the draft's day is
 today (a different day is always drawn). So *From* (*Into* on income) is on
@@ -145,7 +145,8 @@ drawn outside `<Amount>`.
 action and it is pressed in motion. The line above it — *Saved on your phone —
 syncs when you're back online* — is what Save means on a phone that may be
 offline (§6): the write goes to the outbox, and Save reads as done because it
-is. A compact window leaves the line out to keep the account row in view. The label names the kind (*Save expense*, *Save income*).
+is. A compact window leaves the line out to keep the account row in view.
+The label names the kind (*Save expense*, *Save income*).
 
 ### The fourth mode — conversational capture
 
@@ -321,7 +322,7 @@ and dependent transaction intents retain their ordering through sync.
 |---|---|
 | `ComposerHeader` | The fixed band: the name, the day, the ✕. Clears the top inset itself |
 | `SegmentControl` | The kind — Expense · Income · Transfer. Transfer opens S31 |
-| `AmountCard` | *How much?* over a `TextInput` at `display-hero`, tabular lining numerals, the kind's sign in the kind's colour, the currency affix in the accent; the pace line under it |
+| `AmountCard` | *How much?* over a `TextInput` at `display-hero`, tabular lining numerals, the kind's sign in the kind's colour, the currency affix in the accent; the pace line under it. On a compact window (§3) the label is not drawn and the figure is `display-one`; the pace line stays, because it is the one thing that says what the typed figure is being weighed against |
 | `FigureInput` | The figure inside `AmountCard`, and *Leaves* and *Arrives* on S31. **Drawn as text, with a transparent input over it**: the sign, the digits and the currency are three `Text`s in one row, so they share a baseline on every platform, and the input lying over them only takes the typing. Done the other way round it failed three times on a device — a sign mounted on the first keystroke pushed every later digit sideways; an input whose width was *estimated* per character re-laid its content under each key, which is the figure jumping as it is typed; and a `Text` sign baseline-aligned to a `TextInput` sat on the baseline like an underscore on Android. The caret is drawn after the last digit — standing on the digits' baseline and as tall as they are, never centred in the row, whose box on iOS includes the line's space under the glyphs — and typing is at the end. **The input is unseen, never absent**: opacity `0.02` and a nearly clear ink, because iOS delivers no touch to a view at `0.01` or under — a figure at `0` takes its first focus from `autoFocus` and can never be tapped back into — and Android draws the default ink for a fully transparent one |
 | `ComposerRows` · `ComposerRow` | The card of choices: a 32 tinted tile, label over value, caret. *From* on an expense and *Into* on an income — the account the money leaves or lands in, named for the direction it moves — then *Category* · *More details*, which unfolds *Who* · *Date* · *Scope* · *Track money owed*. **≥44px** (Q3). The account row fills from last-used **only within a short window**, or — when that names nothing — from the one live account there is; with two or more it is empty, Save refusing until one is chosen — a stale default reads as an answer rather than a question (§9) |
 | `WhoPicker` | Grouped saved entries and recent names; Use text, Add via S15, and clear. Defined in `design-system/05` |
