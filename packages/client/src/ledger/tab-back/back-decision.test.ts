@@ -28,7 +28,7 @@ describe("decideReselect", () => {
     expect(decideReselect({ tab: "today", page: "summary" })).toEqual({ kind: "scroll-top" });
   });
 
-  it("scrolls any other tab to the top, whatever Start's page is", () => {
-    expect(decideReselect({ tab: "accounts", page: "list" })).toEqual({ kind: "scroll-top" });
+  it("does nothing on any other tab, whatever Start's page is", () => {
+    expect(decideReselect({ tab: "accounts", page: "list" })).toEqual({ kind: "none" });
   });
 });

@@ -58,7 +58,6 @@ vi.mock("expo-router/ui", () => ({
   }),
 }));
 
-let view: string | undefined;
 let stackOnTop = false;
 const setParams = vi.fn();
 vi.mock("expo-router", () => ({
@@ -69,7 +68,6 @@ vi.mock("expo-router", () => ({
     dismissTo: vi.fn(),
     setParams: (params: unknown) => setParams(params),
   },
-  useGlobalSearchParams: () => ({ view }),
   useNavigation: () => ({ isFocused: () => !stackOnTop }),
 }));
 
@@ -89,6 +87,9 @@ vi.mock("./platform", async (importOriginal) => ({
 const { TabsShell, handleSelectType } = await import("./tabs-shell");
 const { displayCurrency } = await import("./platform");
 const { router } = await import("expo-router");
+const { forgetStartPage, publishStartPage } = await import(
+  "@waltning/client/ledger/tab-back/start-page-store"
+);
 
 const CHF = currencyCode("CHF");
 const EUR = currencyCode("EUR");
@@ -198,7 +199,7 @@ function resizeTo(width: number) {
  */
 beforeEach(async () => {
   focused = "today";
-  view = undefined;
+  forgetStartPage();
   stackOnTop = false;
   setParams.mockClear();
   for (const fn of Object.values(switchTab)) fn.mockClear();
@@ -552,11 +553,12 @@ describe("TabsShell hardware back (S04 §2)", () => {
   });
 
   it("goes from Start's Liste to the overview", async () => {
-    view = "list";
+    const show = vi.fn();
+    publishStartPage("list", show);
     const press = await mountPhone();
 
     expect(press()).toBe(true);
-    expect(setParams).toHaveBeenCalledWith({ view: "summary" });
+    expect(show).toHaveBeenCalledWith("summary");
   });
 
   it("leaves Start's overview to the platform, which exits", async () => {

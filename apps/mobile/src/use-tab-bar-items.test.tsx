@@ -26,14 +26,15 @@ vi.mock("expo-router/ui", () => ({
   }),
 }));
 
-let view: string | undefined;
 const setParams = vi.fn();
 vi.mock("expo-router", () => ({
   router: { setParams: (params: unknown) => setParams(params) },
-  useGlobalSearchParams: () => ({ view }),
 }));
 
 const { useTabBarItems } = await import("./use-tab-bar-items");
+const { forgetStartPage, publishStartPage } = await import(
+  "@waltning/client/ledger/tab-back/start-page-store"
+);
 const { scrollToTopCount } = await import("@waltning/client/ledger/tab-back/scroll-to-top-request");
 
 describe("useTabBarItems", () => {
@@ -80,18 +81,19 @@ describe("useTabBarItems", () => {
 
   it("a tap on the selected Start tab returns to the overview from another page", () => {
     focused = "today";
-    view = "list";
-    setParams.mockClear();
+    const show = vi.fn();
+    publishStartPage("list", show);
     const { result } = renderHook(() => useTabBarItems());
 
     act(() => result.current.onSelect("today"));
-    expect(setParams).toHaveBeenCalledWith({ view: "summary" });
+    expect(show).toHaveBeenCalledWith("summary");
     expect(switchTab.today).not.toHaveBeenCalled();
+    forgetStartPage();
   });
 
   it("a tap on the selected Start tab scrolls the overview to the top", () => {
     focused = "today";
-    view = undefined;
+    forgetStartPage();
     setParams.mockClear();
     const before = scrollToTopCount();
     const { result } = renderHook(() => useTabBarItems());
@@ -99,6 +101,16 @@ describe("useTabBarItems", () => {
     act(() => result.current.onSelect("today"));
     expect(scrollToTopCount()).toBe(before + 1);
     expect(setParams).not.toHaveBeenCalled();
+  });
+
+  it("a tap on the selected Accounts tab leaves Start's scroll alone", () => {
+    focused = "accounts";
+    const before = scrollToTopCount();
+    const { result } = renderHook(() => useTabBarItems());
+
+    act(() => result.current.onSelect("accounts"));
+    expect(scrollToTopCount()).toBe(before);
+    expect(switchTab.accounts).not.toHaveBeenCalled();
   });
 
   it("renders a distinct label for every tab", () => {

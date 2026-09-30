@@ -28,10 +28,11 @@ export function decideBack(where: { tab: TabName; page: PagerPageKey }): BackAct
   return { kind: "exit" };
 }
 
-export type ReselectAction = { kind: "overview" } | { kind: "scroll-top" };
+export type ReselectAction = { kind: "overview" } | { kind: "scroll-top" } | { kind: "none" };
 
 /** A tap on the tab that is already selected. */
 export function decideReselect(where: { tab: TabName; page: PagerPageKey }): ReselectAction {
   if (where.tab === "today" && where.page !== "summary") return { kind: "overview" };
-  return { kind: "scroll-top" };
+  // Only Start's overview listens for a scroll request; no other tab has one.
+  return where.tab === "today" ? { kind: "scroll-top" } : { kind: "none" };
 }

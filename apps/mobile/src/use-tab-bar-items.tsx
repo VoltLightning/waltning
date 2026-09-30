@@ -122,7 +122,7 @@ export function useTabBarItems(): {
         // the page scrolls to its top (`S04` §2).
         const action = decideReselect({ tab: name as TabName, page: startPage });
         if (action.kind === "overview") showStartOverview();
-        else requestScrollToTop();
+        else if (action.kind === "scroll-top") requestScrollToTop();
         return;
       }
       const triggers: Record<TabName, (typeof today)["switchTab"]> = {

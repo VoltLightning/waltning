@@ -38,6 +38,7 @@
     "./ledger/preview-routes": "./src/ledger/preview-routes/preview-routes.ts",
     "./ledger/tab-back/back-decision": "./src/ledger/tab-back/back-decision.ts",
     "./ledger/tab-back/scroll-to-top-request": "./src/ledger/tab-back/scroll-to-top-request.ts",
+    "./ledger/tab-back/start-page-store": "./src/ledger/tab-back/start-page-store.ts",
     "./ledger/tab-back/use-scroll-to-top-request": "./src/ledger/tab-back/use-scroll-to-top-request.ts",
     "./ledger/test-port": "./src/ledger/test-port.ts",
     "./ledger/use-category-pace": "./src/ledger/use-category-pace/use-category-pace.ts",

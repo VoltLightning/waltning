@@ -2,7 +2,7 @@
 
 import { render, screen } from "@testing-library/react";
 import { Text } from "react-native";
-import { expect, it } from "vitest";
+import { expect, it, vi } from "vitest";
 import { type SafeAreaInsets, SafeAreaProvider } from "../../../primitives/safe-area";
 import { floating } from "../../../tokens.ts";
 import { FloatingClearanceProvider } from "../../atoms/floating-clearance";
@@ -202,4 +202,31 @@ it("fades it in across the travel rather than snapping it on", () => {
 /** A bounce scrolls past zero, and unclamped that is a negative opacity. */
 it("draws no edge for the overscroll a bounce leaves behind", () => {
   expect(edgeOpacity(-40)).toBe(0);
+});
+
+/**
+ * A re-tap on the tab you are on asks the page to return to its top
+ * (`S04` §2): the request is a count, and only a rise scrolls.
+ */
+it("scrolls to the top when scrollToTopKey rises, and not on mount", () => {
+  const scrollTo = vi.fn();
+  Object.defineProperty(HTMLElement.prototype, "scroll", {
+    value: scrollTo,
+    configurable: true,
+    writable: true,
+  });
+  const { rerender } = render(
+    <GroundPanel scrollToTopKey={3}>
+      <Text>hello</Text>
+    </GroundPanel>,
+  );
+  expect(scrollTo).not.toHaveBeenCalled();
+
+  rerender(
+    <GroundPanel scrollToTopKey={4}>
+      <Text>hello</Text>
+    </GroundPanel>,
+  );
+  expect(scrollTo).toHaveBeenCalledTimes(1);
+  expect(scrollTo.mock.calls[0]?.[0]).toMatchObject({ top: 0 });
 });
