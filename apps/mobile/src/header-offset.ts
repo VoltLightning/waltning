@@ -55,3 +55,21 @@ export function pageArrived(
   header.value = Math.min(Math.max(header.value, 0), COLLAPSE_TRAVEL);
   header.value = withTiming(target, { duration: HANDOVER_MS });
 }
+
+/**
+ * A page's content was swapped for different content while it is on screen —
+ * the List's ledger giving way to *No accounts yet*, say. The new content
+ * starts at the top and reports no scroll, so the page's offset is 0 from here
+ * and, if the page is showing, the header is handed that, exactly as on
+ * arrival. Without it the header stays collapsed over a page that cannot scroll.
+ */
+export function pageReset(
+  showing: Value<boolean>,
+  own: Value<number>,
+  header: Value<number>,
+  reduced: Value<boolean>,
+): void {
+  "worklet";
+  own.value = 0;
+  pageArrived(showing.value, own, header, reduced);
+}

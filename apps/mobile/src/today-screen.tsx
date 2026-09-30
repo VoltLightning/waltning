@@ -469,10 +469,6 @@ export default function Today() {
   // rebuilds the handler on every render, and `pages` is built from it — so a
   // stable handler is what lets the four page elements stay the same objects
   // and React skip the pages it did not change.
-  const summaryScroll = useHeaderOffset(scrollY, pager.state.page === "summary");
-  const calendarScroll = useHeaderOffset(scrollY, pager.state.page === "calendar");
-  const monthsScroll = useHeaderOffset(scrollY, pager.state.page === "months");
-
   const barLabels = useMemo(
     () => ({
       previous: t(pager.stepUnit === "year" ? "shell.previousYear" : "shell.previousMonth"),
@@ -991,6 +987,25 @@ export default function Today() {
       ),
     [snapshot.error, hasAccounts, noAccountsEmpty, t, handleRetry],
   );
+  // One handler per page for the header's single offset (`header-offset.ts`).
+  // `unavailable` swapping in or out is a swap of a page's content while it may
+  // be the one on screen, which hands the header the new content's offset.
+  const summaryScroll = useHeaderOffset(
+    scrollY,
+    pager.state.page === "summary",
+    unavailable !== null,
+  );
+  const listScroll = useHeaderOffset(scrollY, pager.state.page === "list", unavailable !== null);
+  const calendarScroll = useHeaderOffset(
+    scrollY,
+    pager.state.page === "calendar",
+    unavailable !== null,
+  );
+  const monthsScroll = useHeaderOffset(
+    scrollY,
+    pager.state.page === "months",
+    unavailable !== null,
+  );
 
   /* ── Calendar ─────────────────────────────────────────────────────────── */
 
@@ -1462,7 +1477,7 @@ export default function Today() {
   const listNode = useMemo(
     () =>
       unavailable !== null ? (
-        <GroundPanel>{unavailable}</GroundPanel>
+        <GroundPanel onScroll={listScroll}>{unavailable}</GroundPanel>
       ) : (
         <HomeListPage
           ledger={ledger}
@@ -1491,6 +1506,7 @@ export default function Today() {
       ),
     [
       unavailable,
+      listScroll,
       leadNetWorth,
       ledger,
       listAnchor,

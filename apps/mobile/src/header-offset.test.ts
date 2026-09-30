@@ -4,7 +4,7 @@ import { expect, it, vi } from "vitest";
 const timing = vi.hoisted(() => vi.fn((to: number) => to));
 vi.mock("react-native-reanimated", () => ({ withTiming: timing }));
 
-import { pageArrived, pageScrolled } from "./header-offset.ts";
+import { pageArrived, pageReset, pageScrolled } from "./header-offset.ts";
 
 /**
  * Two pages and the one header offset they share, as plain `{ value }` cells:
@@ -112,4 +112,25 @@ it("writes a plain number, and starts no timing, under reduced motion", () => {
   pageArrived(true, s.list.own, s.header, s.reduced);
   expect(s.header.value).toBe(12);
   expect(timing).not.toHaveBeenCalled();
+});
+
+it("opens the header when the page on screen is swapped for content that cannot scroll", () => {
+  // A List scrolled far down, then the ledger disappears (a reset, a restore):
+  // the new content starts at the top and reports nothing, so the header must
+  // be handed 0 rather than stay collapsed over it.
+  const s = screen();
+  s.list.showing.value = true;
+  pageScrolled(s.list.showing, s.list.own, s.header, 800);
+  s.reduced.value = true;
+  pageReset(s.list.showing, s.list.own, s.header, s.reduced);
+  expect(s.list.own.value).toBe(0);
+  expect(s.header.value).toBe(0);
+});
+
+it("does not move the header when a page that is not on screen is swapped", () => {
+  const s = screen();
+  pageScrolled(s.summary.showing, s.summary.own, s.header, 30);
+  s.reduced.value = true;
+  pageReset(s.list.showing, s.list.own, s.header, s.reduced);
+  expect(s.header.value).toBe(30);
 });
