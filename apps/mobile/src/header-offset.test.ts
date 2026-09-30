@@ -1,4 +1,9 @@
-import { expect, it } from "vitest";
+import { COLLAPSE_TRAVEL } from "@waltning/ui/shell/molecules/pager-header/collapse";
+import { expect, it, vi } from "vitest";
+
+const timing = vi.hoisted(() => vi.fn((to: number) => to));
+vi.mock("react-native-reanimated", () => ({ withTiming: timing }));
+
 import { pageArrived, pageScrolled } from "./header-offset.ts";
 
 /**
@@ -42,7 +47,8 @@ it("hands over the page's own offset on arrival, not the last one scrolled", () 
   s.summary.showing.value = false;
   s.list.showing.value = true;
   pageArrived(true, s.list.own, s.header, s.reduced);
-  expect(s.header.value).toBe(90);
+  // 90 is past the travel: the header is as collapsed as it gets.
+  expect(s.header.value).toBe(COLLAPSE_TRAVEL);
 });
 
 it("ignores a page that is not showing, even when it moves on its own", () => {
@@ -62,11 +68,48 @@ it("does nothing when a page stops being the one on screen", () => {
   expect(s.header.value).toBe(60);
 });
 
-it("hands over at once under reduced motion", () => {
+it("times from where the header is to where it must be, both within the travel", () => {
+  // From far down a long page the header is collapsed; it must start the timing
+  // at the collapsed end, not at 200 where nothing visibly moves.
   const s = screen();
+  timing.mockClear();
+  s.header.value = 5000;
+  s.list.own.value = 0;
+  let startedAt = Number.NaN;
+  timing.mockImplementation((to: number) => {
+    startedAt = s.header.value;
+    return to;
+  });
+  pageArrived(true, s.list.own, s.header, s.reduced);
+  expect(startedAt).toBe(COLLAPSE_TRAVEL);
+  expect(timing).toHaveBeenCalledExactlyOnceWith(0, expect.anything());
+});
+
+it("clamps a target past the travel to the travel", () => {
+  const s = screen();
+  timing.mockClear();
+  s.list.own.value = 900;
+  pageArrived(true, s.list.own, s.header, s.reduced);
+  expect(timing).toHaveBeenCalledExactlyOnceWith(COLLAPSE_TRAVEL, expect.anything());
+});
+
+it("never shows a collapsed header over a page that cannot scroll", () => {
+  // An empty Summary never reports an offset, so its own is 0 — whatever the
+  // page before it left in the header.
+  const s = screen();
+  s.header.value = 400;
+  s.reduced.value = true;
+  pageArrived(true, { value: 0 }, s.header, s.reduced);
+  expect(s.header.value).toBe(0);
+});
+
+it("writes a plain number, and starts no timing, under reduced motion", () => {
+  const s = screen();
+  timing.mockClear();
   s.reduced.value = true;
   s.header.value = 200;
   s.list.own.value = 12;
   pageArrived(true, s.list.own, s.header, s.reduced);
   expect(s.header.value).toBe(12);
+  expect(timing).not.toHaveBeenCalled();
 });

@@ -1,3 +1,4 @@
+import { COLLAPSE_TRAVEL } from "@waltning/ui/shell/molecules/pager-header/collapse";
 import { withTiming } from "react-native-reanimated";
 
 /**
@@ -42,5 +43,15 @@ export function pageArrived(
 ): void {
   "worklet";
   if (!now) return;
-  header.value = reduced.value ? own.value : withTiming(own.value, { duration: HANDOVER_MS });
+  // **Both ends are clamped to the travel.** The header changes shape only
+  // between 0 and `COLLAPSE_TRAVEL`; timing the raw offset spends most of the
+  // duration where nothing moves (from 200, the header would sit collapsed and
+  // open in the last fraction) and from far down it is a snap.
+  const target = Math.min(Math.max(own.value, 0), COLLAPSE_TRAVEL);
+  if (reduced.value) {
+    header.value = target;
+    return;
+  }
+  header.value = Math.min(Math.max(header.value, 0), COLLAPSE_TRAVEL);
+  header.value = withTiming(target, { duration: HANDOVER_MS });
 }
