@@ -67,9 +67,10 @@ silent partial success is how a month goes half-imported and nobody notices
 until reconciliation.
 
 `RenderFailed` is the `recoverable` state for a screen whose render threw: it
-names the screen as stopped, says the ledger is untouched, and its action
-remounts the route (`architecture/11` §8c). The error is in Diagnostics, never
-drawn.
+names the screen as stopped, says the ledger is untouched, and offers **Try
+again** (mounts the navigator afresh) and **Restart the app**, because a retry
+can throw again (`architecture/11` §8c). The error goes to the device log and is
+never drawn.
 
 ---
 

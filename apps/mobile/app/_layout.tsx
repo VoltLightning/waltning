@@ -47,6 +47,7 @@ import {
   displayCurrency,
   floatPosition,
   language,
+  restartApp,
 } from "../src/platform";
 
 export default function RootLayout() {
@@ -397,11 +398,16 @@ function AppShell() {
   const styles = useStyles();
   return (
     <View style={styles.root}>
-      <RenderBoundary onError={reportRenderFailure}>
+      <RenderBoundary onError={reportRenderFailure} onRestart={handleRestart}>
         <AppStack />
       </RenderBoundary>
     </View>
   );
+}
+
+/** Try again can throw again, so the failure screen also restarts the app. */
+function handleRestart() {
+  restartApp().catch(() => undefined);
 }
 
 /**

@@ -78,3 +78,32 @@ it("says it in German on a German phone", () => {
 
   expect(screen.getByText("Dieser Bildschirm funktioniert nicht mehr")).toBeDefined();
 });
+
+it("offers a restart that runs, and keeps the failure screen when Try again throws again", () => {
+  const onRestart = vi.fn();
+  render(
+    <I18nProvider locale="en">
+      <RenderBoundary onRestart={onRestart}>
+        <Screen />
+      </RenderBoundary>
+    </I18nProvider>,
+  );
+
+  // Still broken: Try again lands on the failure screen again, not a blank one.
+  fireEvent.click(screen.getByText("Try again"));
+  expect(screen.getByText("This screen stopped working")).toBeDefined();
+
+  fireEvent.click(screen.getByText("Restart the app"));
+  expect(onRestart).toHaveBeenCalledTimes(1);
+});
+
+it("draws no restart where the app gives none", () => {
+  render(
+    <I18nProvider locale="en">
+      <RenderBoundary>
+        <Screen />
+      </RenderBoundary>
+    </I18nProvider>,
+  );
+  expect(screen.queryByText("Restart the app")).toBeNull();
+});

@@ -1758,7 +1758,8 @@ export const en = {
     ledgerFailedTitle: "The ledger could not open",
     renderFailedTitle: "This screen stopped working",
     renderFailedBody:
-      "Something went wrong while drawing it. Your ledger is untouched. Try again, and if it happens again, the error is under Developer.",
+      "Something went wrong while drawing it. Your ledger is untouched. Try again; if it keeps happening, restart the app.",
+    renderFailedRestart: "Restart the app",
     /**
      * The failing layer's own sentence, shown verbatim on the terminal branch
      * — the migrator writes for a person, so replacing it would lose the one

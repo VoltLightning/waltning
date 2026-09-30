@@ -1000,7 +1000,8 @@ export const de: Messages = {
     ledgerFailedTitle: "Das Buch konnte nicht geöffnet werden",
     renderFailedTitle: "Dieser Bildschirm funktioniert nicht mehr",
     renderFailedBody:
-      "Beim Zeichnen ist etwas schiefgelaufen. Ihr Buch ist unberührt. Versuchen Sie es noch einmal; wenn es wieder passiert, steht der Fehler unter Entwickler.",
+      "Beim Zeichnen ist etwas schiefgelaufen. Ihr Buch ist unberührt. Versuchen Sie es noch einmal; wenn es wieder passiert, starten Sie die App neu.",
+    renderFailedRestart: "App neu starten",
     ledgerFailedBody: "{{message}}",
     ledgerBusyBody:
       "Ein anderer Tab hat das Buch noch geöffnet. Schließen Sie ihn und versuchen Sie es erneut.",

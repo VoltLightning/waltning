@@ -27,6 +27,8 @@ export type RenderBoundaryProps = {
   children: ReactNode;
   /** Receives the thrown value and React's component stack, once per failure. */
   onError?: (error: Error, componentStack: string) => void;
+  /** The way out when Try again keeps failing — see `RenderFailed`. */
+  onRestart?: (() => void) | undefined;
 };
 
 type State = { error: Error | null; attempt: number };
@@ -47,7 +49,8 @@ export class RenderBoundary extends Component<RenderBoundaryProps, State> {
   };
 
   override render() {
-    if (this.state.error !== null) return <RenderFailed onRetry={this.handleRetry} />;
+    if (this.state.error !== null)
+      return <RenderFailed onRetry={this.handleRetry} onRestart={this.props.onRestart} />;
     // The key is what makes a retry a fresh mount.
     return <Fragment key={this.state.attempt}>{this.props.children}</Fragment>;
   }

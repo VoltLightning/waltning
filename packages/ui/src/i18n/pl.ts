@@ -1042,7 +1042,8 @@ export const pl: Messages = {
     ledgerFailedTitle: "Nie udało się otworzyć księgi",
     renderFailedTitle: "Ten ekran przestał działać",
     renderFailedBody:
-      "Coś poszło nie tak przy jego rysowaniu. Twoja księga jest nietknięta. Spróbuj ponownie, a jeśli się powtórzy, błąd znajdziesz w sekcji Deweloper.",
+      "Coś poszło nie tak przy rysowaniu tego ekranu. Twoja księga jest nietknięta. Spróbuj ponownie, a jeśli się powtórzy, uruchom aplikację od nowa.",
+    renderFailedRestart: "Uruchom aplikację ponownie",
     ledgerFailedBody: "{{message}}",
     ledgerBusyBody: "Księga jest wciąż otwarta w innej karcie. Zamknij ją i spróbuj ponownie.",
     ledgerUnavailableBody:

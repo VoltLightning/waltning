@@ -326,20 +326,23 @@ for the person to know it. `RenderBoundary` (`packages/ui/src/states`) wraps the
 navigator in `apps/mobile/app/_layout.tsx`, inside the providers, so every
 navigated screen is under it.
 
-- What replaces the screen is `RenderFailed`: a `recoverable` `ErrorState`
+- What replaces the navigator is `RenderFailed`: a `recoverable` `ErrorState`
   (`design-system/08` §8.2) that says the screen stopped, that the ledger is
-  untouched, and offers **Try again**.
-- **Try again mounts the route afresh.** A new `key` discards the subtree that
-  threw, so the next attempt starts from the route's initial state, not from the
-  state that made it throw.
-- **The error text goes to Diagnostics, not to the screen.** The boundary hands
+  untouched, and offers **Try again** and **Restart the app**.
+- **Try again mounts the whole navigator afresh.** A new `key` discards the
+  subtree that threw, so the next attempt starts from the navigator's initial
+  state, not from the state that made it throw. It can throw again, and a
+  screen that throws on every render would make Try again a loop — which is why
+  **Restart the app** is always beside it: it starts the process over, the one
+  action that does not depend on the state that failed.
+- **The error text is logged to the device log, not drawn.** The boundary hands
   the thrown error and React's component stack to the app, which logs it as
   `app_runtime · render` beside the startup failures. It is a developer's
   sentence and names no amount or form value.
 - It catches render and lifecycle errors only. A native mounting failure never
-  reaches React, which is why no screen may rely on the boundary to excuse an
-  operation the platform refuses: a keyed reorder of animated `Pressable`s is
-  one such (S05's category chips keep the order they opened with).
+  reaches React, so the boundary cannot excuse an operation the platform
+  refuses: a keyed reorder of animated `Pressable`s while the screen is
+  visible is one (S05's category chips keep the order they opened with).
 
 ---
 
