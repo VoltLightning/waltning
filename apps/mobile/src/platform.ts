@@ -209,6 +209,26 @@ export function dayTickHaptic(): void {}
  * holds a preview ledger and appears in neither of §5.7's tables; the
  * controller settles on `open` and the layout draws the app.
  */
+const APP_LOCK_KEY = "waltning.appLock";
+
+/**
+ * Whether the owner wants the launch gate: `true` for Yes, `false` for Not
+ * now, nothing until they have been asked (`SPEC.md` §5.7). The first-run
+ * question writes it and S30's lock row flips it; a device preference, never
+ * synced.
+ */
+export const appLockPreference = createDevicePreference<boolean>(
+  {
+    get: () => AsyncStorage.getItem(APP_LOCK_KEY),
+    set: (value) => AsyncStorage.setItem(APP_LOCK_KEY, value),
+  },
+  {
+    parse: (raw) => (raw === "on" ? true : raw === "off" ? false : null),
+    serialize: (value) => (value ? "on" : "off"),
+  },
+  mobileDiagnostics,
+);
+
 export const appLock = createAppLock({
   authenticator: null,
   subscribeAppState: () => () => {},

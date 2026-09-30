@@ -1399,6 +1399,10 @@ export const en = {
     language: "Language",
     followPhone: "Match the phone",
     followPhoneHint: "Currently {{value}}",
+    lock: "App lock",
+    lockOn: "On",
+    lockOff: "Off",
+    lockHint: "Asks for your fingerprint, face or passcode when the app opens.",
     followPhoneValue: "Match the phone · {{value}}",
     light: "Light",
     dark: "Dark",
@@ -1756,6 +1760,14 @@ export const en = {
     failed: "That wasn't recognised. Try again.",
     lockout: "Too many attempts. Use your device passcode.",
     unavailable: "This device can't unlock right now.",
+    askTitleFingerprint: "Lock the app with your fingerprint?",
+    askTitleFace: "Lock the app with your face?",
+    askTitleEither: "Lock the app with your fingerprint or face?",
+    askTitlePasscode: "Lock the app with your device passcode?",
+    askBody:
+      "Anyone holding this unlocked phone can read your accounts. You can change this at any time in Settings.",
+    askYes: "Yes",
+    askLater: "Not now",
   },
   startup: {
     /**

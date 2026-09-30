@@ -20,6 +20,13 @@
  * presented earlier on all three targets, and the lock is always the later
  * one — a sheet cannot open while the tree under the lock takes no touches.
  *
+ * **Before any of that, the question.** On a device that could gate and has
+ * not been asked, `LockedScreen` stands in `ask` mode — *Lock the app with
+ * your fingerprint?* — and the device's prompt is not raised until the answer
+ * is Yes. Not now leaves the ledger open; Settings' row flips it either way.
+ * The same tree carries `open` and `unlocked`, so switching the lock on or off
+ * from Settings does not remount the screen the switch was on.
+ *
  * **The prompt is raised by the gate, once per lock.** A person opening the
  * app should meet Face ID, not a button asking them to ask for it; the
  * button is for after a cancel. `prompted` remembers which lock the prompt
@@ -67,8 +74,13 @@ export function LockGate({ lock, children }: LockGateProps) {
     unlock();
   }, [state, unlock]);
 
+  const yes = useCallback(() => void lock.answer(true), [lock]);
+  const notNow = useCallback(() => void lock.answer(false), [lock]);
+
   if (state.status === "checking") return <View style={styles.blank} />;
-  if (state.status === "open") return <>{children}</>;
+  if (state.status === "asking") {
+    return <LockedScreen mode="ask" method={state.method} onYes={yes} onNotNow={notNow} />;
+  }
   if (state.status === "locked" && !state.opened) {
     return (
       <LockedScreen
@@ -79,7 +91,7 @@ export function LockGate({ lock, children }: LockGateProps) {
       />
     );
   }
-  const hidden = state.status === "locked" || state.covered;
+  const hidden = state.status === "locked" || (state.status === "unlocked" && state.covered);
   return (
     <View style={styles.root}>
       {/* Under the layer the tree is out of reach as well as out of sight:

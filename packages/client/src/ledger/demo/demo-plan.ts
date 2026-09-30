@@ -14,11 +14,14 @@
  * executors make — and would therefore produce data that behaves differently
  * from data you entered, which is the one thing a test fixture must not do.
  *
- * **Every account, employer and client is invented; the merchants are real.**
- * Those are two different rules. The placeholder rule protects *this* ledger's
- * private data — which bank, which employer, which client — and none of that
- * appears here. A supermarket is not private data, and naming real ones is the
- * only way §14.4b's offline matcher has anything to recognise.
+ * **Every account, employer, client and person is invented; the international
+ * services are real.** Those are two different rules. The placeholder rule
+ * protects *this* ledger's private data — which bank, which employer, which
+ * client — and none of that appears here. A streaming subscription is not
+ * private data, and naming real ones is the only way §14.4b's offline matcher
+ * has anything to recognise. **The words are the app's language**
+ * (`demo-names.ts`): this file is the structure and the English keys, and a
+ * German demo reads German.
  *
  * Deliberately separate from `packages/db`'s Postgres fixture, which serves
  * the API-backed dev flow and cannot be imported from a phone bundle. The two
@@ -28,6 +31,7 @@
 import type { CurrencyCode } from "@waltning/core/money";
 import * as money from "@waltning/core/money";
 import type { AccountKind } from "@waltning/core/registry/inputs";
+import { type DemoLocale, demoText } from "./demo-names.ts";
 
 export type DemoAccount = {
   /** Referenced by the patterns below, never shown. */
@@ -476,7 +480,7 @@ export const DEMO_PATTERNS: readonly DemoPattern[] = [
 ];
 
 /**
- * The three people and companies money moves between, and the three states
+ * The people and companies money moves between, and the three states
  * S14 sorts them into: **one who owes you, one you owe, and one settled.**
  *
  * A demo with no counterparties leaves Debt drawing its empty state and S15
@@ -498,13 +502,14 @@ export const DEMO_COUNTERPARTIES: readonly DemoCounterparty[] = [
   { ref: "owing", name: "Marta", kind: "person", settlementCurrency: null },
   { ref: "owed", name: "Piotr", kind: "person", settlementCurrency: null },
   { ref: "settled", name: "Studio B", kind: "company", settlementCurrency: null },
-  // **Not only Polish names.** The ledger is kept in three languages, and a
-  // directory of Polish names never exercises `fold()` on an umlaut or on
-  // Cyrillic at all — the two scripts its uniqueness rule most needs to hold
-  // for. A German friend settling in euros, and a Belarusian one written in
-  // his own alphabet.
+  // **One person per currency and per script the names are shown in.** The
+  // name in the app is the language's own (`demo-names.ts`) — a German demo's
+  // contacts are German, a Russian demo's are written in Cyrillic, which is
+  // what keeps `fold()`'s umlaut and Cyrillic cases exercised. The one who
+  // settles in euros and the one who settles in dollars are the currency
+  // cases; here they carry the plan's English placeholder.
   { ref: "de-owing", name: "Jürgen", kind: "person", settlementCurrency: "EUR" },
-  { ref: "by-owed", name: "Алесь", kind: "person", settlementCurrency: null },
+  { ref: "by-owed", name: "Alex", kind: "person", settlementCurrency: null },
   // And a dollar debt, so S12's totals carry a third currency.
   { ref: "us-owing", name: "John Henry", kind: "person", settlementCurrency: "USD" },
   // A real loan to a friend, paid back monthly — lending as a debt on a
@@ -688,6 +693,10 @@ function iso(year: number, month: number, day: number): string {
 }
 
 /**
+ * **The plan's own words are the English ones, and they are keys.** A name is
+ * shown in the app's language (`demo-names.ts`); the structure — refs, amounts,
+ * days — is the same whichever language asks.
+ *
  * Every transaction to create, walking back a month at a time from `today`.
  *
  * **Months rather than consecutive days**, so the ledger has whole months
@@ -695,7 +704,11 @@ function iso(year: number, month: number, day: number): string {
  * read against, and the one a run of consecutive days never produces. Nothing
  * is dated later than `today`: rows in the future are a different feature.
  */
-export function demoTransactions(today: string, months: number): readonly DemoTransaction[] {
+export function demoTransactions(
+  today: string,
+  months: number,
+  locale: DemoLocale = "en",
+): readonly DemoTransaction[] {
   const [thisYear, thisMonth, todayDay] = today.split("-").map(Number);
   if (thisYear === undefined || thisMonth === undefined || todayDay === undefined) {
     throw new Error(`demo data needs a YYYY-MM-DD to walk back from, got ${today}`);
@@ -718,7 +731,9 @@ export function demoTransactions(today: string, months: number): readonly DemoTr
         rows.push({
           account: pattern.account,
           category: pattern.category,
-          enteredName: pattern.enteredName,
+          // The words follow the app's language; the amount's variation is
+          // keyed by the plan's own text, so it is identical in every one.
+          enteredName: demoText(locale, pattern.enteredName),
           type: pattern.toAccount === undefined ? pattern.type : "transfer",
           ...(pattern.toAccount === undefined ? {} : { toAccount: pattern.toAccount }),
           amount: vary(pattern.amount, `${pattern.enteredName}-${date}`),

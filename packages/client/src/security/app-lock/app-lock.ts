@@ -39,6 +39,7 @@
  * which is also what makes every transition testable without a device.
  */
 
+import type { DevicePreferenceController } from "../../device/create-device-preference/create-device-preference.ts";
 import { type ClientDiagnostics, clientFailure, emitClientDiagnostic } from "../../diagnostics.ts";
 
 /** How long the app may be away before coming back asks again. */
@@ -53,6 +54,14 @@ export const ENROLMENT_TIMEOUT_MS = 5_000;
 /** What the device can ask for. `none` is a device with no secret set — nothing to gate with. */
 export type AppLockEnrolment = "none" | "secret" | "biometric";
 
+/**
+ * What the device will ask of the person — the words the first-run question
+ * and the Settings row use. `either` is a device that offers both a
+ * fingerprint and a face, or one that cannot say which; `passcode` is a
+ * device with a secret but no biometric enrolled.
+ */
+export type AppLockMethod = "fingerprint" | "face" | "either" | "passcode";
+
 /** Why an attempt did not unlock — the words the screen chooses from. */
 export type AppLockFailure = "cancelled" | "failed" | "lockout" | "unavailable";
 
@@ -64,6 +73,11 @@ export type AppLockPrompt = { message: string; cancel: string };
 export type AppLockAuthenticator = {
   enrolment: () => Promise<AppLockEnrolment>;
   authenticate: (prompt: AppLockPrompt) => Promise<AppLockAttempt>;
+  /**
+   * Which biometric the device offers, for the wording of the first-run
+   * question. A platform that cannot say is `either`.
+   */
+  method?: () => Promise<AppLockMethod>;
 };
 
 /** The three states a platform reports; `inactive` is iOS's own transitional one. */
@@ -89,12 +103,25 @@ export type AppLockPlatform = {
    * the stay from then rather than never.
    */
   currentAppState?: () => AppActivity;
+  /**
+   * Whether this device's owner wants the gate — `true` (Yes), `false` (Not
+   * now), or `null` until they have been asked. A device preference, never
+   * synced. Absent, the gate is always on where the device can gate: the
+   * shape the tests that do not care about the question use.
+   */
+  preference?: DevicePreferenceController<boolean>;
 };
 
 export type AppLockSnapshot =
   /** Enrolment not yet answered. Nothing is drawn but the blank. */
   | { status: "checking" }
-  /** Nothing to gate with — no device secret, or no device. */
+  /**
+   * The device can gate and the person has not been asked whether to. The
+   * first-run question stands where the ledger would; no biometric is
+   * requested until it is answered.
+   */
+  | { status: "asking"; method: AppLockMethod }
+  /** No gate — no device secret, no device, or the owner chose none. */
   | { status: "open" }
   | {
       status: "locked";
@@ -124,6 +151,19 @@ export type AppLockController = {
   unlock: (prompt: AppLockPrompt) => Promise<void>;
   /** Locks now, from wherever the app is — a setting's own control, later. */
   lock: () => void;
+  /**
+   * The owner's answer — the first-run question's Yes / Not now, and
+   * Settings' switch. Stored as the device preference. Yes arms the gate
+   * and opens the ledger for this launch (they have just said so; the
+   * prompt comes on the next lock); No disarms it.
+   */
+  answer: (enabled: boolean) => Promise<void>;
+  /**
+   * What the device would gate with, or `null` where there is nothing to
+   * gate with (no secret, or the browser) — Settings shows the switch only
+   * for a device that can honour it. Settled once `start` has.
+   */
+  method: () => AppLockMethod | null;
   /** Stops listening to the platform. */
   dispose: () => void;
 };
@@ -135,6 +175,9 @@ export function createAppLock(
   let snapshot: AppLockSnapshot = { status: "checking" };
   let started: Promise<void> | undefined;
   let gated = false;
+  // What the device can gate with; `null` until enrolment answers, and where
+  // there is nothing to gate with.
+  let deviceMethod: AppLockMethod | null = null;
   let opened = false;
   let hiddenAt: number | null = null;
   // Which lock a prompt was raised for: a lock by hand while the prompt is
@@ -210,14 +253,27 @@ export function createAppLock(
         ENROLMENT_TIMEOUT_MS,
       );
     });
-    started = Promise.race([authenticator.enrolment(), timeout]).then(
-      (enrolment) => {
+    const answered = Promise.all([authenticator.enrolment(), hydratePreference(platform)]);
+    started = Promise.race([answered, timeout]).then(
+      async ([enrolment]) => {
         emitClientDiagnostic(diagnostics, {
           scope: "client_state",
           update: "app_lock_enrolment",
           phase: "success",
         });
         if (enrolment === "none") {
+          publish({ status: "open" });
+          return;
+        }
+        deviceMethod = await methodOf(authenticator, enrolment);
+        const chosen = platform.preference?.getSnapshot().value ?? null;
+        // Not asked yet: ask, and request nothing from the device until the
+        // answer is in.
+        if (platform.preference !== undefined && chosen === null) {
+          publish({ status: "asking", method: deviceMethod });
+          return;
+        }
+        if (chosen === false) {
           publish({ status: "open" });
           return;
         }
@@ -239,6 +295,26 @@ export function createAppLock(
       },
     );
     return started;
+  };
+
+  const answer = async (enabled: boolean) => {
+    if (deviceMethod === null || snapshot.status === "checking") return;
+    // In memory at once; the disk write is awaited after the state moves, so
+    // a slow disk never holds the ledger behind a tap.
+    const written = platform.preference?.set(enabled);
+    if (enabled) {
+      gated = true;
+      opened = true;
+      hiddenAt = null;
+      listen();
+      publish({ status: "unlocked", covered: false });
+    } else {
+      gated = false;
+      unsubscribe?.();
+      unsubscribe = null;
+      publish({ status: "open" });
+    }
+    await written;
   };
 
   const unlock = async (prompt: AppLockPrompt) => {
@@ -303,9 +379,28 @@ export function createAppLock(
     lock: () => {
       if (snapshot.status === "unlocked" || snapshot.status === "locked") lockNow();
     },
+    answer,
+    method: () => deviceMethod,
     dispose: () => {
       unsubscribe?.();
       unsubscribe = null;
     },
   };
+}
+
+async function hydratePreference(platform: AppLockPlatform): Promise<void> {
+  await platform.preference?.hydrate();
+}
+
+/** The device's biometric, or `either` where it cannot say — the words, not the gate. */
+async function methodOf(
+  authenticator: AppLockAuthenticator,
+  enrolment: AppLockEnrolment,
+): Promise<AppLockMethod> {
+  if (enrolment === "secret") return "passcode";
+  try {
+    return (await authenticator.method?.()) ?? "either";
+  } catch {
+    return "either";
+  }
 }

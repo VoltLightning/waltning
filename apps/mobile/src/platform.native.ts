@@ -10,6 +10,7 @@ import { createDeskScopePreference } from "@waltning/client/ledger/desk-scope";
 import {
   type AppLockAttempt,
   type AppLockEnrolment,
+  type AppLockMethod,
   createAppLock,
 } from "@waltning/client/security/app-lock";
 import { createLastCapturePreference } from "@waltning/client/transactions/last-capture";
@@ -219,9 +220,44 @@ function attemptOf(result: LocalAuthentication.LocalAuthenticationResult): AppLo
   }
 }
 
+/**
+ * Which biometric the device offers, for the wording of the first-run
+ * question: what `expo-local-authentication` says the hardware supports.
+ */
+async function methodOf(): Promise<AppLockMethod> {
+  const types = await LocalAuthentication.supportedAuthenticationTypesAsync();
+  const fingerprint = types.includes(LocalAuthentication.AuthenticationType.FINGERPRINT);
+  const face = types.includes(LocalAuthentication.AuthenticationType.FACIAL_RECOGNITION);
+  if (fingerprint && !face) return "fingerprint";
+  if (face && !fingerprint) return "face";
+  return "either";
+}
+
+const APP_LOCK_KEY = "waltning.appLock";
+
+/**
+ * Whether the owner wants the launch gate: `true` for Yes, `false` for Not
+ * now, nothing until they have been asked (`SPEC.md` §5.7). The first-run
+ * question writes it and S30's lock row flips it; a device preference, never
+ * synced.
+ */
+export const appLockPreference = createDevicePreference<boolean>(
+  {
+    get: () => AsyncStorage.getItem(APP_LOCK_KEY),
+    set: (value) => AsyncStorage.setItem(APP_LOCK_KEY, value),
+  },
+  {
+    parse: (raw) => (raw === "on" ? true : raw === "off" ? false : null),
+    serialize: (value) => (value ? "on" : "off"),
+  },
+  mobileDiagnostics,
+);
+
 export const appLock = createAppLock(
   {
+    preference: appLockPreference,
     authenticator: {
+      method: methodOf,
       enrolment: async () => enrolmentOf(await LocalAuthentication.getEnrolledLevelAsync()),
       // `strong` where the device has strong biometrics, `weak` where it
       // has only class-2 ones: asking for `strong` on a device that cannot
