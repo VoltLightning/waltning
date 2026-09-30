@@ -56,6 +56,8 @@ export type AmountCardProps = {
   error?: string | undefined;
   /** Opens the keyboard on mount — the amount is the first thing typed. */
   autoFocus?: boolean;
+  /** Keyboard up: the label is dropped (the input keeps it for assistive tech) and the card is shorter. */
+  compact?: boolean;
 };
 
 export function AmountCard({
@@ -68,6 +70,7 @@ export function AmountCard({
   context,
   error,
   autoFocus = false,
+  compact = false,
 }: AmountCardProps) {
   const t = useT();
   const locale = useLocale();
@@ -95,8 +98,14 @@ export function AmountCard({
   );
 
   return (
-    <View style={[styles.card, focused ? styles.focused : null]}>
-      <Text style={styles.label}>{label}</Text>
+    <View
+      style={[
+        styles.card,
+        compact ? styles.cardCompact : null,
+        focused ? (compact ? styles.focusedCompact : styles.focused) : null,
+      ]}
+    >
+      {compact ? null : <Text style={styles.label}>{label}</Text>}
       <FigureInput
         label={label}
         value={display}
@@ -143,8 +152,10 @@ const useStyles = makeStyles((theme) => ({
     paddingHorizontal: space.x3b,
     gap: space.md,
   },
+  cardCompact: { paddingVertical: space.x3 },
   label: { color: theme.textMuted, ...text.ui("label") },
   focused: focusBorder(theme.focusRing, { horizontal: space.x3b, vertical: space.x5 }),
+  focusedCompact: focusBorder(theme.focusRing, { horizontal: space.x3b, vertical: space.x3 }),
   affix: { color: theme.accentText, ...text.ui("displayTwo") },
   contextRow: { flexDirection: "row", marginTop: space.xs },
   context: {

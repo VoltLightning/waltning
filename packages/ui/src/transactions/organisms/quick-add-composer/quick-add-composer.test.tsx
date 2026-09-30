@@ -7,7 +7,7 @@
  * against the rows that carry it now.
  */
 
-import { fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { timeOfDay } from "@waltning/core/date";
 import { currencyCode } from "@waltning/core/money";
 import { expect, it, vi } from "vitest";
@@ -349,4 +349,30 @@ it("names the account row Into on an income, which credits it", () => {
   draw({ type: "income" });
   expect(screen.getByText("Into")).toBeDefined();
   expect(screen.queryByText("From")).toBeNull();
+});
+
+/** S05 §3 — the account is asked for before the category, and an unfilled row is a question, not an error. */
+it("draws the account row before the category row, without an error before any submit", () => {
+  draw({ accountId: null });
+  const rows = screen.getAllByRole("button").map((row) => row.getAttribute("aria-label") ?? "");
+  const account = rows.findIndex((label) => label.startsWith("From"));
+  const category = rows.findIndex((label) => label.startsWith("Category"));
+  expect(account).toBeGreaterThanOrEqual(0);
+  expect(account).toBeLessThan(category);
+  expect(screen.queryByRole("alert")).toBeNull();
+});
+
+it("shows the currency beside the figure once a filled account is known, and none before", () => {
+  draw({ accountId: null, raw: "45" });
+  expect(screen.queryByText("PLN")).toBeNull();
+  cleanup();
+  draw({ accountId: "account-a", accountMachineFilled: true, raw: "45" });
+  expect(screen.getByText("PLN")).toBeDefined();
+});
+
+it("drops the amount card's label but keeps the field named, while the keyboard is up", () => {
+  draw({ compact: true });
+  expect(screen.queryByText("How much?")).toBeNull();
+  expect(screen.getByLabelText("How much?")).toBeDefined();
+  expect(screen.getByRole("button", { name: /^From/ })).toBeDefined();
 });

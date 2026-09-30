@@ -75,6 +75,13 @@ const SHARED_ACCOUNT = {
   ownership: "shared" as const,
 };
 
+/** A second account, so that a fresh ledger has a choice to make — one account is filled in for you (S05 §9.2). */
+const SECOND_ACCOUNT = {
+  ...ACCOUNT,
+  id: id<"accounts">("66666666-6666-4666-8666-666666666666"),
+  name: "Wallet · PLN",
+};
+
 /** H2 — a smaller-scale account than `ACCOUNT`'s two decimal places. */
 const JPY_ACCOUNT = {
   ...ACCOUNT,
@@ -95,7 +102,7 @@ function fakeController(
   } = {},
 ) {
   const port = basePort({
-    listAccounts: () => overrides.accounts ?? [ACCOUNT],
+    listAccounts: () => overrides.accounts ?? [ACCOUNT, SECOND_ACCOUNT],
     listCurrencies: () => [
       {
         code: PLN,
@@ -177,6 +184,26 @@ beforeEach(() => {
 });
 
 describe("QuickAdd — the phone path (Dock + QuickAddComposer)", () => {
+  it("fills the only account in for a fresh ledger, marks it so, and shows its currency (S05 §9.2)", () => {
+    withLedger({ accounts: [ACCOUNT] });
+    typeAmount("4500");
+    expect(
+      screen.getByRole("button", { name: "From: Cash · PLN, filled automatically" }),
+    ).toBeDefined();
+    expect(screen.getByText("PLN")).toBeDefined();
+    expect(screen.getByRole("button", { name: "Save expense" })).toHaveProperty("disabled", false);
+  });
+
+  it("leaves the account row a question, unerrored, when two accounts could take it", () => {
+    withLedger();
+    typeAmount("4500");
+    expect(screen.getByRole("button", { name: "From: Which one?" })).toBeDefined();
+    expect(screen.queryByText("PLN")).toBeNull();
+    expect(
+      screen.queryByText("The form isn't complete — check the highlighted fields."),
+    ).toBeNull();
+  });
+
   it("refuses Save until an amount and an account are both present (S05 §9.2)", () => {
     withLedger();
     expectSaveRefused();

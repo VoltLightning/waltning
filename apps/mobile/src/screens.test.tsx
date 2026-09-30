@@ -1150,7 +1150,10 @@ describe("QuickAdd", () => {
     withLedger(<QuickAdd />, fakeController({ accounts: [PLN_ACCOUNT] }));
 
     fireEvent.click(screen.getByRole("button", { name: /^From/ }));
-    expect(screen.getByText("Bank A · PLN")).toBeDefined();
+    // The one account is already filled into the row; the sheet still lists it.
+    expect(
+      within(screen.getByTestId("account-picker-list")).getByText("Bank A · PLN"),
+    ).toBeDefined();
   });
 
   it("offers the ledger's accounts via AccountPicker at the desk breakpoint (QuickAddForm's own fallback)", () => {
