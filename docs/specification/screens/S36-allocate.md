@@ -142,7 +142,10 @@ Pick the mode, then the people. *Even* re-splits on every add and remove, so
 adding a fourth person to a three-way split is one tap rather than four edits.
 Typing an amount on any row switches the mode to *Custom* and keeps every other
 amount where it was — an edit is a statement about one row, never a re-split of
-the others behind your back.
+the others behind your back. The typed fields are seeded with each row's
+current figure at the currency's decimals in the reader's decimal mark
+(`400,00` in German, Polish, Russian and Belarusian, `400.00` in English) —
+never the stored eight decimals.
 
 *Shares* puts a weight stepper on each row, defaulting every weight to 1, so it
 starts as *Even* and diverges only where you say so.

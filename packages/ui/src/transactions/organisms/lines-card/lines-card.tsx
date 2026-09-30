@@ -42,8 +42,9 @@ import { useCallback, useMemo, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import Animated from "react-native-reanimated";
 import { Amount } from "../../../fx/atoms/amount/amount";
-import { AmountField, parseAmount } from "../../../fx/molecules/amount-field/amount-field";
-import { useT } from "../../../i18n/provider";
+import { formatAmountDraft, parseAmount } from "../../../fx/molecules/amount-field/amount-field";
+import type { Locale } from "../../../i18n/locales.ts";
+import { useLocale, useT } from "../../../i18n/provider";
 import { Button } from "../../../primitives/atoms/button/button";
 import { TextField } from "../../../primitives/atoms/text-field/text-field";
 import { useDisclosureMotion } from "../../../primitives/disclosure-motion.ts";
@@ -92,8 +93,14 @@ type DraftLine = {
   categoryName: string | null;
 };
 
-function toDraft(line: LinesCardLine): DraftLine {
-  return { ...line, amount: line.amount };
+/**
+ * A line's `amount` in the draft is **the text in its field**, exactly as typed
+ * (`"5,"`, `""`), the way `FieldsCard` keeps its own amount. Seeded from the
+ * stored figure in the currency's decimals and the locale's mark; parsed only
+ * to read it (`parseAmount`), never written back into the field.
+ */
+function toDraft(line: LinesCardLine, decimals: number, locale: Locale): DraftLine {
+  return { ...line, amount: formatAmountDraft(line.amount, decimals, locale) };
 }
 
 export function LinesCard({
@@ -108,7 +115,11 @@ export function LinesCard({
   const t = useT();
   const styles = useStyles();
 
-  const [draft, setDraft] = useState<readonly DraftLine[]>(() => lines.map(toDraft));
+  const locale = useLocale();
+
+  const [draft, setDraft] = useState<readonly DraftLine[]>(() =>
+    lines.map((line) => toDraft(line, decimals, locale)),
+  );
   const [open, setOpen] = useState<ReadonlySet<string>>(new Set());
 
   const handleAdd = useCallback(() => {
@@ -127,17 +138,21 @@ export function LinesCard({
       .map((value) => money.toMoney(value));
     return amounts.length > 0 ? money.sum(amounts) : money.toMoney("0");
   }, [draft]);
-  const balanced = draft.length === 0 || money.eq(sum, total);
+  // A line with no amount yet is not a zero line: it cannot be saved.
+  const complete = draft.every((line) => parseAmount(line.amount) !== null);
+  const balanced = draft.length === 0 || (complete && money.eq(sum, total));
 
   const changed = useMemo(() => {
     if (draft.length !== lines.length) return true;
     return draft.some((line, index) => {
       const saved = lines[index];
+      const typed = parseAmount(line.amount);
       return (
         !saved ||
         saved.id !== line.id ||
         saved.description !== line.description ||
-        saved.amount !== line.amount
+        typed === null ||
+        !money.eq(money.toMoney(typed), saved.amount)
       );
     });
   }, [draft, lines]);
@@ -149,7 +164,7 @@ export function LinesCard({
       draft.map((line) => ({
         id: line.id,
         description: line.description,
-        amount: line.amount,
+        amount: parseAmount(line.amount) ?? line.amount,
         categoryId: line.categoryId,
       })),
     );
@@ -273,10 +288,10 @@ function LineRow({ line, currency, decimals, isOpen, first, setDraft, setOpen }:
   );
 
   const handleAmountChange = useCallback(
-    (next: string | null) => {
+    (next: string) => {
       setDraft((current) =>
         current.map((candidate) =>
-          candidate.id === line.id ? { ...candidate, amount: next ?? "" } : candidate,
+          candidate.id === line.id ? { ...candidate, amount: next } : candidate,
         ),
       );
     },
@@ -334,11 +349,14 @@ function LineRow({ line, currency, decimals, isOpen, first, setDraft, setOpen }:
             onChangeText={handleDescriptionChange}
             maxLength={200}
           />
-          <AmountField
+          <TextField
             label={t("transactions.amount")}
-            currency={currency}
-            initial={line.amount}
-            onChange={handleAmountChange}
+            value={line.amount}
+            onChangeText={handleAmountChange}
+            keyboardType="decimal-pad"
+            {...(parsedAmount === null && line.amount !== ""
+              ? { error: t("transactions.invalidAmount") }
+              : {})}
           />
           <Button label={t("transactions.delete")} onPress={handleRemove} variant="ghost" />
         </View>

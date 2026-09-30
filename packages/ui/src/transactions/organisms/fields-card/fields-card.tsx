@@ -21,7 +21,8 @@ import { useCallback, useMemo, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import Animated from "react-native-reanimated";
 import { parseAmount } from "../../../fx/molecules/amount-field/amount-field";
-import { useT } from "../../../i18n/provider";
+import { decimalMark } from "../../../i18n/locales.ts";
+import { useLocale, useT } from "../../../i18n/provider";
 import { Button } from "../../../primitives/atoms/button/button";
 import { Chip } from "../../../primitives/atoms/chip/chip";
 import { DateField } from "../../../primitives/atoms/date-field/date-field";
@@ -188,9 +189,12 @@ export function FieldsCard({
 
   const [open, setOpen] = useState<ReadonlySet<OpenField>>(new Set());
   const [date, setDate] = useState(fields.date);
-  const [amount, setAmount] = useState(fields.amount);
-  const [toAmount, setToAmount] = useState(fields.toAmount ?? "");
-  const [fee, setFee] = useState(fields.fee ?? "");
+  // Figures arrive at the account's scale with a `.`; the fields are seeded in
+  // the reader's own mark (`400,00` in de, `400.00` in en).
+  const mark = decimalMark(useLocale());
+  const [amount, setAmount] = useState(() => fields.amount.replace(".", mark));
+  const [toAmount, setToAmount] = useState(() => (fields.toAmount ?? "").replace(".", mark));
+  const [fee, setFee] = useState(() => (fields.fee ?? "").replace(".", mark));
   const [enteredName, setEnteredName] = useState(fields.enteredName);
   const [note, setNote] = useState(fields.note);
   const [isBusiness, setIsBusiness] = useState(fields.isBusiness);

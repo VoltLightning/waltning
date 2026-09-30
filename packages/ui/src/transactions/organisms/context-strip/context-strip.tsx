@@ -59,6 +59,8 @@ export type ContextStripCard =
       months: readonly MonthBarsMonth[];
       count: number;
       onOpenAll: () => void;
+      /** Re-opens the counterparty picker: one counterparty per transaction, so this replaces it. */
+      onChange?: () => void;
     })
   | (Figures & {
       kind: "pair";
@@ -177,7 +179,14 @@ export function ContextStrip({ cards, column }: ContextStripProps) {
 function ContextCard({ card }: { card: ContextStripCard }) {
   switch (card.kind) {
     case "who":
-      return <MonthsCard title={card.name} card={card} onOpenAll={card.onOpenAll} />;
+      return (
+        <MonthsCard
+          title={card.name}
+          card={card}
+          onOpenAll={card.onOpenAll}
+          {...(card.onChange === undefined ? {} : { onChange: card.onChange })}
+        />
+      );
     case "pair":
       return <MonthsCard title={`${card.fromName} → ${card.toName}`} card={card} />;
     case "category":
@@ -191,9 +200,10 @@ type MonthsCardProps = {
   title: string;
   card: Figures & { months: readonly MonthBarsMonth[]; count: number };
   onOpenAll?: () => void;
+  onChange?: () => void;
 };
 
-function MonthsCard({ title, card, onOpenAll }: MonthsCardProps) {
+function MonthsCard({ title, card, onOpenAll, onChange }: MonthsCardProps) {
   const styles = useStyles();
   const t = useT();
   const locale = useLocale();
@@ -217,9 +227,14 @@ function MonthsCard({ title, card, onOpenAll }: MonthsCardProps) {
       <MonthBars months={card.months} share={card.share} />
       <View style={styles.foot}>
         <ShareNote card={card} />
-        {onOpenAll === undefined ? null : (
-          <Button label={t("transactions.contextSeeAll")} variant="ghost" onPress={onOpenAll} />
-        )}
+        <View style={styles.actions}>
+          {onChange === undefined ? null : (
+            <Button label={t("transactions.contextChange")} variant="ghost" onPress={onChange} />
+          )}
+          {onOpenAll === undefined ? null : (
+            <Button label={t("transactions.contextSeeAll")} variant="ghost" onPress={onOpenAll} />
+          )}
+        </View>
       </View>
     </Card>
   );
@@ -367,4 +382,5 @@ const useStyles = makeStyles((theme) => ({
   usual: { flexDirection: "row", alignItems: "baseline", gap: space.xs },
   notes: { gap: space.xxs, flexShrink: 1 },
   linkAction: { flexDirection: "row" },
+  actions: { flexDirection: "row", alignItems: "center", gap: space.sm },
 }));

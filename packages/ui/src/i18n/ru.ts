@@ -319,6 +319,7 @@ export const ru: Messages = {
     contextLabel: "Что это значит",
     contextInMonth: "{{month}} · {{times}}×",
     contextSeeAll: "Показать все",
+    contextChange: "Изменить",
     contextUsual: "обычно",
     contextOneOff: "Разовая — не учитывается в сравнениях",
     /** §5 — another row in the card was a one-off and is not in its figures. */

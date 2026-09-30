@@ -317,6 +317,7 @@ export const be: Messages = {
     contextLabel: "Што гэта значыць",
     contextInMonth: "{{month}} · {{times}}×",
     contextSeeAll: "Паказаць усё",
+    contextChange: "Змяніць",
     contextUsual: "звычайна",
     contextOneOff: "Разовая — не ўлічваецца ў параўнаннях",
     /** §5 — another row in the card was a one-off and is not in its figures. */

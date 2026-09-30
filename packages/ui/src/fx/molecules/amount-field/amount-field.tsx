@@ -23,9 +23,10 @@
  * the thing `parseAmount`'s own comment exists to prevent.
  */
 
+import * as money from "@waltning/core/money";
 import { useCallback, useState } from "react";
 import { Text, View } from "react-native";
-import { decimalMark } from "../../../i18n/locales.ts";
+import { decimalMark, type Locale } from "../../../i18n/locales.ts";
 import { useLocale, useT } from "../../../i18n/provider";
 import { PressableScaled } from "../../../primitives/atoms/pressable-scaled/pressable-scaled";
 import { SheetAwareTextInput } from "../../../primitives/sheet-input";
@@ -135,6 +136,20 @@ export function parseAmount(input: string): string | null {
   if (significantIntegerDigits > 12) return null;
 
   return normalized;
+}
+
+/**
+ * A stored amount → what an input is seeded with: the account's display
+ * decimals and the reader's decimal mark, **ungrouped** (a group separator
+ * typed into a field is a second separator, which `parseAmount` refuses).
+ *
+ * The inverse of `parseAmount` for a figure that has not been touched: `400.00000000`
+ * is `numeric(20,8)` storage, never something to put in front of a person.
+ * `""` stays `""` — no amount yet is not zero.
+ */
+export function formatAmountDraft(value: string, decimals: number, locale: Locale): string {
+  if (value === "") return "";
+  return money.round(money.toMoney(value), decimals).replace(".", decimalMark(locale));
 }
 
 export function AmountField(props: AmountFieldProps) {

@@ -323,6 +323,7 @@ export const de: Messages = {
     contextLabel: "Was das bedeutet",
     contextInMonth: "{{month}} · {{times}}×",
     contextSeeAll: "Alle anzeigen",
+    contextChange: "Ändern",
     contextUsual: "üblich",
     contextOneOff: "Einmalig — bei Vergleichen ausgelassen",
     /** §5 — another row in the card was a one-off and is not in its figures. */

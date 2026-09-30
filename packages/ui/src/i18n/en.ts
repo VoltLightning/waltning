@@ -619,6 +619,7 @@ export const en = {
     contextLabel: "What this means",
     contextInMonth: "{{month}} · {{times}}×",
     contextSeeAll: "See all",
+    contextChange: "Change",
     contextUsual: "usual",
     contextOneOff: "One-off — left out of comparisons",
     /** §5 — another row in the card was a one-off and is not in its figures. */
