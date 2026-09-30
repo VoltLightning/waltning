@@ -423,3 +423,11 @@ export function restartApp(): Promise<void> {
   window.location.reload();
   return Promise.resolve();
 }
+
+/**
+ * Android's back button — `platform.native.ts`'s half. A browser has its own
+ * history, which the router already keeps, so the web build never calls back.
+ */
+export function subscribeHardwareBack(_onBack: () => boolean): () => void {
+  return () => {};
+}

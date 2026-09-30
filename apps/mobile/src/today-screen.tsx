@@ -1,6 +1,7 @@
 import { useHoldings } from "@waltning/client/accounts/use-holdings";
 import { deviceRuntime } from "@waltning/client/ledger/device-runtime";
 import { isPagerPageKey } from "@waltning/client/ledger/pager-date";
+import { useScrollToTopRequest } from "@waltning/client/ledger/tab-back/use-scroll-to-top-request";
 import { useDayFlows } from "@waltning/client/ledger/use-day-flows";
 import { useDayRows } from "@waltning/client/ledger/use-day-rows";
 import { useLedgerController } from "@waltning/client/ledger/use-ledger-controller";
@@ -445,6 +446,8 @@ export default function Today() {
   const listAnchor = useDeferredValue(heldAnchor.current);
 
   const scrollY = useSharedValue(0);
+  // A re-tap on the Start tab (`use-tab-bar-items.tsx`) scrolls the overview up.
+  const scrollToTopKey = useScrollToTopRequest();
   /**
    * Whether List is the page on screen — for the list's own settle worklet,
    * and for nothing React renders. A boolean prop here re-rendered the List
@@ -1410,8 +1413,12 @@ export default function Today() {
     is what says this holds (`tools/e2e/specs/renders.spec.ts`).
   */
   const summaryNode = useMemo(
-    () => <GroundPanel onScroll={handleScroll}>{body}</GroundPanel>,
-    [body, handleScroll],
+    () => (
+      <GroundPanel onScroll={handleScroll} scrollToTopKey={scrollToTopKey}>
+        {body}
+      </GroundPanel>
+    ),
+    [body, handleScroll, scrollToTopKey],
   );
   const listNode = useMemo(
     () =>

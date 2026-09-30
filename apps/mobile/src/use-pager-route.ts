@@ -13,6 +13,10 @@ import {
   step,
   stepUnitOf,
 } from "@waltning/client/ledger/pager-date";
+import {
+  forgetStartPage,
+  publishStartPage,
+} from "@waltning/client/ledger/tab-back/start-page-store";
 import type { AccountingDate, YearMonth } from "@waltning/core/date";
 import { router, useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -188,6 +192,12 @@ export function usePagerRoute(today: AccountingDate): PagerRoute {
     (date: AccountingDate) => write(enterDay(latest.current, date)),
     [write],
   );
+  // What back and a re-tap on the Start tab decide from: the page on screen,
+  // which leads the URL by `URL_LAG_MS`, and the way to change it.
+  useEffect(() => {
+    publishStartPage(state.page, showPage);
+  }, [state.page, showPage]);
+  useEffect(() => forgetStartPage, []);
   const setQuery = useCallback(
     (query: string | null) => write(search(base(), query)),
     [base, write],
