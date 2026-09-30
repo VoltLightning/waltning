@@ -31,4 +31,21 @@ describe("TodayPill", () => {
     expect(style.left).toBe(`${floating.inset}px`);
     expect(style.top).not.toBe(`${16}px`);
   });
+
+  /** The button is draggable to either side; the pill takes the other one. */
+  it.each([
+    ["left", "left"],
+    ["right", "right"],
+  ] as const)("rests on the %s when told the button is opposite", (side, edge) => {
+    render(
+      <ThemeProvider theme={light}>
+        <TodayPill label="Today" accessibilityLabel="Back to today" onPress={noop} side={side} />
+      </ThemeProvider>,
+    );
+    const layer = screen.getByRole("button", { name: "Back to today" }).parentElement
+      ?.parentElement as HTMLElement;
+    const style = getComputedStyle(layer);
+    expect(style[edge]).toBe(`${floating.inset}px`);
+    expect(style[edge === "left" ? "right" : "left"]).not.toBe(`${floating.inset}px`);
+  });
 });

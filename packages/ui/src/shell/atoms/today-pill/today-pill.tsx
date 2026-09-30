@@ -22,8 +22,8 @@
  * system does. A third float would leave the token meaning "important" rather
  * than "above the page".
  *
- * **Bottom-left, on the add button's line.** The button owns the bottom-right
- * corner (§2.9); the pill sits opposite it, centred on the same line with the
+ * **On the add button's line, on the side it is not.** The button is draggable to
+ * either side edge (§2.9) and defaults to bottom-right; the pill sits opposite it, centred on the same line with the
  * same inset from the list's bottom edge. The list already ends with the
  * button's clearance (`useFloatingClearance`), so at the end of the list the
  * pill covers nothing, exactly as the button does; mid-scroll it overlaps
@@ -54,9 +54,15 @@ export type TodayPillProps = {
   /** What the pill announces — where the list is, and that this returns it. */
   accessibilityLabel: string;
   onPress: () => void;
+  /**
+   * The side it rests on — **the one the add button is not on.** The button is
+   * draggable to either side edge, and a pill under it would hide the only way
+   * back from a jump. Default `left`: the button's own default is bottom-right.
+   */
+  side?: "left" | "right";
 };
 
-export function TodayPill({ label, accessibilityLabel, onPress }: TodayPillProps) {
+export function TodayPill({ label, accessibilityLabel, onPress, side = "left" }: TodayPillProps) {
   const styles = useStyles();
   const theme = useTheme();
   const { focused, handlers } = useInteraction();
@@ -93,7 +99,7 @@ export function TodayPill({ label, accessibilityLabel, onPress }: TodayPillProps
   return (
     // The layer is the positioned box and holds the pill at its own width. A
     // `left: 0; right: 0` pill would be a full-width bar, which is a banner.
-    <View style={styles.layer}>
+    <View style={[styles.layer, side === "left" ? styles.left : styles.right]}>
       <Animated.View style={entrance}>
         <PressableScaled
           accessibilityRole="button"
@@ -129,13 +135,14 @@ const useStyles = makeStyles((theme) => ({
     // The add button's line: its inset from the bottom, and its centre — the
     // button is 56 tall and the pill a 44pt target.
     bottom: floating.inset + (floating.size - touchTarget.min) / 2,
-    left: floating.inset,
     // Above the rows it covers. Not `shadow.float`'s layer — see the header.
     zIndex: 1,
     // On `style`, not as a prop: the prop is deprecated and warns on every
     // render.
     pointerEvents: "box-none",
   },
+  left: { left: floating.inset },
+  right: { right: floating.inset },
   pill: {
     minHeight: touchTarget.min,
     flexDirection: "row",

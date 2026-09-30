@@ -199,6 +199,21 @@ export const SearchedAcrossMonths: Story = {
 };
 
 /**
+ * The widest cues in Russian — a month and a two-digit year in the weekday
+ * letter's place — on the 48pt cell: one line, the cell's height unchanged.
+ */
+const SEARCHED_RU: readonly RibbonDay[] = [
+  { ...day("2025-11-20", "some", "in"), weekday: "ноя\u00A0\u201925" },
+  { ...day("2026-02-15", "some", "out"), weekday: "фев\u00A0\u201926" },
+  { ...day("2026-07-15", "some", "in"), weekday: "июл\u00A0\u201926" },
+  { ...day("2026-09-26", "some", "out"), weekday: "сен\u00A0\u201926" },
+];
+
+export const SearchedAcrossMonthsRussian: Story = {
+  args: { days: SEARCHED_RU, current: "2026-07-15", at: 2 },
+};
+
+/**
  * **A list that moves, and a count of the taps it asked for.**
  *
  * The one part of this component no component test can see: whether a day

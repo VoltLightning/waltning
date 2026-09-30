@@ -82,6 +82,7 @@ function draw(
     accountId?: string | null;
     onClearFilter?: () => void;
     accountName?: string;
+    pillSide?: "left" | "right";
   } = {},
 ) {
   render(
@@ -105,6 +106,7 @@ function draw(
           empty={<Text>nothing yet</Text>}
           onClearFilter={over.onClearFilter ?? vi.fn()}
           accountName={over.accountName ?? "Bank A"}
+          pillSide={over.pillSide ?? "left"}
         />
       </I18nProvider>
     </ThemeProvider>,

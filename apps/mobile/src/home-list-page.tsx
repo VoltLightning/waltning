@@ -24,7 +24,13 @@ import {
 import { type AccountingDate, accountingDate, yearMonth } from "@waltning/core/date";
 import { id as brandId } from "@waltning/core/id";
 import type { CurrencyCode } from "@waltning/core/money";
-import { dayLabel, dayRangeLabel, monthShort, weekdayInitial } from "@waltning/ui/i18n/locales";
+import {
+  dayLabel,
+  dayRangeLabel,
+  monthShort,
+  monthYearShort,
+  weekdayInitial,
+} from "@waltning/ui/i18n/locales";
 import { useLocale, useT } from "@waltning/ui/i18n/provider";
 import { useScrollSettle } from "@waltning/ui/primitives/use-scroll-settle";
 import { GroundPanel } from "@waltning/ui/shell/card";
@@ -180,6 +186,8 @@ export type HomeListPageProps = {
    * filtered*), which is not the ledger's own first-run.
    */
   onClearFilter: () => void;
+  /** The side the pill rests on: the one the floating add button is not on. */
+  pillSide: "left" | "right";
 };
 
 const EMPTY = { tops: [], marks: [], dates: [] } as const;
@@ -203,6 +211,7 @@ function HomeListPageView({
   active,
   empty,
   onClearFilter,
+  pillSide,
 }: HomeListPageProps) {
   const t = useT();
   const locale = useLocale();
@@ -337,7 +346,7 @@ function HomeListPageView({
             : cue === "year"
               ? day.date.slice(0, 4)
               : cue === "monthYear"
-                ? `${monthShort(yearMonth(day.date.slice(0, 7)), locale)} ${day.date.slice(2, 4)}`
+                ? monthYearShort(yearMonth(day.date.slice(0, 7)), locale)
                 : monthShort(yearMonth(day.date.slice(0, 7)), locale),
         activity: day.activity,
         direction: day.direction,
@@ -958,6 +967,7 @@ function HomeListPageView({
               date: dayLabel(shown, locale),
             })}
             onPress={returnToToday}
+            side={pillSide}
           />
         )}
       </View>

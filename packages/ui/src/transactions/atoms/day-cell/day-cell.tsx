@@ -171,7 +171,13 @@ function DayCellView({
           focused ? styles.focused : null,
         ]}
       >
-        {weekday === undefined ? null : <Text style={sub}>{weekday}</Text>}
+        {weekday === undefined ? null : (
+          // One line, shrunk rather than wrapped: a month and year (`сен ’26`)
+          // must not break the cell's 66pt height.
+          <Text style={sub} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
+            {weekday}
+          </Text>
+        )}
         <Text style={ink}>{day}</Text>
         {matches === undefined && figure !== undefined ? (
           <View style={styles.figureBox}>

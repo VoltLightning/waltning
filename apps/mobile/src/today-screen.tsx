@@ -1,4 +1,5 @@
 import { useHoldings } from "@waltning/client/accounts/use-holdings";
+import { useDevicePreference } from "@waltning/client/device/use-device-preference";
 import { deviceRuntime } from "@waltning/client/ledger/device-runtime";
 import { isPagerPageKey } from "@waltning/client/ledger/pager-date";
 import { useDayFlows } from "@waltning/client/ledger/use-day-flows";
@@ -44,6 +45,7 @@ import {
 import { useLocale, useT } from "@waltning/ui/i18n/provider";
 import { PressableScaled } from "@waltning/ui/primitives/pressable-scaled";
 import { Card, GroundPanel } from "@waltning/ui/shell/card";
+import { floatSide } from "@waltning/ui/shell/float-geometry";
 import { GatewayGrid } from "@waltning/ui/shell/molecules/gateway-grid/gateway-grid";
 import { MonthSummary } from "@waltning/ui/shell/month-summary";
 import { PagerFrame } from "@waltning/ui/shell/organisms/pager-frame/pager-frame";
@@ -71,11 +73,11 @@ import { MonthList } from "@waltning/ui/transactions/organisms/month-list/month-
 import { YearChart, type YearColumn } from "@waltning/ui/transactions/year-chart";
 import { router, useLocalSearchParams } from "expo-router";
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
-import { Text as RNText, View } from "react-native";
+import { Text as RNText, useWindowDimensions, View } from "react-native";
 import { useAnimatedScrollHandler, useSharedValue } from "react-native-reanimated";
 import { HomeListPage } from "./home-list-page";
 import { openUnsettled } from "./open-unsettled.ts";
-import { dayTickHaptic } from "./platform";
+import { dayTickHaptic, floatPosition } from "./platform";
 import { usePagerRoute } from "./use-pager-route.ts";
 
 function handleCreateAccount() {
@@ -197,6 +199,10 @@ export default function Today() {
     [t],
   );
   const snapshot = usePhoneLedger(ledger);
+  // The pill rests opposite the add button, which is draggable to either side.
+  const addButton = useDevicePreference(floatPosition);
+  const pillSide =
+    floatSide(addButton.value, useWindowDimensions().width) === "left" ? "right" : "left";
   const { message, nonce, account } = useLocalSearchParams<{
     message?: string;
     nonce?: string;
@@ -964,22 +970,23 @@ export default function Today() {
   );
 
   /**
-   * **What stands in for a page that cannot draw at all**: the balance read
-   * failed (an error, never *create an account*), or there is no account to
-   * draw anything from (§6). Decided on the accounts, not on a net-worth line —
+   * **What stands in for a page that has nothing to draw from**: no account —
+   * and if the read failed, the error rather than *create an account*. **An
+   * error with accounts already loaded stands in for nothing**: the pages keep
+   * their last-known figures and the error shows where the summary shows it (§6). Decided on the accounts, not on a net-worth line —
    * net worth can be empty while accounts exist (only receivables), and a
    * failed first refresh leaves both empty. `null` when the page can draw.
    */
   const unavailable = useMemo(
     () =>
-      snapshot.error ? (
+      hasAccounts ? null : snapshot.error ? (
         <ErrorState
           variant="recoverable"
           what={t("shell.balanceQueryFailed")}
           why={t("shell.balanceQueryFailedBody")}
           action={{ label: t("common.retry"), onPress: handleRetry }}
         />
-      ) : hasAccounts ? null : (
+      ) : (
         noAccountsEmpty
       ),
     [snapshot.error, hasAccounts, noAccountsEmpty, t, handleRetry],
@@ -1475,6 +1482,7 @@ export default function Today() {
           active={listActive}
           empty={listEmpty}
           onClearFilter={clearAccountFilter}
+          pillSide={pillSide}
         />
       ),
     [
@@ -1493,6 +1501,7 @@ export default function Today() {
       listActive,
       listEmpty,
       clearAccountFilter,
+      pillSide,
       filteredAccount?.id,
       filteredAccount?.name,
     ],
