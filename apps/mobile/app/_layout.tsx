@@ -24,6 +24,7 @@ import { chooseLocale } from "@waltning/ui/i18n/locales";
 import { I18nProvider, useT } from "@waltning/ui/i18n/provider";
 import { FormAlertHost } from "@waltning/ui/primitives/form-alert-host";
 import { HapticsProvider } from "@waltning/ui/primitives/haptics";
+import { RenderBoundary } from "@waltning/ui/states/render-boundary";
 import { StartupFailed } from "@waltning/ui/states/startup-failed";
 import { ThemeProvider, useTheme, useThemeName } from "@waltning/ui/theme/provider";
 import { makeStyles } from "@waltning/ui/theme/styles";
@@ -46,6 +47,7 @@ import {
   displayCurrency,
   floatPosition,
   language,
+  restartApp,
 } from "../src/platform";
 
 export default function RootLayout() {
@@ -396,9 +398,31 @@ function AppShell() {
   const styles = useStyles();
   return (
     <View style={styles.root}>
-      <AppStack />
+      <RenderBoundary onError={reportRenderFailure} onRestart={handleRestart}>
+        <AppStack />
+      </RenderBoundary>
     </View>
   );
+}
+
+/** Try again can throw again, so the failure screen also restarts the app. */
+function handleRestart() {
+  restartApp().catch(() => undefined);
+}
+
+/**
+ * **A screen that throws while rendering is a screen, not a white window.**
+ * `RenderBoundary` replaces the navigator with a recoverable state and hands
+ * the error here, so it is in the log beside the startup failures.
+ */
+function reportRenderFailure(error: Error, componentStack: string) {
+  mobileDiagnostics({
+    scope: "app_runtime",
+    phase: "failure",
+    component: "render",
+    error: describeDiagnosticError(error),
+    componentStack,
+  });
 }
 
 const useStyles = makeStyles((theme) => ({

@@ -370,9 +370,49 @@ it("shows the currency beside the figure once a filled account is known, and non
   expect(screen.getByText("PLN")).toBeDefined();
 });
 
-it("drops the amount card's label but keeps the field named, while the keyboard is up", () => {
+it("drops the amount card's label but keeps the field named, on a short window", () => {
   draw({ compact: true });
   expect(screen.queryByText("How much?")).toBeNull();
   expect(screen.getByLabelText("How much?")).toBeDefined();
   expect(screen.getByRole("button", { name: /^From/ })).toBeDefined();
+});
+
+it("keeps the pace line in compact: it appears once a category is known, after the row mattered", () => {
+  draw({ compact: true, pace: "Groceries this month: 61% of usual" });
+  expect(screen.getByText("Groceries this month: 61% of usual")).toBeDefined();
+});
+
+/**
+ * Saving counts the picked category as used while the composer is still on
+ * screen. If the chips re-ranked on that render, a category used for the first
+ * time would jump up the row: a keyed reorder that Fabric on Android refuses
+ * with "View already has a parent", leaving a white screen. The row keeps the
+ * order the composer opened with.
+ */
+it("keeps the chips in the order the composer opened with when usage changes under it", () => {
+  const props = { ...base(), type: "income" as const };
+  const income = (usage: Record<string, number>): QuickAddComposerProps["categories"] =>
+    [
+      { id: "inc-a", name: "Bonus" },
+      { id: "inc-b", name: "Gift" },
+      { id: "inc-c", name: "Interest" },
+      { id: "inc-d", name: "Refund" },
+      { id: "inc-e", name: "Wage" },
+    ].map((category) => ({ ...category, kind: "income", usage: usage[category.id] ?? 0 }));
+  const tree = (categories: QuickAddComposerProps["categories"]) => (
+    <ThemeProvider theme={light}>
+      <I18nProvider>
+        <QuickAddComposer {...props} categories={categories} categoryId="inc-e" />
+      </I18nProvider>
+    </ThemeProvider>
+  );
+  const order = () => screen.getAllByRole("radio").map((chip) => chip.getAttribute("aria-label"));
+
+  const { rerender } = render(tree(income({ "inc-a": 2 })));
+  const before = order();
+  expect(before).toEqual(["Bonus", "Gift", "Interest", "Wage"]);
+
+  // The save: "Wage" is now the second most used category.
+  rerender(tree(income({ "inc-a": 2, "inc-e": 1 })));
+  expect(order()).toEqual(before);
 });

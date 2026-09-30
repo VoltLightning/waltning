@@ -30,6 +30,21 @@ tab bar → S16, S12, S30.
 **S04 has no *show all*, and the tab bar has no Ledger or Calendar tab.**
 Browsing the ledger and picking a date are this screen, one swipe away. See §3.
 
+**Back (Android's system button, from a tab's root).** A pushed screen
+closes first — that is the stack's own pop — and a sheet or dialog drawn as a
+modal closes itself (Android sends back to its close handler before any screen
+hears it). Otherwise: on any tab
+but Home, back goes to Home, which keeps the page it was left on; on Home, on
+Liste, Kalender or Monate, back goes to Summary; on Home's Summary with nothing
+open, back leaves the app. Switching a tab or a page pushes no history, so
+these are rules rather than a record of where the reader has been. The web
+keeps the browser's history and adds nothing.
+
+**Tapping the selected tab.** On Home it returns to Summary from any other page,
+and on Summary scrolls to the top. On any other tab a re-tap does nothing. The
+bar is covered by a pushed screen, so a re-tap never meets one.
+The tab bar is specified in `design-system/05-composites.md`.
+
 ## 3. Layout
 
 ### Mobile — 390pt

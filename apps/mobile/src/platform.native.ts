@@ -30,7 +30,7 @@ import * as Haptics from "expo-haptics";
 import * as LocalAuthentication from "expo-local-authentication";
 import { getLocales } from "expo-localization";
 import { isAvailableAsync, shareAsync } from "expo-sharing";
-import { AppState, DevSettings, Platform } from "react-native";
+import { AppState, BackHandler, DevSettings, Platform } from "react-native";
 import { mobileDiagnostics } from "./diagnostics.ts";
 
 const APPEARANCE_KEY = "waltning.appearance";
@@ -415,4 +415,15 @@ export async function restartApp(): Promise<void> {
   }
   const Updates = await import("expo-updates");
   await Updates.reloadAsync();
+}
+
+/**
+ * Android's back button. `onBack` answers `true` when it handled the press and
+ * `false` to let the next handler — the stack's pop, then the platform's exit —
+ * have it. Listeners registered later run first, so the tab shell's comes
+ * before the router's.
+ */
+export function subscribeHardwareBack(onBack: () => boolean): () => void {
+  const subscription = BackHandler.addEventListener("hardwareBackPress", onBack);
+  return () => subscription.remove();
 }
