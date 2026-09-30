@@ -1005,7 +1005,7 @@ describe("Today", () => {
     withLedger(<Today />, controller);
 
     const rendered = document.body.textContent ?? "";
-    expect(rendered).toContain("-150.00 PLN unallocated · Hotel");
+    expect(rendered).toContain("-150.00\u00a0PLN unallocated · Hotel");
     expect(rendered).not.toContain("account balance");
   });
 

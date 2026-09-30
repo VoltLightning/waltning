@@ -25,6 +25,8 @@
 
 import * as money from "@waltning/core/money";
 import { Text, View } from "react-native";
+import { decimalMark } from "../../../i18n/locales.ts";
+import { useLocale } from "../../../i18n/provider";
 import { text } from "../../../theme/fonts.ts";
 import { makeStyles } from "../../../theme/styles.ts";
 import { space, tabularNums } from "../../../tokens.ts";
@@ -47,6 +49,9 @@ export type TransferAmountProps = {
 };
 
 export function TransferAmount({ from, to, referenceRate, rateDecimals = 4 }: TransferAmountProps) {
+  // The same mark `<Amount>` uses: a rate and a spread are figures too, and a
+  // dot among commas is the one that reads as a different number.
+  const mark = decimalMark(useLocale());
   const fromDecimals = from.decimals ?? 2;
   const toDecimals = to.decimals ?? 2;
 
@@ -55,7 +60,11 @@ export function TransferAmount({ from, to, referenceRate, rateDecimals = 4 }: Tr
   const zeroSource = money.isZero(from.amount);
   const realized = zeroSource
     ? null
-    : money.toMoney(money.dec(to.amount).div(money.dec(from.amount)), rateDecimals);
+    : money.forDisplay(
+        money.toMoney(money.dec(to.amount).div(money.dec(from.amount))),
+        rateDecimals,
+        mark,
+      );
 
   // What the reference rate would have produced, less what actually arrived.
   const atReference = money.toPivot(from.amount, referenceRate);
@@ -80,7 +89,7 @@ export function TransferAmount({ from, to, referenceRate, rateDecimals = 4 }: Tr
       <View style={styles.rates}>
         <Text style={styles.rate}>realized {realized ?? "—"}</Text>
         <Text style={styles.rate}>
-          reference {money.toMoney(referenceRate, rateDecimals)}
+          reference {money.forDisplay(money.toMoney(referenceRate), rateDecimals, mark)}
           {/*
             Shown only when it is not zero. A spread of 0,00 on every row trains
             people to stop reading the line, and then the one that is not zero
@@ -89,7 +98,7 @@ export function TransferAmount({ from, to, referenceRate, rateDecimals = 4 }: Tr
           {spreadMatters ? (
             <Text style={styles.spread}>
               {"  ·  spread "}
-              {money.toMoney(spread, toDecimals)} {to.currency}
+              {`${money.forDisplay(spread, toDecimals, mark)}\u00a0${to.currency}`}
             </Text>
           ) : null}
         </Text>

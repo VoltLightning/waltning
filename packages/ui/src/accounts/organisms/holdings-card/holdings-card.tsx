@@ -28,7 +28,7 @@
 import * as money from "@waltning/core/money";
 import type { AccountColor, AccountKind } from "@waltning/core/registry/inputs";
 import { type ReactNode, useCallback, useMemo, useState } from "react";
-import { Text, View } from "react-native";
+import { type LayoutChangeEvent, Text, View } from "react-native";
 import { Amount } from "../../../fx/atoms/amount/amount";
 import { useT } from "../../../i18n/provider";
 import { PressableScaled } from "../../../primitives/atoms/pressable-scaled/pressable-scaled";
@@ -95,6 +95,9 @@ export type HoldingsCardProps = {
 };
 
 /** Currencies have no colour of their own; the accent, stepped down, tells them apart by lightness. */
+/** What a figure's word and the `·` take beside it, and the gap after them. */
+const PART_LABEL_ROOM = 100;
+
 const CURRENCY_STEPS = [1, 0.62, 0.36, 0.2] as const;
 
 /**
@@ -130,6 +133,13 @@ export function HoldingsCard({
   const theme = useTheme();
   const [open, setOpen] = useState(initiallyOpen);
   const [lens, setLens] = useState<CardLens>(initialLens);
+
+  // The room a figure in the line under the total has — measured here, because
+  // in that row a figure would only ever measure itself (`Amount`'s `fitWidth`).
+  const [room, setRoom] = useState(0);
+  const handleFiguresLayout = useCallback((event: LayoutChangeEvent) => {
+    setRoom(Math.max(0, Math.floor(event.nativeEvent.layout.width) - PART_LABEL_ROOM));
+  }, []);
 
   const handleToggle = useCallback(() => setOpen((current) => !current), []);
   const handleOpenKind = useCallback(() => onOpenAccounts("kind"), [onOpenAccounts]);
@@ -223,7 +233,7 @@ export function HoldingsCard({
         </View>
         <Amount value={mine} currency={currency} decimals={decimals} size="medium" fit />
       </Opener>
-      <View style={styles.figures}>
+      <View style={styles.figures} onLayout={handleFiguresLayout}>
         {ours === null ? null : (
           <View style={styles.line}>
             <View style={styles.part}>
@@ -246,7 +256,14 @@ export function HoldingsCard({
         */}
         <View style={styles.line}>
           <View style={styles.part}>
-            <Amount value={held} currency={currency} decimals={decimals} size="small" />
+            <Amount
+              value={held}
+              currency={currency}
+              decimals={decimals}
+              size="small"
+              fit
+              fitWidth={room}
+            />
             <Text style={styles.soft}>{t("accounts.held")}</Text>
             {money.isPositive(owed) ? <Text style={styles.soft}>·</Text> : null}
           </View>
@@ -258,6 +275,8 @@ export function HoldingsCard({
                 decimals={decimals}
                 size="small"
                 kind="spend"
+                fit
+                fitWidth={room}
               />
               <Text style={styles.soft}>{t("accounts.owed")}</Text>
             </View>
@@ -554,7 +573,7 @@ const useStyles = makeStyles((theme) => ({
     gap: space.sm,
     paddingHorizontal: space.xs,
   },
-  part: { flexDirection: "row", alignItems: "baseline", gap: space.xs },
+  part: { flexDirection: "row", alignItems: "baseline", gap: space.xs, flexShrink: 1, minWidth: 0 },
   hovered: { backgroundColor: theme.hoverFill },
   focused: {
     outlineWidth: focus.width,

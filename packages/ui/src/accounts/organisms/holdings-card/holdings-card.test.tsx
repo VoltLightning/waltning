@@ -177,4 +177,20 @@ describe("HoldingsCard", () => {
     expect(held?.textContent).toContain("480.00");
     expect(owed?.textContent).toContain("40.00");
   });
+
+  /** The hero and both parts of the line under it are single-line at the widest figure. */
+  it("draws the hero, held and owed on one line at the widest figure", () => {
+    render(
+      <HoldingsCard
+        {...props({
+          mine: money.toMoney("-999999999999.99"),
+          held: money.toMoney("999999999999.99"),
+          owed: money.toMoney("999999999999.99"),
+        })}
+      />,
+    );
+    for (const figure of screen.getAllByText(/999/)) {
+      expect(getComputedStyle(figure).whiteSpace, figure.textContent ?? "").toBe("nowrap");
+    }
+  });
 });

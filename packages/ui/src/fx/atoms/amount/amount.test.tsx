@@ -11,7 +11,8 @@
 import { render, screen } from "@testing-library/react";
 import * as money from "@waltning/core/money";
 import { describe, expect, it } from "vitest";
-import { Amount, FIT_MIN_SCALE, fitScale } from "./amount";
+import { FIT_MIN_SCALE } from "../../../tokens.ts";
+import { Amount, fitScale } from "./amount";
 
 /**
  * The group separator, **as Testing Library sees it.**
@@ -131,6 +132,15 @@ describe("Amount", () => {
     );
     expect(container.textContent).not.toMatch(/\d [\d,.]/);
     expect(container.textContent).not.toMatch(/ EUR/);
+  });
+
+  it("is one line only when asked to fit", () => {
+    const wide = money.toMoney("999999999999.99");
+    const plain = render(<Amount value={wide} currency="EUR" />);
+    expect(getComputedStyle(plain.getByText(/999/)).whiteSpace).not.toBe("nowrap");
+    plain.unmount();
+    const fitted = render(<Amount value={wide} currency="EUR" fit />);
+    expect(getComputedStyle(fitted.getByText(/999/)).whiteSpace).toBe("nowrap");
   });
 
   describe("fitScale", () => {

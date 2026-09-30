@@ -30,7 +30,8 @@
  */
 
 import type * as money from "@waltning/core/money";
-import { Text, View } from "react-native";
+import { useCallback, useState } from "react";
+import { type LayoutChangeEvent, Text, View } from "react-native";
 import { Amount } from "../../../fx/atoms/amount/amount";
 import { useT } from "../../../i18n/provider";
 import { text } from "../../../theme/fonts.ts";
@@ -106,6 +107,9 @@ export type MonthSummaryProps = {
   layout?: "hero" | "compact";
 };
 
+/** What the label beside a compact card's figure takes, and the gap after it. */
+const COMPACT_LABEL_ROOM = 120;
+
 export function MonthSummary({
   period,
   spend,
@@ -120,6 +124,16 @@ export function MonthSummary({
 }: MonthSummaryProps) {
   const t = useT();
   const styles = useStyles();
+  // The card's own content width, from the one child every layout stretches.
+  // The figures beside a label or a sibling sit in rows, where a figure cannot
+  // learn its room from itself (`Amount`'s `fitWidth`), so the card says.
+  const [width, setWidth] = useState(0);
+  const handleLayout = useCallback((event: LayoutChangeEvent) => {
+    setWidth(Math.floor(event.nativeEvent.layout.width));
+  }, []);
+  const compact = layout === "compact";
+  const heroRoom = compact ? Math.max(0, width - COMPACT_LABEL_ROOM) : undefined;
+  const pairRoom = Math.max(0, (width - space.x3) / 2);
 
   return (
     <Card>
@@ -142,7 +156,7 @@ export function MonthSummary({
         `signed` — a kept month is a gain, and the `+` is the difference
         between "you have 3 529,82" and "you kept 3 529,82".
       */}
-      <View style={layout === "compact" ? styles.compact : styles.hero}>
+      <View style={compact ? styles.compact : styles.hero} onLayout={handleLayout}>
         <Text style={styles.heroLabel}>{labels?.net ?? t("shell.keptSoFar")}</Text>
         {/*
           **`medium`, which is larger than `large`.** The size names do not
@@ -156,8 +170,10 @@ export function MonthSummary({
           value={net}
           currency={currency}
           decimals={decimals}
-          size={layout === "compact" ? "large" : "medium"}
+          size={compact ? "large" : "medium"}
           signed={signed}
+          fit
+          {...(heroRoom === undefined ? {} : { fitWidth: heroRoom })}
         />
       </View>
 
@@ -173,11 +189,21 @@ export function MonthSummary({
             size="small"
             kind="income"
             signed
+            fit
+            fitWidth={pairRoom}
           />
         </View>
         <View style={styles.pairItemEnd}>
           <Text style={styles.pairLabel}>{labels?.spend ?? t("shell.wentOut")}</Text>
-          <Amount value={spend} currency={currency} decimals={decimals} size="small" kind="spend" />
+          <Amount
+            value={spend}
+            currency={currency}
+            decimals={decimals}
+            size="small"
+            kind="spend"
+            fit
+            fitWidth={pairRoom}
+          />
         </View>
       </View>
 

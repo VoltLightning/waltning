@@ -8,6 +8,7 @@
 import { render, screen } from "@testing-library/react";
 import * as money from "@waltning/core/money";
 import { describe, expect, it } from "vitest";
+import { I18nProvider } from "../../../i18n/provider";
 import { TransferAmount } from "./transfer-amount";
 
 const example = {
@@ -25,6 +26,20 @@ describe("TransferAmount", () => {
     expect(screen.getByText(/3\.7680/)).toBeDefined();
     expect(screen.getByText(/3\.8100/)).toBeDefined();
     expect(screen.getByText(/6\.30/)).toBeDefined();
+  });
+
+  /** The rate line and the spread were raw `toMoney` strings: a dot among commas in German. */
+  it.each(["de", "ru", "pl"] as const)("writes rate and spread with %s's comma", (locale) => {
+    const { container } = render(
+      <I18nProvider locale={locale}>
+        <TransferAmount {...example} />
+      </I18nProvider>,
+    );
+    const shown = container.textContent ?? "";
+    expect(shown).toContain("3,7680");
+    expect(shown).toContain("3,8100");
+    expect(shown).toContain("6,30\u00a0PLN");
+    expect(shown).not.toMatch(/\d\.\d/);
   });
 
   it("shows both amounts, because a transfer has two", () => {

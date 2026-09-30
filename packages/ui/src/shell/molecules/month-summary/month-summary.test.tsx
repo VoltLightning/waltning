@@ -47,4 +47,20 @@ describe("MonthSummary", () => {
     draw();
     expect(screen.queryByText(/other currenc/)).toBeNull();
   });
+
+  /**
+   * A twelve-digit figure under a larger OS text size wraps between digits at
+   * any width a line of no-break characters cannot fit. Every figure on the card
+   * is one line that shrinks, so it never does.
+   */
+  it("draws every figure on one line, however wide", () => {
+    draw({
+      inflow: money.toMoney("999999999999.99"),
+      spend: money.toMoney("999999999999.99"),
+      net: money.toMoney("-999999999999.99"),
+    });
+    for (const figure of screen.getAllByText(/999/)) {
+      expect(getComputedStyle(figure).whiteSpace, figure.textContent ?? "").toBe("nowrap");
+    }
+  });
 });
