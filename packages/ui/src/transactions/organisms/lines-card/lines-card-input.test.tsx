@@ -91,3 +91,24 @@ it("a line with no amount yet cannot be saved, even when the others already add 
   fireEvent.click(screen.getByRole("button", { name: "Save" }));
   expect(onSave).not.toHaveBeenCalled();
 });
+
+it("an empty new line says so on its own field, not on the total, even when the rest balance", () => {
+  render(
+    <LinesCard lines={LINES} total={money.toMoney("48.90")} currency="PLN" onSave={vi.fn()} />,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "+ Add" }));
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+  expect(screen.getByText("Enter an amount.")).toBeDefined();
+  expect(screen.queryByText("The lines must add up to the transaction's total.")).toBeNull();
+});
+
+it("a real mismatch still says so on the total, and not on any field", () => {
+  render(<LinesCard lines={LINES} total={money.toMoney("100")} currency="PLN" onSave={vi.fn()} />);
+  fireEvent.click(screen.getByRole("button", { name: "Groceries" }));
+  fireEvent.change(screen.getByLabelText("Amount"), { target: { value: "43" } });
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+  expect(screen.getByText("The lines must add up to the transaction's total.")).toBeDefined();
+  expect(screen.queryByText("Enter an amount.")).toBeNull();
+});

@@ -404,6 +404,9 @@ describe("TransactionDetail", () => {
 
     expect(screen.queryByText("Who was this with?")).toBeNull();
     expect(screen.getAllByText("Nina").length).toBeGreaterThan(0);
+    // The pick is a draft: the card says so, and counts this row among theirs.
+    expect(screen.getByText("Not saved yet")).toBeDefined();
+    expect(screen.getByText(/× 1|1×/)).toBeDefined();
 
     // Change replaces: the same picker, and the card now names the second person.
     fireEvent.click(screen.getByRole("button", { name: "Change" }));

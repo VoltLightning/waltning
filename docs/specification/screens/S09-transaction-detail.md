@@ -193,13 +193,17 @@ reads the transaction's own category.
 characters entered, takes `,` or `.` as the decimal mark, and backspace clears
 it down to empty; the line's header and the running sum read the parsed figure.
 Empty means *no amount yet* — not zero and not the previous figure — and a
-breakdown holding such a line cannot be saved. An existing line opens seeded at
+breakdown holding such a line cannot be saved: the line's own field says
+*Enter an amount*, and the total's *must add up* is kept for sums that are
+really wrong. An existing line opens seeded at
 the currency's decimals in the reader's decimal mark, never at the stored
 eight. The details card's amount fields are seeded the same way.
 
 **The *Who was this with?* card follows the choice.** Choosing a counterparty —
 saved or still a draft — turns it into the *Who* card for that person: their
-name, the month's count and total, and *Change* beside *See all*. The empty
+name, the month's count and total (this transaction included, marked as its
+share), and *Change* beside *See all*. While the choice is a draft the card
+says *Not saved yet*. The empty
 prompt appears only while none is set. A transaction has one counterparty, so
 choosing again replaces the first; several people on one expense is what
 S36 (Allocate) is for.

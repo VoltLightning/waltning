@@ -316,6 +316,7 @@ export const de: Messages = {
     newLine: "Neue Zeile",
     total: "Ergibt zusammen",
     linesUnbalanced: "Die Positionen müssen den Betrag der Buchung ergeben.",
+    lineAmountMissing: "Gib einen Betrag ein.",
     notFound: "Diese Buchung gibt es nicht mehr.",
     /** S09 — the chip that opens the obligation picker when nobody is named yet. */
     someoneOwes: "Jemand schuldet",
@@ -324,6 +325,7 @@ export const de: Messages = {
     contextInMonth: "{{month}} · {{times}}×",
     contextSeeAll: "Alle anzeigen",
     contextChange: "Ändern",
+    contextUnsaved: "Noch nicht gespeichert",
     contextUsual: "üblich",
     contextOneOff: "Einmalig — bei Vergleichen ausgelassen",
     /** §5 — another row in the card was a one-off and is not in its figures. */

@@ -19,6 +19,11 @@ describe("formatAmountDraft — a stored figure, seeded into a field", () => {
     expect(formatAmountDraft("", 2, "en")).toBe("");
   });
 
+  it("never writes a negative zero, and rounds half-up", () => {
+    expect(formatAmountDraft("-0.001", 2, "de")).toBe("0,00");
+    expect(formatAmountDraft("0.005", 2, "en")).toBe("0.01");
+  });
+
   it("is read back by parseAmount as the same figure", () => {
     expect(parseAmount(formatAmountDraft("400.00000000", 2, "de"))).toBe("400.00");
   });

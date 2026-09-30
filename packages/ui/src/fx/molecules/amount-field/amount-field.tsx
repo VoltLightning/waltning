@@ -34,7 +34,7 @@ import { focusBorder } from "../../../theme/focus.ts";
 import { inputStep, text, textCap } from "../../../theme/fonts.ts";
 import { useInputHeight } from "../../../theme/input-height.ts";
 import { makeStyles } from "../../../theme/styles.ts";
-import { radius, space, tabularNums } from "../../../tokens.ts";
+import { radius, space, tabularNums, touchTarget } from "../../../tokens.ts";
 import { CurrencyMark } from "../../currency-marks";
 
 export type AmountFieldFieldProps = {
@@ -50,7 +50,12 @@ export type AmountFieldFieldProps = {
    */
   currency?: string;
   /** The decimal string, or `null` when what is typed is not yet an amount. */
-  onChange: (value: string | null) => void;
+  onChange?: (value: string | null) => void;
+  /**
+   * The text exactly as typed — for a caller that keeps the draft itself
+   * (`"5,"` is mid-entry, and `""` is "no amount yet").
+   */
+  onChangeText?: (typed: string) => void;
   initial?: string;
   error?: string | undefined;
 };
@@ -149,7 +154,9 @@ export function parseAmount(input: string): string | null {
  */
 export function formatAmountDraft(value: string, decimals: number, locale: Locale): string {
   if (value === "") return "";
-  return money.round(money.toMoney(value), decimals).replace(".", decimalMark(locale));
+  // `forDisplay` is the one rounding (half-up, and `-0.001` is unsigned `0`);
+  // the group separator is what a typed field cannot hold.
+  return money.forDisplay(money.toMoney(value), decimals, decimalMark(locale)).replace(/\s/g, "");
 }
 
 export function AmountField(props: AmountFieldProps) {
@@ -228,6 +235,7 @@ function EditableAmountField({
   label,
   currency,
   onChange,
+  onChangeText,
   initial = "",
   error,
 }: AmountFieldFieldProps) {
@@ -239,9 +247,10 @@ function EditableAmountField({
   const handleTextChange = useCallback(
     (next: string) => {
       setText(next);
-      onChange(parseAmount(next));
+      onChangeText?.(next);
+      onChange?.(parseAmount(next));
     },
-    [onChange],
+    [onChange, onChangeText],
   );
   const handleFocus = useCallback(() => setFocused(true), []);
   const handleBlur = useCallback(() => setFocused(false), []);
@@ -308,6 +317,15 @@ const useStyles = makeStyles((theme) => ({
   },
   input: {
     flex: 1,
+    // `inputHeight` is one line of the display step — about half the field. An
+    // Android `EditText` keeps its own vertical padding inside a box that short
+    // and clips the glyphs out of view while typing still works. The floor is
+    // the field's inside (its touch target less the border), and the padding
+    // and font padding are the platform's to give up, not the text's.
+    minHeight: touchTarget.min - 2,
+    paddingVertical: 0,
+    textAlignVertical: "center",
+    includeFontPadding: false,
     color: theme.text,
     ...inputStep(text.display("displayThree")),
     // Right-aligned and tabular so a column of entered amounts lines up with

@@ -61,6 +61,8 @@ export type ContextStripCard =
       onOpenAll: () => void;
       /** Re-opens the counterparty picker: one counterparty per transaction, so this replaces it. */
       onChange?: () => void;
+      /** The counterparty is a pick not yet saved with the transaction. */
+      unsaved?: boolean;
     })
   | (Figures & {
       kind: "pair";
@@ -185,6 +187,7 @@ function ContextCard({ card }: { card: ContextStripCard }) {
           card={card}
           onOpenAll={card.onOpenAll}
           {...(card.onChange === undefined ? {} : { onChange: card.onChange })}
+          unsaved={card.unsaved === true}
         />
       );
     case "pair":
@@ -201,9 +204,10 @@ type MonthsCardProps = {
   card: Figures & { months: readonly MonthBarsMonth[]; count: number };
   onOpenAll?: () => void;
   onChange?: () => void;
+  unsaved?: boolean;
 };
 
-function MonthsCard({ title, card, onOpenAll, onChange }: MonthsCardProps) {
+function MonthsCard({ title, card, onOpenAll, onChange, unsaved = false }: MonthsCardProps) {
   const styles = useStyles();
   const t = useT();
   const locale = useLocale();
@@ -226,7 +230,7 @@ function MonthsCard({ title, card, onOpenAll, onChange }: MonthsCardProps) {
       <Amount value={last.total} currency={card.currency} decimals={card.decimals} size="large" />
       <MonthBars months={card.months} share={card.share} />
       <View style={styles.foot}>
-        <ShareNote card={card} />
+        <ShareNote card={card} unsaved={unsaved} />
         <View style={styles.actions}>
           {onChange === undefined ? null : (
             <Button label={t("transactions.contextChange")} variant="ghost" onPress={onChange} />
@@ -315,11 +319,12 @@ function LinkCard({ onLink }: { onLink: () => void }) {
  * *This one*, or why there is no *this one* — and, when any other row was a
  * one-off, that it was left out (§5: a comparison states the exclusion).
  */
-function ShareNote({ card }: { card: Figures }) {
+function ShareNote({ card, unsaved = false }: { card: Figures; unsaved?: boolean }) {
   const styles = useStyles();
   const t = useT();
   return (
     <View style={styles.notes}>
+      {unsaved ? <Text style={styles.caption}>{t("transactions.contextUnsaved")}</Text> : null}
       {card.ownOneOff ? (
         <Text style={styles.caption}>{t("transactions.contextOneOff")}</Text>
       ) : card.share === null ? null : (

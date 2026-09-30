@@ -161,7 +161,7 @@ function toStripCards(
     toAccount: string | null;
     categoryName: (id: string) => string | null;
   },
-  actions: { onOpenCounterparty: () => void; onLink: () => void },
+  actions: { onOpenCounterparty: () => void; onLink: () => void; counterpartyUnsaved: boolean },
 ): ContextStripCard[] {
   const cards: ContextStripCard[] = [];
   for (const card of context) {
@@ -172,6 +172,7 @@ function toStripCards(
           name: names.counterparty ?? "—",
           onOpenAll: actions.onOpenCounterparty,
           onChange: actions.onLink,
+          unsaved: actions.counterpartyUnsaved,
         });
         break;
       case "pair":
@@ -412,7 +413,12 @@ export default function TransactionDetail() {
                   ? live.categoryName
                   : (live.lines.find((line) => line.categoryId === id)?.categoryName ?? null),
             },
-            { onOpenCounterparty: handleOpenCounterparty, onLink: handleLinkCounterparty },
+            {
+              onOpenCounterparty: handleOpenCounterparty,
+              onLink: handleLinkCounterparty,
+              counterpartyUnsaved:
+                pickedIdentity !== undefined && pickedIdentity.id !== live.counterpartyId,
+            },
           ),
     [context, live, pickedIdentity, handleLinkCounterparty, handleOpenCounterparty],
   );

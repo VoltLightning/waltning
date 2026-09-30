@@ -42,7 +42,11 @@ import { useCallback, useMemo, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import Animated from "react-native-reanimated";
 import { Amount } from "../../../fx/atoms/amount/amount";
-import { formatAmountDraft, parseAmount } from "../../../fx/molecules/amount-field/amount-field";
+import {
+  AmountField,
+  formatAmountDraft,
+  parseAmount,
+} from "../../../fx/molecules/amount-field/amount-field";
 import type { Locale } from "../../../i18n/locales.ts";
 import { useLocale, useT } from "../../../i18n/provider";
 import { Button } from "../../../primitives/atoms/button/button";
@@ -157,7 +161,19 @@ export function LinesCard({
     });
   }, [draft, lines]);
 
-  const check = useSubmitCheck({ total: !balanced && t("transactions.linesUnbalanced") });
+  // An incomplete line is its own objection, on its own field; the total's is
+  // only for a sum that is really wrong.
+  const objections = useMemo(() => {
+    const found: Record<string, string | false> = {
+      total: complete && !balanced && t("transactions.linesUnbalanced"),
+    };
+    for (const line of draft) {
+      found[`line:${line.id}`] =
+        parseAmount(line.amount) === null && t("transactions.lineAmountMissing");
+    }
+    return found;
+  }, [balanced, complete, draft, t]);
+  const check = useSubmitCheck(objections);
   const save = useCallback(() => {
     if (!changed || !balanced || saving) return;
     onSave(
@@ -196,6 +212,7 @@ export function LinesCard({
           first={index === 0}
           setDraft={setDraft}
           setOpen={setOpen}
+          error={check.errorFor(`line:${line.id}`)}
         />
       ))}
 
@@ -250,6 +267,7 @@ type LineRowProps = {
   decimals: number;
   isOpen: boolean;
   first: boolean;
+  error: string | undefined;
   setDraft: (updater: (current: readonly DraftLine[]) => readonly DraftLine[]) => void;
   setOpen: (updater: (current: ReadonlySet<string>) => ReadonlySet<string>) => void;
 };
@@ -260,7 +278,16 @@ type LineRowProps = {
  * inside a pressable's label (`CLAUDE.md`). Tapping the row opens the editor
  * below it, `FieldsCard`'s own disclosure.
  */
-function LineRow({ line, currency, decimals, isOpen, first, setDraft, setOpen }: LineRowProps) {
+function LineRow({
+  line,
+  currency,
+  decimals,
+  isOpen,
+  first,
+  error,
+  setDraft,
+  setOpen,
+}: LineRowProps) {
   const t = useT();
   const styles = useStyles();
   const { focused, handlers } = useInteraction();
@@ -349,14 +376,16 @@ function LineRow({ line, currency, decimals, isOpen, first, setDraft, setOpen }:
             onChangeText={handleDescriptionChange}
             maxLength={200}
           />
-          <TextField
+          <AmountField
             label={t("transactions.amount")}
-            value={line.amount}
+            currency={currency}
+            initial={line.amount}
             onChangeText={handleAmountChange}
-            keyboardType="decimal-pad"
-            {...(parsedAmount === null && line.amount !== ""
-              ? { error: t("transactions.invalidAmount") }
-              : {})}
+            {...(error !== undefined
+              ? { error }
+              : parsedAmount === null && line.amount !== ""
+                ? { error: t("transactions.invalidAmount") }
+                : {})}
           />
           <Button label={t("transactions.delete")} onPress={handleRemove} variant="ghost" />
         </View>
