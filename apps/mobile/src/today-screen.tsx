@@ -40,6 +40,7 @@ import {
   dayLabel,
   monthLabel,
   monthShort,
+  monthTitle,
   weekdayInitial,
   weekStart,
 } from "@waltning/ui/i18n/locales";
@@ -75,10 +76,11 @@ import { YearChart, type YearColumn } from "@waltning/ui/transactions/year-chart
 import { router, useLocalSearchParams } from "expo-router";
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { Text as RNText, useWindowDimensions, View } from "react-native";
-import { useAnimatedScrollHandler, useSharedValue } from "react-native-reanimated";
+import { useSharedValue } from "react-native-reanimated";
 import { HomeListPage } from "./home-list-page";
 import { openUnsettled } from "./open-unsettled.ts";
 import { dayTickHaptic, floatPosition } from "./platform";
+import { useHeaderOffset } from "./use-header-offset.ts";
 import { usePagerRoute } from "./use-pager-route.ts";
 
 function handleCreateAccount() {
@@ -467,15 +469,6 @@ export default function Today() {
   // rebuilds the handler on every render, and `pages` is built from it — so a
   // stable handler is what lets the four page elements stay the same objects
   // and React skip the pages it did not change.
-  const handleScroll = useAnimatedScrollHandler(
-    {
-      onScroll: (event) => {
-        scrollY.value = event.contentOffset.y;
-      },
-    },
-    [scrollY],
-  );
-
   const barLabels = useMemo(
     () => ({
       previous: t(pager.stepUnit === "year" ? "shell.previousYear" : "shell.previousMonth"),
@@ -994,6 +987,25 @@ export default function Today() {
       ),
     [snapshot.error, hasAccounts, noAccountsEmpty, t, handleRetry],
   );
+  // One handler per page for the header's single offset (`header-offset.ts`).
+  // `unavailable` swapping in or out is a swap of a page's content while it may
+  // be the one on screen, which hands the header the new content's offset.
+  const summaryScroll = useHeaderOffset(
+    scrollY,
+    pager.state.page === "summary",
+    unavailable !== null,
+  );
+  const listScroll = useHeaderOffset(scrollY, pager.state.page === "list", unavailable !== null);
+  const calendarScroll = useHeaderOffset(
+    scrollY,
+    pager.state.page === "calendar",
+    unavailable !== null,
+  );
+  const monthsScroll = useHeaderOffset(
+    scrollY,
+    pager.state.page === "months",
+    unavailable !== null,
+  );
 
   /* ── Calendar ─────────────────────────────────────────────────────────── */
 
@@ -1163,7 +1175,7 @@ export default function Today() {
         <EmptyState
           variant="filtered"
           title={t("transactions.calendarFilteredTitle", {
-            month: monthLabel(month, locale).replace(/\s+\d{4}$/, ""),
+            month: monthTitle(month, locale),
           })}
           body={t("transactions.calendarFilteredBody", { query: pager.state.query ?? "" })}
           primaryAction={{ label: t("transactions.calendarClearSearch"), onPress: closeSearch }}
@@ -1190,7 +1202,7 @@ export default function Today() {
       <EmptyState
         variant="range"
         title={t("transactions.calendarRangeTitle", {
-          month: monthLabel(month, locale).replace(/\s+\d{4}$/, ""),
+          month: monthTitle(month, locale),
         })}
         body={t("transactions.calendarRangeBody", {
           nearest: monthLabel(nearestToMonth.month, locale),
@@ -1334,7 +1346,7 @@ export default function Today() {
   const monthRows = useMemo<readonly MonthRow[]>(() => {
     return yearRows.map((row) => ({
       month: row.month,
-      label: monthLabel(row.month, locale).replace(/\s+\d{4}$/, ""),
+      label: monthTitle(row.month, locale),
       inflow: row.inflow,
       spend: row.spend,
       net: row.net,
@@ -1456,16 +1468,16 @@ export default function Today() {
   */
   const summaryNode = useMemo(
     () => (
-      <GroundPanel onScroll={handleScroll} scrollToTopKey={scrollToTopKey}>
+      <GroundPanel onScroll={summaryScroll} scrollToTopKey={scrollToTopKey}>
         {body}
       </GroundPanel>
     ),
-    [body, handleScroll, scrollToTopKey],
+    [body, summaryScroll, scrollToTopKey],
   );
   const listNode = useMemo(
     () =>
       unavailable !== null ? (
-        <GroundPanel>{unavailable}</GroundPanel>
+        <GroundPanel onScroll={listScroll}>{unavailable}</GroundPanel>
       ) : (
         <HomeListPage
           ledger={ledger}
@@ -1494,6 +1506,7 @@ export default function Today() {
       ),
     [
       unavailable,
+      listScroll,
       leadNetWorth,
       ledger,
       listAnchor,
@@ -1516,9 +1529,9 @@ export default function Today() {
   const calendarNode = useMemo(
     () =>
       unavailable !== null ? (
-        <GroundPanel onScroll={handleScroll}>{unavailable}</GroundPanel>
+        <GroundPanel onScroll={calendarScroll}>{unavailable}</GroundPanel>
       ) : (
-        <GroundPanel onScroll={handleScroll}>
+        <GroundPanel onScroll={calendarScroll}>
           <MonthGrid
             weeks={weeks}
             headings={dayHeadings}
@@ -1533,7 +1546,7 @@ export default function Today() {
       ),
     [
       unavailable,
-      handleScroll,
+      calendarScroll,
       weeks,
       dayHeadings,
       pager.state.date,
@@ -1548,9 +1561,9 @@ export default function Today() {
   const monthsNode = useMemo(
     () =>
       unavailable !== null ? (
-        <GroundPanel onScroll={handleScroll}>{unavailable}</GroundPanel>
+        <GroundPanel onScroll={monthsScroll}>{unavailable}</GroundPanel>
       ) : (
-        <GroundPanel onScroll={handleScroll}>
+        <GroundPanel onScroll={monthsScroll}>
           <View style={sectionStyles.year}>
             <YearChart
               year={shownYear}
@@ -1582,7 +1595,7 @@ export default function Today() {
       ),
     [
       unavailable,
-      handleScroll,
+      monthsScroll,
       sectionStyles.year,
       shownYear,
       yearColumns,
@@ -1637,9 +1650,7 @@ export default function Today() {
               },
             })}
         periodLabel={
-          pager.state.page === "months"
-            ? String(shownYear)
-            : monthLabel(titleMonth, locale).replace(/\s+\d{4}$/, "")
+          pager.state.page === "months" ? String(shownYear) : monthTitle(titleMonth, locale)
         }
         periodDetail={pager.state.page === "months" ? null : titleMonth.slice(0, 4)}
         /*

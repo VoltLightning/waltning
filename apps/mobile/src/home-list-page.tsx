@@ -34,7 +34,9 @@ import {
 import { useLocale, useT } from "@waltning/ui/i18n/provider";
 import { useScrollSettle } from "@waltning/ui/primitives/use-scroll-settle";
 import { GroundPanel } from "@waltning/ui/shell/card";
+import { useCollapseInset } from "@waltning/ui/shell/collapse-inset";
 import { useGroundInset } from "@waltning/ui/shell/ground-inset";
+import { chromeSlack, collapseProgress } from "@waltning/ui/shell/molecules/pager-header/collapse";
 import { TodayPill } from "@waltning/ui/shell/today-pill";
 import { EmptyState } from "@waltning/ui/states/empty-state";
 import { text } from "@waltning/ui/theme/fonts";
@@ -58,12 +60,15 @@ import type { ListEntryHandlers } from "@waltning/ui/transactions/molecules/list
 import { LedgerScroller } from "@waltning/ui/transactions/organisms/ledger-scroller/ledger-scroller";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { type FlatList, Text, View, type ViewToken } from "react-native";
-import {
+import Animated, {
   runOnJS,
   type SharedValue,
   useAnimatedScrollHandler,
+  useAnimatedStyle,
   useSharedValue,
 } from "react-native-reanimated";
+import { pageScrolled } from "./header-offset.ts";
+import { useHeaderArrival } from "./use-header-arrival.ts";
 
 /**
  * S04's List page — the whole ledger, continuous in both directions.
@@ -574,6 +579,8 @@ function HomeListPageView({
    * `list-start-gate.ts` is right that those do not compose.
    */
   const listY = useSharedValue(0);
+  // The room above the first day that the header overlays (`collapse-inset.tsx`).
+  const collapseInset = useCollapseInset();
   /** The scroll to a day that is still being finished (`finish`, below). */
   const sent = useRef<{ date: string; at: number; legs: number } | null>(null);
   /** A finger on the list ends it at once: the list is the reader's. */
@@ -587,18 +594,38 @@ function HomeListPageView({
         runOnJS(dropSent)();
       },
       onScroll: (event) => {
-        listY.value = event.contentOffset.y;
-        scrollY.value = event.contentOffset.y;
+        // The header follows the page on screen and no other. A page that is
+        // not showing does not scroll, but it can be *moved* — a prepend, a
+        // re-anchor — and its offset is not the header's business.
+        pageScrolled(active, listY, scrollY, event.contentOffset.y);
       },
     },
-    [listY, scrollY, dropSent],
+    [listY, scrollY, active, dropSent],
+  );
+  // **Arriving on this page hands the header this page's offset.** The header
+  // reads one number for four pages, so without this it keeps the shape of the
+  // page the reader left: a List at the top under a collapsed header.
+  useHeaderArrival(active, listY, scrollY);
+  /**
+   * **The strip rides the header instead of the scroller doing it.** The
+   * header overlays the top of this page while it is open, and the room it
+   * occupies is `collapseInset` of the list's own content (the list's top
+   * padding). The strip is not in that content — it does not scroll — so it is
+   * drawn that far down and follows the header up by the same amount as the
+   * offset grows. Its *layout* box never moves, and neither does the list's,
+   * which is what the header needs: a scroller whose frame is a function of its
+   * own offset is a feedback loop under the finger.
+   */
+  const ride = useAnimatedStyle(
+    () => ({ transform: [{ translateY: chromeSlack(collapseProgress(listY.value)) }] }),
+    [listY],
   );
 
   const geometry = useMemo(
     // `oddSeen` is what says the map changed; the map itself is a ref so that
     // an ordinary row being measured re-renders nothing.
-    () => (oddSeen >= 0 ? listGeometry(shape, heights, cellOf, 0, odd.current) : EMPTY),
-    [shape, heights, cellOf, oddSeen],
+    () => (oddSeen >= 0 ? listGeometry(shape, heights, cellOf, collapseInset, odd.current) : EMPTY),
+    [shape, heights, cellOf, oddSeen, collapseInset],
   );
   /**
    * **One value, not two arrays.** They were written as two assignments and
@@ -859,7 +886,10 @@ function HomeListPageView({
   // The gutter and the home-indicator clearance, on the content rather than on
   // the scroller: a `View` around the list clips the scroll bar inside the page
   // and slices a focused row's ring.
-  const content = useMemo(() => [styles.content, inset.content], [styles.content, inset.content]);
+  const content = useMemo(
+    () => [styles.content, inset.content, { paddingTop: collapseInset }],
+    [styles.content, inset.content, collapseInset],
+  );
   // `ListEmptyComponent` takes an element or a component type, and an element
   // built in the prop would be a new one every render.
   //
@@ -922,18 +952,20 @@ function HomeListPageView({
       device and the amounts on the right were cut off by the screen.
     */
     <GroundPanel scroll="own">
-      <DayRibbon
-        count={stripCount}
-        dayAt={dayAt}
-        fill={!filtered}
-        start={cellOf(anchor)}
-        current={shown}
-        scrollY={listY}
-        placement={placement}
-        onPickDay={pickDay}
-        onLead={leadTo}
-        onTick={onTick}
-      />
+      <Animated.View style={[styles.ribbon, ride]}>
+        <DayRibbon
+          count={stripCount}
+          dayAt={dayAt}
+          fill={!filtered}
+          start={cellOf(anchor)}
+          current={shown}
+          scrollY={listY}
+          placement={placement}
+          onPickDay={pickDay}
+          onLead={leadTo}
+          onTick={onTick}
+        />
+      </Animated.View>
       <View style={styles.floatBox}>
         <LedgerScroller
           listRef={list}
@@ -987,6 +1019,8 @@ const useStyles = makeStyles((theme) => ({
   root: { flex: 1 },
   // The list's own box, and what the pill floats over.
   floatBox: { flex: 1 },
+  // Above the list, which it overlaps by the header's travel at rest.
+  ribbon: { zIndex: 1 },
   content: { flexGrow: 1 },
   // Centred in the page it was given, not stacked at the top of it.
   empty: { flex: 1, justifyContent: "center" },
