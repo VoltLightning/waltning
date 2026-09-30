@@ -182,6 +182,23 @@ export const NothingCapturedYet: Story = {
 };
 
 /**
+ * **A searched strip**: the matched days and nothing else, across two months.
+ * Without a cue the 15th and the 26th simply repeat; the month is named where it
+ * changes (`ribbonCue`), on the first cell and on the first match of the next
+ * month, in the weekday letter's place.
+ */
+const SEARCHED: readonly RibbonDay[] = [
+  { ...day("2026-01-15", "some", "in"), weekday: "Jan" },
+  day("2026-01-26", "some", "out"),
+  { ...day("2026-02-15", "some", "in"), weekday: "Feb" },
+  day("2026-02-26", "some", "out"),
+];
+
+export const SearchedAcrossMonths: Story = {
+  args: { days: SEARCHED, current: "2026-02-15", at: 2 },
+};
+
+/**
  * **A list that moves, and a count of the taps it asked for.**
  *
  * The one part of this component no component test can see: whether a day

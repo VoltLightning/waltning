@@ -8,9 +8,13 @@
  * that day's neighbourhood and nothing else. Walking home from 2021 is not a
  * scroll, it is four years of them.
  *
- * **It floats rather than sitting in the layout**, because the list under it is
- * infinite in both directions: a control in the flow would be a control the
- * reader scrolls away from, which is the one thing this must never be.
+ * **It has a band of its own, between the strip and the list.** The list under
+ * it is infinite in both directions, so the pill must be somewhere the reader
+ * never scrolls away from — and it must never cover a row, which a pill floated
+ * over the list did, sitting on the first day header and the first row's title.
+ * The page reserves a band for it (`apps/mobile`'s `HomeListPage`) that exists
+ * only while the pill does; the pill is absolute inside that band, so it is
+ * centred in a box that holds nothing else.
  *
  * **Not `shadow.float`.** §2.5 reserves that for the add button, and
  * `<Toast>` extended it once to the second thing that sits above the *screen*.

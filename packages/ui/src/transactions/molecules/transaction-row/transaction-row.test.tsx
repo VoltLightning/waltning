@@ -52,16 +52,40 @@ describe("TransactionRow", () => {
     expect(screen.getByText("biz")).toBeDefined();
   });
 
-  it("falls back rather than rendering a blank enteredName", () => {
+  it("titles an unnamed row by its category, and says the category once", () => {
+    // S10 §4: a dash over a `?` says the row is broken; it is only unnamed.
     render(
       <TransactionRow
         date="2026-08-16"
         enteredName=""
+        category="Salary"
+        account="Bank A"
+        type="income"
+        brandKey={null}
         amount={money.toMoney("1.00000000")}
         currency="PLN"
       />,
     );
-    expect(screen.getByText("—")).toBeDefined();
+    expect(screen.queryByText("\u2014")).toBeNull();
+    expect(screen.getAllByText("Salary")).toHaveLength(1);
+    expect(screen.getByText("Bank A")).toBeDefined();
+    // The monogram follows the title, not the empty name.
+    expect(screen.getByText("S")).toBeDefined();
+    expect(screen.queryByText("?")).toBeNull();
+  });
+
+  it("titles a row with neither name nor category by its kind", () => {
+    render(
+      <TransactionRow
+        date="2026-08-16"
+        enteredName="  "
+        type="income"
+        amount={money.toMoney("1.00000000")}
+        currency="PLN"
+      />,
+    );
+    expect(screen.getByText("Income")).toBeDefined();
+    expect(screen.queryByText("\u2014")).toBeNull();
   });
 
   it("draws no BrandIcon at all when the caller has not passed brandKey", () => {

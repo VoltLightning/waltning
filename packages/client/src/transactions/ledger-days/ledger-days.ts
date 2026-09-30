@@ -459,6 +459,34 @@ export function ribbonMarks<Row extends LedgerDayRow>(
   return { days: strip, held: new Map(strip.map((day) => [day.date as string, day])), from, to };
 }
 
+/** What a cell says in the weekday letter's place. */
+export type RibbonCue = "weekday" | "month" | "year";
+
+/**
+ * **What a strip cell says under its day number** (S04 §4).
+ *
+ * The weekday letter, except where the strip crosses into a month or a year:
+ * *the 1st says its month and 1 January its year*. A continuous strip needs
+ * nothing more, because every month begins with its 1st. **A searched strip is
+ * not continuous** — it is the matched days and nothing else, so the 15th of
+ * one month stands beside the 26th of another and a bare `15 26 15 26` says
+ * nothing about where the reader is. There the cue moves to wherever the month
+ * *changes between two neighbours*, and to the first cell, whichever day of the
+ * month that is. `previous` is the cell to the left (`undefined` for the first).
+ */
+export function ribbonCue(
+  date: AccountingDate,
+  previous: AccountingDate | undefined,
+  filtered: boolean,
+): RibbonCue {
+  if (date.endsWith("-01-01")) return "year";
+  if (date.endsWith("-01")) return "month";
+  if (!filtered) return "weekday";
+  if (previous === undefined) return "month";
+  if (previous.slice(0, 4) !== date.slice(0, 4)) return "year";
+  return previous.slice(0, 7) !== date.slice(0, 7) ? "month" : "weekday";
+}
+
 /**
  * One day of the strip, asked for when its cell is drawn.
  *

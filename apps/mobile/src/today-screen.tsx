@@ -950,6 +950,19 @@ export default function Today() {
     [t, addTransactionAction],
   );
 
+  /** §6 *Empty · no accounts* — the same words on every page that has nothing to draw without one. */
+  const noAccountsEmpty = useMemo(
+    () => (
+      <EmptyState
+        variant="first-run"
+        title={t("shell.noAccounts")}
+        body={t("shell.noAccountsBody")}
+        primaryAction={createAccountAction}
+      />
+    ),
+    [t, createAccountAction],
+  );
+
   /* ── Calendar ─────────────────────────────────────────────────────────── */
 
   // Half-open, `money.Period`'s own shape: `monthRange` gives the inclusive
@@ -1126,6 +1139,7 @@ export default function Today() {
       );
     }
     if (monthHasEntries) return null;
+    if (!hasAccounts) return noAccountsEmpty;
     if (drawsNothing) {
       return (
         <EmptyState
@@ -1165,6 +1179,8 @@ export default function Today() {
     monthHasEntries,
     drawsNothing,
     ledgerIsEmpty,
+    hasAccounts,
+    noAccountsEmpty,
     loaded,
     nearestToMonth,
     goToNearestMonth,
@@ -1438,8 +1454,14 @@ export default function Today() {
           onTick={dayTickHaptic}
           active={listActive}
           empty={listEmpty}
+          onClearFilter={clearAccountFilter}
         />
-      ) : null,
+      ) : (
+        // No account, so no pivot to total a day in and no list to draw: the
+        // page says so and offers the one thing that changes it (§6, *Empty ·
+        // no accounts*). Returning nothing left the page blank.
+        <GroundPanel>{noAccountsEmpty}</GroundPanel>
+      ),
     [
       leadNetWorth,
       ledger,
@@ -1454,6 +1476,8 @@ export default function Today() {
       scrollY,
       listActive,
       listEmpty,
+      noAccountsEmpty,
+      clearAccountFilter,
       filteredAccount?.id,
     ],
   );

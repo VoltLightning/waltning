@@ -80,6 +80,7 @@ function draw(
     onVisibleDay?: (date: AccountingDate) => void;
     query?: string | null;
     accountId?: string | null;
+    onClearFilter?: () => void;
   } = {},
 ) {
   render(
@@ -101,6 +102,7 @@ function draw(
           scrollY={scrollY}
           active={active}
           empty={<Text>nothing yet</Text>}
+          onClearFilter={over.onClearFilter ?? vi.fn()}
         />
       </I18nProvider>
     </ThemeProvider>,
@@ -418,14 +420,14 @@ it("draws the ribbon earliest-first, under a list that runs newest-first", () =>
 });
 
 /**
- * **The pill floats over the *list*, and the ribbon is not the list** (S04 §4,
- * which names the two separately). Positioned against the whole panel it sat on
- * the ribbon's first cells — covering a weekday letter outright and two 44pt
- * targets. What an absolutely-positioned box can cover is decided by the box it
- * resolves against, so the claim is about which box that is: the pill and the
- * rows it floats over share one, and the strip is outside it.
+ * **The pill never covers a row** (S04 §4). It sat over the list, top-centre,
+ * on the first day header and the first row's title. It now has a band of its
+ * own between the strip and the list, so what matters is that no box holding
+ * the rows also holds the pill. jsdom has no layout, so the claim is about the
+ * tree: the smallest box around both is the page's own, which also holds the
+ * strip.
  */
-it("floats over the rows, not over the strip above them", () => {
+it("keeps the pill out of the box the rows are in", () => {
   draw(ledgerWith([row("2021-03-02", 1, "-96")]), vi.fn(), {
     anchor: accountingDate("2021-03-02"),
   });
@@ -434,11 +436,53 @@ it("floats over the rows, not over the strip above them", () => {
 
   let box: HTMLElement | null = pill;
   while (box !== null && !box.contains(aRow)) box = box.parentElement;
-  expect(box, "the pill and the rows must share a box at all").not.toBeNull();
+  expect(box, "the pill and the rows must share a page at all").not.toBeNull();
   expect(
     box?.contains(screen.getByRole("list")),
-    "the strip is chrome above the list, and a floating control must not land on it",
-  ).toBe(false);
+    "the only box holding both is the page, which also holds the strip",
+  ).toBe(true);
+});
+
+/**
+ * **A searched strip says which month it is in.** It is the matched days and
+ * nothing else, so `15 26 15 26` over two months reads as the same two days
+ * repeating. The month changes between two neighbours without either being the
+ * 1st, so the 1st-says-its-month rule never fires; the cue moves to the change.
+ */
+it("names the month where a searched strip changes month", () => {
+  draw(
+    ledgerWith([
+      row("2026-02-26", 1, "-10"),
+      row("2026-02-15", 2, "-10"),
+      row("2026-01-26", 3, "-10"),
+      row("2026-01-15", 4, "-10"),
+    ]),
+    vi.fn(),
+    { accountId: "00000000-0000-4000-8000-00000000000a" },
+  );
+  const cell = (label: RegExp) => screen.getByRole("button", { name: label });
+  expect(cell(/January 15, 2026/).textContent).toMatch(/Jan/);
+  expect(cell(/January 26, 2026/).textContent).not.toMatch(/Jan|Feb/);
+  expect(cell(/February 15, 2026/).textContent).toMatch(/Feb/);
+  expect(cell(/February 26, 2026/).textContent).not.toMatch(/Jan|Feb/);
+});
+
+/**
+ * **An account with nothing on it is not a ledger with nothing in it.** The
+ * carried account filter left the List page saying *No transactions yet* over a
+ * ledger that holds rows elsewhere.
+ */
+it("blames the account filter, offers to clear it, and never says first-run", () => {
+  const onClearFilter = vi.fn();
+  draw(ledgerWith([]), vi.fn(), {
+    anchor: accountingDate("2021-03-02"),
+    accountId: "00000000-0000-4000-8000-00000000000a",
+    onClearFilter,
+  });
+  expect(screen.getByText("Nothing in this account yet")).toBeTruthy();
+  expect(screen.queryByText("nothing yet")).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "Clear filters" }));
+  expect(onClearFilter).toHaveBeenCalledTimes(1);
 });
 
 /**

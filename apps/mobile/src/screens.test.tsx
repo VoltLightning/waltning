@@ -660,8 +660,30 @@ describe("Today", () => {
   it("renders the empty ledger with a create-account action that navigates", () => {
     withLedger(<Today />);
 
-    expect(screen.getByText("No accounts yet")).toBeDefined();
-    fireEvent.click(screen.getByText("Create account"));
+    // Scoped to the page on screen: the pager mounts all four, and the List and
+    // Calendar pages say the same thing when there is no account.
+    const page = within(screen.getByRole("tabpanel"));
+    expect(page.getByText("No accounts yet")).toBeDefined();
+    fireEvent.click(page.getByText("Create account"));
+    expect(router.push).toHaveBeenCalledWith({
+      pathname: "/account/new",
+      params: { returnTo: "today" },
+    });
+  });
+
+  /**
+   * **The List page was blank with no account.** It drew nothing until the
+   * ledger had a net-worth line to total a day in, so a ledger emptied of its
+   * accounts left an empty beige page with no word on it (S04 §6, *Empty · no
+   * accounts*: every page says so and offers the one act that changes it).
+   */
+  it("says there is no account on the List page too, and offers to create one", () => {
+    liveParams = { view: "list" };
+    withLedger(<Today />);
+
+    const page = within(screen.getByRole("tabpanel"));
+    expect(page.getByText("No accounts yet")).toBeDefined();
+    fireEvent.click(page.getByText("Create account"));
     expect(router.push).toHaveBeenCalledWith({
       pathname: "/account/new",
       params: { returnTo: "today" },

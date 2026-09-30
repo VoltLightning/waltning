@@ -54,6 +54,20 @@ export const Filtered: Story = {
 };
 
 /**
+ * **`filtered`, by account.** The List page carried an account filter and that
+ * account holds nothing: the ledger is not empty, so this is never the
+ * first-run wording, and the one action drops the filter.
+ */
+export const AccountFiltered: Story = {
+  args: {
+    variant: "filtered",
+    title: "Nothing in this account yet",
+    body: "No transactions have been recorded on it. Clear the filter to see the rest of the ledger.",
+    primaryAction: { label: "Clear filters", onPress: noop },
+  },
+};
+
+/**
  * **`range`.** The period is empty, not the ledger — so the useful offer is the
  * nearest period that is not, which is what the calendar and reports screens
  * specify.

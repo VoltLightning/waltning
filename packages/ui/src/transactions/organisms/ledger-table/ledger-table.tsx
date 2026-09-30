@@ -156,6 +156,7 @@ import {
   TRANSACTION_AMOUNT_KIND,
   type TransactionType,
 } from "../../molecules/transaction-row/transaction-row";
+import { useRowTitle } from "../../molecules/transaction-row/use-row-title.ts";
 
 /**
  * The six columns this table draws. **Owned here, not in `core`** — a column
@@ -638,6 +639,8 @@ function LedgerTableRowView({
 }: LedgerTableRowViewProps) {
   const styles = useStyles();
   const handlePress = useCallback(() => onPress(row.id), [onPress, row.id]);
+  // S10 §4 — an unnamed row is titled by its category, then its kind.
+  const named = useRowTitle(row.enteredName, row.category, row.type);
   /**
    * Two delegates, because the row holds two elements the responder treats
    * differently (`isDelegatedKey`). The row body is a native `<button>`, so
@@ -700,7 +703,7 @@ function LedgerTableRowView({
       </View>
       <PressableScaled
         accessibilityRole="button"
-        accessibilityLabel={row.enteredName || row.account}
+        accessibilityLabel={named.title}
         // The file doc's own "one tab stop" paragraph — the container holds
         // focus, `activeId` holds the ring, and there is only ever one
         // "current row" between them. `tabIndex`, not `focusable={false}`:
@@ -734,10 +737,10 @@ function LedgerTableRowView({
           `amount` left of the headers that name them.
         */}
         <View style={styles.brandCell}>
-          <BrandIcon brandKey={row.brandKey} enteredName={row.enteredName} size={20} />
+          <BrandIcon brandKey={row.brandKey} enteredName={named.title} size={20} />
         </View>
         <Text style={[styles.cellText, styles.flexCell]} numberOfLines={1}>
-          {row.enteredName || "—"}
+          {named.title}
         </Text>
         <Text style={[styles.cellTextMuted, styles.flexCell]} numberOfLines={1}>
           {row.category || "—"}
