@@ -125,10 +125,6 @@ export function MonthSummary({
   // the wrapper it sits in: a row hands a child its content's width, so a
   // figure cannot learn its room from itself (`Amount`'s `fitWidth`), and a
   // guessed label width is wrong in every language but the one it was guessed in.
-  const [heroRoom, setHeroRoom] = useState<number | null>(null);
-  const handleHeroLayout = useCallback((event: LayoutChangeEvent) => {
-    setHeroRoom(Math.floor(event.nativeEvent.layout.width));
-  }, []);
   const [pairRoom, setPairRoom] = useState<number | null>(null);
   const handlePairLayout = useCallback((event: LayoutChangeEvent) => {
     setPairRoom(Math.floor(event.nativeEvent.layout.width));
@@ -149,6 +145,23 @@ export function MonthSummary({
   }, []);
   const stacked =
     compact && rowWidth !== null && labelWidth !== null && labelWidth * 2 > rowWidth - space.md;
+  // The stack decision needs the row and the label; the figure's room is only
+  // trusted when it was measured *in the arrangement now showing*. Until both,
+  // the figure is unseen, so the card appears once, at its final size.
+  const decided = rowWidth !== null && labelWidth !== null;
+  const [measuredRoom, setMeasuredRoom] = useState<{ width: number; stacked: boolean } | null>(
+    null,
+  );
+  const handleHeroLayout = useCallback(
+    (event: LayoutChangeEvent) => {
+      setMeasuredRoom({ width: Math.floor(event.nativeEvent.layout.width), stacked });
+    },
+    [stacked],
+  );
+  const heroRoom =
+    decided && measuredRoom !== null && measuredRoom.stacked === stacked
+      ? measuredRoom.width
+      : null;
 
   return (
     <Card>

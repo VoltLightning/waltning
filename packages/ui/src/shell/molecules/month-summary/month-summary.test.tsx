@@ -96,6 +96,22 @@ describe("MonthSummary", () => {
     expect(getComputedStyle(shown).opacity).not.toBe("0");
   });
 
+  /** One appearance, at the final size: nothing is drawn before the row and the label are measured. */
+  it("keeps the compact figure unseen until the row and the label are measured", () => {
+    draw({ layout: "compact" });
+    const label = screen.getByText("Kept so far");
+    const row = label.parentElement;
+    const figure = label.nextElementSibling as HTMLElement;
+    const amount = () => within(figure).getByText(/1.200/);
+    layOut(figure, 200);
+    expect(getComputedStyle(amount()).opacity).toBe("0");
+    layOut(row, 300);
+    expect(getComputedStyle(amount()).opacity).toBe("0");
+    layOut(label, 90);
+    layOut(figure, 200);
+    expect(getComputedStyle(amount()).opacity).not.toBe("0");
+  });
+
   it("keeps the compact figure beside a short label", () => {
     draw({ layout: "compact" });
     const label = screen.getByText("Kept so far");

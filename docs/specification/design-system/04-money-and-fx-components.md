@@ -27,7 +27,7 @@ no column of the product draws. The phone's headline figures set it — `Holding
 *held* and *owed*, and all three of `MonthSummary`'s — so a no-break run wider
 than its line never reaches the platform's emergency break between characters,
 at any OS text size (the estimate is of the glyphs as the reader's setting draws
-them). A fitted figure is cut with an ellipsis only below the floor; every other
+them). A fitted figure is not drawn until its room is measured, so it appears once, already sized; once measured it is always drawn, at the floor if there is no room. A figure beside a label stacks under it when the label takes more than half the row (`MonthSummary`'s compact card, S04), since a figure left the remainder would sit at the floor. A fitted figure is cut with an ellipsis only below the floor; every other
 figure keeps its size and is not fitted. The width is worked out
 from the characters, because digits are tabular — the same width each — and
 react-native-web has no text-fitting of its own; the native `adjustsFontSizeToFit`
