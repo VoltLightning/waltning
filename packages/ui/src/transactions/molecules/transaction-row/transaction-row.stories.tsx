@@ -55,6 +55,19 @@ export const UnrecognisedBrand: Story = {
 };
 
 /**
+ * **A row with no payee is titled by its category**, and the category is not
+ * said again under it. The monogram follows the title.
+ */
+export const Unnamed: Story = {
+  args: { enteredName: "", category: "Salary", type: "income", brandKey: null },
+};
+
+/** No payee and no category: the row is titled by what it is. */
+export const UnnamedUncategorised: Story = {
+  args: { enteredName: "", category: null, type: "expense", brandKey: null },
+};
+
+/**
  * The dated column, as S10's ledger and a counterparty's history draw it. This
  * is the story that shows whether the
  * figures line up — and whether the *identity* column does too: every row

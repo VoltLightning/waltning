@@ -188,6 +188,9 @@ export const pl: Messages = {
     aheadRunOne: "{{count}} dzień · jeszcze nie",
     aheadRunMany: "{{count}} dni · jeszcze nie",
     noMatchesHere: "Nic tutaj nie pasuje do \u201E{{query}}\u201D.",
+    accountEmptyTitle: "Na koncie {{account}} nic jeszcze nie ma",
+    accountEmptyBody:
+      "Nie zapisano na nim żadnych transakcji. Wyczyść filtr, aby zobaczyć resztę księgi.",
     amount: "Kwota",
     account: "Konto",
     chooseAccount: "Które?",
@@ -259,6 +262,7 @@ export const pl: Messages = {
     transferArrow: "→",
     transferTo: "Na {{account}}",
     transferKind: "Przelew",
+    adjustmentKind: "Korekta",
     categorise: "Kategoryzuj",
     loadingTransactions: "Wczytywanie transakcji",
     emptyFirstRunTitle: "Brak transakcji",

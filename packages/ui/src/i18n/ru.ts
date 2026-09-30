@@ -179,6 +179,9 @@ export const ru: Messages = {
     aheadRunOne: "{{count}} день · ещё впереди",
     aheadRunMany: "Дней: {{count}} · ещё впереди",
     noMatchesHere: "Ничего не подходит под «{{query}}».",
+    accountEmptyTitle: "На счёте {{account}} пока ничего нет",
+    accountEmptyBody:
+      "Операций по нему не записано. Сбросьте фильтр, чтобы увидеть остальную книгу.",
     amount: "Сумма",
     account: "Счёт",
     chooseAccount: "Какой?",
@@ -248,6 +251,7 @@ export const ru: Messages = {
     transferArrow: "→",
     transferTo: "На {{account}}",
     transferKind: "Перевод",
+    adjustmentKind: "Корректировка",
     categorise: "Разнести",
     loadingTransactions: "Загрузка операций",
     emptyFirstRunTitle: "Операций пока нет",

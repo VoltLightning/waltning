@@ -87,6 +87,7 @@ vi.mock("expo-router", () => ({
 
 import NewAccount from "./account-creation-screen";
 import CategoriesScreen from "./categories-screen";
+import { floatPosition } from "./platform";
 import QuickAdd from "./quick-add-screen";
 import SettingsScreen from "./settings-screen";
 import Today from "./today-screen";
@@ -660,8 +661,30 @@ describe("Today", () => {
   it("renders the empty ledger with a create-account action that navigates", () => {
     withLedger(<Today />);
 
-    expect(screen.getByText("No accounts yet")).toBeDefined();
-    fireEvent.click(screen.getByText("Create account"));
+    // Scoped to the page on screen: the pager mounts all four, and the List and
+    // Calendar pages say the same thing when there is no account.
+    const page = within(screen.getByRole("tabpanel"));
+    expect(page.getByText("No accounts yet")).toBeDefined();
+    fireEvent.click(page.getByText("Create account"));
+    expect(router.push).toHaveBeenCalledWith({
+      pathname: "/account/new",
+      params: { returnTo: "today" },
+    });
+  });
+
+  /**
+   * **The List page was blank with no account.** It drew nothing until the
+   * ledger had a net-worth line to total a day in, so a ledger emptied of its
+   * accounts left an empty beige page with no word on it (S04 §6, *Empty · no
+   * accounts*: every page says so and offers the one act that changes it).
+   */
+  it("says there is no account on the List page too, and offers to create one", () => {
+    liveParams = { view: "list" };
+    withLedger(<Today />);
+
+    const page = within(screen.getByRole("tabpanel"));
+    expect(page.getByText("No accounts yet")).toBeDefined();
+    fireEvent.click(page.getByText("Create account"));
     expect(router.push).toHaveBeenCalledWith({
       pathname: "/account/new",
       params: { returnTo: "today" },
@@ -1085,7 +1108,8 @@ describe("Today", () => {
 
     withLedger(<Today />, controller);
 
-    expect(screen.getByText("Couldn't refresh")).toBeDefined();
+    // Every page says it, so scoped to the one on screen.
+    expect(within(screen.getByRole("tabpanel")).getByText("Couldn't refresh")).toBeDefined();
     // S04 §6: a failed balance query replaces the ground's body and nothing
     // else, so the figures it did not touch stay. Both of them — the strip and
     // the month card render above the error branch for exactly this reason,
@@ -1095,6 +1119,122 @@ describe("Today", () => {
     expect(screen.getByText("Kept so far")).toBeDefined();
     const rendered = document.body.textContent ?? "";
     expect(rendered).toContain("50.00");
+  });
+
+  /**
+   * **A page that cannot draw says why.** A failed first refresh leaves no
+   * accounts *and* an error, and the List, Calendar and Months pages read that
+   * as *create an account* — the wrong instruction for a ledger that simply did
+   * not load (S04 §6).
+   */
+  it.each(["list", "calendar", "months"])(
+    "shows the error, not create-an-account, on %s when the first refresh fails",
+    (view) => {
+      // An empty ledger whose next refresh fails: no accounts *and* an error.
+      let calls = 0;
+      const port = basePort({
+        listAccounts: () => {
+          calls += 1;
+          if (calls > 1) throw new Error("query failed");
+          return [];
+        },
+      });
+      const controller = createPhoneLedger(port, {
+        capture: () => ({
+          date: accountingDate("2026-09-03"),
+          timeZone: "Europe/Warsaw",
+          offsetMinutes: 120,
+          at: new Date("2026-09-03T10:00:00Z"),
+        }),
+        id: () => id("11111111-1111-4111-8111-111111111111"),
+      });
+      try {
+        controller.refresh();
+      } catch {
+        // Expected — asserting the snapshot it leaves behind, not this throw.
+      }
+      liveParams = { view };
+      withLedger(<Today />, controller);
+
+      const page = within(screen.getByRole("tabpanel"));
+      expect(page.getByText("Couldn't refresh")).toBeDefined();
+      expect(page.queryByText("No accounts yet")).toBeNull();
+    },
+  );
+
+  /**
+   * **Accounts without a net-worth line are still accounts.** Net worth can be
+   * empty while an account exists (only receivables), and the List page decided
+   * *no accounts* by it, so it told a reader with an account to create one.
+   */
+  it("draws the List page when accounts exist but net worth is empty", () => {
+    const port = basePort({ listAccounts: () => [PLN_ACCOUNT], listNetWorth: () => [] });
+    const controller = createPhoneLedger(port, {
+      capture: () => ({
+        date: accountingDate("2026-09-03"),
+        timeZone: "Europe/Warsaw",
+        offsetMinutes: 120,
+        at: new Date("2026-09-03T10:00:00Z"),
+      }),
+      id: () => id("11111111-1111-4111-8111-111111111111"),
+    });
+    controller.refresh();
+    liveParams = { view: "list" };
+    withLedger(<Today />, controller);
+
+    const page = within(screen.getByRole("tabpanel"));
+    expect(page.queryByText("No accounts yet")).toBeNull();
+    expect(page.getByText("No transactions yet")).toBeDefined();
+  });
+
+  /**
+   * **An error with accounts already loaded stands in for nothing.** S04 §6:
+   * the error replaces the body only where there is nothing to fall back on; a
+   * later failed refresh must not wipe List, Calendar and Months to a message
+   * with no numbers under it.
+   */
+  it.each(["list", "calendar", "months"])(
+    "keeps drawing %s when a later refresh fails and accounts are loaded",
+    (view) => {
+      let calls = 0;
+      const port = basePort({
+        listAccounts: () => {
+          calls += 1;
+          if (calls > 1) throw new Error("query failed");
+          return [PLN_ACCOUNT];
+        },
+        listNetWorth: () => netWorthOf([PLN_ACCOUNT]),
+      });
+      const controller = createPhoneLedger(port, {
+        capture: () => ({
+          date: accountingDate("2026-09-03"),
+          timeZone: "Europe/Warsaw",
+          offsetMinutes: 120,
+          at: new Date("2026-09-03T10:00:00Z"),
+        }),
+        id: () => id("11111111-1111-4111-8111-111111111111"),
+      });
+      try {
+        controller.refresh();
+      } catch {
+        // Expected — asserting the snapshot it leaves behind, not this throw.
+      }
+      liveParams = { view };
+      withLedger(<Today />, controller);
+
+      const page = within(screen.getByRole("tabpanel"));
+      expect(page.queryByText("Couldn't refresh")).toBeNull();
+      expect(page.queryByText("No accounts yet")).toBeNull();
+    },
+  );
+
+  it("says there is no account on Months too, with no chart", () => {
+    liveParams = { view: "months" };
+    withLedger(<Today />);
+
+    const page = within(screen.getByRole("tabpanel"));
+    expect(page.getByText("No accounts yet")).toBeDefined();
+    expect(page.queryByText(/Jan/)).toBeNull();
   });
 
   /**
@@ -1619,6 +1759,33 @@ describe("Today — the pager, with a month in it", () => {
     }
     expect(screen.getByRole("tab", { name: "Summary" }).getAttribute("aria-selected")).toBe("true");
   });
+
+  /**
+   * **The pill never sits under the add button**, which is draggable to either
+   * side edge: it rests on the side the button is not — the only way back from
+   * a jump must not be the thing the button hides.
+   */
+  it.each([
+    ["right", { x: 318, y: 500, dock: null }, "right" as const, "left" as const],
+    ["left", { x: 16, y: 500, dock: null }, "left" as const, "right" as const],
+  ])(
+    "puts the pill opposite the add button on the %s",
+    async (_name, position, buttonAt, pillAt) => {
+      // A phone-width frame, so the button's side is read against a real width.
+      Object.defineProperty(document.documentElement, "clientWidth", {
+        value: 390,
+        configurable: true,
+      });
+      window.dispatchEvent(new Event("resize"));
+      await floatPosition.set(position);
+      open("list", "2021-03-02");
+      const pill = await screen.findByRole("button", { name: /Back to today/ });
+      const layer = pill.parentElement?.parentElement as HTMLElement;
+      const style = getComputedStyle(layer);
+      expect(style[pillAt]).toBe("16px");
+      expect(style[buttonAt]).not.toBe("16px");
+    },
+  );
 
   it("draws Summary's month as three labelled figures, each with its currency", () => {
     // §3's hero. The bar between them is decorative and says the same

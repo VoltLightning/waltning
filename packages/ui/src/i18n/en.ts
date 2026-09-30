@@ -319,6 +319,9 @@ export const en = {
      * own window would contradict the number over its head.
      */
     noMatchesHere: "Nothing here matches \u201C{{query}}\u201D.",
+    accountEmptyTitle: "Nothing in {{account}} yet",
+    accountEmptyBody:
+      "No transactions have been recorded on it. Clear the filter to see the rest of the ledger.",
     amount: "Amount",
     account: "Account",
     /**
@@ -501,6 +504,8 @@ export const en = {
     transferArrow: "→",
     transferTo: "To {{account}}",
     transferKind: "Transfer",
+    /** A row with no entered name and no category is titled by what it is. */
+    adjustmentKind: "Adjustment",
     /** Short swipe's action (S10 §4, §7) — announced, not only shown. */
     categorise: "Categorise",
     /** `Skeleton`'s accessible label while a page loads. */
