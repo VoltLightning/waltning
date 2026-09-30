@@ -296,6 +296,12 @@ export type PhoneCategory = {
   id: Id<"categories">;
   name: string;
   kind: "income" | "expense";
+  /**
+   * The seed's own tag (`seed:borrowed`) — the identity a rename or a
+   * translation leaves alone, and what `debtIntentOf` reads. Absent or `null`
+   * for a category a person made.
+   */
+  externalId?: string | null;
 };
 
 /**

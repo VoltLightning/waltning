@@ -291,6 +291,21 @@ cancel restores the query and transaction draft. A typed name is never itself
 permission to create a saved entry. Blank search shows recent entries, with
 saved groups ordered by recent use then name; scrolling loads bounded pages.
 
+**A debt category is a debt from the moment it is picked.** *Borrowed*, *Lent
+out*, *Repayment received* and *Repayment made* (seed keys `borrowed`,
+`lent-out`, `repayment-received`, `repayment-made`; read from the tag, never the
+name) set the obligation role to debt and draw a required **Who?** row directly
+under Category, in the first view and not behind *More details*. It opens the
+same person sheet with no role to choose; one pick closes it, and *+ New person
+or company* makes the person inline — a contact made here is a *person*, and the
+draft's category and kind are still there when S15 returns. Save refused without
+a person says so on the Who? row. Choosing any other category takes the role
+back; a role chosen by hand under *More details* stays. A repayment whose person
+has an open debt in that direction says which it pays down (*Settles what Nina
+owes you*): it carries the same party and role as the debt, so the balance
+S12–S14 derive goes down by it and the overview's line follows. The desk form
+asks the same question in the same place.
+
 Track money owed reveals a **separate party selector** and an explicit meaning.
 For expenses: **I'll get this back** or **I'm paying someone back**. For income:
 **I'll pay this back** or **Someone is paying me back**. None is preselected.

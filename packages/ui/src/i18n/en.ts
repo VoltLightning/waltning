@@ -663,6 +663,13 @@ export const en = {
 
     /** S15's escape from S05's counterparty sheet — the same shape `onCreateAccount` gives the account sheet. */
     newCounterparty: "+ New person or company",
+    /** §6.6 — a debt category asks who the other side is, and cannot be saved without. */
+    who: "Who?",
+    whoPlaceholder: "Choose a person",
+    whoRequired: "Choose who this is with.",
+    /** Under Who?, when the person has an open debt this entry pays down. */
+    settlesOwed: "Settles what {{name}} owes you.",
+    settlesOwe: "Settles what you owe {{name}}.",
 
     /* ── DESK2 · the desk command bar, `screens/S05-quick-add.md` §3 web ── */
     /**
@@ -1108,6 +1115,8 @@ export const en = {
     noBalances: "No accounts yet",
     noRecent: "Nothing recorded yet",
     noDebt: "Nobody owes, and you owe nobody",
+    /** The overview's list of who owes whom. */
+    openDebts: "Open debts",
     noSpend: "Nothing spent this period",
     /** M4 — a database with no active layout row at all, which the seed migration is supposed to make impossible. */
     noLayout: "No dashboard layout",

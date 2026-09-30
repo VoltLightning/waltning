@@ -345,6 +345,13 @@ export const be: Messages = {
     feeInvalid: "Увядзіце лік або пакіньце пустым.",
     sameAccountRefused: "Для перавода патрэбны два розныя рахункі.",
     newCounterparty: "+ Новы чалавек або кампанія",
+    /** §6.6 — a debt category asks who the other side is, and cannot be saved without. */
+    who: "Хто?",
+    whoPlaceholder: "Абярыце чалавека",
+    whoRequired: "Абярыце чалавека.",
+    /** Under Who?, when the person has an open debt this entry pays down. */
+    settlesOwed: "{{name}}: пагашэнне доўгу перад вамі.",
+    settlesOwe: "{{name}}: пагашэнне вашага доўгу.",
     commandBarPlaceholder: "48,90 наяўныя кава ўчора",
     commandBarLabel: "Дадаць аперацыю",
     commandBarCategoryPrompt: "Катэгорыя?",
@@ -575,6 +582,8 @@ export const be: Messages = {
     noBalances: "Рахункаў пакуль няма",
     noRecent: "Пакуль нічога не запісана",
     noDebt: "Ніхто вам не вінен, і вы нікому",
+    /** The overview's list of who owes whom. */
+    openDebts: "Адкрытыя даўгі",
     noSpend: "За гэты перыяд выдаткаў няма",
     noLayout: "Няма макета агляду",
     noLayoutBody: "У гэтай базе няма актыўнага макета. Пераўсталёўка верне макет па змаўчанні.",

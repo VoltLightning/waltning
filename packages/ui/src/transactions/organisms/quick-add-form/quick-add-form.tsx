@@ -117,6 +117,18 @@ export type QuickAddFormProps = {
    */
   onOpenCategoryPicker: (kind: "income" | "expense") => void;
   /**
+   * §6.6 — the ids of the categories that are debts (*Borrowed*, *Lent out*,
+   * the two repayments), decided by the screen from their seed tags. Picking
+   * one fixes the role to `debt` and asks **Who?**, which is required.
+   */
+  debtCategoryIds?: readonly string[];
+  /** The kind to start on — the round trip through S15 hands back the one it left on. */
+  initialType?: "expense" | "income";
+  /** A person to start with — S15's round trip (`returnTo: quick-add`) hands the one it just made back. */
+  initialCounterpartyId?: string | null;
+  /** Who?'s *+ New* — carries the draft's amount and kind, which live only here. */
+  onCreateCounterparty?: (current: { amount: string; type: "expense" | "income" }) => void;
+  /**
    * A refusal from the last save attempt, matched onto `amountOriginal` /
    * `accountId` — the input schema's own paths, so a controller refusal and a
    * server one bind to the same field the same way (`mapFieldErrors`,
@@ -137,18 +149,24 @@ export function QuickAddForm({
   onOpenAccountPicker,
   categoryId,
   onOpenCategoryPicker,
+  debtCategoryIds = [],
+  initialType = "expense",
+  initialCounterpartyId = null,
+  onCreateCounterparty,
   fieldErrors,
   onCancel,
   onSave,
 }: QuickAddFormProps) {
   const t = useT();
   const [amount, setAmount] = useState(parseAmount(initialAmount) ?? "");
-  const [type, setType] = useState<"expense" | "income">("expense");
+  const [type, setType] = useState<"expense" | "income">(initialType);
   const [moreOpen, setMoreOpen] = useState(false);
   const [date, setDate] = useState(today);
   const [note, setNote] = useState("");
   const [isBusiness, setIsBusiness] = useState(false);
-  const [obligationCounterpartyId, setObligationCounterpartyId] = useState<string | null>(null);
+  const [obligationCounterpartyId, setObligationCounterpartyId] = useState<string | null>(
+    initialCounterpartyId,
+  );
   const [obligationRole, setObligationRole] = useState<ObligationRole | null>(null);
 
   const styles = useStyles();
@@ -165,6 +183,10 @@ export function QuickAddForm({
    * own. Switching back restores the pick rather than losing it.
    */
   const effectiveCategoryId = selectedCategory?.kind === type ? categoryId : null;
+  // §6.6 — the role a debt category gives is derived, never stored: leaving
+  // the category takes it back, and a role chosen by hand is what is left.
+  const debt = effectiveCategoryId !== null && debtCategoryIds.includes(effectiveCategoryId);
+  const effectiveRole: ObligationRole | null = debt ? "debt" : obligationRole;
   let positive = false;
   try {
     positive = amount !== "" && money.dec(amount).gt(0);
@@ -188,6 +210,10 @@ export function QuickAddForm({
   const handleDateChange = useCallback((next: string) => setDate(next), []);
   const handleNoteChange = useCallback((next: string) => setNote(next), []);
   const handleBusinessChange = useCallback((next: boolean) => setIsBusiness(next), []);
+  const handleCreateCounterparty = useCallback(
+    () => onCreateCounterparty?.({ amount, type }),
+    [amount, onCreateCounterparty, type],
+  );
   const handleCounterpartyChange = useCallback(
     (next: string) => setObligationCounterpartyId(next),
     [],
@@ -202,6 +228,7 @@ export function QuickAddForm({
       ? t("common.chooseOne")
       : blocked && t("transactions.needsRate", { currency: selected.currency }),
     date: !dateValid && t("transactions.invalidDate"),
+    who: debt && obligationCounterpartyId === null && t("transactions.whoRequired"),
   });
   const save = useCallback(() => {
     if (!accountId || blocked || !positive || !dateValid) return;
@@ -214,7 +241,7 @@ export function QuickAddForm({
       note,
       isBusiness,
       obligationCounterpartyId,
-      obligationRole,
+      obligationRole: effectiveRole,
     });
   }, [
     accountId,
@@ -222,7 +249,7 @@ export function QuickAddForm({
     blocked,
     effectiveCategoryId,
     obligationCounterpartyId,
-    obligationRole,
+    effectiveRole,
     date,
     dateValid,
     isBusiness,
@@ -239,6 +266,7 @@ export function QuickAddForm({
   const accountError = check.errorFor("account") ?? fieldErrors?.byField["accountId"]?.[0];
   const amountError = check.errorFor("amount") ?? fieldErrors?.byField["amountOriginal"]?.[0];
   const categoryError = fieldErrors?.byField["categoryId"]?.[0];
+  const whoError = check.errorFor("who") ?? fieldErrors?.byField["obligationCounterpartyId"]?.[0];
 
   const counterpartyOptions = counterparties.map((counterparty) => ({
     value: counterparty.id,
@@ -313,6 +341,27 @@ export function QuickAddForm({
         machineFilled={false}
       />
       {categoryError === undefined ? null : <Text style={styles.fieldError}>{categoryError}</Text>}
+      {/* §6.6 — a debt is between two people, asked where the category was picked. */}
+      {debt ? (
+        <FieldAnchor check={check} field="who" style={styles.root}>
+          <Select
+            label={t("transactions.who")}
+            placeholder={t("transactions.whoPlaceholder")}
+            options={counterpartyOptions}
+            value={obligationCounterpartyId}
+            onChange={handleCounterpartyChange}
+            searchable
+          />
+          {whoError === undefined ? null : <Text style={styles.fieldError}>{whoError}</Text>}
+          {onCreateCounterparty === undefined ? null : (
+            <Button
+              label={t("transactions.newCounterparty")}
+              onPress={handleCreateCounterparty}
+              variant="secondary"
+            />
+          )}
+        </FieldAnchor>
+      ) : null}
       <Button label={t("transactions.more")} onPress={handleToggleMore} variant="ghost" />
 
       {moreOpen ? (
@@ -338,7 +387,7 @@ export function QuickAddForm({
             value={isBusiness}
             onChange={handleBusinessChange}
           />
-          {counterpartyOptions.length > 0 ? (
+          {counterpartyOptions.length > 0 && !debt ? (
             <>
               <Select
                 label={t("transactions.counterparty")}

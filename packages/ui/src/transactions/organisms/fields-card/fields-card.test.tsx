@@ -302,3 +302,86 @@ describe("a transfer — the same card, with a transfer's own rows", () => {
     expect(onSave).toHaveBeenCalledWith({ fee: "2.50" });
   });
 });
+
+/**
+ * §6.6 — S09 follows the category: a debt category makes the role `debt`, asks
+ * **Who?** and cannot be saved without it; leaving the category takes back the
+ * role it gave, and the person it was asked for with it.
+ */
+describe("a debt category — Who? is required, the role follows the category", () => {
+  const DEBT = {
+    categoryId: "cat-borrowed",
+    categoryName: "Money from friends",
+    debtCategory: true,
+  };
+  const NINA = { obligationCounterpartyId: "cp-nina", obligationCounterpartyName: "Nina" };
+
+  it("asks Who? with no role to choose, and refuses Save on that row until a person is named", () => {
+    const { onSave } = renderCard(DEBT);
+    expect(screen.getByRole("button", { name: "Who?" })).toBeDefined();
+    expect(screen.queryByRole("button", { name: /^Role/ })).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(screen.getByText("Choose who this is with.")).toBeDefined();
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
+  it("saves the category, the person and the debt role together", () => {
+    const { onSave } = renderCard({ ...DEBT, ...NINA });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(onSave).toHaveBeenCalledWith({
+      categoryId: "cat-borrowed",
+      obligationCounterpartyId: "cp-nina",
+      obligationRole: "debt",
+    });
+  });
+
+  /** The saved row is a debt under a debt category; the pick moves it to a plain one. */
+  function renderSavedDebt(obligationRole: "debt" | "contribution") {
+    const saved: TransactionFields = {
+      ...FIELDS,
+      categoryId: "cat-borrowed",
+      obligationCounterpartyId: "cp-nina",
+      obligationRole,
+    };
+    const onSave = vi.fn();
+    const props = {
+      fields: saved,
+      accounts: ACCOUNTS,
+      accountId: "account-a",
+      onOpenAccountPicker: vi.fn(),
+      today: "2026-08-06",
+      onOpenCategoryPicker: vi.fn(),
+      counterpartyId: null,
+      counterpartyName: null,
+      ...NINA,
+      onOpenCounterpartyPicker: vi.fn(),
+      onSave,
+    };
+    const view = render(<FieldsCard {...props} {...DEBT} />);
+    return { onSave, view, props };
+  }
+
+  it("takes the role and the person back when the category stops being a debt", () => {
+    const { onSave, view, props } = renderSavedDebt("debt");
+    view.rerender(
+      <FieldsCard {...props} categoryId="cat-salary" categoryName="Salary" debtCategory={false} />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(onSave).toHaveBeenCalledWith({
+      categoryId: "cat-salary",
+      obligationCounterpartyId: null,
+      obligationRole: null,
+    });
+  });
+
+  it("keeps a role somebody chose by hand when the category changes", () => {
+    const { onSave, view, props } = renderSavedDebt("contribution");
+    view.rerender(
+      <FieldsCard {...props} categoryId="cat-salary" categoryName="Salary" debtCategory={false} />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    // Only the category moved: the contribution and its person stay.
+    expect(onSave).toHaveBeenCalledWith({ categoryId: "cat-salary" });
+  });
+});

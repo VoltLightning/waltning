@@ -363,6 +363,13 @@ export const pl: Messages = {
     sameAccountRefused: "Przelew wymaga dwóch różnych kont.",
 
     newCounterparty: "+ Nowa osoba lub firma",
+    /** §6.6 — a debt category asks who the other side is, and cannot be saved without. */
+    who: "Kto?",
+    whoPlaceholder: "Wybierz osobę",
+    whoRequired: "Wybierz osobę.",
+    /** Under Who?, when the person has an open debt this entry pays down. */
+    settlesOwed: "{{name}}: rozliczenie należności.",
+    settlesOwe: "{{name}}: rozliczenie zobowiązania.",
 
     // L2 — "cash" (unchanged), not "gotówka": nothing populates an account's
     // Polish alias today (`en.ts`'s own comment on this same key), and a
@@ -613,6 +620,8 @@ export const pl: Messages = {
     noBalances: "Brak jeszcze kont",
     noRecent: "Nic jeszcze nie zapisano",
     noDebt: "Nikt nikomu nie jest winien",
+    /** The overview's list of who owes whom. */
+    openDebts: "Otwarte długi",
     noSpend: "Brak wydatków w tym okresie",
     noLayout: "Brak układu panelu",
     noLayoutBody: "Ta baza nie ma aktywnego układu. Ponowna instalacja przywraca domyślny.",

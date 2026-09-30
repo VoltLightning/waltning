@@ -32,6 +32,7 @@
  * each ledger revision for the header and the context cards (see `live`).
  */
 
+import { debtIntentOf } from "@waltning/client/counterparties/debt-intent";
 import type {
   PhoneCapturableAccount,
   PhoneTransactionDetail,
@@ -294,9 +295,27 @@ export default function TransactionDetail() {
     router.push({ pathname: "/counterparty/new", params: { returnTo: "transaction" } });
   }, []);
 
+  /**
+   * §6.6 — a category pick that touches a debt category (into one, or out of
+   * one) is **held in the card until Save**, because the role and the person
+   * it asks for go with it: writing the category alone would leave a `debt`
+   * under *Salary*, or a *Borrowed* with nobody on the other side. Any other
+   * pick is written straight away, as it always was.
+   */
+  const [pickedCategoryId, setPickedCategoryId] = useState<string | null>(null);
+  const debtIntentOfCategory = useCallback(
+    (categoryId: string | null) =>
+      debtIntentOf(snapshot.categories.find((category) => category.id === categoryId)?.externalId),
+    [snapshot.categories],
+  );
   const handlePickCategory = useCallback(
     (categoryId: string) => {
       if (!transactionId || !detail) return;
+      if (debtIntentOfCategory(categoryId) !== null || debtIntentOfCategory(detail.categoryId)) {
+        setPickedCategoryId(categoryId === detail.categoryId ? null : categoryId);
+        setCategorySheetOpen(false);
+        return;
+      }
       const result = ledger.updateTransaction(transactionId, detail.version, { categoryId });
       setCategorySheetOpen(false);
       if ("id" in result) {
@@ -306,7 +325,7 @@ export default function TransactionDetail() {
       }
       setFieldsErrors(toFormLevel(t, result.fieldErrors));
     },
-    [detail, ledger, refetch, t, transactionId],
+    [debtIntentOfCategory, detail, ledger, refetch, t, transactionId],
   );
 
   const handleCreateCategory = useCallback(
@@ -324,6 +343,7 @@ export default function TransactionDetail() {
       const result = ledger.updateTransaction(transactionId, detail.version, patch);
       if ("id" in result) {
         setFieldsErrors(undefined);
+        setPickedCategoryId(null);
         refetch();
         return;
       }
@@ -464,6 +484,13 @@ export default function TransactionDetail() {
   const effectiveAccountId = pickedAccountId ?? detail.accountId;
   const effectiveToAccountId = pickedToAccountId ?? detail.toAccountId;
   // The pick until it is saved, the saved row afterwards — `accountId`'s own rule.
+  const effectiveCategoryId = pickedCategoryId ?? detail.categoryId;
+  const effectiveCategoryName =
+    pickedCategoryId === null
+      ? detail.categoryName
+      : (snapshot.categories.find((category) => category.id === pickedCategoryId)?.name ??
+        detail.categoryName);
+  // The pick until it is saved, the saved row afterwards — `accountId`'s own rule.
   // The pick until it is saved, the saved row afterwards — `accountId`'s own
   // rule, once per link. A name comes from the directory rather than the row's
   // own join, which carries one name and now has two ids to name.
@@ -530,8 +557,9 @@ export default function TransactionDetail() {
           toAccountId={effectiveToAccountId}
           onOpenToAccountPicker={handleOpenToAccountPicker}
           today={today}
-          categoryId={detail.categoryId}
-          categoryName={detail.categoryName}
+          categoryId={effectiveCategoryId}
+          categoryName={effectiveCategoryName}
+          debtCategory={debtIntentOfCategory(effectiveCategoryId) !== null}
           onOpenCategoryPicker={handleOpenCategoryPicker}
           counterpartyId={effectiveIdentity.id}
           counterpartyName={effectiveIdentity.name}

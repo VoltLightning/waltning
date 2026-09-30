@@ -1439,6 +1439,27 @@ Set at write time, never inferred. The alternative — deriving the distinction
 from `accounts.ownership` — works today but silently rewrites the meaning of
 five years of history the moment an account is reclassified.
 
+**The category is what says a capture is a debt.** Four seeded categories carry
+it, read from the taxonomy's seed key (`external_id`, `seed:<key>`) and never
+from a display name, which a person renames and a language translates:
+
+| Seed key | Kind | Side of the debt ledger |
+|---|---|---|
+| `borrowed` | income | you owe — money you received |
+| `repayment-made` | expense | you owe — money you returned |
+| `lent-out` | expense | you are owed — money you handed over |
+| `repayment-received` | income | you are owed — money that came back |
+
+Picking one makes the obligation role `debt` and requires a person on the other
+side (`obligation_counterparty_id`): a debt with nobody on the other end is not
+a debt, so the capture surfaces ask **Who?** where the category is picked and
+refuse to save without it. The role is a function of the category, not a value
+the category writes: any other category takes it back, while a role somebody
+chose by hand is theirs and stays. A category a person made and named
+*Borrowed* carries no seed tag and means nothing about debt. A repayment needs
+no link of its own — it carries the same obligation party and role as the debt
+it pays, so the derived balance below goes down by it.
+
 **Debt is derived, never stored.** A counterparty's position is the running sum
 of the `debt`-role transactions referencing them. Nothing is posted twice, so a
 balance cannot drift from its history:

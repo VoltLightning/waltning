@@ -353,6 +353,13 @@ export const de: Messages = {
     feeInvalid: "Eine Zahl eingeben oder leer lassen.",
     sameAccountRefused: "Eine Umbuchung braucht zwei verschiedene Konten.",
     newCounterparty: "+ Neue Person oder Firma",
+    /** §6.6 — a debt category asks who the other side is, and cannot be saved without. */
+    who: "Wer?",
+    whoPlaceholder: "Person auswählen",
+    whoRequired: "Bitte wählen Sie eine Person aus.",
+    /** Under Who?, when the person has an open debt this entry pays down. */
+    settlesOwed: "{{name}}: begleicht eine offene Forderung von Ihnen.",
+    settlesOwe: "{{name}}: begleicht Ihre offene Schuld.",
     commandBarPlaceholder: "48,90 bar Kaffee gestern",
     commandBarLabel: "Buchung hinzufügen",
     commandBarCategoryPrompt: "Kategorie?",
@@ -589,6 +596,8 @@ export const de: Messages = {
     noBalances: "Noch keine Konten",
     noRecent: "Noch nichts erfasst",
     noDebt: "Niemand schuldet Ihnen, und Sie schulden niemandem",
+    /** The overview's list of who owes whom. */
+    openDebts: "Offene Schulden",
     noSpend: "In diesem Zeitraum nichts ausgegeben",
     noLayout: "Kein Übersichtslayout",
     noLayoutBody:

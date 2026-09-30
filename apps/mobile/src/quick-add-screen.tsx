@@ -1,3 +1,4 @@
+import { debtIntentOf, effectiveRole } from "@waltning/client/counterparties/debt-intent";
 import { useDevicePreference } from "@waltning/client/device/use-device-preference";
 import type {
   CreateCategoryDraft,
@@ -164,7 +165,11 @@ export default function QuickAdd() {
    * both forms only ever open a callback this screen owns, the same way
    * they already escape to account creation.
    */
-  const [categoryId, setCategoryId] = useState<string | null>(null);
+  const [categoryId, setCategoryId] = useState<string | null>(
+    snapshot.categories.some((category) => category.id === draft.categoryId)
+      ? (draft.categoryId ?? null)
+      : null,
+  );
   const [categorySheet, setCategorySheet] = useState<{
     open: boolean;
     kind: "income" | "expense";
@@ -231,7 +236,12 @@ export default function QuickAdd() {
   const [composerAccountId, setComposerAccountId] = useState<string | null>(
     accounts.some((account) => account.id === draft.accountId) ? (draft.accountId ?? null) : null,
   );
-  const [composerCategoryId, setComposerCategoryId] = useState<string | null>(null);
+  // A category the draft left with (S15's *+ New* round trip), when it is still offered.
+  const [composerCategoryId, setComposerCategoryId] = useState<string | null>(
+    snapshot.categories.some((category) => category.id === draft.categoryId)
+      ? (draft.categoryId ?? null)
+      : null,
+  );
   /**
    * H1 — S05 §8's Undo, for a proposal the draft applied on its own. Reset
    * whenever the entered name's *fold* changes (the effect beside `enteredNameFold`
@@ -253,6 +263,9 @@ export default function QuickAdd() {
       ? (draft.counterpartyId ?? null)
       : null,
   );
+  // The role a person chose by hand. A debt category's role is not stored
+  // here: it is derived below (`effectiveRole`), so leaving the category takes
+  // it back with nothing to clear, and this stays what the person set.
   const [composerObligationRole, setComposerObligationRole] = useState<ObligationRole | null>(null);
   const [composerCategorySheet, setComposerCategorySheet] = useState<{
     open: boolean;
@@ -336,6 +349,45 @@ export default function QuickAdd() {
   const effectiveCategoryId =
     composerCategoryId ?? (categoryAutoFilled ? (categoryProposal?.categoryId ?? null) : null);
   const handleUndoCategory = useCallback(() => setCategoryProposalDismissed(true), []);
+  /**
+   * §6.6 — *Borrowed*, *Lent out* and the two repayments make the entry a
+   * debt, read from the category's seed tag and never from its name (which is
+   * the person's to rename and the language's to translate).
+   */
+  const effectiveCategory = snapshot.categories.find(
+    (category) => category.id === effectiveCategoryId && category.kind === composerType,
+  );
+  const intent = debtIntentOf(effectiveCategory?.externalId);
+  const debtCategory = intent !== null;
+  const obligationRole = effectiveRole(composerObligationRole, intent);
+  /**
+   * A repayment with a person who has an open debt *in that direction* says
+   * which debt it pays down. It needs no separate link: the entry carries the
+   * same obligation party and role as the debt, so the balance the register
+   * derives (`counterparty_balances`) goes down by it.
+   */
+  const settlesCounterpartyId = intent?.settles ? composerCounterpartyId : null;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: snapshot.revision invalidates the read by identity; it is not read.
+  const openDebtSide = useMemo(() => {
+    if (settlesCounterpartyId === null) return null;
+    const side = ledger
+      .listCounterpartyBalances(today)
+      .filter((row) => row.counterpartyId === settlesCounterpartyId)
+      .map((row) => money.debtDirection(row.balance, row.decimals))
+      .find((direction) => direction !== "settled");
+    return side ?? null;
+  }, [ledger, settlesCounterpartyId, snapshot.revision, today]);
+  const pickedPerson = snapshot.counterparties.find(
+    (counterparty) => counterparty.id === composerCounterpartyId,
+  );
+  const debtHint =
+    intent?.settles && pickedPerson !== undefined && openDebtSide !== null
+      ? intent.direction === "owed" && openDebtSide === "theyOwe"
+        ? t("transactions.settlesOwed", { name: pickedPerson.name })
+        : intent.direction === "owe" && openDebtSide === "youOwe"
+          ? t("transactions.settlesOwe", { name: pickedPerson.name })
+          : undefined
+      : undefined;
 
   const handleRawChange = useCallback((next: string) => setComposerAmountRaw(next), []);
   const handleLeaveForTransfer = useCallback(() => router.replace("/transfer"), []);
@@ -451,10 +503,14 @@ export default function QuickAdd() {
       params: {
         returnTo: "quick-add",
         amount: composerAmountRaw,
+        type: composerType,
         ...(effectiveAccountId ? { accountId: effectiveAccountId } : {}),
+        // A debt's Who? sends the person here; the category it was asked for
+        // must still be the category when they come back.
+        ...(effectiveCategoryId ? { categoryId: effectiveCategoryId } : {}),
       },
     });
-  }, [composerAmountRaw, effectiveAccountId]);
+  }, [composerAmountRaw, composerType, effectiveAccountId, effectiveCategoryId]);
   const needsRateCurrency =
     selectedComposerAccount !== undefined && !selectedComposerAccount.capturable
       ? selectedComposerAccount.currency
@@ -573,6 +629,9 @@ export default function QuickAdd() {
         ? t("common.chooseOne")
         : selectedComposerAccount?.capturable === false &&
           t("transactions.needsRate", { currency: selectedComposerAccount.currency }),
+    // §6.6 — a debt is between two people: a debt category is refused
+    // without the other one, on the Who? row it asked it on.
+    who: debtCategory && composerCounterpartyId === null && t("transactions.whoRequired"),
     // §6.6.1 — **no longer required.** Naming a counterparty used to force a
     // role, because `reference` was the only way to say "involved, owes
     // nothing" and the pair-shape CHECK refused a party without one. The
@@ -602,8 +661,8 @@ export default function QuickAdd() {
       // obligation *as well*, with the same counterparty on both: the two
       // differing is S09's edit, not something one chip row can express.
       counterpartyId: composerCounterpartyId,
-      obligationCounterpartyId: composerObligationRole === null ? null : composerCounterpartyId,
-      obligationRole: composerObligationRole,
+      obligationCounterpartyId: obligationRole === null ? null : composerCounterpartyId,
+      obligationRole,
     };
     const result = ledger.createTransaction(next);
     if (!("id" in result)) {
@@ -639,7 +698,7 @@ export default function QuickAdd() {
     composerAmountRaw,
     effectiveCategoryId,
     composerCounterpartyId,
-    composerObligationRole,
+    obligationRole,
     composerDate,
     composerTime,
     composerIsBusiness,
@@ -690,7 +749,37 @@ export default function QuickAdd() {
     [snapshot.categories, snapshot.categoryUsage],
   );
 
-  /* ── The desk fallback's own draft — unchanged from before this PR ──── */
+  /* ── The desk fallback's own draft ──────────────────────────────────── */
+  // §6.6 — which categories are debts, from their seed tags; the form only
+  // ever asks whether the picked id is in this list.
+  const debtCategoryIds = useMemo(
+    () =>
+      snapshot.categories
+        .filter((category) => debtIntentOf(category.externalId) !== null)
+        .map((category) => category.id),
+    [snapshot.categories],
+  );
+  const deskInitialCounterpartyId = snapshot.counterparties.some(
+    (counterparty) => counterparty.id === draft.counterpartyId,
+  )
+    ? (draft.counterpartyId ?? null)
+    : null;
+  const handleDeskCreateCounterparty = useCallback(
+    (current: { amount: string; type: "expense" | "income" }) => {
+      router.push({
+        pathname: "/counterparty/new",
+        params: {
+          returnTo: "quick-add",
+          amount: current.amount,
+          type: current.type,
+          ...(deskAccountId ? { accountId: deskAccountId } : {}),
+          ...(categoryId ? { categoryId } : {}),
+        },
+      });
+    },
+    [deskAccountId, categoryId],
+  );
+
   const [fieldErrorsDesk, setFieldErrorsDesk] = useState<ReturnType<typeof mapFieldErrors>>();
   const handleDeskSave = useCallback(
     (next: QuickAddDraft) => {
@@ -753,6 +842,10 @@ export default function QuickAdd() {
             onOpenAccountPicker={handleOpenDeskAccountPicker}
             categoryId={categoryId}
             onOpenCategoryPicker={handleOpenCategoryPicker}
+            debtCategoryIds={debtCategoryIds}
+            initialType={draft.type ?? "expense"}
+            initialCounterpartyId={deskInitialCounterpartyId}
+            onCreateCounterparty={handleDeskCreateCounterparty}
             {...(fieldErrorsDesk === undefined ? {} : { fieldErrors: fieldErrorsDesk })}
             onCancel={handleDeskCancel}
             onSave={handleDeskSave}
@@ -853,9 +946,11 @@ export default function QuickAdd() {
             counterparties={snapshot.counterparties}
             obligationCounterpartyId={composerCounterpartyId}
             onCounterpartyChange={handleComposerCounterpartyChange}
-            obligationRole={composerObligationRole}
+            obligationRole={obligationRole}
             onObligationRoleChange={handleComposerObligationRoleChange}
             onCreateCounterparty={handleComposerCreateCounterparty}
+            debtCategory={debtCategory}
+            debtHint={debtHint}
             {...(fieldErrors === undefined ? {} : { fieldErrors })}
             check={composerCheck}
           />

@@ -348,6 +348,13 @@ export const ru: Messages = {
     feeInvalid: "Введите число или оставьте пустым.",
     sameAccountRefused: "Для перевода нужны два разных счёта.",
     newCounterparty: "+ Новый человек или компания",
+    /** §6.6 — a debt category asks who the other side is, and cannot be saved without. */
+    who: "Кто?",
+    whoPlaceholder: "Выберите человека",
+    whoRequired: "Выберите человека.",
+    /** Under Who?, when the person has an open debt this entry pays down. */
+    settlesOwed: "{{name}}: погашение долга перед вами.",
+    settlesOwe: "{{name}}: погашение вашего долга.",
     commandBarPlaceholder: "48,90 наличные кофе вчера",
     commandBarLabel: "Добавить операцию",
     commandBarCategoryPrompt: "Категория?",
@@ -578,6 +585,8 @@ export const ru: Messages = {
     noBalances: "Счетов пока нет",
     noRecent: "Пока ничего не записано",
     noDebt: "Никто вам не должен, и вы никому",
+    /** The overview's list of who owes whom. */
+    openDebts: "Открытые долги",
     noSpend: "За этот период расходов нет",
     noLayout: "Нет макета обзора",
     noLayoutBody: "В этой базе нет активного макета. Переустановка вернёт макет по умолчанию.",

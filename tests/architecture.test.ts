@@ -974,6 +974,7 @@ describe("a card groups rows or holds a figure — never a whole screen", () => 
     "HoldingsCard",
     "LinesCard",
     "MonthSummary",
+    "OpenDebtsCard",
     "RestoreCard",
     "SettingsMenu",
     "SharedGroup",
@@ -3618,8 +3619,8 @@ describe("every pressable answers the finger", () => {
     ],
   ]);
 
-  /** Every bare `<Pressable` tag the scan sees today: 18 hand-wired, 5 backdrops. */
-  const BARE_TAG_COUNT = 23;
+  /** Every bare `<Pressable` tag the scan sees today: 19 hand-wired, 5 backdrops. */
+  const BARE_TAG_COUNT = 24;
   /** The docblocks here name `Pressable` constantly; only rendered tags count. */
   const withoutComments = (text: string) =>
     text.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");

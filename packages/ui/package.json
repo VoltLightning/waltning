@@ -29,6 +29,7 @@
     "./counterparties/counterparty-card": "./src/counterparties/molecules/counterparty-card/counterparty-card.tsx",
     "./counterparties/counterparty-form": "./src/counterparties/organisms/counterparty-form/counterparty-form.tsx",
     "./counterparties/counterparty-picker": "./src/counterparties/organisms/counterparty-picker/counterparty-picker.tsx",
+    "./counterparties/open-debts-card": "./src/counterparties/molecules/open-debts-card/open-debts-card.tsx",
     "./counterparties/counterparty-row": "./src/counterparties/molecules/counterparty-row/counterparty-row.tsx",
     "./counterparties/debt-direction-tag": "./src/counterparties/atoms/debt-direction-tag/debt-direction-tag.tsx",
     "./counterparties/merge-row": "./src/counterparties/molecules/merge-row/merge-row.tsx",

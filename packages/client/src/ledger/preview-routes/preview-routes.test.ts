@@ -48,12 +48,14 @@ describe("phone preview route state", () => {
       accountId: undefined,
       type: undefined,
       counterpartyId: undefined,
+      categoryId: undefined,
     });
     expect(parseQuickAddRoute({ amount: ["1", "2"], accountId: ["a", "b"] })).toEqual({
       amount: "",
       accountId: undefined,
       type: undefined,
       counterpartyId: undefined,
+      categoryId: undefined,
     });
   });
 
@@ -67,7 +69,13 @@ describe("phone preview route state", () => {
   it("carries S15's counterparty return trip alongside the amount and account", () => {
     expect(
       parseQuickAddRoute({ amount: "10.25", accountId: "account-a", counterpartyId: "cp-1" }),
-    ).toEqual({ amount: "10.25", accountId: "account-a", type: undefined, counterpartyId: "cp-1" });
+    ).toEqual({
+      amount: "10.25",
+      accountId: "account-a",
+      type: undefined,
+      counterpartyId: "cp-1",
+      categoryId: undefined,
+    });
   });
 
   it("reads the transaction id, or undefined for a missing or duplicated segment", () => {

@@ -1188,6 +1188,61 @@ describe("Today", () => {
   });
 
   /**
+   * §6.6 — the overview lists who owes whom, under what you hold: one line per
+   * person per currency with the direction in words, absent when nothing is
+   * open. The balances are `listCounterpartyBalances`'s own rows, so a
+   * repayment that brings one to zero drops its line on the next read.
+   */
+  describe("open debts", () => {
+    const row = (name: string, balance: string, key: string) => ({
+      counterpartyId: id<"counterparties">(`bbbbbbbb-bbbb-4bbb-8bbb-0000000000${key}`),
+      name,
+      kind: "person" as const,
+      settlementCurrency: null,
+      currency: currencyCode("PLN"),
+      decimals: 2,
+      balance: toMoney(balance),
+      ageDays: null,
+      bucket: null,
+    });
+
+    function withDebts(rows: ReturnType<typeof row>[]) {
+      const port = basePort({
+        listAccounts: () => [PLN_ACCOUNT],
+        listCounterpartyBalances: () => rows,
+      });
+      const controller = createPhoneLedger(port, {
+        capture: () => ({
+          date: accountingDate("2026-09-03"),
+          timeZone: "Europe/Warsaw",
+          offsetMinutes: 120,
+          at: new Date("2026-09-03T10:00:00Z"),
+        }),
+        id: () => id("11111111-1111-4111-8111-111111111111"),
+      });
+      controller.refresh();
+      withLedger(<Today />, controller);
+    }
+
+    it("lists each open debt with its direction, and opens the person", () => {
+      withDebts([row("Nina", "-5.00000000", "01"), row("Tomasz", "150.00000000", "02")]);
+
+      expect(screen.getByText("Open debts")).toBeDefined();
+      expect(screen.getByText("owes you")).toBeDefined();
+      expect(screen.getByText("you owe")).toBeDefined();
+      fireEvent.click(screen.getByRole("button", { name: "Nina" }));
+      expect(router.push).toHaveBeenCalledWith(
+        "/counterparty/bbbbbbbb-bbbb-4bbb-8bbb-000000000001",
+      );
+    });
+
+    it("is hidden when nothing is open", () => {
+      withDebts([row("Nina", "0.00000000", "01")]);
+      expect(screen.queryByText("Open debts")).toBeNull();
+    });
+  });
+
+  /**
    * **An error with accounts already loaded stands in for nothing.** S04 §6:
    * the error replaces the body only where there is nothing to fall back on; a
    * later failed refresh must not wipe List, Calendar and Months to a message

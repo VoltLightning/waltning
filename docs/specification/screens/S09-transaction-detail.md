@@ -171,6 +171,16 @@ row and the friend on the second; S05's one chip row cannot express that, which
 is why it writes the same party to both when a role is chosen and leaves this
 screen to separate them.
 
+**A debt category turns *Owes* into a required *Who?*.** Picking *Borrowed*,
+*Lent out*, *Repayment received* or *Repayment made* (read from the category's
+seed tag, never its name) makes the role `debt` — the role row goes, there is
+nothing to choose — and the obligation row is drawn as **Who?** whether or not
+somebody is named yet. The pick is held in the card until Save, because the
+category, the person and the role are written together; Save with nobody named
+is refused with an error on Who?. Moving the row to any other category takes the
+role back and clears the person it was asked for, while a role chosen by hand
+stays. Any other category pick is written at once, as it always was.
+
 One picker serves both rows — the same directory, asked twice — rather than two
 components holding two copies of one list. Imported/legacy debt rows with no merchant link retain entered name text as Who,
 never silently promote the debtor into a merchant. Show the entered name snapshot and

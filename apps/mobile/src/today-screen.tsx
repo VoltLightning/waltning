@@ -1,4 +1,5 @@
 import { useHoldings } from "@waltning/client/accounts/use-holdings";
+import { openDebtLines } from "@waltning/client/counterparties/open-debts";
 import { useDevicePreference } from "@waltning/client/device/use-device-preference";
 import { deviceRuntime } from "@waltning/client/ledger/device-runtime";
 import { isPagerPageKey } from "@waltning/client/ledger/pager-date";
@@ -34,6 +35,7 @@ import {
 } from "@waltning/core/date";
 import * as money from "@waltning/core/money";
 import { HoldingsCard, type HoldingsLens } from "@waltning/ui/accounts/holdings-card";
+import { OpenDebtsCard } from "@waltning/ui/counterparties/open-debts-card";
 import { SpendRows } from "@waltning/ui/dashboard/spend-rows";
 import { Amount } from "@waltning/ui/fx/amount";
 import {
@@ -620,6 +622,29 @@ export default function Today() {
     ],
   );
 
+  /**
+   * **Who owes whom, under what you hold** (S04 §3). A live read, never cached
+   * in the snapshot — `snapshot.revision` is the signal that a write could have
+   * moved a balance, exactly as the Debt register's own memo reads it. One line
+   * per person per currency, never folded; the card draws nothing when no debt
+   * is open.
+   */
+  const handleOpenCounterparty = useCallback((counterpartyId: string) => {
+    router.push(`/counterparty/${counterpartyId}`);
+  }, []);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: snapshot.revision invalidates the read by identity; it is not read.
+  const openDebts = useMemo(
+    () => openDebtLines(ledger.listCounterpartyBalances(today)),
+    [ledger, snapshot.revision, today],
+  );
+  const debtsCard = useMemo(
+    () =>
+      openDebts.length === 0 ? null : (
+        <OpenDebtsCard lines={openDebts} onOpenCounterparty={handleOpenCounterparty} />
+      ),
+    [openDebts, handleOpenCounterparty],
+  );
+
   /** Under the hero, compact: §5's three figures in the shape `net = inflow − spend`. */
   const monthCard = useMemo(
     () =>
@@ -924,11 +949,12 @@ export default function Today() {
         `null`, so the first run is unaffected.
       */}
         {holdingsCard}
+        {debtsCard}
         {monthCard}
         {ledgerBody}
       </>
     ),
-    [notice, noticeToken, handleDismissToast, holdingsCard, monthCard, ledgerBody],
+    [notice, noticeToken, handleDismissToast, holdingsCard, debtsCard, monthCard, ledgerBody],
   );
 
   /**
