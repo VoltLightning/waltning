@@ -62,6 +62,10 @@ export function assertMoneyScale<TRun>(
   currency: CurrencyCode,
   where: string,
 ): void {
+  // The ceiling rides on the scale check: every figure a row is about to hold
+  // passes through here, and a caller that remembered one and forgot the other
+  // is the defect this avoids. It needs no currency lookup, so it runs first.
+  assertAmountCeiling(value, where);
   const [row] = tx
     .select({ decimals: currencies.decimals })
     .from(currencies)
@@ -98,4 +102,27 @@ function columnOf(where: string): string | undefined {
   const segments = afterOp.split(".");
   const last = segments[segments.length - 1];
   return last && last.length > 0 ? last : undefined;
+}
+
+/**
+ * Throws when `|value|` is not below the amount ceiling (`money.ts`'s
+ * `AMOUNT_CEILING_EXCLUSIVE`, `999 999 999.99`) — the executor's own refusal,
+ * with a message naming the column, beneath `zAmount` at the contract edge and
+ * above the replica's `*_amount_ceiling_*` triggers (and Postgres's CHECKs),
+ * which hold when both are wrong.
+ *
+ * `LocalRefusal` with `column` and `params`, so a screen routes it to the
+ * field a person is looking at without parsing the text — the same shape
+ * `assertMoneyScale` gives a scale refusal.
+ */
+export function assertAmountCeiling(value: string, where: string): void {
+  if (money.amountWithinCeiling(value)) return;
+  const column = columnOf(where);
+  throw new LocalRefusal(
+    `${where} ${value} is past the largest amount a row may hold, ${money.AMOUNT_CEILING_DISPLAY} (amounts_below_ceiling)`,
+    {
+      ...(column !== undefined ? { column } : {}),
+      params: { max: money.AMOUNT_CEILING_DISPLAY },
+    },
+  );
 }

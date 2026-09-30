@@ -21,7 +21,7 @@
  */
 
 import * as money from "@waltning/core/money";
-import type { AccountColor, AccountKind } from "@waltning/core/registry/inputs";
+import { type AccountColor, type AccountKind, isOverdrawn } from "@waltning/core/registry/inputs";
 
 export type HoldingsAccount = {
   id: string;
@@ -68,8 +68,16 @@ export type Holdings = {
   mine: money.Money;
   /** `mine` plus shared accounts — `null` where no shared account is counted (§6.7). */
   ours: money.Money | null;
-  /** The positive half of `mine`, and the negative half as a magnitude. */
+  /**
+   * The positive half of `mine`, and the negative half as two magnitudes that
+   * together are everything below zero: `overdrawn` is an asset account that
+   * has gone negative (bank, cash, deposit — no lender, just a balance below
+   * nothing), `owed` is a liability kind below zero (a card). The split is
+   * words, not figures: `held − overdrawn − owed` is `mine`, exactly as
+   * `held − (overdrawn + owed)` always was.
+   */
   held: money.Money;
+  overdrawn: money.Money;
   owed: money.Money;
   /** Accounts in `mine`, of the own non-loan accounts that are visible. */
   counted: number;
@@ -110,6 +118,7 @@ export function holdings(
   let shared = money.ZERO;
   let anyShared = false;
   let held = money.ZERO;
+  let overdrawn = money.ZERO;
   let owed = money.ZERO;
   let counted = 0;
   let of = 0;
@@ -155,7 +164,9 @@ export function holdings(
       value,
     });
     if (money.isPositive(value)) held = money.add(held, value);
-    else owed = money.add(owed, money.abs(value));
+    else if (isOverdrawn(account.kind, account.balance)) {
+      overdrawn = money.add(overdrawn, money.abs(value));
+    } else owed = money.add(owed, money.abs(value));
     bump(byKind, account.kind, { kind: account.kind, count: 0, value: money.ZERO }, (row) => ({
       ...row,
       count: row.count + 1,
@@ -186,6 +197,7 @@ export function holdings(
     mine,
     ours: anyShared ? money.add(mine, shared) : null,
     held,
+    overdrawn,
     owed,
     counted,
     of,

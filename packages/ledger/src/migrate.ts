@@ -649,6 +649,83 @@ END`,
  */
 const PRESET_KEY = layoutKey(PRESET_LAYOUT);
 
+/**
+ * `accounts_delete_guard` on the replica — the mirror of Postgres's WA022: an
+ * account some row references is never deleted (`SPEC.md` §6.9).
+ *
+ * **Every reference, not only transactions.** A transaction on either leg —
+ * soft-deleted ones included, they are still rows — a recurring rule, or a
+ * non-zero opening balance. The foreign keys already refuse the first two once
+ * `foreign_keys` is on; this names the rule, states the third, and does not
+ * depend on a connection pragma. `accounts/account-references.ts` is the same
+ * list in TypeScript, and `delete_account`'s executor refuses first with a
+ * message the screen can use — this is what holds when it is wrong.
+ *
+ * The message carries the Postgres code because it is the only field a
+ * SQLite trigger can speak through; the two engines' refusals should be
+ * greppable as one thing.
+ */
+const ACCOUNT_DELETE_GUARD_TRIGGERS: readonly string[] = [
+  `CREATE TRIGGER IF NOT EXISTS \`accounts_delete_guard\`
+BEFORE DELETE ON \`accounts\`
+WHEN EXISTS (SELECT 1 FROM \`transactions\` WHERE \`account_id\` = OLD.\`id\` OR \`to_account_id\` = OLD.\`id\`)
+  OR EXISTS (SELECT 1 FROM \`recurring_transactions\` WHERE \`account_id\` = OLD.\`id\` OR \`to_account_id\` = OLD.\`id\`)
+  OR CAST(OLD.\`opening_balance\` AS REAL) <> 0
+BEGIN
+  SELECT RAISE(ABORT, 'an account that anything references is archived, never deleted (SPEC.md §6.9, WA022, accounts_delete_guard)');
+END`,
+];
+
+/**
+ * `*_amount_ceiling_*` on the replica — no amount a row holds reaches
+ * `1 000 000 000` in absolute value (`money.ts`'s `AMOUNT_CEILING_EXCLUSIVE`).
+ * Postgres states it as a CHECK per table; here it is a trigger, because a
+ * CHECK on SQLite is a table rebuild, and a rebuild copies every existing row
+ * through the new constraint — a device already holding one figure past the
+ * ceiling would fail its own upgrade, on every launch, with no way forward
+ * from the phone. A trigger checks the write and leaves the past alone, which
+ * is what a ceiling introduced after the fact should do.
+ *
+ * **Decided on the text, not on a number.** Amounts are stored as normalised
+ * decimal strings, so "at or past a billion" is "more than nine digits before
+ * the point" — an exact test. `CAST(… AS REAL)` would round
+ * `999999999.99999999` up to exactly `1e9` and refuse a figure that is in
+ * bounds.
+ *
+ * `BEFORE INSERT` and `BEFORE UPDATE OF <amount columns>`, the shape
+ * `transactions_amount_positive_*` already has: a sync-down reaches the table
+ * by insert, an edit by update, and neither passes through a screen.
+ */
+const integerDigits = (column: string): string =>
+  `length(substr(ltrim(NEW.\`${column}\`, '-'), 1, instr(ltrim(NEW.\`${column}\`, '-') || '.', '.') - 1))`;
+
+const ceilingTriggers = (table: string, columns: readonly string[]): readonly string[] => {
+  const past = columns.map((column) => `${integerDigits(column)} > 9`).join("\n  OR ");
+  const refusal = `an amount is at most 999999999.99 (WA023, ${table}_amount_ceiling)`;
+  const list = columns.map((column) => `\`${column}\``).join(", ");
+  return [
+    `CREATE TRIGGER IF NOT EXISTS \`${table}_amount_ceiling_insert\`
+BEFORE INSERT ON \`${table}\`
+WHEN ${past}
+BEGIN
+  SELECT RAISE(ABORT, '${refusal}');
+END`,
+    `CREATE TRIGGER IF NOT EXISTS \`${table}_amount_ceiling_update\`
+BEFORE UPDATE OF ${list} ON \`${table}\`
+WHEN ${past}
+BEGIN
+  SELECT RAISE(ABORT, '${refusal}');
+END`,
+  ];
+};
+
+const AMOUNT_CEILING_TRIGGERS: readonly string[] = [
+  ...ceilingTriggers("transactions", ["amount_original", "to_amount", "fee", "debt_amount"]),
+  ...ceilingTriggers("transaction_lines", ["amount"]),
+  ...ceilingTriggers("accounts", ["opening_balance"]),
+  ...ceilingTriggers("recurring_transactions", ["amount_original"]),
+];
+
 export const REPLICA_BACKFILLS: Readonly<Record<string, Backfill>> = {
   "0006_schema": {
     check: (db) => {
@@ -756,6 +833,26 @@ export const REPLICA_BACKFILLS: Readonly<Record<string, Backfill>> = {
       for (const statement of CATEGORY_KIND_TRIGGERS) tx.run(sql.raw(statement));
       for (const statement of LINE_SUM_TRIGGERS) tx.run(sql.raw(statement));
       for (const statement of AMOUNT_POSITIVE_TRIGGERS) tx.run(sql.raw(statement));
+    },
+  },
+  "0021_account_guards": {
+    /**
+     * **Four tables' worth of new triggers, on a step that rebuilds none of
+     * them — so an installed device gets them on upgrade.** The hook on
+     * `0017_schema` above cannot: it ran on every database already past that
+     * step and never runs again, and a step's own statements cannot hold a
+     * trigger (`backfills.test.ts`). A step of its own, with no statements,
+     * is how a trigger reaches a database that already exists.
+     *
+     * The rule above still stands and now covers two hooks: **a later step
+     * that rebuilds `transactions`, `transaction_lines`, `accounts` or
+     * `recurring_transactions` must re-create these as well**, because
+     * `DROP TABLE` takes a table's triggers with it. `migrate.test.ts`
+     * censuses the whole chain, so forgetting is red.
+     */
+    objects: (tx) => {
+      for (const statement of ACCOUNT_DELETE_GUARD_TRIGGERS) tx.run(sql.raw(statement));
+      for (const statement of AMOUNT_CEILING_TRIGGERS) tx.run(sql.raw(statement));
     },
   },
   "0018_schema": {

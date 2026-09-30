@@ -37,6 +37,8 @@ afterAll(async () => {
 /** A fresh pair of accounts per test, so no case can lean on another's rows. */
 async function reset(opening: money.Money = money.toMoney("0.00")): Promise<void> {
   await s.sql`DELETE FROM transactions`;
+  // An opening balance keeps its account (WA022); zero it so the reset can clear the table.
+  await s.sql`UPDATE accounts SET opening_balance = 0`;
   await s.sql`DELETE FROM accounts`;
   await s.db.insert(accounts).values([
     { id: ACC, name: "Bank A", currency: currencyCode("USD"), openingBalance: opening },

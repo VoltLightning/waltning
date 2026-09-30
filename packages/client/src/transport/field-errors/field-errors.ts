@@ -89,6 +89,7 @@ export function fieldErrorsFromZod(error: unknown): readonly FieldError[] | null
       path,
       message: issue.message,
       ...(isCalendarDateIssue(path, issue.code) ? { messageKey: "transactions.badDate" } : {}),
+      ...(isCeilingIssue(issue.message) ? { messageKey: "common.amountCeiling" } : {}),
     };
   });
 }
@@ -111,4 +112,16 @@ export function fieldErrorsFromZod(error: unknown): readonly FieldError[] | null
  */
 function isCalendarDateIssue(path: string, code: string): boolean {
   return path === "date" && code === "custom";
+}
+
+/**
+ * `zAmount`'s ceiling refusal — no amount a row holds reaches a billion
+ * (`999 999 999.99`). The schema is `packages/core` and cannot reach a
+ * catalogue, so the issue carries its rule's name in the message and this is
+ * where it becomes a key. Matched on the name `zAmount` writes into the
+ * message, which no other refusal uses; the key's text carries the figure
+ * itself, formatted the way each language writes it.
+ */
+function isCeilingIssue(message: string): boolean {
+  return message.includes("amounts_below_ceiling");
 }

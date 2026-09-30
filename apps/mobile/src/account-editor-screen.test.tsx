@@ -52,6 +52,7 @@ const ACCOUNT = {
   isBusiness: false,
   archived: false,
   hidden: false,
+  hasEntries: true,
   inTotal: true,
   color: null,
   expectedBalance: null,
@@ -64,11 +65,14 @@ const ACCOUNT = {
 function fakeController(overrides: {
   updateAccount?: PhoneLedgerPort["updateAccount"];
   archiveAccount?: PhoneLedgerPort["archiveAccount"];
+  deleteAccount?: PhoneLedgerPort["deleteAccount"];
+  /** What `listAccounts` returns; defaults to an account with entries. */
+  account?: typeof ACCOUNT;
   reconcileAccount?: PhoneLedgerPort["reconcileAccount"];
   balanceAsOf?: PhoneLedgerPort["balanceAsOf"];
 }) {
   const port = basePort({
-    listAccounts: () => [ACCOUNT],
+    listAccounts: () => [overrides.account ?? ACCOUNT],
     listCurrencies: () => [
       {
         code: PLN,
@@ -82,6 +86,7 @@ function fakeController(overrides: {
     balanceAsOf: overrides.balanceAsOf ?? (() => ACCOUNT.balance),
     updateAccount: overrides.updateAccount ?? (() => undefined),
     archiveAccount: overrides.archiveAccount ?? (() => undefined),
+    deleteAccount: overrides.deleteAccount ?? (() => undefined),
     reconcileAccount: overrides.reconcileAccount ?? (() => undefined),
   });
   return createPhoneLedger(port, {
@@ -168,6 +173,46 @@ describe("AccountEditorScreen", () => {
       pathname: "/accounts",
       params: { message: "Account archived.", nonce: expect.any(String) },
     });
+  });
+
+  /**
+   * §6.9 — an account with entries has no Delete to press; only Archive. An
+   * account nothing references gets Delete behind a `ConfirmDialog`, and the
+   * write is the confirmation's, never the button's.
+   */
+  it("offers no Delete for an account with entries", () => {
+    withLedger();
+    expect(screen.queryByRole("button", { name: "Delete account" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Archive" })).toBeDefined();
+  });
+
+  it("deletes an empty account only after the confirmation, then dismisses with a Toast message", async () => {
+    const deleteAccount = vi.fn<PhoneLedgerPort["deleteAccount"]>();
+    withLedger({ deleteAccount, account: { ...ACCOUNT, hasEntries: false } });
+    fireEvent.click(screen.getByRole("button", { name: "Delete account" }));
+    expect(deleteAccount).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+    await waitFor(() => expect(deleteAccount).toHaveBeenCalledTimes(1));
+    expect(deleteAccount.mock.calls[0]?.[0]).toMatchObject({ id: ACCOUNT.id, version: 3 });
+    expect(router.dismissTo).toHaveBeenCalledWith({
+      pathname: "/accounts",
+      params: { message: "Account deleted.", nonce: expect.any(String) },
+    });
+  });
+
+  it("says so, and stays, when an entry arrived between the render and the tap", async () => {
+    const deleteAccount = vi.fn<PhoneLedgerPort["deleteAccount"]>(() => {
+      throw new Error("delete_account: x has entries (transactions) — archive it instead");
+    });
+    withLedger({ deleteAccount, account: { ...ACCOUNT, hasEntries: false } });
+    fireEvent.click(screen.getByRole("button", { name: "Delete account" }));
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+
+    await waitFor(() =>
+      expect(screen.getByRole("alert").textContent).toContain("can only be archived"),
+    );
+    expect(router.dismissTo).not.toHaveBeenCalled();
   });
 
   it("opens Reconcile and saves the observed balance through reconcileAccount", async () => {

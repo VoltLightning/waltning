@@ -385,6 +385,58 @@ describe("every other guard is identifiable", () => {
   });
 });
 
+describe("account deletion and the amount ceiling", () => {
+  const FREE = "88888888-8888-4888-8888-888888888888";
+  const FUNDED = "99999999-9999-4999-8999-999999999999";
+
+  it("WA022 · an account a transaction names cannot be deleted", async () => {
+    await s.sql`INSERT INTO transactions (date, type, account_id, amount_original, currency, fx_rate)
+      VALUES ('2026-01-01', 'expense', ${ACC_PLN}::uuid, 10, 'PLN', 1)`;
+    const error = await refusal(`DELETE FROM accounts WHERE id = '${ACC_PLN}'`);
+    expect(error.code).toBe("validation");
+    expect(error.details?.constraint).toBe(GUARDS[SQLSTATE.ACCOUNT_REFERENCED].constraint);
+    await s.sql`DELETE FROM transactions WHERE account_id = ${ACC_PLN}::uuid`;
+  });
+
+  it("WA022 · a soft-deleted transaction still keeps its account", async () => {
+    await s.sql`INSERT INTO transactions (date, type, account_id, amount_original, currency, fx_rate, deleted_at)
+      VALUES ('2026-01-01', 'expense', ${ACC_PLN}::uuid, 10, 'PLN', 1, now())`;
+    const error = await refusal(`DELETE FROM accounts WHERE id = '${ACC_PLN}'`);
+    expect(error.details?.constraint).toBe(TRIGGER.ACCOUNT_DELETE_GUARD);
+    await s.sql`DELETE FROM transactions WHERE account_id = ${ACC_PLN}::uuid`;
+  });
+
+  it("WA022 · an opening balance keeps its account", async () => {
+    await s.sql`INSERT INTO accounts (id, name, currency, opening_balance)
+      VALUES (${FUNDED}::uuid, 'Bank F', 'USD', 5)`;
+    const error = await refusal(`DELETE FROM accounts WHERE id = '${FUNDED}'`);
+    expect(error.details?.constraint).toBe(TRIGGER.ACCOUNT_DELETE_GUARD);
+  });
+
+  it("deletes an account nothing references", async () => {
+    await s.sql`INSERT INTO accounts (id, name, currency) VALUES (${FREE}::uuid, 'Bank E', 'USD')`;
+    await s.sql`DELETE FROM accounts WHERE id = ${FREE}::uuid`;
+    const rows = await s.sql`SELECT 1 FROM accounts WHERE id = ${FREE}::uuid`;
+    expect(rows).toHaveLength(0);
+  });
+
+  it("holds 999999999.99 and refuses 1000000000.00 on every amount column", async () => {
+    await s.sql`INSERT INTO transactions (date, type, account_id, amount_original, currency, fx_rate)
+      VALUES ('2026-01-01', 'expense', ${ACC_OWN}::uuid, 999999999.99, 'USD', 1)`;
+    await s.sql`DELETE FROM transactions WHERE account_id = ${ACC_OWN}::uuid`;
+
+    for (const statement of [
+      txn(`('2026-01-01', 'expense', '${ACC_OWN}', 1000000000.00, 'USD', 1)`),
+      `INSERT INTO transactions (date, type, account_id, amount_original, currency, fx_rate, fee)
+         VALUES ('2026-01-01', 'expense', '${ACC_OWN}', 10, 'USD', 1, 1000000000)`,
+      `INSERT INTO accounts (id, name, currency, opening_balance)
+         VALUES ('${FREE}', 'Bank E', 'USD', -1000000000)`,
+    ]) {
+      await expect(s.db.execute(sql.raw(statement)), statement).rejects.toThrow();
+    }
+  });
+});
+
 describe("Postgres's own refusals", () => {
   /**
    * R2 H2 — `name_folded` is `GENERATED ALWAYS AS (…) STORED` now, never

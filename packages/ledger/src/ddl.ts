@@ -629,6 +629,10 @@ export const REPLICA_STEPS: readonly {
     tag: "0020_schema",
     statements: [`ALTER TABLE \`accounts\` ADD \`color\` text`],
   },
+  {
+    tag: "0021_account_guards",
+    statements: [],
+  },
 ];
 
 /** One step per file in `drizzle/outbox`, filename order — the queue, its index, and the counter `claimSeq` allocates from. */

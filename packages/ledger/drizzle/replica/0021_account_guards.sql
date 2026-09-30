@@ -1,0 +1,5 @@
+-- No statements, on purpose: this step exists to carry an `objects` hook.
+-- `accounts_delete_guard` (WA022) and the `*_amount_ceiling_*` triggers are
+-- created by `REPLICA_BACKFILLS["0021_account_guards"].objects` in
+-- `src/migrate.ts`, because a trigger cannot live in a step's statements —
+-- a later rebuild of its table would drop it with nothing to re-create it.

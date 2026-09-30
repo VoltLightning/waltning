@@ -20,6 +20,7 @@ const BASE: HoldingsCardProps = {
   mine: money.toMoney("49415.84"),
   ours: null,
   held: money.toMoney("50670.52"),
+  overdrawn: money.toMoney("0"),
   owed: money.toMoney("1254.68"),
   counted: 9,
   of: 9,
@@ -140,6 +141,20 @@ export const Closed: Story = {};
 
 /** Broken down by kind, loans under their own rule and not in the figure. */
 export const ByKind: Story = { args: { initiallyOpen: true } };
+
+/**
+ * **A bank below zero is *overdrawn*, a card below zero is *owed*** — two
+ * words for two things, where one used to read the overdraft as money owed to
+ * someone.
+ */
+export const Overdrawn: Story = {
+  args: {
+    mine: money.toMoney("48611.64"),
+    overdrawn: money.toMoney("504.20"),
+    owed: money.toMoney("299.63"),
+    held: money.toMoney("49415.47"),
+  },
+};
 
 /** A shared account: the title becomes *Mine*, and *ours* sits under the figure. */
 export const Shared: Story = { args: { ours: money.toMoney("61240.10") } };

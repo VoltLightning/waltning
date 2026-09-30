@@ -64,6 +64,7 @@ function fakeController(rows: readonly Row[]) {
     isBusiness: row.isBusiness,
     archived: row.archived ?? false,
     hidden: row.hidden ?? false,
+    hasEntries: false,
     inTotal: row.inTotal ?? true,
     color: null,
     expectedBalance: null,

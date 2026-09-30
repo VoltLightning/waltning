@@ -1731,10 +1731,12 @@ describe("a constraint declared in the schema is present on the device", () => {
    * way while the `transaction_lines` pair survived and made the loss look
    * partial rather than systematic.
    *
-   * So there is one home and this is the census of it: every hand-written
-   * replica trigger is created by `REPLICA_BACKFILLS["0017_schema"].objects`
-   * — the hook on the last step that *rebuilds* `transactions` — and the hook
-   * moves when a later step rebuilds that table. That has happened once
+   * So there are two homes and this is the census of both: every
+   * hand-written replica trigger is created by
+   * `REPLICA_BACKFILLS["0017_schema"].objects` — the hook on the last step
+   * that *rebuilds* `transactions` — or by `["0021_account_guards"].objects`,
+   * the step that introduced the account and ceiling guards on databases
+   * already past `0017`; a hook moves when a later step rebuilds its table. That has happened once
    * already since: the obligation rename is a rebuild, because SQLite cannot
    * rename a column a CHECK mentions, so the key moved off `0010_schema`.
    *
@@ -1756,8 +1758,17 @@ describe("a constraint declared in the schema is present on the device", () => {
       inspect(join(dir, "triggers-replica.db"), (db) => objects(db, "trigger")),
       "a later rebuild of either table must take the `objects` hook with it",
     ).toEqual([
+      "accounts_amount_ceiling_insert",
+      "accounts_amount_ceiling_update",
+      "accounts_delete_guard",
+      "recurring_transactions_amount_ceiling_insert",
+      "recurring_transactions_amount_ceiling_update",
+      "transaction_lines_amount_ceiling_insert",
+      "transaction_lines_amount_ceiling_update",
       "transaction_lines_category_not_archived_insert",
       "transaction_lines_category_not_archived_update",
+      "transactions_amount_ceiling_insert",
+      "transactions_amount_ceiling_update",
       "transactions_amount_positive_insert",
       "transactions_amount_positive_update",
       "transactions_category_kind_matches_type_insert",

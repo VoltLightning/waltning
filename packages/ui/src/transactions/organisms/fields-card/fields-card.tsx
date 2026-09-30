@@ -20,7 +20,7 @@ import type { AccountKind } from "@waltning/core/registry/inputs";
 import { useCallback, useMemo, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import Animated from "react-native-reanimated";
-import { parseAmount } from "../../../fx/molecules/amount-field/amount-field";
+import { exceedsAmountCeiling, parseAmount } from "../../../fx/molecules/amount-field/amount-field";
 import { decimalMark } from "../../../i18n/locales.ts";
 import { useLocale, useT } from "../../../i18n/provider";
 import { Button } from "../../../primitives/atoms/button/button";
@@ -424,7 +424,15 @@ export function FieldsCard({
               value={amount}
               onChangeText={setAmount}
               keyboardType="decimal-pad"
-              {...(amountValid ? {} : { error: t("transactions.invalidAmount") })}
+              {...(amountValid
+                ? {}
+                : {
+                    error: t(
+                      exceedsAmountCeiling(amount)
+                        ? "common.amountCeiling"
+                        : "transactions.invalidAmount",
+                    ),
+                  })}
             />
           </FieldDisclosureRow>
 
@@ -441,7 +449,15 @@ export function FieldsCard({
                 value={toAmount}
                 onChangeText={setToAmount}
                 keyboardType="decimal-pad"
-                {...(toAmountValid ? {} : { error: t("transactions.invalidAmount") })}
+                {...(toAmountValid
+                  ? {}
+                  : {
+                      error: t(
+                        exceedsAmountCeiling(toAmount)
+                          ? "common.amountCeiling"
+                          : "transactions.invalidAmount",
+                      ),
+                    })}
               />
             </FieldDisclosureRow>
           ) : null}
@@ -459,7 +475,15 @@ export function FieldsCard({
                 value={fee}
                 onChangeText={setFee}
                 keyboardType="decimal-pad"
-                {...(feeValid ? {} : { error: t("transactions.feeInvalid") })}
+                {...(feeValid
+                  ? {}
+                  : {
+                      error: t(
+                        exceedsAmountCeiling(fee)
+                          ? "common.amountCeiling"
+                          : "transactions.feeInvalid",
+                      ),
+                    })}
               />
             </FieldDisclosureRow>
           ) : null}

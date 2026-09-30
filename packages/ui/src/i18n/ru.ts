@@ -21,6 +21,8 @@ export const ru: Messages = {
     close: "Закрыть",
     name: "Название",
     loading: "Загрузка…",
+    /** The amount ceiling (`money.ts`) — the figure is written the way this language writes it. */
+    amountCeiling: "Не более 999 999 999,99",
     search: "Поиск…",
     noMatches: "Ничего не найдено.",
     dismissSheet: "Закрыть: {{title}}",
@@ -143,6 +145,15 @@ export const ru: Messages = {
     moveUp: "Переместить {{name}} вверх",
     moveDown: "Переместить {{name}} вниз",
     archivedToast: "Счёт отправлен в архив.",
+    delete: "Удалить счёт",
+    deleteConfirmTitle: "Удалить этот счёт?",
+    deleteConfirmBody:
+      "В счёте «{{name}}» нет записей, поэтому он будет удалён полностью. Это действие нельзя отменить.",
+    deleteConfirmSubmit: "Удалить",
+    deletedToast: "Счёт удалён.",
+    deleteHasEntries:
+      "В этом счёте уже появились записи, поэтому его можно только отправить в архив.",
+    overdrawn: "овердрафт",
     reconcile: "Сверить…",
     reconcileTitle: "Сверка",
     computed: "Рассчитано",

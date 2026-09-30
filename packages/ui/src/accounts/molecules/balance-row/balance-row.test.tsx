@@ -222,3 +222,18 @@ it("draws a rule above every row but the first of its section", () => {
   const firstRow = head.firstElementChild as HTMLElement;
   expect(getComputedStyle(firstRow).borderTopWidth).toBe("0px");
 });
+
+it("reads overdrawn, and the magnitude, for an account flagged overdrawn", () => {
+  render(
+    <BalanceRow account="Bank A" balance={money.toMoney("-504.20")} currency="PLN" overdrawn />,
+  );
+  expect(screen.getByText("overdrawn")).toBeDefined();
+  expect(screen.getByText("504.20")).toBeDefined();
+  expect(screen.queryByText("-504.20")).toBeNull();
+});
+
+it("leaves a negative balance signed when the account is not flagged overdrawn", () => {
+  render(<BalanceRow account="Card A" balance={money.toMoney("-299.63")} currency="PLN" />);
+  expect(screen.queryByText("overdrawn")).toBeNull();
+  expect(screen.getByText("-299.63")).toBeDefined();
+});

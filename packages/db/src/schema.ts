@@ -25,6 +25,7 @@
  * See SPEC.md §6–§7 for the reasoning behind each.
  */
 
+import { AMOUNT_CEILING_EXCLUSIVE } from "@waltning/core/money";
 import { type SQL, sql } from "drizzle-orm";
 import {
   type AnyPgColumn,
@@ -51,6 +52,13 @@ import {
 
 /** Money. `numeric` is exact; scale 8 accommodates crypto balances. */
 const money = (name: string) => numeric(name, { precision: 20, scale: 8 });
+
+/**
+ * No amount reaches the ceiling — `abs(col) < 1 000 000 000`, NULL passing
+ * (`money.ts`'s `AMOUNT_CEILING_EXCLUSIVE`; `999 999 999.99` at two decimals).
+ */
+const below = (col: AnyPgColumn): SQL =>
+  sql`(${col} is null or abs(${col}) < ${sql.raw(AMOUNT_CEILING_EXCLUSIVE)})`;
 
 /** Normalized name for uniqueness: case- and whitespace-insensitive. */
 const normalized = (col: AnyPgColumn): SQL => sql`lower(btrim(${col}))`;
@@ -227,6 +235,11 @@ export const accounts = pgTable("accounts", accountsColumns(), (t) => [
     "accounts_color_known",
     sql.raw(`color is null or color in (${ACCOUNT_COLOR.map((c) => `'${c}'`).join(", ")})`),
   ),
+  // No amount reaches the ceiling (`money.ts`'s `AMOUNT_CEILING_EXCLUSIVE`). The
+  // migration that adds it writes it `NOT VALID` first, like every amount
+  // CHECK before it — `drizzle-kit generate` cannot say that, so a
+  // regeneration of that migration must have it hand-added back.
+  check("accounts_opening_balance_ceiling", below(t.openingBalance)),
 ]);
 
 /* ------------------------------------------------------------------ *
@@ -547,6 +560,12 @@ export const transactions = pgTable("transactions", transactionsColumns(), (t) =
   // either — a typed `0` fee is "no fee", and the app drops it to `null`
   // before the write ever reaches here.
   check("transactions_fee_positive", sql`${t.fee} is null or ${t.fee} > 0`),
+  // No amount a transaction holds reaches the ceiling — the four columns
+  // that carry one, in one constraint so a fifth is one edit.
+  check(
+    "transactions_amount_ceiling",
+    sql`${below(t.amountOriginal)} and ${below(t.toAmount)} and ${below(t.fee)} and ${below(t.debtAmount)}`,
+  ),
   // `SPEC.md` §14.4b. Catalogue membership of `brand_key` is a
   // contract/service concern (`registry/inputs.ts`), not a CHECK: the
   // catalogue is versioned code, the same reason `service`
@@ -584,6 +603,7 @@ export const recurringTransactions = pgTable(
   "recurring_transactions",
   recurringTransactionsColumns(),
   (t) => [
+    check("recurring_transactions_amount_ceiling", below(t.amountOriginal)),
     // `SPEC.md` §14.4b — the same guarantee as `transactions_brand_shape`
     // (see its own comment for the three-value shape), ahead of the write
     // path that will eventually set these two columns.
@@ -648,6 +668,7 @@ export const transactionLines = pgTable(
     // category on every render the merge sheet is open for; `transactions`
     // already had `transactions_category_idx`, this table did not.
     index("transaction_lines_category_idx").on(t.categoryId),
+    check("transaction_lines_amount_ceiling", below(t.amount)),
   ],
 );
 

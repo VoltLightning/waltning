@@ -289,6 +289,28 @@ export const rateInBounds = (v: Rate | string | number | Decimal): boolean => {
   return d.gt(RATE_MIN_EXCLUSIVE) && d.lt(RATE_MAX_EXCLUSIVE);
 };
 
+/**
+ * The ceiling on any amount a row holds: strictly below `1 000 000 000` in
+ * absolute value, in the row's own currency — `999 999 999.99` at two
+ * decimals, and the same integer bound for a currency with other decimals.
+ *
+ * **One bound, stated once.** A transaction, a split line, a fee, a transfer's
+ * destination leg, a debt share, a recurring rule's amount and an opening
+ * balance all hold a figure a person typed, and a figure a hundred times a
+ * plausible balance is a typo that breaks every layout it reaches. It is
+ * enforced in `zAmount` (the contract edge), in the executors, and by a CHECK
+ * on Postgres and a trigger on the replica (`amounts_below_ceiling`), so the
+ * limit holds when any one layer is wrong.
+ */
+export const AMOUNT_CEILING_EXCLUSIVE = "1000000000";
+
+/** The ceiling as the largest two-decimal figure, for messages: `999 999 999.99`. */
+export const AMOUNT_CEILING_DISPLAY = "999999999.99";
+
+/** Whether `|v|` lies strictly below `AMOUNT_CEILING_EXCLUSIVE`. */
+export const amountWithinCeiling = (v: Money | string | number | Decimal): boolean =>
+  dec(v).abs().lt(AMOUNT_CEILING_EXCLUSIVE);
+
 declare const CROSS: unique symbol;
 
 /**

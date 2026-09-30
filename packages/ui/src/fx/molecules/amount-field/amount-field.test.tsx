@@ -4,10 +4,10 @@
  * `AmountField` — where the comma meets the decimal point.
  */
 
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { I18nProvider } from "../../../i18n/provider";
-import { AmountField, parseAmount } from "./amount-field";
+import { AmountField, exceedsAmountCeiling, parseAmount } from "./amount-field";
 
 function noop() {}
 
@@ -75,24 +75,45 @@ describe("parseAmount — comma decimal", () => {
     expect(parseAmount("-.5")).toBe("-0.5");
   });
 
-  it("refuses more than twelve integer digits, matching zMoney's own refine (M1)", () => {
-    expect(parseAmount("999999999999")).toBe("999999999999"); // twelve nines — the boundary itself
-    expect(parseAmount("1000000000000")).toBeNull(); // thirteen digits
+  it("refuses more than nine integer digits — the amount ceiling, 999 999 999.99", () => {
+    expect(parseAmount("999999999")).toBe("999999999"); // nine nines — the boundary itself
+    expect(parseAmount("999999999,99")).toBe("999999999.99");
+    expect(parseAmount("1000000000")).toBeNull(); // ten digits
+    expect(parseAmount("-1000000000,00")).toBeNull();
     expect(parseAmount("1234567890123,45")).toBeNull();
   });
 
   /**
-   * L — the twelve-digit cap counts by *significance*, not by character:
-   * `zMoney`'s own refine compares the numeric value, so a run of leading
-   * zeros must not count toward the cap the way `.length` alone would.
+   * L — the nine-digit cap counts by *significance*, not by character: the
+   * ceiling compares the numeric value, so a run of leading zeros must not
+   * count toward it the way `.length` alone would.
    */
-  it("does not count leading zeros toward the twelve-digit cap (L)", () => {
-    expect(parseAmount("0000000000001")).toBe("0000000000001"); // 1 significant digit, 13 characters
+  it("does not count leading zeros toward the nine-digit cap (L)", () => {
+    expect(parseAmount("0000000001")).toBe("0000000001"); // 1 significant digit, 10 characters
     expect(parseAmount("00000000000000000001,50")).toBe("00000000000000000001.50");
-    // Twelve significant digits, padded with a leading zero — still admitted.
-    expect(parseAmount("0999999999999")).toBe("0999999999999");
-    // Thirteen significant digits, once the leading zero is stripped — still refused.
-    expect(parseAmount("09999999999999")).toBeNull();
+    // Nine significant digits, padded with a leading zero — still admitted.
+    expect(parseAmount("0999999999")).toBe("0999999999");
+    // Ten significant digits, once the leading zero is stripped — still refused.
+    expect(parseAmount("01000000000")).toBeNull();
+  });
+
+  it("says *past the ceiling* only of something that would have been an amount", () => {
+    expect(exceedsAmountCeiling("1000000000")).toBe(true);
+    expect(exceedsAmountCeiling("100 000 000 000,50")).toBe(true);
+    expect(exceedsAmountCeiling("999999999,99")).toBe(false);
+    expect(exceedsAmountCeiling("0000000001")).toBe(false);
+    expect(exceedsAmountCeiling("")).toBe(false);
+    expect(exceedsAmountCeiling("abc")).toBe(false);
+    expect(exceedsAmountCeiling("1,2,3")).toBe(false);
+  });
+
+  it("puts *Maximum 999 999 999,99* under a field holding a figure past the ceiling", () => {
+    render(<AmountField label="Amount" currency="EUR" onChange={noop} />);
+    const input = screen.getByLabelText("Amount");
+    fireEvent.change(input, { target: { value: "100000000000" } });
+    expect(screen.getByText("Maximum 999,999,999.99")).toBeDefined();
+    fireEvent.change(input, { target: { value: "999999999" } });
+    expect(screen.queryByText("Maximum 999,999,999.99")).toBeNull();
   });
 
   it("renders with a currency affix", () => {

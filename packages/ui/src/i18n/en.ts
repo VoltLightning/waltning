@@ -28,6 +28,8 @@ export const en = {
     close: "Close",
     name: "Name",
     loading: "Loading…",
+    /** The amount ceiling (`money.ts`) — the figure is written the way this language writes it. */
+    amountCeiling: "Maximum 999,999,999.99",
     search: "Search…",
     /** A filter that matched nothing must say so — an empty panel reads as broken. */
     noMatches: "Nothing matches.",
@@ -240,6 +242,16 @@ export const en = {
     moveUp: "Move {{name}} up",
     moveDown: "Move {{name}} down",
     archivedToast: "Account archived.",
+    /** `delete_account` (§6.9) — offered only where nothing references the account; otherwise *Archive* stays. */
+    delete: "Delete account",
+    deleteConfirmTitle: "Delete this account?",
+    deleteConfirmBody:
+      "“{{name}}” has no entries, so it is removed completely. This cannot be undone.",
+    deleteConfirmSubmit: "Delete",
+    deletedToast: "Account deleted.",
+    deleteHasEntries: "This account now has entries and can only be archived.",
+    /** A bank, cash or deposit account below zero — not a debt to a lender, so not *owed* (S04, S16). */
+    overdrawn: "overdrawn",
     reconcile: "Reconcile…",
     reconcileTitle: "Reconcile",
     computed: "Computed",

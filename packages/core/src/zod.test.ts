@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { zAccountingDate, zFee, zMoney, zPivotPerUnit, zUnitsPerPivot } from "./zod.ts";
+import { zAccountingDate, zAmount, zFee, zMoney, zPivotPerUnit, zUnitsPerPivot } from "./zod.ts";
 
 describe("zMoney", () => {
   it("accepts the largest numeric(20,8) magnitude", () => {
@@ -11,6 +11,24 @@ describe("zMoney", () => {
     "rejects %s after storage-scale rounding would overflow numeric(20,8)",
     (value) => {
       expect(zMoney.safeParse(value).success).toBe(false);
+    },
+  );
+});
+
+describe("zAmount — the amount ceiling", () => {
+  it.each(["999999999.99", "-999999999.99", "0", "999999999.99999999"])("accepts %s", (value) => {
+    expect(zAmount.safeParse(value).success).toBe(true);
+  });
+
+  it.each(["1000000000", "1000000000.00", "-1000000000.00", "100000000000"])(
+    "refuses %s, which zMoney alone would take",
+    (value) => {
+      expect(zMoney.safeParse(value).success).toBe(true);
+      const result = zAmount.safeParse(value);
+      expect(result.success).toBe(false);
+      expect(result.success ? undefined : result.error.issues[0]?.message).toContain(
+        "999999999.99",
+      );
     },
   );
 });

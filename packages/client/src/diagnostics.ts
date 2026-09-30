@@ -17,6 +17,7 @@ export type ClientAction =
   | "set_transaction_lines"
   | "update_account"
   | "archive_account"
+  | "delete_account"
   | "set_account_visibility"
   | "reorder_accounts"
   | "reconcile_account"

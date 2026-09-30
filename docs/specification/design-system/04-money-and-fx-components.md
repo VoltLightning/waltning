@@ -12,6 +12,16 @@ The heart of the system. These enforce §7 of `SPEC.md` structurally.
 Props: `value`, `currency`, `size`, `emphasis`, `signed`, `fit`. Negative values
 take `negative` ink. Never renders a conversion — that is `<FxAmount>`.
 
+**No amount reaches a billion.** The largest figure any transaction, line, fee,
+transfer leg or opening balance holds is **999 999 999,99** in absolute value, in
+the row's own currency (`SPEC.md` §6.5) — the same integer bound for a currency
+with other decimals. Every input that takes an amount refuses a tenth integer
+digit: a keypad simply does not take the key, and a typed field holds what was
+typed, disables Save, and says **Maximum 999 999 999,99** under it, the figure
+written in the reader's own notation. The figure is held and not cut, so a
+pasted twelve digits never quietly becomes nine. Display components never need
+more room than that: a figure at the ceiling is ten digits and two groups.
+
 **A figure never breaks inside itself.** Its digits, separators and mark are one
 unbreakable run: the mark is joined to the figure by a no-break space, like the
 groups. A line that has to break does so between a figure and the words around

@@ -1240,7 +1240,28 @@ currencies_decimals_sane              decimals BETWEEN 0 AND 8
 fx_rates_rate_positive                rate > 0
 fx_rates_rate_bounds                  rate > 0.000000000001 AND rate < 999999999999
 fx_rates_distinct                     base <> quote
+transactions_amount_ceiling           abs(amount_original), abs(to_amount), abs(fee), abs(debt_amount) each < 1000000000
+transaction_lines_amount_ceiling      abs(amount) < 1000000000
+accounts_opening_balance_ceiling      abs(opening_balance) < 1000000000
+recurring_transactions_amount_ceiling abs(amount_original) < 1000000000
 ```
+
+**No amount a row holds reaches `1 000 000 000`.** The ceiling is `999 999 999.99`
+in absolute value, in the row's own currency; a currency with other decimals
+keeps the same integer bound (fewer than a billion). A figure a hundred times a
+plausible balance is a typo, and it breaks every layout it reaches. It is one
+bound, `AMOUNT_CEILING_EXCLUSIVE` in `money.ts`, stated at every layer: the
+contract schema (`zAmount`, used by every write input's amount field), each
+executor, the four CHECKs above on Postgres and a trigger per table on the
+replica, and every amount input, which refuses a tenth integer digit and says
+*Maximum 999 999 999,99* in the reader's own notation. The CHECKs are added
+`NOT VALID` and validated at once on a database that holds nothing past the
+bound; a database that does keeps those rows until the owner corrects them and
+validates by hand. On the replica the ceiling is a trigger and not a CHECK
+because a CHECK is a table rebuild, which copies every existing row through the
+new constraint — a device already holding one such figure would fail its own
+upgrade on every launch. `accounts.expected_balance` is not bounded: it is a
+balance the owner observed, not an amount an entry holds.
 
 **`transactions_amount_positive` refuses zero, not only a negative.** A
 zero-amount income, expense or transfer is not a payment event (§6.10), and
@@ -2025,7 +2046,25 @@ a car, a deposit, or a large medical bill, which an asset model would not.
 purges; the same escape hatch is wanted, and a hard delete in a financial
 ledger is rarely the right default. Every read path filters
 `deleted_at IS NULL`. Reference data (accounts, categories) uses `archived`
-instead — never deleted, because history references it.
+instead, because history references it. The one exception is an **account that
+no row has ever referenced**, which `delete_account` removes outright: no
+transaction on either leg — a soft-deleted one is still a row naming the
+account — no recurring rule, no import batch, and no opening balance, which is
+money the account started with and would leave every total silently. Anything
+referenced is archived, never deleted. `accounts_delete_guard` enforces it in
+Postgres (SQLSTATE `WA022`) and the replica carries the same trigger, so the
+rule holds when the operation's own check is wrong; the operation refuses first
+with a message that says *archive it instead*.
+
+**A delete races another device's entry, and the server decides.** `delete_account`
+is structural — it materialises on the device at once and drains only to a
+backend that can see every device's entries (`architecture/08`). If another
+device's entry reaches the server first, the delete meets `WA022` and is
+`blocked` with its reason on S30, and the account returns to the phone at the
+next sync-down, since the server still holds it. If the delete reaches the
+server first, the other device's entry — naming an account that is gone — is
+refused and kept `blocked` with its payload, never dropped, for the person to
+re-home.
 
 **Archived means "not assignable any more", never "not readable".** The rows
 already on an archived category keep it and still render; archiving one that

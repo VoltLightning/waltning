@@ -74,6 +74,25 @@ describe("holdings", () => {
     expect([fig(h.held), fig(h.owed), fig(h.mine)]).toEqual(["100.00", "40.00", "60.00"]);
   });
 
+  /** An asset account below zero is overdrawn, a card below zero is owed — the two never share a word. */
+  it("says overdrawn for a bank below zero and owed for a card below zero", () => {
+    const h = holdings(
+      [
+        account({ balance: money.toMoney("500") }),
+        account({ kind: "bank", balance: money.toMoney("-504.20") }),
+        account({ kind: "card", balance: money.toMoney("-299.63") }),
+      ],
+      DISPLAY,
+      rateOf,
+    );
+    expect([fig(h.held), fig(h.overdrawn), fig(h.owed), fig(h.mine)]).toEqual([
+      "500.00",
+      "504.20",
+      "299.63",
+      "-303.83",
+    ]);
+  });
+
   /** The third lens: every counted account, own figure and converted, in the order handed in. */
   it("lists each counted account, loans and shared ones apart", () => {
     const h = holdings(

@@ -30,6 +30,7 @@ import type {
   CreateCounterpartyInput,
   CreateGroupInput,
   CreateTransactionInput,
+  DeleteAccountInput,
   DeleteTransactionInput,
   MergeCategoriesInput,
   MergeCounterpartiesInput,
@@ -55,6 +56,7 @@ import { currencies } from "@waltning/schema/sqlite/currencies";
 import { archiveAccountExecutor } from "./accounts/archive-account.executor.ts";
 import { createAccountExecutor, type LocalAccountRow } from "./accounts/create-account.executor.ts";
 import { createGroupExecutor, type LocalGroupRow } from "./accounts/create-group.executor.ts";
+import { deleteAccountExecutor } from "./accounts/delete-account.executor.ts";
 import { type LocalAccountSummary, readAccounts } from "./accounts/read-accounts.ts";
 import { readBalanceAsOf } from "./accounts/read-balance-as-of.ts";
 import { type LocalGroup, readGroups } from "./accounts/read-groups.ts";
@@ -401,6 +403,8 @@ export type LocalLedgerSession = {
   setTransactionLines: (input: SetTransactionLinesInput, capture: Capture) => LocalTransactionRow;
   updateAccount: (input: UpdateAccountInput, capture: Capture) => LocalAccountRow;
   archiveAccount: (input: ArchiveAccountInput, capture: Capture) => LocalAccountRow;
+  /** `delete_account` — only an account nothing references (§6.9); returns the row it removed. */
+  deleteAccount: (input: DeleteAccountInput, capture: Capture) => LocalAccountRow;
   /** S16 §3 — what the register shows, and what its total counts. */
   setAccountVisibility: (input: SetAccountVisibilityInput, capture: Capture) => LocalAccountRow;
   /** S16 §3 — the whole ordered list; `sort` becomes each id's position. */
@@ -862,6 +866,14 @@ export function createLocalLedgerSession<TRun>(
     archiveAccount: (input, capture) =>
       writeLocally(requireOpen(), {
         executor: archiveAccountExecutor,
+        registry: ledgerRegistry,
+        input,
+        capture,
+        ...(options.diagnostics ? { diagnostics: options.diagnostics } : {}),
+      }).row,
+    deleteAccount: (input, capture) =>
+      writeLocally(requireOpen(), {
+        executor: deleteAccountExecutor,
         registry: ledgerRegistry,
         input,
         capture,

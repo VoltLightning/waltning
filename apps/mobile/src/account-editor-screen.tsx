@@ -1,5 +1,5 @@
 /**
- * S16 §4, §5, §7 — one account, open to edit, archive, or reconcile.
+ * S16 §4, §5, §7 — one account, open to edit, archive, delete (when nothing references it), or reconcile.
  *
  * Pushed as `/accounts/[id]`, the same stack-route shape `account/new`
  * already uses. The id names an *active* account: the register never wires
@@ -80,6 +80,7 @@ export default function AccountEditorScreen() {
       version: account.version,
       expectedBalance: account.expectedBalance,
       color: account.color,
+      hasEntries: account.hasEntries,
     };
   }, [account, currency]);
 
@@ -124,6 +125,24 @@ export default function AccountEditorScreen() {
     router.dismissTo({
       pathname: "/accounts",
       params: { message: t("accounts.archivedToast"), nonce: String(Date.now()) },
+    });
+  }, [account, ledger, t]);
+
+  /** `delete_account` — the editor offers it only for an account nothing references, after its own `ConfirmDialog`. */
+  const handleDelete = useCallback(() => {
+    if (!account) return;
+    const result = ledger.deleteAccount({ id: account.id, version: account.version });
+    if (!("id" in result)) {
+      const resolved = result.fieldErrors.map((error) => ({
+        path: error.path,
+        message: resolveFieldErrorMessage(t, error),
+      }));
+      setFieldErrors(mapFieldErrors(resolved, KNOWN_PATHS));
+      return;
+    }
+    router.dismissTo({
+      pathname: "/accounts",
+      params: { message: t("accounts.deletedToast"), nonce: String(Date.now()) },
     });
   }, [account, ledger, t]);
 
@@ -196,6 +215,7 @@ export default function AccountEditorScreen() {
         onCancel={handleCancel}
         onSave={handleSave}
         onArchive={handleArchive}
+        onDelete={handleDelete}
         onReconcile={handleOpenReconcile}
         onCreateGroup={handleCreateGroup}
       />
