@@ -248,6 +248,22 @@ export function monthShort(month: YearMonth, locale: Locale): string {
 }
 
 /**
+ * A month and its year in the room of one weekday letter — `Mar ’26`.
+ *
+ * **Three letters and an apostrophe year, because the cell is 48pt wide.**
+ * Russian's short months carry a trailing dot and run to four letters
+ * (*февр.*, *сент.*, *нояб.*), which with a year wraps the caption and breaks
+ * the cell's height. The dot goes, the month is cut to three characters of the
+ * *short* form (so never a cut of the full name, which is what `monthShort`'s
+ * own note rules out), and the year takes an apostrophe so `Mar ’26` cannot be
+ * read as the date *26 March* under a day number.
+ */
+export function monthYearShort(month: YearMonth, locale: Locale): string {
+  const name = monthShort(month, locale).replace(/\.$/, "").slice(0, 3);
+  return `${name}\u00A0\u2019${month.slice(2, 4)}`;
+}
+
+/**
  * One letter — the weekday, for `DayRibbon`'s cells.
  *
  * **`narrow`, not the first character of `short`.** Slicing a short name is a

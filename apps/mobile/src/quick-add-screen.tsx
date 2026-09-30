@@ -10,6 +10,11 @@ import { useCategoryPace } from "@waltning/client/ledger/use-category-pace";
 import { useLedgerController } from "@waltning/client/ledger/use-ledger-controller";
 import { usePhoneLedger } from "@waltning/client/ledger/use-phone-ledger";
 import { acceptProposedCategory } from "@waltning/client/transactions/accept-proposed-category";
+import { isCompactWindow } from "@waltning/client/transactions/compact-window";
+import {
+  soleEligibleAccount,
+  useDefaultAccount,
+} from "@waltning/client/transactions/default-account";
 import { useLastUsedAccount } from "@waltning/client/transactions/last-capture";
 import { mapFieldErrors } from "@waltning/client/transport/field-errors";
 import { proposeCategory } from "@waltning/core/capture/entered-name-memory";
@@ -43,7 +48,7 @@ import {
 import { type QuickAddAccount, QuickAddForm } from "@waltning/ui/transactions/quick-add-form";
 import { router, useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Alert, Text, View } from "react-native";
+import { Alert, Text, useWindowDimensions, View } from "react-native";
 import { lastCapture, saveHaptic } from "./platform";
 
 type CreateAccountEscapeDraft = { amount: string; accountId: string | null };
@@ -265,8 +270,17 @@ export default function QuickAdd() {
 
   const lastCaptureSnapshot = useDevicePreference(lastCapture);
   const lastUsedAccountId = useLastUsedAccount(lastCapture, capture.at.getTime(), composerAccounts);
-  const effectiveAccountId = composerAccountId ?? lastUsedAccountId;
-  const accountMachineFilled = composerAccountId === null && lastUsedAccountId !== null;
+  // Last-used inside its window, else the one account there is (S05 §9.2).
+  const defaultAccountId = useDefaultAccount(lastCapture, capture.at.getTime(), composerAccounts);
+  const effectiveAccountId = composerAccountId ?? defaultAccountId;
+  const accountMachineFilled = composerAccountId === null && defaultAccountId !== null;
+  // Only a fill the machine chose between accounts for is expensive to redo
+  // (S05 §7); the one account there is, is the ledger and not a guess.
+  // The lone account is never a guess, window or no window.
+  const guessedAccount =
+    composerAccountId === null &&
+    lastUsedAccountId !== null &&
+    soleEligibleAccount(composerAccounts) === null;
   const selectedComposerAccount = composerAccounts.find(
     (account) => account.id === effectiveAccountId,
   );
@@ -340,7 +354,7 @@ export default function QuickAdd() {
         // §7's own rule, the same one ✕ keeps: leaving is cheap when the
         // draft is your own typing, and asked about when a machine filled
         // something — the segment is a way out of this draft too.
-        if (!accountMachineFilled) {
+        if (!guessedAccount) {
           router.replace("/transfer");
           return;
         }
@@ -356,7 +370,7 @@ export default function QuickAdd() {
       // while Save still carried its id into `categoryKindMismatch`.
       setComposerCategoryId(null);
     },
-    [accountMachineFilled, handleLeaveForTransfer, t],
+    [guessedAccount, handleLeaveForTransfer, t],
   );
   const kindSegments = useMemo<
     readonly [Segment<KindSegment>, Segment<KindSegment>, Segment<KindSegment>]
@@ -533,7 +547,7 @@ export default function QuickAdd() {
     // S05 §7: discarding your own typing is cheap to redo; discarding a
     // machine's guess is not — the confirm exists for exactly the one thing
     // the keypad path ever fills on its own.
-    if (!accountMachineFilled) {
+    if (!guessedAccount) {
       router.back();
       return;
     }
@@ -541,7 +555,7 @@ export default function QuickAdd() {
       { text: t("common.cancel"), style: "cancel" },
       { text: t("common.discard"), style: "destructive", onPress: handleDiscard },
     ]);
-  }, [accountMachineFilled, handleDiscard, t]);
+  }, [guessedAccount, handleDiscard, t]);
 
   // §6.6, never defaulted: a counterparty picked with no role would reach
   // `create_transaction`'s own refine and refuse — so Save refuses first, and
@@ -655,8 +669,17 @@ export default function QuickAdd() {
    * second time.
    */
   const keyboardHeight = useKeyboardHeight();
+  const keyboardUp = keyboardHeight > 0;
+  /**
+   * A short window is decided from the first frame, from the window's own
+   * height — never from the keyboard's events, which would collapse the page
+   * under the thumb on every open (and a mobile browser's viewport shrinks
+   * instead, reporting no keyboard at all). S05 §3.
+   */
+  const window = useWindowDimensions();
+  const compact = isCompactWindow(window.height, window.fontScale);
   const clearBottom = {
-    paddingBottom: keyboardHeight > 0 ? gutter + keyboardHeight : gutter + insets.bottom,
+    paddingBottom: keyboardUp ? space.md + keyboardHeight : gutter + insets.bottom,
   };
   const composerCategories = useMemo(
     () =>
@@ -770,13 +793,15 @@ export default function QuickAdd() {
             ? "transactions.addExpenseTitle"
             : "transactions.addIncomeTitle",
         )}
-        subtitle={weekdayLabel(accountingDate(composerDate), locale)}
+        {...(compact && composerDate === today
+          ? {}
+          : { subtitle: weekdayLabel(accountingDate(composerDate), locale) })}
       />
       {/* `clearBottom={false}` — this panel is not the screen's own bottom
           edge, the Save footer below it is, and that clears the home
           indicator itself. */}
       <GroundPanel clearBottom={false}>
-        <View style={styles.column}>
+        <View style={compact ? styles.columnCompact : styles.column}>
           <SegmentControl
             segments={kindSegments}
             value={composerType}
@@ -789,6 +814,7 @@ export default function QuickAdd() {
             accounts={composerAccounts}
             accountId={effectiveAccountId}
             accountMachineFilled={accountMachineFilled}
+            compact={compact}
             onOpenAccountPicker={handleOpenComposerAccountPicker}
             onSetRate={handleSetRate}
             categories={composerCategories}
@@ -838,8 +864,8 @@ export default function QuickAdd() {
       {/* S05 §3 — Save is full-width at the bottom edge, because it is the
           only affirmative action and it is pressed in motion; the line above
           it says what Save means on a phone that may be offline (§6). */}
-      <View style={[styles.footer, clearBottom]}>
-        <Text style={styles.footerNote}>{t("transactions.savedOnPhone")}</Text>
+      <View style={[styles.footer, compact ? styles.footerCompact : null, clearBottom]}>
+        {compact ? null : <Text style={styles.footerNote}>{t("transactions.savedOnPhone")}</Text>}
         <Button
           variant="primary"
           size="lg"
@@ -888,11 +914,14 @@ const useStyles = makeStyles((theme) => ({
   deskTitle: { color: theme.text, ...text.ui("displayThree") },
   /** The deck's 20 between the kind control and the amount card. */
   column: { gap: space.x4 },
+  /** The same column on a short window — 6 between blocks, so the account row is in the first view. */
+  columnCompact: { gap: space.sm },
   footer: {
     backgroundColor: theme.ground,
     paddingHorizontal: gutter,
     paddingTop: space.lg,
     gap: space.lg,
   },
+  footerCompact: { paddingTop: 0 },
   footerNote: { color: theme.textMuted, ...text.ui("caption"), textAlign: "center" },
 }));

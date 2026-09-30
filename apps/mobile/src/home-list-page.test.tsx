@@ -83,6 +83,9 @@ function draw(
     query?: string | null;
     accountId?: string | null;
     inset?: number;
+    onClearFilter?: () => void;
+    accountName?: string;
+    pillSide?: "left" | "right";
   } = {},
 ) {
   render(
@@ -105,6 +108,9 @@ function draw(
             scrollY={scrollY}
             active={active}
             empty={<Text>nothing yet</Text>}
+            onClearFilter={over.onClearFilter ?? vi.fn()}
+            accountName={over.accountName ?? "Bank A"}
+            pillSide={over.pillSide ?? "left"}
           />
         </CollapseInsetProvider>
       </I18nProvider>
@@ -445,52 +451,71 @@ it("draws the ribbon earliest-first, under a list that runs newest-first", () =>
 });
 
 /**
- * **The pill floats over the *list*, and the ribbon is not the list** (S04 §4,
- * which names the two separately). Positioned against the whole panel it sat on
- * the ribbon's first cells — covering a weekday letter outright and two 44pt
- * targets. What an absolutely-positioned box can cover is decided by the box it
- * resolves against, so the claim is about which box that is: the pill and the
- * rows it floats over share one, and the strip is outside it.
+ * **The pill changes no layout** (S04 §4). It is shown while the anchor is off
+ * today, and the anchor moves on every scroll settle, so a band reserved for it
+ * above the rows dropped every row by the pill's height one day off today and
+ * lifted them again on the way back. jsdom has no layout, so the claim is about
+ * the tree: the pill comes *after* the rows, inside the list's own box (nothing
+ * is inserted before them), and `today-pill.test.tsx` pins that it is absolutely
+ * positioned on the add button's line.
  */
-it("floats over the rows, not over the strip above them", () => {
+it("floats after the rows in the list's own box, never in a band before them", () => {
   draw(ledgerWith([row("2021-03-02", 1, "-96")]), vi.fn(), {
     anchor: accountingDate("2021-03-02"),
   });
   const pill = screen.getByRole("button", { name: /Back to today/ });
   const aRow = screen.getByRole("button", { name: /EnteredName 1/ });
+  expect(aRow.compareDocumentPosition(pill) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 
   let box: HTMLElement | null = pill;
   while (box !== null && !box.contains(aRow)) box = box.parentElement;
-  expect(box, "the pill and the rows must share a box at all").not.toBeNull();
+  expect(box, "the pill and the rows share a box").not.toBeNull();
   expect(
     box?.contains(screen.getByRole("list")),
-    "the strip is chrome above the list, and a floating control must not land on it",
+    "that box is the list's own, not the page that also holds the strip",
   ).toBe(false);
 });
 
 /**
- * At rest the strip is drawn the header's travel lower than its box, over the
- * top of the list's. The pill floats over that same top, so it has to be drawn
- * as much lower, or the strip covers it and takes its taps.
+ * **A searched strip says which month it is in.** It is the matched days and
+ * nothing else, so `15 26 15 26` over two months reads as the same two days
+ * repeating. The month changes between two neighbours without either being the
+ * 1st, so the 1st-says-its-month rule never fires; the cue moves to the change.
  */
-it("draws the pill as far down as the strip, so it never sits under it", () => {
-  draw(ledgerWith([row("2021-03-02", 1, "-96")]), vi.fn(), {
+it("names the month where a searched strip changes month", () => {
+  draw(
+    ledgerWith([
+      row("2026-02-26", 1, "-10"),
+      row("2026-02-15", 2, "-10"),
+      row("2026-01-26", 3, "-10"),
+      row("2026-01-15", 4, "-10"),
+    ]),
+    vi.fn(),
+    { accountId: "00000000-0000-4000-8000-00000000000a" },
+  );
+  const cell = (label: RegExp) => screen.getByRole("button", { name: label });
+  expect(cell(/January 15, 2026/).textContent).toMatch(/Jan/);
+  expect(cell(/January 26, 2026/).textContent).not.toMatch(/Jan|Feb/);
+  expect(cell(/February 15, 2026/).textContent).toMatch(/Feb/);
+  expect(cell(/February 26, 2026/).textContent).not.toMatch(/Jan|Feb/);
+});
+
+/**
+ * **An account with nothing on it is not a ledger with nothing in it.** The
+ * carried account filter left the List page saying *No transactions yet* over a
+ * ledger that holds rows elsewhere.
+ */
+it("blames the account filter, offers to clear it, and never says first-run", () => {
+  const onClearFilter = vi.fn();
+  draw(ledgerWith([]), vi.fn(), {
     anchor: accountingDate("2021-03-02"),
-    inset: COLLAPSE_TRAVEL,
+    accountId: "00000000-0000-4000-8000-00000000000a",
+    onClearFilter,
   });
-  const shift = (el: HTMLElement): string => {
-    let node: HTMLElement | null = el;
-    let found = "";
-    while (node !== null) {
-      if (node.style.transform.includes("translateY")) found = node.style.transform;
-      node = node.parentElement;
-    }
-    return found;
-  };
-  const pill = shift(screen.getByRole("button", { name: /Back to today/ }));
-  const strip = shift(screen.getByRole("button", { name: /March 2, 2021, 1 entry/ }));
-  expect(strip).toBe(`translateY(${COLLAPSE_TRAVEL}px)`);
-  expect(pill).toBe(strip);
+  expect(screen.getByText("Nothing in Bank A yet")).toBeTruthy();
+  expect(screen.queryByText("nothing yet")).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "Clear filters" }));
+  expect(onClearFilter).toHaveBeenCalledTimes(1);
 });
 
 /**

@@ -5,6 +5,7 @@ import {
   type LedgerDayRow,
   RIBBON_BACK_YEARS,
   ribbonCell,
+  ribbonCue,
   ribbonDate,
   ribbonDayOn,
   ribbonMarks,
@@ -498,5 +499,29 @@ describe("days after today", () => {
       anchor: accountingDate("2026-09-26"),
     });
     expect(items.some((item) => item.kind === "quiet" && item.ahead)).toBe(false);
+  });
+});
+
+describe("ribbonCue", () => {
+  const d = accountingDate;
+
+  it("says the weekday everywhere but the 1st on a continuous strip", () => {
+    expect(ribbonCue(d("2026-02-15"), d("2026-02-14"), false)).toBe("weekday");
+    expect(ribbonCue(d("2026-02-01"), d("2026-01-31"), false)).toBe("month");
+    expect(ribbonCue(d("2026-01-01"), d("2025-12-31"), false)).toBe("year");
+  });
+
+  it("says the month wherever a searched strip changes month, not only on the 1st", () => {
+    // `15 26 15 26`: four matched days over two months, none of them the 1st.
+    const days = ["2026-01-15", "2026-01-26", "2026-02-15", "2026-02-26"].map(d);
+    const cues = days.map((day, at) => ribbonCue(day, days[at - 1], true));
+    expect(cues).toEqual(["month", "weekday", "month", "weekday"]);
+  });
+
+  it("says month and year together where a searched strip crosses a year", () => {
+    // A bare year on 5 March reads as January.
+    const days = ["2025-12-20", "2026-03-05", "2026-03-19"].map(d);
+    const cues = days.map((day, at) => ribbonCue(day, days[at - 1], true));
+    expect(cues).toEqual(["month", "monthYear", "weekday"]);
   });
 });

@@ -179,6 +179,9 @@ export const de: Messages = {
     aheadRunOne: "{{count}} Tag · noch nicht",
     aheadRunMany: "{{count}} Tage · noch nicht",
     noMatchesHere: "Nichts passt zu „{{query}}“.",
+    accountEmptyTitle: "Noch nichts auf dem Konto {{account}}",
+    accountEmptyBody:
+      "Hier wurden keine Buchungen erfasst. Heben Sie den Filter auf, um den Rest des Hauptbuchs zu sehen.",
     amount: "Betrag",
     account: "Konto",
     chooseAccount: "Welches?",
@@ -248,6 +251,7 @@ export const de: Messages = {
     transferArrow: "→",
     transferTo: "An {{account}}",
     transferKind: "Umbuchung",
+    adjustmentKind: "Korrektur",
     categorise: "Kategorisieren",
     loadingTransactions: "Buchungen werden geladen",
     emptyFirstRunTitle: "Noch keine Buchungen",
@@ -316,6 +320,7 @@ export const de: Messages = {
     newLine: "Neue Zeile",
     total: "Ergibt zusammen",
     linesUnbalanced: "Die Positionen müssen den Betrag der Buchung ergeben.",
+    lineAmountMissing: "Gib einen Betrag ein.",
     notFound: "Diese Buchung gibt es nicht mehr.",
     /** S09 — the chip that opens the obligation picker when nobody is named yet. */
     someoneOwes: "Jemand schuldet",
@@ -323,6 +328,8 @@ export const de: Messages = {
     contextLabel: "Was das bedeutet",
     contextInMonth: "{{month}} · {{times}}×",
     contextSeeAll: "Alle anzeigen",
+    contextChange: "Ändern",
+    contextUnsaved: "Noch nicht gespeichert",
     contextUsual: "üblich",
     contextOneOff: "Einmalig — bei Vergleichen ausgelassen",
     /** §5 — another row in the card was a one-off and is not in its figures. */
@@ -998,6 +1005,10 @@ export const de: Messages = {
   },
   startup: {
     ledgerFailedTitle: "Das Buch konnte nicht geöffnet werden",
+    renderFailedTitle: "Dieser Bildschirm funktioniert nicht mehr",
+    renderFailedBody:
+      "Beim Zeichnen ist etwas schiefgelaufen. Ihr Buch ist unberührt. Versuchen Sie es noch einmal; wenn es wieder passiert, starten Sie die App neu.",
+    renderFailedRestart: "App neu starten",
     ledgerFailedBody: "{{message}}",
     ledgerBusyBody:
       "Ein anderer Tab hat das Buch noch geöffnet. Schließen Sie ihn und versuchen Sie es erneut.",

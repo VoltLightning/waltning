@@ -188,6 +188,9 @@ export const pl: Messages = {
     aheadRunOne: "{{count}} dzień · jeszcze nie",
     aheadRunMany: "{{count}} dni · jeszcze nie",
     noMatchesHere: "Nic tutaj nie pasuje do \u201E{{query}}\u201D.",
+    accountEmptyTitle: "Na koncie {{account}} nic jeszcze nie ma",
+    accountEmptyBody:
+      "Nie zapisano na nim żadnych transakcji. Wyczyść filtr, aby zobaczyć resztę księgi.",
     amount: "Kwota",
     account: "Konto",
     chooseAccount: "Które?",
@@ -259,6 +262,7 @@ export const pl: Messages = {
     transferArrow: "→",
     transferTo: "Na {{account}}",
     transferKind: "Przelew",
+    adjustmentKind: "Korekta",
     categorise: "Kategoryzuj",
     loadingTransactions: "Wczytywanie transakcji",
     emptyFirstRunTitle: "Brak transakcji",
@@ -325,6 +329,7 @@ export const pl: Messages = {
     newLine: "Nowa pozycja",
     total: "Sumuje się do",
     linesUnbalanced: "Pozycje muszą sumować się do kwoty transakcji.",
+    lineAmountMissing: "Wpisz kwotę.",
     notFound: "Ta transakcja już nie istnieje.",
     /** S09 — the chip that opens the obligation picker when nobody is named yet. */
     someoneOwes: "Ktoś jest winien",
@@ -332,6 +337,8 @@ export const pl: Messages = {
     contextLabel: "Co to znaczy",
     contextInMonth: "{{month}} · {{times}}×",
     contextSeeAll: "Pokaż wszystko",
+    contextChange: "Zmień",
+    contextUnsaved: "Jeszcze nie zapisano",
     contextUsual: "zwykle",
     contextOneOff: "Jednorazowe — pominięte w porównaniach",
     /** §5 — another row in the card was a one-off and is not in its figures. */
@@ -1040,6 +1047,10 @@ export const pl: Messages = {
   },
   startup: {
     ledgerFailedTitle: "Nie udało się otworzyć księgi",
+    renderFailedTitle: "Ten ekran przestał działać",
+    renderFailedBody:
+      "Coś poszło nie tak przy rysowaniu tego ekranu. Twoja księga jest nietknięta. Spróbuj ponownie, a jeśli się powtórzy, uruchom aplikację od nowa.",
+    renderFailedRestart: "Uruchom aplikację ponownie",
     ledgerFailedBody: "{{message}}",
     ledgerBusyBody: "Księga jest wciąż otwarta w innej karcie. Zamknij ją i spróbuj ponownie.",
     ledgerUnavailableBody:

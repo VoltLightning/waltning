@@ -16,6 +16,7 @@ import { basePort } from "@waltning/client/ledger/test-port";
 import { accountingDate } from "@waltning/core/date";
 import { id } from "@waltning/core/id";
 import { currencyCode, toMoney } from "@waltning/core/money";
+import { I18nProvider } from "@waltning/ui/i18n/provider";
 import type { ReactElement } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -368,6 +369,64 @@ describe("TransactionDetail", () => {
     fireEvent.click(screen.getByRole("button", { name: "Role" }));
     fireEvent.click(screen.getByRole("radio", { name: "Debt — expected back" }));
     expect(screen.getByRole("button", { name: "Role: Debt — expected back" })).toBeDefined();
+  });
+
+  /**
+   * S09 §3 — the *Who* card follows the pick. A counterparty chosen here is a
+   * draft until Save, and the card above the fields must not go on asking
+   * *Who was this with?* after one is chosen: it names the person, and offers
+   * to change them (one counterparty per transaction — a second pick replaces).
+   */
+  it("the context card names the chosen counterparty and offers to change it", () => {
+    const nina = id<"counterparties">("99999999-9999-4999-8999-999999999999");
+    const tomasz = id<"counterparties">("88888888-8888-4888-8888-888888888888");
+    const person = (counterpartyId: typeof nina, name: string) => ({
+      id: counterpartyId,
+      name,
+      kind: "person" as const,
+      settlementCurrency: null,
+      contact: null,
+      note: "",
+      archived: false,
+      version: 1,
+    });
+    withLedger(
+      <TransactionDetail />,
+      fakeController(DETAIL, {
+        listCounterparties: () => [person(nina, "Nina"), person(tomasz, "Tomasz")],
+      }),
+    );
+
+    expect(screen.getByText("Who was this with?")).toBeDefined();
+
+    fireEvent.click(screen.getByRole("button", { name: "Counterparty" }));
+    fireEvent.click(screen.getByRole("button", { name: "Nina" }));
+
+    expect(screen.queryByText("Who was this with?")).toBeNull();
+    expect(screen.getAllByText("Nina").length).toBeGreaterThan(0);
+    // The pick is a draft: the card says so, and counts this row among theirs.
+    expect(screen.getByText("Not saved yet")).toBeDefined();
+    expect(screen.getByText(/× 1|1×/)).toBeDefined();
+
+    // Change replaces: the same picker, and the card now names the second person.
+    fireEvent.click(screen.getByRole("button", { name: "Change" }));
+    fireEvent.click(screen.getByRole("button", { name: "Tomasz" }));
+    expect(screen.queryByText("Who was this with?")).toBeNull();
+    expect(screen.getAllByText("Tomasz").length).toBeGreaterThan(0);
+    expect(screen.queryByText("Nina")).toBeNull();
+  });
+
+  /** §3 — the amount row is seeded in the reader's mark, at the account's scale. */
+  it("seeds the amount field with the locale's decimal mark", () => {
+    render(
+      <I18nProvider locale="de">
+        <LedgerProvider controller={fakeController(DETAIL)}>
+          <TransactionDetail />
+        </LedgerProvider>
+      </I18nProvider>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Betrag: 48,90" }));
+    expect((screen.getByLabelText("Betrag") as HTMLInputElement).value).toBe("48,90");
   });
 
   /** §6.8's one-off, whose only producer is this screen. */

@@ -33,7 +33,7 @@ import { CategorySheet } from "@waltning/ui/categories/category-sheet";
 import { CounterpartyPicker } from "@waltning/ui/counterparties/counterparty-picker";
 import { ShareRow } from "@waltning/ui/counterparties/share-row";
 import { Amount } from "@waltning/ui/fx/amount";
-import { parseAmount } from "@waltning/ui/fx/amount-field";
+import { formatAmountDraft, parseAmount } from "@waltning/ui/fx/amount-field";
 import { decimalMark } from "@waltning/ui/i18n/locales";
 import { useLocale, useT } from "@waltning/ui/i18n/provider";
 import { Button } from "@waltning/ui/primitives/button";
@@ -65,7 +65,8 @@ export default function Allocate() {
   const styles = useStyles();
   // The commit states the figure it will write, so the figure has to read
   // like one — `<Amount>` cannot render inside a label (§4.1's own note).
-  const mark = decimalMark(useLocale());
+  const locale = useLocale();
+  const mark = decimalMark(locale);
   const ledger = useLedgerController();
   const snapshot = usePhoneLedger(ledger);
   const params = useLocalSearchParams<{ account?: string }>();
@@ -134,9 +135,14 @@ export default function Allocate() {
    */
   const startEditing = useCallback(() => {
     if (mode === "custom") return;
-    setRows((current) => current.map((row, index) => ({ ...row, draft: amounts[index] ?? "0" })));
+    setRows((current) =>
+      current.map((row, index) => ({
+        ...row,
+        draft: formatAmountDraft(amounts[index] ?? "0", decimals, locale),
+      })),
+    );
     setMode("custom");
-  }, [amounts, mode]);
+  }, [amounts, decimals, locale, mode]);
 
   const changeAmount = useCallback((key: string, value: string) => {
     setRows((current) => current.map((row) => (row.key === key ? { ...row, draft: value } : row)));

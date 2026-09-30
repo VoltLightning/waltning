@@ -57,6 +57,7 @@ import { categoryTintFor } from "../../../primitives/monogram.ts";
 import { BottomSheet } from "../../../primitives/organisms/bottom-sheet/bottom-sheet";
 import { SheetAwareTextInput } from "../../../primitives/sheet-input";
 import { useBreakpoint } from "../../../primitives/use-breakpoint.ts";
+import { useFrozenOrder } from "../../../primitives/use-frozen-order.ts";
 import type { SubmitCheck } from "../../../primitives/use-submit-check.ts";
 import { HouseIcon } from "../../../shell/phosphor";
 import { Banner } from "../../../states/molecules/banner/banner";
@@ -78,6 +79,8 @@ const OBLIGATION_ROLES = ["debt", "contribution"] as const;
 type ObligationRole = (typeof OBLIGATION_ROLES)[number];
 /** How many categories the chip row offers — the deck draws four. */
 const CHIP_COUNT = 4;
+
+const chipId = (chip: { id: string }) => chip.id;
 
 export type QuickAddComposerAccount = {
   id: string;
@@ -113,6 +116,12 @@ export type QuickAddComposerProps = {
   accountId: string | null;
   /** The account row fills machine, carrying the trail — `useLastUsedAccount`'s own result. */
   accountMachineFilled: boolean;
+  /**
+   * The window is short: the amount card gives up its label and some air so the account row sits in the first view, under the amount,
+   * instead of under the fold. Decided from the window's height by the screen,
+   * never from the keyboard's events.
+   */
+  compact?: boolean;
   /** Opens `AccountPicker` (`accounts/`) — the screen composes it and wires its own pick straight to `accountId`, this only ever asks. */
   onOpenAccountPicker: () => void;
   /**
@@ -203,6 +212,7 @@ export function QuickAddComposer({
   accounts,
   accountId,
   accountMachineFilled,
+  compact = false,
   onOpenAccountPicker,
   onSetRate,
   categories,
@@ -329,7 +339,15 @@ export function QuickAddComposer({
    * gone. Ordered by use, then by name so two never-used categories keep a
    * stable order between renders.
    */
-  const chips = useMemo(() => {
+  /**
+   * **The order is the one the composer opened with** (`useFrozenOrder`).
+   * Saving counts the picked category as used, which would float it up the row
+   * in the very render that precedes the screen closing: a keyed reorder of
+   * tinted `Pressable`s that Fabric on Android answers with "addViewAt: View
+   * already has a parent" and a white screen, for a category used for the
+   * first time. The next composer opens with the new ranking.
+   */
+  const ranked = useMemo(() => {
     const ofKind = categories
       .filter((category) => category.kind === type)
       .sort((a, b) => (b.usage ?? 0) - (a.usage ?? 0) || a.name.localeCompare(b.name));
@@ -340,6 +358,7 @@ export function QuickAddComposer({
     }
     return top.map(({ id, name }) => ({ id, name }));
   }, [categories, type, categoryId]);
+  const chips = useFrozenOrder(ranked, chipId);
 
   const pickedCounterparty = counterparties.find(
     (counterparty) => counterparty.id === obligationCounterpartyId,
@@ -425,7 +444,7 @@ export function QuickAddComposer({
   const categoryGlyph = categoryValue === undefined ? "?" : categoryValue.slice(0, 1).toUpperCase();
 
   return (
-    <View style={styles.root}>
+    <View style={compact ? styles.rootCompact : styles.root}>
       {fieldErrors && fieldErrors.formLevel.length > 0 ? (
         // A refusal a person cannot see is a refusal that never happened
         // (`field-errors.ts`): whatever `mapFieldErrors` could not place on a
@@ -451,6 +470,7 @@ export function QuickAddComposer({
           context={pace}
           error={amountError}
           autoFocus
+          compact={compact}
         />
       </Anchored>
 
@@ -835,6 +855,7 @@ function isObligationRole(value: string): value is ObligationRole {
 const useStyles = makeStyles((theme) => ({
   // The deck's 20 between blocks — the same gap the page keeps between its cards.
   root: { gap: space.x4 },
+  rootCompact: { gap: space.sm },
   formLevel: { gap: space.xs, paddingHorizontal: space.xs },
   formLevelHeading: { color: theme.dangerText, ...text.ui("body", 600) },
   fieldError: { color: theme.dangerText, ...text.ui("caption") },
