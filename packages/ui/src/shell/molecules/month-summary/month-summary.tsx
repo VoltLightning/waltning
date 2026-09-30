@@ -30,7 +30,8 @@
  */
 
 import type * as money from "@waltning/core/money";
-import { Text, View } from "react-native";
+import { useCallback, useState } from "react";
+import { type LayoutChangeEvent, Text, View } from "react-native";
 import { Amount } from "../../../fx/atoms/amount/amount";
 import { useT } from "../../../i18n/provider";
 import { text } from "../../../theme/fonts.ts";
@@ -120,6 +121,47 @@ export function MonthSummary({
 }: MonthSummaryProps) {
   const t = useT();
   const styles = useStyles();
+  // **Each figure in a row is given the room it actually gets**, measured off
+  // the wrapper it sits in: a row hands a child its content's width, so a
+  // figure cannot learn its room from itself (`Amount`'s `fitWidth`), and a
+  // guessed label width is wrong in every language but the one it was guessed in.
+  const [pairRoom, setPairRoom] = useState<number | null>(null);
+  const handlePairLayout = useCallback((event: LayoutChangeEvent) => {
+    setPairRoom(Math.floor(event.nativeEvent.layout.width));
+  }, []);
+  const compact = layout === "compact";
+  // **The figure goes under its label when the label would take more than half
+  // the row.** Beside a long label (German at twice the text size, or any label
+  // at an accessibility size) a figure has no room to be read at, and shrinking
+  // it to the floor is worse than giving it a line. Decided on the label's
+  // width, which does not change when the figure moves, so it cannot flip-flop.
+  const [rowWidth, setRowWidth] = useState<number | null>(null);
+  const handleRowLayout = useCallback((event: LayoutChangeEvent) => {
+    setRowWidth(Math.floor(event.nativeEvent.layout.width));
+  }, []);
+  const [labelWidth, setLabelWidth] = useState<number | null>(null);
+  const handleLabelLayout = useCallback((event: LayoutChangeEvent) => {
+    setLabelWidth(Math.floor(event.nativeEvent.layout.width));
+  }, []);
+  const stacked =
+    compact && rowWidth !== null && labelWidth !== null && labelWidth * 2 > rowWidth - space.md;
+  // The stack decision needs the row and the label; the figure's room is only
+  // trusted when it was measured *in the arrangement now showing*. Until both,
+  // the figure is unseen, so the card appears once, at its final size.
+  const decided = rowWidth !== null && labelWidth !== null;
+  const [measuredRoom, setMeasuredRoom] = useState<{ width: number; stacked: boolean } | null>(
+    null,
+  );
+  const handleHeroLayout = useCallback(
+    (event: LayoutChangeEvent) => {
+      setMeasuredRoom({ width: Math.floor(event.nativeEvent.layout.width), stacked });
+    },
+    [stacked],
+  );
+  const heroRoom =
+    decided && measuredRoom !== null && measuredRoom.stacked === stacked
+      ? measuredRoom.width
+      : null;
 
   return (
     <Card>
@@ -142,8 +184,16 @@ export function MonthSummary({
         `signed` — a kept month is a gain, and the `+` is the difference
         between "you have 3 529,82" and "you kept 3 529,82".
       */}
-      <View style={layout === "compact" ? styles.compact : styles.hero}>
-        <Text style={styles.heroLabel}>{labels?.net ?? t("shell.keptSoFar")}</Text>
+      <View
+        style={compact ? (stacked ? styles.hero : styles.compact) : styles.hero}
+        onLayout={handleRowLayout}
+      >
+        <Text
+          style={stacked ? [styles.heroLabel, styles.labelStacked] : styles.heroLabel}
+          onLayout={handleLabelLayout}
+        >
+          {labels?.net ?? t("shell.keptSoFar")}
+        </Text>
         {/*
           **`medium`, which is larger than `large`.** The size names do not
           order — `large` is `displayTwo` at 23 and `medium` is `displayOne` at
@@ -152,19 +202,37 @@ export function MonthSummary({
           draws it at 40. `medium` had zero callers before this one, which is
           what a name nobody reaches for looks like.
         */}
-        <Amount
-          value={net}
-          currency={currency}
-          decimals={decimals}
-          size={layout === "compact" ? "large" : "medium"}
-          signed={signed}
-        />
+        {compact ? (
+          <View
+            style={stacked ? styles.heroFigureStacked : styles.heroFigure}
+            onLayout={handleHeroLayout}
+          >
+            <Amount
+              value={net}
+              currency={currency}
+              decimals={decimals}
+              size="large"
+              signed={signed}
+              fit
+              fitWidth={heroRoom}
+            />
+          </View>
+        ) : (
+          <Amount
+            value={net}
+            currency={currency}
+            decimals={decimals}
+            size="medium"
+            signed={signed}
+            fit
+          />
+        )}
       </View>
 
       <FlowBar inflow={inflow} spend={spend} />
 
       <View style={styles.pair}>
-        <View style={styles.pairItem}>
+        <View style={styles.pairItem} onLayout={handlePairLayout}>
           <Text style={styles.pairLabel}>{labels?.inflow ?? t("shell.cameIn")}</Text>
           <Amount
             value={inflow}
@@ -173,11 +241,21 @@ export function MonthSummary({
             size="small"
             kind="income"
             signed
+            fit
+            fitWidth={pairRoom}
           />
         </View>
         <View style={styles.pairItemEnd}>
           <Text style={styles.pairLabel}>{labels?.spend ?? t("shell.wentOut")}</Text>
-          <Amount value={spend} currency={currency} decimals={decimals} size="small" kind="spend" />
+          <Amount
+            value={spend}
+            currency={currency}
+            decimals={decimals}
+            size="small"
+            kind="spend"
+            fit
+            fitWidth={pairRoom}
+          />
         </View>
       </View>
 
@@ -196,9 +274,13 @@ const useStyles = makeStyles((theme) => ({
     flexDirection: "row",
     alignItems: "baseline",
     justifyContent: "space-between",
-    flexWrap: "wrap",
     gap: space.md,
   },
+  heroFigure: { flex: 1, minWidth: 0, alignItems: "flex-end" },
+  // Stacked, a column would stretch the label to the row and the measure of it
+  // would then be the row's: it would never unstack.
+  labelStacked: { alignSelf: "flex-start" },
+  heroFigureStacked: { alignSelf: "stretch", alignItems: "flex-end" },
   /**
    * **Primary text, not muted** — the only label in this card that is. It
    * names the screen's hero figure, and a muted label over a 38pt number read
@@ -208,8 +290,8 @@ const useStyles = makeStyles((theme) => ({
    */
   heroLabel: { color: theme.text, ...text.ui("label") },
   pair: { flexDirection: "row", justifyContent: "space-between", gap: space.x3 },
-  pairItem: { gap: space.xxs },
-  pairItemEnd: { gap: space.xxs, alignItems: "flex-end" },
+  pairItem: { flex: 1, minWidth: 0, gap: space.xxs },
+  pairItemEnd: { flex: 1, minWidth: 0, gap: space.xxs, alignItems: "flex-end" },
   pairLabel: { color: theme.textMuted, ...text.ui("caption") },
   otherCurrencies: { color: theme.textMuted, ...text.ui("caption") },
 }));

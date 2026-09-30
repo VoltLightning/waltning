@@ -1572,8 +1572,8 @@ export default function Today() {
               kept={
                 <Amount
                   value={yearKept}
-                  currency={leadNetWorth?.currency ?? ""}
-                  decimals={leadNetWorth?.decimals ?? 2}
+                  currency={pivotCurrency?.code ?? leadNetWorth?.currency ?? ""}
+                  decimals={pivotCurrency?.decimals ?? leadNetWorth?.decimals ?? 2}
                   size="caption"
                   signed
                 />
@@ -1602,6 +1602,7 @@ export default function Today() {
       month,
       yearKept,
       leadNetWorth,
+      pivotCurrency,
       yearKeptNote,
       previousYear,
       nextYear,

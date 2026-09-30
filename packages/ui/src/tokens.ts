@@ -648,6 +648,15 @@ export const maxFontScale: Partial<Record<TypeStep, number>> = {
   displayTwo: 1.6,
 };
 
+/**
+ * The narrowest a fitted figure (`<Amount fit>`) may get, as a share of its
+ * step. Below half a figure stops being a headline, and a balance that needs
+ * less than this is wider than any column the product draws — past it the line
+ * is cut with an ellipsis rather than shrunk further, which is the only place a
+ * fitted figure is ever cut.
+ */
+export const FIT_MIN_SCALE = 0.45;
+
 /* ── 2.3 Spacing ─────────────────────────────────────────────────────────── */
 
 /**

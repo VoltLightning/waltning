@@ -287,7 +287,11 @@ describe("Transfer — the phone path", () => {
 
     // §4a: margin_pivot = 150 − 565.20 ÷ 3.8100 ≈ 1.6535 USD — the source
     // currency, a cost, drawn as money that left.
-    expect(screen.getByText((_, element) => element?.textContent === "-1.65 USD")).toBeDefined();
+    expect(
+      screen.getByText(
+        (_, element) => element?.textContent?.replaceAll("\u00a0", " ") === "-1.65 USD",
+      ),
+    ).toBeDefined();
 
     fireEvent.click(screen.getByRole("button", { name: "Move money" }));
 

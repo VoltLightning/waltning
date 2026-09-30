@@ -11,7 +11,8 @@
 import { render, screen } from "@testing-library/react";
 import * as money from "@waltning/core/money";
 import { describe, expect, it } from "vitest";
-import { Amount } from "./amount";
+import { FIT_MIN_SCALE } from "../../../tokens.ts";
+import { Amount, fitScale } from "./amount";
 
 /**
  * The group separator, **as Testing Library sees it.**
@@ -113,5 +114,75 @@ describe("Amount", () => {
     const { container } = render(<Amount value={money.toMoney("100.00000000")} currency="USD" />);
     expect(container.textContent).toContain("100.00");
     expect(container.textContent).toContain("USD");
+  });
+
+  /**
+   * `€` alone on its own line, under a figure that had wrapped: the mark was
+   * joined to the figure by a plain space, which is a line-break opportunity.
+   */
+  it("joins the mark to its figure with a no-break space", () => {
+    const { container } = render(<Amount value={money.toMoney("12.50")} currency="EUR" />);
+    expect(container.textContent).toContain("12.50\u00a0EUR");
+    expect(container.textContent).not.toContain("12.50 EUR");
+  });
+
+  it("never holds a breakable space inside a twelve-digit figure", () => {
+    const { container } = render(
+      <Amount value={money.toMoney("-100000000504.20")} currency="EUR" size="hero" fit />,
+    );
+    expect(container.textContent).not.toMatch(/\d [\d,.]/);
+    expect(container.textContent).not.toMatch(/ EUR/);
+  });
+
+  it("is one line only when asked to fit", () => {
+    const wide = money.toMoney("999999999999.99");
+    const plain = render(<Amount value={wide} currency="EUR" />);
+    expect(getComputedStyle(plain.getByText(/999/)).whiteSpace).not.toBe("nowrap");
+    plain.unmount();
+    const fitted = render(<Amount value={wide} currency="EUR" fit />);
+    expect(getComputedStyle(fitted.getByText(/999/)).whiteSpace).toBe("nowrap");
+  });
+
+  /** A fitted figure appears once, already sized: unseen until its room is known. */
+  it("hides a fitted figure until it has a width to fit, and shows it once it does", () => {
+    const wide = money.toMoney("999999999999.99");
+    const waiting = render(<Amount value={wide} currency="EUR" fit />);
+    expect(getComputedStyle(waiting.getByText(/999/)).opacity).toBe("0");
+    waiting.unmount();
+    const sized = render(<Amount value={wide} currency="EUR" fit fitWidth={200} />);
+    expect(getComputedStyle(sized.getByText(/999/)).opacity).not.toBe("0");
+  });
+
+  /** *Not measured* and *measured as nothing* are different: the second is drawn, at its floor. */
+  it("draws a figure whose room measured as nothing", () => {
+    const wide = money.toMoney("999999999999.99");
+    const none = render(<Amount value={wide} currency="EUR" fit fitWidth={0} />);
+    expect(getComputedStyle(none.getByText(/999/)).opacity).not.toBe("0");
+    expect(fitScale("-999 999 999 999.99", "EUR", 38, 12, 0)).toBe(FIT_MIN_SCALE);
+    none.unmount();
+    const pending = render(<Amount value={wide} currency="EUR" fit fitWidth={null} />);
+    expect(getComputedStyle(pending.getByText(/999/)).opacity).toBe("0");
+  });
+
+  describe("fitScale", () => {
+    const figure = "-100 000 000 504.20";
+    it("leaves a figure that already fits at full size", () => {
+      expect(fitScale("-504.20", "EUR", 38, 12, 300)).toBe(1);
+    });
+    it("shrinks a wide figure until it is inside the width", () => {
+      const scale = fitScale(figure, "EUR", 38, 12, 290);
+      expect(scale).toBeLessThan(0.8);
+      expect(scale).toBeGreaterThan(FIT_MIN_SCALE);
+    });
+    it("stops at the floor rather than shrinking without end", () => {
+      expect(fitScale(figure, "EUR", 38, 12, 40)).toBe(FIT_MIN_SCALE);
+    });
+    it("keeps the widest figure a twelve-digit column can hold readable at 360pt", () => {
+      const widest = "-999 999 999 999.99";
+      expect(fitScale(widest, "EUR", 38, 12, 290)).toBeGreaterThan(FIT_MIN_SCALE);
+    });
+    it("does nothing before the width is known", () => {
+      expect(fitScale(figure, "EUR", 38, 12, null)).toBe(1);
+    });
   });
 });

@@ -9,8 +9,29 @@ The heart of the system. These enforce §7 of `SPEC.md` structurally.
   $ 62.40            foreign, unconverted
 ```
 
-Props: `value`, `currency`, `size`, `emphasis`, `signed`. Negative values take
-`negative` ink. Never renders a conversion — that is `<FxAmount>`.
+Props: `value`, `currency`, `size`, `emphasis`, `signed`, `fit`. Negative values
+take `negative` ink. Never renders a conversion — that is `<FxAmount>`.
+
+**A figure never breaks inside itself.** Its digits, separators and mark are one
+unbreakable run: the mark is joined to the figure by a no-break space, like the
+groups. A line that has to break does so between a figure and the words around
+it, and a caller that puts a figure beside a label keeps the two in a row that
+does not wrap, so a narrow line breaks between *held ·* and *owed*, never
+inside either.
+
+**`fit` is for the one figure on a screen that must stay on one line.** A
+twelve-digit balance at display size is wider than a phone. With `fit` the
+figure is one line and gives up point size, never a digit, down to 45% of its
+step; the width is its container's, and a figure too wide even then is a width
+no column of the product draws. The phone's headline figures set it — `HoldingsCard`'s total and its
+*held* and *owed*, and all three of `MonthSummary`'s — so a no-break run wider
+than its line never reaches the platform's emergency break between characters,
+at any OS text size (the estimate is of the glyphs as the reader's setting draws
+them). A fitted figure is not drawn until its room is measured, so it appears once, already sized; once measured it is always drawn, at the floor if there is no room. A figure beside a label stacks under it when the label takes more than half the row (`MonthSummary`'s compact card, S04), since a figure left the remainder would sit at the floor. A fitted figure is cut with an ellipsis only below the floor; every other
+figure keeps its size and is not fitted. The width is worked out
+from the characters, because digits are tabular — the same width each — and
+react-native-web has no text-fitting of its own; the native `adjustsFontSizeToFit`
+is set as well to absorb what the estimate gets wrong.
 
 **Digits are grouped, through `money.forDisplay`.** A ledger without grouping is
 a ledger you count digits in — `12480.20` and `1248.02` are one glance apart —

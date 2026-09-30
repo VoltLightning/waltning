@@ -1028,7 +1028,7 @@ describe("Today", () => {
     withLedger(<Today />, controller);
 
     const rendered = document.body.textContent ?? "";
-    expect(rendered).toContain("-150.00 PLN unallocated · Hotel");
+    expect(rendered).toContain("-150.00\u00a0PLN unallocated · Hotel");
     expect(rendered).not.toContain("account balance");
   });
 
@@ -1845,11 +1845,19 @@ describe("Today — the pager, with a month in it", () => {
    */
   it("draws the last days on Summary as day groups whose rows open the transaction", () => {
     const summary = open("summary");
+    // Named from the month the clock is in, not a month written into the test.
+    const dayOfMonth = (day: string) =>
+      new Date(`${MONTH}-${day}T12:00:00Z`).toLocaleDateString("en-US", {
+        month: "long",
+        day: "numeric",
+        year: "numeric",
+        timeZone: "UTC",
+      });
     // The two latest days of the page read from today, newest first — and no
     // further: the 2nd is the List's to show.
-    expect(summary.getByText("September 9, 2026")).toBeTruthy();
-    expect(summary.getByText("September 5, 2026")).toBeTruthy();
-    expect(summary.queryByText("September 2, 2026")).toBeNull();
+    expect(summary.getByText(dayOfMonth("09"))).toBeTruthy();
+    expect(summary.getByText(dayOfMonth("05"))).toBeTruthy();
+    expect(summary.queryByText(dayOfMonth("02"))).toBeNull();
     expect(summary.queryByText("Show all →")).toBeNull();
     fireEvent.click(summary.getByRole("button", { name: /Clinic G/ }));
     expect(router.push).toHaveBeenCalledWith(
@@ -2003,6 +2011,40 @@ describe("Today — the pager, with a month in it", () => {
       labels.some((line) => line.includes("PLN")),
       labels.join(" | "),
     ).toBe(true);
+  });
+
+  /**
+   * **One page, one currency: the year chart's header named the lead.**
+   *
+   * The twelve monthly rows and the chart's *kept* figure are sums in the
+   * pivot (`computations.md` §4), but the header was labelled with the lead
+   * currency — the first account's. A USD pivot over a PLN account read
+   * *+4 161,23 PLN* over rows in `$`.
+   */
+  it("labels the year's kept figure in the pivot the month rows are in", () => {
+    const months = open("months", `${MONTH}-09`, {
+      currencies: [
+        {
+          code: currencyCode("USD"),
+          name: "US dollar",
+          symbol: "$",
+          decimals: 2,
+          capturable: true,
+          isPivot: true,
+        },
+        {
+          code: currencyCode("PLN"),
+          name: "Polish Złoty",
+          symbol: "zł",
+          decimals: 2,
+          capturable: true,
+          isPivot: false,
+        },
+      ],
+    });
+    // The page says PLN nowhere: every figure on it is the pivot's.
+    expect(months.queryAllByText(/PLN/)).toHaveLength(0);
+    expect(months.getAllByText(/USD/).length).toBeGreaterThan(0);
   });
 
   /**

@@ -789,7 +789,7 @@ export const en = {
     addSomeone: "+ Add someone",
     leftToAllocate: "left to allocate",
     /** S36 §3 — the commit states the figure, because the figure is the point. */
-    commit: "Allocate {{amount}} {{currency}}",
+    commit: "Allocate {{amount}}\u00a0{{currency}}",
     debtsOpen_one: "{{count}} debt open · the pot returns to zero",
     debtsOpen_few: "{{count}} debts open · the pot returns to zero",
     debtsOpen_many: "{{count}} debts open · the pot returns to zero",
@@ -799,7 +799,7 @@ export const en = {
     emptyBody:
       "This pot is at zero. Transfer what you laid out for a group into it, then split it here.",
     /** J08 §4 — the split may be committed incomplete; the banner is what says so. */
-    incomplete: "{{amount}} {{currency}} will stay on the pot",
+    incomplete: "{{amount}}\u00a0{{currency}} will stay on the pot",
     over: "That is more than the pot holds",
     editShare: "{{name}}'s share",
     shareOf: "{{name}}'s share",
@@ -873,8 +873,8 @@ export const en = {
     youLent: "You lent",
     youOweLabel: "You owe",
     owedNet: "You owe, on balance",
-    unallocated: "{{amount}} {{currency}} unallocated",
-    unallocatedNamed: "{{amount}} {{currency}} unallocated · {{enteredName}} · {{date}}",
+    unallocated: "{{amount}}\u00a0{{currency}} unallocated",
+    unallocatedNamed: "{{amount}}\u00a0{{currency}} unallocated · {{enteredName}} · {{date}}",
     allocate: "Allocate",
     add: "+ Add",
     emptyFirstRunTitle: "No one yet",
@@ -912,7 +912,7 @@ export const en = {
     /** P1 — the derived total's own rate and date, never shown without both. */
     atRateDate: "@ {{rate}} · {{date}}",
     /** S13 — after a successful settle: the residual, named in words, never a bare sign (P5). */
-    settledToast: "Settled. {{amount}} {{currency}} {{direction}}.",
+    settledToast: "Settled. {{amount}}\u00a0{{currency}} {{direction}}.",
     addTransaction: "Add transaction",
     history: "History",
     /** S13 §3's own toggle — the count it is hiding is stated, never silent. */
@@ -1262,14 +1262,14 @@ export const en = {
     spent: "spent",
     net: "net",
     /** The unsettled-clearing banner (§8) — C2. `Open` goes to the account, filtered. */
-    unsettled: "{{amount}} {{currency}} unallocated · {{account}}",
+    unsettled: "{{amount}}\u00a0{{currency}} unallocated · {{account}}",
     /**
      * S04 §3 draws one banner row; a second unsettled account folds into this
      * one's text (`count` is every account past the first) rather than
      * stacking a second alert — `Banner`'s own doc: "page-level, one tone,
      * one action."
      */
-    unsettledMore: "{{amount}} {{currency}} unallocated · {{account}} · and {{count}} more",
+    unsettledMore: "{{amount}}\u00a0{{currency}} unallocated · {{account}} · and {{count}} more",
     /**
      * §8's third field — `find_unsettled`'s own reason for existing — is
      * what lets this name the transaction rather than the account, once
@@ -1282,13 +1282,13 @@ export const en = {
      * for the one case where showing only the remainder would look like it
      * disagreed with the figure a tap on `Open` leads to.
      */
-    unsettledNamed: "{{remainder}} {{currency}} unallocated · {{enteredName}}",
+    unsettledNamed: "{{remainder}}\u00a0{{currency}} unallocated · {{enteredName}}",
     unsettledNamedMore:
-      "{{remainder}} {{currency}} unallocated · {{enteredName}} · and {{count}} more",
+      "{{remainder}}\u00a0{{currency}} unallocated · {{enteredName}} · and {{count}} more",
     unsettledNamedDiffers:
-      "{{remainder}} {{currency}} unallocated · {{enteredName}} ({{amount}} {{currency}} account balance)",
+      "{{remainder}}\u00a0{{currency}} unallocated · {{enteredName}} ({{amount}}\u00a0{{currency}} account balance)",
     unsettledNamedDiffersMore:
-      "{{remainder}} {{currency}} unallocated · {{enteredName}} ({{amount}} {{currency}} account balance) · and {{count}} more",
+      "{{remainder}}\u00a0{{currency}} unallocated · {{enteredName}} ({{amount}}\u00a0{{currency}} account balance) · and {{count}} more",
     /**
      * H2 — the oldest unconsumed entry is the account's own opening balance,
      * not a transaction (`oldestUnconsumedTransactionId` is `null`): there is
@@ -1296,9 +1296,9 @@ export const en = {
      * that does not exist. `Open` still falls back to the account's own
      * filtered ledger, same as before this entry existed.
      */
-    unsettledOpening: "{{remainder}} {{currency}} unallocated · opening balance",
+    unsettledOpening: "{{remainder}}\u00a0{{currency}} unallocated · opening balance",
     unsettledOpeningMore:
-      "{{remainder}} {{currency}} unallocated · opening balance · and {{count}} more",
+      "{{remainder}}\u00a0{{currency}} unallocated · opening balance · and {{count}} more",
     unsettledOpen: "Open",
     /** S04 §6 — the balance query failed; the hero keeps its last known figure. */
     balanceQueryFailed: "Couldn't refresh",
