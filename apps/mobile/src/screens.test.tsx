@@ -1663,6 +1663,116 @@ describe("CategoriesScreen", () => {
       screen.queryByText("Food belongs to the expense side — a category cannot move across kinds"),
     ).toBeNull();
   });
+
+  describe("starter categories in the app's language, used ones first", () => {
+    const FOOD = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1";
+    const DELIVERY = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2";
+    const GROCERIES_ROW = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa3";
+    const RENAMED = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa4";
+    const OWN = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa5";
+    const starters = [
+      fakeCategory({
+        id: FOOD,
+        name: "Food",
+        kind: "expense",
+        isLeaf: false,
+        externalId: "seed:food",
+      }),
+      fakeCategory({
+        id: DELIVERY,
+        name: "Delivery",
+        parentId: FOOD,
+        kind: "expense",
+        depth: 1,
+        externalId: "seed:delivery",
+      }),
+      fakeCategory({
+        id: GROCERIES_ROW,
+        name: "Groceries",
+        parentId: FOOD,
+        kind: "expense",
+        depth: 1,
+        externalId: "seed:groceries",
+      }),
+      // A starter the person renamed: the stored text differs from the seed's.
+      fakeCategory({
+        id: RENAMED,
+        name: "Snacks",
+        parentId: FOOD,
+        kind: "expense",
+        depth: 1,
+        externalId: "seed:alcohol",
+      }),
+      // Their own, carrying a starter's English name and no seed tag.
+      fakeCategory({ id: OWN, name: "Taxi", parentId: FOOD, kind: "expense", depth: 1 }),
+    ];
+    const used = new Map([[id<"categories">(GROCERIES_ROW), 5]]);
+
+    function renderIn(locale: "de" | "en") {
+      return render(
+        <I18nProvider locale={locale}>
+          <LedgerProvider
+            controller={fakeController({ categories: starters, categoryUsage: used })}
+          >
+            <CategoriesScreen />
+          </LedgerProvider>
+        </I18nProvider>,
+      );
+    }
+
+    it("shows a starter in German, a renamed one and their own as stored", () => {
+      renderIn("de");
+      expect(screen.getByText("Ernährung")).toBeDefined();
+      expect(screen.getByText("Lebensmittel")).toBeDefined();
+      expect(screen.getByText("Lieferdienst")).toBeDefined();
+      expect(screen.getByText("Snacks")).toBeDefined();
+      expect(screen.getByText("Taxi")).toBeDefined();
+      expect(screen.queryByText("Groceries")).toBeNull();
+    });
+
+    it("shows the canonical English names in English", () => {
+      renderIn("en");
+      expect(screen.getByText("Groceries")).toBeDefined();
+      expect(screen.getByText("Delivery")).toBeDefined();
+    });
+
+    it("lists the category with entries before the unused ones inside its group", () => {
+      renderIn("de");
+      const order = ["Ernährung", "Lebensmittel", "Lieferdienst", "Snacks", "Taxi"].map((label) =>
+        screen.getByText(label),
+      );
+      for (let i = 1; i < order.length; i += 1) {
+        const before = order[i - 1] as HTMLElement;
+        const after = order[i] as HTMLElement;
+        expect(
+          before.compareDocumentPosition(after) & Node.DOCUMENT_POSITION_FOLLOWING,
+        ).toBeTruthy();
+      }
+    });
+
+    it("starts a rename from the name on screen, and the saved text is then the person's own", () => {
+      renderIn("de");
+      fireEvent.click(screen.getByRole("button", { name: "Aktionen für Lebensmittel" }));
+      fireEvent.click(screen.getByRole("button", { name: "Umbenennen" }));
+      const field = screen.getByLabelText("Name") as HTMLInputElement;
+      expect(field.value).toBe("Lebensmittel");
+      fireEvent.change(field, { target: { value: "Einkauf" } });
+      fireEvent.click(screen.getByRole("button", { name: "Speichern" }));
+      expect(screen.getByText("Einkauf")).toBeDefined();
+      expect(screen.queryByText("Lebensmittel")).toBeNull();
+    });
+
+    it("finds a starter by its German name and by its stored one", () => {
+      renderIn("de");
+      const search = screen.getByPlaceholderText(/^\d+ Kategorien durchsuchen$/);
+      fireEvent.change(search, { target: { value: "lebensm" } });
+      expect(screen.getByText("Lebensmittel")).toBeDefined();
+      expect(screen.queryByText("Lieferdienst")).toBeNull();
+      fireEvent.change(search, { target: { value: "deliver" } });
+      expect(screen.getByText("Lieferdienst")).toBeDefined();
+      expect(screen.queryByText("Lebensmittel")).toBeNull();
+    });
+  });
 });
 
 /**

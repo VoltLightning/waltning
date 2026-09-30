@@ -28,6 +28,7 @@ import { parseAmount } from "@waltning/ui/fx/amount-field";
 import { KNOWN_PATHS, resolveFieldErrorMessage } from "@waltning/ui/i18n/field-error-messages";
 import { weekdayLabel } from "@waltning/ui/i18n/locales";
 import { useLocale, useT } from "@waltning/ui/i18n/provider";
+import { useCategoryLabel } from "@waltning/ui/i18n/use-category-label";
 import { Button } from "@waltning/ui/primitives/button";
 import { readTyped } from "@waltning/ui/primitives/clock";
 import { useKeyboardHeight } from "@waltning/ui/primitives/keyboard";
@@ -119,6 +120,7 @@ type KindSegment = "expense" | "income" | "transfer";
 
 export default function QuickAdd() {
   const t = useT();
+  const labelOf = useCategoryLabel();
   const locale = useLocale();
   const raw = useLocalSearchParams<{
     amount?: string | string[];
@@ -531,7 +533,7 @@ export default function QuickAdd() {
     pace === null || paceCategory === undefined
       ? undefined
       : t("transactions.categoryPace", {
-          category: paceCategory.name,
+          category: labelOf(paceCategory),
           percent: String(pace.percent),
         });
   const handleComposerCounterpartyChange = useCallback(

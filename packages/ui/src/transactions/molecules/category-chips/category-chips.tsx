@@ -16,6 +16,7 @@
 
 import { useCallback } from "react";
 import { Text, View } from "react-native";
+import { useCategoryLabel } from "../../../i18n/use-category-label.ts";
 import { PressableScaled } from "../../../primitives/atoms/pressable-scaled/pressable-scaled";
 import { useInteraction } from "../../../primitives/interaction.ts";
 import { categoryTintFor } from "../../../primitives/monogram.ts";
@@ -24,7 +25,11 @@ import { useTheme } from "../../../theme/provider";
 import { makeStyles } from "../../../theme/styles.ts";
 import { focus, radius, space, touchTarget } from "../../../tokens.ts";
 
-export type CategoryChipModel = { id: string; name: string };
+export type CategoryChipModel = {
+  id: string;
+  name: string;
+  externalId?: string | null | undefined;
+};
 
 export type CategoryChipsProps = {
   categories: readonly CategoryChipModel[];
@@ -59,7 +64,8 @@ function CategoryChip({ category, selected, onPick }: CategoryChipProps) {
   const theme = useTheme();
   const styles = useStyles();
   const { hovered, focused, handlers } = useInteraction();
-  const tint = categoryTintFor(category.name, theme);
+  const label = useCategoryLabel()(category);
+  const tint = categoryTintFor(label, theme);
   const fill = { backgroundColor: tint.fill };
   const ink = { color: tint.ink };
   const handlePress = useCallback(() => onPick(category.id), [onPick, category.id]);
@@ -69,14 +75,14 @@ function CategoryChip({ category, selected, onPick }: CategoryChipProps) {
       // way `Button`'s smaller sizes meet it.
       hitSlop={CHIP_SLOP}
       accessibilityRole="radio"
-      accessibilityLabel={category.name}
+      accessibilityLabel={label}
       accessibilityState={{ checked: selected }}
       aria-checked={selected}
       onPress={handlePress}
       {...handlers}
       style={[styles.chip, fill, hovered ? styles.hovered : null, focused ? styles.focused : null]}
     >
-      <Text style={[selected ? styles.labelSelected : styles.label, ink]}>{category.name}</Text>
+      <Text style={[selected ? styles.labelSelected : styles.label, ink]}>{label}</Text>
     </PressableScaled>
   );
 }

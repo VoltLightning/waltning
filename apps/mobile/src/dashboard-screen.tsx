@@ -60,6 +60,7 @@ import { RecentWidget } from "@waltning/ui/dashboard/recent-widget";
 import { SpendByCategoryWidget } from "@waltning/ui/dashboard/spend-by-category-widget";
 import { dayLabel, monthLabel } from "@waltning/ui/i18n/locales";
 import { useLocale, useT } from "@waltning/ui/i18n/provider";
+import { useCategoryLabel } from "@waltning/ui/i18n/use-category-label";
 import { GroundPanel } from "@waltning/ui/shell/card";
 import { UnsettledBanner } from "@waltning/ui/shell/unsettled-banner";
 import { EmptyState } from "@waltning/ui/states/empty-state";
@@ -104,6 +105,7 @@ function handleOpenTransaction(id: string) {
 
 export default function Dashboard() {
   const t = useT();
+  const labelOf = useCategoryLabel();
   const locale = useLocale();
   const styles = useStyles();
   const ledger = useLedgerController();
@@ -169,7 +171,7 @@ export default function Dashboard() {
   const flowRangeLabel = t("dashboard.flowRange", { count: COMPLETE_FLOW_MONTHS });
 
   const categoryNameOf = new Map<string, string>(
-    snapshot.categoryTree.map((category) => [category.id, category.name]),
+    snapshot.categoryTree.map((category) => [category.id, labelOf(category)]),
   );
   const spendForLead = spendRows.filter((row) => row.currency === leadCurrency);
   const { top: topSpend, restTotal: otherTotal } = money.topByAmount(spendForLead, TOP_CATEGORIES);
@@ -266,7 +268,10 @@ export default function Dashboard() {
   const recentRows = snapshot.recent.map((row) => ({
     id: row.id,
     enteredName: row.enteredName,
-    meta: row.categoryName ?? row.accountName,
+    meta:
+      row.categoryName === null
+        ? row.accountName
+        : labelOf({ name: row.categoryName, externalId: row.categoryExternalId }),
     amount: row.amount,
     currency: row.currency,
     decimals: row.decimals,

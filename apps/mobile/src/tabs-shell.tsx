@@ -43,6 +43,7 @@ import { currencyCode } from "@waltning/core/money";
 import { CurrencyChip } from "@waltning/ui/fx/currency-chip";
 import { KNOWN_PATHS, resolveFieldErrorMessage } from "@waltning/ui/i18n/field-error-messages";
 import { useT } from "@waltning/ui/i18n/provider";
+import { useCategoryLabel } from "@waltning/ui/i18n/use-category-label";
 import { SafeAreaProvider, useSafeArea } from "@waltning/ui/primitives/safe-area";
 import { SegmentControl } from "@waltning/ui/primitives/segment-control";
 import { useBreakpoint } from "@waltning/ui/primitives/use-breakpoint";
@@ -333,6 +334,7 @@ function DeskScope() {
  */
 function DeskCommandBar() {
   const t = useT();
+  const labelOf = useCategoryLabel();
   const ledger = useLedgerController();
   const snapshot = usePhoneLedger(ledger);
   // L7 — read every render, deliberately: `quick-add-screen.tsx`'s own
@@ -357,10 +359,23 @@ function DeskCommandBar() {
     [snapshot.categories],
   );
 
+  // A category answers to what the app calls it and, where that differs, to
+  // its stored name — so typing either files the line under it.
+  const captureCategories = useMemo(
+    () =>
+      expenseCategories.map((category) => {
+        const label = labelOf(category);
+        return label === category.name
+          ? { id: category.id, name: category.name }
+          : { id: category.id, name: label, aliases: [category.name] };
+      }),
+    [expenseCategories, labelOf],
+  );
+
   const context: CaptureContext = useMemo(
     () => ({
       accounts: snapshot.accounts,
-      categories: expenseCategories,
+      categories: captureCategories,
       defaultAccountId: lastUsedAccountId,
       today,
       // Both languages' words already resolve unconditionally (`dates.ts`'s
@@ -368,7 +383,7 @@ function DeskCommandBar() {
       // need, not a live switch today.
       locale: "en",
     }),
-    [snapshot.accounts, expenseCategories, lastUsedAccountId, today],
+    [snapshot.accounts, captureCategories, lastUsedAccountId, today],
   );
   const parse = useCallback((text: string) => parseCapture(text, context), [context]);
 

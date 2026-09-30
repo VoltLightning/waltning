@@ -1939,6 +1939,7 @@ describe("every src/ is organised by domain, not by layer", () => {
       "accounts",
       "appearance",
       "backup",
+      "categories",
       "connectivity",
       "counterparties",
       "currencies",

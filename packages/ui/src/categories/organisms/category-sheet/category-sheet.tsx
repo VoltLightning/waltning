@@ -54,6 +54,7 @@ import { useCallback, useMemo, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import Animated from "react-native-reanimated";
 import { useT } from "../../../i18n/provider";
+import { useCategoryLabel } from "../../../i18n/use-category-label.ts";
 import { Button } from "../../../primitives/atoms/button/button";
 import { PressableScaled } from "../../../primitives/atoms/pressable-scaled/pressable-scaled";
 import { Tag } from "../../../primitives/atoms/tag";
@@ -189,7 +190,7 @@ function findSeededUncategorized(nodes: readonly CategoryTreeNode[]): CategoryTr
 export function CategorySheet({
   visible,
   kind,
-  tree,
+  tree: storedTree,
   usage,
   proposal,
   enteredName,
@@ -199,6 +200,13 @@ export function CategorySheet({
   onDismiss,
 }: CategorySheetProps) {
   const t = useT();
+  const labelOf = useCategoryLabel();
+  // Every name this sheet draws is the display rule's (`categoryLabel`); the
+  // stored one rides along so a search still finds a row by either.
+  const tree = useMemo(
+    () => storedTree.map((node) => ({ ...node, name: labelOf(node), storedName: node.name })),
+    [storedTree, labelOf],
+  );
   const styles = useStyles();
   const [query, setQuery] = useState("");
   const [groupId, setGroupId] = useState<string | null>(null);
@@ -220,7 +228,9 @@ export function CategorySheet({
   const visibleLeaves = useMemo(() => {
     if (searching) {
       const needle = fold(query);
-      return ordinaryLeaves.filter((leaf) => fold(leaf.name).includes(needle));
+      return ordinaryLeaves.filter(
+        (leaf) => fold(leaf.name).includes(needle) || fold(leaf.storedName).includes(needle),
+      );
     }
     return groupId === null ? ordinaryLeaves : ordinaryLeaves.filter((l) => l.parentId === groupId);
   }, [groupId, ordinaryLeaves, query, searching]);

@@ -268,6 +268,7 @@ export type PhoneRecentTransaction = {
   date: AccountingDate;
   enteredName: string;
   categoryName: string | null;
+  categoryExternalId?: string | null | undefined;
   accountName: string;
   amount: Money;
   currency: CurrencyCode;
@@ -296,6 +297,8 @@ export type PhoneCategory = {
   id: Id<"categories">;
   name: string;
   kind: "income" | "expense";
+  /** The seed's own tag — the display rule's other input (`@waltning/core/seed-label`). */
+  externalId?: string | null | undefined;
 };
 
 /**
@@ -512,6 +515,7 @@ export type PhoneSearchTransaction = {
   enteredName: string;
   note: string;
   categoryName: string | null;
+  categoryExternalId?: string | null | undefined;
   /** `SPEC.md` §14.4b — mirrors `@waltning/ledger`'s `LocalSearchTransaction.brandKey` field-for-field. */
   brandKey: string | null;
   accountId: Id<"accounts">;
@@ -608,6 +612,7 @@ export type PhoneTransactionLine = {
   amount: Money;
   categoryId: Id<"categories"> | null;
   categoryName: string | null;
+  categoryExternalId?: string | null | undefined;
 };
 
 /**
@@ -645,6 +650,7 @@ export type PhoneTransactionDetail = {
   fee: Money | null;
   categoryId: Id<"categories"> | null;
   categoryName: string | null;
+  categoryExternalId?: string | null | undefined;
   /** §6.6.1 — who the transaction was *with*, and the name to draw for it. */
   counterpartyId: Id<"counterparties"> | null;
   /** `counterpartyId`'s own name, archived or not; `counterpartyName` is the obligation's. */

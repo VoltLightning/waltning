@@ -12,6 +12,7 @@
  * as a plain number rather than the mocked trend line.
  */
 
+import { usedFirst } from "@waltning/client/categories/used-first";
 import type {
   ArchiveCategoryDraft,
   ConvertCategoryDraft,
@@ -37,6 +38,7 @@ import { MoveCategorySheet } from "@waltning/ui/categories/move-category-sheet";
 import { RenameCategorySheet } from "@waltning/ui/categories/rename-category-sheet";
 import { monthLabel } from "@waltning/ui/i18n/locales";
 import { useLocale, useT } from "@waltning/ui/i18n/provider";
+import { useCategoryLabel } from "@waltning/ui/i18n/use-category-label";
 import { Button } from "@waltning/ui/primitives/button";
 import { PressableScaled } from "@waltning/ui/primitives/pressable-scaled";
 import { SearchField } from "@waltning/ui/primitives/search-field";
@@ -141,7 +143,7 @@ function isUncategorized(node: CategoryTreeNode): boolean {
  */
 function visibleTree(
   nodes: readonly CategoryTreeNode[],
-  options: { search: string; showArchived: boolean },
+  options: { search: string; showArchived: boolean; storedNames: ReadonlyMap<string, string> },
 ): readonly CategoryTreeNode[] {
   const eligible = nodes.filter(
     (node) => !isUncategorized(node) && (options.showArchived || !node.archived),
@@ -151,7 +153,12 @@ function visibleTree(
 
   const matchingLeafIds = new Set(
     eligible
-      .filter((node) => node.isLeaf && node.name.toLowerCase().includes(query))
+      .filter(
+        (node) =>
+          node.isLeaf &&
+          (node.name.toLowerCase().includes(query) ||
+            (options.storedNames.get(node.id) ?? "").toLowerCase().includes(query)),
+      )
       .map((n) => n.id),
   );
   const parentIds = new Set(
@@ -229,40 +236,63 @@ export default function CategoriesScreen() {
     [monthSpend, snapshot.fullCategoryTree, leadCode],
   );
 
+  const labelOf = useCategoryLabel();
+  /** What each row is stored as — what search, undo and the collision finder go back to. */
+  const storedNames = useMemo(
+    () => new Map(snapshot.fullCategoryTree.map((node) => [node.id as string, node.name])),
+    [snapshot.fullCategoryTree],
+  );
   const nodes: readonly CategoryTreeNode[] = useMemo(
     () =>
-      snapshot.fullCategoryTree.map((node) => {
-        const spent = spend.spent.get(node.id);
-        return {
-          id: node.id,
-          parentId: node.parentId,
-          name: node.name,
-          kind: node.kind,
-          isLeaf: node.isLeaf,
-          archived: node.archived,
-          depth: node.depth,
-          usageCount: snapshot.categoryUsage.get(node.id) ?? 0,
-          externalId: node.externalId,
-          ...(spent === undefined || pivot === undefined
-            ? {}
-            : {
-                spent: {
-                  amount: spent,
-                  // `04`: the pivot's symbol, every other currency's code.
-                  currency: pivot.isPivot ? (pivot.symbol ?? pivot.code) : pivot.code,
-                  decimals: pivot.decimals,
-                },
-                share: spend.share.get(node.id) ?? 0,
-              }),
-        };
-      }),
-    [snapshot.fullCategoryTree, snapshot.categoryUsage, spend, pivot],
+      usedFirst(
+        snapshot.fullCategoryTree.map((node) => {
+          const spent = spend.spent.get(node.id);
+          return {
+            id: node.id,
+            parentId: node.parentId,
+            name: labelOf(node),
+            kind: node.kind,
+            isLeaf: node.isLeaf,
+            archived: node.archived,
+            depth: node.depth,
+            usageCount: snapshot.categoryUsage.get(node.id) ?? 0,
+            externalId: node.externalId,
+            ...(spent === undefined || pivot === undefined
+              ? {}
+              : {
+                  spent: {
+                    amount: spent,
+                    // `04`: the pivot's symbol, every other currency's code.
+                    currency: pivot.isPivot ? (pivot.symbol ?? pivot.code) : pivot.code,
+                    decimals: pivot.decimals,
+                  },
+                  share: spend.share.get(node.id) ?? 0,
+                }),
+          };
+        }),
+      ),
+    [snapshot.fullCategoryTree, snapshot.categoryUsage, spend, pivot, labelOf],
   );
 
+  const collisions = useMemo(
+    () =>
+      snapshot.categoryCollisions.map((collision) => ({
+        ...collision,
+        a: {
+          ...collision.a,
+          name: nodes.find((n) => n.id === collision.a.id)?.name ?? collision.a.name,
+        },
+        b: {
+          ...collision.b,
+          name: nodes.find((n) => n.id === collision.b.id)?.name ?? collision.b.name,
+        },
+      })),
+    [snapshot.categoryCollisions, nodes],
+  );
   const uncategorized = nodes.find(isUncategorized) ?? null;
   const rows = useMemo(
-    () => visibleTree(nodes, { search, showArchived }),
-    [nodes, search, showArchived],
+    () => visibleTree(nodes, { search, showArchived, storedNames }),
+    [nodes, search, showArchived, storedNames],
   );
   const matchedLeaves = search.trim() === "" ? undefined : rows.filter((n) => n.isLeaf).length;
 
@@ -342,7 +372,9 @@ export default function CategoriesScreen() {
   const handleSaveRename = useCallback(
     (name: string) => {
       if (sheet?.type !== "rename") return;
-      const oldName = sheet.category.name;
+      // Undo puts back what was *stored*, which for a starter still carrying
+      // its canonical name is the name that keeps translating.
+      const oldName = storedNames.get(sheet.category.id) ?? sheet.category.name;
       const draft: RenameCategoryDraft = { id: sheet.category.id, name };
       const result = ledger.renameCategory(draft);
       if ("fieldErrors" in result) {
@@ -357,7 +389,7 @@ export default function CategoriesScreen() {
         },
       });
     },
-    [sheet, ledger, t, messageOf, showToast],
+    [sheet, ledger, t, messageOf, showToast, storedNames],
   );
 
   const handleSaveMove = useCallback(
@@ -530,10 +562,7 @@ export default function CategoriesScreen() {
             onClear={handleClearSearch}
             {...(matchedLeaves === undefined ? {} : { resultCount: matchedLeaves })}
           />
-          <CollisionFinder
-            candidates={snapshot.categoryCollisions}
-            onReview={handleReviewCollision}
-          />
+          <CollisionFinder candidates={collisions} onReview={handleReviewCollision} />
           {uncategorized === null ? null : (
             <View style={styles.uncategorized}>
               <Text style={styles.uncategorizedName}>{uncategorized.name}</Text>

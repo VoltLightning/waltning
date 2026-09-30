@@ -38,6 +38,7 @@ import { type ReactNode, useCallback, useMemo, useState } from "react";
 import { Text, View } from "react-native";
 import { dayLabel } from "../../../i18n/locales";
 import { useLocale, useT } from "../../../i18n/provider";
+import { useCategoryLabel } from "../../../i18n/use-category-label.ts";
 import { Button } from "../../../primitives/atoms/button/button";
 import { DateField } from "../../../primitives/atoms/date-field/date-field";
 import { RadioGroup, type RadioGroupProps } from "../../../primitives/atoms/radio/radio";
@@ -97,6 +98,8 @@ export type QuickAddComposerAccount = {
 export type QuickAddComposerCategory = {
   id: string;
   name: string;
+  /** The seed's own tag — the display rule's other input (`categoryLabel`). */
+  externalId?: string | null | undefined;
   kind: "income" | "expense";
   /** How often this ledger has used it — what puts a category among the chips. */
   usage?: number;
@@ -245,6 +248,7 @@ export function QuickAddComposer({
   check,
 }: QuickAddComposerProps) {
   const t = useT();
+  const labelOf = useCategoryLabel();
   const locale = useLocale();
   const theme = useTheme();
   const styles = useStyles();
@@ -297,7 +301,11 @@ export function QuickAddComposer({
     categoryProposal !== null &&
     categoryProposal.confidence < PROPOSAL_DISPLAY_THRESHOLD;
   const categoryValue =
-    pickedCategory?.name ?? (proposedBelowThreshold ? undefined : proposedCategory?.name);
+    pickedCategory !== undefined
+      ? labelOf(pickedCategory)
+      : proposedBelowThreshold || proposedCategory === undefined
+        ? undefined
+        : labelOf(proposedCategory);
   /**
    * Machine-filled (P2) either while an at-or-above-threshold proposal is
    * shown but not applied, or (H1) while `categoryId` itself is the applied
@@ -316,7 +324,7 @@ export function QuickAddComposer({
    */
   const categoryPlaceholder =
     proposedBelowThreshold && proposedCategory !== undefined
-      ? t("transactions.categorySuggested", { name: proposedCategory.name })
+      ? t("transactions.categorySuggested", { name: labelOf(proposedCategory) })
       : t("transactions.chooseCategory");
   /**
    * H1, S05 §8's P2 trail — the caption and Undo for an applied proposal,
@@ -356,7 +364,7 @@ export function QuickAddComposer({
     if (picked !== undefined && !top.some((category) => category.id === picked.id)) {
       top.splice(CHIP_COUNT - 1, 1, picked);
     }
-    return top.map(({ id, name }) => ({ id, name }));
+    return top.map(({ id, name, externalId }) => ({ id, name, externalId }));
   }, [categories, type, categoryId]);
   const chips = useFrozenOrder(ranked, chipId);
 

@@ -90,3 +90,28 @@ it("opens a transfer on a tap, as it opens every other row", () => {
   expect(onPress).toHaveBeenCalledWith("t2");
   view.unmount();
 });
+
+it("names a starter category in the app's language, and leaves a renamed one as stored", () => {
+  const german = (row: LedgerEntry) =>
+    render(
+      <ThemeProvider theme={light}>
+        <I18nProvider locale="de">
+          <EntryRow row={row} onPress={vi.fn()} withAccount />
+        </I18nProvider>
+      </ThemeProvider>,
+    );
+  const starter = german({
+    ...ROW,
+    categoryName: "Groceries",
+    categoryExternalId: "seed:groceries",
+  });
+  expect(starter.getByText(/Lebensmittel/)).toBeDefined();
+  starter.unmount();
+  const renamed = german({
+    ...ROW,
+    categoryName: "Bio shop",
+    categoryExternalId: "seed:groceries",
+  });
+  expect(renamed.getByText(/Bio shop/)).toBeDefined();
+  renamed.unmount();
+});

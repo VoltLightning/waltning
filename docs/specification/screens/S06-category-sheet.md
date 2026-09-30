@@ -100,6 +100,11 @@ is not a better one.
 | `EmptyState(filtered)` | No match — offers *Create "…"* scoped to the selected group |
 | `EmptyState(first-run)` | No categories at all — *No categories yet*, offering *Create a category*, which lands at the top level while no group exists and under the chosen group once one does. A query already typed is carried into the name. A caller that passes no create handler (S10's categorize path) gets the same title with copy that offers nothing, and no footer *New* |
 
+**Names are the display rule's** (`SPEC.md` §6.3): a starter category is drawn
+in the app's language until it is renamed, in the grid, the group chips, the
+recent section, the proposal and the footer. Search matches the drawn name and
+the stored one, so *grocer* and *Lebensm* both find Groceries in a German app.
+
 ## 5. Data
 
 | Reads | Writes |

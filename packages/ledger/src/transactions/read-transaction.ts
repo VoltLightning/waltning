@@ -47,6 +47,7 @@ export type LocalTransactionLine = {
   amount: Money;
   categoryId: Id<"categories"> | null;
   categoryName: string | null;
+  categoryExternalId: string | null;
   sort: number;
 };
 
@@ -73,6 +74,7 @@ export type LocalTransactionDetail = {
   fee: Money | null;
   categoryId: Id<"categories"> | null;
   categoryName: string | null;
+  categoryExternalId: string | null;
   /**
    * §6.6's other side of a row. Read here because S09 is where a capture's
    * missing role is corrected — and a role with no counterparty, or the
@@ -120,6 +122,7 @@ export function readTransaction<TRun, TSchema extends typeof ledgerSchema>(
       toAccountName: destinations.name,
       categoryId: transactions.categoryId,
       categoryName: categories.name,
+      categoryExternalId: categories.externalId,
       counterpartyId: transactions.counterpartyId,
       counterpartyIdentityName: identities.name,
       obligationCounterpartyId: transactions.obligationCounterpartyId,
@@ -154,6 +157,7 @@ export function readTransaction<TRun, TSchema extends typeof ledgerSchema>(
       amount: transactionLines.amount,
       categoryId: transactionLines.categoryId,
       categoryName: categories.name,
+      categoryExternalId: categories.externalId,
       sort: transactionLines.sort,
     })
     .from(transactionLines)
