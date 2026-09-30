@@ -317,6 +317,35 @@ value, and it is the one sanctioned `setInterval` in `packages/ui`;
 decision made in the open, not a precedent that spread because the first one
 compiled.
 
+## 8c · A render error is a screen
+
+**A render error shows a recoverable screen, never a blank one.** React unmounts
+the whole tree when a render throws and nothing above it catches; on a phone
+that is the window's own white, with the ledger untouched underneath and no way
+for the person to know it. `RenderBoundary` (`packages/ui/src/states`) wraps the
+navigator in `apps/mobile/app/_layout.tsx`, inside the providers, so every
+navigated screen is under it.
+
+- What replaces the navigator is `RenderFailed`: a `recoverable` `ErrorState`
+  (`design-system/08` §8.2) that says the screen stopped, that the ledger is
+  untouched, and offers **Try again** and **Restart the app**.
+- **Try again mounts the whole navigator afresh.** A new `key` discards the
+  subtree that threw, so the next attempt starts from the navigator's initial
+  state, not from the state that made it throw. It can throw again, and a
+  screen that throws on every render would make Try again a loop — which is why
+  **Restart the app** is always beside it: it starts the process over, the one
+  action that does not depend on the state that failed.
+- **The error text is logged to the device log, not drawn.** The boundary hands
+  the thrown error and React's component stack to the app, which logs it as
+  `app_runtime · render` beside the startup failures. It is a developer's
+  sentence and names no amount or form value.
+- It catches render and lifecycle errors only. A native mounting failure never
+  reaches React, so the boundary cannot excuse an operation the platform
+  refuses: a keyed reorder of animated `Pressable`s while the screen is
+  visible is one (S05's category chips keep the order they opened with).
+
+---
+
 ## 9 · What this is not
 
 It is **not** a rewrite. The moves are moves: the same files, in directories

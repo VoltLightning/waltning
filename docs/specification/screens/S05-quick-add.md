@@ -115,6 +115,9 @@ categories as chips, each in the tint `categoryTintFor` gives its name
 everywhere else it appears, the picked one drawn heavier. A chip's pick lands
 in the *Category* row exactly as the sheet's pick does; the picked category is
 always among the four, so a shortcut never hides the current answer.
+**The order is fixed when the composer opens.** Saving counts the pick as used,
+and a row that rearranged in that render would be a keyed reorder on screen;
+the next composer opens with the new ranking.
 
 **The pace line is a ratio, never an amount.** *Groceries this month: 61% of
 usual* — this month's spend in the draft's category against the mean of the

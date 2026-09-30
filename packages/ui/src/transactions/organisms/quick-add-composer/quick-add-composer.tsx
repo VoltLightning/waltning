@@ -57,6 +57,7 @@ import { categoryTintFor } from "../../../primitives/monogram.ts";
 import { BottomSheet } from "../../../primitives/organisms/bottom-sheet/bottom-sheet";
 import { SheetAwareTextInput } from "../../../primitives/sheet-input";
 import { useBreakpoint } from "../../../primitives/use-breakpoint.ts";
+import { useFrozenOrder } from "../../../primitives/use-frozen-order.ts";
 import type { SubmitCheck } from "../../../primitives/use-submit-check.ts";
 import { HouseIcon } from "../../../shell/phosphor";
 import { Banner } from "../../../states/molecules/banner/banner";
@@ -78,6 +79,8 @@ const OBLIGATION_ROLES = ["debt", "contribution"] as const;
 type ObligationRole = (typeof OBLIGATION_ROLES)[number];
 /** How many categories the chip row offers — the deck draws four. */
 const CHIP_COUNT = 4;
+
+const chipId = (chip: { id: string }) => chip.id;
 
 export type QuickAddComposerAccount = {
   id: string;
@@ -329,7 +332,15 @@ export function QuickAddComposer({
    * gone. Ordered by use, then by name so two never-used categories keep a
    * stable order between renders.
    */
-  const chips = useMemo(() => {
+  /**
+   * **The order is the one the composer opened with** (`useFrozenOrder`).
+   * Saving counts the picked category as used, which would float it up the row
+   * in the very render that precedes the screen closing: a keyed reorder of
+   * tinted `Pressable`s that Fabric on Android answers with "addViewAt: View
+   * already has a parent" and a white screen, for a category used for the
+   * first time. The next composer opens with the new ranking.
+   */
+  const ranked = useMemo(() => {
     const ofKind = categories
       .filter((category) => category.kind === type)
       .sort((a, b) => (b.usage ?? 0) - (a.usage ?? 0) || a.name.localeCompare(b.name));
@@ -340,6 +351,7 @@ export function QuickAddComposer({
     }
     return top.map(({ id, name }) => ({ id, name }));
   }, [categories, type, categoryId]);
+  const chips = useFrozenOrder(ranked, chipId);
 
   const pickedCounterparty = counterparties.find(
     (counterparty) => counterparty.id === obligationCounterpartyId,

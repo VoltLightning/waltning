@@ -982,6 +982,10 @@ export const ru: Messages = {
   },
   startup: {
     ledgerFailedTitle: "Не удалось открыть учёт",
+    renderFailedTitle: "Этот экран перестал работать",
+    renderFailedBody:
+      "При отрисовке что-то пошло не так. Ваш учёт не затронут. Попробуйте ещё раз; если повторится, перезапустите приложение.",
+    renderFailedRestart: "Перезапустить приложение",
     ledgerFailedBody: "{{message}}",
     ledgerBusyBody: "Учёт ещё открыт в другой вкладке. Закройте её и попробуйте снова.",
     ledgerUnavailableBody: "Движок учёта не запустился. Обычно помогает перезагрузка.",

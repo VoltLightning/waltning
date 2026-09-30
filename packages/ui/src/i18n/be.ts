@@ -979,6 +979,10 @@ export const be: Messages = {
   },
   startup: {
     ledgerFailedTitle: "Не ўдалося адкрыць улік",
+    renderFailedTitle: "Гэты экран перастаў працаваць",
+    renderFailedBody:
+      "Пры адмалёўцы нешта пайшло не так. Ваш улік не закрануты. Паспрабуйце яшчэ раз; калі паўторыцца, перазапусціце праграму.",
+    renderFailedRestart: "Перазапусціць праграму",
     ledgerFailedBody: "{{message}}",
     ledgerBusyBody: "Улік яшчэ адкрыты ў іншай укладцы. Закрыйце яе і паспрабуйце зноў.",
     ledgerUnavailableBody: "Рухавік уліку не запусціўся. Звычайна дапамагае перазагрузка.",
