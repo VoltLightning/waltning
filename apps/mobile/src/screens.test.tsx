@@ -1206,7 +1206,8 @@ describe("Today", () => {
       bucket: null,
     });
 
-    function withDebts(rows: ReturnType<typeof row>[]) {
+    function withDebts(initial: ReturnType<typeof row>[]) {
+      let rows = initial;
       const port = basePort({
         listAccounts: () => [PLN_ACCOUNT],
         listCounterpartyBalances: () => rows,
@@ -1222,6 +1223,11 @@ describe("Today", () => {
       });
       controller.refresh();
       withLedger(<Today />, controller);
+      /** What the register reads next: a repayment settled them all. */
+      return (next: ReturnType<typeof row>[]) => {
+        rows = next;
+        act(() => controller.refresh());
+      };
     }
 
     it("lists each open debt with its direction, and opens the person", () => {
@@ -1230,14 +1236,16 @@ describe("Today", () => {
       expect(screen.getByText("Open debts")).toBeDefined();
       expect(screen.getByText("owes you")).toBeDefined();
       expect(screen.getByText("you owe")).toBeDefined();
-      fireEvent.click(screen.getByRole("button", { name: "Nina" }));
+      fireEvent.click(screen.getByRole("button", { name: /^Nina, you owe, 5/ }));
       expect(router.push).toHaveBeenCalledWith(
         "/counterparty/bbbbbbbb-bbbb-4bbb-8bbb-000000000001",
       );
     });
 
-    it("is hidden when nothing is open", () => {
-      withDebts([row("Nina", "0.00000000", "01")]);
+    it("is hidden when nothing is open, and goes when the last debt is settled", () => {
+      const settle = withDebts([row("Nina", "-5.00000000", "01")]);
+      expect(screen.getByText("Open debts")).toBeDefined();
+      settle([row("Nina", "0.00000000", "01")]);
       expect(screen.queryByText("Open debts")).toBeNull();
     });
   });

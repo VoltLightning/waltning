@@ -217,7 +217,20 @@ export function FieldsCard({
   const [role, setRole] = useState<ObligationRoleValue | null>(() =>
     debtCategory && fields.obligationRole === "debt" ? null : fields.obligationRole,
   );
-  const shownRole: ObligationRoleValue | null = debtCategory ? "debt" : role;
+  /**
+   * **Nothing is rewritten on open.** A debt category gives the role only when
+   * something is being decided — the category moved here, or a person was
+   * picked for it — or when the saved row already is that debt. A legacy row
+   * that sits under one of the four with no person, or with a `contribution`
+   * (which a debt category does not state), is shown as it is and is not an
+   * unsaved change: Save does not appear just from opening it, and an
+   * unrelated edit is never held up by it.
+   */
+  const categoryMoved = categoryId !== fields.categoryId;
+  const personMoved = obligationCounterpartyId !== fields.obligationCounterpartyId;
+  const decidingDebt =
+    debtCategory && (categoryMoved || personMoved || fields.obligationRole === "debt");
+  const shownRole: ObligationRoleValue | null = decidingDebt ? "debt" : role;
   const [whoAsked, setWhoAsked] = useState(false);
 
   const toggleField = useCallback((field: OpenField) => {
@@ -362,7 +375,10 @@ export function FieldsCard({
   const draftValid = amountValid && toAmountValid && feeValid;
 
   // A debt with nobody on the other side is not a debt (§6.6).
-  const whoMissing = debtCategory && obligationCounterpartyId === null;
+  const whoMissing = debtCategory && categoryMoved && obligationCounterpartyId === null;
+  // A legacy row under a debt category with nobody named is not counted as a debt.
+  const notCounted =
+    debtCategory && !categoryMoved && obligationCounterpartyId === null && role === null;
   const handleSave = useCallback(() => {
     if (!hasChanges || saving || !draftValid) return;
     if (whoMissing) {
@@ -542,7 +558,11 @@ export function FieldsCard({
           {obligationCounterpartyId === null && !debtCategory ? null : (
             <>
               <FieldDisclosureRow
-                label={debtCategory ? t("transactions.who") : t("transactions.obligationParty")}
+                label={
+                  decidingDebt || notCounted
+                    ? t("transactions.who")
+                    : t("transactions.obligationParty")
+                }
                 value={obligationCounterpartyName}
                 placeholder={
                   debtCategory ? t("transactions.whoPlaceholder") : t("transactions.noObligation")
@@ -552,9 +572,12 @@ export function FieldsCard({
                   ? { error: t("transactions.whoRequired") }
                   : {})}
               />
+              {notCounted ? (
+                <Text style={styles.hint}>{t("transactions.notCountedAsDebt")}</Text>
+              ) : null}
 
               {/* A debt category fixes the role, so there is nothing to choose. */}
-              {debtCategory ? null : (
+              {decidingDebt || notCounted ? null : (
                 <FieldDisclosureRow
                   label={t("transactions.role")}
                   value={role === null ? null : t(`transactions.role.${role}`)}

@@ -352,9 +352,13 @@ export const ru: Messages = {
     who: "Кто?",
     whoPlaceholder: "Выберите человека",
     whoRequired: "Выберите человека.",
+    /** S09 — a legacy row under a debt category that names nobody. */
+    notCountedAsDebt: "Пока не учитывается как долг. Укажите, кто это, и он будет учтён.",
     /** Under Who?, when the person has an open debt this entry pays down. */
-    settlesOwed: "{{name}}: погашение долга перед вами.",
-    settlesOwe: "{{name}}: погашение вашего долга.",
+    settlesOwed: "{{name}}: погашение долга перед вами, {{currency}}.",
+    settlesOwe: "{{name}}: погашение вашего долга, {{currency}}.",
+    nothingToSettle: "{{name}}: открытого долга в этом направлении нет.",
+    settleNeedsRate: "Нет курса для {{currency}}. Пожалуйста, погасите долг на странице человека.",
     commandBarPlaceholder: "48,90 наличные кофе вчера",
     commandBarLabel: "Добавить операцию",
     commandBarCategoryPrompt: "Категория?",

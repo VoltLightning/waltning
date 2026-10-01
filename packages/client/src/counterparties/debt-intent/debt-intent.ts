@@ -21,6 +21,8 @@
  * stored here: it is derived from the row's own type, as it always was.
  */
 
+import { DEBT_SEED_KEYS } from "@waltning/core/taxonomy";
+
 export type DebtIntent = {
   role: "debt";
   /** `owe`: the category concerns what you owe; `owed`: what you are owed. */
@@ -29,7 +31,7 @@ export type DebtIntent = {
   settles: boolean;
 };
 
-const INTENTS: Readonly<Record<string, DebtIntent>> = {
+const INTENTS: Readonly<Record<(typeof DEBT_SEED_KEYS)[number], DebtIntent>> = {
   borrowed: { role: "debt", direction: "owe", settles: false },
   "repayment-made": { role: "debt", direction: "owe", settles: true },
   "lent-out": { role: "debt", direction: "owed", settles: false },
@@ -42,11 +44,15 @@ export function seedKeyOf(externalId: string | null | undefined): string | null 
   return externalId.startsWith("seed:") ? externalId.slice("seed:".length) : null;
 }
 
+function isDebtSeedKey(key: string): key is (typeof DEBT_SEED_KEYS)[number] {
+  return (DEBT_SEED_KEYS as readonly string[]).includes(key);
+}
+
 /** What picking this seed key means — or `null` when it means nothing about debt. */
 export function debtIntent(seedKey: string | null | undefined): DebtIntent | null {
   if (seedKey === null || seedKey === undefined) return null;
   // An own-property lookup: a seed key named `constructor` is not a debt.
-  return Object.hasOwn(INTENTS, seedKey) ? (INTENTS[seedKey] ?? null) : null;
+  return isDebtSeedKey(seedKey) ? INTENTS[seedKey] : null;
 }
 
 /** `debtIntent` from the tag a category row carries. */

@@ -667,9 +667,13 @@ export const en = {
     who: "Who?",
     whoPlaceholder: "Choose a person",
     whoRequired: "Choose who this is with.",
+    /** S09 — a legacy row under a debt category that names nobody. */
+    notCountedAsDebt: "Not counted as a debt yet. Add who, and it is.",
     /** Under Who?, when the person has an open debt this entry pays down. */
-    settlesOwed: "Settles what {{name}} owes you.",
-    settlesOwe: "Settles what you owe {{name}}.",
+    settlesOwed: "Settles what {{name}} owes you, in {{currency}}.",
+    settlesOwe: "Settles what you owe {{name}}, in {{currency}}.",
+    nothingToSettle: "Nothing to settle with {{name}}: no open debt in this direction.",
+    settleNeedsRate: "No exchange rate for {{currency}}. Please settle from the person's page.",
 
     /* ── DESK2 · the desk command bar, `screens/S05-quick-add.md` §3 web ── */
     /**

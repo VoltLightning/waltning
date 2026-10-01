@@ -1,4 +1,6 @@
+import { settleResidualDirection } from "@waltning/client/counterparties/counterparty-figures";
 import { debtIntentOf, effectiveRole } from "@waltning/client/counterparties/debt-intent";
+import { planRepayment } from "@waltning/client/counterparties/repayment-plan";
 import { useDevicePreference } from "@waltning/client/device/use-device-preference";
 import type {
   CreateCategoryDraft,
@@ -27,7 +29,7 @@ import { AccountPicker, type AccountPickerAccount } from "@waltning/ui/accounts/
 import { CategorySheet } from "@waltning/ui/categories/category-sheet";
 import { parseAmount } from "@waltning/ui/fx/amount-field";
 import { KNOWN_PATHS, resolveFieldErrorMessage } from "@waltning/ui/i18n/field-error-messages";
-import { weekdayLabel } from "@waltning/ui/i18n/locales";
+import { decimalMark, weekdayLabel } from "@waltning/ui/i18n/locales";
 import { useLocale, useT } from "@waltning/ui/i18n/provider";
 import { Button } from "@waltning/ui/primitives/button";
 import { readTyped } from "@waltning/ui/primitives/clock";
@@ -361,33 +363,80 @@ export default function QuickAdd() {
   const debtCategory = intent !== null;
   const obligationRole = effectiveRole(composerObligationRole, intent);
   /**
-   * A repayment with a person who has an open debt *in that direction* says
-   * which debt it pays down. It needs no separate link: the entry carries the
-   * same obligation party and role as the debt, so the balance the register
-   * derives (`counterparty_balances`) goes down by it.
+   * **A repayment is `settle_debt`** (S14), decided here before the write: the
+   * person's open debt *in that direction*, the currency it is in, what the
+   * entry discharges of it and what is left — or that there is no such debt, or
+   * no rate to convert with. `planRepayment` is the one place that is worked
+   * out; the hint says it and Save does it.
    */
-  const settlesCounterpartyId = intent?.settles ? composerCounterpartyId : null;
+  const personId = intent?.settles ? composerCounterpartyId : null;
   // biome-ignore lint/correctness/useExhaustiveDependencies: snapshot.revision invalidates the read by identity; it is not read.
-  const openDebtSide = useMemo(() => {
-    if (settlesCounterpartyId === null) return null;
-    const side = ledger
-      .listCounterpartyBalances(today)
-      .filter((row) => row.counterpartyId === settlesCounterpartyId)
-      .map((row) => money.debtDirection(row.balance, row.decimals))
-      .find((direction) => direction !== "settled");
-    return side ?? null;
-  }, [ledger, settlesCounterpartyId, snapshot.revision, today]);
+  const personBalances = useMemo(
+    () =>
+      personId === null
+        ? []
+        : ledger.listCounterpartyBalances(today).filter((row) => row.counterpartyId === personId),
+    [ledger, personId, snapshot.revision, today],
+  );
   const pickedPerson = snapshot.counterparties.find(
     (counterparty) => counterparty.id === composerCounterpartyId,
   );
+  const accountCurrency = selectedComposerAccount?.currency ?? null;
+  const enteredAmount = parseAmount(composerAmountRaw);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: snapshot.revision invalidates the read by identity; it is not read.
+  const repayment = useMemo(
+    () =>
+      personId === null
+        ? null
+        : planRepayment({
+            intent,
+            balances: personBalances,
+            accountCurrency,
+            amount: enteredAmount,
+            crossRate: (from) =>
+              accountCurrency === null
+                ? null
+                : (ledger.readCrossRate({ from, to: accountCurrency, date: today })?.rate ?? null),
+          }),
+    [
+      personId,
+      intent,
+      personBalances,
+      accountCurrency,
+      enteredAmount,
+      ledger,
+      today,
+      snapshot.revision,
+    ],
+  );
+  const mark = decimalMark(locale);
+  const repaymentProblem =
+    repayment?.kind === "no-debt" && pickedPerson !== undefined
+      ? t("transactions.nothingToSettle", { name: pickedPerson.name })
+      : repayment?.kind === "no-rate"
+        ? t("transactions.settleNeedsRate", { currency: repayment.currency })
+        : undefined;
   const debtHint =
-    intent?.settles && pickedPerson !== undefined && openDebtSide !== null
-      ? intent.direction === "owed" && openDebtSide === "theyOwe"
-        ? t("transactions.settlesOwed", { name: pickedPerson.name })
-        : intent.direction === "owe" && openDebtSide === "youOwe"
-          ? t("transactions.settlesOwe", { name: pickedPerson.name })
-          : undefined
-      : undefined;
+    repayment === null || pickedPerson === undefined
+      ? undefined
+      : repayment.kind === "settle"
+        ? [
+            t(
+              intent?.direction === "owed" ? "transactions.settlesOwed" : "transactions.settlesOwe",
+              {
+                name: pickedPerson.name,
+                currency: repayment.currency,
+              },
+            ),
+            repayment.over
+              ? t("counterparties.overSettled", {
+                  amount: `${money.forDisplay(money.abs(repayment.residual), repayment.decimals, mark)}\u00a0${repayment.currency}`,
+                })
+              : null,
+          ]
+            .filter((part) => part !== null)
+            .join(" ")
+        : repaymentProblem;
 
   const handleRawChange = useCallback((next: string) => setComposerAmountRaw(next), []);
   const handleLeaveForTransfer = useCallback(() => router.replace("/transfer"), []);
@@ -631,7 +680,10 @@ export default function QuickAdd() {
           t("transactions.needsRate", { currency: selectedComposerAccount.currency }),
     // §6.6 — a debt is between two people: a debt category is refused
     // without the other one, on the Who? row it asked it on.
-    who: debtCategory && composerCounterpartyId === null && t("transactions.whoRequired"),
+    who:
+      debtCategory && composerCounterpartyId === null
+        ? t("transactions.whoRequired")
+        : repaymentProblem !== undefined && repaymentProblem,
     // §6.6.1 — **no longer required.** Naming a counterparty used to force a
     // role, because `reference` was the only way to say "involved, owes
     // nothing" and the pair-shape CHECK refused a party without one. The
@@ -664,6 +716,55 @@ export default function QuickAdd() {
       obligationCounterpartyId: obligationRole === null ? null : composerCounterpartyId,
       obligationRole,
     };
+    /**
+     * **A repayment is `settle_debt`** (S14): same person, same role, the
+     * discharge stamped in the debt's own currency, the direction checked
+     * against the live balance and over-settlement stated rather than clamped.
+     * Only when there is an open debt in the matching direction
+     * (`planRepayment`); with none, Save was already refused on Who?.
+     */
+    if (
+      repayment?.kind === "settle" &&
+      composerCounterpartyId !== null &&
+      selectedComposerAccount !== undefined
+    ) {
+      const settled = ledger.settleDebt({
+        counterpartyId: composerCounterpartyId,
+        accountId: effectiveAccountId,
+        date: composerDate,
+        amount,
+        currency: selectedComposerAccount.currency,
+        dischargesCurrency: repayment.currency,
+        dischargesAmount: repayment.dischargesAmount,
+        note: composerNote,
+        categoryId: effectiveCategoryId,
+      });
+      if (!("id" in settled)) {
+        const resolved = settled.fieldErrors.map((error) => ({
+          path: error.path,
+          message: resolveFieldErrorMessage(t, error),
+        }));
+        setFieldErrors(mapFieldErrors(resolved, KNOWN_PATHS));
+        return;
+      }
+      setFieldErrors(undefined);
+      void lastCapture.set({ accountId: effectiveAccountId, at: Date.now() });
+      saveHaptic();
+      router.dismissTo({
+        pathname: "/",
+        params: {
+          message: t("counterparties.settledToast", {
+            amount: money.forDisplay(money.abs(settled.residual), repayment.decimals, mark),
+            currency: repayment.currency,
+            direction: t(
+              `counterparties.${settleResidualDirection(settled.residual, repayment.decimals)}`,
+            ),
+          }),
+          nonce: String(Date.now()),
+        },
+      });
+      return;
+    }
     const result = ledger.createTransaction(next);
     if (!("id" in result)) {
       const resolved = result.fieldErrors.map((error) => ({
@@ -699,6 +800,8 @@ export default function QuickAdd() {
     effectiveCategoryId,
     composerCounterpartyId,
     obligationRole,
+    repayment,
+    mark,
     composerDate,
     composerTime,
     composerIsBusiness,
@@ -783,6 +886,66 @@ export default function QuickAdd() {
   const [fieldErrorsDesk, setFieldErrorsDesk] = useState<ReturnType<typeof mapFieldErrors>>();
   const handleDeskSave = useCallback(
     (next: QuickAddDraft) => {
+      /**
+       * §6.6 — the desk's repayment is `settle_debt` too, the same plan the
+       * phone's composer reads: no open debt in the matching direction (or no
+       * rate to convert with) is refused on Who?, an open one is settled.
+       */
+      const deskAccount = composerAccounts.find((candidate) => candidate.id === next.accountId);
+      const deskCategory = snapshot.categories.find(
+        (candidate) => candidate.id === next.categoryId,
+      );
+      const deskIntent = debtIntentOf(deskCategory?.externalId);
+      const deskPerson = next.obligationCounterpartyId;
+      if (deskIntent?.settles && deskPerson !== null && deskAccount !== undefined) {
+        const plan = planRepayment({
+          intent: deskIntent,
+          balances: ledger
+            .listCounterpartyBalances(today)
+            .filter((row) => row.counterpartyId === deskPerson),
+          accountCurrency: deskAccount.currency,
+          amount: next.amount,
+          crossRate: (from) =>
+            ledger.readCrossRate({ from, to: deskAccount.currency, date: today })?.rate ?? null,
+        });
+        const name = snapshot.counterparties.find((c) => c.id === deskPerson)?.name ?? "";
+        const problem =
+          plan?.kind === "no-debt"
+            ? t("transactions.nothingToSettle", { name })
+            : plan?.kind === "no-rate"
+              ? t("transactions.settleNeedsRate", { currency: plan.currency })
+              : undefined;
+        if (problem !== undefined) {
+          setFieldErrorsDesk(
+            mapFieldErrors([{ path: "obligationCounterpartyId", message: problem }], KNOWN_PATHS),
+          );
+          return;
+        }
+        if (plan?.kind === "settle") {
+          const settled = ledger.settleDebt({
+            counterpartyId: deskPerson,
+            accountId: next.accountId,
+            date: next.date,
+            amount: next.amount,
+            currency: deskAccount.currency,
+            dischargesCurrency: plan.currency,
+            dischargesAmount: plan.dischargesAmount,
+            note: next.note,
+            categoryId: next.categoryId,
+          });
+          if (!("id" in settled)) {
+            const resolved = settled.fieldErrors.map((error) => ({
+              path: error.path,
+              message: resolveFieldErrorMessage(t, error),
+            }));
+            setFieldErrorsDesk(mapFieldErrors(resolved, KNOWN_PATHS));
+            return;
+          }
+          setFieldErrorsDesk(undefined);
+          router.dismissTo("/");
+          return;
+        }
+      }
       const result = ledger.createTransaction(next);
       if (!("id" in result)) {
         const resolved = result.fieldErrors.map((error) => ({
@@ -809,7 +972,7 @@ export default function QuickAdd() {
       }
       router.dismissTo("/");
     },
-    [composerAccounts, ledger, t],
+    [composerAccounts, ledger, snapshot.categories, snapshot.counterparties, t, today],
   );
 
   if (breakpoint === "desk") {

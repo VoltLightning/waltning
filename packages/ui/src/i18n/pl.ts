@@ -365,11 +365,15 @@ export const pl: Messages = {
     newCounterparty: "+ Nowa osoba lub firma",
     /** §6.6 — a debt category asks who the other side is, and cannot be saved without. */
     who: "Kto?",
-    whoPlaceholder: "Wybierz osobę",
-    whoRequired: "Wybierz osobę.",
+    whoPlaceholder: "Proszę wybrać osobę",
+    whoRequired: "Proszę wybrać osobę.",
+    /** S09 — a legacy row under a debt category that names nobody. */
+    notCountedAsDebt: "Jeszcze nie liczy się jako dług. Po wskazaniu osoby zostanie policzony.",
     /** Under Who?, when the person has an open debt this entry pays down. */
-    settlesOwed: "{{name}}: rozliczenie należności.",
-    settlesOwe: "{{name}}: rozliczenie zobowiązania.",
+    settlesOwed: "{{name}}: rozliczenie należności w {{currency}}.",
+    settlesOwe: "{{name}}: rozliczenie zobowiązania w {{currency}}.",
+    nothingToSettle: "{{name}}: brak otwartego zadłużenia w tym kierunku.",
+    settleNeedsRate: "Brak kursu dla {{currency}}. Proszę rozliczyć dług na stronie osoby.",
 
     // L2 — "cash" (unchanged), not "gotówka": nothing populates an account's
     // Polish alias today (`en.ts`'s own comment on this same key), and a

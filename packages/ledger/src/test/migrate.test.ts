@@ -1764,6 +1764,8 @@ describe("a constraint declared in the schema is present on the device", () => {
       "transactions_category_kind_matches_type_update",
       "transactions_category_not_archived_insert",
       "transactions_category_not_archived_update",
+      "transactions_debt_category_shape_insert",
+      "transactions_debt_category_shape_update",
       "transactions_lines_sum_matches_update",
     ]);
   });

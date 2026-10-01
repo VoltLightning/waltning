@@ -181,6 +181,13 @@ is refused with an error on Who?. Moving the row to any other category takes the
 role back and clears the person it was asked for, while a role chosen by hand
 stays. Any other category pick is written at once, as it always was.
 
+**A row that was filed under one of the four before the rule is shown as it
+is.** One that names nobody carries *Not counted as a debt yet. Add who, and it
+is.* under its Who? row, and an edit that touches neither the category nor the
+person (a note, an amount) saves without asking for who. A legacy
+*contribution* under a debt category keeps its role: opening the row never
+leaves Save showing.
+
 One picker serves both rows — the same directory, asked twice — rather than two
 components holding two copies of one list. Imported/legacy debt rows with no merchant link retain entered name text as Who,
 never silently promote the debtor into a merchant. Show the entered name snapshot and

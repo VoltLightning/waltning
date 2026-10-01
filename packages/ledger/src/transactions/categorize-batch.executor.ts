@@ -50,6 +50,7 @@ import {
   assertCategoryNotArchived,
   type LocalTransactionRow,
 } from "./create-transaction.executor.ts";
+import { debtCategoryIds, isDebtCategory, rowsMissingDebt } from "./debt-categories.ts";
 
 const { transactions, categories } = schema;
 
@@ -72,6 +73,38 @@ export const categorizeBatchExecutor = defineLocalExecutor<
 function categorize(input: CategorizeBatchInput, tx: ReplicaTx): LocalTransactionRow[] {
   // M2 — before the `UPDATE`, so no row is touched by a batch that cannot stand.
   assertCategoryNotArchived(tx, input.categoryId, "categorize_batch: category_id");
+
+  /**
+   * §6.6 — moving rows *into* a debt category would file them as debts with
+   * nobody named, so the batch is refused naming how many lack the debt; moving
+   * rows *out* of one takes the automatic role with it, in the same write.
+   * Both before the bulk `UPDATE`, for the reason M2 gives.
+   */
+  if (isDebtCategory(tx, input.categoryId)) {
+    const missing = rowsMissingDebt(tx, input.transactionIds);
+    if (missing.length > 0) {
+      throw new LocalRefusal(
+        `categorize_batch: ${missing.length} of the named rows carry no debt, and ${input.categoryId} is ` +
+          "a debt category (SPEC §6.6) — file them one by one, each with the person on the other side",
+      );
+    }
+  }
+  // The rows that hold the automatic role now, read before the `UPDATE` moves
+  // them: clearing it first would put a debt category on a row with no debt.
+  const leaving = isDebtCategory(tx, input.categoryId)
+    ? []
+    : tx
+        .select({ id: transactions.id })
+        .from(transactions)
+        .where(
+          and(
+            inArray(transactions.id, input.transactionIds),
+            eq(transactions.obligationRole, "debt"),
+            inArray(transactions.categoryId, debtCategoryIds(tx)),
+          ),
+        )
+        .all()
+        .map((row) => row.id);
 
   // `undefined` only when `input.categoryId` names no row at all — the FK on
   // `transactions.category_id` refuses that on its own, with its own message,
@@ -124,6 +157,13 @@ function categorize(input: CategorizeBatchInput, tx: ReplicaTx): LocalTransactio
       `categorize_batch: named ${distinctIds} distinct transactions, ${updated.length} were ` +
         `live ${category === undefined ? "income or expense" : category.kind} rows — ${reason}`,
     );
+  }
+
+  if (leaving.length > 0) {
+    tx.update(transactions)
+      .set({ obligationCounterpartyId: null, obligationRole: null })
+      .where(inArray(transactions.id, leaving))
+      .run();
   }
 
   return updated;

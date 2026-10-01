@@ -23,7 +23,8 @@ import { useCallback } from "react";
 import { Pressable, Text, View } from "react-native";
 import Animated from "react-native-reanimated";
 import { Amount } from "../../../fx/atoms/amount/amount";
-import { useT } from "../../../i18n/provider";
+import { decimalMark } from "../../../i18n/locales.ts";
+import { useLocale, useT } from "../../../i18n/provider";
 import { useInteraction } from "../../../primitives/interaction.ts";
 import { usePressScale } from "../../../primitives/press-scale.ts";
 import { Card } from "../../../shell/molecules/card/card";
@@ -70,16 +71,28 @@ type OpenDebtRowProps = {
 };
 
 function OpenDebtRow({ line, first, onOpen }: OpenDebtRowProps) {
+  const t = useT();
+  const mark = decimalMark(useLocale());
   const styles = useStyles();
   const { focused, handlers } = useInteraction();
   const press = usePressScale();
+  // What a screen reader says for the whole line: who, which way, how much.
+  const label = [
+    line.name,
+    t(
+      money.debtDirection(line.balance, line.decimals) === "youOwe"
+        ? "counterparties.youOwe"
+        : "counterparties.owesYou",
+    ),
+    `${money.forDisplay(money.abs(line.balance), line.decimals, mark)}\u00a0${line.currency}`,
+  ].join(", ");
   const { counterpartyId } = line;
   const handlePress = useCallback(() => onOpen(counterpartyId), [onOpen, counterpartyId]);
   return (
     <Animated.View style={press.style}>
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={line.name}
+        accessibilityLabel={label}
         onPress={handlePress}
         onPressIn={press.onPressIn}
         onPressOut={press.onPressOut}

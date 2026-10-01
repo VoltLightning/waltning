@@ -1452,13 +1452,54 @@ from a display name, which a person renames and a language translates:
 
 Picking one makes the obligation role `debt` and requires a person on the other
 side (`obligation_counterparty_id`): a debt with nobody on the other end is not
-a debt, so the capture surfaces ask **Who?** where the category is picked and
-refuse to save without it. The role is a function of the category, not a value
-the category writes: any other category takes it back, while a role somebody
-chose by hand is theirs and stays. A category a person made and named
-*Borrowed* carries no seed tag and means nothing about debt. A repayment needs
-no link of its own — it carries the same obligation party and role as the debt
-it pays, so the derived balance below goes down by it.
+a debt. Every claim below names the layer that enforces it:
+
+- **The capture surfaces** ask **Who?** where the category is picked and refuse
+  to save without it (Quick add on phone and desk, and S09) — *UI*.
+- **A row under one of the four carries the `debt` role and a person** —
+  `create_transaction`, `update_transaction` and `supersede_transaction`
+  refuse otherwise with a message naming the field, and `categorize_batch`
+  refuses to move rows into one that carry no debt (*service, the replica's
+  executors*); under them, the `transactions_debt_category_shape_insert/update`
+  triggers on the replica (`0021_debt_categories`) and
+  `transactions_debt_category_shape` on Postgres (**WA022**,
+  `0025_debt_categories.sql`) hold when the code is wrong (*database, both
+  engines*). The triggers watch only `category_id`, `obligation_role` and
+  `obligation_counterparty_id`, so an unrelated edit to a legacy row that names
+  nobody (a note, an amount) is never refused by them.
+- **Leaving the four takes the automatic role with it.** `update_transaction`
+  and `categorize_batch` clear the obligation pair of a row they move out of one
+  of the four when the write says nothing about the obligation (the identity
+  link, who it was with, stays); a role a person chose by hand under another
+  category is never touched — *service*. The role is a function of the
+  category on the capture surfaces, not a value written into the draft, so
+  nothing is left to clear — *UI*.
+- **Merging into or out of the four is refused while the loser holds rows**
+  (`merge_categories`, *service*; the triggers refuse the `UPDATE` if it were
+  attempted regardless): plain rows moved under a debt category would be debts
+  with nobody named, and debts moved out would keep a role their category no
+  longer states. Re-file them first, each with the person on the other side;
+  an empty category merges freely. `convert_leaf_group` needs no rule of its
+  own: it already refuses a category any row references, so the four can only
+  become groups while empty.
+- **Rows that already sit under the four** are converted by a one-time
+  migration (`0021_debt_categories` on the replica, `0025_debt_categories` on
+  Postgres, idempotent): a row that names a person (`counterparty_id`) and
+  carries no obligation becomes a debt on that person. A row that names nobody
+  stays plain, and S09 says *not counted as a debt — add who* instead of
+  guessing; it does not block unrelated edits.
+- **A repayment is `settle_debt`, never a second path.** *Repayment received*
+  and *Repayment made* with a person who has an open debt in the matching
+  direction settle against it (S14): `settle_debt` reads the live sign, stamps
+  `debt_amount`/`debt_currency` so 25 EUR discharges a PLN debt without
+  opening a reverse EUR one, verifies the direction against the balance and
+  reports `overSettled` (*service*). With no open debt in that direction the
+  capture surface refuses on Who?: if they never owed you, money from them is
+  a loan to you, which is *Borrowed*.
+
+A category a person made and named *Borrowed* carries no seed tag and means
+nothing about debt. The rule is keyed on the four starter categories' seed keys
+(`DEBT_SEED_KEYS`), not on a flag on the category.
 
 **Debt is derived, never stored.** A counterparty's position is the running sum
 of the `debt`-role transactions referencing them. Nothing is posted twice, so a

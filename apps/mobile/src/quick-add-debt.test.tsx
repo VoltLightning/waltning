@@ -228,9 +228,13 @@ describe("QuickAdd — a debt category asks Who? (§6.6)", () => {
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
 
     pickCategory("Money from friends");
+    // Under the debt category the role is the category's: Who? is asked, with Nina already on it.
+    expect(screen.getByRole("button", { name: "Who?: Nina" })).toBeDefined();
     pickCategory("Salary");
+    expect(screen.queryByRole("button", { name: /^Who\?/ })).toBeNull();
     save("Save income");
 
+    // …and leaving it leaves the role the person chose by hand where they put it.
     expect(createTransaction.mock.calls[0]?.[0]).toMatchObject({
       categoryId: SALARY.id,
       obligationCounterpartyId: NINA.id,
@@ -241,6 +245,10 @@ describe("QuickAdd — a debt category asks Who? (§6.6)", () => {
   it("reads the seed tag, not the name: a category someone made and called Borrowed is not a debt", () => {
     withLedger();
     fireEvent.click(screen.getByRole("tab", { name: "Income" }));
+    // The seeded category, renamed: still a debt, so Who? is asked…
+    pickCategory("Money from friends");
+    expect(screen.getByRole("button", { name: /^Who\?/ })).toBeDefined();
+    // …and the one a person made and called Borrowed is not.
     pickCategory("Borrowed");
     expect(screen.queryByRole("button", { name: /^Who\?/ })).toBeNull();
   });
@@ -261,38 +269,8 @@ describe("QuickAdd — a debt category asks Who? (§6.6)", () => {
     });
   });
 
-  it("says which open debt a repayment settles, and links it by the same person and role", () => {
-    const createTransaction = vi.fn();
-    withLedger({
-      createTransaction,
-      // Nina owes the ledger's owner: a positive debt balance (§6.6).
-      balances: () => [
-        {
-          counterpartyId: NINA.id,
-          name: "Nina",
-          kind: "person",
-          settlementCurrency: null,
-          currency: PLN,
-          decimals: 2,
-          balance: toMoney("150"),
-          ageDays: null,
-          bucket: null,
-        },
-      ],
-    });
-    fireEvent.click(screen.getByRole("tab", { name: "Income" }));
-    typeAmount("150");
-    pickCategory("Money back");
-    pickNina();
-
-    expect(screen.getByText("Settles what Nina owes you.")).toBeDefined();
-    save("Save income");
-    expect(createTransaction.mock.calls[0]?.[0]).toMatchObject({
-      categoryId: REPAYMENT_RECEIVED.id,
-      obligationCounterpartyId: NINA.id,
-      obligationRole: "debt",
-    });
-  });
+  // The repayment path (settle_debt, hint, no-debt refusal, over-settlement) is
+  // `quick-add-repayment.test.tsx`, over a real ledger rather than a port double.
 
   it("sends the category and the kind along when Who? creates a person, and they come back", () => {
     withLedger();

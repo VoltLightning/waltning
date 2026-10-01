@@ -300,11 +300,16 @@ same person sheet with no role to choose; one pick closes it, and *+ New person
 or company* makes the person inline — a contact made here is a *person*, and the
 draft's category and kind are still there when S15 returns. Save refused without
 a person says so on the Who? row. Choosing any other category takes the role
-back; a role chosen by hand under *More details* stays. A repayment whose person
-has an open debt in that direction says which it pays down (*Settles what Nina
-owes you*): it carries the same party and role as the debt, so the balance
-S12–S14 derive goes down by it and the overview's line follows. The desk form
-asks the same question in the same place.
+back; a role chosen by hand under *More details* stays. A repayment is
+**`settle_debt`** (S14), not a second write: with a person who has an open debt
+in that direction the hint says which one and in which currency (*Settles what
+Nina owes you, in PLN*), a repayment in another currency discharges the debt at
+the reference cross rate without opening a reverse debt, and one that pays more
+than was owed says *Becomes 20,00 PLN the other way* before it commits. With no
+open debt in that direction Save is refused on Who? (*Nothing to settle with
+Nina*) — money from somebody who never owed you is *Borrowed*. The desk form
+asks the same questions in the same place, carries *who it was with* like the
+phone, and drops the obligation when the category stops being a debt.
 
 Track money owed reveals a **separate party selector** and an explicit meaning.
 For expenses: **I'll get this back** or **I'm paying someone back**. For income:

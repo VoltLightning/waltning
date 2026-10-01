@@ -385,3 +385,57 @@ describe("a debt category — Who? is required, the role follows the category", 
     expect(onSave).toHaveBeenCalledWith({ categoryId: "cat-salary" });
   });
 });
+
+/**
+ * A legacy row — filed under a debt category before the rule — is shown as it
+ * is. Opening it changes nothing and an unrelated edit is never held up.
+ */
+describe("a legacy row under a debt category", () => {
+  const DEBT = {
+    categoryId: "cat-borrowed",
+    categoryName: "Money from friends",
+    debtCategory: true,
+  };
+  const legacy = (overrides: Partial<TransactionFields>): TransactionFields => ({
+    ...FIELDS,
+    categoryId: "cat-borrowed",
+    ...overrides,
+  });
+
+  it("does not open with Save showing when it carries a contribution", () => {
+    renderCard({
+      ...DEBT,
+      fields: legacy({ obligationCounterpartyId: "cp-nina", obligationRole: "contribution" }),
+      obligationCounterpartyId: "cp-nina",
+      obligationCounterpartyName: "Nina",
+    });
+    expect(screen.queryByRole("button", { name: "Save" })).toBeNull();
+  });
+
+  it("says it is not counted as a debt, and a note edit saves without asking for who", () => {
+    const { onSave } = renderCard({ ...DEBT, fields: legacy({}) });
+    expect(screen.getByText(/^Not counted as a debt yet/)).toBeDefined();
+    expect(screen.queryByRole("button", { name: "Save" })).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Note" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Note" }), {
+      target: { value: "a note" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(onSave).toHaveBeenCalledWith({ note: "a note" });
+  });
+
+  it("becomes a debt the moment somebody is named", () => {
+    const { onSave } = renderCard({
+      ...DEBT,
+      fields: legacy({}),
+      obligationCounterpartyId: "cp-nina",
+      obligationCounterpartyName: "Nina",
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(onSave).toHaveBeenCalledWith({
+      obligationCounterpartyId: "cp-nina",
+      obligationRole: "debt",
+    });
+  });
+});

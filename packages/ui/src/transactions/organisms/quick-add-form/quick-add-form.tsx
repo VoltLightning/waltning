@@ -69,6 +69,8 @@ export type QuickAddDraft = {
   date: string;
   note: string;
   isBusiness: boolean;
+  /** §6.6.1 — who it was with; the picker's answer, whether or not a role turns it into an obligation. */
+  counterpartyId: string | null;
   obligationCounterpartyId: string | null;
   obligationRole: ObligationRole | null;
 };
@@ -240,7 +242,12 @@ export function QuickAddForm({
       date,
       note,
       isBusiness,
-      obligationCounterpartyId,
+      // Who it was with, as the phone carries it: the picker's answer is the
+      // identity link whatever the role. The obligation pair is both or neither
+      // (`transactions_obligation_pair_shape`), so leaving a debt category —
+      // which takes the role with it — takes the person off the obligation too.
+      counterpartyId: obligationCounterpartyId,
+      obligationCounterpartyId: effectiveRole === null ? null : obligationCounterpartyId,
       obligationRole: effectiveRole,
     });
   }, [

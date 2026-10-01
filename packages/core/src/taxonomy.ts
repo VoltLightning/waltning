@@ -31,6 +31,30 @@ export type SeedGroup = {
   leaves: { key: string; name: string; isEarnings?: boolean; note?: string }[];
 };
 
+/**
+ * The four starter categories that are debts (`SPEC.md` §6.6): a row filed under
+ * one carries the `debt` obligation role and a person on the other side.
+ *
+ * **Keyed on the seed key, which is the category's identity on both engines**
+ * (`external_id = 'seed:<key>'`) — never its name, which is the person's to
+ * rename and the language's to translate, and never a flag on the category.
+ * Every layer that states the rule reads this list: the client's `debtIntent`,
+ * the replica's executors and trigger, and Postgres's trigger, whose SQL
+ * spells the same four keys out (`0025_debt_categories.sql`) and is held to
+ * this list by a test.
+ */
+export const DEBT_SEED_KEYS = [
+  "borrowed",
+  "lent-out",
+  "repayment-received",
+  "repayment-made",
+] as const;
+
+export type DebtSeedKey = (typeof DEBT_SEED_KEYS)[number];
+
+/** `DEBT_SEED_KEYS` as stored: `seed:borrowed`, … */
+export const DEBT_SEED_EXTERNAL_IDS: readonly string[] = DEBT_SEED_KEYS.map((key) => `seed:${key}`);
+
 /** Income — earnings is a flag, not a level. */
 export const incomeTree: SeedGroup[] = [
   {

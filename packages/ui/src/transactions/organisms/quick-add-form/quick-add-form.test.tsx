@@ -42,6 +42,7 @@ const restingDraft: Omit<QuickAddDraft, "amount" | "accountId"> = {
   date: TODAY,
   note: "",
   isBusiness: false,
+  counterpartyId: null,
   obligationCounterpartyId: null,
   obligationRole: null,
 };
@@ -388,8 +389,48 @@ describe("a debt category on the desk's form", () => {
     );
   });
 
-  it("asks nothing for a category that is not a debt", () => {
-    renderForm({ ...debtProps, debtCategoryIds: [] });
+  it("carries who it was with like the phone, and drops the obligation when the category stops being a debt", () => {
+    const onSave = vi.fn();
+    const view = renderForm({
+      ...debtProps,
+      categories: [
+        { id: "cat-borrowed", name: "Money from friends", kind: "income" as const },
+        { id: "cat-salary", name: "Salary", kind: "income" as const },
+      ],
+      onSave,
+    });
+    fillAmount();
+    fireEvent.click(screen.getByRole("button", { name: "Who?" }));
+    fireEvent.click(screen.getByRole("radio", { name: "Counterparty A" }));
+
+    // Borrowed → Salary: the role goes with the category, and so does the person on the obligation.
+    view.rerender(
+      <QuickAddForm
+        {...BASE_PROPS}
+        {...debtProps}
+        categories={[
+          { id: "cat-borrowed", name: "Money from friends", kind: "income" as const },
+          { id: "cat-salary", name: "Salary", kind: "income" as const },
+        ]}
+        categoryId="cat-salary"
+        onSave={onSave}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(onSave).toHaveBeenCalledWith(
+      expect.objectContaining({
+        categoryId: "cat-salary",
+        counterpartyId: "cp-a",
+        obligationCounterpartyId: null,
+        obligationRole: null,
+      }),
+    );
+  });
+
+  it("asks nothing for a category that is not a debt, and asks the moment it is one", () => {
+    const view = renderForm({ ...debtProps, debtCategoryIds: [] });
     expect(screen.queryByRole("button", { name: "Who?" })).toBeNull();
+    view.rerender(<QuickAddForm {...BASE_PROPS} {...debtProps} />);
+    expect(screen.getByRole("button", { name: "Who?" })).toBeDefined();
   });
 });

@@ -17,6 +17,7 @@
     "./counterparties/debt-intent": "./src/counterparties/debt-intent/debt-intent.ts",
     "./counterparties/debt-totals": "./src/counterparties/debt-totals/debt-totals.ts",
     "./counterparties/open-debts": "./src/counterparties/open-debts/open-debts.ts",
+    "./counterparties/repayment-plan": "./src/counterparties/repayment-plan/repayment-plan.ts",
     "./counterparties/split-shares": "./src/counterparties/split-shares/split-shares.ts",
     "./counterparties/counterparty-net": "./src/counterparties/counterparty-net/counterparty-net.ts",
     "./counterparties/near-matches": "./src/counterparties/near-matches/near-matches.ts",

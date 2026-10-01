@@ -34,6 +34,7 @@ import { readNearestRate } from "../currencies/read-rate.ts";
 import { defineLocalExecutor, LocalDeferral, LocalRefusal } from "../executor.ts";
 import { assertMoneyScale } from "../scale.ts";
 import { type ReplicaTx, ledgerSchema as schema } from "../schema-map.ts";
+import { assertDebtCategoryShape } from "./debt-categories.ts";
 
 const { accounts, categories, currencies, transactions } = schema;
 
@@ -88,6 +89,8 @@ export function insertTransaction(
 ): LocalTransactionRow {
   assertBusinessNotShared(input, tx);
   assertCategoryNotArchived(tx, input.categoryId, "create_transaction: category_id");
+  // §6.6 — a debt category is a debt: the role and a person, or no row.
+  assertDebtCategoryShape(tx, input.categoryId, input, "create_transaction: category_id");
   // R4 re-review — restored. L10 had dropped this call on the theory that
   // `create_transaction`'s own `validate` already ran it, pre-outbox, on this
   // exact `input`, so a second call here would check nothing new — true only

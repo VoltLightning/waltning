@@ -24,6 +24,7 @@ import {
   insertTransaction,
   type LocalTransactionRow,
 } from "./create-transaction.executor.ts";
+import { assertDebtCategoryShape } from "./debt-categories.ts";
 
 const { transactions } = schema;
 
@@ -80,6 +81,14 @@ function supersede(input: SupersedeTransactionInput, tx: ReplicaTx): LocalTransa
         "the replacement must be new",
     );
   }
+
+  // §6.6 — before the original is touched, so the refusal names this operation.
+  assertDebtCategoryShape(
+    tx,
+    input.replacement.categoryId,
+    input.replacement,
+    "supersede_transaction: replacement.category_id",
+  );
 
   const deleted = tx
     .update(transactions)

@@ -169,6 +169,8 @@ function settleDebt(input: SettleDebtInput, tx: ReplicaTx): SettleDebtResult {
       accountId: input.accountId,
       amountOriginal: input.amount,
       currency: input.currency,
+      // Who it was with, and who it owes — the same person, as a captured debt carries both.
+      counterpartyId: input.counterpartyId,
       obligationCounterpartyId: input.counterpartyId,
       obligationRole: "debt",
       enteredName: counterparty.name,

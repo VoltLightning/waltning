@@ -349,9 +349,13 @@ export const be: Messages = {
     who: "Хто?",
     whoPlaceholder: "Абярыце чалавека",
     whoRequired: "Абярыце чалавека.",
+    /** S09 — a legacy row under a debt category that names nobody. */
+    notCountedAsDebt: "Пакуль не ўлічваецца як доўг. Назавіце чалавека, і ён будзе ўлічаны.",
     /** Under Who?, when the person has an open debt this entry pays down. */
-    settlesOwed: "{{name}}: пагашэнне доўгу перад вамі.",
-    settlesOwe: "{{name}}: пагашэнне вашага доўгу.",
+    settlesOwed: "{{name}}: пагашэнне доўгу перад вамі, {{currency}}.",
+    settlesOwe: "{{name}}: пагашэнне вашага доўгу, {{currency}}.",
+    nothingToSettle: "{{name}}: адкрытага доўгу ў гэтым кірунку няма.",
+    settleNeedsRate: "Няма курсу для {{currency}}. Калі ласка, пагасіце доўг на старонцы чалавека.",
     commandBarPlaceholder: "48,90 наяўныя кава ўчора",
     commandBarLabel: "Дадаць аперацыю",
     commandBarCategoryPrompt: "Катэгорыя?",

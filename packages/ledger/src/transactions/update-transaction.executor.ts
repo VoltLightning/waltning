@@ -24,6 +24,7 @@ import {
   assertCategoryNotArchived,
   type LocalTransactionRow,
 } from "./create-transaction.executor.ts";
+import { assertDebtCategoryShape, obligationAfterLeaving } from "./debt-categories.ts";
 
 const { transactionLines, transactions } = schema;
 
@@ -159,6 +160,36 @@ function patchTransaction(input: UpdateTransactionInput, tx: ReplicaTx): LocalTr
   }
 
   /**
+   * **§6.6 — a debt category is a debt, checked whenever the patch touches the
+   * category or the obligation, and only then.** A note or an amount edited on
+   * a legacy row that sits under one of the four with nobody named is an
+   * unrelated edit and is not this rule's to refuse; adding the person, or
+   * moving the row, is.
+   *
+   * Moving a row *out* of the four with nothing said about the obligation
+   * takes the automatic role with it (`obligationAfterLeaving`), so the row
+   * does not keep a debt its category no longer states.
+   */
+  const obligationInPatch =
+    "obligationRole" in input.patch || "obligationCounterpartyId" in input.patch;
+  const afterLeaving = obligationAfterLeaving(tx, current, input.patch, obligationInPatch);
+  if ("categoryId" in input.patch || obligationInPatch) {
+    assertDebtCategoryShape(
+      tx,
+      merged.categoryId,
+      afterLeaving ?? {
+        obligationCounterpartyId:
+          "obligationCounterpartyId" in input.patch
+            ? input.patch.obligationCounterpartyId
+            : current.obligationCounterpartyId,
+        obligationRole:
+          "obligationRole" in input.patch ? input.patch.obligationRole : current.obligationRole,
+      },
+      "update_transaction: category_id",
+    );
+  }
+
+  /**
    * **A patched amount must still be the sum of its own lines.**
    *
    * §10.3: *"the parent transaction holds the total and every balance reads
@@ -241,6 +272,7 @@ function patchTransaction(input: UpdateTransactionInput, tx: ReplicaTx): LocalTr
     .set({
       ...input.patch,
       ...brandFields,
+      ...(afterLeaving ?? {}),
       version: sql`${transactions.version} + 1`,
       updatedAt: new Date(),
     })

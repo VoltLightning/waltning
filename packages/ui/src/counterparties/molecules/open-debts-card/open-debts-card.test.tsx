@@ -35,7 +35,8 @@ describe("OpenDebtsCard — the overview's open debts", () => {
   it("opens the person when their line is pressed", () => {
     const onOpen = vi.fn();
     render(<OpenDebtsCard lines={[YOU_OWE]} onOpenCounterparty={onOpen} />);
-    fireEvent.click(screen.getByRole("button", { name: "Nina" }));
+    // The whole line is the label: who, which way, how much.
+    fireEvent.click(screen.getByRole("button", { name: /^Nina, you owe, 5[.,]00\u00a0EUR$/ }));
     expect(onOpen).toHaveBeenCalledWith("a");
   });
 

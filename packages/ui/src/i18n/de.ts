@@ -357,9 +357,14 @@ export const de: Messages = {
     who: "Wer?",
     whoPlaceholder: "Person auswählen",
     whoRequired: "Bitte wählen Sie eine Person aus.",
+    /** S09 — a legacy row under a debt category that names nobody. */
+    notCountedAsDebt: "Noch nicht als Schuld gezählt. Geben Sie an, wer es ist, dann zählt es.",
     /** Under Who?, when the person has an open debt this entry pays down. */
-    settlesOwed: "{{name}}: begleicht eine offene Forderung von Ihnen.",
-    settlesOwe: "{{name}}: begleicht Ihre offene Schuld.",
+    settlesOwed: "Damit begleicht {{name}} eine Schuld bei Ihnen, in {{currency}}.",
+    settlesOwe: "Damit begleichen Sie eine Schuld bei {{name}}, in {{currency}}.",
+    nothingToSettle: "Bei {{name}} ist in dieser Richtung keine Schuld offen.",
+    settleNeedsRate:
+      "Für {{currency}} liegt kein Wechselkurs vor. Bitte begleichen Sie die Schuld auf der Seite der Person.",
     commandBarPlaceholder: "48,90 bar Kaffee gestern",
     commandBarLabel: "Buchung hinzufügen",
     commandBarCategoryPrompt: "Kategorie?",
