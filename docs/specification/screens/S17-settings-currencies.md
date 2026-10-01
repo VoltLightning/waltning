@@ -116,10 +116,13 @@ abroad requires.
 
 ## 8. Rules this screen must obey
 
-- **§7.0** — the **display** currency is not set here. It is the header
-  `CurrencyChip`, free and instant; with nothing chosen it is the currency of the
-  device's region when the ledger holds it, else the pivot, derived on every
-  read and never stored. This screen states it and sets what is *available*.
+- **§7.0** — the **display** currency is a device preference, free and instant,
+  never a registry write: *Show figures in* at the top of this screen sets it,
+  as does the header `CurrencyChip` on the desk. With nothing chosen it is the
+  currency of the device's region when the ledger holds it, else the anchor,
+  derived on every read and never stored. **A choice with no rate today is not
+  applied**, and the card says so (*Not applied yet — needs a rate*) rather than
+  silently showing the anchor. The rest of this screen sets what is *available*.
 - **§7.7** — prefer the central bank of the jurisdiction you report in.
 - Coverage is stated per currency, with its source and last quote date.
   Reporting a currency as present when it holds 0.5% of its range is how GEL

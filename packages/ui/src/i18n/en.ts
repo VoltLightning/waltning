@@ -1231,6 +1231,7 @@ export const en = {
     plusOtherCurrencies_few: "+ {{count}} other currencies",
     plusOtherCurrencies_many: "+ {{count}} other currencies",
     plusOtherCurrencies_other: "+ {{count}} other currencies",
+    estimatedAtToday: "≈ some days at today's rate",
     /**
      * The *Go to* cards' figures (S04 §3). **Every card carries one**, which is
      * what makes the grid a status board rather than a menu — *Between us* as a
@@ -1666,7 +1667,9 @@ export const en = {
     pivotExplained:
       "Exchange rates are stored against this currency so any pair can be worked out. It decides nothing you see; figures are shown in the currency above.",
     displayExplained:
-      "This follows your phone's region until you choose another currency. Switch it at any time with the currency toggle at the top; nothing you have recorded changes.",
+      "Until you choose, this follows your phone's region. Switching changes only how figures are shown; nothing you have recorded changes.",
+    displayNeedsRate:
+      "Not applied yet: {{currency}} has no exchange rate, so figures stay in {{shown}}. Set a {{currency}} rate to use it.",
     changePivotStart: "Change the anchor currency…",
     groupShown: "In the header toggle",
     groupHeld: "Held, not in the toggle",

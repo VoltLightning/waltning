@@ -1,5 +1,5 @@
 import "./polyfills.ts";
-import { anchorToRegion } from "@waltning/client/currencies/anchor-to-region";
+import { anchorOnce } from "@waltning/client/currencies/anchor-to-region";
 import {
   createPhoneLedger,
   type PhoneLedgerController,
@@ -15,6 +15,7 @@ import { Directory, File, Paths } from "expo-file-system";
 import { deleteDatabaseSync, openDatabaseSync, type SQLiteRunResult } from "expo-sqlite";
 import { mobileDiagnostics } from "./diagnostics.ts";
 import {
+  anchorDecided,
   deviceRegionCurrency,
   setLedgerHistoryReader,
   setLiveHeldReader,
@@ -119,8 +120,8 @@ export function startPhoneLedger(): PhoneLedgerStartup {
     });
 
     const controller = createPhoneLedger(session, deviceRuntime(mobileDiagnostics));
-    // §7.0 — a fresh ledger is anchored to the region's currency, before any account exists.
-    anchorToRegion(controller, deviceRegionCurrency, pivotCurrency.code);
+    // §7.0 — a fresh ledger is anchored to the region's currency, before any account exists, once per device.
+    void anchorOnce(controller, deviceRegionCurrency, pivotCurrency.code, anchorDecided);
 
     // H1 — the header's live fallback, wired before anything reads it: every
     // `getSnapshot()` call resolves through this reader once nothing is chosen.

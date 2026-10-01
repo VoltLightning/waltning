@@ -70,9 +70,11 @@ function fakeController(overrides: {
   readCoverage?: PhoneLedgerPort["readCoverage"];
   readCurrencyUsage?: PhoneLedgerPort["readCurrencyUsage"];
   searchTransactions?: PhoneLedgerPort["searchTransactions"];
+  listCurrencies?: PhoneLedgerPort["listCurrencies"];
 }) {
   const port = basePort({
     listCurrencySettings: overrides.listCurrencySettings ?? (() => [PLN_ROW, USD_ROW]),
+    ...(overrides.listCurrencies ? { listCurrencies: overrides.listCurrencies } : {}),
     ...(overrides.searchTransactions ? { searchTransactions: overrides.searchTransactions } : {}),
     ...(overrides.readCurrencyUsage ? { readCurrencyUsage: overrides.readCurrencyUsage } : {}),
     readCoverage:
@@ -611,4 +613,31 @@ it("states why the anchor cannot change once a transaction exists, and disables 
   expect(
     (start as HTMLButtonElement).disabled || start.getAttribute("aria-disabled") === "true",
   ).toBe(true);
+});
+
+/**
+ * **A choice with no rate today is not silently swapped for the anchor**: the
+ * card says it is not applied and what would apply it.
+ */
+it("says a chosen display currency is not applied while it has no rate", async () => {
+  await displayCurrency.set(PLN);
+  try {
+    // The fixture holds no rate for PLN (the port answers none), and USD is the anchor.
+    withLedger({
+      listCurrencies: () => [
+        { code: USD, name: "US Dollar", symbol: "$", decimals: 2, capturable: true, isPivot: true },
+        {
+          code: PLN,
+          name: "Polish Złoty",
+          symbol: "zł",
+          decimals: 2,
+          capturable: false,
+          isPivot: false,
+        },
+      ],
+    });
+    expect(screen.getByText(/Not applied yet: PLN has no exchange rate/)).toBeDefined();
+  } finally {
+    await displayCurrency.set(USD);
+  }
 });

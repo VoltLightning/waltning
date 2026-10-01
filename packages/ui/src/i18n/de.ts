@@ -663,6 +663,7 @@ export const de: Messages = {
     plusOtherCurrencies_few: "+ {{count}} weitere Währungen",
     plusOtherCurrencies_many: "+ {{count}} weitere Währungen",
     plusOtherCurrencies_other: "+ {{count}} weitere Währungen",
+    estimatedAtToday: "≈ einige Tage zum heutigen Kurs",
     gatewayPeople_one: "{{count}} Person",
     gatewayPeople_few: "{{count}} Personen",
     gatewayPeople_many: "{{count}} Personen",
@@ -951,7 +952,9 @@ export const de: Messages = {
     pivotExplained:
       "Wechselkurse werden gegenüber dieser Währung gespeichert, damit sich jedes Paar berechnen lässt. Sie bestimmt nichts von dem, was Sie sehen; Beträge erscheinen in der oben gewählten Währung.",
     displayExplained:
-      "Das richtet sich nach der Region Ihres Telefons, bis Sie eine andere Währung wählen. Sie können sie jederzeit mit dem Währungsschalter oben umstellen; an Ihren Buchungen ändert sich dadurch nichts.",
+      "Solange Sie nichts wählen, richtet sich dies nach der Region Ihres Telefons. Das Umstellen ändert nur die Darstellung; an Ihren Buchungen ändert sich nichts.",
+    displayNeedsRate:
+      "Noch nicht angewendet: Für {{currency}} gibt es keinen Wechselkurs, daher bleiben die Beträge in {{shown}}. Setzen Sie einen Kurs für {{currency}}, um sie zu verwenden.",
     changePivotStart: "Ankerwährung ändern…",
     groupShown: "Im Umschalter der Kopfzeile",
     groupHeld: "Gehalten, nicht im Umschalter",

@@ -34,6 +34,7 @@
  */
 
 import { useDisplayCurrency } from "@waltning/client/currencies/display-currency";
+import { useDisplayBasis } from "@waltning/client/currencies/use-display-basis";
 import type { CurrencyPatch } from "@waltning/client/ledger/create-phone-ledger";
 import { deviceRuntime } from "@waltning/client/ledger/device-runtime";
 import { useLedgerController } from "@waltning/client/ledger/use-ledger-controller";
@@ -60,7 +61,7 @@ import { space } from "@waltning/ui/tokens";
 import { router } from "expo-router";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { Text, View } from "react-native";
-import { displayCurrency } from "./platform";
+import { anchorDecided, displayCurrency } from "./platform";
 import { PushedPage } from "./pushed-page";
 
 type Draft = { code: string; name: string; symbol: string };
@@ -159,6 +160,14 @@ export default function SettingsCurrenciesScreen() {
 
   const pivotRow = rows.find((row) => row.isPivot);
   const display = useDisplayCurrency(displayCurrency);
+  // What is actually applied: the display currency, or the anchor when it has no rate today.
+  const basis = useDisplayBasis(
+    ledger,
+    snapshot.currencies,
+    displayCurrency,
+    today,
+    snapshot.revision,
+  );
   const displayOptions: SelectOption[] = useMemo(
     () => rows.map((row) => ({ value: row.code, label: `${row.code} · ${row.name}` })),
     [rows],
@@ -315,6 +324,8 @@ export default function SettingsCurrenciesScreen() {
   const handleConfirmPivotChange = useCallback(() => {
     setPivotConfirmOpen(false);
     if (!selectedPivotTarget) return;
+    // A person's own change settles the anchor: first-start anchoring never runs again.
+    void anchorDecided.set("decided");
     // C1 — the *target*, non-pivot currency, never `pivotRow.code` (the
     // current pivot): the executor refuses that as "already the pivot".
     const result = ledger.changePivot({ code: selectedPivotTarget });
@@ -359,6 +370,11 @@ export default function SettingsCurrenciesScreen() {
             onChange={handleChangeDisplay}
           />
           <Text style={styles.pivotBody}>{t("fx.displayExplained")}</Text>
+          {basis !== null && basis.currency !== display.currency ? (
+            <Text style={styles.pivotBody}>
+              {t("fx.displayNeedsRate", { currency: display.currency, shown: basis.currency })}
+            </Text>
+          ) : null}
         </View>
       </Card>
 

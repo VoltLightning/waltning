@@ -39,6 +39,7 @@
  */
 
 import { useDisplayCurrency } from "@waltning/client/currencies/display-currency";
+import { useDisplayBasis } from "@waltning/client/currencies/use-display-basis";
 import { useDevicePreference } from "@waltning/client/device/use-device-preference";
 import { clientFailure, emitClientDiagnostic } from "@waltning/client/diagnostics";
 import { DEFAULT_DESK_SCOPE } from "@waltning/client/ledger/desk-scope";
@@ -112,7 +113,6 @@ export default function Dashboard() {
   const snapshot = usePhoneLedger(ledger);
   const display = useDisplayCurrency(displayCurrency);
   const storedScope = useDevicePreference(deskScope);
-  const leadCurrency = display.currency;
   const scope = storedScope.value ?? DEFAULT_DESK_SCOPE;
 
   const currentMonth = yearMonth(deviceRuntime().capture().date.slice(0, 7));
@@ -129,8 +129,35 @@ export default function Dashboard() {
   );
 
   const layout = useDashboardLayout(ledger, snapshot.revision);
-  const spendRows = useSpendByCategory(ledger, period, scope, snapshot.revision);
-  const flowRows = useIncomeVsExpense(ledger, buckets, scope, snapshot.revision);
+  // §7.0 — every figure is stated in the display currency, each row at its own
+  // date's rate; what cannot be converted stays in its own currency, as an
+  // "other" row, never folded in unconverted.
+  const basis = useDisplayBasis(
+    ledger,
+    snapshot.currencies,
+    displayCurrency,
+    deviceRuntime().capture().date,
+    snapshot.revision,
+  );
+  const leadCurrency = basis?.currency ?? display.currency;
+  const rawSpendRows = useSpendByCategory(
+    ledger,
+    period,
+    scope,
+    snapshot.revision,
+    basis?.spendRebase,
+  );
+  const spendRows = useMemo(
+    () => (basis === null ? rawSpendRows : basis.restateSpend(rawSpendRows)),
+    [basis, rawSpendRows],
+  );
+  const flowRows = useIncomeVsExpense(
+    ledger,
+    buckets,
+    scope,
+    snapshot.revision,
+    basis?.spendRebase,
+  );
   const unsettledModel = useUnsettledBanner(snapshot.unsettledClearing);
 
   const today = deviceRuntime().capture().date;

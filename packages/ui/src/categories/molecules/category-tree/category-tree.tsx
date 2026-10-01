@@ -52,7 +52,7 @@ export type CategoryTreeNode = {
    * group's is its children's together. Absent where nothing was spent, or on
    * a screen that does not say.
    */
-  spent?: { amount: money.Money; currency: string; decimals: number };
+  spent?: { amount: money.Money; currency: string; decimals: number; approximate?: boolean };
   /** `spent` against the month's largest category, `0..1` — the bar's length. */
   share?: number;
 };
@@ -134,6 +134,7 @@ function CategoryTreeRow({ node, onOpenActions }: CategoryTreeRowProps) {
       </View>
       {node.spent === undefined ? null : (
         <View style={styles.figure}>
+          {node.spent.approximate === true ? <Text style={styles.approx}>≈</Text> : null}
           <Amount
             value={node.spent.amount}
             currency={node.spent.currency}
@@ -160,6 +161,7 @@ function CategoryTreeRow({ node, onOpenActions }: CategoryTreeRowProps) {
 }
 
 const useStyles = makeStyles((theme) => ({
+  approx: { color: theme.textMuted, ...text.ui("caption") },
   root: { gap: 0 },
   row: {
     minHeight: touchTarget.min,

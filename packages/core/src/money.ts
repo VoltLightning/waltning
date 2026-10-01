@@ -721,6 +721,8 @@ export type DayFlowRow = {
    */
   spendPivot: Money | null;
   inflowPivot: Money | null;
+  /** The pivot figures were re-expressed at a rate that is not this day's own — draw `≈`. Absent when exact. */
+  estimated?: boolean;
 };
 
 /**
@@ -873,11 +875,17 @@ export type SpendByCategoryOptions = {
    * Re-express `amountPivot` in another currency — the **display** currency
    * (§7.0) — each transaction at **its own date's** rate, never one rate
    * looked up now. `perPivot` is that date's units of `currency` per one
-   * pivot, or `null` when it has none, which voids the bucket exactly as a
-   * row stored without a rate does. A row already in `currency` is its own
+   * pivot — `estimated` when the date has none of its own and a nearer rate
+   * stands in — or `null` when there is none, which voids the bucket exactly
+   * as a row stored without a rate does. A row already in `currency` is its own
    * figure, never a round trip through the pivot.
    */
-  rebase?: { currency: CurrencyCode; perPivot: (date: AccountingDate) => UnitsPerPivot | null };
+  rebase?: {
+    currency: CurrencyCode;
+    /** The display currency's decimals — what a converted figure is stated to. */
+    decimals?: number;
+    perPivot: (date: AccountingDate) => { rate: UnitsPerPivot; estimated: boolean } | null;
+  };
 };
 
 export type SpendByCategoryLineRow = {
@@ -898,6 +906,12 @@ export type SpendByCategoryRow = {
    * reader that has no rate to give, which reads the same as `null`.
    */
   amountPivot?: Money | null;
+  /**
+   * Some row in `amountPivot` was converted at a rate that is not its own
+   * date's (a display currency with no quote that day), so the figure is an
+   * estimate and is drawn with `≈`. Absent when every row used its own.
+   */
+  estimated?: boolean;
 };
 
 /**
@@ -948,16 +962,22 @@ export const spendByCategory = (
     categoryId: string | null;
     amount: Decimal;
     amountPivot: Decimal | null;
+    estimated: boolean;
   };
   const totals = new Map<string, Bucket>();
   /** The row's rate into the reported currency: its own, or its own re-expressed at its date's rate. */
-  const rateOf = (row: SpendByCategoryTransactionRow): PivotPerUnit | undefined => {
+  const rateOf = (
+    row: SpendByCategoryTransactionRow,
+  ): { rate: PivotPerUnit | undefined; estimated: boolean } => {
     const { rebase } = options;
-    if (rebase === undefined) return row.fxRate;
-    if (row.currency === rebase.currency) return pivotPerUnit("1");
-    const perPivot = rebase.perPivot(row.date);
-    if (row.fxRate === undefined || perPivot === null) return undefined;
-    return pivotPerUnit(dec(row.fxRate).times(perPivot));
+    if (rebase === undefined) return { rate: row.fxRate, estimated: false };
+    if (row.currency === rebase.currency) return { rate: pivotPerUnit("1"), estimated: false };
+    const found = rebase.perPivot(row.date);
+    if (row.fxRate === undefined || found === null) return { rate: undefined, estimated: false };
+    return {
+      rate: pivotPerUnit(dec(row.fxRate).times(found.rate)),
+      estimated: found.estimated,
+    };
   };
   const bucketOf = (
     currency: CurrencyCode,
@@ -967,7 +987,14 @@ export const spendByCategory = (
     const key = `${currency}::${categoryId ?? ""}`;
     const existing = totals.get(key);
     if (existing) return existing;
-    const created: Bucket = { currency, decimals, categoryId, amount: dec(0), amountPivot: dec(0) };
+    const created: Bucket = {
+      currency,
+      decimals,
+      categoryId,
+      amount: dec(0),
+      amountPivot: dec(0),
+      estimated: false,
+    };
     totals.set(key, created);
     return created;
   };
@@ -980,7 +1007,9 @@ export const spendByCategory = (
     linedIds.add(line.transactionId);
     const bucket = bucketOf(parent.currency, parent.decimals, line.categoryId);
     bucket.amount = bucket.amount.plus(dec(line.amount));
-    bucket.amountPivot = plusPivot(bucket.amountPivot, dec(line.amount), rateOf(parent));
+    const lineRate = rateOf(parent);
+    bucket.amountPivot = plusPivot(bucket.amountPivot, dec(line.amount), lineRate.rate);
+    bucket.estimated ||= lineRate.estimated;
   }
 
   // Branch B — a row WITHOUT a breakdown: attribute to its own category.
@@ -988,7 +1017,9 @@ export const spendByCategory = (
     if (linedIds.has(row.id)) continue;
     const bucket = bucketOf(row.currency, row.decimals, row.categoryId);
     bucket.amount = bucket.amount.plus(dec(row.amountOriginal));
-    bucket.amountPivot = plusPivot(bucket.amountPivot, dec(row.amountOriginal), rateOf(row));
+    const rowRate = rateOf(row);
+    bucket.amountPivot = plusPivot(bucket.amountPivot, dec(row.amountOriginal), rowRate.rate);
+    bucket.estimated ||= rowRate.estimated;
   }
 
   return [...totals.values()]
@@ -997,12 +1028,13 @@ export const spendByCategory = (
         a.currency.localeCompare(b.currency) ||
         (a.categoryId ?? "").localeCompare(b.categoryId ?? ""),
     )
-    .map(({ currency, decimals, categoryId, amount, amountPivot }) => ({
+    .map(({ currency, decimals, categoryId, amount, amountPivot, estimated }) => ({
       currency,
       decimals,
       categoryId,
       amount: toMoney(amount),
       amountPivot: amountPivot === null ? null : toMoney(amountPivot),
+      ...(estimated ? { estimated } : {}),
     }));
 };
 
@@ -1042,6 +1074,8 @@ export type IncomeExpenseTransactionRow = {
   decimals: number;
   amountOriginal: Money;
   isCapital: boolean;
+  /** The row's own rate to the pivot — read only when the caller asks to `rebase`. */
+  fxRate?: PivotPerUnit;
 };
 
 /** One point on the line chart's x-axis — the caller's own granularity (a month, a week). */
@@ -1087,6 +1121,8 @@ export type IncomeExpenseRow = {
   decimals: number;
   income: Money;
   expense: Money;
+  /** Some row was stated at a rate that is not its own date's — draw `≈`. Absent when exact. */
+  estimated?: boolean;
 };
 
 /**
@@ -1114,6 +1150,7 @@ export const incomeVsExpense = (
   rows: readonly IncomeExpenseTransactionRow[],
   buckets: readonly IncomeExpenseBucket[],
   scope: LedgerScope,
+  options: Pick<SpendByCategoryOptions, "rebase"> = {},
 ): readonly IncomeExpenseRow[] => {
   type Bucket = {
     label: string;
@@ -1121,6 +1158,31 @@ export const incomeVsExpense = (
     decimals: number;
     income: Decimal;
     expense: Decimal;
+    estimated: boolean;
+  };
+  /**
+   * The row as the chart states it: its own currency, or — when the caller
+   * re-expresses in the display currency (§7.0) — that currency, each row at its
+   * own date's rate. A row that cannot be converted stays in its own currency
+   * and is drawn as an "other" one, never folded in unconverted.
+   */
+  const stated = (row: IncomeExpenseTransactionRow) => {
+    const own = {
+      currency: row.currency,
+      decimals: row.decimals,
+      amount: dec(row.amountOriginal),
+      estimated: false,
+    };
+    const { rebase } = options;
+    if (rebase === undefined || row.currency === rebase.currency) return own;
+    const found = rebase.perPivot(row.date);
+    if (row.fxRate === undefined || found === null) return own;
+    return {
+      currency: rebase.currency,
+      decimals: rebase.decimals ?? 2,
+      amount: dec(row.amountOriginal).times(row.fxRate).times(found.rate),
+      estimated: found.estimated,
+    };
   };
   const totals = new Map<string, Bucket>();
   /** Every currency the range holds at all, and the decimals its first row declared. */
@@ -1133,16 +1195,19 @@ export const incomeVsExpense = (
     const bucketPeriod = buckets.find((candidate) => inPeriod(row.date, candidate));
     if (!bucketPeriod) continue;
 
-    if (!currencies.has(row.currency)) currencies.set(row.currency, row.decimals);
-    const key = `${bucketPeriod.label}::${row.currency}`;
+    const shown = stated(row);
+    if (!currencies.has(shown.currency)) currencies.set(shown.currency, shown.decimals);
+    const key = `${bucketPeriod.label}::${shown.currency}`;
     const found = totals.get(key) ?? {
       label: bucketPeriod.label,
-      currency: row.currency,
-      decimals: row.decimals,
+      currency: shown.currency,
+      decimals: shown.decimals,
       income: dec(0),
       expense: dec(0),
+      estimated: false,
     };
-    const amount = dec(row.amountOriginal);
+    found.estimated ||= shown.estimated;
+    const amount = shown.amount;
     if (row.type === "income") found.income = found.income.plus(amount);
     else found.expense = found.expense.plus(amount);
     totals.set(key, found);
@@ -1159,6 +1224,7 @@ export const incomeVsExpense = (
         decimals,
         income: toMoney(entry?.income ?? dec(0)),
         expense: toMoney(entry?.expense ?? dec(0)),
+        ...(entry?.estimated ? { estimated: true } : {}),
       };
     }),
   );

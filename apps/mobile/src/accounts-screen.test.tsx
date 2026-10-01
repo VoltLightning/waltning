@@ -8,6 +8,7 @@
  */
 
 import { act, fireEvent, render, screen } from "@testing-library/react";
+import type { PhoneLedgerPort } from "@waltning/client/ledger/create-phone-ledger";
 import { createPhoneLedger } from "@waltning/client/ledger/create-phone-ledger";
 import { LedgerProvider } from "@waltning/client/ledger/ledger-provider";
 import { basePort } from "@waltning/client/ledger/test-port";
@@ -52,7 +53,13 @@ type Row = {
   inTotal?: boolean;
 };
 
-function fakeController(rows: readonly Row[]) {
+function fakeController(
+  rows: readonly Row[],
+  extra: {
+    readRate?: PhoneLedgerPort["readRate"];
+    withEur?: boolean;
+  } = {},
+) {
   const accounts = rows.map((row) => ({
     id: id<"accounts">(row.id),
     name: row.name,
@@ -78,6 +85,18 @@ function fakeController(rows: readonly Row[]) {
     listAccounts: (options) =>
       options?.includeArchived ? accounts : accounts.filter((a) => !a.archived),
     listCurrencies: () => [
+      ...(extra.withEur === true
+        ? [
+            {
+              code: currencyCode("EUR"),
+              name: "Euro",
+              symbol: "€",
+              decimals: 2,
+              capturable: true,
+              isPivot: false,
+            },
+          ]
+        : []),
       {
         code: PLN,
         name: "Polish Złoty",
@@ -89,14 +108,16 @@ function fakeController(rows: readonly Row[]) {
       { code: USD, name: "US dollar", symbol: "$", decimals: 2, capturable: true, isPivot: false },
     ],
     // 3,80 zł to the dollar: USD per PLN, the direction `readRate` answers in.
-    readRate: ({ quote }) => ({
-      // The pivot against itself is 1, as the real read answers — so a screen
-      // that forgot to skip the pivot would draw `1.0000` and fail below.
-      rate: unitsPerPivot(quote === USD ? "0.263157894737" : "1"),
-      source: "nbp",
-      asOf: accountingDate("2026-09-03"),
-      carriedDays: 0,
-    }),
+    readRate:
+      extra.readRate ??
+      (({ quote }) => ({
+        // The pivot against itself is 1, as the real read answers — so a screen
+        // that forgot to skip the pivot would draw `1.0000` and fail below.
+        rate: unitsPerPivot(quote === USD ? "0.263157894737" : "1"),
+        source: "nbp",
+        asOf: accountingDate("2026-09-03"),
+        carriedDays: 0,
+      })),
   });
   return createPhoneLedger(port, {
     capture: () => ({
@@ -327,5 +348,51 @@ describe("Accounts", () => {
     // Twice, and deliberately: the row's converted figure, and the register's
     // own total — which with one convertible account is the same number.
     expect(screen.getAllByText(/380[.,]00/).length).toBeGreaterThanOrEqual(1);
+  });
+
+  /**
+   * **A conversion rests on two rates, and says the weaker one.** A dollar
+   * account shown in euros goes through the pivot: the dollar leg is fresh, the
+   * euro leg is carried forward — so the line is an estimate, not a synced one.
+   */
+  it("labels a conversion through the pivot with the weaker of its two rates", async () => {
+    const EUR = currencyCode("EUR");
+    const rows: Row[] = [
+      {
+        id: "a1",
+        name: "Travel float",
+        kind: "cash",
+        currency: USD,
+        ownership: "own",
+        isBusiness: false,
+        balance: "100",
+      },
+    ];
+    const rate =
+      (carriedEur: number): PhoneLedgerPort["readRate"] =>
+      ({ quote }) => ({
+        rate: unitsPerPivot(quote === USD ? "0.25" : quote === EUR ? "0.2" : "1"),
+        source: "nbp",
+        asOf: accountingDate("2026-09-03"),
+        carriedDays: quote === EUR ? carriedEur : 0,
+      });
+    await displayCurrency.set(EUR);
+    try {
+      const fresh = render(
+        <LedgerProvider controller={fakeController(rows, { withEur: true, readRate: rate(0) })}>
+          <Accounts />
+        </LedgerProvider>,
+      );
+      expect(fresh.container.textContent).not.toMatch(/estimated/i);
+      fresh.unmount();
+      const carried = render(
+        <LedgerProvider controller={fakeController(rows, { withEur: true, readRate: rate(3) })}>
+          <Accounts />
+        </LedgerProvider>,
+      );
+      expect(carried.container.textContent).toMatch(/estimated/i);
+    } finally {
+      await displayCurrency.set(PLN);
+    }
   });
 });

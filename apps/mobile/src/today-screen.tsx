@@ -695,6 +695,7 @@ export default function Today() {
           currency={pivotCurrency?.code ?? leadNetWorth.currency}
           decimals={pivotCurrency?.decimals ?? leadNetWorth.decimals}
           otherCurrencies={periodFigures.otherCurrencies}
+          estimated={periodFigures.estimated}
           layout="compact"
         />
       ) : null,
@@ -798,10 +799,11 @@ export default function Today() {
             rows={whereItWentRows}
             currency={pivotCurrency?.code ?? leadNetWorth.currency}
             decimals={pivotCurrency?.decimals ?? leadNetWorth.decimals}
+            estimated={spendByCategory.some((row) => row.estimated === true)}
           />
         </Card>
       ),
-    [whereItWentRows, pivotCurrency, leadNetWorth, t],
+    [whereItWentRows, spendByCategory, pivotCurrency, leadNetWorth, t],
   );
 
   // S04 §3 draws exactly one banner row, and `Banner`'s own doc is explicit —
@@ -1440,9 +1442,14 @@ export default function Today() {
       currency: pivotCurrency?.code ?? leadNetWorth?.currency ?? "",
       decimals: pivotCurrency?.decimals ?? leadNetWorth?.decimals ?? 2,
       note:
-        row.otherCurrencies === 0
-          ? null
-          : t("shell.plusOtherCurrencies", { count: row.otherCurrencies }),
+        [
+          row.otherCurrencies === 0
+            ? null
+            : t("shell.plusOtherCurrencies", { count: row.otherCurrencies }),
+          row.estimated ? t("shell.estimatedAtToday") : null,
+        ]
+          .filter((part) => part !== null)
+          .join(" · ") || null,
       ahead: row.ahead,
       // Absent from the map is nothing found, which is a fact worth drawing —
       // §7's *how often, and when* includes *not in this month*.
@@ -1492,7 +1499,11 @@ export default function Today() {
       yearFlows,
       pivotCurrency?.code ?? leadNetWorth?.currency ?? LEAD_FALLBACK,
     );
-    return others === 0 ? undefined : t("shell.plusOtherCurrencies", { count: others });
+    const parts = [
+      others === 0 ? null : t("shell.plusOtherCurrencies", { count: others }),
+      yearFlows.some((flow) => flow.estimated === true) ? t("shell.estimatedAtToday") : null,
+    ].filter((part) => part !== null);
+    return parts.length === 0 ? undefined : parts.join(" · ");
   }, [yearFlows, pivotCurrency, leadNetWorth, t]);
 
   const thisYear = Number(today.slice(0, 4));

@@ -14,6 +14,11 @@
  * - no account exists (and so no transaction can);
  * - no transaction exists.
  *
+ * **And only once per device** (`anchorOnce`): a persisted "anchor decided" marker
+ * is set the first time this runs, whatever it did, and by every later change
+ * of the anchor. A person who moves the anchor back to the seed, or a restored
+ * backup that happens to have no accounts, is therefore never re-anchored.
+ *
  * Otherwise nothing happens: an existing ledger keeps its anchor, because the
  * phone cannot re-rate history (S17 §7). The write is the registry's own
  * `change_pivot`, audited like any other.
@@ -47,4 +52,38 @@ export function anchorToRegion(
   if (ledger.searchTransactions({}).total.count > 0) return "kept";
   const result = ledger.changePivot({ code: region });
   return "fieldErrors" in result ? "kept" : "anchored";
+}
+
+/** The one-bit device marker `anchorOnce` reads and writes — a `DevicePreferenceController` of any one-value type. */
+export type AnchorDecided = {
+  hydrate: () => Promise<void>;
+  getSnapshot: () => { value: "decided" | null };
+  set: (value: "decided") => Promise<void>;
+};
+
+/**
+ * `anchorToRegion`, at most once per device and never able to fail startup.
+ *
+ * Reads the marker first (hydrating it), runs the anchoring only when it is
+ * unset, then sets it — **even when the anchoring kept the anchor**, because
+ * the first start is the one moment a ledger is fresh; a later start must not
+ * find it empty and decide again. A throw anywhere is contained: the ledger
+ * keeps whatever anchor it has.
+ */
+export async function anchorOnce(
+  ledger: AnchorLedger,
+  region: CurrencyCode | null,
+  seed: CurrencyCode,
+  decided: AnchorDecided,
+): Promise<AnchorOutcome> {
+  try {
+    await decided.hydrate();
+    if (decided.getSnapshot().value !== null) return "kept";
+    const outcome = anchorToRegion(ledger, region, seed);
+    await decided.set("decided");
+    return outcome;
+  } catch {
+    // The anchor stays as it is; the next start tries again.
+    return "kept";
+  }
 }

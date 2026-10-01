@@ -115,15 +115,16 @@ export function createDisplayCurrencyPreference(
     options?.diagnostics,
   );
   /**
-   * The stored choice — except an **unmarked value equal to the live pivot**,
-   * which is the old build's own auto-write of the pivot and so no choice at
+   * The stored choice — except an **unmarked value equal to the live pivot or
+   * to the build's seed**, which is the old build's own auto-write of the pivot
+   * (the seed, on an install since anchored to its region) and so no choice at
    * all. An unmarked value that is *not* the pivot was picked in the toggle
    * and stands.
    */
   const readChoice = (): CurrencyCode | null => {
     const value = inner.getSnapshot().value;
     if (value === null) return null;
-    return unmarked && value === readPivot() ? null : value;
+    return unmarked && (value === readPivot() || value === seed) ? null : value;
   };
 
   /** The region's currency, derived live and never stored — a later pivot change or a real choice must not meet a frozen default. */

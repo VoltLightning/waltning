@@ -699,6 +699,7 @@ export const pl: Messages = {
     plusOtherCurrencies_few: "+ {{count}} inne waluty",
     plusOtherCurrencies_many: "+ {{count}} innych walut",
     plusOtherCurrencies_other: "+ {{count}} innych walut",
+    estimatedAtToday: "≈ część dni po dzisiejszym kursie",
     keptSoFar: "Zostało do tej pory",
     cameIn: "Wpłynęło",
     wentOut: "Wypłynęło",
@@ -986,7 +987,9 @@ export const pl: Messages = {
     pivotExplained:
       "Kursy wymiany są zapisywane względem tej waluty, aby dało się wyliczyć każdą parę. Nie wpływa ona na to, co widać na ekranie; kwoty są pokazywane w walucie wybranej wyżej.",
     displayExplained:
-      "Domyślnie wynika to z regionu telefonu, dopóki nie zostanie wybrana inna waluta. Można ją w każdej chwili zmienić przełącznikiem walut u góry; zapisane transakcje się przy tym nie zmieniają.",
+      "Dopóki nic nie zostanie wybrane, wynika to z regionu telefonu. Zmiana wpływa tylko na sposób pokazywania kwot; zapisane transakcje się nie zmieniają.",
+    displayNeedsRate:
+      "Jeszcze nie zastosowano: dla waluty {{currency}} nie ma kursu, więc kwoty pozostają w {{shown}}. Aby jej użyć, trzeba ustawić kurs waluty {{currency}}.",
     changePivotStart: "Zmień walutę odniesienia…",
     groupShown: "W przełączniku nagłówka",
     groupHeld: "Posiadane, poza przełącznikiem",

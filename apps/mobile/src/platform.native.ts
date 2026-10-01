@@ -181,6 +181,22 @@ function readRegionCurrency(): CurrencyCode | null {
   return currencyOfTags(locales.map((locale) => locale.languageTag));
 }
 
+const ANCHOR_DECIDED_KEY = "waltning.anchorDecided";
+
+/**
+ * Whether this device has already decided its ledger's anchor currency — set the
+ * first time first-start anchoring runs (whatever it did) and whenever a person
+ * changes the anchor, so a ledger found empty later is never anchored again.
+ */
+export const anchorDecided = createDevicePreference<"decided">(
+  {
+    get: () => AsyncStorage.getItem(ANCHOR_DECIDED_KEY),
+    set: (value) => AsyncStorage.setItem(ANCHOR_DECIDED_KEY, value),
+  },
+  { parse: (raw) => (raw === "decided" ? "decided" : null), serialize: (value) => value },
+  mobileDiagnostics,
+);
+
 /** The device region's currency, read once — the display default and the first-start anchor. */
 export const deviceRegionCurrency: CurrencyCode | null = readRegionCurrency();
 

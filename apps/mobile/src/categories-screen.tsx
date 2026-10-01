@@ -251,17 +251,12 @@ export default function CategoriesScreen() {
     basis?.spendRebase,
   );
   const monthSpend = useMemo(
-    () =>
-      basis === null
-        ? rawMonthSpend
-        : rawMonthSpend.flatMap((row) =>
-            row.currency === basis.currency
-              ? [row]
-              : row.amountPivot === null || row.amountPivot === undefined
-                ? []
-                : [{ ...row, currency: basis.currency, amount: row.amountPivot }],
-          ),
+    () => (basis === null ? rawMonthSpend : basis.restateSpend(rawMonthSpend)),
     [basis, rawMonthSpend],
+  );
+  const approximate = useMemo(
+    () => rawMonthSpend.some((row) => row.estimated === true),
+    [rawMonthSpend],
   );
   const spend = useMemo(
     () => categorySpend(monthSpend, snapshot.fullCategoryTree, leadCode),
@@ -301,13 +296,14 @@ export default function CategoriesScreen() {
                     // `04`: the pivot's symbol, every other currency's code.
                     currency: pivot.isPivot ? (pivot.symbol ?? pivot.code) : pivot.code,
                     decimals: pivot.decimals,
+                    ...(approximate ? { approximate } : {}),
                   },
                   share: spend.share.get(node.id) ?? 0,
                 }),
           };
         }),
       ),
-    [snapshot.fullCategoryTree, snapshot.categoryUsage, spend, pivot, labelOf],
+    [snapshot.fullCategoryTree, snapshot.categoryUsage, spend, pivot, labelOf, approximate],
   );
 
   // Near-duplicates on the stored names, plus on the names as drawn — a

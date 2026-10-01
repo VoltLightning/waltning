@@ -52,23 +52,23 @@ function conversionOf(
   if (account.currency === display.code) return undefined;
   const perDisplay = basis.unitsPerDisplay(account.currency, today);
   if (perDisplay === null) return undefined;
-  // Provenance is the account currency's own leg — what the figure rests on.
-  const held =
-    account.currency === pivot.code
-      ? null
-      : ledger.readRate({ base: pivot.code, quote: account.currency, date: today });
+  // The figure rests on **two** rates when neither currency is the pivot — the
+  // account's and the display currency's — so its provenance is the weaker of
+  // the two: manual if either was set by hand, estimated if either is carried.
+  const legs = [account.currency, display.code]
+    .filter((code) => code !== pivot.code)
+    .map((quote) => ledger.readRate({ base: pivot.code, quote, date: today }));
+  const manual = legs.some((leg) => leg !== null && leg.source === "manual");
+  const carried = legs.some((leg) => leg !== null && leg.carriedDays > 0);
   return {
     rate: money.reciprocal(perDisplay),
     displayCurrency: display.symbol ?? display.code,
     displayDecimals: display.decimals,
-    provenance:
-      held === null
-        ? { kind: "synced" }
-        : held.source === "manual"
-          ? { kind: "override" }
-          : held.carriedDays > 0
-            ? { kind: "estimated" }
-            : { kind: "synced" },
+    provenance: manual
+      ? { kind: "override" }
+      : carried
+        ? { kind: "estimated" }
+        : { kind: "synced" },
   };
 }
 

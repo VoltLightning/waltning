@@ -23,7 +23,7 @@
  */
 
 import "./polyfills.ts";
-import { anchorToRegion } from "@waltning/client/currencies/anchor-to-region";
+import { anchorOnce } from "@waltning/client/currencies/anchor-to-region";
 import {
   createPhoneLedger,
   type PhoneLedgerController,
@@ -46,6 +46,7 @@ import {
 import { useSyncExternalStore } from "react";
 import { mobileDiagnostics } from "./diagnostics.ts";
 import {
+  anchorDecided,
   deviceRegionCurrency,
   setLedgerHistoryReader,
   setLiveHeldReader,
@@ -185,8 +186,8 @@ function openSession(): PhoneLedgerController {
     preJournalStores: "rebuild",
   });
   const controller = createPhoneLedger(session, deviceRuntime(mobileDiagnostics));
-  // §7.0 — a fresh ledger is anchored to the region's currency, before any account exists.
-  anchorToRegion(controller, deviceRegionCurrency, pivotCurrency.code);
+  // §7.0 — a fresh ledger is anchored to the region's currency, before any account exists, once per device.
+  void anchorOnce(controller, deviceRegionCurrency, pivotCurrency.code, anchorDecided);
   // H1 — the header's live fallback, wired before anything reads it.
   setLivePivotReader(() => session.listCurrencySettings().find((row) => row.isPivot)?.code ?? null);
   // §7.0 — the codes the ledger holds, so a region whose currency it does not hold falls on the pivot.

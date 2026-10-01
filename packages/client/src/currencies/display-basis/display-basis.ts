@@ -57,6 +57,8 @@ export type DisplayBasis = {
   identity: boolean;
   /** A pivot-valued amount, on a date, in the display currency. */
   fromPivotAt: (amount: money.Money, date: AccountingDate) => money.Money;
+  /** Whether a date is stated at a rate that is not its own — `fromPivotAt`'s answer is then an estimate (`≈`). */
+  estimatedAt: (date: AccountingDate) => boolean;
   /** `spendByCategory`'s `rebase` option — `undefined` when nothing converts. */
   spendRebase: money.SpendByCategoryOptions["rebase"];
   /**
@@ -76,6 +78,13 @@ export type DisplayBasis = {
   ) => { rate: money.UnitsPerPivot; asOf: AccountingDate } | null;
   /** Rows whose `fxRate`/`toFxRate` now take an amount straight to the display currency. */
   rebaseRows: <Row extends RebasableRow>(rows: readonly Row[]) => readonly Row[];
+  /**
+   * `spendByCategory` rows read with `spendRebase`, stated in the display
+   * currency: each bucket's `amountPivot` becomes its amount, buckets of one
+   * category merge, and a bucket that could not be converted stays in its own
+   * currency. Without a rebase (the identity) the rows are returned as read.
+   */
+  restateSpend: (rows: readonly money.SpendByCategoryRow[]) => readonly money.SpendByCategoryRow[];
   /** Day flows whose pivot figures are in the display currency. */
   rebaseFlows: (flows: readonly money.DayFlowRow[]) => readonly money.DayFlowRow[];
 };
@@ -136,9 +145,17 @@ export function createDisplayBasis(input: DisplayBasisInput): DisplayBasis {
     decimals: display.decimals,
     identity,
     fromPivotAt,
+    estimatedAt: (date) => !identity && (resolve(date)?.estimated ?? false),
     spendRebase: identity
       ? undefined
-      : { currency: display.code, perPivot: (date) => resolve(date)?.perPivot ?? null },
+      : {
+          currency: display.code,
+          decimals: display.decimals,
+          perPivot: (date) => {
+            const found = resolve(date);
+            return found === null ? null : { rate: found.perPivot, estimated: found.estimated };
+          },
+        },
     readFromDisplay: (quote, date) => {
       const quoted = legOf(quote, date);
       const shown = legOf(display.code, date);
@@ -167,6 +184,36 @@ export function createDisplayBasis(input: DisplayBasisInput): DisplayBasis {
         };
       });
     },
+    restateSpend: (rows) => {
+      if (identity) return rows;
+      const merged = new Map<string, money.SpendByCategoryRow>();
+      for (const row of rows) {
+        const stated =
+          row.currency === display.code || row.amountPivot === null || row.amountPivot === undefined
+            ? row
+            : {
+                ...row,
+                currency: display.code,
+                decimals: display.decimals,
+                amount: row.amountPivot,
+              };
+        const key = `${stated.currency}::${stated.categoryId ?? ""}`;
+        const held = merged.get(key);
+        merged.set(
+          key,
+          held === undefined
+            ? stated
+            : {
+                ...held,
+                amount: money.add(held.amount, stated.amount),
+                ...(held.estimated === true || stated.estimated === true
+                  ? { estimated: true }
+                  : {}),
+              },
+        );
+      }
+      return [...merged.values()];
+    },
     rebaseFlows: (flows) => {
       if (identity) return flows;
       return flows.map((flow) => {
@@ -194,7 +241,16 @@ export function createDisplayBasis(input: DisplayBasisInput): DisplayBasis {
           : inflowInPivot === null
             ? null
             : fromPivotAt(inflowInPivot, flow.date);
-        return { ...flow, spendPivot: spend, inflowPivot: inflow };
+        // A day stated at today's rate is an estimate, unless it needed no rate
+        // at all (a day already in the display currency).
+        const estimated =
+          !own && (spend !== null || inflow !== null) && (resolve(flow.date)?.estimated ?? false);
+        return {
+          ...flow,
+          spendPivot: spend,
+          inflowPivot: inflow,
+          ...(estimated ? { estimated } : {}),
+        };
       });
     },
   };

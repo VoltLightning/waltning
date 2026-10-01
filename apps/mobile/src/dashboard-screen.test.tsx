@@ -22,7 +22,14 @@ import { LedgerProvider } from "@waltning/client/ledger/ledger-provider";
 import { basePort } from "@waltning/client/ledger/test-port";
 import { accountingDate } from "@waltning/core/date";
 import { id } from "@waltning/core/id";
-import { currencyCode, toMoney } from "@waltning/core/money";
+import {
+  currencyCode,
+  incomeVsExpense,
+  pivotPerUnit,
+  spendByCategory,
+  toMoney,
+  unitsPerPivot,
+} from "@waltning/core/money";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const router = {
@@ -144,20 +151,24 @@ function fakeController(options: {
   spendByCategory?: PhoneLedgerPort["readSpendByCategory"];
   incomeVsExpense?: PhoneLedgerPort["readIncomeVsExpense"];
   recent?: readonly PhoneRecentTransaction[];
+  currencies?: ReturnType<PhoneLedgerPort["listCurrencies"]>;
+  readRate?: PhoneLedgerPort["readRate"];
 }) {
   const accounts = options.accounts ?? [ACCOUNT];
   const port = basePort({
     listAccounts: () => accounts,
-    listCurrencies: () => [
-      {
-        code: PLN,
-        name: "Polish Złoty",
-        symbol: "zł",
-        decimals: 2,
-        capturable: true,
-        isPivot: true,
-      },
-    ],
+    ...(options.readRate === undefined ? {} : { readRate: options.readRate }),
+    listCurrencies: () =>
+      options.currencies ?? [
+        {
+          code: PLN,
+          name: "Polish Złoty",
+          symbol: "zł",
+          decimals: 2,
+          capturable: true,
+          isPivot: true,
+        },
+      ],
     listRecent: () => options.recent ?? [RECENT],
     listCategoryTree: () => [
       {
@@ -513,5 +524,64 @@ describe("Dashboard (S01)", () => {
     expect(stateUpdates("dashboard_unknown_widget_kind")).toHaveLength(0);
     expect(screen.getByText("Balances")).toBeTruthy();
     expect(screen.getByText("Income vs expense")).toBeTruthy();
+  });
+});
+
+/**
+ * **The desk follows the display currency too** (§7.0): with EUR shown, a
+ * 100 PLN expense — the ledger's pivot — appears converted on the spend panel
+ * and in the income/expense chart, not filtered out as another currency.
+ */
+describe("Dashboard — figures in the display currency", () => {
+  const EUR = currencyCode("EUR");
+  const CURRENCIES = [
+    { code: PLN, name: "Polish Złoty", symbol: "zł", decimals: 2, capturable: true, isPivot: true },
+    { code: EUR, name: "Euro", symbol: "€", decimals: 2, capturable: true, isPivot: false },
+  ];
+  /** A quarter of a euro to the złoty, on every date. */
+  const readRate: PhoneLedgerPort["readRate"] = ({ quote, date }) =>
+    quote === EUR
+      ? { rate: unitsPerPivot("0.25"), source: "nbp", asOf: date, carriedDays: 0 }
+      : null;
+  const expense = {
+    id: "t1",
+    type: "expense" as const,
+    date: accountingDate("2026-09-02"),
+    ownership: "own" as const,
+    isBusiness: false,
+    currency: PLN,
+    decimals: 2,
+    categoryId: "cat-groceries",
+    amountOriginal: toMoney("100.00"),
+    isCapital: false,
+    fxRate: pivotPerUnit("1"),
+  };
+
+  it("converts the spend panel and the income/expense chart", async () => {
+    await displayCurrency.set(EUR);
+    try {
+      withLedger(
+        fakeController({
+          currencies: CURRENCIES,
+          readRate,
+          spendByCategory: (_period, scope, options) =>
+            spendByCategory(
+              [expense],
+              [],
+              { start: accountingDate("2026-09-01"), end: accountingDate("2026-10-01") },
+              scope,
+              options,
+            ),
+          incomeVsExpense: (buckets, scope, options) =>
+            incomeVsExpense([expense], buckets, scope, options),
+        }),
+      );
+      const body = document.body.textContent ?? "";
+      // 100 PLN at a quarter: 25.00, in euros, on both widgets.
+      expect(body.match(/25[.,]00/g)?.length ?? 0).toBeGreaterThanOrEqual(2);
+      expect(body).not.toMatch(/100[.,]00\s*zł|zł\s*100[.,]00/);
+    } finally {
+      await displayCurrency.set(PLN);
+    }
   });
 });
