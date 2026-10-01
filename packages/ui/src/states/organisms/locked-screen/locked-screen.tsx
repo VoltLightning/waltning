@@ -11,6 +11,13 @@
  * button: the app is in the background and this is what the switcher's
  * snapshot shows instead of a balance.
  *
+ * **A third mode, `ask`, is the question that comes before any of it.** The
+ * first time the app opens on a device that could gate, it stands here and
+ * asks once — *Lock the app with your fingerprint?*, with the reason under it
+ * — and requests nothing from the device until the answer is in. Yes and Not
+ * now are the two buttons; the answer is a device preference the Settings row
+ * can flip later. Which biometric the question names is the device's to say.
+ *
  * **In `packages/ui`, like `StartupFailed`** — it composes nothing but
  * platform-neutral pieces and reads no platform; which state it is in is the
  * layout's to say.
@@ -26,6 +33,9 @@ import { text, textCap } from "../../../theme/fonts.ts";
 import { makeStyles } from "../../../theme/styles.ts";
 import { gutter, space } from "../../../tokens.ts";
 
+/** What the device would gate with — the question names it. */
+export type LockedScreenMethod = "fingerprint" | "face" | "either" | "passcode";
+
 export type LockedScreenFailure = "cancelled" | "failed" | "lockout" | "unavailable";
 
 export type LockedScreenProps =
@@ -37,7 +47,15 @@ export type LockedScreenProps =
       /** Why the last attempt did not unlock, for the line under the button. */
       failure?: LockedScreenFailure | null | undefined;
     }
-  | { mode: "cover" };
+  | { mode: "cover" }
+  | { mode: "ask"; method: LockedScreenMethod; onYes: () => void; onNotNow: () => void };
+
+const ASK_TITLE = {
+  fingerprint: "lock.askTitleFingerprint",
+  face: "lock.askTitleFace",
+  either: "lock.askTitleEither",
+  passcode: "lock.askTitlePasscode",
+} as const;
 
 const FAILURE_LINE = {
   cancelled: "lock.cancelled",
@@ -49,6 +67,32 @@ const FAILURE_LINE = {
 export function LockedScreen(props: LockedScreenProps) {
   const t = useT();
   const styles = useStyles();
+
+  if (props.mode === "ask") {
+    return (
+      <View style={styles.root}>
+        <View style={styles.centre}>
+          <Text
+            style={styles.title}
+            accessibilityRole="header"
+            maxFontSizeMultiplier={textCap("displayTwo")}
+          >
+            {t(ASK_TITLE[props.method])}
+          </Text>
+          <Text style={styles.body}>{t("lock.askBody")}</Text>
+          <View style={styles.action}>
+            <Button variant="primary" size="lg" label={t("lock.askYes")} onPress={props.onYes} />
+          </View>
+          <Button
+            variant="secondary"
+            size="lg"
+            label={t("lock.askLater")}
+            onPress={props.onNotNow}
+          />
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.root} accessibilityRole={props.mode === "cover" ? "none" : undefined}>

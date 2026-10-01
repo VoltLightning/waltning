@@ -260,3 +260,15 @@ export function TranslateIcon({ size, color }: PhosphorIconProps) {
     </Svg>
   );
 }
+
+/** The Settings lock row's tile — regular weight, like the two beside it. */
+export function LockIcon({ size, color }: PhosphorIconProps) {
+  return (
+    <Svg width={size} height={size} viewBox={VIEW_BOX}>
+      <Path
+        fill={color}
+        d="M208,80H176V56a48,48,0,0,0-96,0V80H48A16,16,0,0,0,32,96V208a16,16,0,0,0,16,16H208a16,16,0,0,0,16-16V96A16,16,0,0,0,208,80ZM96,56a32,32,0,0,1,64,0V80H96ZM208,208H48V96H208V208Z"
+      />
+    </Svg>
+  );
+}

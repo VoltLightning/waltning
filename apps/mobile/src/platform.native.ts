@@ -10,7 +10,9 @@ import { createDevicePreference } from "@waltning/client/device/create-device-pr
 import { createDeskScopePreference } from "@waltning/client/ledger/desk-scope";
 import {
   type AppLockAttempt,
+  type AppLockChoice,
   type AppLockEnrolment,
+  type AppLockMethod,
   createAppLock,
 } from "@waltning/client/security/app-lock";
 import { createLastCapturePreference } from "@waltning/client/transactions/last-capture";
@@ -243,9 +245,51 @@ function attemptOf(result: LocalAuthentication.LocalAuthenticationResult): AppLo
   }
 }
 
+/**
+ * Which biometric the device offers, for the wording of the first-run
+ * question: what `expo-local-authentication` says the hardware supports.
+ */
+async function methodOf(): Promise<AppLockMethod> {
+  const types = await LocalAuthentication.supportedAuthenticationTypesAsync();
+  const fingerprint = types.includes(LocalAuthentication.AuthenticationType.FINGERPRINT);
+  const face = types.includes(LocalAuthentication.AuthenticationType.FACIAL_RECOGNITION);
+  if (fingerprint && !face) return "fingerprint";
+  if (face && !fingerprint) return "face";
+  return "either";
+}
+
+const APP_LOCK_KEY = "waltning.appLock";
+
+/**
+ * Whether this device already holds ledger data — wired by the ledger session
+ * once it exists, the same indirection (and for the same reason) as
+ * `livePivotReader`: the ledger files import this one. `true` until wired, so a
+ * read before the ledger is up can only lock, never ask.
+ */
+let ledgerHistoryReader: () => boolean = () => true;
+
+/** Called once by the phone's ledger session: whether it holds any account. */
+export function setLedgerHistoryReader(reader: () => boolean): void {
+  ledgerHistoryReader = reader;
+}
+
+/**
+ * The owner's answer to the lock question (`SPEC.md` §5.7) — stored on this
+ * device, never synced. Raw on purpose: the gate decides what a missing,
+ * unreadable or corrupt value means, and a codec that turned each of them into
+ * `null` would make them all look like "never asked".
+ */
+export const appLockChoice: AppLockChoice = {
+  read: () => AsyncStorage.getItem(APP_LOCK_KEY),
+  write: (enabled) => AsyncStorage.setItem(APP_LOCK_KEY, enabled ? "on" : "off"),
+  hasHistory: async () => ledgerHistoryReader(),
+};
+
 export const appLock = createAppLock(
   {
+    choice: appLockChoice,
     authenticator: {
+      method: methodOf,
       enrolment: async () => enrolmentOf(await LocalAuthentication.getEnrolledLevelAsync()),
       // `strong` where the device has strong biometrics, `weak` where it
       // has only class-2 ones: asking for `strong` on a device that cannot

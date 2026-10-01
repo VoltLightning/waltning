@@ -29,3 +29,13 @@ export const Cancelled: Story = {
 
 /** What the app switcher shows while the app is away. */
 export const Cover: Story = { args: { mode: "cover" } };
+
+/** First launch on a device that can gate: the question, before any prompt. */
+export const Ask: Story = {
+  args: { mode: "ask", method: "either", onYes: noop, onNotNow: noop },
+};
+
+/** A device with no biometric enrolled names its passcode instead. */
+export const AskPasscode: Story = {
+  args: { mode: "ask", method: "passcode", onYes: noop, onNotNow: noop },
+};

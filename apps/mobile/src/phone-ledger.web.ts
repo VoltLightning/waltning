@@ -47,6 +47,7 @@ import { useSyncExternalStore } from "react";
 import { mobileDiagnostics } from "./diagnostics.ts";
 import {
   displayCurrency,
+  setLedgerHistoryReader,
   setLiveHeldReader,
   setLivePivotReader,
   setLivePivotSubscriber,
@@ -191,6 +192,7 @@ function openSession(): PhoneLedgerController {
   // M2 — `controller.subscribe` fires after every successful write,
   // `change_pivot` included, so a mounted display-currency consumer follows live.
   setLivePivotSubscriber(controller.subscribe);
+  setLedgerHistoryReader(() => session.listAccounts({ includeArchived: true }).length > 0);
   // §7.0's default (first pinned, else the live pivot), read from this ledger
   // rather than `platform.ts`'s bootstrap constant — see
   // `initialize-display-currency.ts`. Guarded on hydration inside; never
