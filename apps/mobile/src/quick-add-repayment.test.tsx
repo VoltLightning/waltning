@@ -164,7 +164,7 @@ function fillRepayment(amount: string) {
   fireEvent.change(screen.getByLabelText("Search…"), { target: { value: "repayment rec" } });
   fireEvent.click(screen.getByRole("radio", { name: "Repayment received" }));
   fireEvent.click(screen.getByRole("button", { name: /^Who\?/ }));
-  fireEvent.click(screen.getByRole("button", { name: /^Counterparty/ }));
+  fireEvent.click(screen.getByRole("button", { name: /^With whom/ }));
   fireEvent.click(screen.getByText("Nina"));
 }
 
@@ -226,14 +226,14 @@ describe("a repayment is settle_debt, over the real ledger", () => {
 
   it("refuses a repayment from somebody who owes nothing, naming why, and writes nothing", () => {
     fillRepayment("25");
-    expect(screen.getByText(/Nothing to settle with Nina/)).toBeDefined();
+    expect(screen.getByText(/Nothing to settle: Nina has/)).toBeDefined();
 
     fireEvent.click(screen.getByRole("button", { name: "Save income" }));
 
     expect(balances().filter((row) => row.counterpartyId === nina)).toEqual([]);
     expect(router.dismissTo).not.toHaveBeenCalled();
     expect(
-      screen.getAllByText(/Nothing to settle with Nina/).length,
+      screen.getAllByText(/Nothing to settle: Nina has/).length,
       "the reason stays on the Who? row after Save",
     ).toBeGreaterThan(0);
   });

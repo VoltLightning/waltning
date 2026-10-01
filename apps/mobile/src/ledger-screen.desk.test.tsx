@@ -272,7 +272,7 @@ describe("Ledger at desk width", () => {
     }));
     withLedger(<Ledger />, controller);
 
-    expect(screen.getByRole("button", { name: "Payee" })).toBeDefined();
+    expect(screen.getByRole("button", { name: "Shop / payee" })).toBeDefined();
     expect(screen.getByRole("button", { name: "Amount" })).toBeDefined();
     expect(screen.getByText("Corner Bakery")).toBeDefined();
   });
@@ -380,7 +380,7 @@ describe("Ledger at desk width", () => {
     }));
     withLedger(<Ledger />, controller);
 
-    fireEvent.click(screen.getByRole("button", { name: "Payee" }));
+    fireEvent.click(screen.getByRole("button", { name: "Shop / payee" }));
     const cells = screen.getAllByText(/^(Zed|Abe)$/);
     expect(cells.map((cell) => cell.textContent)).toEqual(["Abe", "Zed"]);
   });
@@ -544,7 +544,7 @@ describe("Ledger at desk width", () => {
     withLedger(<Ledger />, fakeController(searchTransactions));
 
     const alerts = screen.getAllByRole("alert").map((node) => node.textContent ?? "");
-    expect(alerts.some((message) => /came back empty/.test(message))).toBe(true);
+    expect(alerts.some((message) => /next part did not load/.test(message))).toBe(true);
     expect(alerts.some((message) => /Narrow the filter/.test(message))).toBe(false);
   });
 

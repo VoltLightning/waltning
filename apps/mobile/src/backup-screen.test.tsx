@@ -186,7 +186,7 @@ it("says a copy was refused", async () => {
 it("names the unsent captures, which nothing else holds", async () => {
   draw();
   fireEvent.click(screen.getByRole("button", { name: "Back up" }));
-  await waitFor(() => expect(screen.getByText("1 capture")).toBeTruthy());
+  await waitFor(() => expect(screen.getByText("1 change")).toBeTruthy());
 });
 
 /**

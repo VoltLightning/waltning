@@ -13,7 +13,7 @@ const meta = {
   title: "Primitives/RateField",
   component: RateField,
   args: {
-    label: "Realized",
+    label: "Your rate",
     value: toMoney("4.2810"),
   },
 } satisfies Meta<typeof RateField>;

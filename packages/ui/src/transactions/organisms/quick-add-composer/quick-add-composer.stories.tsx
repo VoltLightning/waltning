@@ -269,7 +269,7 @@ export const WithCounterparty: Story = {
     // own reason — so the Select trigger and everything past it is queried
     // against the owner document, not the canvas.
     const body = within(canvasElement.ownerDocument.body);
-    await userEvent.click(await body.findByRole("button", { name: "Counterparty" }));
+    await userEvent.click(await body.findByRole("button", { name: "With whom" }));
     await userEvent.click(await body.findByRole("radio", { name: "Corner Café" }));
     await expect(body.findByRole("radiogroup", { name: "Role" })).resolves.toBeDefined();
   },

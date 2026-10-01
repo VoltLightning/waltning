@@ -120,7 +120,7 @@ describe("useTabBarItems", () => {
       return <>{items.map((item) => item.label).join(" · ")}</>;
     }
     render(<Probe />);
-    expect(screen.getByText("Home · Accounts · Counterparties · Settings")).toBeDefined();
+    expect(screen.getByText("Home · Accounts · Contacts · Settings")).toBeDefined();
   });
 
   /**

@@ -134,7 +134,7 @@ it("never offers an archived account", () => {
 it("puts the last-used account first, in its own Recent section, machine-filled", () => {
   renderPicker({ lastUsedId: "acc-bank", lastUsedAt: new Date("2026-08-12T14:20:00Z").getTime() });
   expect(screen.getByText("Recent")).toBeDefined();
-  expect(screen.getByText(/From your last capture/)).toBeDefined();
+  expect(screen.getByText(/As in your last transaction/)).toBeDefined();
   // It still appears a second time in its own group.
   expect(screen.getAllByRole("radio", { name: "Bank A · PLN" })).toHaveLength(2);
 });

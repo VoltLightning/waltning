@@ -34,7 +34,7 @@ export const Reconcile: Story = {
     // `BottomSheet` portals into `document.body` — `account-picker.stories.tsx:161`'s
     // own reason for querying the owner document rather than `canvasElement`.
     const canvas = within(canvasElement.ownerDocument.body);
-    await userEvent.type(await canvas.findByLabelText("You observed"), "1198,30");
+    await userEvent.type(await canvas.findByLabelText("Actual"), "1198,30");
   },
 };
 

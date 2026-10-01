@@ -45,8 +45,8 @@ it("below 100% states the percentage and the last quote's date, amber", () => {
     pct: 23,
     lastDate: "2022-03-11",
   });
-  expect(screen.getByText("23% · last quote 2022-03-11")).toBeDefined();
-  expect(inkOf("23% · last quote 2022-03-11")).toBe(AMBER_INK);
+  expect(screen.getByText("23% · last rate 2022-03-11")).toBeDefined();
+  expect(inkOf("23% · last rate 2022-03-11")).toBe(AMBER_INK);
 });
 
 // H — `complete` used to read `realDays === calendarDays` unconditionally, so
@@ -90,7 +90,7 @@ it("H3 — a nonzero days count is never 'no rates yet', even at a 0% floor", ()
     />,
   );
   expect(screen.queryByText("No rates yet · set one by hand")).toBeNull();
-  expect(screen.getByText("0% · last quote 2020-11-25")).toBeDefined();
+  expect(screen.getByText("0% · last rate 2020-11-25")).toBeDefined();
 });
 
 it("H3 — days short of calendarDays is never 'complete', even at a 100% ceiling", () => {
@@ -104,7 +104,7 @@ it("H3 — days short of calendarDays is never 'complete', even at a 100% ceilin
       lastDate="2026-08-20"
     />,
   );
-  expect(screen.getByText("99% · last quote 2026-08-20")).toBeDefined();
+  expect(screen.getByText("99% · last rate 2026-08-20")).toBeDefined();
   expect(screen.queryByText("100%")).toBeNull();
 });
 
@@ -126,7 +126,7 @@ it("M3 — filled to today by carry, but only realDays decides complete", () => 
       lastDate="2026-01-01"
     />,
   );
-  expect(screen.getByText("10% · last quote 2026-01-01")).toBeDefined();
+  expect(screen.getByText("10% · last rate 2026-01-01")).toBeDefined();
   expect(screen.queryByText("100%")).toBeNull();
 });
 
@@ -134,7 +134,7 @@ it("M3 — filled to today by carry, but only realDays decides complete", () => 
 // forward`) has no date to state, and must not read as a bare percentage.
 it("H2 — no real quote at all says so, never a percentage with no date", () => {
   render(<CoverageStatus days={5} realDays={0} calendarDays={5} futureRows={0} pct={100} />);
-  expect(screen.getByText("No quote yet")).toBeDefined();
+  expect(screen.getByText("No published rate yet")).toBeDefined();
   expect(screen.queryByText("100%")).toBeNull();
 });
 

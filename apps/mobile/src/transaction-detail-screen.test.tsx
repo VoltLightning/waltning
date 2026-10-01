@@ -246,21 +246,21 @@ describe("TransactionDetail", () => {
       .filter((node) => node.closest('[aria-hidden="true"]') === null);
     expect(spoken).toHaveLength(1);
     expect(screen.getByRole("heading", { name: "August 6, 2026" })).toBeDefined();
-    expect(screen.getByRole("button", { name: "Payee: Café A" })).toBeDefined();
+    expect(screen.getByRole("button", { name: "Shop / payee: Café A" })).toBeDefined();
   });
 
   it("saves a changed field, and the new value reads back", () => {
     withLedger(<TransactionDetail />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Payee: Café A" }));
-    fireEvent.change(screen.getByLabelText("Payee"), {
+    fireEvent.click(screen.getByRole("button", { name: "Shop / payee: Café A" }));
+    fireEvent.change(screen.getByLabelText("Shop / payee"), {
       target: { value: "Café A · Downtown" },
     });
     // The only `Save` on screen: `LinesCard` renders none while it holds no
     // lines and none have been added.
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
-    expect(screen.getByRole("button", { name: "Payee: Café A · Downtown" })).toBeDefined();
+    expect(screen.getByRole("button", { name: "Shop / payee: Café A · Downtown" })).toBeDefined();
   });
 
   /**
@@ -278,8 +278,8 @@ describe("TransactionDetail", () => {
     });
     withLedger(<TransactionDetail />, controller);
 
-    fireEvent.click(screen.getByRole("button", { name: "Payee: Café A" }));
-    fireEvent.change(screen.getByLabelText("Payee"), { target: { value: "Bakery A" } });
+    fireEvent.click(screen.getByRole("button", { name: "Shop / payee: Café A" }));
+    fireEvent.change(screen.getByLabelText("Shop / payee"), { target: { value: "Bakery A" } });
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
     expect(screen.getByRole("alert").textContent).toBe(
@@ -302,8 +302,8 @@ describe("TransactionDetail", () => {
       controller.updateTransaction(id<"transactions">(TXN), 1, { note: "Elsewhere" });
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "Payee: Café A" }));
-    fireEvent.change(screen.getByLabelText("Payee"), { target: { value: "Bakery A" } });
+    fireEvent.click(screen.getByRole("button", { name: "Shop / payee: Café A" }));
+    fireEvent.change(screen.getByLabelText("Shop / payee"), { target: { value: "Bakery A" } });
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
     expect(screen.getByRole("alert").textContent).toBe(
@@ -359,9 +359,9 @@ describe("TransactionDetail", () => {
     // it. S09 is the one surface where the two can name different parties —
     // paying a shop for a friend — which is why the rows are separate rather
     // than one field with a role hanging off it.
-    fireEvent.click(screen.getByRole("button", { name: "Counterparty" }));
+    fireEvent.click(screen.getByRole("button", { name: "With whom" }));
     fireEvent.click(screen.getByRole("button", { name: "Nina" }));
-    expect(screen.getByRole("button", { name: "Counterparty: Nina" })).toBeDefined();
+    expect(screen.getByRole("button", { name: "With whom: Nina" })).toBeDefined();
     expect(
       screen.queryByRole("button", { name: "Role" }),
       "naming somebody owes them nothing",
@@ -405,7 +405,7 @@ describe("TransactionDetail", () => {
 
     expect(screen.getByText("Who was this with?")).toBeDefined();
 
-    fireEvent.click(screen.getByRole("button", { name: "Counterparty" }));
+    fireEvent.click(screen.getByRole("button", { name: "With whom" }));
     fireEvent.click(screen.getByRole("button", { name: "Nina" }));
 
     expect(screen.queryByText("Who was this with?")).toBeNull();

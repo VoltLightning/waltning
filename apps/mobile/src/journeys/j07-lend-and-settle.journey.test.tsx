@@ -114,7 +114,7 @@ async function settle(into: readonly string[], discharges: readonly string[]) {
   fireEvent.click(screen.getByRole("button", { name: "Settle" }));
 
   tapDigits(into);
-  fireEvent.click(screen.getByRole("button", { name: /^Discharges:/ }));
+  fireEvent.click(screen.getByRole("button", { name: /^Towards:/ }));
   tapDigits(discharges);
 
   fireEvent.click(screen.getByRole("button", { name: "Into" }));
@@ -150,9 +150,9 @@ describe("J07 — lend and settle", () => {
     expect(screen.getByRole("button", { name: "Amount: 100" })).toBeDefined();
 
     // The Discharges amount — S14 §5's own two-amount, derived-rate shape.
-    fireEvent.click(screen.getByRole("button", { name: "Discharges: 0" }));
+    fireEvent.click(screen.getByRole("button", { name: "Towards: 0" }));
     tapDigits(["1", "0", "0"]);
-    expect(screen.getByRole("button", { name: "Discharges: 100" })).toBeDefined();
+    expect(screen.getByRole("button", { name: "Towards: 100" })).toBeDefined();
 
     // Into the same PLN account the lend itself came from.
     fireEvent.click(screen.getByRole("button", { name: "Into" }));
@@ -206,7 +206,7 @@ describe("J07 — lend and settle", () => {
     // §6.6 — the person and the role are one sheet, because a counterparty
     // with no role is not a smaller claim than one with a role.
     fireEvent.click(screen.getByRole("button", { name: /^Person/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Counterparty" }));
+    fireEvent.click(screen.getByRole("button", { name: "With whom" }));
     await waitFor(() => expect(screen.getByRole("radio", { name: "Placeholder" })).toBeDefined());
     fireEvent.click(screen.getByRole("radio", { name: "Placeholder" }));
     fireEvent.click(screen.getByRole("radio", { name: "Debt — expected back" }));

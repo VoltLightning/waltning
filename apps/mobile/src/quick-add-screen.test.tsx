@@ -515,8 +515,8 @@ describe("QuickAdd — the phone path (Dock + QuickAddComposer)", () => {
     pickCashAccount();
 
     openMore();
-    fireEvent.click(screen.getByRole("button", { name: "Payee" }));
-    fireEvent.change(screen.getByRole("textbox", { name: "Payee" }), {
+    fireEvent.click(screen.getByRole("button", { name: "Shop / payee" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Shop / payee" }), {
       target: { value: "Corner Café" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
@@ -530,8 +530,8 @@ describe("QuickAdd — the phone path (Dock + QuickAddComposer)", () => {
     // Retype — different raw text, the same fold. The chip already carries
     // "Corner Café" as its value, so its accessible name is no longer the
     // bare "+ Entered name" placeholder.
-    fireEvent.click(screen.getByRole("button", { name: /^Payee/ }));
-    fireEvent.change(screen.getByRole("textbox", { name: "Payee" }), {
+    fireEvent.click(screen.getByRole("button", { name: /^Shop \/ payee/ }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Shop / payee" }), {
       target: { value: "CORNER CAFÉ" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Close" }));

@@ -145,7 +145,7 @@ function pickCategory(name: string) {
 
 function pickNina() {
   fireEvent.click(screen.getByRole("button", { name: /^Who\?/ }));
-  fireEvent.click(screen.getByRole("button", { name: /^Counterparty/ }));
+  fireEvent.click(screen.getByRole("button", { name: /^With whom/ }));
   fireEvent.click(screen.getByText("Nina"));
 }
 
@@ -223,7 +223,7 @@ describe("QuickAdd — a debt category asks Who? (§6.6)", () => {
     // The person row under More details, with the role picked by hand.
     fireEvent.click(screen.getByRole("button", { name: /^More details/ }));
     fireEvent.click(screen.getByRole("button", { name: /^Person/ }));
-    fireEvent.click(screen.getByRole("button", { name: /^Counterparty/ }));
+    fireEvent.click(screen.getByRole("button", { name: /^With whom/ }));
     fireEvent.click(screen.getByText("Nina"));
     fireEvent.click(screen.getByRole("radio", { name: "Debt — expected back" }));
     fireEvent.click(screen.getByRole("button", { name: "Close" }));

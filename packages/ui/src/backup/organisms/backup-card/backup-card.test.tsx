@@ -91,7 +91,7 @@ describe("the key's card", () => {
 
   it("names the unsent captures, which nothing else holds", () => {
     draw();
-    expect(screen.getByText("3 captures")).toBeTruthy();
+    expect(screen.getByText("3 changes")).toBeTruthy();
   });
 
   it("leaves the unsent row out when there is nothing waiting", () => {

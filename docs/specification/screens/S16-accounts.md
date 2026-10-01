@@ -319,8 +319,8 @@ The action is *I counted, and it says this*:
 ```
   Bank A · PLN            1 240,50        ⌃ reconcile
   ─────────────────────────────────────────────────────
-  Computed                1 240,50
-  You observed            1 198,30        [        ]
+  Recorded                1 240,50
+  Actual                  1 198,30        [        ]
   Difference               −42,20
                                           Uncategorized ▾
                                           "cash spent, not recorded"

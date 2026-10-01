@@ -133,7 +133,7 @@ it("computes the live difference and saves observed, asOf and note", () => {
       onSave={onSave}
     />,
   );
-  fireEvent.change(screen.getByLabelText("You observed"), { target: { value: "1198.30" } });
+  fireEvent.change(screen.getByLabelText("Actual"), { target: { value: "1198.30" } });
   expect(screen.getByText("-42.20")).toBeDefined();
 
   fireEvent.change(screen.getByLabelText("Note"), {
@@ -170,7 +170,7 @@ it("renders a zero difference in plain ink, not income green", () => {
       onSave={noop}
     />,
   );
-  fireEvent.change(screen.getByLabelText("You observed"), { target: { value: "1240.50" } });
+  fireEvent.change(screen.getByLabelText("Actual"), { target: { value: "1240.50" } });
 
   const computedFigure = screen.getByText("1 240.50");
   const differenceFigure = screen.getByText("0.00");

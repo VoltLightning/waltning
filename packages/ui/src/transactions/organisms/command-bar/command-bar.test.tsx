@@ -71,7 +71,7 @@ it("Resolved: renders the amount, the account, the date and the enteredName", ()
   // the bare ISO string the grammar resolved to.
   expect(screen.getByText("Sep 2")).toBeDefined();
   expect(screen.queryByText("2026-09-02")).toBeNull();
-  expect(screen.getByText("Payee: coffee")).toBeDefined();
+  expect(screen.getByText("Shop / payee: coffee")).toBeDefined();
   // No category matched or proposed — the chip asks, it does not guess.
   expect(screen.getByText("Category?")).toBeDefined();
 });
@@ -348,7 +348,7 @@ it("M3 — the listbox contains options and nothing else", () => {
   expect(children).toHaveLength(3);
   for (const child of children) expect(child.getAttribute("role")).toBe("option");
   expect(listbox.textContent).not.toContain("48.90");
-  expect(listbox.textContent).not.toContain("Payee");
+  expect(listbox.textContent).not.toContain("Shop / payee");
   expect(listbox.textContent).not.toContain("From your history");
 });
 

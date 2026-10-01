@@ -248,7 +248,7 @@ describe("TabsShell", () => {
     );
     await settleLayout();
 
-    expect(screen.getAllByText("Counterparties")).toHaveLength(2);
+    expect(screen.getAllByText("Contacts")).toHaveLength(2);
   });
 
   /**

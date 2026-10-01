@@ -169,7 +169,7 @@ describe("BalanceRow", () => {
         expectedBalance={money.toMoney("1198.30")}
       />,
     );
-    expect(screen.getByText("Last observed:")).toBeDefined();
+    expect(screen.getByText("Last checked:")).toBeDefined();
     expect(screen.getByText("1 198.30")).toBeDefined();
   });
 
@@ -177,7 +177,7 @@ describe("BalanceRow", () => {
     const { rerender } = render(
       <BalanceRow account="Bank A" kind="bank" balance={money.toMoney("100")} currency="PLN" />,
     );
-    expect(screen.queryByText("Last observed:")).toBeNull();
+    expect(screen.queryByText("Last checked:")).toBeNull();
 
     rerender(
       <BalanceRow
@@ -188,7 +188,7 @@ describe("BalanceRow", () => {
         expectedBalance={null}
       />,
     );
-    expect(screen.queryByText("Last observed:")).toBeNull();
+    expect(screen.queryByText("Last checked:")).toBeNull();
   });
 });
 

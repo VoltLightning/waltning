@@ -143,7 +143,7 @@ it("leaves the room the header overlays above the first day, and the strip rides
     node = node.parentElement;
   }
   expect(padded, "no scroll content carries the header's room as top padding").toBe(true);
-  const strip = screen.getByRole("button", { name: /August 14, 2026, 1 entry/ });
+  const strip = screen.getByRole("button", { name: /August 14, 2026, 1 transaction/ });
   let ride: HTMLElement | null = strip;
   let offset = "";
   while (ride !== null) {
@@ -156,7 +156,7 @@ it("leaves the room the header overlays above the first day, and the strip rides
 it("names a ribbon cell by its date and what happened, not by the number", () => {
   // A run of bare numbers says nothing about which month or which year.
   draw(ledgerWith([row("2026-08-14", 1, "-96")]));
-  expect(screen.getByRole("button", { name: /August 14, 2026, 1 entry/ })).toBeTruthy();
+  expect(screen.getByRole("button", { name: /August 14, 2026, 1 transaction/ })).toBeTruthy();
   expect(screen.queryByRole("button", { name: "14" })).toBeNull();
 });
 
@@ -444,9 +444,9 @@ it("draws the ribbon earliest-first, under a list that runs newest-first", () =>
   // Every day has a cell, so the run is read for its order, not for its ends:
   // the 12th is drawn before the 14th, and the day between them is between.
   const at = (day: RegExp) => dates.findIndex((label) => day.test(label));
-  expect(at(/August 12, 2026, 1 entry/)).toBeGreaterThanOrEqual(0);
+  expect(at(/August 12, 2026, 1 transaction/)).toBeGreaterThanOrEqual(0);
   expect(at(/August 13, 2026, nothing/)).toBe(at(/August 12/) + 1);
-  expect(at(/August 14, 2026, 1 entry/)).toBe(at(/August 12/) + 2);
+  expect(at(/August 14, 2026, 1 transaction/)).toBe(at(/August 12/) + 2);
   // Before the oldest loaded day the list has read nothing, and says so.
   expect(dates[at(/August 12/) - 1]).toBe("August 11, 2026");
 });
@@ -639,7 +639,7 @@ describe("a day that is already on screen", () => {
     const onPickDay = vi.fn();
     const onVisibleDay = vi.fn();
     draw(loaded(), onPickDay, { anchor: accountingDate("2026-08-14"), onVisibleDay });
-    fireEvent.click(screen.getByRole("button", { name: /August 13, 2026, 1 entry/ }));
+    fireEvent.click(screen.getByRole("button", { name: /August 13, 2026, 1 transaction/ }));
     expect(onVisibleDay).toHaveBeenCalledWith("2026-08-13");
     // A jump re-reads the ledger; the rows are already on screen.
     expect(onPickDay).not.toHaveBeenCalled();

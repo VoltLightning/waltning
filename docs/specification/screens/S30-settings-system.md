@@ -48,8 +48,8 @@ order:
 
 **Every row states the one fact that sends you into it**, under its label:
 *5 accounts*, *12 in use* (the categories something is filed under — whether the
-taxonomy is being used, not how big it is), *7 currencies*, *Oldest quote 5 days
-old* (the stalest last quote among currencies that have one). Read from the
+taxonomy is being used, not how big it is), *7 currencies*, *Oldest rate 5 days
+old* (the stalest last rate among currencies that have one). Read from the
 ledger, never guessed: a row with nothing true to say — *Back up*, until a
 backup's time is kept — renders its label alone.
 

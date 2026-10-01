@@ -8,7 +8,7 @@ const meta = {
   args: {
     title: "Spend by category",
     currency: "PLN",
-    period: "August 2026 · by leaf category",
+    period: "August 2026 · by subcategory",
     scope: "Mine",
     emptyLabel: "Nothing spent this period",
     othersLabel: "Other currencies",

@@ -1592,7 +1592,7 @@ describe("CategoriesScreen", () => {
     // The row says what archiving did, and how many are in it (S19 §3).
     fireEvent.click(screen.getByRole("button", { name: "Archived · 1" }));
     expect(screen.getByText("Old subscriptions")).toBeDefined();
-    expect(screen.getByText("Kept on old entries, never offered again")).toBeDefined();
+    expect(screen.getByText("Kept on old transactions, never offered again")).toBeDefined();
   });
 
   it("renames a category end to end, through the actions sheet", () => {
@@ -1616,8 +1616,8 @@ describe("CategoriesScreen", () => {
     expect(screen.getByText("Convert to group")).toBeDefined(); // the Toast, not the button
 
     fireEvent.click(screen.getByRole("button", { name: "Eating out actions" }));
-    fireEvent.click(screen.getByRole("button", { name: "Convert to leaf" }));
-    expect(screen.getByText("Convert to leaf")).toBeDefined();
+    fireEvent.click(screen.getByRole("button", { name: "Convert to category" }));
+    expect(screen.getByText("Convert to category")).toBeDefined();
   });
 
   it("shows the sibling-collision refusal inline, without closing the sheet", () => {
@@ -2183,7 +2183,7 @@ describe("Today — the pager, with a month in it", () => {
     const calendar = open("calendar", `${Number(MONTH.slice(0, 4)) - 1}-12-05`);
 
     expect(calendar.getByText(/^Nothing in December$/)).toBeTruthy();
-    expect(calendar.getByText(/nearest month with anything — 4 entries/)).toBeTruthy();
+    expect(calendar.getByText(/nearest month with anything — 4 transactions/)).toBeTruthy();
     expect(calendar.queryByText("No transactions yet"), "the ledger is not empty").toBeNull();
   });
 
@@ -2215,7 +2215,7 @@ describe("Today — the pager, with a month in it", () => {
     const calendar = open("calendar", `${MONTH}-07`);
 
     expect(calendar.getByText("nothing"), "the day's own figure").toBeTruthy();
-    expect(calendar.getByText(/Nearest entries:/)).toBeTruthy();
+    expect(calendar.getByText(/Nearest transactions:/)).toBeTruthy();
     expect(calendar.queryByText(/^Nothing in /), "the month is not empty").toBeNull();
   });
 
@@ -2352,14 +2352,14 @@ describe("Today — the pager, with a month in it", () => {
     const calendar = open("calendar", `${MONTH}-09`, { ledger: [], recent: [RECENT_ROW] });
 
     expect(calendar.getByText(/income and expenses on your own accounts/)).toBeTruthy();
-    expect(calendar.queryByText(/Capture your first/), "the rows are on List").toBeNull();
+    expect(calendar.queryByText(/Record your first/), "the rows are on List").toBeNull();
   });
 
   it("still says first-run when the ledger really is empty", () => {
     const calendar = open("calendar", `${MONTH}-09`, { ledger: [], recent: [] });
 
     expect(calendar.getByText("No transactions yet")).toBeTruthy();
-    expect(calendar.getByText(/Capture your first/)).toBeTruthy();
+    expect(calendar.getByText(/Record your first/)).toBeTruthy();
   });
 
   /**
@@ -2370,7 +2370,7 @@ describe("Today — the pager, with a month in it", () => {
   it("does not offer an unfiltered day while a search is on", () => {
     const calendar = open("calendar", `${MONTH}-07`, { q: "Market" });
 
-    expect(calendar.queryByText(/Nearest entries:/)).toBeNull();
+    expect(calendar.queryByText(/Nearest transactions:/)).toBeNull();
   });
 
   /**
