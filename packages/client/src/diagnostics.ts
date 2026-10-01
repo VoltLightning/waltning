@@ -58,6 +58,8 @@ export type ClientStateUpdate =
   | "device_preference_write"
   /** What the device can gate with, read once at launch (`security/app-lock`). */
   | "app_lock_enrolment"
+  /** The owner's stored answer to the lock question — read at launch, written on a tap. */
+  | "app_lock_choice"
   | "counterparty_direction_totals"
   /** `S01` found no active `dashboard_layouts` row — `SPEC.md` §14.5's seed is absent. */
   | "dashboard_active_layout"
