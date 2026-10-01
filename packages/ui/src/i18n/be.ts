@@ -19,6 +19,8 @@ export const be: Messages = {
     close: "Закрыць",
     name: "Назва",
     loading: "Загрузка…",
+    /** The amount ceiling (`money.ts`) — the figure is written the way this language writes it. */
+    amountCeiling: "Не больш за 999 999 999,99",
     search: "Пошук…",
     noMatches: "Нічога не знойдзена.",
     dismissSheet: "Закрыць: {{title}}",
@@ -141,6 +143,15 @@ export const be: Messages = {
     moveUp: "Перамясціць {{name}} уверх",
     moveDown: "Перамясціць {{name}} уніз",
     archivedToast: "Рахунак адпраўлены ў архіў.",
+    delete: "Выдаліць рахунак",
+    deleteConfirmTitle: "Выдаліць гэты рахунак?",
+    deleteConfirmBody:
+      "У рахунку «{{name}}» няма запісаў, таму ён будзе выдалены цалкам. Гэта дзеянне нельга адмяніць.",
+    deleteConfirmSubmit: "Выдаліць",
+    deletedToast: "Рахунак выдалены.",
+    deleteHasEntries:
+      "У гэтым рахунку ўжо з’явіліся запісы, таму яго можна толькі адправіць у архіў.",
+    overdrawn: "авердрафт",
     reconcile: "Звярыць…",
     reconcileTitle: "Звярка",
     computed: "Разлічана",

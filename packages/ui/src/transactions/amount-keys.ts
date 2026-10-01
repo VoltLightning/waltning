@@ -14,10 +14,8 @@
  * the locale's decimal mark. `decimalMark` only ever touches a *display*.
  */
 
+import { AMOUNT_INTEGER_DIGITS } from "../fx/molecules/amount-field/amount-field";
 import type { KeypadKey } from "./organisms/keypad/keypad";
-
-/** `parseAmount`'s own cap on integer digits — `numeric(20,8)` holds twelve before the point. */
-export const AMOUNT_INTEGER_DIGITS = 12;
 
 /**
  * `raw` after one keypress, capped at `decimals` fraction digits.
@@ -36,6 +34,10 @@ export const AMOUNT_INTEGER_DIGITS = 12;
  *   fraction digit to a 2-decimal currency is silently refused rather than
  *   truncating what is already there — the same "do nothing" `,` gives past
  *   the first one.
+ * - **At most `AMOUNT_INTEGER_DIGITS` digits before it** — nine, the amount
+ *   ceiling. The tenth digit is refused the same way: a keypad has no field
+ *   to attach an error to, and what is on the screen is always an amount a
+ *   row may hold.
  */
 export function applyKey(raw: string, key: KeypadKey, decimals: number = 2): string {
   if (key === "delete") return raw.slice(0, -1);
@@ -52,6 +54,7 @@ export function applyKey(raw: string, key: KeypadKey, decimals: number = 2): str
   }
 
   if (raw === "0") return key;
+  if (commaIndex === -1 && raw.replace("-", "").length >= AMOUNT_INTEGER_DIGITS) return raw;
   return raw + key;
 }
 

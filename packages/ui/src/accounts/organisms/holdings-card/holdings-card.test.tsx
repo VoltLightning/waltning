@@ -28,6 +28,7 @@ function props(overrides: Partial<HoldingsCardProps> = {}): HoldingsCardProps {
     mine: money.toMoney("440"),
     ours: null,
     held: money.toMoney("480"),
+    overdrawn: money.toMoney("0"),
     owed: money.toMoney("40"),
     counted: 3,
     of: 3,
@@ -104,6 +105,34 @@ describe("HoldingsCard", () => {
           Node.DOCUMENT_POSITION_FOLLOWING,
       ).toBeTruthy();
     }
+  });
+
+  /**
+   * The line under the figure names what is below zero by what it is: a bank
+   * account below zero is **overdrawn**, a card below zero is **owed**. One
+   * word for both read the overdraft as money owed to someone.
+   */
+  it("says overdrawn for the part an asset account is below zero by, and owed for a card", () => {
+    render(
+      <HoldingsCard
+        {...props({
+          mine: money.toMoney("-303.83"),
+          held: money.toMoney("500"),
+          overdrawn: money.toMoney("504.20"),
+          owed: money.toMoney("299.63"),
+        })}
+      />,
+    );
+    expect(screen.getByText("overdrawn")).toBeDefined();
+    expect(screen.getByText("504.20")).toBeDefined();
+    expect(screen.getByText("owed")).toBeDefined();
+    expect(screen.getByText("299.63")).toBeDefined();
+  });
+
+  it("says nothing about an overdraft when no account is overdrawn", () => {
+    render(<HoldingsCard {...props()} />);
+    expect(screen.queryByText("overdrawn")).toBeNull();
+    expect(screen.getByText("owed")).toBeDefined();
   });
 
   /** Listed under their own rule — never a row that reads as part of the figure. */

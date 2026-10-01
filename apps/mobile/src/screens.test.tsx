@@ -104,6 +104,7 @@ type FakeAccount = {
   isBusiness: false;
   archived: false;
   hidden: boolean;
+  hasEntries: boolean;
   inTotal: boolean;
   color: null;
   expectedBalance: null;
@@ -477,6 +478,7 @@ function fakeController(options: FakeControllerOptions = {}) {
           isBusiness: false,
           archived: false,
           hidden: false,
+          hasEntries: false,
           inTotal: true,
           color: null,
           expectedBalance: null,
@@ -541,6 +543,7 @@ const PLN_ACCOUNT: FakeAccount = {
   isBusiness: false,
   archived: false,
   hidden: false,
+  hasEntries: false,
   inTotal: true,
   color: null,
   expectedBalance: null,
@@ -563,6 +566,7 @@ const SHARED_ACCOUNT: FakeAccount = {
   isBusiness: false,
   archived: false,
   hidden: false,
+  hasEntries: false,
   inTotal: true,
   color: null,
   expectedBalance: null,
@@ -585,6 +589,7 @@ const CLEARING_ACCOUNT: FakeAccount = {
   isBusiness: false,
   archived: false,
   hidden: false,
+  hasEntries: false,
   inTotal: true,
   color: null,
   expectedBalance: null,
@@ -607,6 +612,7 @@ const SECOND_CLEARING_ACCOUNT: FakeAccount = {
   isBusiness: false,
   archived: false,
   hidden: false,
+  hasEntries: false,
   inTotal: true,
   color: null,
   expectedBalance: null,

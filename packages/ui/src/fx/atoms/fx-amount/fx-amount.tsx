@@ -29,7 +29,7 @@ import { Tag } from "../../../primitives/atoms/tag";
 import { text } from "../../../theme/fonts.ts";
 import { makeStyles } from "../../../theme/styles.ts";
 import { space, tabularNums } from "../../../tokens.ts";
-import { Amount } from "../amount/amount";
+import { Amount, type AmountKind } from "../amount/amount";
 
 /**
  * Where the rate came from, and what the row therefore has to say about it.
@@ -70,6 +70,13 @@ export type FxAmountProps = {
   rateDecimals?: number;
   provenance?: FxProvenance;
   /**
+   * What kind of figure the balance is, for `Amount`'s colour — `auto` (the
+   * default) reads the sign. A caller that shows a magnitude and says what it
+   * is in words (*overdrawn 504,20*) passes `spend`, because the sign that
+   * would have coloured it is not on the figure any more.
+   */
+  kind?: AmountKind;
+  /**
    * **Two lines, right-aligned: the balance, and under it the rate and what it
    * comes to** — S16's register, `62,40 Br` over `0,3121 · 19,48 zł`. Inline,
    * the whole figure wanted a third of a 390pt row and took the account's
@@ -93,6 +100,7 @@ export function FxAmount({
   displayDecimals = 2,
   rateDecimals = 4,
   provenance = { kind: "synced" },
+  kind = "auto",
   stacked = false,
 }: FxAmountProps) {
   // Converted here rather than by the caller, and this is the point of the
@@ -131,7 +139,7 @@ export function FxAmount({
     // both vary, and both say this particular figure may be wrong.
     return (
       <View style={styles.stacked}>
-        <Amount value={value} currency={currency} decimals={decimals} />
+        <Amount value={value} currency={currency} decimals={decimals} kind={kind} />
         <View style={styles.under}>
           <Amount
             value={converted}

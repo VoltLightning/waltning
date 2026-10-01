@@ -19,6 +19,7 @@ import {
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { assertAmountPositive } from "../amount-sign.ts";
 import { defineLocalExecutor, LocalRefusal } from "../executor.ts";
+import { assertAmountCeiling } from "../scale.ts";
 import { type ReplicaTx, ledgerSchema as schema } from "../schema-map.ts";
 import {
   assertCategoryNotArchived,
@@ -71,6 +72,15 @@ export const updateTransactionExecutor = defineLocalExecutor<
    * could resolve that one differently, and this one it cannot.
    */
   validate: (input, tx) => {
+    // The ceiling first: it needs no row, so it refuses a ghost id's oversized
+    // figure too, and it never depends on the row's type the way the sign does.
+    if (input.patch.amountOriginal !== undefined) {
+      assertAmountCeiling(input.patch.amountOriginal, "update_transaction: amount_original");
+    }
+    if (input.patch.toAmount != null) {
+      assertAmountCeiling(input.patch.toAmount, "update_transaction: to_amount");
+    }
+    if (input.patch.fee != null) assertAmountCeiling(input.patch.fee, "update_transaction: fee");
     if (input.patch.amountOriginal === undefined) return;
     const current = tx
       .select({ type: transactions.type, deletedAt: transactions.deletedAt })

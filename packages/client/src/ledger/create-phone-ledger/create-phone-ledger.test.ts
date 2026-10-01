@@ -126,6 +126,7 @@ function account(
     isBusiness: false,
     archived: false,
     hidden: false,
+    hasEntries: false,
     inTotal: true,
     color: null,
     expectedBalance: null,
@@ -184,6 +185,7 @@ function harness(
         isBusiness: input.isBusiness,
         archived: false,
         hidden: false,
+        hasEntries: false,
         inTotal: true,
         color: null,
         expectedBalance: null,
@@ -302,6 +304,22 @@ function harness(
         : candidate,
     );
   });
+  /** An empty account goes; one something references is refused, the way the executor says it. */
+  const deleteAccount = vi.fn<PhoneLedgerPort["deleteAccount"]>((input) => {
+    const current = accounts.find((candidate) => candidate.id === input.id);
+    if (!current) throw new Error(`delete_account: no account ${input.id}`);
+    if (versionOf(input.id) !== input.version) {
+      throw new Error(
+        `delete_account: stale version — read ${input.version}, row is at ${versionOf(input.id)}`,
+      );
+    }
+    if (current.hasEntries) {
+      throw new Error(
+        `delete_account: ${input.id} has entries (transactions) — archive it instead`,
+      );
+    }
+    accounts = accounts.filter((candidate) => candidate.id !== input.id);
+  });
   const reconcileAccount = vi.fn<PhoneLedgerPort["reconcileAccount"]>((input) => {
     const current = accounts.find((candidate) => candidate.id === input.accountId);
     if (!current) throw new Error(`reconcile_account: no account ${input.accountId}`);
@@ -393,6 +411,7 @@ function harness(
     setTransactionLines: vi.fn(),
     updateAccount,
     archiveAccount,
+    deleteAccount,
     setAccountVisibility,
     reconcileAccount,
     createGroup,
@@ -451,10 +470,15 @@ function harness(
     createTransaction,
     updateAccount,
     archiveAccount,
+    deleteAccount,
     setAccountVisibility,
     reconcileAccount,
     createGroup,
     balanceAsOf,
+    /** A row now references every account — the state that turns *Delete* into a refusal. */
+    markReferenced: () => {
+      accounts = accounts.map((row) => ({ ...row, hasEntries: true }));
+    },
     /** The raw port — the FX methods have no fixture state of their own to assert through, so tests spy on this directly. */
     port,
     renameCategory,
@@ -1405,6 +1429,46 @@ describe("phone ledger controller", () => {
 
       const second = controller.archiveAccount({ id: accountId, version: 2 });
       expect("fieldErrors" in second).toBe(true);
+    });
+  });
+
+  describe("deleteAccount", () => {
+    it("removes an account nothing references", () => {
+      const { controller, deleteAccount } = harness();
+      const accountId = idOf(controller.createAccount(minimalDraft("Bank A · PLN", PLN)));
+
+      const result = controller.deleteAccount({ id: accountId, version: 1 });
+
+      expect("id" in result && result.id).toBe(accountId);
+      expect(deleteAccount).toHaveBeenCalledTimes(1);
+      expect(controller.getSnapshot().accounts).toHaveLength(0);
+    });
+
+    it("names the refusal when something references the account, rather than throwing", () => {
+      const { controller, markReferenced } = harness();
+      const accountId = idOf(controller.createAccount(minimalDraft("Bank A · PLN", PLN)));
+      markReferenced();
+
+      const result = controller.deleteAccount({ id: accountId, version: 1 });
+
+      expect("fieldErrors" in result && result.fieldErrors).toEqual([
+        {
+          path: "",
+          message: expect.stringContaining("has entries"),
+          messageKey: "accounts.deleteHasEntries",
+        },
+      ]);
+    });
+
+    it("reads a stale version as the same refusal update and archive give", () => {
+      const { controller } = harness();
+      const accountId = idOf(controller.createAccount(minimalDraft("Bank A · PLN", PLN)));
+
+      const result = controller.deleteAccount({ id: accountId, version: 9 });
+
+      expect("fieldErrors" in result && result.fieldErrors[0]?.messageKey).toBe(
+        "accounts.staleVersion",
+      );
     });
   });
 

@@ -25,7 +25,7 @@
  */
 
 import * as money from "@waltning/core/money";
-import type { AccountColor, AccountKind } from "@waltning/core/registry/inputs";
+import { type AccountColor, type AccountKind, isOverdrawn } from "@waltning/core/registry/inputs";
 import { useCallback, useMemo, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import Animated from "react-native-reanimated";
@@ -429,6 +429,7 @@ export function AccountRegister({
         ...(row.decimals === undefined ? {} : { decimals: row.decimals }),
         isBusiness: row.isBusiness,
         unsettled: row.kind === "clearing" && !money.isZero(row.balance),
+        overdrawn: isOverdrawn(row.kind, row.balance),
         expectedBalance: row.expectedBalance,
       })),
     [shared, t],
@@ -783,6 +784,7 @@ function AccountRegisterRow({
       balance={account.balance}
       currency={account.currency}
       {...(account.decimals === undefined ? {} : { decimals: account.decimals })}
+      overdrawn={isOverdrawn(account.kind, account.balance)}
       isBusiness={account.isBusiness}
       unsettled={account.kind === "clearing" && !money.isZero(account.balance)}
       expectedBalance={account.expectedBalance}

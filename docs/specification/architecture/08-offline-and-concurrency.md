@@ -525,6 +525,36 @@ conflict with a phone's queued category edit (`14-local-first.md` §14.2):
 
 ---
 
+## H17 · A delete races another device's entry
+
+`delete_account` removes an account nothing has referenced (`SPEC.md` §6.9). The
+phone decides that from its own replica, which cannot see what another device
+has written and not yet sent. So the two devices can disagree, and the answer is
+the same rule as everywhere above: **the backend admits every write**, and
+`accounts_delete_guard` (`WA023`) is how it says no.
+
+- **The delete arrives second.** Another device's entry already references the
+  account, so the delete is refused with `WA023` and is `blocked` and terminal:
+  *an entry was added to this account elsewhere — archive it instead*. The
+  phone that deleted it had already dropped the row, so the account returns at
+  the next sync-down, which copies every server row by insert; nothing is
+  reconstructed from the entry.
+- **The delete arrives first.** The other device's entry names an account that
+  is gone and is refused. It stays `blocked`, terminal, **with its payload
+  intact** — a refusal is never a drop — and is editable on S30, where the
+  person can move it to another account. The entry is the capture of something
+  that happened; the account it named was the only thing that stopped existing.
+
+`delete_account` is queued in the outbox like every local write: it materialises
+on the device at once and drains later. The device refuses first what it can
+see — an entry in the replica, a deferred capture in the outbox that names the
+account, a stale `version` — before anything is queued, so a refused delete
+leaves no blocked entry to discard. What it cannot see is another device's
+unsent entry, and the backend's guard is what makes that case a refusal rather
+than a silent divergence.
+
+---
+
 ## What is deliberately not built
 
 **No CRDTs, no vector clocks, no operational transform.** One user with two

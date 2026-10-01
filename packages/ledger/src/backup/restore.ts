@@ -65,6 +65,8 @@
 import type { BackupDocument, BackupRow } from "@waltning/core/backup/contract";
 import { type SQL, sql } from "drizzle-orm";
 import {
+  createAmountCeilingTriggers,
+  dropAmountCeilingTriggers,
   type LedgerFs,
   type Migration,
   migrateOutbox,
@@ -130,7 +132,7 @@ export function restoreBackup<TRun, TSchema extends LedgerSchema>(
 
   // The outbox first: it is the half nothing else holds.
   fill(stores.outbox.db, BACKUP_TABLES.outbox, backup.outbox);
-  fill(stores.replica.db, BACKUP_TABLES.replica, backup.replica);
+  fill(stores.replica.db, BACKUP_TABLES.replica, backup.replica, true);
 
   // Then the rest of the chain, over rows that are now in the file — the same
   // thing a launch does to a database an update has moved past.
@@ -212,10 +214,14 @@ function fill<TRun, TSchema extends LedgerSchema>(
   db: AnyStore<TRun, TSchema>,
   tables: readonly string[],
   rows: Readonly<Record<string, readonly BackupRow[]>>,
+  /** The replica only: its amount-ceiling triggers are lifted for the load (see `dropAmountCeilingTriggers`). */
+  liftCeiling = false,
 ): void {
   db.transaction((tx) => {
     tx.run(sql`PRAGMA defer_foreign_keys = ON`);
+    if (liftCeiling) dropAmountCeilingTriggers(tx);
     for (const name of tables) insertAll(tx, name, rows[name] ?? []);
+    if (liftCeiling) createAmountCeilingTriggers(tx);
   });
 }
 

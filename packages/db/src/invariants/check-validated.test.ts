@@ -149,6 +149,8 @@ const CHECKS: Record<string, () => Promise<unknown>> = {
   transactions_occurrence_shape: () => insertRow({ occurrence_date: "2026-08-12" }),
   // A debt amount with no debt currency.
   transactions_debt_shape: () => insertRow({ debt_amount: "5.00" }),
+  // An amount at the ceiling (`AMOUNT_CEILING_EXCLUSIVE`) — 999 999 999.99 is the largest any row holds.
+  transactions_amount_ceiling: () => insertRow({ amount_original: "1000000000.00" }),
   // A zero fee — "no fee" is null, never zero.
   transactions_fee_positive: () => insertRow({ fee: "0.00" }),
   // §7.0a — the minute is the resolution. Postgres `time` would take a second

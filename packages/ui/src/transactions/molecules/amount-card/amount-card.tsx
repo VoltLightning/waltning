@@ -28,6 +28,10 @@
 import { useCallback, useMemo, useState } from "react";
 import { Text, View } from "react-native";
 import { CurrencyMark } from "../../../fx/currency-marks";
+import {
+  AMOUNT_INTEGER_DIGITS,
+  exceedsAmountCeiling,
+} from "../../../fx/molecules/amount-field/amount-field";
 import { decimalMark } from "../../../i18n/locales";
 import { useLocale, useT } from "../../../i18n/provider";
 import { focusBorder } from "../../../theme/focus.ts";
@@ -35,7 +39,7 @@ import { text, textCap } from "../../../theme/fonts.ts";
 import { useTheme } from "../../../theme/provider";
 import { makeStyles } from "../../../theme/styles.ts";
 import { radius, space } from "../../../tokens.ts";
-import { AMOUNT_INTEGER_DIGITS, sanitizeAmount } from "../../amount-keys.ts";
+import { sanitizeAmount } from "../../amount-keys.ts";
 import { FigureInput } from "../figure-input/figure-input";
 
 export type AmountCardProps = {
@@ -77,6 +81,10 @@ export function AmountCard({
   const styles = useStyles();
   const mark = decimalMark(locale);
   const display = raw.replace(",", mark);
+  // A figure past the ceiling is held, not cut (a pasted twelve digits must not
+  // quietly become nine), and says why under the field; a refusal of the
+  // write's own takes precedence.
+  const shownError = error ?? (exceedsAmountCeiling(raw) ? t("common.amountCeiling") : undefined);
   const handleChange = useCallback(
     (typed: string) => onChangeRaw(sanitizeAmount(typed, decimals, mark)),
     [onChangeRaw, decimals, mark],
@@ -125,7 +133,7 @@ export function AmountCard({
         onBlur={handleBlur}
         autoFocus={autoFocus}
       />
-      {error === undefined ? null : <Text style={styles.error}>{error}</Text>}
+      {shownError === undefined ? null : <Text style={styles.error}>{shownError}</Text>}
       {context === undefined ? null : (
         <View style={styles.contextRow}>
           <Text

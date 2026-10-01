@@ -44,6 +44,7 @@ import Animated from "react-native-reanimated";
 import { Amount } from "../../../fx/atoms/amount/amount";
 import {
   AmountField,
+  exceedsAmountCeiling,
   formatAmountDraft,
   parseAmount,
 } from "../../../fx/molecules/amount-field/amount-field";
@@ -394,7 +395,13 @@ function LineRow({
             {...(error !== undefined
               ? { error }
               : parsedAmount === null && line.amount !== ""
-                ? { error: t("transactions.invalidAmount") }
+                ? {
+                    error: t(
+                      exceedsAmountCeiling(line.amount)
+                        ? "common.amountCeiling"
+                        : "transactions.invalidAmount",
+                    ),
+                  }
                 : {})}
           />
           <Button label={t("transactions.delete")} onPress={handleRemove} variant="ghost" />

@@ -100,6 +100,14 @@ export const SQLSTATE = {
    * (`0025_debt_categories.sql`).
    */
   DEBT_CATEGORY_SHAPE: "WA022",
+  /**
+   * §6.9 — an account something references is archived, never deleted
+   * (`0026_account_delete_guard_and_amount_ceiling.sql`). A transaction on
+   * either leg — soft-deleted ones included — a recurring rule, an import
+   * batch or a non-zero opening balance each keep it. Only an account no row
+   * has ever touched may go.
+   */
+  ACCOUNT_REFERENCED: "WA023",
 } as const;
 
 export type GuardState = (typeof SQLSTATE)[keyof typeof SQLSTATE];
@@ -152,6 +160,7 @@ export const TRIGGER = {
   ONE_ACTIVE_LAYOUT: "dashboard_layouts_exactly_one_active",
   ACCOUNT_KIND_NOT_RETIRED: "accounts_kind_not_retired",
   DEBT_CATEGORY_SHAPE: "transactions_debt_category_shape",
+  ACCOUNT_DELETE_GUARD: "accounts_delete_guard",
 } as const;
 
 /**
@@ -225,6 +234,13 @@ export const GUARDS: Record<GuardState, Guard> = {
   [SQLSTATE.DEBT_CATEGORY_SHAPE]: {
     code: "validation",
     constraint: TRIGGER.DEBT_CATEGORY_SHAPE,
+  },
+  // `validation`, not a retryable class: the account is referenced and stays
+  // referenced. The drain marks the entry `blocked` (`architecture/08` H15) and
+  // the phone's account returns when the ledger next syncs down.
+  [SQLSTATE.ACCOUNT_REFERENCED]: {
+    code: "validation",
+    constraint: TRIGGER.ACCOUNT_DELETE_GUARD,
   },
 };
 
