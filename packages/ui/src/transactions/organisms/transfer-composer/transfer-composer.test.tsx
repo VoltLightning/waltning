@@ -80,7 +80,18 @@ function draw(overrides: Partial<TransferComposerProps> = {}) {
 const textOf = (wanted: string) =>
   screen.getByText((_, element) => element?.textContent?.replaceAll("\u00a0", " ") === wanted);
 
-it("draws the two legs as rows with their balances, and the amount over them", () => {
+it("asks for the From account first, then the amount, then the To account", () => {
+  draw();
+  const follows = (first: HTMLElement, second: HTMLElement) =>
+    (first.compareDocumentPosition(second) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
+  const from = screen.getByRole("button", { name: "From: Household · USD" });
+  const amount = screen.getByLabelText("Amount");
+  const to = screen.getByRole("button", { name: "To: Cash · PLN" });
+  expect(follows(from, amount)).toBe(true);
+  expect(follows(amount, to)).toBe(true);
+});
+
+it("draws the two legs as rows with their balances, and the amount between them", () => {
   draw();
   expect(screen.getByRole("button", { name: "From: Household · USD" })).toBeDefined();
   expect(screen.getByRole("button", { name: "To: Cash · PLN" })).toBeDefined();

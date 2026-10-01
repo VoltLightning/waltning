@@ -61,7 +61,7 @@ import { SheetAwareTextInput } from "../../../primitives/sheet-input";
 import { useBreakpoint } from "../../../primitives/use-breakpoint.ts";
 import { useFrozenOrder } from "../../../primitives/use-frozen-order.ts";
 import type { SubmitCheck } from "../../../primitives/use-submit-check.ts";
-import { HouseIcon } from "../../../shell/phosphor";
+import { CaretRightIcon, HouseIcon } from "../../../shell/phosphor";
 import { Banner } from "../../../states/molecules/banner/banner";
 import { focusBorder } from "../../../theme/focus.ts";
 import { inputStep, text } from "../../../theme/fonts.ts";
@@ -485,6 +485,27 @@ export function QuickAddComposer({
           ))}
         </View>
       ) : null}
+      <ComposerRows>
+        <Anchored check={check} field="account">
+          <ComposerRow
+            first
+            label={t(type === "income" ? "transactions.intoAccount" : "transactions.fromAccount")}
+            value={selectedAccount?.name}
+            trailing={
+              selectedAccount === undefined ? undefined : (
+                <AccountCurrency code={selectedAccount.currency} />
+              )
+            }
+            placeholder={t("transactions.chooseAccount")}
+            tile={<HouseIcon size={15} color={theme.accentText} />}
+            tileFill={theme.accentFill}
+            onPress={onOpenAccountPicker}
+            machineFilled={accountMachineFilled && selectedAccount !== undefined}
+            error={accountError}
+          />
+        </Anchored>
+      </ComposerRows>
+
       <Anchored check={check} field="amount">
         <AmountCard
           label={t("transactions.howMuch")}
@@ -494,7 +515,10 @@ export function QuickAddComposer({
           // The code: `AmountCard` draws the pivot's symbol or the code (`04` §4.1).
           currency={selectedAccount?.currency}
           kind={type}
-          context={pace}
+          context={
+            pace ??
+            (selectedAccount === undefined ? t("transactions.amountWaitsForAccount") : undefined)
+          }
           error={amountError}
           autoFocus
           compact={compact}
@@ -502,20 +526,8 @@ export function QuickAddComposer({
       </Anchored>
 
       <ComposerRows>
-        <Anchored check={check} field="account">
-          <ComposerRow
-            first
-            label={t(type === "income" ? "transactions.intoAccount" : "transactions.fromAccount")}
-            value={selectedAccount?.name}
-            placeholder={t("transactions.chooseAccount")}
-            tile={<HouseIcon size={15} color={theme.accentText} />}
-            tileFill={theme.accentFill}
-            onPress={onOpenAccountPicker}
-            machineFilled={accountMachineFilled && selectedAccount !== undefined}
-            error={accountError}
-          />
-        </Anchored>
         <ComposerRow
+          first
           label={t("transactions.category")}
           value={categoryValue}
           placeholder={categoryPlaceholder}
@@ -755,6 +767,20 @@ export function QuickAddComposer({
 }
 
 /** A `FieldAnchor` when the screen passed a check, the field alone when it did not. */
+type AccountCurrencyProps = { code: string };
+
+/** The account row's right edge: the currency the entry will be in, then the caret. */
+function AccountCurrency({ code }: AccountCurrencyProps) {
+  const styles = useStyles();
+  const theme = useTheme();
+  return (
+    <View style={styles.accountCurrency}>
+      <Text style={styles.accountCurrencyCode}>{code}</Text>
+      <CaretRightIcon size={15} color={theme.textFaint} />
+    </View>
+  );
+}
+
 function Anchored({
   check,
   field,
@@ -921,6 +947,8 @@ const useStyles = makeStyles((theme) => ({
     gap: space.sm,
     paddingHorizontal: space.xs,
   },
+  accountCurrency: { flexDirection: "row", alignItems: "center", gap: space.sm },
+  accountCurrencyCode: { color: theme.accentText, ...text.ui("label", 700) },
   trailCaption: { color: theme.textMuted, ...text.ui("caption") },
   // The deck's note: one line in its own card, 14 above and below, 16 at the sides.
   noteCard: {

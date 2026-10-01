@@ -40,14 +40,15 @@ the phone is typed on.
 │  ┌ Expense ┐   Income      Transfer             │  ← segment control, the kind
 │                                                 │
 │  ┌─────────────────────────────────────────────┐│
+│  │ ▣  From                              PLN  › ││  ← the account first, and the currency it fixes
+│  │    Bank A · PLN                             ││
+│  └─────────────────────────────────────────────┘│
+│  ┌─────────────────────────────────────────────┐│
 │  │ How much?                                   ││
 │  │ −1 240,50  zł                               ││  ← display-hero, tabular; the sign is the kind's colour
 │  │ [Groceries this month: 61% of usual]        ││  ← one line, only when there is a habit to measure against
 │  └─────────────────────────────────────────────┘│
 │  ┌─────────────────────────────────────────────┐│
-│  │ ▣  From                                   › ││
-│  │    Bank A · PLN                             ││
-│  │ ─────────────────────────────────────────── ││
 │  │ G  Category                               › ││
 │  │    Groceries                                ││
 │  │ ─────────────────────────────────────────── ││
@@ -65,6 +66,17 @@ the phone is typed on.
 │  └─────────────────────────────────────────────┘│
 └─────────────────────────────────────────────────┘
 ```
+
+**The account comes first, then the amount.** A figure with no currency under
+it asks *of what?*, so the order is the segment, then the *From* row (*Into* on
+income) with the account and the currency it fixes, then the amount, then the
+category and the rest. The row is pre-filled — the only account, else the last
+used within the window, else empty — and while it is empty the amount card says
+*Choose an account first* where the pace line would go and draws no currency.
+The row is above the figure, so the keyboard never covers it, and changing the
+account is one tap on it. An entry's currency is its account's: the data model
+holds a transaction in its account's currency alone, so there is no currency
+chip, and a foreign purchase is captured in the account that was charged.
 
 **The amount is the largest thing on the screen** because it is the only field
 that is always required and always typed. It is a `TextInput` in its own card
@@ -109,8 +121,8 @@ steps the figure from `display-hero` to `display-one`, takes
 the padding in, sets the blocks 6 apart instead of 20, leaves out the *Saved on
 your phone* line, and leaves out the day under the name while the draft's day is
 today (a different day is always drawn). So *From* (*Into* on income) is on
-screen directly under the amount, before *Category*, un-errored, saying what to
-pick or what it was filled with. The currency mark beside the figure appears the
+screen directly above the amount, un-errored, saying what to
+pick or what it was filled with. The currency — on the account row and beside the figure — appears the
 moment an account is known, whether chosen or filled; with none it shows
 nothing.
 

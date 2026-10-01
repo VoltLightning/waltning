@@ -203,7 +203,8 @@ describe("QuickAdd — the phone path (Dock + QuickAddComposer)", () => {
     expect(
       screen.getByRole("button", { name: "From: Cash · PLN, filled automatically" }),
     ).toBeDefined();
-    expect(screen.getByText("PLN")).toBeDefined();
+    // On the account row and beside the figure.
+    expect(screen.getAllByText("PLN")).toHaveLength(2);
     expect(screen.getByRole("button", { name: "Save expense" })).toHaveProperty("disabled", false);
   });
 

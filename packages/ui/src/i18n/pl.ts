@@ -204,6 +204,7 @@ export const pl: Messages = {
     amount: "Kwota",
     account: "Konto",
     chooseAccount: "Które?",
+    amountWaitsForAccount: "Proszę najpierw wybrać konto",
     chooseCategory: "Na co poszło?",
     needsRate: "Waluta {{currency}} wymaga kursu wymiany, zanim zapiszesz w niej transakcję.",
     needsRateAction: "Ustaw kurs {{currency}}",

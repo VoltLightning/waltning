@@ -369,6 +369,31 @@ export function TransferComposer({
             </View>
           </IconButton>
         </View>
+        <ComposerRows>
+          <Anchored check={check} field="from">
+            <ComposerRow
+              first
+              label={t("transactions.from")}
+              value={from?.name}
+              placeholder={t("transactions.account")}
+              onPress={onOpenFromAccountPicker}
+              error={accountIdError}
+              {...(from?.balance === undefined
+                ? {}
+                : {
+                    trailing: (
+                      <Amount
+                        value={from.balance}
+                        currency={from.currency}
+                        decimals={from.decimals}
+                        size="compact"
+                        emphasis="muted"
+                      />
+                    ),
+                  })}
+            />
+          </Anchored>
+        </ComposerRows>
         <Anchored check={check} field="amount">
           <View style={[styles.figure, focused === "amount" ? styles.figureFocused : null]}>
             <FigureInput
@@ -397,31 +422,9 @@ export function TransferComposer({
           <Text style={styles.fieldError}>{toAmountError}</Text>
         ) : null}
         <ComposerRows>
-          <Anchored check={check} field="from">
-            <ComposerRow
-              first
-              label={t("transactions.from")}
-              value={from?.name}
-              placeholder={t("transactions.account")}
-              onPress={onOpenFromAccountPicker}
-              error={accountIdError}
-              {...(from?.balance === undefined
-                ? {}
-                : {
-                    trailing: (
-                      <Amount
-                        value={from.balance}
-                        currency={from.currency}
-                        decimals={from.decimals}
-                        size="compact"
-                        emphasis="muted"
-                      />
-                    ),
-                  })}
-            />
-          </Anchored>
           <Anchored check={check} field="to">
             <ComposerRow
+              first
               label={t("transactions.to")}
               value={to?.name}
               placeholder={t("transactions.account")}
