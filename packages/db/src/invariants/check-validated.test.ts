@@ -162,6 +162,20 @@ const CHECKS: Record<string, () => Promise<unknown>> = {
   // happily, and a row carrying one is a second spelling of the same minute,
   // which sorts and compares differently from every other row.
   transactions_time_of_day_whole_minute: () => insertRow({ time_of_day: "14:20:30" }),
+  // §7.8 — what was paid names an amount and a currency together.
+  transactions_paid_shape: () => insertRow({ paid_amount: "350.00" }),
+  // …in a currency other than the one the account is charged in.
+  transactions_paid_distinct: () =>
+    insertRow({ paid_amount: "350.00", paid_currency: CURRENCY.code }),
+  // …on an income or an expense only (an adjustment is a balance correction).
+  transactions_paid_type: () =>
+    insertRow({ type: "adjustment", paid_amount: "350.00", paid_currency: OTHER_CURRENCY.code }),
+  // …a positive figure…
+  transactions_paid_amount_positive: () =>
+    insertRow({ paid_amount: "0.00", paid_currency: OTHER_CURRENCY.code }),
+  // …under the ceiling.
+  transactions_paid_amount_ceiling: () =>
+    insertRow({ paid_amount: "1000000000.00", paid_currency: OTHER_CURRENCY.code }),
   // A tax FX rate with no tax FX date.
   transactions_tax_fx_shape: () => insertRow({ tax_fx_rate: "1" }),
   // A zero FX rate — `amount_pivot = amount_original × fx_rate` refuses one.

@@ -45,6 +45,20 @@ type Story = StoryObj<typeof meta>;
 
 export const Expense: Story = {};
 
+/**
+ * §7.8 — *350 CZK* paid with a EUR card: the row's own figure is what the
+ * account was charged, and what was paid sits small and muted under it.
+ */
+export const PaidInAnotherCurrency: Story = {
+  args: {
+    enteredName: "Café",
+    amount: money.toMoney("-14.02"),
+    currency: "EUR",
+    paidAmount: money.toMoney("350"),
+    paidCurrency: "CZK",
+  },
+};
+
 /** `SPEC.md` §14.4b — recognised offline, never blank for an unmatched entered name. */
 export const RecognisedBrand: Story = {
   args: { enteredName: "ORLEN", brandKey: "orlen" },

@@ -40,6 +40,7 @@ const { accounts, categories, counterparties, currencies, transactionLines, tran
  */
 const destinations = alias(accounts, "destination_account");
 const identities = alias(counterparties, "identity_counterparty");
+const paidCurrencies = alias(currencies, "paid_currencies");
 
 export type LocalTransactionLine = {
   id: Id<"transactionLines">;
@@ -72,6 +73,15 @@ export type LocalTransactionDetail = {
   toCurrency: CurrencyCode | null;
   /** A transfer's fee, in the source leg's currency; `null` when there is none. */
   fee: Money | null;
+  /**
+   * §7.8 — what was handed over when that was not the account's currency
+   * (`350` in `CZK` on a EUR card); `null` when the entry was made in its
+   * account's own. `amount` stays the account-side figure — what the account
+   * was charged — so the realised rate is `paidAmount ÷ amount`.
+   */
+  paidAmount: Money | null;
+  paidCurrency: CurrencyCode | null;
+  paidDecimals: number | null;
   categoryId: Id<"categories"> | null;
   categoryName: string | null;
   categoryExternalId: string | null;
@@ -134,6 +144,9 @@ export function readTransaction<TRun, TSchema extends typeof ledgerSchema>(
       toAmount: transactions.toAmount,
       toCurrency: transactions.toCurrency,
       fee: transactions.fee,
+      paidAmount: transactions.paidAmount,
+      paidCurrency: transactions.paidCurrency,
+      paidDecimals: paidCurrencies.decimals,
       currency: transactions.currency,
       decimals: currencies.decimals,
       version: transactions.version,
@@ -145,6 +158,7 @@ export function readTransaction<TRun, TSchema extends typeof ledgerSchema>(
     .leftJoin(counterparties, eq(transactions.obligationCounterpartyId, counterparties.id))
     .leftJoin(destinations, eq(transactions.toAccountId, destinations.id))
     .leftJoin(identities, eq(transactions.counterpartyId, identities.id))
+    .leftJoin(paidCurrencies, eq(transactions.paidCurrency, paidCurrencies.code))
     .where(and(eq(transactions.id, id), isNull(transactions.deletedAt)))
     .get();
 

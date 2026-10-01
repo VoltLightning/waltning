@@ -27,6 +27,7 @@ import { Button } from "../../../primitives/atoms/button/button";
 import { Chip } from "../../../primitives/atoms/chip/chip";
 import { DateField } from "../../../primitives/atoms/date-field/date-field";
 import { RadioGroup, type RadioGroupProps } from "../../../primitives/atoms/radio/radio";
+import { Select, type SelectProps } from "../../../primitives/atoms/select/select";
 import { TextField } from "../../../primitives/atoms/text-field/text-field";
 import { useDisclosureMotion } from "../../../primitives/disclosure-motion.ts";
 import type { FieldErrorMap } from "../../../primitives/field-errors.ts";
@@ -78,6 +79,14 @@ export type TransactionFields = {
   toAccountId: string | null;
   toAmount: string | null;
   fee: string | null;
+  /**
+   * §7.8 — what was handed over, when that was not the account's currency
+   * (`350` in `CZK` on a EUR card), at the paid currency's scale; `null` for
+   * both on an entry made in its account's own. `amount` is what the account
+   * was charged.
+   */
+  paidAmount: string | null;
+  paidCurrency: string | null;
   categoryId: string | null;
   /**
    * §6.6.1 — who the transaction was **with**. Separate from the obligation
@@ -103,6 +112,9 @@ export type TransactionFieldsPatch = {
   toAmount?: string;
   toCurrency?: string;
   fee?: string | null;
+  /** §7.8 — both to a value, or both to `null`; one alone is a half pair the contract refuses. */
+  paidAmount?: string | null;
+  paidCurrency?: string | null;
   categoryId?: string | null;
   counterpartyId?: string | null;
   obligationCounterpartyId?: string | null;
@@ -165,12 +177,17 @@ export type FieldsCardProps = {
    * about.
    */
   onOpenCounterpartyPicker: (target: "identity" | "obligation") => void;
+  /**
+   * §7.8 — every currency an income or an expense could have been paid in. With
+   * none to offer the row is drawn only when the entry already has a paid side.
+   */
+  paidCurrencies?: readonly { code: string; name: string }[];
   fieldErrors?: FieldErrorMap;
   saving?: boolean;
   onSave: (patch: TransactionFieldsPatch) => void;
 };
 
-type OpenField = "date" | "amount" | "toAmount" | "fee" | "enteredName" | "note" | "role";
+type OpenField = "date" | "amount" | "paid" | "toAmount" | "fee" | "enteredName" | "note" | "role";
 
 export function FieldsCard({
   fields,
@@ -189,6 +206,7 @@ export function FieldsCard({
   obligationCounterpartyId,
   obligationCounterpartyName,
   onOpenCounterpartyPicker,
+  paidCurrencies = [],
   fieldErrors,
   saving = false,
   onSave,
@@ -204,6 +222,9 @@ export function FieldsCard({
   const [amount, setAmount] = useState(() => fields.amount.replace(".", mark));
   const [toAmount, setToAmount] = useState(() => (fields.toAmount ?? "").replace(".", mark));
   const [fee, setFee] = useState(() => (fields.fee ?? "").replace(".", mark));
+  // §7.8 — the paid side's draft; `null` is the account's own currency.
+  const [paidCurrency, setPaidCurrency] = useState<string | null>(fields.paidCurrency);
+  const [paidAmount, setPaidAmount] = useState(() => (fields.paidAmount ?? "").replace(".", mark));
   const [enteredName, setEnteredName] = useState(fields.enteredName);
   const [note, setNote] = useState(fields.note);
   const [isBusiness, setIsBusiness] = useState(fields.isBusiness);
@@ -257,6 +278,12 @@ export function FieldsCard({
   const handleToggleAmount = useCallback(() => toggleField("amount"), [toggleField]);
   const handleToggleToAmount = useCallback(() => toggleField("toAmount"), [toggleField]);
   const handleToggleFee = useCallback(() => toggleField("fee"), [toggleField]);
+  const handleTogglePaid = useCallback(() => toggleField("paid"), [toggleField]);
+  /** The account's own currency is "nothing was paid in another": it takes the pair off. */
+  const handlePaidCurrencyChange = useCallback((next: string) => {
+    setPaidCurrency(next === "" ? null : next);
+    if (next === "") setPaidAmount("");
+  }, []);
   const handleOpenToAccountPicker = useCallback(
     () => onOpenToAccountPicker?.(),
     [onOpenToAccountPicker],
@@ -303,7 +330,34 @@ export function FieldsCard({
   const parsedAmount = parseAmount(amount);
   const parsedToAmount = parseAmount(toAmount);
   const parsedFee = parseAmount(fee);
+  const parsedPaid = parseAmount(paidAmount);
   const amountValid = parsedAmount !== null;
+  // §7.8 — an income or an expense may carry what was paid; the account's own
+  // currency is never "another", so it is the way to take the pair off.
+  const paidOptions = useMemo<SelectProps["options"]>(
+    () => [
+      {
+        value: "",
+        label: t("transactions.paidInOwn", { currency: fromAccount?.currency ?? "" }),
+      },
+      ...paidCurrencies
+        .filter((currency) => currency.code !== fromAccount?.currency)
+        .map((currency) => ({
+          value: currency.code,
+          label: `${currency.code} · ${currency.name}`,
+        })),
+      // A paid currency since archived stays choosable for as long as it is the row's own.
+      ...(fields.paidCurrency !== null &&
+      !paidCurrencies.some((currency) => currency.code === fields.paidCurrency)
+        ? [{ value: fields.paidCurrency, label: fields.paidCurrency }]
+        : []),
+    ],
+    [fromAccount?.currency, paidCurrencies, fields.paidCurrency, t],
+  );
+  const paidApplies = fields.type === "income" || fields.type === "expense";
+  const paidShown = paidApplies && (fields.paidCurrency !== null || paidOptions.length > 1);
+  // Both or neither: a currency with no figure, or the reverse, is not a paid side.
+  const paidValid = paidCurrency === null || parsedPaid !== null;
   const toAmountValid = !crossCurrency || parsedToAmount !== null;
   // An empty fee is no fee, not an invalid one.
   const feeValid = fee.trim() === "" || parsedFee !== null;
@@ -314,6 +368,18 @@ export function FieldsCard({
     if (accountId !== fields.accountId) next.accountId = accountId;
     if (parsedAmount !== null && !sameFigure(parsedAmount, fields.amount)) {
       next.amountOriginal = parsedAmount;
+    }
+    // §7.8 — what was paid: both off, or only what moved of the pair.
+    if (paidApplies) {
+      if (paidCurrency === null) {
+        if (fields.paidCurrency !== null) {
+          next.paidAmount = null;
+          next.paidCurrency = null;
+        }
+      } else if (parsedPaid !== null) {
+        if (paidCurrency !== fields.paidCurrency) next.paidCurrency = paidCurrency;
+        if (!sameFigure(parsedPaid, fields.paidAmount)) next.paidAmount = parsedPaid;
+      }
     }
     if (transfer && toAccountId !== null) {
       if (toAccountId !== fields.toAccountId) {
@@ -357,6 +423,9 @@ export function FieldsCard({
     parsedAmount,
     parsedToAmount,
     parsedFee,
+    parsedPaid,
+    paidApplies,
+    paidCurrency,
     fee,
     feeValid,
     categoryId,
@@ -372,7 +441,7 @@ export function FieldsCard({
     shownRole,
   ]);
   const hasChanges = Object.keys(patch).length > 0;
-  const draftValid = amountValid && toAmountValid && feeValid;
+  const draftValid = amountValid && toAmountValid && feeValid && paidValid;
 
   // A debt with nobody on the other side is not a debt (§6.6).
   const whoMissing = debtCategory && categoryMoved && obligationCounterpartyId === null;
@@ -457,14 +526,15 @@ export function FieldsCard({
           ) : null}
 
           <FieldDisclosureRow
-            label={t("transactions.amount")}
+            // §7.8 — with a paid side the figure here is what the account was charged.
+            label={t(paidCurrency === null ? "transactions.amount" : "transactions.charged")}
             value={amount}
             placeholder="—"
             open={open.has("amount")}
             onPress={handleToggleAmount}
           >
             <TextField
-              label={t("transactions.amount")}
+              label={t(paidCurrency === null ? "transactions.amount" : "transactions.charged")}
               value={amount}
               onChangeText={setAmount}
               keyboardType="decimal-pad"
@@ -479,6 +549,42 @@ export function FieldsCard({
                   })}
             />
           </FieldDisclosureRow>
+
+          {paidShown ? (
+            <FieldDisclosureRow
+              label={t("transactions.paid")}
+              value={paidCurrency === null ? null : `${paidAmount} ${paidCurrency}`.trim()}
+              placeholder={t("transactions.paidAnother")}
+              open={open.has("paid")}
+              onPress={handleTogglePaid}
+            >
+              <Select
+                label={t("transactions.paidInCurrency")}
+                placeholder={t("transactions.paidInTitle")}
+                options={paidOptions}
+                value={paidCurrency ?? ""}
+                onChange={handlePaidCurrencyChange}
+                searchable
+              />
+              {paidCurrency === null ? null : (
+                <TextField
+                  label={t("transactions.paidAmount")}
+                  value={paidAmount}
+                  onChangeText={setPaidAmount}
+                  keyboardType="decimal-pad"
+                  {...(paidValid
+                    ? {}
+                    : {
+                        error: t(
+                          exceedsAmountCeiling(paidAmount)
+                            ? "common.amountCeiling"
+                            : "transactions.paidMissingAmount",
+                        ),
+                      })}
+                />
+              )}
+            </FieldDisclosureRow>
+          ) : null}
 
           {crossCurrency ? (
             <FieldDisclosureRow

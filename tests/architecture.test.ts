@@ -2972,6 +2972,10 @@ describe("a control's edge is not the divider colour", () => {
       "S05's amount card — an area holding the one typed field; the card is bordered as a card, the input inside it is the control",
     ],
     [
+      "packages/ui/src/transactions/molecules/charged-card/charged-card.tsx#card",
+      "S05's charged card (§7.8) — the amount card's pair: an area holding the one typed field, bordered as a card",
+    ],
+    [
       "packages/ui/src/transactions/molecules/composer-rows/composer-rows.tsx#card",
       "S05's card of choices — an area, with its own pressable rows inside it (`DayGroup#rows`'s own shape)",
     ],

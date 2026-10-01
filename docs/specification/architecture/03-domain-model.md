@@ -98,6 +98,7 @@ The column that matters most in this table is the last one.
 | `amount_pivot = amount × rate` | Generated column | `0000` |
 | Exactly one pivot currency | Partial unique index **+ deferred constraint trigger** — an index bounds a count above, never below, so clearing `is_pivot` used to succeed (C9) | `0002` |
 | Transaction currency = account currency | Trigger on `transactions` **and** on `accounts` — an `UPDATE accounts SET currency` walked past a trigger that only watched `transactions` (C2) | `0003` |
+| An entry paid in another currency: the paid pair is both-or-neither, never the account's currency, an income or expense, positive, under the ceiling and at its own currency's decimals (`SPEC.md` §7.8) | `CHECK`s `transactions_paid_*` and the `WA016` trigger on `transactions`; the replica's triggers of the same names. The pair is a *second face* of the entry: the row above still binds `currency` to the account's | `0028` |
 | Leaf-only category assignment | Trigger (`TAXONOMY.md` R1) | `0003` |
 | Business money never in a shared account | Trigger on both tables, **plus** the target-side guard for a transfer *into* a shared account | `0003` |
 | Closed period is frozen | `assert_period_not_closed` on INSERT/UPDATE/DELETE, checking **both** dates on an update | `0004`, fixed `0006` |

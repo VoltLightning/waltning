@@ -141,6 +141,37 @@ describe("TransactionRow", () => {
     expect(screen.queryByRole("button")).toBeNull();
   });
 
+  it("draws what was paid under the figure the account was charged (§7.8)", () => {
+    render(
+      <TransactionRow
+        date="2026-08-16"
+        enteredName="Café"
+        amount={money.toMoney("-14.02000000")}
+        currency="EUR"
+        paidAmount={money.toMoney("350.00000000")}
+        paidCurrency="CZK"
+        type="expense"
+      />,
+    );
+    // The row's own figure is the account side; the paid one is beside it, not instead of it.
+    expect(screen.getByText("-14.02")).toBeDefined();
+    expect(screen.getByText("350.00")).toBeDefined();
+    expect(screen.getAllByText("CZK").length).toBeGreaterThan(0);
+  });
+
+  it("draws no second figure for an entry in its account's own currency", () => {
+    render(
+      <TransactionRow
+        date="2026-08-16"
+        enteredName="Café"
+        amount={money.toMoney("-14.02000000")}
+        currency="EUR"
+        type="expense"
+      />,
+    );
+    expect(screen.queryByText("CZK")).toBeNull();
+  });
+
   it("takes the button role and calls onPress — S09's whole entry point", () => {
     const onPress = vi.fn();
     render(

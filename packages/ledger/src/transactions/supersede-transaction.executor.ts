@@ -254,6 +254,16 @@ function replacePair(
     return planned.length > 1 && input.spillId === undefined ? whole : planned;
   })();
 
+  // §7.8 — a split divides one amount between two rows, and what was paid is
+  // not divisible the same way: the figure the card was charged is what splits,
+  // the foreign figure is one number on one receipt. Refused rather than
+  // written onto both halves or dropped.
+  if (plan.length > 1 && replacement.paidAmount !== undefined) {
+    throw new LocalRefusal(
+      "supersede_transaction: a payment made in another currency cannot be split against an existing debt — record it without the paid amount",
+    );
+  }
+
   const write = (
     rowInput: typeof replacement,
     part: { amount: money.Money; discharge: money.Money; link: (typeof plan)[number]["link"] },

@@ -63,6 +63,11 @@ something no list row can.
   [+ Someone owes]  [+ Business]  [+ One-off]
                                    [ Save ]  ← only once something changed
 
+  ┌ details · paid in another currency ───┐   ← income and expense only
+  │ Charged to the account  14.02       › │   ← the account side; every balance reads it
+  │ Paid          350.00 CZK            › │   ← currency and figure, edited together
+  └───────────────────────────────────────┘
+
   ┌ details · a transfer ─────────────────┐   ← the same card, its own rows
   │ Date          14 Jul 2026           › │
   │ From          Bank A · PLN          › │
@@ -94,6 +99,17 @@ something no list row can.
 
   [ Delete ]
 ```
+
+**An entry paid in another currency shows both figures** (`SPEC.md` §7.8). The
+*Amount* row is then *Charged to the account* — what left it, in the account's
+currency, which is what every balance and period figure reads — and a *Paid*
+row beside it holds what was handed over, in its own currency. An entry with no
+paid side offers the row empty when there is another currency to choose, and the
+row's first option, the account's own currency, takes the pair off (both to
+`null`: one of the two is a half pair the contract refuses). The pair is edited
+as one — a currency with no figure is not a change and Save is not offered — and
+a transfer or an adjustment has no *Paid* row at all. Editing the charged figure
+leaves what was paid alone, and the reverse.
 
 **The header is the category's own colour.** The band is `categoryTintFor`'s
 wash for the transaction's category — the same hue its chip wears everywhere

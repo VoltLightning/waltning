@@ -20,7 +20,7 @@ import { and, eq, isNull, ne, sql } from "drizzle-orm";
 import { assertAmountPositive } from "../amount-sign.ts";
 import { openingLinkFor } from "../counterparties/opening-link.ts";
 import { defineLocalExecutor, LocalRefusal } from "../executor.ts";
-import { assertAmountCeiling } from "../scale.ts";
+import { assertAmountCeiling, assertMoneyScale } from "../scale.ts";
 import { type ReplicaTx, ledgerSchema as schema } from "../schema-map.ts";
 import {
   assertCategoryNotArchived,
@@ -93,6 +93,9 @@ export const updateTransactionExecutor = defineLocalExecutor<
       assertAmountCeiling(input.patch.toAmount, "update_transaction: to_amount");
     }
     if (input.patch.fee != null) assertAmountCeiling(input.patch.fee, "update_transaction: fee");
+    if (input.patch.paidAmount != null) {
+      assertAmountCeiling(input.patch.paidAmount, "update_transaction: paid_amount");
+    }
     if (input.patch.amountOriginal === undefined) return;
     const current = tx
       .select({ type: transactions.type, deletedAt: transactions.deletedAt })
@@ -191,6 +194,11 @@ function patchTransaction(input: UpdateTransactionInput, tx: ReplicaTx): LocalTr
     toAccountId: "toAccountId" in input.patch ? input.patch.toAccountId : current.toAccountId,
     toAmount: "toAmount" in input.patch ? input.patch.toAmount : current.toAmount,
     toCurrency: "toCurrency" in input.patch ? input.patch.toCurrency : current.toCurrency,
+    // §7.8 — the paid pair is judged as the row would hold it, against the
+    // account-side currency, which a patch never changes.
+    currency: current.currency,
+    paidAmount: "paidAmount" in input.patch ? input.patch.paidAmount : current.paidAmount,
+    paidCurrency: "paidCurrency" in input.patch ? input.patch.paidCurrency : current.paidCurrency,
   };
   const shapeIssues = transactionShapeIssues(merged);
   if (shapeIssues.length > 0) {
@@ -199,6 +207,15 @@ function patchTransaction(input: UpdateTransactionInput, tx: ReplicaTx): LocalTr
         .map((issue) => `${issue.field}: ${issue.message}`)
         .join("; ")}`,
     );
+  }
+  // §7.8 — the paid figure fits its own currency's decimals, checked whenever
+  // the patch touches either half of the pair.
+  if (
+    ("paidAmount" in input.patch || "paidCurrency" in input.patch) &&
+    merged.paidAmount != null &&
+    merged.paidCurrency != null
+  ) {
+    assertMoneyScale(tx, merged.paidAmount, merged.paidCurrency, "update_transaction: paid_amount");
   }
   // H1a — the same guarantee `create_transaction`'s own `insertTransaction`
   // carries, checked whenever this patch actually touches `categoryId`; an

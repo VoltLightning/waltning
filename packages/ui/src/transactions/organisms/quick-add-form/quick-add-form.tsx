@@ -3,8 +3,10 @@ import type { CurrencyCode } from "@waltning/core/money";
 import * as money from "@waltning/core/money";
 import { useCallback, useMemo, useState } from "react";
 import { Text, View } from "react-native";
+import { formatRate } from "../../../fx/format-rate.ts";
 import { AmountField, parseAmount } from "../../../fx/molecules/amount-field/amount-field";
-import { useT } from "../../../i18n/provider";
+import { decimalMark } from "../../../i18n/locales.ts";
+import { useLocale, useT } from "../../../i18n/provider";
 import { Button } from "../../../primitives/atoms/button/button";
 import { Chip } from "../../../primitives/atoms/chip/chip";
 import { DateField } from "../../../primitives/atoms/date-field/date-field";
@@ -13,7 +15,7 @@ import {
   SegmentControl,
   type SegmentControlProps,
 } from "../../../primitives/atoms/segment-control/segment-control";
-import { Select } from "../../../primitives/atoms/select/select";
+import { Select, type SelectProps } from "../../../primitives/atoms/select/select";
 import { TextField } from "../../../primitives/atoms/text-field/text-field";
 import { Toggle } from "../../../primitives/atoms/toggle/toggle";
 import { FieldAnchor } from "../../../primitives/field-anchor";
@@ -73,6 +75,25 @@ export type QuickAddDraft = {
   counterpartyId: string | null;
   obligationCounterpartyId: string | null;
   obligationRole: ObligationRole | null;
+  /**
+   * §7.8 — what was handed over, when that was not the account's currency.
+   * `amount` is then what the account was *charged*. Both or neither.
+   */
+  paidAmount?: string;
+  paidCurrency?: string;
+};
+
+/**
+ * §7.8 — the desk's way into a foreign amount: a currency choice beside the
+ * amount, and the account's figure pre-filled at the day's cross rate.
+ */
+export type QuickAddFormForeign = {
+  /** Every currency the amount could be paid in. */
+  currencies: readonly { code: string; name: string }[];
+  /** The cross rate for one pair on one day, or `null` when none is held — nothing is priced at `1`. */
+  readCrossRate: (pair: { from: string; to: string; date: string }) => money.CrossRate | null;
+  /** An account currency's own fraction digits — the charged figure's rounding. */
+  decimalsOf: (currency: string) => number;
 };
 
 export type QuickAddFormProps = {
@@ -137,6 +158,8 @@ export type QuickAddFormProps = {
    * `architecture/12`). Absent before a first attempt.
    */
   fieldErrors?: FieldErrorMap;
+  /** §7.8 — absent, the amount is always in the account's own currency. */
+  foreign?: QuickAddFormForeign;
   onCancel: () => void;
   onSave: (draft: QuickAddDraft) => void;
 };
@@ -156,10 +179,13 @@ export function QuickAddForm({
   initialCounterpartyId = null,
   onCreateCounterparty,
   fieldErrors,
+  foreign,
   onCancel,
   onSave,
 }: QuickAddFormProps) {
   const t = useT();
+  const locale = useLocale();
+  const mark = decimalMark(locale);
   const [amount, setAmount] = useState(parseAmount(initialAmount) ?? "");
   const [type, setType] = useState<"expense" | "income">(initialType);
   const [moreOpen, setMoreOpen] = useState(false);
@@ -170,6 +196,9 @@ export function QuickAddForm({
     initialCounterpartyId,
   );
   const [obligationRole, setObligationRole] = useState<ObligationRole | null>(null);
+  // §7.8 — the chosen foreign currency, and the charged figure once typed over.
+  const [paidChoice, setPaidChoice] = useState<string | null>(null);
+  const [chargedTyped, setChargedTyped] = useState<string | null>(null);
 
   const styles = useStyles();
   const selected = accounts.find((account) => account.id === accountId);
@@ -196,7 +225,30 @@ export function QuickAddForm({
     positive = false;
   }
 
+  const accountCurrency = selected?.currency;
+  const paidCurrency = paidChoice !== null && paidChoice !== accountCurrency ? paidChoice : null;
+  const paidSelectable = foreign !== undefined && accountCurrency !== undefined;
+  // The account's figure: the rate's guess until the person types over it.
+  const rate =
+    paidCurrency === null || accountCurrency === undefined || !dateValid
+      ? null
+      : (foreign?.readCrossRate({ from: paidCurrency, to: accountCurrency, date }) ?? null);
+  const derivedCharged =
+    rate === null || !positive || accountCurrency === undefined
+      ? ""
+      : money.chargedFor(money.toMoney(amount), rate, foreign?.decimalsOf(accountCurrency) ?? 2);
+  const charged = chargedTyped ?? derivedCharged.replace(".", mark);
+  const chargedAmount = paidCurrency === null ? null : parseAmount(charged);
+  const chargedKey = `${paidCurrency}:${derivedCharged}:${chargedTyped === null ? "d" : "t"}`;
   const handleAmountChange = useCallback((next: string | null) => setAmount(next ?? ""), []);
+  const handleChargedChange = useCallback((typed: string) => setChargedTyped(typed), []);
+  const handlePaidChange = useCallback(
+    (next: string) => {
+      setPaidChoice(next === accountCurrency ? null : next);
+      setChargedTyped(null);
+    },
+    [accountCurrency],
+  );
   const handleOpenAccountPicker = useCallback(
     () => onOpenAccountPicker({ amount }),
     [amount, onOpenAccountPicker],
@@ -226,6 +278,7 @@ export function QuickAddForm({
   // Drawn order: the figure, the account, then the date under *More*.
   const check = useSubmitCheck({
     amount: !positive && t("common.required"),
+    charged: paidCurrency !== null && chargedAmount === null && t("common.required"),
     account: !accountId
       ? t("common.chooseOne")
       : blocked && t("transactions.needsRate", { currency: selected.currency }),
@@ -234,9 +287,12 @@ export function QuickAddForm({
   });
   const save = useCallback(() => {
     if (!accountId || blocked || !positive || !dateValid) return;
+    if (paidCurrency !== null && chargedAmount === null) return;
     onSave({
       type,
-      amount,
+      // §7.8 — the entry's own figure is what the account was charged.
+      amount: chargedAmount ?? amount,
+      ...(paidCurrency === null ? {} : { paidAmount: amount, paidCurrency }),
       accountId,
       categoryId: effectiveCategoryId,
       date,
@@ -254,6 +310,8 @@ export function QuickAddForm({
     accountId,
     amount,
     blocked,
+    chargedAmount,
+    paidCurrency,
     effectiveCategoryId,
     obligationCounterpartyId,
     effectiveRole,
@@ -271,7 +329,28 @@ export function QuickAddForm({
     check.submit(save);
   }, [check, dateValid, save]);
   const accountError = check.errorFor("account") ?? fieldErrors?.byField["accountId"]?.[0];
-  const amountError = check.errorFor("amount") ?? fieldErrors?.byField["amountOriginal"]?.[0];
+  const amountError =
+    check.errorFor("amount") ??
+    fieldErrors?.byField[paidCurrency === null ? "amountOriginal" : "paidAmount"]?.[0];
+  const chargedError = check.errorFor("charged") ?? fieldErrors?.byField["amountOriginal"]?.[0];
+  const paidOptions = useMemo<SelectProps["options"]>(
+    () =>
+      accountCurrency === undefined || foreign === undefined
+        ? []
+        : [
+            {
+              value: accountCurrency,
+              label: t("transactions.paidInOwn", { currency: accountCurrency }),
+            },
+            ...foreign.currencies
+              .filter((currency) => currency.code !== accountCurrency)
+              .map((currency) => ({
+                value: currency.code,
+                label: `${currency.code} · ${currency.name}`,
+              })),
+          ],
+    [accountCurrency, foreign, t],
+  );
   const categoryError = fieldErrors?.byField["categoryId"]?.[0];
   const whoError = check.errorFor("who") ?? fieldErrors?.byField["obligationCounterpartyId"]?.[0];
 
@@ -343,6 +422,41 @@ export function QuickAddForm({
       {selected ? null : (
         <Text style={styles.waits}>{t("transactions.amountWaitsForAccount")}</Text>
       )}
+      {/* §7.8 — the amount's currency, when it is not the account's. Offered
+          only with another currency to offer. */}
+      {paidSelectable && paidOptions.length > 1 ? (
+        <Select
+          label={t("transactions.paidInCurrency")}
+          placeholder={t("transactions.paidInTitle")}
+          options={paidOptions}
+          value={paidCurrency ?? accountCurrency ?? null}
+          onChange={handlePaidChange}
+          searchable
+        />
+      ) : null}
+      {paidCurrency !== null && selected !== undefined ? (
+        <FieldAnchor check={check} field="charged">
+          <AmountField
+            // Remounted when the pre-fill moves and the figure is still the
+            // guess: the field keeps what it was given at mount.
+            key={chargedKey}
+            label={t("transactions.chargedTo", { account: selected.name })}
+            currency={selected.currency}
+            initial={charged}
+            onChangeText={handleChargedChange}
+            error={chargedError}
+          />
+          <Text style={styles.waits}>
+            {rate === null
+              ? t("transactions.chargedNoRate", { paid: paidCurrency })
+              : t("transactions.chargedRate", {
+                  paid: paidCurrency,
+                  rate: formatRate(rate, locale),
+                  charged: selected.currency,
+                })}
+          </Text>
+        </FieldAnchor>
+      ) : null}
       <Chip
         placeholder={t("transactions.category")}
         value={selectedCategory?.kind === type ? selectedCategory.name : undefined}

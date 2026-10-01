@@ -53,6 +53,8 @@ const meta = {
       toAccountId: null,
       toAmount: null,
       fee: null,
+      paidAmount: null,
+      paidCurrency: null,
       categoryId: "cat-eating-out",
       counterpartyId: null,
       obligationCounterpartyId: null,
@@ -107,6 +109,39 @@ export const Changed: Story = {
   },
 };
 
+/**
+ * §7.8 — *350 CZK* paid with a EUR card: the amount row is what the account was
+ * charged, and the Paid row beside it holds what was handed over.
+ */
+export const PaidInAnotherCurrency: Story = {
+  args: {
+    fields: {
+      type: "expense",
+      date: "2026-08-06",
+      accountId: "account-c",
+      amount: "14.02",
+      toAccountId: null,
+      toAmount: null,
+      fee: null,
+      paidAmount: "350.00",
+      paidCurrency: "CZK",
+      categoryId: "cat-eating-out",
+      counterpartyId: null,
+      obligationCounterpartyId: null,
+      obligationRole: null,
+      enteredName: "Café A",
+      note: "",
+      isBusiness: false,
+      isCapital: false,
+    },
+    accountId: "account-c",
+    paidCurrencies: [
+      { code: "EUR", name: "Euro" },
+      { code: "CZK", name: "Czech koruna" },
+    ],
+  },
+};
+
 /** A stale-version refusal — form level, names no single field. */
 export const ChangedElsewhere: Story = {
   args: {
@@ -131,6 +166,8 @@ export const WithCounterparty: Story = {
       toAccountId: null,
       toAmount: null,
       fee: null,
+      paidAmount: null,
+      paidCurrency: null,
       categoryId: "cat-eating-out",
       counterpartyId: null,
       obligationCounterpartyId: "cp-nina",
@@ -161,6 +198,8 @@ export const Transfer: Story = {
       toAccountId: "account-c",
       toAmount: "88.34",
       fee: null,
+      paidAmount: null,
+      paidCurrency: null,
       categoryId: null,
       counterpartyId: null,
       obligationCounterpartyId: null,

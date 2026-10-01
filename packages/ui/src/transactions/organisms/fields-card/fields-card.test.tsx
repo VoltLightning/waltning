@@ -33,6 +33,8 @@ const FIELDS: TransactionFields = {
   toAccountId: null,
   toAmount: null,
   fee: null,
+  paidAmount: null,
+  paidCurrency: null,
   categoryId: "cat-eating-out",
   counterpartyId: null,
   obligationCounterpartyId: null,
@@ -228,6 +230,8 @@ describe("a transfer — the same card, with a transfer's own rows", () => {
     toAccountId: "account-a",
     toAmount: "400.00",
     fee: null,
+    paidAmount: null,
+    paidCurrency: null,
     categoryId: null,
     enteredName: "",
   };
@@ -437,5 +441,112 @@ describe("a legacy row under a debt category", () => {
       obligationCounterpartyId: "cp-nina",
       obligationRole: "debt",
     });
+  });
+});
+
+/** §7.8 — an entry paid in another currency than its account's: both figures are shown, and both edited. */
+describe("what was paid — beside what the account was charged", () => {
+  const EUR_ACCOUNT = {
+    id: "account-eur",
+    name: "Card A · EUR",
+    currency: "EUR",
+    kind: "card" as const,
+    capturable: true,
+    ownership: "own" as const,
+    groupId: null,
+  };
+  const CURRENCIES = [
+    { code: "EUR", name: "Euro" },
+    { code: "CZK", name: "Czech koruna" },
+    { code: "JPY", name: "Yen" },
+  ];
+  const CHARGED: TransactionFields = {
+    ...FIELDS,
+    accountId: "account-eur",
+    amount: "14.02",
+    paidAmount: "350.00",
+    paidCurrency: "CZK",
+  };
+  const draw = (overrides: Partial<Parameters<typeof FieldsCard>[0]> = {}) =>
+    renderCard({
+      accounts: [EUR_ACCOUNT],
+      accountId: "account-eur",
+      paidCurrencies: CURRENCIES,
+      ...overrides,
+    });
+
+  it("offers a Paid row on an entry that has none, and draws it empty", () => {
+    draw({ fields: { ...FIELDS, accountId: "account-eur" } });
+    expect(screen.getByRole("button", { name: "Paid" })).toBeDefined();
+    expect(screen.getByRole("button", { name: "Amount: 48.90" })).toBeDefined();
+  });
+
+  it("draws no Paid row when there is no other currency to offer and nothing was paid", () => {
+    draw({
+      fields: { ...FIELDS, accountId: "account-eur" },
+      paidCurrencies: [{ code: "EUR", name: "Euro" }],
+    });
+    expect(screen.queryByRole("button", { name: /^Paid/ })).toBeNull();
+  });
+
+  it("shows both figures — what was paid, and what the account was charged", () => {
+    draw({ fields: CHARGED });
+    expect(screen.getByRole("button", { name: "Paid: 350.00 CZK" })).toBeDefined();
+    expect(screen.getByRole("button", { name: "Charged to the account: 14.02" })).toBeDefined();
+  });
+
+  it("puts a pair on an entry, both halves in one patch", () => {
+    const { onSave } = draw({ fields: { ...FIELDS, accountId: "account-eur" } });
+    fireEvent.click(screen.getByRole("button", { name: "Paid" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Currency paid in/ }));
+    fireEvent.click(screen.getByRole("radio", { name: "CZK · Czech koruna" }));
+    fireEvent.change(screen.getByLabelText("Amount paid"), { target: { value: "350" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(onSave).toHaveBeenCalledWith({ paidCurrency: "CZK", paidAmount: "350" });
+  });
+
+  it("will not save a currency with no figure", () => {
+    draw({ fields: { ...FIELDS, accountId: "account-eur" } });
+    fireEvent.click(screen.getByRole("button", { name: "Paid" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Currency paid in/ }));
+    fireEvent.click(screen.getByRole("radio", { name: "CZK · Czech koruna" }));
+    expect(screen.getByText("Enter the amount as well.")).toBeDefined();
+    // Half a pair is not a change: there is nothing to save until it is whole.
+    expect(screen.queryByRole("button", { name: "Save" })).toBeNull();
+  });
+
+  it("edits the paid figure alone, and the charged figure alone", () => {
+    const { onSave } = draw({ fields: CHARGED });
+    fireEvent.click(screen.getByRole("button", { name: "Paid: 350.00 CZK" }));
+    fireEvent.change(screen.getByLabelText("Amount paid"), { target: { value: "351" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(onSave).toHaveBeenLastCalledWith({ paidAmount: "351" });
+    cleanup();
+
+    const second = draw({ fields: CHARGED });
+    fireEvent.click(screen.getByRole("button", { name: "Charged to the account: 14.02" }));
+    fireEvent.change(screen.getByLabelText("Charged to the account"), {
+      target: { value: "14.05" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(second.onSave).toHaveBeenCalledWith({ amountOriginal: "14.05" });
+  });
+
+  it("takes the pair off by choosing the account's own currency — both to null", () => {
+    const { onSave } = draw({ fields: CHARGED });
+    fireEvent.click(screen.getByRole("button", { name: "Paid: 350.00 CZK" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Currency paid in/ }));
+    fireEvent.click(screen.getByRole("radio", { name: "EUR — the account's own" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(onSave).toHaveBeenCalledWith({ paidAmount: null, paidCurrency: null });
+  });
+
+  it("offers no Paid row on a transfer", () => {
+    draw({
+      fields: { ...FIELDS, type: "transfer", toAccountId: "account-a", toAmount: "48.90" },
+      toAccountId: "account-a",
+      accounts: [EUR_ACCOUNT, ...ACCOUNTS],
+    });
+    expect(screen.queryByRole("button", { name: /^Paid/ })).toBeNull();
   });
 });

@@ -110,6 +110,10 @@ function toFields(detail: PhoneTransactionDetail, toDecimals: number): Transacti
     toAccountId: detail.toAccountId,
     toAmount: detail.toAmount === null ? null : money.round(detail.toAmount, toDecimals),
     fee: detail.fee === null ? null : money.round(detail.fee, detail.decimals),
+    // §7.8 — what was paid, at the paid currency's own scale.
+    paidAmount:
+      detail.paidAmount === null ? null : money.round(detail.paidAmount, detail.paidDecimals ?? 2),
+    paidCurrency: detail.paidCurrency,
     categoryId: detail.categoryId,
     counterpartyId: detail.counterpartyId,
     obligationCounterpartyId: detail.obligationCounterpartyId,
@@ -570,6 +574,11 @@ export default function TransactionDetail() {
     () => snapshot.groups.map((group) => ({ id: group.id, name: group.name })),
     [snapshot.groups],
   );
+  // §7.8 — every currency an entry could have been paid in.
+  const paidChoices = useMemo(
+    () => snapshot.currencies.map((currency) => ({ code: currency.code, name: currency.name })),
+    [snapshot.currencies],
+  );
 
   if (!detail) {
     return (
@@ -690,6 +699,7 @@ export default function TransactionDetail() {
           obligationCounterpartyId={effectiveObligation.id}
           obligationCounterpartyName={effectiveObligation.name}
           onOpenCounterpartyPicker={handleOpenCounterpartyPicker}
+          paidCurrencies={paidChoices}
           {...(fieldsErrors ? { fieldErrors: fieldsErrors } : {})}
           onSave={handleSaveFields}
         />

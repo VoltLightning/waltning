@@ -103,6 +103,69 @@ export const ReadyToSave: Story = {
   args: { raw: "48,90", accountId: "account-a" },
 };
 
+/** A EUR card — the account a foreign purchase is paid with (§7.8). */
+const EUR_CARD = {
+  id: "account-eur",
+  name: "Card · EUR",
+  currency: currencyCode("EUR"),
+  decimals: 2,
+  capturable: true,
+  ownership: "own" as const,
+};
+
+const FOREIGN = {
+  currencies: [
+    { code: "EUR", name: "Euro" },
+    { code: "CZK", name: "Czech koruna" },
+  ],
+  paidCurrency: null,
+  onPaidCurrencyChange: noop,
+  paidDecimals: 2,
+  chargedRaw: "",
+  onChargedChange: noop,
+};
+
+/**
+ * §7.8 — the currency is a chip beside the figure, and with another currency to
+ * choose it opens *Paid in*. The entry is still in the account's own currency.
+ */
+export const CurrencyChip: Story = {
+  args: { raw: "14,02", accounts: [EUR_CARD], accountId: "account-eur", foreign: FOREIGN },
+};
+
+/**
+ * §7.8 — *350 CZK* paid with a EUR card: the figure is in CZK, the chip says so
+ * in the accent, and the charged figure is pre-filled at the day's rate.
+ */
+export const PaidInAnotherCurrency: Story = {
+  args: {
+    raw: "350",
+    accounts: [EUR_CARD],
+    accountId: "account-eur",
+    foreign: {
+      ...FOREIGN,
+      paidCurrency: "CZK",
+      chargedRaw: "14,02",
+      hint: "1 CZK = 0,0401 € on this day",
+    },
+  },
+};
+
+/** §7.8 — no rate held for the day: the charged figure is empty, and says what to do. */
+export const PaidInAnotherCurrencyNoRate: Story = {
+  args: {
+    raw: "350",
+    accounts: [EUR_CARD],
+    accountId: "account-eur",
+    foreign: {
+      ...FOREIGN,
+      paidCurrency: "CZK",
+      chargedRaw: "",
+      hint: "No rate for CZK on this day — enter what the bank charged.",
+    },
+  },
+};
+
 /**
  * H1, D2's proposal at or above `PROPOSAL_DISPLAY_THRESHOLD` — it **is** the
  * draft's category, not only a suggestion the sheet has to confirm: the chip

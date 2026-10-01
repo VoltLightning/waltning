@@ -767,18 +767,31 @@ END`,
 const integerDigits = (column: string): string =>
   `length(substr(ltrim(NEW.\`${column}\`, '-'), 1, instr(ltrim(NEW.\`${column}\`, '-') || '.', '.') - 1))`;
 
-const ceilingTriggers = (table: string, columns: readonly string[]): readonly string[] => {
+/**
+ * One ceiling trigger pair: `name` is the constraint it carries (and the
+ * trigger names' stem), `table` the table it guards. They differ only for a
+ * column that arrived after the pair for its table shipped — `IF NOT EXISTS`
+ * keeps an installed pair as it was, so a new column gets a pair of its own
+ * rather than an edit to one a device already holds.
+ */
+type CeilingSet = {
+  readonly name: string;
+  readonly table: string;
+  readonly columns: readonly string[];
+};
+
+const ceilingTriggers = ({ name, table, columns }: CeilingSet): readonly string[] => {
   const past = columns.map((column) => `${integerDigits(column)} > 9`).join("\n  OR ");
-  const refusal = `an amount is at most 999999999.99 (${table}_amount_ceiling)`;
+  const refusal = `an amount is at most 999999999.99 (${name}_amount_ceiling)`;
   const list = columns.map((column) => `\`${column}\``).join(", ");
   return [
-    `CREATE TRIGGER IF NOT EXISTS \`${table}_amount_ceiling_insert\`
+    `CREATE TRIGGER IF NOT EXISTS \`${name}_amount_ceiling_insert\`
 BEFORE INSERT ON \`${table}\`
 WHEN ${past}
 BEGIN
   SELECT RAISE(ABORT, '${refusal}');
 END`,
-    `CREATE TRIGGER IF NOT EXISTS \`${table}_amount_ceiling_update\`
+    `CREATE TRIGGER IF NOT EXISTS \`${name}_amount_ceiling_update\`
 BEFORE UPDATE OF ${list} ON \`${table}\`
 WHEN ${past}
 BEGIN
@@ -787,16 +800,33 @@ END`,
   ];
 };
 
-const CEILING_TABLES: ReadonlyArray<readonly [string, readonly string[]]> = [
-  ["transactions", ["amount_original", "to_amount", "fee", "debt_amount"]],
-  ["transaction_lines", ["amount"]],
-  ["accounts", ["opening_balance"]],
-  ["recurring_transactions", ["amount_original"]],
+/** The pairs `0022_account_guards` creates — every column that existed then. */
+const CEILING_SETS: readonly CeilingSet[] = [
+  {
+    name: "transactions",
+    table: "transactions",
+    columns: ["amount_original", "to_amount", "fee", "debt_amount"],
+  },
+  { name: "transaction_lines", table: "transaction_lines", columns: ["amount"] },
+  { name: "accounts", table: "accounts", columns: ["opening_balance"] },
+  { name: "recurring_transactions", table: "recurring_transactions", columns: ["amount_original"] },
 ];
 
-const AMOUNT_CEILING_TRIGGERS: readonly string[] = CEILING_TABLES.flatMap(([table, columns]) =>
-  ceilingTriggers(table, columns),
-);
+/**
+ * §7.8's paid figure, on a pair of its own: `paid_amount` is a column of
+ * `0024_schema`, so the `0022` hook cannot name it (a fresh install runs that
+ * hook before the column exists), and the `transactions` pair an installed
+ * device already holds cannot be edited. Postgres states it as
+ * `transactions_paid_amount_ceiling`.
+ */
+const PAID_CEILING_SETS: readonly CeilingSet[] = [
+  { name: "transactions_paid", table: "transactions", columns: ["paid_amount"] },
+];
+
+const CEILING_TABLES: readonly CeilingSet[] = [...CEILING_SETS, ...PAID_CEILING_SETS];
+
+const AMOUNT_CEILING_TRIGGERS: readonly string[] = CEILING_SETS.flatMap(ceilingTriggers);
+const PAID_CEILING_TRIGGERS: readonly string[] = PAID_CEILING_SETS.flatMap(ceilingTriggers);
 
 /**
  * **A restore writes the past, and the ceiling is about the present.** A
@@ -809,15 +839,16 @@ const AMOUNT_CEILING_TRIGGERS: readonly string[] = CEILING_TABLES.flatMap(([tabl
  * copies server rows by insert, takes the same two calls.
  */
 export function dropAmountCeilingTriggers(tx: SqlRunner): void {
-  for (const [table] of CEILING_TABLES) {
-    tx.run(sql.raw(`DROP TRIGGER IF EXISTS \`${table}_amount_ceiling_insert\``));
-    tx.run(sql.raw(`DROP TRIGGER IF EXISTS \`${table}_amount_ceiling_update\``));
+  for (const { name } of CEILING_TABLES) {
+    tx.run(sql.raw(`DROP TRIGGER IF EXISTS \`${name}_amount_ceiling_insert\``));
+    tx.run(sql.raw(`DROP TRIGGER IF EXISTS \`${name}_amount_ceiling_update\``));
   }
 }
 
 /** The counterpart of `dropAmountCeilingTriggers` — idempotent, `IF NOT EXISTS`. */
 export function createAmountCeilingTriggers(tx: SqlRunner): void {
   for (const statement of AMOUNT_CEILING_TRIGGERS) tx.run(sql.raw(statement));
+  for (const statement of PAID_CEILING_TRIGGERS) tx.run(sql.raw(statement));
 }
 
 /**
@@ -842,6 +873,56 @@ FOR EACH ROW WHEN NEW.\`settles_opening_debt_id\` IS NOT NULL AND NEW.\`obligati
 BEGIN
 	SELECT RAISE(ABORT, 'only a debt-role row can settle an opening debt (transactions_opening_link_shape)');
 END`,
+];
+
+/**
+ * §7.8 — the paid pair on the replica: both or neither
+ * (`transactions_paid_shape`), a currency other than the entry's own
+ * (`transactions_paid_distinct`), on an income or an expense only
+ * (`transactions_paid_type`), and positive
+ * (`transactions_paid_amount_positive`). Postgres states each as a CHECK; here
+ * a CHECK on an existing table is a rebuild, so each is an insert/update
+ * trigger pair, the shape `OPENING_LINK_TRIGGERS` has. `0024_schema` adds the
+ * columns with `ALTER` and rebuilds nothing, so its hook creates these; **a
+ * later step that rebuilds `transactions` must re-create them**, which
+ * `migrate.test.ts` censuses.
+ */
+const paidTriggers = (rule: string, when: string, message: string): readonly string[] => [
+  `CREATE TRIGGER IF NOT EXISTS \`transactions_${rule}_insert\`
+BEFORE INSERT ON \`transactions\`
+FOR EACH ROW WHEN ${when}
+BEGIN
+	SELECT RAISE(ABORT, '${message} (transactions_${rule})');
+END`,
+  `CREATE TRIGGER IF NOT EXISTS \`transactions_${rule}_update\`
+BEFORE UPDATE OF \`paid_amount\`, \`paid_currency\`, \`currency\`, \`type\` ON \`transactions\`
+FOR EACH ROW WHEN ${when}
+BEGIN
+	SELECT RAISE(ABORT, '${message} (transactions_${rule})');
+END`,
+];
+
+const PAID_TRIGGERS: readonly string[] = [
+  ...paidTriggers(
+    "paid_shape",
+    "(NEW.`paid_amount` IS NULL) <> (NEW.`paid_currency` IS NULL)",
+    "what was paid is an amount and a currency together, or neither",
+  ),
+  ...paidTriggers(
+    "paid_distinct",
+    "NEW.`paid_currency` IS NOT NULL AND NEW.`paid_currency` = NEW.`currency`",
+    "what was paid is in a currency other than the one the account is charged in",
+  ),
+  ...paidTriggers(
+    "paid_type",
+    "NEW.`paid_amount` IS NOT NULL AND NEW.`type` NOT IN ('income', 'expense')",
+    "only an income or an expense has a paid side",
+  ),
+  ...paidTriggers(
+    "paid_amount_positive",
+    "NEW.`paid_amount` IS NOT NULL AND CAST(NEW.`paid_amount` AS REAL) <= 0",
+    "what was paid is a positive amount",
+  ),
 ];
 
 export const REPLICA_BACKFILLS: Readonly<Record<string, Backfill>> = {
@@ -970,7 +1051,7 @@ export const REPLICA_BACKFILLS: Readonly<Record<string, Backfill>> = {
      */
     objects: (tx) => {
       for (const statement of ACCOUNT_DELETE_GUARD_TRIGGERS) tx.run(sql.raw(statement));
-      createAmountCeilingTriggers(tx);
+      for (const statement of AMOUNT_CEILING_TRIGGERS) tx.run(sql.raw(statement));
     },
   },
   "0018_schema": {
@@ -1012,6 +1093,12 @@ export const REPLICA_BACKFILLS: Readonly<Record<string, Backfill>> = {
   "0023_schema": {
     objects: (tx) => {
       for (const statement of OPENING_LINK_TRIGGERS) tx.run(sql.raw(statement));
+    },
+  },
+  "0024_schema": {
+    objects: (tx) => {
+      for (const statement of PAID_TRIGGERS) tx.run(sql.raw(statement));
+      for (const statement of PAID_CEILING_TRIGGERS) tx.run(sql.raw(statement));
     },
   },
   "0021_debt_categories": {

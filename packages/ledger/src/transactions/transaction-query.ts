@@ -63,7 +63,11 @@ export function structuralWhere(filter: TransactionSearchFilter): SQL | undefine
       : undefined,
     categoryIds.length > 0 ? inArray(transactions.categoryId, categoryIds) : undefined,
     filter.currency !== undefined
-      ? or(eq(transactions.currency, filter.currency), eq(transactions.toCurrency, filter.currency))
+      ? or(
+          eq(transactions.currency, filter.currency),
+          eq(transactions.toCurrency, filter.currency),
+          eq(transactions.paidCurrency, filter.currency),
+        )
       : undefined,
     scopeCondition(filter.scope ?? "all"),
     filter.obligationCounterpartyId !== undefined
@@ -123,6 +127,14 @@ export type SignedLedgerRow = {
   toFxRate: PivotPerUnit | null;
   toCurrency: CurrencyCode | null;
   toDecimals: number | null;
+  /**
+   * §7.8 — what was handed over when that was not the account's currency, in
+   * `paidCurrency`; `null` on an entry made in its account's own currency.
+   * `amountOriginal` above stays the account-side figure every balance reads.
+   */
+  paidAmount: Money | null;
+  paidCurrency: CurrencyCode | null;
+  paidDecimals: number | null;
   isBusiness: boolean;
   isCapital: boolean;
   obligationRole: ObligationRole | null;
@@ -138,6 +150,7 @@ export function ledgerRowsQuery<TRun, TSchema extends typeof ledgerSchema>(
 ) {
   const toAccounts = alias(accounts, "to_accounts");
   const toCurrencies = alias(currencies, "to_currencies");
+  const paidCurrencies = alias(currencies, "paid_currencies");
   return db
     .select({
       id: transactions.id,
@@ -161,6 +174,9 @@ export function ledgerRowsQuery<TRun, TSchema extends typeof ledgerSchema>(
       decimals: currencies.decimals,
       toCurrency: transactions.toCurrency,
       toDecimals: toCurrencies.decimals,
+      paidAmount: transactions.paidAmount,
+      paidCurrency: transactions.paidCurrency,
+      paidDecimals: paidCurrencies.decimals,
       isBusiness: transactions.isBusiness,
       isCapital: transactions.isCapital,
       obligationRole: transactions.obligationRole,
@@ -170,6 +186,7 @@ export function ledgerRowsQuery<TRun, TSchema extends typeof ledgerSchema>(
     .innerJoin(currencies, eq(transactions.currency, currencies.code))
     .leftJoin(toAccounts, eq(transactions.toAccountId, toAccounts.id))
     .leftJoin(toCurrencies, eq(transactions.toCurrency, toCurrencies.code))
+    .leftJoin(paidCurrencies, eq(transactions.paidCurrency, paidCurrencies.code))
     .leftJoin(categories, eq(transactions.categoryId, categories.id));
 }
 

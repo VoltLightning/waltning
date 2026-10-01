@@ -78,9 +78,27 @@ part that gives way: it is one line that shrinks and ellipsizes, and it is not d
 at all once a digit is typed, so it never costs the figure width. It is spoken
 with the amount field's label throughout.
 The row is above the figure, so the keyboard never covers it, and changing the
-account is one tap on it. An entry's currency is its account's: the data model
-holds a transaction in its account's currency alone, so there is no currency
-chip, and a foreign purchase is captured in the account that was charged.
+account is one tap on it.
+
+**The currency is a chip, and it is how a foreign purchase is captured**
+(`SPEC.md` §7.8). An entry is in its account's currency by default; the chip
+beside the figure — at the card's right edge, because the drawn figure is
+under the input and a button inside it would never be reached — opens *Paid in*,
+a sheet whose first answer is the account's own currency (the way back) and then
+every other currency the ledger holds. Choosing one makes the figure that
+currency — *350 CZK* — and draws a second card under it, **Charged to Bank A ·
+EUR**: the figure the account was actually charged, pre-filled at the entry day's
+cross rate and left editable, because the bank statement is the truth. The line
+under it says the rate it was filled at (*1 CZK = 0,0401 € on this day*) or that
+there is none (*No rate for CZK on this day — enter what the bank charged*), in
+which case the card is empty and Save asks for it; nothing is priced at `1`.
+Typed over, the figure stops following the amount, the date and the rate; choosing
+another currency is a new question and drops the edit. The chip says the entry is
+foreign by its accent outline and by the card under it, never by colour alone.
+The chip is not offered for a repayment (`settle_debt` discharges a debt in its
+own currency and has no paid side) and not while there is no other currency to
+choose. Save writes the charged figure as the entry's amount and the typed one
+as what was paid.
 
 **The amount is the largest thing on the screen** because it is the only field
 that is always required and always typed. It is a `TextInput` in its own card

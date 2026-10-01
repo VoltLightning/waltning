@@ -98,6 +98,19 @@ export const transactionsColumns = () => ({
   toAmount: k.money("to_amount"),
   toCurrency: k.currency("to_currency").references(() => currencies.code),
   toFxRate: k.pivotPerUnit("to_fx_rate"),
+  /**
+   * **What was handed over, when that is not the account's own currency**
+   * (§7.8) — 350 CZK paid with a EUR card. `amount_original`/`currency` stay the
+   * account-side figure (what the account was charged), so every balance and
+   * period figure keeps reading the account side unchanged; this pair is the
+   * other face of the same payment, shown beside it. Both or neither
+   * (`transactions_paid_shape`), a currency other than the account's
+   * (`transactions_paid_distinct`), positive, under the ceiling. The realised
+   * rate is `paid_amount ÷ amount_original` and is derived at read time, never
+   * stored — storing it would be a third figure that could disagree.
+   */
+  paidAmount: k.money("paid_amount"),
+  paidCurrency: k.currency("paid_currency").references(() => currencies.code),
   enteredName: k.text("entered_name").notNull().default(""),
   note: k.text("note").notNull().default(""),
   /**

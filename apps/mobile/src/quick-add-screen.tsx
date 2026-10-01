@@ -19,6 +19,7 @@ import {
   useDefaultAccount,
 } from "@waltning/client/transactions/default-account";
 import { useLastUsedAccount } from "@waltning/client/transactions/last-capture";
+import { useForeignSpend } from "@waltning/client/transactions/use-foreign-spend";
 import { mapFieldErrors } from "@waltning/client/transport/field-errors";
 import { proposeCategory } from "@waltning/core/capture/entered-name-memory";
 import { fold } from "@waltning/core/capture/names";
@@ -28,6 +29,7 @@ import * as money from "@waltning/core/money";
 import { AccountPicker, type AccountPickerAccount } from "@waltning/ui/accounts/account-picker";
 import { CategorySheet } from "@waltning/ui/categories/category-sheet";
 import { parseAmount } from "@waltning/ui/fx/amount-field";
+import { formatRate } from "@waltning/ui/fx/format-rate";
 import { drawnNamesOf } from "@waltning/ui/i18n/category-label";
 import { KNOWN_PATHS, resolveFieldErrorMessage } from "@waltning/ui/i18n/field-error-messages";
 import { decimalMark, weekdayLabel } from "@waltning/ui/i18n/locales";
@@ -49,8 +51,13 @@ import {
   type QuickAddCheckField,
   QuickAddComposer,
   type QuickAddComposerAccount,
+  type QuickAddComposerForeign,
 } from "@waltning/ui/transactions/quick-add-composer";
-import { type QuickAddAccount, QuickAddForm } from "@waltning/ui/transactions/quick-add-form";
+import {
+  type QuickAddAccount,
+  QuickAddForm,
+  type QuickAddFormForeign,
+} from "@waltning/ui/transactions/quick-add-form";
 import { router, useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Alert, Text, useWindowDimensions, View } from "react-native";
@@ -420,6 +427,54 @@ export default function QuickAdd() {
     ],
   );
   const mark = decimalMark(locale);
+  /**
+   * §7.8 — the currency chip and the charged figure. **Not offered for a
+   * repayment**: that is `settle_debt` (S14), which discharges a debt in its
+   * own currency and carries no paid side, so a foreign amount there would be
+   * dropped without a word.
+   */
+  const foreignSpend = useForeignSpend({
+    readCrossRate: ledger.readCrossRate,
+    revision: snapshot.revision,
+    account:
+      selectedComposerAccount === undefined
+        ? null
+        : {
+            currency: selectedComposerAccount.currency,
+            decimals: selectedComposerAccount.decimals,
+          },
+    amount: enteredAmount,
+    date: composerDate,
+  });
+  const paidCurrency = intent?.settles === true ? null : foreignSpend.paidCurrency;
+  const chargedAmount = paidCurrency === null ? null : parseAmount(foreignSpend.chargedRaw);
+  const paidChoices = useMemo(
+    () => snapshot.currencies.map((currency) => ({ code: currency.code, name: currency.name })),
+    [snapshot.currencies],
+  );
+  const foreignHint =
+    paidCurrency === null || selectedComposerAccount === undefined
+      ? undefined
+      : foreignSpend.rate === null
+        ? t("transactions.chargedNoRate", { paid: paidCurrency })
+        : t("transactions.chargedRate", {
+            paid: paidCurrency,
+            rate: formatRate(foreignSpend.rate.rate, locale),
+            charged: selectedComposerAccount.symbol ?? selectedComposerAccount.currency,
+          });
+  const foreign: QuickAddComposerForeign | undefined =
+    intent?.settles === true
+      ? undefined
+      : {
+          currencies: paidChoices,
+          paidCurrency,
+          onPaidCurrencyChange: foreignSpend.setPaidCurrency,
+          paidDecimals:
+            snapshot.currencies.find((currency) => currency.code === paidCurrency)?.decimals ?? 2,
+          chargedRaw: foreignSpend.chargedRaw,
+          onChargedChange: foreignSpend.setChargedRaw,
+          hint: foreignHint,
+        };
   const repaymentProblem =
     repayment?.kind === "no-debt" && pickedPerson !== undefined
       ? t("transactions.nothingToSettle", { name: pickedPerson.name })
@@ -515,7 +570,10 @@ export default function QuickAdd() {
     (next: string) => {
       const account = composerAccounts.find((candidate) => candidate.id === next);
       const parsedAmount = parseAmount(composerAmountRaw);
+      // §7.8 — in a foreign currency the typed figure is not in the account's
+      // scale at all; the charged figure is checked at Save.
       if (
+        paidCurrency === null &&
         account !== undefined &&
         parsedAmount !== null &&
         money.dec(parsedAmount).decimalPlaces() > account.decimals
@@ -531,7 +589,7 @@ export default function QuickAdd() {
       setComposerAccountId(next);
       if (account?.ownership === "shared") setComposerIsBusiness(false);
     },
-    [composerAccounts, composerAmountRaw, t],
+    [composerAccounts, composerAmountRaw, paidCurrency, t],
   );
   const handlePickComposerAccount = useCallback(
     (next: string) => {
@@ -683,6 +741,9 @@ export default function QuickAdd() {
   // field it is about when Save is pressed.
   const composerCheck = useSubmitCheck<QuickAddCheckField>({
     amount: parseAmount(composerAmountRaw) === null && t("common.required"),
+    // §7.8 — what the account was charged is every balance's figure, so it is
+    // required whenever the amount is in another currency.
+    charged: paidCurrency !== null && chargedAmount === null && t("common.required"),
     account:
       effectiveAccountId === null
         ? t("common.chooseOne")
@@ -704,9 +765,13 @@ export default function QuickAdd() {
   const saveComposer = useCallback(() => {
     const amount = parseAmount(composerAmountRaw);
     if (amount === null || effectiveAccountId === null) return;
+    if (paidCurrency !== null && chargedAmount === null) return;
     const next: QuickAddDraft = {
       type: composerType,
-      amount,
+      // §7.8 — the entry's own figure is what the account was charged; what was
+      // typed is the paid side of the same payment.
+      amount: chargedAmount ?? amount,
+      ...(paidCurrency === null ? {} : { paidAmount: amount, paidCurrency }),
       accountId: effectiveAccountId,
       categoryId: effectiveCategoryId,
       enteredName: composerEnteredName,
@@ -807,6 +872,8 @@ export default function QuickAdd() {
     router.dismissTo("/");
   }, [
     composerAmountRaw,
+    paidCurrency,
+    chargedAmount,
     effectiveCategoryId,
     composerCounterpartyId,
     obligationRole,
@@ -893,6 +960,26 @@ export default function QuickAdd() {
     [deskAccountId, categoryId],
   );
 
+  /**
+   * §7.8 — the desk form's currency choice and the day's cross rate. Read live
+   * on every render of the form, so a rate set elsewhere is the rate it uses.
+   */
+  const deskForeign = useMemo<QuickAddFormForeign>(
+    () => ({
+      currencies: paidChoices,
+      readCrossRate: ({ from, to, date }) =>
+        isAccountingDate(date)
+          ? (ledger.readCrossRate({
+              from: money.currencyCode(from),
+              to: money.currencyCode(to),
+              date: accountingDate(date),
+            })?.rate ?? null)
+          : null,
+      decimalsOf: (currency) =>
+        snapshot.currencies.find((candidate) => candidate.code === currency)?.decimals ?? 2,
+    }),
+    [ledger, paidChoices, snapshot.currencies],
+  );
   const [fieldErrorsDesk, setFieldErrorsDesk] = useState<ReturnType<typeof mapFieldErrors>>();
   const handleDeskSave = useCallback(
     (next: QuickAddDraft) => {
@@ -907,6 +994,17 @@ export default function QuickAdd() {
       );
       const deskIntent = debtIntentOf(deskCategory?.externalId);
       const deskPerson = next.obligationCounterpartyId;
+      // §7.8 — a repayment is `settle_debt`, which discharges a debt in its own
+      // currency and has no paid side: refused where it was typed.
+      if (deskIntent?.settles && next.paidAmount !== undefined) {
+        setFieldErrorsDesk(
+          mapFieldErrors(
+            [{ path: "paidAmount", message: t("transactions.paidNotForRepayment") }],
+            KNOWN_PATHS,
+          ),
+        );
+        return;
+      }
       if (deskIntent?.settles && deskPerson !== null && deskAccount !== undefined) {
         const plan = planRepayment({
           intent: deskIntent,
@@ -1024,6 +1122,7 @@ export default function QuickAdd() {
             initialCounterpartyId={deskInitialCounterpartyId}
             onCreateCounterparty={handleDeskCreateCounterparty}
             {...(fieldErrorsDesk === undefined ? {} : { fieldErrors: fieldErrorsDesk })}
+            foreign={deskForeign}
             onCancel={handleDeskCancel}
             onSave={handleDeskSave}
           />
@@ -1130,6 +1229,7 @@ export default function QuickAdd() {
             debtHint={debtHint}
             {...(fieldErrors === undefined ? {} : { fieldErrors })}
             check={composerCheck}
+            {...(foreign === undefined ? {} : { foreign })}
           />
         </View>
       </GroundPanel>
