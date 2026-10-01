@@ -185,6 +185,15 @@ export type QuickAddComposerProps = {
    * screen that has not wired S15 yet (a story, an older test) still renders.
    */
   onCreateCounterparty?: () => void;
+  /**
+   * §6.6 — the picked category is a debt (*Borrowed*, *Lent out*, a repayment):
+   * the role is fixed to `debt`, **Who?** is asked in the first view and is
+   * required, and the person row under *More details* steps aside. The screen
+   * decides this from the category's seed key; the composer only draws it.
+   */
+  debtCategory?: boolean;
+  /** Under Who?, when the person picked has an open debt this entry settles — already worded. */
+  debtHint?: string | undefined;
   /** The one finished line under the figure — `useCategoryPace`, already worded by the screen. */
   pace?: string | undefined;
   /** `create_transaction`'s own field paths — same keys `QuickAddForm` resolves. */
@@ -205,7 +214,7 @@ export type QuickAddComposerProps = {
  * says that by itself, so a role is an answer somebody gives when there is an
  * obligation — never a blank the composer waits on.
  */
-export type QuickAddCheckField = "amount" | "account";
+export type QuickAddCheckField = "amount" | "account" | "who";
 
 type OpenSheet = "date" | "time" | "scope" | "enteredName" | "counterparty" | null;
 
@@ -244,6 +253,8 @@ export function QuickAddComposer({
   obligationRole,
   onObligationRoleChange,
   onCreateCounterparty,
+  debtCategory = false,
+  debtHint,
   pace,
   fieldErrors,
   check,
@@ -271,6 +282,14 @@ export function QuickAddComposer({
   const handleOpenEnteredNameSheet = useCallback(() => setOpenSheet("enteredName"), []);
   const handleOpenCounterpartySheet = useCallback(() => setOpenSheet("counterparty"), []);
   const handleToggleMore = useCallback(() => setMoreShown((shown) => !shown), []);
+  /** A debt's Who? is answered in one pick: the sheet closes on it. */
+  const handlePickCounterparty = useCallback(
+    (next: string) => {
+      onCounterpartyChange(next);
+      if (debtCategory) setOpenSheet(null);
+    },
+    [debtCategory, onCounterpartyChange],
+  );
 
   const handleScopePick = useCallback(
     (next: boolean) => {
@@ -381,6 +400,8 @@ export function QuickAddComposer({
         ? t("transactions.obligationRoleMissing", { name: pickedCounterparty.name })
         : pickedCounterparty.name;
 
+  const whoError = check?.errorFor("who") ?? fieldErrors?.byField["obligationCounterpartyId"]?.[0];
+
   const amountError = check?.errorFor("amount") ?? fieldErrors?.byField["amountOriginal"]?.[0];
   /**
    * L2 — `resolveFieldErrorMessage` maps the controller's own
@@ -438,7 +459,7 @@ export function QuickAddComposer({
     enteredName.trim() === "" ? null : enteredName,
     date === today ? null : dateWords,
     isBusiness ? t("shell.scopeBusiness") : null,
-    pickedCounterparty?.name ?? null,
+    debtCategory ? null : (pickedCounterparty?.name ?? null),
   ]
     .filter((part) => part !== null)
     .join(" · ");
@@ -505,6 +526,25 @@ export function QuickAddComposer({
           error={categoryError}
         />
         {/*
+          **Who?, in the first view, the moment the category is a debt** (§6.6).
+          A debt with nobody on the other side is not a debt, so this is asked
+          where the category was just picked rather than found under *More
+          details*, and Save refuses without it.
+        */}
+        {debtCategory ? (
+          <Anchored check={check} field="who">
+            <ComposerRow
+              label={t("transactions.who")}
+              value={pickedCounterparty?.name}
+              placeholder={t("transactions.whoPlaceholder")}
+              tile={<ComposerTileGlyph glyph="&" ink={theme.textMuted} />}
+              tileFill={theme.subtleFill}
+              onPress={handleOpenCounterpartySheet}
+              error={whoError}
+            />
+          </Anchored>
+        ) : null}
+        {/*
           No `Anchored` here: the more-details row holds no field the composer
           checks before submitting. It wrapped `obligationRole` while naming a
           counterparty demanded one — §6.6.1's identity link ended that, and an
@@ -554,7 +594,7 @@ export function QuickAddComposer({
               onPress={handleOpenScopeSheet}
               error={scopeError}
             />
-            {counterparties.length === 0 ? null : (
+            {counterparties.length === 0 || debtCategory ? null : (
               <ComposerRow
                 label={t("transactions.person")}
                 value={counterpartyValue}
@@ -575,6 +615,9 @@ export function QuickAddComposer({
           {...(setRateAction === undefined ? {} : { action: setRateAction })}
         />
       )}
+      {debtCategory && debtHint !== undefined ? (
+        <Text style={styles.trailCaption}>{debtHint}</Text>
+      ) : null}
       {!categoryLowConfidence ? null : (
         <Text style={styles.lowConfidence}>{t("categories.lowConfidence")}</Text>
       )}
@@ -688,13 +731,14 @@ export function QuickAddComposer({
 
       <BottomSheet
         visible={openSheet === "counterparty"}
-        title={t("transactions.counterparty")}
+        title={debtCategory ? t("transactions.who") : t("transactions.counterparty")}
         onDismiss={closeSheet}
       >
         <CounterpartyPicker
           counterparties={counterparties}
           obligationCounterpartyId={obligationCounterpartyId}
-          onCounterpartyChange={onCounterpartyChange}
+          onCounterpartyChange={handlePickCounterparty}
+          roleFixed={debtCategory}
           obligationRole={obligationRole}
           onObligationRoleChange={onObligationRoleChange}
         />
@@ -789,6 +833,8 @@ type CounterpartyPickerProps = {
   onCounterpartyChange: (obligationCounterpartyId: string) => void;
   obligationRole: ObligationRole | null;
   onObligationRoleChange: (role: ObligationRole | null) => void;
+  /** The category decides the role (a debt), so there is nothing to pick. */
+  roleFixed: boolean;
 };
 
 /** §6.6 — the role picker lives in the same sheet, and defaults to no obligation. */
@@ -798,6 +844,7 @@ function CounterpartyPicker({
   onCounterpartyChange,
   obligationRole,
   onObligationRoleChange,
+  roleFixed,
 }: CounterpartyPickerProps) {
   const t = useT();
   const options = useMemo(
@@ -839,7 +886,7 @@ function CounterpartyPicker({
         onChange={onCounterpartyChange}
         searchable
       />
-      {obligationCounterpartyId ? (
+      {obligationCounterpartyId && !roleFixed ? (
         <RadioGroup
           label={t("transactions.role")}
           options={roleOptions}

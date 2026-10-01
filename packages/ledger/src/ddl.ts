@@ -630,7 +630,23 @@ export const REPLICA_STEPS: readonly {
     statements: [`ALTER TABLE \`accounts\` ADD \`color\` text`],
   },
   {
-    tag: "0021_account_guards",
+    tag: "0021_debt_categories",
+    statements: [
+      `UPDATE \`transactions\`
+SET \`obligation_counterparty_id\` = \`counterparty_id\`, \`obligation_role\` = 'debt'
+WHERE \`deleted_at\` IS NULL
+  AND \`counterparty_id\` IN (SELECT \`id\` FROM \`counterparties\` WHERE \`kind\` = 'person')
+  AND \`obligation_counterparty_id\` IS NULL
+  AND \`obligation_role\` IS NULL
+  AND \`type\` IN ('income', 'expense')
+  AND \`category_id\` IN (
+    SELECT \`id\` FROM \`categories\`
+    WHERE \`external_id\` IN ('seed:borrowed', 'seed:lent-out', 'seed:repayment-received', 'seed:repayment-made')
+  )`,
+    ],
+  },
+  {
+    tag: "0022_account_guards",
     statements: [],
   },
 ];

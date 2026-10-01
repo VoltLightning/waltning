@@ -356,6 +356,23 @@ export const be: Messages = {
     feeInvalid: "Увядзіце лік або пакіньце пустым.",
     sameAccountRefused: "Для перавода патрэбны два розныя рахункі.",
     newCounterparty: "+ Новы чалавек або кампанія",
+    /** §6.6 — a debt category asks who the other side is, and cannot be saved without. */
+    who: "Хто?",
+    whoPlaceholder: "Абярыце чалавека",
+    whoRequired: "Абярыце чалавека.",
+    /** S09 — a legacy row under a debt category that names nobody. */
+    notCountedAsDebt: "Пакуль не ўлічваецца як доўг. Назавіце чалавека, і ён будзе ўлічаны.",
+    /** Under Who?, when the person has an open debt this entry pays down. */
+    settlesOwed: "{{name}}: пагашэнне доўгу перад вамі, {{currency}}.",
+    settlesOwe: "{{name}}: пагашэнне вашага доўгу, {{currency}}.",
+    nothingToSettle: "{{name}}: адкрытага доўгу ў гэтым кірунку няма.",
+    settleNeedsRate: "Няма курсу для {{currency}}. Калі ласка, пагасіце доўг на старонцы чалавека.",
+    reSettle:
+      "Гэта пагашэнне закрывае суму, адрозную ад унесенай (іншая валюта або дараваная частка), таму па новай суме нельга зразумець, якую частку доўгу яно закрывае. Выдаліце яго і запішыце пагашэнне нанава.",
+    splitDebtCategory:
+      "Частку падзеленай аперацыі нельга аднесці да катэгорый «Узята ў доўг», «Дадзена ў доўг» або да пагашэння: у доўгу ёсць чалавек, а ў часткі яго няма. Аднясіце да іх аперацыю цалкам.",
+    unSplitFirst:
+      "Гэтая аперацыя падзелена на часткі, а ў пагашэння іх няма. Спачатку прыбярыце падзел.",
     commandBarPlaceholder: "48,90 наяўныя кава ўчора",
     commandBarLabel: "Дадаць аперацыю",
     commandBarCategoryPrompt: "Катэгорыя?",
@@ -586,6 +603,8 @@ export const be: Messages = {
     noBalances: "Рахункаў пакуль няма",
     noRecent: "Пакуль нічога не запісана",
     noDebt: "Ніхто вам не вінен, і вы нікому",
+    /** The overview's list of who owes whom. */
+    openDebts: "Адкрытыя даўгі",
     noSpend: "За гэты перыяд выдаткаў няма",
     noLayout: "Няма макета агляду",
     noLayoutBody: "У гэтай базе няма актыўнага макета. Пераўсталёўка верне макет па змаўчанні.",

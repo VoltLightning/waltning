@@ -463,3 +463,105 @@ describe("TransactionDetail", () => {
     expect(router.back).toHaveBeenCalledTimes(1);
   });
 });
+
+/**
+ * §6.6 — S09 follows the category. Picking one of the four debt categories
+ * (by its seed tag, not its name) makes the row a debt and asks Who?, which is
+ * required; the pick is held in the card until Save so the category, the
+ * person and the role are written together.
+ */
+describe("TransactionDetail — a debt category", () => {
+  const GROUP = id<"categories">("aaaaaaaa-aaaa-4aaa-8aaa-000000000010");
+  const LENT = id<"categories">("aaaaaaaa-aaaa-4aaa-8aaa-000000000011");
+  const GROCERIES = id<"categories">("aaaaaaaa-aaaa-4aaa-8aaa-000000000012");
+  const NINA = id<"counterparties">("bbbbbbbb-bbbb-4bbb-8bbb-000000000001");
+  const node = (
+    nodeId: typeof LENT,
+    name: string,
+    externalId: string | null,
+    parentId = GROUP,
+  ) => ({
+    id: nodeId,
+    parentId,
+    name,
+    kind: "expense" as const,
+    isLeaf: true,
+    sort: 0,
+    externalId,
+  });
+
+  function debtLedger(updateTransaction: PhoneLedgerPort["updateTransaction"]) {
+    return fakeController(
+      { ...DETAIL, categoryId: GROCERIES, categoryName: "Groceries" },
+      {
+        updateTransaction,
+        listCategories: () => [
+          { id: LENT, name: "Money I handed over", kind: "expense", externalId: "seed:lent-out" },
+          { id: GROCERIES, name: "Groceries", kind: "expense", externalId: "seed:groceries" },
+        ],
+        listCategoryTree: () => [
+          {
+            id: GROUP,
+            parentId: null,
+            name: "Loans",
+            kind: "expense",
+            isLeaf: false,
+            sort: 0,
+            externalId: null,
+          },
+          node(LENT, "Money I handed over", "seed:lent-out"),
+          node(GROCERIES, "Groceries", "seed:groceries"),
+        ],
+        listCounterparties: () => [
+          {
+            id: NINA,
+            name: "Nina",
+            kind: "person" as const,
+            settlementCurrency: null,
+            contact: null,
+            note: "",
+            archived: false,
+            version: 1,
+          },
+        ],
+      },
+    );
+  }
+
+  function pickLentOut() {
+    fireEvent.click(screen.getByRole("button", { name: /^Category/ }));
+    fireEvent.click(screen.getByRole("radio", { name: "Money I handed over" }));
+  }
+
+  it("holds the pick, asks Who?, and refuses Save until a person is named", () => {
+    const updateTransaction = vi.fn();
+    withLedger(<TransactionDetail />, debtLedger(updateTransaction));
+
+    pickLentOut();
+    // Held, not written: the category changes with the role and the person.
+    expect(updateTransaction).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "Category: Money I handed over" })).toBeDefined();
+    expect(screen.getByRole("button", { name: "Who?" })).toBeDefined();
+
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(screen.getByText("Choose who this is with.")).toBeDefined();
+    expect(updateTransaction).not.toHaveBeenCalled();
+  });
+
+  it("writes the category, the person and the debt role together", () => {
+    const updateTransaction = vi.fn();
+    withLedger(<TransactionDetail />, debtLedger(updateTransaction));
+
+    pickLentOut();
+    fireEvent.click(screen.getByRole("button", { name: "Who?" }));
+    fireEvent.click(screen.getByRole("button", { name: "Nina" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(updateTransaction).toHaveBeenCalledOnce();
+    expect(updateTransaction.mock.calls[0]?.[0].patch).toMatchObject({
+      categoryId: LENT,
+      obligationCounterpartyId: NINA,
+      obligationRole: "debt",
+    });
+  });
+});

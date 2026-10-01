@@ -1734,7 +1734,7 @@ describe("a constraint declared in the schema is present on the device", () => {
    * So there are two homes and this is the census of both: every
    * hand-written replica trigger is created by
    * `REPLICA_BACKFILLS["0017_schema"].objects` — the hook on the last step
-   * that *rebuilds* `transactions` — or by `["0021_account_guards"].objects`,
+   * that *rebuilds* `transactions` — or by `["0022_account_guards"].objects`,
    * the step that introduced the account and ceiling guards on databases
    * already past `0017`; a hook moves when a later step rebuilds its table. That has happened once
    * already since: the obligation rename is a rebuild, because SQLite cannot
@@ -1767,6 +1767,8 @@ describe("a constraint declared in the schema is present on the device", () => {
       "transaction_lines_amount_ceiling_update",
       "transaction_lines_category_not_archived_insert",
       "transaction_lines_category_not_archived_update",
+      "transaction_lines_debt_category_insert",
+      "transaction_lines_debt_category_update",
       "transactions_amount_ceiling_insert",
       "transactions_amount_ceiling_update",
       "transactions_amount_positive_insert",
@@ -1775,6 +1777,8 @@ describe("a constraint declared in the schema is present on the device", () => {
       "transactions_category_kind_matches_type_update",
       "transactions_category_not_archived_insert",
       "transactions_category_not_archived_update",
+      "transactions_debt_category_shape_insert",
+      "transactions_debt_category_shape_update",
       "transactions_lines_sum_matches_update",
     ]);
   });

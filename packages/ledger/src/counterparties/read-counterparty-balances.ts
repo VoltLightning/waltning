@@ -32,11 +32,11 @@
  */
 
 import type { AccountingDate } from "@waltning/core/date";
-import type { Id } from "@waltning/core/id";
+import { id as brand, type Id } from "@waltning/core/id";
 import type { CurrencyCode, Money } from "@waltning/core/money";
 import * as money from "@waltning/core/money";
 import type { CounterpartyKind } from "@waltning/schema/enums";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, isNull, ne } from "drizzle-orm";
 import type { ReplicaDb } from "../open.ts";
 import { ledgerSchema, type ReplicaTx } from "../schema-map.ts";
 
@@ -94,6 +94,12 @@ type DebtLegRow = {
 export function readCounterpartyBalances<TRun, TSchema extends typeof ledgerSchema>(
   db: ReplicaDb<TRun, TSchema>,
   today: AccountingDate,
+  /**
+   * A row to leave out of the fold: the one a re-filing is about to replace
+   * (`settle_debt`'s `supersedesId`). Its own contribution is not part of the
+   * debt the replacement settles against.
+   */
+  options: { excluding?: string } = {},
 ): readonly LocalCounterpartyBalance[] {
   const rows = db
     .select({
@@ -113,7 +119,15 @@ export function readCounterpartyBalances<TRun, TSchema extends typeof ledgerSche
     })
     .from(transactions)
     .innerJoin(counterparties, eq(transactions.obligationCounterpartyId, counterparties.id))
-    .where(and(isNull(transactions.deletedAt), eq(transactions.obligationRole, "debt")))
+    .where(
+      and(
+        isNull(transactions.deletedAt),
+        eq(transactions.obligationRole, "debt"),
+        options.excluding === undefined
+          ? undefined
+          : ne(transactions.id, brand<"transactions">(options.excluding)),
+      ),
+    )
     // M3 — deterministic input order. `fifoOldestOpen` re-sorts by
     // `(date, id)` internally so this never changes ageing, but the fold
     // below builds `byCounterparty` (and each bucket's own `balances`) by

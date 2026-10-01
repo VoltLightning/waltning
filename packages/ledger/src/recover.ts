@@ -33,7 +33,7 @@ import {
 } from "./executor.ts";
 import { advanceAppliedSeq, readAppliedSeq } from "./migrate.ts";
 import type { Ledger, LedgerSchema } from "./open.ts";
-import { outbox } from "./outbox.ts";
+import { type OutboxPayload, outbox } from "./outbox.ts";
 import type { Capture, LocalTx } from "./write.ts";
 
 /**
@@ -162,6 +162,7 @@ export function recoverOnLaunch<TRun, TSchema extends LedgerSchema>(
       seq: outbox.seq,
       operation: outbox.operation,
       payload: outbox.payload,
+      opVersion: outbox.opVersion,
       // M1 — an executor derives "today" from where and when the capture
       // happened (`LocalExecutor.apply`), and those three facts are recorded
       // on the entry itself precisely so a replay is not left guessing them
@@ -203,8 +204,39 @@ export function recoverOnLaunch<TRun, TSchema extends LedgerSchema>(
 
     try {
       ledger.replica.db.transaction((tx) => {
-        executor.invoke(entry.payload, tx, captureOf(entry));
+        // An entry captured at an older `opVersion` is brought to this build's
+        // shape first — possibly into a different operation — never dropped.
+        const upcast =
+          entry.opVersion < executor.opVersion
+            ? executor.upcast?.(entry.payload, entry.opVersion, tx)
+            : undefined;
+        const target = upcast?.operation === undefined ? executor : registry[upcast.operation];
+        if (target === undefined) {
+          throw new Error(`no local executor for the upcast of "${entry.operation}"`);
+        }
+        target.invoke(upcast === undefined ? entry.payload : upcast.payload, tx, captureOf(entry));
         advanceAppliedSeq(tx, entry.seq);
+        // **What the phone applied is what a later drain sends.** An upcast
+        // changed the intent (perhaps into another operation), so the entry is
+        // rewritten to match — operation, payload and the version it now is —
+        // *before* this replica transaction commits. The two files cannot share
+        // a transaction, and this order is the safe one: if the replica then
+        // fails to commit, the entry is already current and replays as itself;
+        // if it commits, the entry already says what was applied. Written the
+        // other way round, a crash in between would leave a drain sending the
+        // legacy payload for a row the phone settled.
+        if (upcast !== undefined) {
+          ledger.outbox.db
+            .update(outbox)
+            .set({
+              operation: target.operation,
+              // An upcast hands back an object payload (JSON the executor parses).
+              payload: upcast.payload as OutboxPayload,
+              opVersion: target.opVersion,
+            })
+            .where(eq(outbox.id, entry.id))
+            .run();
+        }
       });
     } catch (error) {
       // R3 M2 — mirrors `write.ts`'s own catch, because replay is the same

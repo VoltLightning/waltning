@@ -284,7 +284,10 @@ export type LocalLedgerSession = {
    */
   listEnteredNameHistory: () => readonly EnteredNameHistoryRow[];
   /** §7, one row per counterparty per currency, ageing on companies (O15) — S12. */
-  listCounterpartyBalances: (today: AccountingDate) => readonly LocalCounterpartyBalance[];
+  listCounterpartyBalances: (
+    today: AccountingDate,
+    options?: { excluding?: string },
+  ) => readonly LocalCounterpartyBalance[];
   /**
    * The whole tree **with archived rows** — S19's editor, which has its own
    * archived toggle and is the one screen where "offerable" is not the
@@ -764,7 +767,8 @@ export function createLocalLedgerSession<TRun>(
       readCategoryTree(requireOpen().replica.db).filter((category) => !category.archived),
     listCounterparties: (options) => readCounterparties(requireOpen().replica.db, options),
     listEnteredNameHistory: () => readEnteredNameHistory(requireOpen().replica.db),
-    listCounterpartyBalances: (today) => readCounterpartyBalances(requireOpen().replica.db, today),
+    listCounterpartyBalances: (today, options) =>
+      readCounterpartyBalances(requireOpen().replica.db, today, options),
     listFullCategoryTree: () => readCategoryTree(requireOpen().replica.db),
     listCategoryUsage: () => readCategoryUsage(requireOpen().replica.db),
     readCategoryReferenceCounts: (categoryId) =>

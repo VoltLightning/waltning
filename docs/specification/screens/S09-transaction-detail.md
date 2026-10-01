@@ -171,6 +171,31 @@ row and the friend on the second; S05's one chip row cannot express that, which
 is why it writes the same party to both when a role is chosen and leaves this
 screen to separate them.
 
+**A debt category turns *Owes* into a required *Who?*.** Picking *Borrowed*,
+*Lent out*, *Repayment received* or *Repayment made* (read from the category's
+seed tag, never its name) makes the role `debt` — the role row goes, there is
+nothing to choose — and the obligation row is drawn as **Who?** whether or not
+somebody is named yet. The pick is held in the card until Save, because the
+category, the person and the role are written together; Save with nobody named
+is refused with an error on Who?. Moving the row to any other category takes the
+role back and clears the person it was asked for, while a role chosen by hand
+stays. Any other category pick is written at once, as it always was.
+
+**Picking *Repayment received* or *Repayment made* is not a patch.** The row's
+own figures settle the person's open debt in the matching direction (S14,
+`settle_debt` with `supersedes`) and the settlement replaces the row in one
+operation, carrying its entered name, scope, time and tags, and counting the
+replaced row out of the debt it settles. A transaction split into lines is
+refused until it is un-split. Who? is required, and the refusals are Quick add's (*Nothing to settle with …*; no exchange rate). The
+other two (*Borrowed*, *Lent out*) are ordinary edits.
+
+**A row that was filed under one of the four before the rule is shown as it
+is.** One that names nobody carries *Not counted as a debt yet. Add who, and it
+is.* under its Who? row, and an edit that touches neither the category nor the
+person (a note, an amount) saves without asking for who. A legacy
+*contribution* under a debt category keeps its role: opening the row never
+leaves Save showing.
+
 One picker serves both rows — the same directory, asked twice — rather than two
 components holding two copies of one list. Imported/legacy debt rows with no merchant link retain entered name text as Who,
 never silently promote the debtor into a merchant. Show the entered name snapshot and

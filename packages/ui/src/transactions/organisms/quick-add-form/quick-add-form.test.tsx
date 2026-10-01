@@ -2,7 +2,7 @@
 
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { currencyCode } from "@waltning/core/money";
-import { afterAll, beforeAll, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { type QuickAddDraft, QuickAddForm, type QuickAddFormProps } from "./quick-add-form";
 
 /** `use-breakpoint.test.tsx`'s own real-resize technique: the desk's typed field, or the phone's drum. */
@@ -42,6 +42,7 @@ const restingDraft: Omit<QuickAddDraft, "amount" | "accountId"> = {
   date: TODAY,
   note: "",
   isBusiness: false,
+  counterpartyId: null,
   obligationCounterpartyId: null,
   obligationRole: null,
 };
@@ -343,4 +344,93 @@ it("renders an unknown path at form level, under an alert", () => {
 it("renders nothing extra with no fieldErrors prop", () => {
   renderForm({ categories: [], today: "2026-08-24" });
   expect(screen.queryByRole("alert")).toBeNull();
+});
+
+/**
+ * §6.6 — the desk's form follows the category too: a debt category asks Who?
+ * in the first view, required, and sends the debt role with the person.
+ */
+describe("a debt category on the desk's form", () => {
+  const debtProps: Partial<QuickAddFormProps> = {
+    categories: [{ id: "cat-borrowed", name: "Money from friends", kind: "income" as const }],
+    categoryId: "cat-borrowed",
+    initialType: "income",
+    debtCategoryIds: ["cat-borrowed"],
+    counterparties: [{ id: "cp-a", name: "Counterparty A" }],
+    accountId: "account-a",
+  };
+
+  it("asks Who? and refuses Save on that field until a person is picked", () => {
+    const onSave = vi.fn();
+    renderForm({ ...debtProps, onSave });
+    fillAmount();
+    expect(screen.getByRole("button", { name: "Who?" })).toBeDefined();
+
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(screen.getByText("Choose who this is with.")).toBeDefined();
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
+  it("sends the person with the debt role, and no role picker is offered", () => {
+    const onSave = vi.fn();
+    renderForm({ ...debtProps, onSave });
+    fillAmount();
+    fireEvent.click(screen.getByRole("button", { name: "Who?" }));
+    fireEvent.click(screen.getByRole("radio", { name: "Counterparty A" }));
+    expect(screen.queryByRole("radiogroup", { name: "Role" })).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(onSave).toHaveBeenCalledWith(
+      expect.objectContaining({
+        categoryId: "cat-borrowed",
+        obligationCounterpartyId: "cp-a",
+        obligationRole: "debt",
+      }),
+    );
+  });
+
+  it("carries who it was with like the phone, and drops the obligation when the category stops being a debt", () => {
+    const onSave = vi.fn();
+    const view = renderForm({
+      ...debtProps,
+      categories: [
+        { id: "cat-borrowed", name: "Money from friends", kind: "income" as const },
+        { id: "cat-salary", name: "Salary", kind: "income" as const },
+      ],
+      onSave,
+    });
+    fillAmount();
+    fireEvent.click(screen.getByRole("button", { name: "Who?" }));
+    fireEvent.click(screen.getByRole("radio", { name: "Counterparty A" }));
+
+    // Borrowed → Salary: the role goes with the category, and so does the person on the obligation.
+    view.rerender(
+      <QuickAddForm
+        {...BASE_PROPS}
+        {...debtProps}
+        categories={[
+          { id: "cat-borrowed", name: "Money from friends", kind: "income" as const },
+          { id: "cat-salary", name: "Salary", kind: "income" as const },
+        ]}
+        categoryId="cat-salary"
+        onSave={onSave}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(onSave).toHaveBeenCalledWith(
+      expect.objectContaining({
+        categoryId: "cat-salary",
+        counterpartyId: "cp-a",
+        obligationCounterpartyId: null,
+        obligationRole: null,
+      }),
+    );
+  });
+
+  it("asks nothing for a category that is not a debt, and asks the moment it is one", () => {
+    const view = renderForm({ ...debtProps, debtCategoryIds: [] });
+    expect(screen.queryByRole("button", { name: "Who?" })).toBeNull();
+    view.rerender(<QuickAddForm {...BASE_PROPS} {...debtProps} />);
+    expect(screen.getByRole("button", { name: "Who?" })).toBeDefined();
+  });
 });

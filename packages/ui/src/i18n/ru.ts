@@ -359,6 +359,23 @@ export const ru: Messages = {
     feeInvalid: "Введите число или оставьте пустым.",
     sameAccountRefused: "Для перевода нужны два разных счёта.",
     newCounterparty: "+ Новый человек или компания",
+    /** §6.6 — a debt category asks who the other side is, and cannot be saved without. */
+    who: "Кто?",
+    whoPlaceholder: "Выберите человека",
+    whoRequired: "Выберите человека.",
+    /** S09 — a legacy row under a debt category that names nobody. */
+    notCountedAsDebt: "Пока не учитывается как долг. Укажите, кто это, и он будет учтён.",
+    /** Under Who?, when the person has an open debt this entry pays down. */
+    settlesOwed: "{{name}}: погашение долга перед вами, {{currency}}.",
+    settlesOwe: "{{name}}: погашение вашего долга, {{currency}}.",
+    nothingToSettle: "{{name}}: открытого долга в этом направлении нет.",
+    settleNeedsRate: "Нет курса для {{currency}}. Пожалуйста, погасите долг на странице человека.",
+    reSettle:
+      "Это погашение закрывает сумму, отличную от внесённой (другая валюта или прощённая часть), поэтому по новой сумме нельзя понять, какую часть долга оно закрывает. Удалите его и запишите погашение заново.",
+    splitDebtCategory:
+      "Часть разделённой операции нельзя отнести к категориям «Взято в долг», «Дано в долг» или к погашению: у долга есть человек, а у части его нет. Отнесите к ним операцию целиком.",
+    unSplitFirst:
+      "Эта операция разделена на части, а у погашения их нет. Сначала уберите разделение.",
     commandBarPlaceholder: "48,90 наличные кофе вчера",
     commandBarLabel: "Добавить операцию",
     commandBarCategoryPrompt: "Категория?",
@@ -589,6 +606,8 @@ export const ru: Messages = {
     noBalances: "Счетов пока нет",
     noRecent: "Пока ничего не записано",
     noDebt: "Никто вам не должен, и вы никому",
+    /** The overview's list of who owes whom. */
+    openDebts: "Открытые долги",
     noSpend: "За этот период расходов нет",
     noLayout: "Нет макета обзора",
     noLayoutBody: "В этой базе нет активного макета. Переустановка вернёт макет по умолчанию.",

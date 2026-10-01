@@ -105,6 +105,7 @@ import { fold } from "@waltning/core/capture/names";
 import { layoutKey, PRESET_LAYOUT } from "@waltning/core/dashboard";
 import { errorFromThrown } from "@waltning/core/diagnostics";
 import { RATE_MAX_EXCLUSIVE, RATE_MIN_EXCLUSIVE } from "@waltning/core/money";
+import { DEBT_SEED_EXTERNAL_IDS } from "@waltning/core/taxonomy";
 import { type SQL, sql } from "drizzle-orm";
 import type { BaseSQLiteDatabase } from "drizzle-orm/sqlite-core";
 import { OUTBOX_STEPS, REPLICA_STEPS } from "./ddl.ts";
@@ -643,6 +644,73 @@ END`,
 ];
 
 /**
+ * WA022 on the replica — `SPEC.md` §6.6: a row filed under one of the four debt
+ * categories carries the `debt` role and a person on the other side. The
+ * backstop under `assertDebtCategoryShape` (`transactions/debt-categories.ts`)
+ * and the mirror of `packages/db`'s `assert_debt_category_shape`
+ * (`0025_debt_categories.sql`), which carries the same four seed keys —
+ * `DEBT_SEED_KEYS`, which `migrate.test.ts` holds both to.
+ *
+ * **On `0021_debt_categories`, not `0017_schema`.** The rule is a replica trigger
+ * like the nine above, and a trigger lives on the last step that rebuilds its
+ * table: `0021` rebuilds nothing, so it is the last step of the chain and the
+ * trigger is created here. **If a later step ever rebuilds `transactions`,
+ * these two move to that step** — `DROP TABLE` takes a table's triggers with it,
+ * silently, and `backfills.test.ts` reads `sqlite_master` after the whole chain
+ * so the failure is red.
+ *
+ * `UPDATE OF` the three columns a debt is made of, for the reason the Postgres
+ * trigger lists them: an unrelated edit to a legacy row that names nobody (a
+ * note, an amount) touches none of them and is not this rule's business.
+ */
+const DEBT_SEEDS_SQL = DEBT_SEED_EXTERNAL_IDS.map((id) => `'${id}'`).join(", ");
+const DEBT_CATEGORY_TRIGGERS: readonly string[] = [
+  `CREATE TRIGGER IF NOT EXISTS \`transactions_debt_category_shape_insert\`
+BEFORE INSERT ON \`transactions\`
+FOR EACH ROW WHEN NEW.\`category_id\` IS NOT NULL
+  AND (NEW.\`obligation_role\` IS NOT 'debt' OR NEW.\`obligation_counterparty_id\` IS NULL)
+BEGIN
+	SELECT RAISE(ABORT, 'a debt category needs the debt role and a person on the other side (WA022)')
+	WHERE EXISTS (
+		SELECT 1 FROM \`categories\`
+		WHERE \`categories\`.\`id\` = NEW.\`category_id\` AND \`categories\`.\`external_id\` IN (${DEBT_SEEDS_SQL})
+	);
+END`,
+  `CREATE TRIGGER IF NOT EXISTS \`transactions_debt_category_shape_update\`
+BEFORE UPDATE OF \`category_id\`, \`obligation_role\`, \`obligation_counterparty_id\` ON \`transactions\`
+FOR EACH ROW WHEN NEW.\`category_id\` IS NOT NULL
+  AND (NEW.\`obligation_role\` IS NOT 'debt' OR NEW.\`obligation_counterparty_id\` IS NULL)
+BEGIN
+	SELECT RAISE(ABORT, 'a debt category needs the debt role and a person on the other side (WA022)')
+	WHERE EXISTS (
+		SELECT 1 FROM \`categories\`
+		WHERE \`categories\`.\`id\` = NEW.\`category_id\` AND \`categories\`.\`external_id\` IN (${DEBT_SEEDS_SQL})
+	);
+END`,
+  // A split line carries no obligation, so it is never filed under a debt category.
+  `CREATE TRIGGER IF NOT EXISTS \`transaction_lines_debt_category_insert\`
+BEFORE INSERT ON \`transaction_lines\`
+FOR EACH ROW WHEN NEW.\`category_id\` IS NOT NULL
+BEGIN
+	SELECT RAISE(ABORT, 'a split line cannot be filed under a debt category (WA022)')
+	WHERE EXISTS (
+		SELECT 1 FROM \`categories\`
+		WHERE \`categories\`.\`id\` = NEW.\`category_id\` AND \`categories\`.\`external_id\` IN (${DEBT_SEEDS_SQL})
+	);
+END`,
+  `CREATE TRIGGER IF NOT EXISTS \`transaction_lines_debt_category_update\`
+BEFORE UPDATE OF \`category_id\` ON \`transaction_lines\`
+FOR EACH ROW WHEN NEW.\`category_id\` IS NOT NULL
+BEGIN
+	SELECT RAISE(ABORT, 'a split line cannot be filed under a debt category (WA022)')
+	WHERE EXISTS (
+		SELECT 1 FROM \`categories\`
+		WHERE \`categories\`.\`id\` = NEW.\`category_id\` AND \`categories\`.\`external_id\` IN (${DEBT_SEEDS_SQL})
+	);
+END`,
+];
+
+/**
  * `seed:standing`, derived rather than repeated — the backfill below and
  * `bootstrap-dashboard.ts` must agree on what names the preset, and two string
  * literals agreeing is the upkeep this whole change exists to remove.
@@ -650,7 +718,7 @@ END`,
 const PRESET_KEY = layoutKey(PRESET_LAYOUT);
 
 /**
- * `accounts_delete_guard` on the replica — the mirror of Postgres's WA022: an
+ * `accounts_delete_guard` on the replica — the mirror of Postgres's WA023: an
  * account some row references is never deleted (`SPEC.md` §6.9).
  *
  * **Every reference, not only transactions.** A transaction on either leg —
@@ -672,7 +740,7 @@ WHEN EXISTS (SELECT 1 FROM \`transactions\` WHERE \`account_id\` = OLD.\`id\` OR
   OR EXISTS (SELECT 1 FROM \`recurring_transactions\` WHERE \`account_id\` = OLD.\`id\` OR \`to_account_id\` = OLD.\`id\`)
   OR CAST(OLD.\`opening_balance\` AS REAL) <> 0
 BEGIN
-  SELECT RAISE(ABORT, 'an account that anything references is archived, never deleted (SPEC.md §6.9, WA022, accounts_delete_guard)');
+  SELECT RAISE(ABORT, 'an account that anything references is archived, never deleted (SPEC.md §6.9, WA023, accounts_delete_guard)');
 END`,
 ];
 
@@ -861,7 +929,7 @@ export const REPLICA_BACKFILLS: Readonly<Record<string, Backfill>> = {
       for (const statement of AMOUNT_POSITIVE_TRIGGERS) tx.run(sql.raw(statement));
     },
   },
-  "0021_account_guards": {
+  "0022_account_guards": {
     /**
      * **Four tables' worth of new triggers, on a step that rebuilds none of
      * them — so an installed device gets them on upgrade.** The hook on
@@ -915,6 +983,12 @@ export const REPLICA_BACKFILLS: Readonly<Record<string, Backfill>> = {
           `update "dashboard_widgets" set "external_id" = '${PRESET_KEY}:' || "kind" where "external_id" is null and "layout_id" in (select "id" from "dashboard_layouts" where "is_preset" = 1)`,
         ),
       );
+    },
+  },
+  "0021_debt_categories": {
+    /** The backfill is the step's own SQL (`0021_debt_categories.sql`); what is created here is the rule that holds afterwards. */
+    objects: (tx) => {
+      for (const statement of DEBT_CATEGORY_TRIGGERS) tx.run(sql.raw(statement));
     },
   },
   "0019_schema": {

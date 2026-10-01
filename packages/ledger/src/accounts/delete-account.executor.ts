@@ -6,7 +6,7 @@
  * no opening balance. Anything referenced is archived, never removed —
  * `archive_account` is the verb for it. The refusal is stated three times and
  * on purpose: here, with a message the screen can name; in the replica's
- * `accounts_delete_guard` trigger; and in Postgres's (WA022), which is the
+ * `accounts_delete_guard` trigger; and in Postgres's (WA023), which is the
  * one that still holds when this function is wrong.
  *
  * Compare-and-swap on `version`, same as `archive_account`.

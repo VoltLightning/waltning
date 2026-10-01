@@ -180,8 +180,15 @@
     {
       "idx": 25,
       "version": "7",
-      "when": 1790819795190,
-      "tag": "0025_account_delete_guard_and_amount_ceiling",
+      "when": 1790812435654,
+      "tag": "0025_debt_categories",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1790821952065,
+      "tag": "0026_account_delete_guard_and_amount_ceiling",
       "breakpoints": true
     }
   ]

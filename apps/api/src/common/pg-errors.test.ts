@@ -389,7 +389,7 @@ describe("account deletion and the amount ceiling", () => {
   const FREE = "88888888-8888-4888-8888-888888888888";
   const FUNDED = "99999999-9999-4999-8999-999999999999";
 
-  it("WA022 · an account a transaction names cannot be deleted", async () => {
+  it("WA023 · an account a transaction names cannot be deleted", async () => {
     await s.sql`INSERT INTO transactions (date, type, account_id, amount_original, currency, fx_rate)
       VALUES ('2026-01-01', 'expense', ${ACC_PLN}::uuid, 10, 'PLN', 1)`;
     const error = await refusal(`DELETE FROM accounts WHERE id = '${ACC_PLN}'`);
@@ -398,7 +398,7 @@ describe("account deletion and the amount ceiling", () => {
     await s.sql`DELETE FROM transactions WHERE account_id = ${ACC_PLN}::uuid`;
   });
 
-  it("WA022 · a soft-deleted transaction still keeps its account", async () => {
+  it("WA023 · a soft-deleted transaction still keeps its account", async () => {
     await s.sql`INSERT INTO transactions (date, type, account_id, amount_original, currency, fx_rate, deleted_at)
       VALUES ('2026-01-01', 'expense', ${ACC_PLN}::uuid, 10, 'PLN', 1, now())`;
     const error = await refusal(`DELETE FROM accounts WHERE id = '${ACC_PLN}'`);
@@ -406,7 +406,7 @@ describe("account deletion and the amount ceiling", () => {
     await s.sql`DELETE FROM transactions WHERE account_id = ${ACC_PLN}::uuid`;
   });
 
-  it("WA022 · an opening balance keeps its account", async () => {
+  it("WA023 · an opening balance keeps its account", async () => {
     await s.sql`INSERT INTO accounts (id, name, currency, opening_balance)
       VALUES (${FUNDED}::uuid, 'Bank F', 'USD', 5)`;
     const error = await refusal(`DELETE FROM accounts WHERE id = '${FUNDED}'`);

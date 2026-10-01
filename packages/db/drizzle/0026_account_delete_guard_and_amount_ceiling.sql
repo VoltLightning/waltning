@@ -1,4 +1,4 @@
--- ═══ WA022 — an account something references is archived, never deleted ════
+-- ═══ WA023 — an account something references is archived, never deleted ════
 --
 -- `SPEC.md` §6.9: reference data is archived, never deleted — except an account
 -- **no row has ever referenced**, which `delete_account` may remove. Anything
@@ -11,7 +11,7 @@
 -- The foreign keys already refuse the first three, with `23503` and no name
 -- for the rule. This is the rule, in the domain's own code, and the fourth
 -- reference no foreign key can see. It is a BEFORE trigger so it runs ahead of
--- the foreign key and the client gets WA022 rather than a constraint name
+-- the foreign key and the client gets WA023 rather than a constraint name
 -- nobody reads.
 CREATE OR REPLACE FUNCTION assert_account_deletable()
 RETURNS trigger LANGUAGE plpgsql AS $$
@@ -27,7 +27,7 @@ BEGIN
   THEN
     RAISE EXCEPTION
       'account % is referenced and cannot be deleted — archive it instead (SPEC.md §6.9)', OLD.id
-      USING ERRCODE = 'WA022';
+      USING ERRCODE = 'WA023';
   END IF;
   RETURN OLD;
 END $$;

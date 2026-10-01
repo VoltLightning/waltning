@@ -1498,6 +1498,112 @@ Set at write time, never inferred. The alternative — deriving the distinction
 from `accounts.ownership` — works today but silently rewrites the meaning of
 five years of history the moment an account is reclassified.
 
+**The category is what says a capture is a debt.** Four seeded categories carry
+it, read from the taxonomy's seed key (`external_id`, `seed:<key>`) and never
+from a display name, which a person renames and a language translates:
+
+| Seed key | Kind | Side of the debt ledger |
+|---|---|---|
+| `borrowed` | income | you owe — money you received |
+| `repayment-made` | expense | you owe — money you returned |
+| `lent-out` | expense | you are owed — money you handed over |
+| `repayment-received` | income | you are owed — money that came back |
+
+Picking one makes the obligation role `debt` and requires a person on the other
+side (`obligation_counterparty_id`): a debt with nobody on the other end is not
+a debt. Every claim below names the layer that enforces it:
+
+- **The capture surfaces** ask **Who?** where the category is picked and refuse
+  to save without it (Quick add on phone and desk, and S09) — *UI*.
+- **A row under one of the four carries the `debt` role and a person** —
+  `create_transaction`, `update_transaction` and `supersede_transaction`
+  refuse otherwise with a message naming the field, and `categorize_batch`
+  refuses to move rows into one that carry no debt (*service, the replica's
+  executors*); under them, the `transactions_debt_category_shape_insert/update`
+  triggers on the replica (`0021_debt_categories`) and
+  `transactions_debt_category_shape` on Postgres (**WA022**,
+  `0025_debt_categories.sql`) hold when the code is wrong (*database, both
+  engines*). The triggers watch only `category_id`, `obligation_role` and
+  `obligation_counterparty_id`, so an unrelated edit to a legacy row that names
+  nobody (a note, an amount) is never refused by them.
+- **Leaving the four takes the automatic role with it.** `update_transaction`
+  and `categorize_batch` clear the obligation pair of a row they move out of one
+  of the four when the write says nothing about the obligation (the identity
+  link, who it was with, stays); a role a person chose by hand under another
+  category is never touched — *service*. The role is a function of the
+  category on the capture surfaces, not a value written into the draft, so
+  nothing is left to clear — *UI*.
+- **Merging into or out of the four is refused while the loser holds rows**
+  (`merge_categories`, *service*; the triggers refuse the `UPDATE` if it were
+  attempted regardless): plain rows moved under a debt category would be debts
+  with nobody named, and debts moved out would keep a role their category no
+  longer states. Re-file them first, each with the person on the other side;
+  an empty category merges freely. `convert_leaf_group` needs no rule of its
+  own: it already refuses a category any row references, so the four can only
+  become groups while empty.
+- **Rows that already sit under the four** are converted by a one-time
+  migration (`0021_debt_categories` on the replica, `0025_debt_categories` on
+  Postgres, idempotent): a live row that names a **person** (`counterparty_id`
+  of kind `person`) and carries no obligation becomes a debt on that person. A
+  row that names nobody, names a company, or is soft-deleted stays as it is, and
+  S09 says *not counted as a debt — add who* instead of guessing; it does not
+  block unrelated edits. Rows the identity-link migration moved off the retired
+  `reference` role carry no mark and are converted like any other row that names
+  a person.
+- **A repayment is `settle_debt`, never a second path.** *Repayment received*
+  and *Repayment made* are written **only** by `settle_debt` (S14): it reads the
+  live sign, stamps `debt_amount`/`debt_currency` so 25 EUR discharges a PLN
+  debt without opening a reverse EUR one, verifies the direction against the
+  balance and reports `overSettled` (*service*). `create_transaction`,
+  `update_transaction` (a row *entering* one), `supersede_transaction` and
+  `categorize_batch` refuse a repayment category with a message naming
+  `settle_debt` (*service, the replica's executors — and so the agent, which
+  reaches the ledger through them*). The capture surfaces route a repayment
+  through it: Quick add on phone and desk, and S09, where picking a repayment
+  category on an existing row settles the person's open debt with the row's own
+  figures and replaces the row with the settlement — **one operation**:
+  `settle_debt` with `supersedesId` and `supersedesVersion` inserts the
+  settlement and soft-deletes the original in one replica transaction and one
+  outbox entry, carries the original's identity (entered name, scope, time,
+  brand, source, external id) and tags across, leaves the original out of the
+  balance it settles against, and refuses an original with split lines — never a
+  settle followed by a delete (*service*; the shared input schema is the server's
+  contract, and receipts and import matches, which only the server holds,
+  follow the original the way `supersede_transaction` moves them). With no open debt in
+  the matching direction they refuse on Who?: money from somebody who never
+  owed you is a loan to you, which is *Borrowed* (*UI*). *Borrowed* and *Lent
+  out* are ordinary writes.
+- **A settlement's discharge figure follows its amount, when it was its amount.**
+  Editing the amount of a row that carries `debt_amount` restates it in the same
+  write only when the debt is in the row's own currency *and* the two were equal
+  before the edit; where a part was forgiven (S14), or across currencies, or when
+  the row is moved to an account in another currency, the new discharge is not
+  derivable, so `update_transaction` refuses and the repayment is redone with
+  `settle_debt` (*service*). A row that leaves the four
+  categories drops `debt_amount` and `debt_currency` with the role, in
+  `update_transaction` and `categorize_batch` (*service*), so re-entering a debt
+  category does not bring the old figure back.
+- **A split line is never filed under one of the four** — a line has no person
+  to owe or be owed. `set_transaction_lines` refuses it (*service*), and the
+  `transaction_lines_debt_category_*` triggers on the replica and
+  `transaction_lines_debt_category` on Postgres (WA022) hold under it
+  (*database, both engines*); `merge_categories` counts lines when it asks
+  whether the loser holds anything.
+- **An entry captured before the rule is not dropped.** A queued
+  `create_transaction` at `opVersion` 1 is brought to the rule at replay
+  (`upcast`, read-only, in the replica transaction): *Borrowed* / *Lent out*
+  naming a person becomes the debt on that person; naming nobody (or a company)
+  it is kept as a plain, uncategorised row; a repayment with an open debt in the
+  matching direction and the row's currency is replayed as `settle_debt` with the
+  same row id, otherwise it is kept as a plain, uncategorised row — never a
+  reverse debt (*service, `recover.ts`*). The entry is rewritten to what was
+  applied (operation, payload, `opVersion`) before the replica transaction
+  commits, so a later drain sends what the phone ran.
+
+A category a person made and named *Borrowed* carries no seed tag and means
+nothing about debt. The rule is keyed on the four starter categories' seed keys
+(`DEBT_SEED_KEYS`), not on a flag on the category.
+
 **Debt is derived, never stored.** A counterparty's position is the running sum
 of the `debt`-role transactions referencing them. Nothing is posted twice, so a
 balance cannot drift from its history:
@@ -2090,14 +2196,14 @@ transaction on either leg — a soft-deleted one is still a row naming the
 account — no recurring rule, no import batch, and no opening balance, which is
 money the account started with and would leave every total silently. Anything
 referenced is archived, never deleted. `accounts_delete_guard` enforces it in
-Postgres (SQLSTATE `WA022`) and the replica carries the same trigger, so the
+Postgres (SQLSTATE `WA023`) and the replica carries the same trigger, so the
 rule holds when the operation's own check is wrong; the operation refuses first
 with a message that says *archive it instead*.
 
 **A delete races another device's entry, and the server decides.** `delete_account`
 is queued in the outbox like every local write — it materialises on the device at once and drains later to
 a backend that can see every device's entries (`architecture/08`). If another
-device's entry reaches the server first, the delete meets `WA022` and is
+device's entry reaches the server first, the delete meets `WA023` and is
 `blocked` with its reason on S30, and the account returns to the phone at the
 next sync-down, since the server still holds it. If the delete reaches the
 server first, the other device's entry — naming an account that is gone — is

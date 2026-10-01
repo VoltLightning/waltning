@@ -363,6 +363,24 @@ export const de: Messages = {
     feeInvalid: "Eine Zahl eingeben oder leer lassen.",
     sameAccountRefused: "Eine Umbuchung braucht zwei verschiedene Konten.",
     newCounterparty: "+ Neue Person oder Firma",
+    /** §6.6 — a debt category asks who the other side is, and cannot be saved without. */
+    who: "Wer?",
+    whoPlaceholder: "Person auswählen",
+    whoRequired: "Bitte wählen Sie eine Person aus.",
+    /** S09 — a legacy row under a debt category that names nobody. */
+    notCountedAsDebt: "Noch nicht als Schuld gezählt. Geben Sie an, wer es ist, dann zählt es.",
+    /** Under Who?, when the person has an open debt this entry pays down. */
+    settlesOwed: "Damit begleicht {{name}} eine Schuld bei Ihnen, in {{currency}}.",
+    settlesOwe: "Damit begleichen Sie eine Schuld bei {{name}}, in {{currency}}.",
+    nothingToSettle: "Bei {{name}} ist in dieser Richtung keine Schuld offen.",
+    settleNeedsRate:
+      "Für {{currency}} liegt kein Wechselkurs vor. Bitte begleichen Sie die Schuld auf der Seite der Person.",
+    reSettle:
+      "Diese Rückzahlung begleicht einen anderen Betrag als den gezahlten (andere Währung oder ein erlassener Teil), daher lässt sich aus dem neuen Betrag nicht ableiten, welcher Teil der Schuld damit beglichen wird. Bitte löschen Sie sie und erfassen Sie die Rückzahlung erneut.",
+    splitDebtCategory:
+      "Eine Teilposition kann nicht unter „Geliehen“, „Verliehen“ oder einer Rückzahlung abgelegt werden: Eine Schuld hat eine Person, eine Teilposition nicht. Bitte legen Sie stattdessen die gesamte Buchung dort ab.",
+    unSplitFirst:
+      "Diese Buchung ist in Teilpositionen aufgeteilt, eine Rückzahlung hat keine. Bitte heben Sie die Aufteilung zuerst auf.",
     commandBarPlaceholder: "48,90 bar Kaffee gestern",
     commandBarLabel: "Buchung hinzufügen",
     commandBarCategoryPrompt: "Kategorie?",
@@ -599,6 +617,8 @@ export const de: Messages = {
     noBalances: "Noch keine Konten",
     noRecent: "Noch nichts erfasst",
     noDebt: "Niemand schuldet Ihnen, und Sie schulden niemandem",
+    /** The overview's list of who owes whom. */
+    openDebts: "Offene Schulden",
     noSpend: "In diesem Zeitraum nichts ausgegeben",
     noLayout: "Kein Übersichtslayout",
     noLayoutBody:

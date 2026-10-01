@@ -4,7 +4,7 @@
  * `delete_account` removes an account **no row has ever referenced** (§6.9),
  * and three readers need the same answer: the executor (to refuse with a good
  * message), `readAccounts` (so the editor offers *Delete* only where it will
- * work), and the two engines' triggers (`accounts_delete_guard`, WA022), which
+ * work), and the two engines' triggers (`accounts_delete_guard`, WA023), which
  * state it a third time where the code cannot be wrong. They are kept to one
  * list of references here so a fourth table that starts pointing at accounts
  * is one line to add and one test that fails if it is forgotten.

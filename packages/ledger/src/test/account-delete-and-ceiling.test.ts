@@ -148,7 +148,7 @@ describe("delete_account", () => {
     it("refuses a raw delete of an account a transaction names", () => {
       insertTransaction("12.00");
       expect(() => s.ledger.replica.db.delete(accounts).where(eq(accounts.id, USED)).run()).toThrow(
-        /WA022/,
+        /WA023/,
       );
       expect(exists(USED)).toBe(true);
     });
@@ -156,7 +156,7 @@ describe("delete_account", () => {
     it("refuses a raw delete of an account with an opening balance", () => {
       expect(() =>
         s.ledger.replica.db.delete(accounts).where(eq(accounts.id, FUNDED)).run(),
-      ).toThrow(/WA022/);
+      ).toThrow(/WA023/);
     });
 
     it("lets a raw delete of an unreferenced account through", () => {

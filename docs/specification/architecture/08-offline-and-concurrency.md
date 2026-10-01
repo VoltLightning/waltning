@@ -531,10 +531,10 @@ conflict with a phone's queued category edit (`14-local-first.md` §14.2):
 phone decides that from its own replica, which cannot see what another device
 has written and not yet sent. So the two devices can disagree, and the answer is
 the same rule as everywhere above: **the backend admits every write**, and
-`accounts_delete_guard` (`WA022`) is how it says no.
+`accounts_delete_guard` (`WA023`) is how it says no.
 
 - **The delete arrives second.** Another device's entry already references the
-  account, so the delete is refused with `WA022` and is `blocked` and terminal:
+  account, so the delete is refused with `WA023` and is `blocked` and terminal:
   *an entry was added to this account elsewhere — archive it instead*. The
   phone that deleted it had already dropped the row, so the account returns at
   the next sync-down, which copies every server row by insert; nothing is

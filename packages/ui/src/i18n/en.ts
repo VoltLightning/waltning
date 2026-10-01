@@ -675,6 +675,23 @@ export const en = {
 
     /** S15's escape from S05's counterparty sheet — the same shape `onCreateAccount` gives the account sheet. */
     newCounterparty: "+ New person or company",
+    /** §6.6 — a debt category asks who the other side is, and cannot be saved without. */
+    who: "Who?",
+    whoPlaceholder: "Choose a person",
+    whoRequired: "Choose who this is with.",
+    /** S09 — a legacy row under a debt category that names nobody. */
+    notCountedAsDebt: "Not counted as a debt yet. Add who, and it is.",
+    /** Under Who?, when the person has an open debt this entry pays down. */
+    settlesOwed: "Settles what {{name}} owes you, in {{currency}}.",
+    settlesOwe: "Settles what you owe {{name}}, in {{currency}}.",
+    nothingToSettle: "Nothing to settle with {{name}}: no open debt in this direction.",
+    settleNeedsRate: "No exchange rate for {{currency}}. Please settle from the person's page.",
+    reSettle:
+      "This repayment settles a different figure than its amount (another currency, or a part forgiven), so a new amount does not say how much of the debt it settles. Please delete it and record the repayment again.",
+    splitDebtCategory:
+      "A split line cannot be filed under Borrowed, Lent out or a repayment: a debt has a person, and a line has none. Please file the whole transaction under it instead.",
+    unSplitFirst:
+      "This transaction is split into lines, and a repayment has none. Please remove the split first.",
 
     /* ── DESK2 · the desk command bar, `screens/S05-quick-add.md` §3 web ── */
     /**
@@ -1120,6 +1137,8 @@ export const en = {
     noBalances: "No accounts yet",
     noRecent: "Nothing recorded yet",
     noDebt: "Nobody owes, and you owe nobody",
+    /** The overview's list of who owes whom. */
+    openDebts: "Open debts",
     noSpend: "Nothing spent this period",
     /** M4 — a database with no active layout row at all, which the seed migration is supposed to make impossible. */
     noLayout: "No dashboard layout",
