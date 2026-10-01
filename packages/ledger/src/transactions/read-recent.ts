@@ -13,6 +13,8 @@ export type LocalRecentTransaction = {
   date: AccountingDate;
   enteredName: string;
   categoryName: string | null;
+  /** The category's `seed:<key>` tag — the display rule's other input (`@waltning/core/seed-label`). */
+  categoryExternalId: string | null;
   accountName: string;
   amount: Money;
   currency: CurrencyCode;
@@ -36,6 +38,7 @@ export function readRecent<TRun, TSchema extends typeof ledgerSchema>(
       date: transactions.date,
       enteredName: transactions.enteredName,
       categoryName: categories.name,
+      categoryExternalId: categories.externalId,
       accountName: accounts.name,
       type: transactions.type,
       amountOriginal: transactions.amountOriginal,

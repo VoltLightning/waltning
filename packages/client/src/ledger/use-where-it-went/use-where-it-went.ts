@@ -49,6 +49,8 @@ export type WhereItWentRow = {
   /** `categoryId`, or the two sentinels — stable across renders for a list key. */
   key: string;
   label: string;
+  /** A starter's seed tag, so its colour survives a language change; absent otherwise. */
+  tintKey?: string;
   amount: money.Money;
 };
 
@@ -92,6 +94,11 @@ export function useWhereItWent(
     // a grouping key, not a reference the reader can follow), and a `Map`
     // keyed on the branded id would never match one.
     const names = new Map<string, string>(categoryTree.map((node) => [node.id, node.name]));
+    const tintKeys = new Map<string, string>(
+      categoryTree.flatMap((node) =>
+        node.externalId?.startsWith("seed:") ? [[node.id, node.externalId]] : [],
+      ),
+    );
 
     // The seed's own blank, if this tree carries one — its bucket merges into
     // the null bucket rather than standing beside it under the same name.
@@ -127,6 +134,11 @@ export function useWhereItWent(
           row.categoryId === null || row.categoryId === seededBlank
             ? labels.uncategorized
             : (names.get(row.categoryId) ?? labels.removed),
+        ...(row.categoryId !== null &&
+        row.categoryId !== seededBlank &&
+        tintKeys.has(row.categoryId)
+          ? { tintKey: tintKeys.get(row.categoryId) as string }
+          : {}),
         amount: row.amount,
       }))
       .reduce<WhereItWentRow[]>((rows, row) => {

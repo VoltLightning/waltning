@@ -36,6 +36,7 @@ import { Amount } from "@waltning/ui/fx/amount";
 import { formatAmountDraft, parseAmount } from "@waltning/ui/fx/amount-field";
 import { decimalMark } from "@waltning/ui/i18n/locales";
 import { useLocale, useT } from "@waltning/ui/i18n/provider";
+import { useCategoryLabel } from "@waltning/ui/i18n/use-category-label";
 import { Button } from "@waltning/ui/primitives/button";
 import { type Segment, SegmentControl } from "@waltning/ui/primitives/segment-control";
 import { Card } from "@waltning/ui/shell/card";
@@ -62,6 +63,7 @@ const OWN_KEY = "own";
 
 export default function Allocate() {
   const t = useT();
+  const labelOf = useCategoryLabel();
   const styles = useStyles();
   // The commit states the figure it will write, so the figure has to read
   // like one — `<Amount>` cannot render inside a label (§4.1's own note).
@@ -122,7 +124,8 @@ export default function Allocate() {
     [snapshot.counterparties, t],
   );
 
-  const categoryName = snapshot.categories.find((c) => c.id === categoryId)?.name;
+  const pickedCategory = snapshot.categories.find((c) => c.id === categoryId);
+  const categoryName = pickedCategory === undefined ? undefined : labelOf(pickedCategory);
 
   const handleMode = useCallback((next: string) => {
     if (next === "even" || next === "shares" || next === "custom") setMode(next);

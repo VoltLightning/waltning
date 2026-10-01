@@ -169,9 +169,10 @@ export type DemoCategory = { name: string; kind: "income" | "expense"; group: st
  * everything else names its parent.
  */
 export const DEMO_CATEGORIES: readonly DemoCategory[] = [
-  { name: "Income", kind: "income", group: null },
-  { name: "Salary", kind: "income", group: "Income" },
-  { name: "Services", kind: "income", group: "Income" },
+  { name: "Employment", kind: "income", group: null },
+  { name: "Salary", kind: "income", group: "Employment" },
+  { name: "Business revenue", kind: "income", group: null },
+  { name: "Services", kind: "income", group: "Business revenue" },
 
   { name: "Food", kind: "expense", group: null },
   { name: "Groceries", kind: "expense", group: "Food" },
@@ -190,8 +191,7 @@ export const DEMO_CATEGORIES: readonly DemoCategory[] = [
   { name: "Media & streaming", kind: "expense", group: "Subscriptions" },
   { name: "Software & tools", kind: "expense", group: "Subscriptions" },
 
-  { name: "Shopping", kind: "expense", group: null },
-  { name: "Household supplies", kind: "expense", group: "Shopping" },
+  { name: "Household supplies", kind: "expense", group: "Home" },
 
   // Lending and repaying. `Lent out` is the outgoing that opens a debt on a
   // person (§6.6) and `Repayment made` is paying one of yours down; a person

@@ -83,6 +83,7 @@ import {
 import { type Role, Text, type TextInput, type TextInputKeyPressEvent, View } from "react-native";
 import { Amount } from "../../../fx/atoms/amount/amount";
 import { useLocale, useT } from "../../../i18n/provider";
+import { useCategoryLabel } from "../../../i18n/use-category-label.ts";
 import { Button } from "../../../primitives/atoms/button/button";
 import type { FieldErrorMap } from "../../../primitives/field-errors.ts";
 import { SheetAwareTextInput } from "../../../primitives/sheet-input";
@@ -141,7 +142,11 @@ export type CommandBarAccount = {
   decimals: number;
 };
 /** Already scoped to the draft's own type (expense — `use-command-bar.ts`'s own fixed choice) by the caller, so this component never filters by `kind`. */
-export type CommandBarCategory = { id: string; name: string };
+export type CommandBarCategory = {
+  id: string;
+  name: string;
+  externalId?: string | null | undefined;
+};
 
 export type CommandBarProps = {
   /** The line as typed — `TextInput`'s own controlled value. */
@@ -223,6 +228,7 @@ export const CommandBar = forwardRef<CommandBarHandle, CommandBarProps>(function
   ref,
 ) {
   const t = useT();
+  const labelOf = useCategoryLabel();
   const locale = useLocale();
   const styles = useStyles();
   const inputHeight = useInputHeight("body");
@@ -265,8 +271,8 @@ export const CommandBar = forwardRef<CommandBarHandle, CommandBarProps>(function
   // chip asks (`commandBarCategoryPrompt`) exactly as if D2 had said nothing,
   // the same "suggestion, not a value" line `quick-add-screen.tsx` draws at
   // `PROPOSAL_DISPLAY_THRESHOLD`.
-  const categoryLabel =
-    pickedCategory?.name ?? (categoryAutoFilled ? proposedCategory?.name : undefined);
+  const shownCategory = pickedCategory ?? (categoryAutoFilled ? proposedCategory : undefined);
+  const categoryLabel = shownCategory === undefined ? undefined : labelOf(shownCategory);
   /**
    * L-e — machine-filled *and* the name of the field it filled, as one value.
    *

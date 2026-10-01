@@ -1187,6 +1187,38 @@ the real taxonomy lives in group names and memo text. Decoded from those:
 date, and `derived` marks a rate triangulated by a pivot change rather than
 published by anyone)
 
+**Starter category names are a display rule, not stored text.** Every seeded
+category and group carries a stable `external_id` (`seed:<key>`) and the
+seed's canonical English name as `name`. A row is drawn in the app's language
+while `name` still equals the canonical name its `external_id` names, and as
+stored text the moment they differ:
+
+| Row | Drawn as |
+|---|---|
+| seed key, `name` equals the canonical name | the catalogue's `taxonomy.<key>` in the current language — a language change re-labels it |
+| seed key, `name` differs (the person renamed it) | `name`, exactly as stored — their own text, never translated again |
+| no seed key (a category the person made) | `name`, exactly as stored |
+
+A rename changes `name` and never `external_id`, so no column records the
+freeze. Renaming a row to exactly its canonical English name makes it a
+starter again, and it translates — the stored text is identical either way.
+The rule is one pure function (`@waltning/core/seed-label`) over `name` and
+`external_id`, and every surface that draws a category name goes through it.
+The stored name stays the canonical one everywhere else: the database's
+sibling-uniqueness index, the agent, exports and sync all read it. Search
+matches both the drawn name and the stored one, with accents dropped
+(*offentlicher* finds *Öffentlicher Nahverkehr*), and so does the sibling check a
+create or a rename makes before it writes (in the phone's screens and controller;
+the replica's executors, the server and the agent compare stored names only): in a German app, creating *Gehalt*
+beside the drawn *Gehalt* is refused, and so is *Salary*, and a refusal names
+the sibling as drawn. A colour is hashed from the seed tag for a starter and
+from the name otherwise, so a language change never repaints a category.
+
+Re-running the server's seed (`packages/db`) upserts the seed's definitions, so
+it resets a starter's stored `name` to the canonical one and a renamed starter
+reads as the catalogue's text again. The phone's bootstrap seeds a ledger once
+and never touches a row afterwards.
+
 ### 6.4 The clearing accounts
 
 `Clearing · PLN` is the third most active account in the system — 678

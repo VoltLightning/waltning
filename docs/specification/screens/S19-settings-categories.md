@@ -27,6 +27,20 @@ headed by the month its figures are of**: *Where money went in August*. A list
 of figures with no period on it is a list nobody can date, and the heading is
 the only place that period can be said once rather than per row.
 
+**Used categories come first in each group.** Inside a group, the categories
+with entries lead and the unused ones follow; the current order is kept within
+each half, so the order is stable and only the boundary moves. Groups keep
+their order. The quick picker (S06) does not reorder — positions there are
+stable (S06 §9).
+
+**Starter categories are drawn in the app's language** (`SPEC.md` §6.3): every
+row here, the actions sheet, the merge and move sheets and the collision finder
+use the displayed name. Search matches the displayed name and the stored one.
+**Rename starts from the name on screen**, and saving writes that text as the
+category's own — from then on it no longer translates. Undo writes the stored
+name back. A category renamed to exactly its canonical English name translates
+again.
+
 **The screen's own line states what it holds** — *31 in use · 4 archived* —
 where a line restating the title in other words ("what spending is filed
 under") told a reader nothing they did not have.
