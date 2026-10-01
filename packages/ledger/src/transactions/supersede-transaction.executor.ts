@@ -259,8 +259,13 @@ function replacePair(
     part: { amount: money.Money; discharge: money.Money; link: (typeof plan)[number]["link"] },
   ): LocalTransactionRow => {
     const row = insertTransaction({ ...rowInput, amountOriginal: part.amount }, tx);
-    const tracked = plan.length > 1 || part.link !== null;
-    if (!tracked || debtCurrency === null) return row;
+    // **Whenever the replacement is still a debt row for the same person it
+    // carries what the pair discharged** — in the debt's currency, whether or
+    // not this write links or splits it. Dropping the discharge would read the
+    // row at its own amount: a forgiven part, or a payment in another currency,
+    // would move the balance by the wrong figure. Only the link and the pair id
+    // depend on the plan.
+    if (!eligible || debtCurrency === null) return row;
     const [stamped] = tx
       .update(transactions)
       .set({

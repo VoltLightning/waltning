@@ -21,7 +21,7 @@
 import type { Id } from "@waltning/core/id";
 import * as money from "@waltning/core/money";
 import { deleteOpeningDebtInput } from "@waltning/core/registry/inputs";
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { defineLocalExecutor, LocalRefusal } from "../executor.ts";
 import { type ReplicaTx, ledgerSchema as schema } from "../schema-map.ts";
 import { readOpeningRepayments } from "./read-opening-debts.ts";
@@ -67,6 +67,23 @@ export const deleteOpeningDebtExecutor = defineLocalExecutor<
       tx.update(transactions)
         .set({ deletedAt: now, version: sql`${transactions.version} + 1`, updatedAt: now })
         .where(and(eq(transactions.id, repayment.id), isNull(transactions.deletedAt)))
+        .run();
+    }
+    // A repayment deleted here may be one half of a split payment: the other
+    // half survives as an ordinary repayment, and without a partner a pair id
+    // would only make it uneditable for ever (§6.6), so it is cleared.
+    const pairIds = repayments.flatMap((repayment) => {
+      const row = tx
+        .select({ pair: transactions.paymentPairId })
+        .from(transactions)
+        .where(eq(transactions.id, repayment.id))
+        .get();
+      return row?.pair == null ? [] : [row.pair];
+    });
+    if (pairIds.length > 0) {
+      tx.update(transactions)
+        .set({ paymentPairId: null })
+        .where(and(inArray(transactions.paymentPairId, pairIds), isNull(transactions.deletedAt)))
         .run();
     }
     tx.update(openingDebts)

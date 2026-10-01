@@ -1069,6 +1069,64 @@ describe("a split payment is one payment", () => {
     expect(linkOf(replacementId)).toBeNull();
   });
 
+  it("a forgiven pair superseded without a spillId keeps what it discharged: the balance does not move", () => {
+    recordOpening({ amount: "90" });
+    debtRow({ amountOriginal: money.toMoney("60") });
+    // 100 paid discharging 150: 50 forgiven, and the payment splits 60 / 40.
+    const crossed = settle({
+      amount: "100",
+      discharges: { currency: "PLN", amount: "150" },
+      spillId: nextId(),
+    });
+    expect(balanceOf(NINA, "PLN")).toBe(money.ZERO);
+
+    write(supersedeTransactionExecutor, {
+      supersedesId: crossed.row.row.id,
+      supersedesVersion: crossed.row.row.version,
+      replacement: importLine(nextId(), "100"),
+    });
+    expect(balanceOf(NINA, "PLN")).toBe(money.ZERO);
+  });
+
+  it("a cross-currency pair superseded without a spillId stays a PLN discharge, not a EUR debt", () => {
+    withEuroAccount();
+    recordOpening({ amount: "9.99" });
+    debtRow({ amountOriginal: money.toMoney("150") });
+    const crossed = settle({
+      accountId: EUR_ACCOUNT,
+      currency: "EUR",
+      amount: "25",
+      discharges: { currency: "PLN", amount: "150" },
+      spillId: nextId(),
+    });
+    const before = balanceOf(NINA, "PLN");
+    expect(before).toBe(money.toMoney("9.99"));
+
+    write(supersedeTransactionExecutor, {
+      supersedesId: crossed.row.row.id,
+      supersedesVersion: crossed.row.row.version,
+      replacement: { ...importLine(nextId(), "25"), accountId: EUR_ACCOUNT, currency: "EUR" },
+    });
+    expect(balanceOf(NINA, "PLN")).toBe(before);
+    expect(balanceOf(NINA, "EUR")).toBeUndefined();
+  });
+
+  it("deleting the existing debt leaves the surviving half editable: its pair id is cleared", () => {
+    const { linked, spill } = splitHundred();
+    write(deleteOpeningDebtExecutor, { id: readOpeningDebts(s.ledger.replica.db, NINA)[0]?.id });
+
+    expect(rowOf(spill?.id ?? "")?.paymentPairId).toBeNull();
+    expect(rowOf(linked.id)?.deletedAt).not.toBeNull();
+    const survivor = rowOf(spill?.id ?? "");
+    expect(() =>
+      write(updateTransactionExecutor, {
+        id: survivor?.id,
+        version: survivor?.version,
+        patch: { amountOriginal: "60" },
+      }),
+    ).not.toThrow();
+  });
+
   it("deleting either half deletes both", () => {
     const { linked, spill } = splitHundred();
     write(deleteTransactionExecutor, { id: spill?.id, version: spill?.version });
