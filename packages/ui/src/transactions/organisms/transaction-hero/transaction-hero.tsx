@@ -74,6 +74,8 @@ export type TransactionHeroProps = {
   toAccountName?: string | null;
   /** The category the band is tinted by; `null` takes the neutral fill. */
   categoryName: string | null;
+  /** What the band's hue is hashed from when it is not `categoryName` — language-independent (`categoryTintKey`). */
+  categoryTintKey?: string | null;
   /** Drives `BrandIcon`'s fallback monogram when nothing matched. */
   enteredName: string;
   brandKey?: string | null;
@@ -107,9 +109,13 @@ export function bandOf(tint: CategoryTint, theme: Theme): { fill: string; ink: s
 }
 
 /** The band's wash and the ink written on it — shared with the page header above. */
-export function heroTint(categoryName: string | null, theme: Theme): { fill: string; ink: string } {
+export function heroTint(
+  categoryName: string | null,
+  theme: Theme,
+  tintKey?: string | null,
+): { fill: string; ink: string } {
   if (categoryName === null) return { fill: theme.subtleFill, ink: theme.textMuted };
-  return bandOf(categoryTintFor(categoryName, theme), theme);
+  return bandOf(categoryTintFor(tintKey ?? categoryName, theme), theme);
 }
 
 export function TransactionHero({
@@ -120,6 +126,7 @@ export function TransactionHero({
   accountName,
   toAccountName,
   categoryName,
+  categoryTintKey,
   enteredName,
   brandKey,
   scrollY,
@@ -156,7 +163,7 @@ export function TransactionHero({
   const theme = useTheme();
   const t = useT();
   const insets = useSafeArea();
-  const tint = heroTint(categoryName, theme);
+  const tint = heroTint(categoryName, theme, categoryTintKey);
 
   const direction =
     type === "expense" ? t("shell.wentOut") : type === "income" ? t("shell.cameIn") : null;

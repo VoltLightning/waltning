@@ -100,6 +100,12 @@ from employment income and carry its own ryczałt rate.
 
 ## 3. Proposed taxonomy
 
+The names below are the seed's canonical English names — what is stored in
+`categories.name`. A starter is drawn in the app's language while it still
+carries that name, and as stored text once renamed (`SPEC.md` §6.3); each of
+the 74 seed keys (15 groups, 58 leaves, `Uncategorized`) has its native name in
+every catalogue's `taxonomy` block.
+
 `◆` = group (not assignable) · `·` = leaf (assignable)
 Percentages are the historical share the leaf inherits.
 

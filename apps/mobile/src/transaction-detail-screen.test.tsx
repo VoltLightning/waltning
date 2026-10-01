@@ -171,6 +171,7 @@ const DETAIL: NonNullable<FakeDetail> = {
   fee: null,
   categoryId: null,
   categoryName: null,
+  categoryExternalId: null,
   counterpartyId: null,
   counterpartyIdentityName: null,
   obligationCounterpartyId: null,

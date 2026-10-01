@@ -117,6 +117,7 @@ const RECENT: PhoneRecentTransaction = {
   date: accountingDate("2026-08-12"),
   enteredName: "Grocer",
   categoryName: "Groceries",
+  categoryExternalId: null,
   accountName: "Bank A · PLN",
   amount: toMoney("-120.00"),
   currency: PLN,

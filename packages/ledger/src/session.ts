@@ -258,6 +258,8 @@ export type LocalCapturableCategory = {
   id: Id<"categories">;
   name: string;
   kind: CategoryKind;
+  /** The seed's own tag — the display rule's other input (`@waltning/core/seed-label`). */
+  externalId: string | null;
 };
 
 export type LocalLedgerSession = {
@@ -740,7 +742,7 @@ export function createLocalLedgerSession<TRun>(
     listCategories: () =>
       readCategoryTree(requireOpen().replica.db)
         .filter((category) => category.isLeaf && !category.archived)
-        .map(({ id, name, kind }) => ({ id, name, kind })),
+        .map(({ id, name, kind, externalId }) => ({ id, name, kind, externalId })),
     // Archived nodes excluded, same as `listCategories` above — an archived
     // category has stopped being offerable (`TAXONOMY.md` R2), and a picker
     // is exactly where "offerable" matters.

@@ -19,6 +19,8 @@ export type LedgerEntry = {
   type: "income" | "expense" | "transfer" | "adjustment";
   enteredName: string;
   categoryName: string | null;
+  /** The category's `seed:<key>` tag, when it has one — the display rule reads it. */
+  categoryExternalId?: string | null | undefined;
   accountName: string;
   amount: Money;
   currency: CurrencyCode;

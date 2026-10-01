@@ -25,9 +25,11 @@ import * as money from "@waltning/core/money";
 import { AccountPicker, type AccountPickerAccount } from "@waltning/ui/accounts/account-picker";
 import { CategorySheet } from "@waltning/ui/categories/category-sheet";
 import { parseAmount } from "@waltning/ui/fx/amount-field";
+import { drawnNamesOf } from "@waltning/ui/i18n/category-label";
 import { KNOWN_PATHS, resolveFieldErrorMessage } from "@waltning/ui/i18n/field-error-messages";
 import { weekdayLabel } from "@waltning/ui/i18n/locales";
 import { useLocale, useT } from "@waltning/ui/i18n/provider";
+import { useCategoryLabel } from "@waltning/ui/i18n/use-category-label";
 import { Button } from "@waltning/ui/primitives/button";
 import { readTyped } from "@waltning/ui/primitives/clock";
 import { useKeyboardHeight } from "@waltning/ui/primitives/keyboard";
@@ -119,6 +121,7 @@ type KindSegment = "expense" | "income" | "transfer";
 
 export default function QuickAdd() {
   const t = useT();
+  const labelOf = useCategoryLabel();
   const locale = useLocale();
   const raw = useLocalSearchParams<{
     amount?: string | string[];
@@ -182,12 +185,15 @@ export default function QuickAdd() {
     setCategorySheet((current) => ({ ...current, open: false }));
   }, []);
   const handleCreateCategory = useCallback(
-    (categoryDraft: CreateCategoryDraft) => {
-      const result = ledger.createCategory(categoryDraft);
+    (categoryDraft: Omit<CreateCategoryDraft, "drawnNames">) => {
+      const result = ledger.createCategory({
+        ...categoryDraft,
+        drawnNames: drawnNamesOf(labelOf, snapshot.categoryTree),
+      });
       if ("id" in result) return { id: result.id };
       return { error: result.fieldErrors[0]?.message ?? t("common.couldNotSave") };
     },
-    [ledger, t],
+    [ledger, t, labelOf, snapshot.categoryTree],
   );
 
   /**
@@ -531,7 +537,7 @@ export default function QuickAdd() {
     pace === null || paceCategory === undefined
       ? undefined
       : t("transactions.categoryPace", {
-          category: paceCategory.name,
+          category: labelOf(paceCategory),
           percent: String(pace.percent),
         });
   const handleComposerCounterpartyChange = useCallback(

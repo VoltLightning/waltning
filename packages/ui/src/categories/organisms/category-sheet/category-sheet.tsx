@@ -49,11 +49,12 @@ import {
   type CategoryProposal,
   PROPOSAL_DISPLAY_THRESHOLD,
 } from "@waltning/core/capture/entered-name-memory";
-import { fold } from "@waltning/core/capture/names";
 import { useCallback, useMemo, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import Animated from "react-native-reanimated";
+import { categorySearchFold, categoryTintKey } from "../../../i18n/category-label.ts";
 import { useT } from "../../../i18n/provider";
+import { useCategoryLabel } from "../../../i18n/use-category-label.ts";
 import { Button } from "../../../primitives/atoms/button/button";
 import { PressableScaled } from "../../../primitives/atoms/pressable-scaled/pressable-scaled";
 import { Tag } from "../../../primitives/atoms/tag";
@@ -189,7 +190,7 @@ function findSeededUncategorized(nodes: readonly CategoryTreeNode[]): CategoryTr
 export function CategorySheet({
   visible,
   kind,
-  tree,
+  tree: storedTree,
   usage,
   proposal,
   enteredName,
@@ -199,6 +200,13 @@ export function CategorySheet({
   onDismiss,
 }: CategorySheetProps) {
   const t = useT();
+  const labelOf = useCategoryLabel();
+  // Every name this sheet draws is the display rule's (`categoryLabel`); the
+  // stored one rides along so a search still finds a row by either.
+  const tree = useMemo(
+    () => storedTree.map((node) => ({ ...node, name: labelOf(node), storedName: node.name })),
+    [storedTree, labelOf],
+  );
   const styles = useStyles();
   const [query, setQuery] = useState("");
   const [groupId, setGroupId] = useState<string | null>(null);
@@ -219,8 +227,12 @@ export function CategorySheet({
   const searching = query.trim() !== "";
   const visibleLeaves = useMemo(() => {
     if (searching) {
-      const needle = fold(query);
-      return ordinaryLeaves.filter((leaf) => fold(leaf.name).includes(needle));
+      const needle = categorySearchFold(query);
+      return ordinaryLeaves.filter(
+        (leaf) =>
+          categorySearchFold(leaf.name).includes(needle) ||
+          categorySearchFold(leaf.storedName).includes(needle),
+      );
     }
     return groupId === null ? ordinaryLeaves : ordinaryLeaves.filter((l) => l.parentId === groupId);
   }, [groupId, ordinaryLeaves, query, searching]);
@@ -393,6 +405,7 @@ export function CategorySheet({
                 <GroupChip
                   key={group.id}
                   name={group.name}
+                  tintKey={categoryTintKey(group)}
                   selected={group.id === groupId}
                   onPress={handleToggleGroup}
                   id={group.id}
@@ -605,6 +618,8 @@ function ProposalRow({ leaf, confidence, enteredName, onPick }: ProposalRowProps
 type GroupChipProps = {
   id: string;
   name: string;
+  /** What the colour is hashed from — language-independent (`categoryTintKey`). */
+  tintKey: string;
   selected: boolean;
   onPress: (id: string) => void;
 };
@@ -614,13 +629,13 @@ type GroupChipProps = {
  * not a radio: unlike `Chip`'s account picker, tapping the chosen one again
  * clears the filter, which a radio cannot represent.
  */
-function GroupChip({ id, name, selected, onPress }: GroupChipProps) {
+function GroupChip({ id, name, tintKey, selected, onPress }: GroupChipProps) {
   const styles = useStyles();
   const theme = useTheme();
   // **A group wears its hue as a wash** (`02-tokens` §2.1): four outlined
   // chips reading *Food · Home · Shopping* were one shape four times. The
   // chosen one takes the hue's solid as its edge.
-  const tint = useMemo(() => categoryTintFor(name, theme), [name, theme]);
+  const tint = useMemo(() => categoryTintFor(tintKey, theme), [tintKey, theme]);
   const wash = useMemo(
     () => ({ backgroundColor: tint.fill, borderColor: selected ? tint.solid : tint.fill }),
     [tint, selected],
@@ -693,7 +708,7 @@ function LeafCell({ leaf, count, selected, onPress }: LeafCellProps) {
     every name. The chosen tile takes the hue's wash and its solid as an edge,
     so *which one is picked* is said in the option's own colour.
   */
-  const tint = useMemo(() => categoryTintFor(leaf.name, theme), [leaf.name, theme]);
+  const tint = useMemo(() => categoryTintFor(categoryTintKey(leaf), theme), [leaf, theme]);
   const mark = useMemo(() => ({ backgroundColor: tint.solid }), [tint]);
   const onMark = useMemo(() => ({ color: tint.onSolid }), [tint]);
   const chosen = useMemo(() => ({ backgroundColor: tint.fill, borderColor: tint.solid }), [tint]);
@@ -842,6 +857,7 @@ function CreateRow({
                     key={group.id}
                     id={group.id}
                     name={group.name}
+                    tintKey={categoryTintKey(group)}
                     selected={group.id === groupId}
                     onPress={onGroupChange}
                   />

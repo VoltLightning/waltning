@@ -52,9 +52,11 @@ import {
   type CategorySheetCreateDraft,
 } from "@waltning/ui/categories/category-sheet";
 import { CounterpartyPicker } from "@waltning/ui/counterparties/counterparty-picker";
+import { categoryTintKey, drawnNamesOf } from "@waltning/ui/i18n/category-label";
 import { resolveFieldErrorMessage } from "@waltning/ui/i18n/field-error-messages";
 import { dayLabel } from "@waltning/ui/i18n/locales";
 import { useLocale, useT } from "@waltning/ui/i18n/provider";
+import { useCategoryLabel } from "@waltning/ui/i18n/use-category-label";
 import { Button } from "@waltning/ui/primitives/button";
 import { useBreakpoint } from "@waltning/ui/primitives/use-breakpoint";
 import { ErrorState } from "@waltning/ui/states/error-state";
@@ -159,7 +161,7 @@ function toStripCards(
     counterparty: string | null;
     fromAccount: string;
     toAccount: string | null;
-    categoryName: (id: string) => string | null;
+    categoryName: (id: string) => { name: string; tintKey: string } | null;
   },
   actions: { onOpenCounterparty: () => void; onLink: () => void; counterpartyUnsaved: boolean },
 ): ContextStripCard[] {
@@ -183,9 +185,9 @@ function toStripCards(
         });
         break;
       case "category": {
-        const name = names.categoryName(card.categoryId);
-        if (name === null) break;
-        cards.push({ ...card, name });
+        const named = names.categoryName(card.categoryId);
+        if (named === null) break;
+        cards.push({ ...card, name: named.name, tintKey: named.tintKey });
         break;
       }
       case "link":
@@ -198,6 +200,7 @@ function toStripCards(
 
 export default function TransactionDetail() {
   const t = useT();
+  const labelOf = useCategoryLabel();
   const styles = useStyles();
   const locale = useLocale();
   const ledger = useLedgerController();
@@ -311,11 +314,14 @@ export default function TransactionDetail() {
 
   const handleCreateCategory = useCallback(
     (draft: CategorySheetCreateDraft) => {
-      const result = ledger.createCategory(draft);
+      const result = ledger.createCategory({
+        ...draft,
+        drawnNames: drawnNamesOf(labelOf, snapshot.categoryTree),
+      });
       if ("id" in result) return { id: result.id };
       return { error: result.fieldErrors[0]?.message ?? t("common.couldNotSave") };
     },
-    [ledger, t],
+    [ledger, t, labelOf, snapshot.categoryTree],
   );
 
   const handleSaveFields = useCallback(
@@ -408,10 +414,13 @@ export default function TransactionDetail() {
               counterparty: pickedIdentity?.name ?? live.counterpartyIdentityName,
               fromAccount: live.accountName,
               toAccount: live.toAccountName,
-              categoryName: (id) =>
-                id === live.categoryId
-                  ? live.categoryName
-                  : (live.lines.find((line) => line.categoryId === id)?.categoryName ?? null),
+              categoryName: (id) => {
+                const named =
+                  id === live.categoryId ? live : live.lines.find((line) => line.categoryId === id);
+                if (named?.categoryName == null) return null;
+                const row = { name: named.categoryName, externalId: named.categoryExternalId };
+                return { name: labelOf(row), tintKey: categoryTintKey(row) };
+              },
             },
             {
               onOpenCounterparty: handleOpenCounterparty,
@@ -420,7 +429,7 @@ export default function TransactionDetail() {
                 pickedIdentity !== undefined && pickedIdentity.id !== live.counterpartyId,
             },
           ),
-    [context, live, pickedIdentity, handleLinkCounterparty, handleOpenCounterparty],
+    [context, live, pickedIdentity, handleLinkCounterparty, handleOpenCounterparty, labelOf],
   );
 
   const today = useMemo(() => deviceRuntime().capture().date, []);
@@ -461,6 +470,18 @@ export default function TransactionDetail() {
 
   // The header draws the row as it is now; the fields draw the draft's base.
   const shown = live ?? detail;
+  const shownCategory =
+    shown.categoryName === null
+      ? null
+      : labelOf({ name: shown.categoryName, externalId: shown.categoryExternalId });
+  const shownTintKey =
+    shown.categoryName === null
+      ? null
+      : categoryTintKey({ name: shown.categoryName, externalId: shown.categoryExternalId });
+  const detailCategory =
+    detail.categoryName === null
+      ? null
+      : labelOf({ name: detail.categoryName, externalId: detail.categoryExternalId });
   const effectiveAccountId = pickedAccountId ?? detail.accountId;
   const effectiveToAccountId = pickedToAccountId ?? detail.toAccountId;
   // The pick until it is saved, the saved row afterwards — `accountId`'s own rule.
@@ -481,8 +502,8 @@ export default function TransactionDetail() {
   return (
     <PushedPage
       title={dayLabel(shown.date, locale)}
-      tint={heroTint(shown.categoryName, theme).fill}
-      topWash={heroTint(shown.categoryName, theme).fill}
+      tint={heroTint(shownCategory, theme, shownTintKey).fill}
+      topWash={heroTint(shownCategory, theme, shownTintKey).fill}
       titleNode={
         <HeroHeaderTitle
           scrollY={heroScroll.scrollY}
@@ -503,7 +524,8 @@ export default function TransactionDetail() {
         type={shown.type}
         accountName={shown.accountName}
         toAccountName={shown.toAccountName}
-        categoryName={shown.categoryName}
+        categoryName={shownCategory}
+        categoryTintKey={shownTintKey}
         enteredName={shown.enteredName}
         brandKey={shown.brandKey}
         scrollY={heroScroll.scrollY}
@@ -531,7 +553,7 @@ export default function TransactionDetail() {
           onOpenToAccountPicker={handleOpenToAccountPicker}
           today={today}
           categoryId={detail.categoryId}
-          categoryName={detail.categoryName}
+          categoryName={detailCategory}
           onOpenCategoryPicker={handleOpenCategoryPicker}
           counterpartyId={effectiveIdentity.id}
           counterpartyName={effectiveIdentity.name}

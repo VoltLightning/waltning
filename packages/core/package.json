@@ -20,6 +20,7 @@
     "./random": "./src/random.ts",
     "./registry/*": "./src/registry/*.ts",
     "./rule-zero-fetch": "./src/rule-zero-fetch.ts",
+    "./seed-label": "./src/seed-label.ts",
     "./taxonomy": "./src/taxonomy.ts",
     "./zod": "./src/zod.ts"
   },
