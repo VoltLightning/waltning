@@ -73,7 +73,10 @@ income) with the account and the currency it fixes, then the amount, then the
 category and the rest. The row is pre-filled — the only account, else the last
 used within the window, else empty — and while it is empty the amount card says
 *Choose an account first* in the place the currency will take, on the figure's own
-line, so the card is as tall without an account as with one.
+line, so the card is as tall without an account as with one. The hint is the
+part that gives way: it is one line that shrinks and ellipsizes, and it is not drawn
+at all once a digit is typed, so it never costs the figure width. It is spoken
+with the amount field's label throughout.
 The row is above the figure, so the keyboard never covers it, and changing the
 account is one tap on it. An entry's currency is its account's: the data model
 holds a transaction in its account's currency alone, so there is no currency
@@ -127,8 +130,9 @@ pick or what it was filled with. The account row is a card of its own, so the
 order costs one card's border and gap (about 7 pt) against the amount-first
 layout. On a 360 × 740 pt phone at text scale 1.0 with a 300 pt keyboard, the
 Save footer clears the last visible line by about 8 pt (14 pt before the
-order changed); at 1.15 with a 330 pt keyboard the pace line ends about 6 pt
-under the footer and *Category* shows about 26 pt of its row. *Who?* on a
+order changed); at 1.15 with a 330 pt keyboard, with no pace line, *Category* shows about 26 pt of
+its row, and with a pace line the line ends about 6 pt under the footer and
+*Category* is fully under the fold. *Who?* on a
 Borrowed or Lent draft is under the fold at both, as it was. The currency — on the account row and beside the figure — appears the
 moment an account is known, whether chosen or filled; with none it shows
 nothing.

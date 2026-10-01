@@ -55,7 +55,9 @@ export type AmountCardProps = {
   /**
    * Drawn in the currency's place, on the figure's own line, while there is no
    * currency to draw — *Choose an account first*. It adds no line: the card is
-   * as tall with it as without.
+   * as tall with it as without. It is drawn while the figure is empty and gives
+   * way the moment a digit is typed, so it can never cost the figure width; it
+   * is spoken with the field's label throughout.
    */
   waiting?: string | undefined;
   /** Which way the money goes, which is the figure's own colour on its sign. */
@@ -122,7 +124,12 @@ export function AmountCard({
     >
       {compact ? null : <Text style={styles.label}>{label}</Text>}
       <FigureInput
-        label={label}
+        // The drawn row is hidden from assistive technology, so the hint is spoken here.
+        label={
+          currency === undefined && waiting !== undefined
+            ? t("common.fieldValue", { field: label, value: waiting })
+            : label
+        }
         value={display}
         onChangeText={handleChange}
         step={compact ? "displayOne" : "displayHero"}
@@ -130,8 +137,10 @@ export function AmountCard({
         sign={sign}
         affix={
           currency === undefined ? (
-            waiting === undefined ? undefined : (
-              <Text style={styles.waiting}>{waiting}</Text>
+            waiting === undefined || raw !== "" ? undefined : (
+              <Text numberOfLines={1} style={styles.waiting}>
+                {waiting}
+              </Text>
             )
           ) : (
             <Text maxFontSizeMultiplier={textCap("displayHero")} style={styles.affix}>
@@ -176,7 +185,9 @@ const useStyles = makeStyles((theme) => ({
   focused: focusBorder(theme.focusRing, { horizontal: space.x3b, vertical: space.x5 }),
   focusedCompact: focusBorder(theme.focusRing, { horizontal: space.x3b, vertical: space.lg }),
   affix: { color: theme.accentText, ...text.ui("displayTwo") },
-  waiting: { color: theme.textMuted, ...text.ui("caption") },
+  // The hint gives way to the figure: it shrinks (and ellipsizes) a hundred
+  // times faster than the digits, which are never cut for it.
+  waiting: { color: theme.textMuted, ...text.ui("caption"), flexShrink: 100, minWidth: 0 },
   contextRow: { flexDirection: "row", marginTop: space.xs },
   context: {
     color: theme.accentText,

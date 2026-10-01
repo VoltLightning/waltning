@@ -123,8 +123,8 @@ export type QuickAddComposerProps = {
   accountMachineFilled: boolean;
   /**
    * The window is short: the amount card gives up its label and some air so
-   * the account row, the amount, and the first category row all sit in the first view
-   * instead of under the fold. Decided from the window's height by the screen,
+   * the account row, the amount and the start of the category row sit in the
+   * first view instead of under the fold (S05 §3 gives the measured fit). Decided from the window's height by the screen,
    * never from the keyboard's events.
    */
   compact?: boolean;
@@ -496,7 +496,9 @@ export function QuickAddComposer({
             spokenValue={
               selectedAccount === undefined
                 ? undefined
-                : `${selectedAccount.name}, ${selectedAccount.currency}`
+                : selectedAccount.name.includes(selectedAccount.currency)
+                  ? selectedAccount.name
+                  : `${selectedAccount.name}, ${selectedAccount.currency}`
             }
             trailing={
               selectedAccount === undefined ? undefined : (

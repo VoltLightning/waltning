@@ -121,7 +121,7 @@ function createTapScript() {
  * they count: J02 §1's budget is presses of any kind, not only ours.
  */
 function tapAmount(script: ReturnType<typeof createTapScript>) {
-  fireEvent.change(screen.getByLabelText("How much?"), { target: { value: "48.90" } });
+  fireEvent.change(screen.getByLabelText(/^How much\?/), { target: { value: "48.90" } });
   script.pressed(5);
 }
 
@@ -328,7 +328,7 @@ describe("J02 — daily capture, under ten seconds, offline", () => {
 
     const start = performance.now();
     fireEvent.click(screen.getByRole("button", { name: "Add" }));
-    fireEvent.change(screen.getByLabelText("How much?"), { target: { value: "48.90" } });
+    fireEvent.change(screen.getByLabelText(/^How much\?/), { target: { value: "48.90" } });
     fireEvent.click(screen.getByRole("radio", { name: "Eating out" })); // the chip
     fireEvent.click(screen.getByRole("button", { name: "Save expense" }));
     // The harness never wraps `I18nProvider`, so `useLocale()` falls back to
@@ -368,7 +368,7 @@ describe("J02 — daily capture, under ten seconds, offline", () => {
     await settleLayout();
 
     fireEvent.click(screen.getByRole("button", { name: "Add" }));
-    fireEvent.change(screen.getByLabelText("How much?"), { target: { value: "48.90" } });
+    fireEvent.change(screen.getByLabelText(/^How much\?/), { target: { value: "48.90" } });
 
     fireEvent.click(screen.getByRole("button", { name: /^More details/ }));
     fireEvent.click(screen.getByRole("button", { name: "Payee" }));
@@ -412,7 +412,7 @@ describe("J02 — daily capture, under ten seconds, offline", () => {
     await settleLayout();
 
     fireEvent.click(screen.getByRole("button", { name: "Add" }));
-    fireEvent.change(screen.getByLabelText("How much?"), { target: { value: "48.90" } });
+    fireEvent.change(screen.getByLabelText(/^How much\?/), { target: { value: "48.90" } });
     fireEvent.click(screen.getByRole("button", { name: /^More details/ }));
     fireEvent.click(screen.getByRole("button", { name: "Payee" }));
     fireEvent.change(screen.getByRole("textbox", { name: "Payee" }), {
@@ -473,7 +473,7 @@ describe("J02 — daily capture, under ten seconds, offline", () => {
     const outboxBefore = readOutboxEntries(ledger).length;
 
     fireEvent.click(screen.getByRole("button", { name: "Add" }));
-    fireEvent.change(screen.getByLabelText("How much?"), { target: { value: "48.90" } });
+    fireEvent.change(screen.getByLabelText(/^How much\?/), { target: { value: "48.90" } });
     fireEvent.click(screen.getByRole("button", { name: /^From/ }));
     fireEvent.click(screen.getByRole("radio", { name: "Bank A · EUR" }));
     fireEvent.click(screen.getByRole("radio", { name: "Eating out" })); // the chip

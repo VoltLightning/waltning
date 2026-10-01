@@ -157,7 +157,7 @@ function fillRepayment(amount: string) {
     </LedgerProvider>,
   );
   fireEvent.click(screen.getByRole("tab", { name: "Income" }));
-  fireEvent.change(screen.getByLabelText("How much?"), { target: { value: amount } });
+  fireEvent.change(screen.getByLabelText(/^How much\?/), { target: { value: amount } });
   fireEvent.click(screen.getByRole("button", { name: /^Into/ }));
   fireEvent.click(screen.getByRole("radio", { name: "Bank B · EUR" }));
   fireEvent.click(screen.getByRole("button", { name: /^Category/ }));

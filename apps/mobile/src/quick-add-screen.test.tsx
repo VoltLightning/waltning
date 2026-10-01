@@ -154,7 +154,7 @@ function withLedger(overrides: Parameters<typeof fakeController>[0] = {}) {
 /** Keypad's own glyphs — `.` is English's decimal mark, mapped to the canonical `,` key. */
 /** The amount is a `TextInput` on the deck's composer — typed, not tapped (S05 §3). */
 function typeAmount(value: string) {
-  fireEvent.change(screen.getByLabelText("How much?"), { target: { value } });
+  fireEvent.change(screen.getByLabelText(/^How much\?/), { target: { value } });
 }
 
 /** The rarer rows — entered name, date, scope, person — wait behind one row (S05 §3). */
@@ -201,7 +201,7 @@ describe("QuickAdd — the phone path (Dock + QuickAddComposer)", () => {
     withLedger({ accounts: [ACCOUNT] });
     typeAmount("4500");
     expect(
-      screen.getByRole("button", { name: "From: Cash · PLN, PLN, filled automatically" }),
+      screen.getByRole("button", { name: "From: Cash · PLN, filled automatically" }),
     ).toBeDefined();
     // On the account row and beside the figure.
     expect(screen.getAllByText("PLN")).toHaveLength(2);
@@ -225,7 +225,7 @@ describe("QuickAdd — the phone path (Dock + QuickAddComposer)", () => {
   it("fills a lone account even when its currency has no rate, and lets the banner speak", () => {
     withLedger({ accounts: [ACCOUNT], capturable: false });
     expect(
-      screen.getByRole("button", { name: "From: Cash · PLN, PLN, filled automatically" }),
+      screen.getByRole("button", { name: "From: Cash · PLN, filled automatically" }),
     ).toBeDefined();
     expect(screen.getByText(/needs an exchange rate/)).toBeDefined();
   });
@@ -292,9 +292,9 @@ describe("QuickAdd — the phone path (Dock + QuickAddComposer)", () => {
     fireEvent.click(screen.getByRole("button", { name: /^From/ }));
     fireEvent.click(screen.getByRole("radio", { name: "Cash · JPY" }));
 
-    expect(screen.getByRole("button", { name: "From: Cash · PLN, PLN" })).toBeDefined();
+    expect(screen.getByRole("button", { name: "From: Cash · PLN" })).toBeDefined();
     expect(screen.getByText("JPY holds 0 decimal places — this amount has more.")).toBeDefined();
-    expect(screen.getByLabelText("How much?")).toHaveProperty("value", "48.90");
+    expect(screen.getByLabelText(/^How much\?/)).toHaveProperty("value", "48.90");
   });
 
   /**
@@ -364,7 +364,7 @@ describe("QuickAdd — the phone path (Dock + QuickAddComposer)", () => {
     ).toBeDefined();
     expectSaveRefused();
     // The typed amount stays put — nothing here empties the draft.
-    expect(screen.getByLabelText("How much?")).toHaveProperty("value", "48.90");
+    expect(screen.getByLabelText(/^How much\?/)).toHaveProperty("value", "48.90");
     expect(createTransaction).not.toHaveBeenCalled();
   });
 
@@ -499,7 +499,7 @@ describe("QuickAdd — the kind (S05 §3)", () => {
     withLedger();
     typeAmount("48.90");
     fireEvent.click(screen.getByRole("tab", { name: "Income" }));
-    expect(screen.getByLabelText("How much?")).toHaveProperty("value", "48.90");
+    expect(screen.getByLabelText(/^How much\?/)).toHaveProperty("value", "48.90");
   });
 
   /**

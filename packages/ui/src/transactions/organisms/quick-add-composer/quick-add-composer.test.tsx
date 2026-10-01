@@ -131,7 +131,7 @@ it("draws two rows at rest — the account and the category — and the rest beh
 
 it("folds what the system keyboard typed onto the draft's own shape", () => {
   const props = draw({ accountId: "account-a" });
-  fireEvent.change(screen.getByLabelText("How much?"), { target: { value: "1 240.509 zł" } });
+  fireEvent.change(screen.getByLabelText(/^How much\?/), { target: { value: "1 240.509 zł" } });
   expect(props.onRawChange).toHaveBeenCalledWith("1240,50");
 });
 
@@ -243,7 +243,7 @@ it("summarises the rarer fields on the More row while they are folded away", () 
 it("marks the account row machine-filled when the last-used window filled it (P2)", () => {
   draw({ accountId: "account-a", accountMachineFilled: true });
   expect(
-    screen.getByRole("button", { name: "From: Cash · PLN, PLN, filled automatically" }),
+    screen.getByRole("button", { name: "From: Cash · PLN, filled automatically" }),
   ).toBeDefined();
 });
 
@@ -387,7 +387,7 @@ function before(first: HTMLElement, second: HTMLElement): boolean {
 it("asks for the account above the amount, and the amount above the category", () => {
   draw();
   const account = screen.getByRole("button", { name: /^From/ });
-  const amount = screen.getByLabelText("How much?");
+  const amount = screen.getByLabelText(/^How much\?/);
   const category = screen.getByRole("button", { name: /^Category/ });
   expect(before(account, amount)).toBe(true);
   expect(before(amount, category)).toBe(true);
@@ -401,9 +401,35 @@ it("states the amount waits for an account while none is known, and drops the hi
   expect(screen.queryByText("Choose an account first")).toBeNull();
 });
 
+it("speaks the account's currency when its name does not already say it", () => {
+  draw({
+    accountId: "account-bare",
+    accounts: [{ ...EUR_CARD, id: "account-bare", name: "Card" }],
+  });
+  expect(screen.getByRole("button", { name: "From: Card, EUR" })).toBeDefined();
+});
+
 it("speaks the account's currency on the account row", () => {
   draw({ accountId: "account-eur", accounts: [...ACCOUNTS, EUR_CARD] });
-  expect(screen.getByRole("button", { name: "From: Card · EUR, EUR" })).toBeDefined();
+  expect(screen.getByRole("button", { name: "From: Card · EUR" })).toBeDefined();
+});
+
+it("lets the waiting hint give way to the figure rather than the figure to the hint", () => {
+  draw({ accountId: null, compact: true });
+  const style = getComputedStyle(screen.getByText("Choose an account first"));
+  expect(Number(style.flexShrink)).toBeGreaterThan(1);
+  expect(style.minWidth).toBe("0px");
+  cleanup();
+  // Once a digit is typed the hint is not drawn at all, so a long figure keeps its width.
+  draw({ accountId: null, raw: "12345.67", compact: true });
+  expect(screen.queryByText("Choose an account first")).toBeNull();
+  // ...and is still spoken with the field's label.
+  expect(screen.getByLabelText("How much?: Choose an account first")).toBeDefined();
+});
+
+it("announces the hint with the amount field, whose drawn row is hidden from assistive technology", () => {
+  draw({ accountId: null });
+  expect(screen.getByLabelText("How much?: Choose an account first")).toBeDefined();
 });
 
 it("shows the account's currency on the account row, and follows a change of account", () => {
@@ -418,7 +444,7 @@ it("shows the account's currency on the account row, and follows a change of acc
 it("drops the amount card's label but keeps the field named, on a short window", () => {
   draw({ compact: true });
   expect(screen.queryByText("How much?")).toBeNull();
-  expect(screen.getByLabelText("How much?")).toBeDefined();
+  expect(screen.getByLabelText(/^How much\?/)).toBeDefined();
   expect(screen.getByRole("button", { name: /^From/ })).toBeDefined();
 });
 
