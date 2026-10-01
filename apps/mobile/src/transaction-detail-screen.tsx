@@ -32,6 +32,9 @@
  * each ledger revision for the header and the context cards (see `live`).
  */
 
+import { settleResidualDirection } from "@waltning/client/counterparties/counterparty-figures";
+import { debtIntentOf } from "@waltning/client/counterparties/debt-intent";
+import { planRepayment } from "@waltning/client/counterparties/repayment-plan";
 import type {
   PhoneCapturableAccount,
   PhoneTransactionDetail,
@@ -44,6 +47,7 @@ import { usePhoneLedger } from "@waltning/client/ledger/use-phone-ledger";
 import { useTransactionContext } from "@waltning/client/ledger/use-transaction-context";
 import type { FieldError } from "@waltning/client/transport/field-errors";
 import { mapFieldErrors } from "@waltning/client/transport/field-errors";
+import { accountingDate } from "@waltning/core/date";
 import { id as brandId } from "@waltning/core/id";
 import * as money from "@waltning/core/money";
 import { AccountPicker, type AccountPickerAccount } from "@waltning/ui/accounts/account-picker";
@@ -52,9 +56,11 @@ import {
   type CategorySheetCreateDraft,
 } from "@waltning/ui/categories/category-sheet";
 import { CounterpartyPicker } from "@waltning/ui/counterparties/counterparty-picker";
+import { categoryTintKey, drawnNamesOf } from "@waltning/ui/i18n/category-label";
 import { resolveFieldErrorMessage } from "@waltning/ui/i18n/field-error-messages";
-import { dayLabel } from "@waltning/ui/i18n/locales";
+import { dayLabel, decimalMark } from "@waltning/ui/i18n/locales";
 import { useLocale, useT } from "@waltning/ui/i18n/provider";
+import { useCategoryLabel } from "@waltning/ui/i18n/use-category-label";
 import { Button } from "@waltning/ui/primitives/button";
 import { useBreakpoint } from "@waltning/ui/primitives/use-breakpoint";
 import { ErrorState } from "@waltning/ui/states/error-state";
@@ -90,10 +96,20 @@ function toFormLevel(t: ReturnType<typeof useT>, errors: readonly FieldError[]) 
   );
 }
 
-function toFields(detail: PhoneTransactionDetail): TransactionFields {
+/** `toDecimals` is the destination account's scale — a transfer's second leg is in its own currency. */
+function toFields(detail: PhoneTransactionDetail, toDecimals: number): TransactionFields {
   return {
+    type: detail.type,
     date: detail.date,
     accountId: detail.accountId,
+    // As stored: unsigned on every type but an adjustment, whose sign is its own.
+    amount: money.round(
+      detail.type === "adjustment" ? detail.amount : money.abs(detail.amount),
+      detail.decimals,
+    ),
+    toAccountId: detail.toAccountId,
+    toAmount: detail.toAmount === null ? null : money.round(detail.toAmount, toDecimals),
+    fee: detail.fee === null ? null : money.round(detail.fee, detail.decimals),
     categoryId: detail.categoryId,
     counterpartyId: detail.counterpartyId,
     obligationCounterpartyId: detail.obligationCounterpartyId,
@@ -149,9 +165,9 @@ function toStripCards(
     counterparty: string | null;
     fromAccount: string;
     toAccount: string | null;
-    categoryName: (id: string) => string | null;
+    categoryName: (id: string) => { name: string; tintKey: string } | null;
   },
-  actions: { onOpenCounterparty: () => void; onLink: () => void },
+  actions: { onOpenCounterparty: () => void; onLink: () => void; counterpartyUnsaved: boolean },
 ): ContextStripCard[] {
   const cards: ContextStripCard[] = [];
   for (const card of context) {
@@ -161,6 +177,8 @@ function toStripCards(
           ...card,
           name: names.counterparty ?? "—",
           onOpenAll: actions.onOpenCounterparty,
+          onChange: actions.onLink,
+          unsaved: actions.counterpartyUnsaved,
         });
         break;
       case "pair":
@@ -171,9 +189,9 @@ function toStripCards(
         });
         break;
       case "category": {
-        const name = names.categoryName(card.categoryId);
-        if (name === null) break;
-        cards.push({ ...card, name });
+        const named = names.categoryName(card.categoryId);
+        if (named === null) break;
+        cards.push({ ...card, name: named.name, tintKey: named.tintKey });
         break;
       }
       case "link":
@@ -186,6 +204,7 @@ function toStripCards(
 
 export default function TransactionDetail() {
   const t = useT();
+  const labelOf = useCategoryLabel();
   const styles = useStyles();
   const locale = useLocale();
   const ledger = useLedgerController();
@@ -208,7 +227,10 @@ export default function TransactionDetail() {
    * reads `detail.accountId` until then (`effectiveAccountId`, below).
    */
   const [pickedAccountId, setPickedAccountId] = useState<string | null>(null);
-  const [accountPickerOpen, setAccountPickerOpen] = useState(false);
+  /** A transfer's destination, picked the same way — one sheet, two legs. */
+  const [pickedToAccountId, setPickedToAccountId] = useState<string | null>(null);
+  /** Which leg the one `AccountPicker` is answering for; `null` is closed. */
+  const [accountPickerFor, setAccountPickerFor] = useState<"from" | "to" | null>(null);
   /** The same rule again: `counterparties/` is a sibling domain, so its picker is composed here. */
   const [pickedCounterparty, setPickedCounterparty] = useState<{
     identity?: { id: string; name: string };
@@ -244,12 +266,17 @@ export default function TransactionDetail() {
 
   const handleOpenCategoryPicker = useCallback(() => setCategorySheetOpen(true), []);
   const handleDismissCategorySheet = useCallback(() => setCategorySheetOpen(false), []);
-  const handleOpenAccountPicker = useCallback(() => setAccountPickerOpen(true), []);
-  const handleDismissAccountPicker = useCallback(() => setAccountPickerOpen(false), []);
-  const handlePickAccount = useCallback((next: string) => {
-    setPickedAccountId(next);
-    setAccountPickerOpen(false);
-  }, []);
+  const handleOpenAccountPicker = useCallback(() => setAccountPickerFor("from"), []);
+  const handleOpenToAccountPicker = useCallback(() => setAccountPickerFor("to"), []);
+  const handleDismissAccountPicker = useCallback(() => setAccountPickerFor(null), []);
+  const handlePickAccount = useCallback(
+    (next: string) => {
+      if (accountPickerFor === "to") setPickedToAccountId(next);
+      else setPickedAccountId(next);
+      setAccountPickerFor(null);
+    },
+    [accountPickerFor],
+  );
 
   const handleOpenCounterpartyPicker = useCallback(
     (target: "identity" | "obligation") => setPickerTarget(target),
@@ -274,9 +301,27 @@ export default function TransactionDetail() {
     router.push({ pathname: "/counterparty/new", params: { returnTo: "transaction" } });
   }, []);
 
+  /**
+   * §6.6 — a category pick that touches a debt category (into one, or out of
+   * one) is **held in the card until Save**, because the role and the person
+   * it asks for go with it: writing the category alone would leave a `debt`
+   * under *Salary*, or a *Borrowed* with nobody on the other side. Any other
+   * pick is written straight away, as it always was.
+   */
+  const [pickedCategoryId, setPickedCategoryId] = useState<string | null>(null);
+  const debtIntentOfCategory = useCallback(
+    (categoryId: string | null) =>
+      debtIntentOf(snapshot.categories.find((category) => category.id === categoryId)?.externalId),
+    [snapshot.categories],
+  );
   const handlePickCategory = useCallback(
     (categoryId: string) => {
       if (!transactionId || !detail) return;
+      if (debtIntentOfCategory(categoryId) !== null || debtIntentOfCategory(detail.categoryId)) {
+        setPickedCategoryId(categoryId === detail.categoryId ? null : categoryId);
+        setCategorySheetOpen(false);
+        return;
+      }
       const result = ledger.updateTransaction(transactionId, detail.version, { categoryId });
       setCategorySheetOpen(false);
       if ("id" in result) {
@@ -286,30 +331,131 @@ export default function TransactionDetail() {
       }
       setFieldsErrors(toFormLevel(t, result.fieldErrors));
     },
-    [detail, ledger, refetch, t, transactionId],
+    [debtIntentOfCategory, detail, ledger, refetch, t, transactionId],
   );
 
   const handleCreateCategory = useCallback(
     (draft: CategorySheetCreateDraft) => {
-      const result = ledger.createCategory(draft);
+      const result = ledger.createCategory({
+        ...draft,
+        drawnNames: drawnNamesOf(labelOf, snapshot.categoryTree),
+      });
       if ("id" in result) return { id: result.id };
       return { error: result.fieldErrors[0]?.message ?? t("common.couldNotSave") };
     },
-    [ledger, t],
+    [ledger, t, labelOf, snapshot.categoryTree],
   );
 
   const handleSaveFields = useCallback(
     (patch: TransactionFieldsPatch) => {
       if (!transactionId || !detail) return;
+      /**
+       * **A repayment is `settle_debt`, here as in Quick add** (S14): a row
+       * picked into *Repayment received* / *Repayment made* is not patched into
+       * it — `update_transaction` refuses that, because a plain patch would
+       * carry the debt role without the discharge, the direction check or
+       * "nothing to settle". The row's own figures settle the person's open debt
+       * in the matching direction, and the settlement replaces the original in
+       * the same write (`supersedes`) — never a settle followed by a delete.
+       */
+      const intoCategory = snapshot.categories.find((category) => category.id === patch.categoryId);
+      const repaymentIntent = debtIntentOf(intoCategory?.externalId);
+      if (repaymentIntent?.settles && patch.categoryId) {
+        const person = patch.obligationCounterpartyId ?? detail.obligationCounterpartyId;
+        if (person === null || person === undefined) return;
+        const amount = patch.amountOriginal ?? money.abs(detail.amount);
+        const accountId = patch.accountId ?? detail.accountId;
+        const account = snapshot.accounts.find((candidate) => candidate.id === accountId);
+        const date = patch.date ?? detail.date;
+        if (account === undefined) return;
+        const plan = planRepayment({
+          intent: repaymentIntent,
+          balances: ledger
+            // Without the row being replaced: it is not part of the debt it settles.
+            .listCounterpartyBalances(deviceRuntime().capture().date, { excluding: transactionId })
+            .filter((row) => row.counterpartyId === person),
+          accountCurrency: account.currency,
+          amount,
+          crossRate: (from) =>
+            ledger.readCrossRate({ from, to: account.currency, date: accountingDate(date) })
+              ?.rate ?? null,
+        });
+        const name = snapshot.counterparties.find((row) => row.id === person)?.name ?? "";
+        if (plan?.kind === "no-debt" || plan?.kind === "no-rate") {
+          setFieldsErrors(
+            mapFieldErrors(
+              [
+                {
+                  path: "",
+                  message:
+                    plan.kind === "no-debt"
+                      ? t("transactions.nothingToSettle", { name })
+                      : t("transactions.settleNeedsRate", { currency: plan.currency }),
+                },
+              ],
+              [],
+            ),
+          );
+          return;
+        }
+        if (plan?.kind === "settle") {
+          const settled = ledger.settleDebt({
+            counterpartyId: person,
+            accountId,
+            date,
+            amount,
+            currency: account.currency,
+            dischargesCurrency: plan.currency,
+            dischargesAmount: plan.dischargesAmount,
+            note: patch.note ?? detail.note,
+            categoryId: patch.categoryId,
+            // One operation: the settlement replaces this row in the same write.
+            supersedes: { id: transactionId, version: detail.version },
+          });
+          if (!("id" in settled)) {
+            setFieldsErrors(toFormLevel(t, settled.fieldErrors));
+            return;
+          }
+          router.dismissTo({
+            pathname: "/",
+            params: {
+              message: t("counterparties.settledToast", {
+                amount: money.forDisplay(
+                  money.abs(settled.residual),
+                  plan.decimals,
+                  decimalMark(locale),
+                ),
+                currency: plan.currency,
+                direction: t(
+                  `counterparties.${settleResidualDirection(settled.residual, plan.decimals)}`,
+                ),
+              }),
+              nonce: String(Date.now()),
+            },
+          });
+          return;
+        }
+      }
       const result = ledger.updateTransaction(transactionId, detail.version, patch);
       if ("id" in result) {
         setFieldsErrors(undefined);
+        setPickedCategoryId(null);
         refetch();
         return;
       }
       setFieldsErrors(toFormLevel(t, result.fieldErrors));
     },
-    [detail, ledger, refetch, t, transactionId],
+    [
+      detail,
+      ledger,
+      locale,
+      refetch,
+      snapshot.accounts,
+      snapshot.categories,
+      snapshot.counterparties,
+      t,
+      transactionId,
+    ],
   );
 
   /**
@@ -356,10 +502,25 @@ export default function TransactionDetail() {
   const theme = useTheme();
   const phone = useBreakpoint() === "phone";
   const heroScroll = useHeroScroll();
-  const context = useTransactionContext(ledger, live, snapshot.revision);
+  /*
+    **The card follows the pick, not only the saved row.** A counterparty picked
+    here is a draft until `Save` (§6.6.1 — cancelling restores it), so the
+    saved row alone kept offering "Who was this with?" after a choice. The
+    context is read for the row as it would be saved.
+  */
+  const pickedIdentity = pickedCounterparty.identity;
+  const subject = useMemo(
+    () =>
+      live !== null && pickedIdentity !== undefined
+        ? { ...live, counterpartyId: pickedIdentity.id as typeof live.counterpartyId }
+        : live,
+    [live, pickedIdentity],
+  );
+  const context = useTransactionContext(ledger, subject, snapshot.revision);
+  const shownCounterpartyId = pickedIdentity?.id ?? detail?.counterpartyId ?? null;
   const handleOpenCounterparty = useCallback(() => {
-    if (detail?.counterpartyId) router.push(`/counterparty/${detail.counterpartyId}`);
-  }, [detail?.counterpartyId]);
+    if (shownCounterpartyId) router.push(`/counterparty/${shownCounterpartyId}`);
+  }, [shownCounterpartyId]);
   const handleLinkCounterparty = useCallback(() => setPickerTarget("identity"), []);
   const stripCards = useMemo(
     () =>
@@ -370,17 +531,25 @@ export default function TransactionDetail() {
             {
               // Read with the row, so an archived counterparty or a closed
               // destination account keeps its name (the snapshot lists omit both).
-              counterparty: live.counterpartyIdentityName,
+              counterparty: pickedIdentity?.name ?? live.counterpartyIdentityName,
               fromAccount: live.accountName,
               toAccount: live.toAccountName,
-              categoryName: (id) =>
-                id === live.categoryId
-                  ? live.categoryName
-                  : (live.lines.find((line) => line.categoryId === id)?.categoryName ?? null),
+              categoryName: (id) => {
+                const named =
+                  id === live.categoryId ? live : live.lines.find((line) => line.categoryId === id);
+                if (named?.categoryName == null) return null;
+                const row = { name: named.categoryName, externalId: named.categoryExternalId };
+                return { name: labelOf(row), tintKey: categoryTintKey(row) };
+              },
             },
-            { onOpenCounterparty: handleOpenCounterparty, onLink: handleLinkCounterparty },
+            {
+              onOpenCounterparty: handleOpenCounterparty,
+              onLink: handleLinkCounterparty,
+              counterpartyUnsaved:
+                pickedIdentity !== undefined && pickedIdentity.id !== live.counterpartyId,
+            },
           ),
-    [context, live, handleLinkCounterparty, handleOpenCounterparty],
+    [context, live, pickedIdentity, handleLinkCounterparty, handleOpenCounterparty, labelOf],
   );
 
   const today = useMemo(() => deviceRuntime().capture().date, []);
@@ -421,7 +590,29 @@ export default function TransactionDetail() {
 
   // The header draws the row as it is now; the fields draw the draft's base.
   const shown = live ?? detail;
+  const shownCategory =
+    shown.categoryName === null
+      ? null
+      : labelOf({ name: shown.categoryName, externalId: shown.categoryExternalId });
+  const shownTintKey =
+    shown.categoryName === null
+      ? null
+      : categoryTintKey({ name: shown.categoryName, externalId: shown.categoryExternalId });
+  const detailCategory =
+    detail.categoryName === null
+      ? null
+      : labelOf({ name: detail.categoryName, externalId: detail.categoryExternalId });
   const effectiveAccountId = pickedAccountId ?? detail.accountId;
+  const effectiveToAccountId = pickedToAccountId ?? detail.toAccountId;
+  // The pick until it is saved, the saved row afterwards — `accountId`'s own rule.
+  const effectiveCategoryId = pickedCategoryId ?? detail.categoryId;
+  // A held pick is drawn like any other category: through the seed-label rule,
+  // so a held Borrowed reads in the language of the app, not as its stored name.
+  const pickedCategory = snapshot.categories.find((category) => category.id === pickedCategoryId);
+  const effectiveCategoryName =
+    pickedCategoryId === null || pickedCategory === undefined
+      ? detailCategory
+      : labelOf({ name: pickedCategory.name, externalId: pickedCategory.externalId });
   // The pick until it is saved, the saved row afterwards — `accountId`'s own rule.
   // The pick until it is saved, the saved row afterwards — `accountId`'s own
   // rule, once per link. A name comes from the directory rather than the row's
@@ -440,8 +631,8 @@ export default function TransactionDetail() {
   return (
     <PushedPage
       title={dayLabel(shown.date, locale)}
-      tint={heroTint(shown.categoryName, theme).fill}
-      topWash={heroTint(shown.categoryName, theme).fill}
+      tint={heroTint(shownCategory, theme, shownTintKey).fill}
+      topWash={heroTint(shownCategory, theme, shownTintKey).fill}
       titleNode={
         <HeroHeaderTitle
           scrollY={heroScroll.scrollY}
@@ -462,7 +653,8 @@ export default function TransactionDetail() {
         type={shown.type}
         accountName={shown.accountName}
         toAccountName={shown.toAccountName}
-        categoryName={shown.categoryName}
+        categoryName={shownCategory}
+        categoryTintKey={shownTintKey}
         enteredName={shown.enteredName}
         brandKey={shown.brandKey}
         scrollY={heroScroll.scrollY}
@@ -478,13 +670,20 @@ export default function TransactionDetail() {
       <View style={styles.content}>
         {phone ? null : <ContextStrip cards={stripCards} column={COLUMN} />}
         <FieldsCard
-          fields={toFields(detail)}
+          fields={toFields(
+            detail,
+            snapshot.accounts.find((account) => account.id === detail.toAccountId)?.decimals ??
+              detail.decimals,
+          )}
           accounts={pickerAccounts}
           accountId={effectiveAccountId}
           onOpenAccountPicker={handleOpenAccountPicker}
+          toAccountId={effectiveToAccountId}
+          onOpenToAccountPicker={handleOpenToAccountPicker}
           today={today}
-          categoryId={detail.categoryId}
-          categoryName={detail.categoryName}
+          categoryId={effectiveCategoryId}
+          categoryName={effectiveCategoryName}
+          debtCategory={debtIntentOfCategory(effectiveCategoryId) !== null}
           onOpenCategoryPicker={handleOpenCategoryPicker}
           counterpartyId={effectiveIdentity.id}
           counterpartyName={effectiveIdentity.name}
@@ -523,10 +722,10 @@ export default function TransactionDetail() {
         onDismiss={handleDismissCounterpartyPicker}
       />
       <AccountPicker
-        visible={accountPickerOpen}
+        visible={accountPickerFor !== null}
         accounts={pickerAccounts}
         groups={pickerGroups}
-        accountId={effectiveAccountId}
+        accountId={accountPickerFor === "to" ? effectiveToAccountId : effectiveAccountId}
         onPick={handlePickAccount}
         onCreateAccount={handleCreateAccountFromDetail}
         onDismiss={handleDismissAccountPicker}

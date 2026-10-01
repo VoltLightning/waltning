@@ -43,6 +43,8 @@ import type { dashboardWidgets as pgDashboardWidgets } from "./dashboard-widgets
 import type { dashboardWidgets as sqliteDashboardWidgets } from "./dashboard-widgets.sqlite.ts";
 import type { fxRates as pgFxRates } from "./fx-rates.pg.ts";
 import type { fxRates as sqliteFxRates } from "./fx-rates.sqlite.ts";
+import type { openingDebts as pgOpeningDebts } from "./opening-debts.pg.ts";
+import type { openingDebts as sqliteOpeningDebts } from "./opening-debts.sqlite.ts";
 import type { recurringTransactions as pgRecurringTransactions } from "./recurring-transactions.pg.ts";
 import type { recurringTransactions as sqliteRecurringTransactions } from "./recurring-transactions.sqlite.ts";
 import type { SharedTable } from "./shared.ts";
@@ -67,6 +69,7 @@ type Pg = {
   dashboardLayouts: typeof pgDashboardLayouts;
   dashboardWidgets: typeof pgDashboardWidgets;
   fxRates: typeof pgFxRates;
+  openingDebts: typeof pgOpeningDebts;
   recurringTransactions: typeof pgRecurringTransactions;
   tags: typeof pgTags;
   transactionLines: typeof pgTransactionLines;
@@ -86,6 +89,7 @@ type Sqlite = {
   dashboardLayouts: typeof sqliteDashboardLayouts;
   dashboardWidgets: typeof sqliteDashboardWidgets;
   fxRates: typeof sqliteFxRates;
+  openingDebts: typeof sqliteOpeningDebts;
   recurringTransactions: typeof sqliteRecurringTransactions;
   tags: typeof sqliteTags;
   transactionLines: typeof sqliteTransactionLines;

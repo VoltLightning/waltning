@@ -5,17 +5,20 @@ import { createAppearance } from "@waltning/client/appearance/create-appearance"
 import { previewResetEnabled } from "@waltning/client/appearance/preview-reset";
 import type { BackupPort } from "@waltning/client/backup/backup-port";
 import { createDisplayCurrencyPreference } from "@waltning/client/currencies/display-currency";
+import { currencyOfTags } from "@waltning/client/currencies/region-currency";
 import { createDevicePreference } from "@waltning/client/device/create-device-preference";
 import { createDeskScopePreference } from "@waltning/client/ledger/desk-scope";
 import {
   type AppLockAttempt,
+  type AppLockChoice,
   type AppLockEnrolment,
+  type AppLockMethod,
   createAppLock,
 } from "@waltning/client/security/app-lock";
 import { createLastCapturePreference } from "@waltning/client/transactions/last-capture";
 import { pivotCurrency } from "@waltning/core/currencies";
 import { type AccountingDate, accountingDate, isAccountingDate } from "@waltning/core/date";
-import type { CurrencyCode } from "@waltning/core/money";
+import { type CurrencyCode, currencyCode } from "@waltning/core/money";
 import { type LanguagePreference, parseLanguagePreference } from "@waltning/ui/i18n/locales";
 import {
   type FloatPosition,
@@ -30,7 +33,7 @@ import * as Haptics from "expo-haptics";
 import * as LocalAuthentication from "expo-local-authentication";
 import { getLocales } from "expo-localization";
 import { isAvailableAsync, shareAsync } from "expo-sharing";
-import { AppState, Platform } from "react-native";
+import { AppState, BackHandler, DevSettings, Platform } from "react-native";
 import { mobileDiagnostics } from "./diagnostics.ts";
 
 const APPEARANCE_KEY = "waltning.appearance";
@@ -143,6 +146,14 @@ export function setLivePivotReader(reader: () => CurrencyCode | null): void {
   livePivotReader = reader;
 }
 
+/** The codes the ledger holds — wired beside `livePivotReader`, for the same ordering reason. */
+let liveHeldReader: () => readonly CurrencyCode[] | null = () => null;
+
+/** Called once by the phone's ledger session: every currency code its replica holds. */
+export function setLiveHeldReader(reader: () => readonly CurrencyCode[] | null): void {
+  liveHeldReader = reader;
+}
+
 /**
  * M2 — the same indirection as `livePivotReader`, for the ledger's write
  * notifications. `displayCurrency`'s own `subscribe` calls through this on
@@ -158,9 +169,41 @@ export function setLivePivotSubscriber(subscribe: (listener: () => void) => () =
 }
 
 /**
+ * The currency of the device's region — what the display currency opens in
+ * when nothing has been chosen (§7.0). The platform's own answer first
+ * (`getLocales()[0].currencyCode`), then the region of the language tags; a
+ * region with no known currency answers `null` and the pivot stands in.
+ */
+function readRegionCurrency(): CurrencyCode | null {
+  const locales = getLocales();
+  const reported = locales[0]?.currencyCode;
+  if (reported && /^[A-Z]{3}$/.test(reported)) return currencyCode(reported);
+  return currencyOfTags(locales.map((locale) => locale.languageTag));
+}
+
+const ANCHOR_DECIDED_KEY = "waltning.anchorDecided";
+
+/**
+ * Whether this device has already decided its ledger's anchor currency — set the
+ * first time first-start anchoring runs (whatever it did) and whenever a person
+ * changes the anchor, so a ledger found empty later is never anchored again.
+ */
+export const anchorDecided = createDevicePreference<"decided">(
+  {
+    get: () => AsyncStorage.getItem(ANCHOR_DECIDED_KEY),
+    set: (value) => AsyncStorage.setItem(ANCHOR_DECIDED_KEY, value),
+  },
+  { parse: (raw) => (raw === "decided" ? "decided" : null), serialize: (value) => value },
+  mobileDiagnostics,
+);
+
+/** The device region's currency, read once — the display default and the first-start anchor. */
+export const deviceRegionCurrency: CurrencyCode | null = readRegionCurrency();
+
+/**
  * `SPEC.md` §7.0's header toggle — a device preference, never a registry
- * write. The live pivot (`livePivotReader`) is the fallback until something
- * is chosen or `initializeFromPinned` runs; `pivotCurrency.code`
+ * write. With nothing chosen it is the device region's currency when the
+ * ledger holds it, else the live pivot (`livePivotReader`); `pivotCurrency.code`
  * (`@waltning/core/currencies` — USD) is only the seed used before the
  * ledger session is ready to answer at all (H1 — a fresh install whose
  * ledger pivot is PLN must render PLN, not this build-time seed).
@@ -175,6 +218,8 @@ export const displayCurrency = createDisplayCurrencyPreference(
   {
     subscribeToLedger: (listener) => livePivotSubscribe(listener),
     diagnostics: mobileDiagnostics,
+    regionCurrency: deviceRegionCurrency,
+    readHeld: () => liveHeldReader(),
   },
 );
 
@@ -219,9 +264,51 @@ function attemptOf(result: LocalAuthentication.LocalAuthenticationResult): AppLo
   }
 }
 
+/**
+ * Which biometric the device offers, for the wording of the first-run
+ * question: what `expo-local-authentication` says the hardware supports.
+ */
+async function methodOf(): Promise<AppLockMethod> {
+  const types = await LocalAuthentication.supportedAuthenticationTypesAsync();
+  const fingerprint = types.includes(LocalAuthentication.AuthenticationType.FINGERPRINT);
+  const face = types.includes(LocalAuthentication.AuthenticationType.FACIAL_RECOGNITION);
+  if (fingerprint && !face) return "fingerprint";
+  if (face && !fingerprint) return "face";
+  return "either";
+}
+
+const APP_LOCK_KEY = "waltning.appLock";
+
+/**
+ * Whether this device already holds ledger data — wired by the ledger session
+ * once it exists, the same indirection (and for the same reason) as
+ * `livePivotReader`: the ledger files import this one. `true` until wired, so a
+ * read before the ledger is up can only lock, never ask.
+ */
+let ledgerHistoryReader: () => boolean = () => true;
+
+/** Called once by the phone's ledger session: whether it holds any account. */
+export function setLedgerHistoryReader(reader: () => boolean): void {
+  ledgerHistoryReader = reader;
+}
+
+/**
+ * The owner's answer to the lock question (`SPEC.md` §5.7) — stored on this
+ * device, never synced. Raw on purpose: the gate decides what a missing,
+ * unreadable or corrupt value means, and a codec that turned each of them into
+ * `null` would make them all look like "never asked".
+ */
+export const appLockChoice: AppLockChoice = {
+  read: () => AsyncStorage.getItem(APP_LOCK_KEY),
+  write: (enabled) => AsyncStorage.setItem(APP_LOCK_KEY, enabled ? "on" : "off"),
+  hasHistory: async () => ledgerHistoryReader(),
+};
+
 export const appLock = createAppLock(
   {
+    choice: appLockChoice,
     authenticator: {
+      method: methodOf,
       enrolment: async () => enrolmentOf(await LocalAuthentication.getEnrolledLevelAsync()),
       // `strong` where the device has strong biometrics, `weak` where it
       // has only class-2 ones: asking for `strong` on a device that cannot
@@ -391,3 +478,39 @@ export const backupPort: BackupPort = {
   /** `setStringAsync` answers whether it took it, and the card renders the answer. */
   clipboard: (value) => setStringAsync(value),
 };
+
+/**
+ * Start the app over — a true restart, the JS runtime torn down and the bundle
+ * evaluated again, so no screen, store or cached snapshot survives it.
+ *
+ * **Two engines, because neither covers both builds.** `expo-updates` reloads
+ * a release build and refuses a development one; React Native's `DevSettings`
+ * reloads a development build and is a no-op in a release one. `__DEV__` is
+ * the line between them. `reloadAsync` also refuses when `expo-updates` is
+ * disabled, which is why `app.json` gives it an update URL — with automatic
+ * checks off, so the restart reloads the embedded bundle and fetches nothing.
+ *
+ * **Imported at the restart, not at startup.** `expo-updates` looks up its
+ * native module as it loads, and a build made before the module was added has
+ * none — a top-level import crashed every such build on launch. Loaded here, an
+ * older build only refuses the restart, which the caller already answers.
+ */
+export async function restartApp(): Promise<void> {
+  if (__DEV__) {
+    DevSettings.reload();
+    return;
+  }
+  const Updates = await import("expo-updates");
+  await Updates.reloadAsync();
+}
+
+/**
+ * Android's back button. `onBack` answers `true` when it handled the press and
+ * `false` to let the next handler — the stack's pop, then the platform's exit —
+ * have it. Listeners registered later run first, so the tab shell's comes
+ * before the router's.
+ */
+export function subscribeHardwareBack(onBack: () => boolean): () => void {
+  const subscription = BackHandler.addEventListener("hardwareBackPress", onBack);
+  return () => subscription.remove();
+}

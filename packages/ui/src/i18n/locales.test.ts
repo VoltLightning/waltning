@@ -7,9 +7,9 @@
  * says the same month twice.
  */
 
-import { accountingDate } from "@waltning/core/date";
+import { accountingDate, yearMonth } from "@waltning/core/date";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { dayRangeLabel } from "./locales.ts";
+import { dayRangeLabel, LOCALES, monthTitle } from "./locales.ts";
 
 /** Set by the one test that takes an `Intl` method away; run whatever happens. */
 let cleanup: (() => void) | undefined;
@@ -135,5 +135,32 @@ describe("without formatRange, as on Hermes", () => {
     expect(dayRangeLabel(accountingDate("2026-08-28"), accountingDate("2026-09-02"), "pl")).toBe(
       "28 sierpnia\u2009–\u20092 września 2026",
     );
+  });
+});
+
+describe("monthTitle", () => {
+  const MONTHS = Array.from({ length: 12 }, (_, index) =>
+    yearMonth(`2025-${String(index + 1).padStart(2, "0")}`),
+  );
+
+  it.each(LOCALES)("is the month's name alone, with no year or suffix, in %s", (locale) => {
+    for (const month of MONTHS) {
+      const title = monthTitle(month, locale);
+      // The year is its own label beside the title; a digit here says it twice.
+      expect(title, `${locale} ${month}`).not.toMatch(/\d/);
+      // Russian and Belarusian follow the year with an abbreviation (`г.`);
+      // a title is one word, so nothing is left to follow anything.
+      expect(title, `${locale} ${month}`).toMatch(/^[^\s.]+$/u);
+    }
+  });
+
+  it("is the nominative, not the form a full date takes", () => {
+    // `апреля` is what `5 апреля` needs and what a title must not say.
+    expect(monthTitle(yearMonth("2025-04"), "ru")).toBe("апрель");
+    expect(monthTitle(yearMonth("2026-09"), "ru")).toBe("сентябрь");
+    expect(monthTitle(yearMonth("2026-09"), "pl")).toBe("wrzesień");
+    expect(monthTitle(yearMonth("2026-10"), "pl")).toBe("październik");
+    expect(monthTitle(yearMonth("2026-09"), "de")).toBe("September");
+    expect(monthTitle(yearMonth("2026-10"), "be")).toBe("кастрычнік");
   });
 });

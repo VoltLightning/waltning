@@ -5,14 +5,24 @@
  * the card with its role beneath; *Business* and *One-off* are on/off chips.
  * One Save commits the draft, and appears only once there is something to
  * commit. Pickers are composed by the screen so each domain owns its controls.
+ *
+ * **One card for every type** — a transaction is a transaction. Every type has
+ * its amount here. A transfer adds what only a transfer has — *To*, the
+ * destination figure when the two currencies differ, and the fee — and leaves
+ * out the two rows it cannot have: a category (`transactions_category_shape`)
+ * and an entered name. It keeps the counterparty and the obligation: a
+ * repayment that lands straight in an account is a transfer that names who.
  */
 
 import { accountingDate, isAccountingDate } from "@waltning/core/date";
+import * as money from "@waltning/core/money";
 import type { AccountKind } from "@waltning/core/registry/inputs";
 import { useCallback, useMemo, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import Animated from "react-native-reanimated";
-import { useT } from "../../../i18n/provider";
+import { exceedsAmountCeiling, parseAmount } from "../../../fx/molecules/amount-field/amount-field";
+import { decimalMark } from "../../../i18n/locales.ts";
+import { useLocale, useT } from "../../../i18n/provider";
 import { Button } from "../../../primitives/atoms/button/button";
 import { Chip } from "../../../primitives/atoms/chip/chip";
 import { DateField } from "../../../primitives/atoms/date-field/date-field";
@@ -51,10 +61,23 @@ export type FieldsCardAccount = {
 /** §6.6's three roles, restated structurally — `client` is a sibling package. */
 export type ObligationRoleValue = "debt" | "contribution";
 
+/** The ledger's four types, restated structurally — `client` is a sibling package. */
+export type TransactionKind = "expense" | "income" | "transfer" | "adjustment";
+
 /** The saved values this card diffs every draft against. */
 export type TransactionFields = {
+  type: TransactionKind;
   date: string;
   accountId: string;
+  /**
+   * The amount as stored, at the account's scale: unsigned on every type but
+   * an adjustment, which carries its own sign (`money.signed`).
+   */
+  amount: string;
+  /** A transfer's destination, that leg's figure and its fee; `null` on every other type. */
+  toAccountId: string | null;
+  toAmount: string | null;
+  fee: string | null;
   categoryId: string | null;
   /**
    * §6.6.1 — who the transaction was **with**. Separate from the obligation
@@ -75,6 +98,11 @@ export type TransactionFields = {
 export type TransactionFieldsPatch = {
   date?: string;
   accountId?: string;
+  amountOriginal?: string;
+  toAccountId?: string;
+  toAmount?: string;
+  toCurrency?: string;
+  fee?: string | null;
   categoryId?: string | null;
   counterpartyId?: string | null;
   obligationCounterpartyId?: string | null;
@@ -97,6 +125,12 @@ export type FieldsCardProps = {
    */
   accountId: string;
   onOpenAccountPicker: () => void;
+  /**
+   * A transfer's destination pick, controlled from the screen the same way
+   * `accountId` is — one `AccountPicker`, two legs. Ignored on other types.
+   */
+  toAccountId?: string | null;
+  onOpenToAccountPicker?: () => void;
   /** The device's local `AccountingDate` (§7.0a) — `DateField`'s shortcuts. */
   today: string;
   /**
@@ -107,6 +141,14 @@ export type FieldsCardProps = {
   categoryId: string | null;
   categoryName: string | null;
   onOpenCategoryPicker: () => void;
+  /**
+   * §6.6 — the category shown (the saved one, or a pick not yet saved) is a
+   * debt: the screen reads it from the category's seed tag. The role is then
+   * `debt`, **Who?** takes the obligation row's place and is required, and
+   * leaving the category takes back the role it gave (one chosen by hand is
+   * kept). This card draws the consequence; it never reads a category's name.
+   */
+  debtCategory?: boolean;
   /**
    * The counterparty pick, controlled from the screen — `categoryId`'s own
    * contract, for the same reason: `counterparties/` is a sibling domain and
@@ -128,17 +170,20 @@ export type FieldsCardProps = {
   onSave: (patch: TransactionFieldsPatch) => void;
 };
 
-type OpenField = "date" | "enteredName" | "note" | "role";
+type OpenField = "date" | "amount" | "toAmount" | "fee" | "enteredName" | "note" | "role";
 
 export function FieldsCard({
   fields,
   accounts,
   accountId,
   onOpenAccountPicker,
+  toAccountId = null,
+  onOpenToAccountPicker,
   today,
   categoryId,
   categoryName,
   onOpenCategoryPicker,
+  debtCategory = false,
   counterpartyId,
   counterpartyName,
   obligationCounterpartyId,
@@ -153,11 +198,40 @@ export function FieldsCard({
 
   const [open, setOpen] = useState<ReadonlySet<OpenField>>(new Set());
   const [date, setDate] = useState(fields.date);
+  // Figures arrive at the account's scale with a `.`; the fields are seeded in
+  // the reader's own mark (`400,00` in de, `400.00` in en).
+  const mark = decimalMark(useLocale());
+  const [amount, setAmount] = useState(() => fields.amount.replace(".", mark));
+  const [toAmount, setToAmount] = useState(() => (fields.toAmount ?? "").replace(".", mark));
+  const [fee, setFee] = useState(() => (fields.fee ?? "").replace(".", mark));
   const [enteredName, setEnteredName] = useState(fields.enteredName);
   const [note, setNote] = useState(fields.note);
   const [isBusiness, setIsBusiness] = useState(fields.isBusiness);
   const [isCapital, setIsCapital] = useState(fields.isCapital);
-  const [role, setRole] = useState<ObligationRoleValue | null>(fields.obligationRole);
+  /**
+   * The role somebody *chose*. A debt category's role is derived (`shownRole`)
+   * and never stored here, so moving to another category takes it back with
+   * nothing to clear. A saved `debt` under a debt category is the category's
+   * own, not a choice: it reads as unchosen, so it goes when the category does.
+   */
+  const [role, setRole] = useState<ObligationRoleValue | null>(() =>
+    debtCategory && fields.obligationRole === "debt" ? null : fields.obligationRole,
+  );
+  /**
+   * **Nothing is rewritten on open.** A debt category gives the role only when
+   * something is being decided — the category moved here, or a person was
+   * picked for it — or when the saved row already is that debt. A legacy row
+   * that sits under one of the four with no person, or with a `contribution`
+   * (which a debt category does not state), is shown as it is and is not an
+   * unsaved change: Save does not appear just from opening it, and an
+   * unrelated edit is never held up by it.
+   */
+  const categoryMoved = categoryId !== fields.categoryId;
+  const personMoved = obligationCounterpartyId !== fields.obligationCounterpartyId;
+  const decidingDebt =
+    debtCategory && (categoryMoved || personMoved || fields.obligationRole === "debt");
+  const shownRole: ObligationRoleValue | null = decidingDebt ? "debt" : role;
+  const [whoAsked, setWhoAsked] = useState(false);
 
   const toggleField = useCallback((field: OpenField) => {
     setOpen((current) => {
@@ -180,6 +254,13 @@ export function FieldsCard({
     else toggleField("date");
   }, [phone, toggleField]);
   const handleToggleEnteredName = useCallback(() => toggleField("enteredName"), [toggleField]);
+  const handleToggleAmount = useCallback(() => toggleField("amount"), [toggleField]);
+  const handleToggleToAmount = useCallback(() => toggleField("toAmount"), [toggleField]);
+  const handleToggleFee = useCallback(() => toggleField("fee"), [toggleField]);
+  const handleOpenToAccountPicker = useCallback(
+    () => onOpenToAccountPicker?.(),
+    [onOpenToAccountPicker],
+  );
   const handleToggleRole = useCallback(() => toggleField("role"), [toggleField]);
   const handleRoleChange = useCallback((next: string) => setRole(isRole(next) ? next : null), []);
   const handleToggleNote = useCallback(() => toggleField("note"), [toggleField]);
@@ -206,23 +287,62 @@ export function FieldsCard({
   );
 
   const dateValid = isAccountingDate(date);
-  const selectedAccountName =
-    accounts.find((account) => account.id === accountId)?.name ?? accountId;
+  const transfer = fields.type === "transfer";
+  const fromAccount = accounts.find((account) => account.id === accountId);
+  const toAccount = accounts.find((account) => account.id === toAccountId);
+  const selectedAccountName = fromAccount?.name ?? accountId;
+  const toAccountName = toAccount?.name ?? toAccountId;
+  // Two figures only when there are two currencies; one currency, one figure
+  // (S31 §7.5), so a same-currency destination follows the amount.
+  const crossCurrency =
+    transfer &&
+    fromAccount !== undefined &&
+    toAccount !== undefined &&
+    fromAccount.currency !== toAccount.currency;
+
+  const parsedAmount = parseAmount(amount);
+  const parsedToAmount = parseAmount(toAmount);
+  const parsedFee = parseAmount(fee);
+  const amountValid = parsedAmount !== null;
+  const toAmountValid = !crossCurrency || parsedToAmount !== null;
+  // An empty fee is no fee, not an invalid one.
+  const feeValid = fee.trim() === "" || parsedFee !== null;
 
   const patch = useMemo<TransactionFieldsPatch>(() => {
     const next: TransactionFieldsPatch = {};
     if (dateValid && date !== fields.date) next.date = date;
     if (accountId !== fields.accountId) next.accountId = accountId;
+    if (parsedAmount !== null && !sameFigure(parsedAmount, fields.amount)) {
+      next.amountOriginal = parsedAmount;
+    }
+    if (transfer && toAccountId !== null) {
+      if (toAccountId !== fields.toAccountId) {
+        next.toAccountId = toAccountId;
+        if (toAccount !== undefined) next.toCurrency = toAccount.currency;
+      }
+      // The destination leg: typed across currencies, the amount itself
+      // within one — restated whenever either could have moved it.
+      const destination = crossCurrency ? parsedToAmount : parsedAmount;
+      if (destination !== null && !sameFigure(destination, fields.toAmount)) {
+        next.toAmount = destination;
+      }
+      const nextFee =
+        fee.trim() === "" || parsedFee === null || isZeroFigure(parsedFee) ? null : parsedFee;
+      if (feeValid && !sameFee(nextFee, fields.fee)) next.fee = nextFee;
+    }
     if (categoryId !== fields.categoryId) next.categoryId = categoryId;
     if (counterpartyId !== fields.counterpartyId) next.counterpartyId = counterpartyId;
-    if (obligationCounterpartyId !== fields.obligationCounterpartyId) {
-      next.obligationCounterpartyId = obligationCounterpartyId;
+    // §6.6 — the pair is both or neither: no role, nobody owed. A debt category's
+    // role going away with its category clears the person it was asked for.
+    const owed =
+      shownRole === null && fields.obligationRole !== null ? null : obligationCounterpartyId;
+    if (owed !== fields.obligationCounterpartyId) {
+      next.obligationCounterpartyId = owed;
       // §6.6 — a role belongs to the person it is about. Whoever is picked
       // next has their own, and nobody at all has none.
-      if (obligationCounterpartyId === null) next.obligationRole = null;
+      if (owed === null) next.obligationRole = null;
     }
-    if (obligationCounterpartyId !== null && role !== fields.obligationRole)
-      next.obligationRole = role;
+    if (owed !== null && shownRole !== fields.obligationRole) next.obligationRole = shownRole;
     if (isCapital !== fields.isCapital) next.isCapital = isCapital;
     if (enteredName !== fields.enteredName) next.enteredName = enteredName;
     if (note !== fields.note) next.note = note;
@@ -230,6 +350,15 @@ export function FieldsCard({
     return next;
   }, [
     accountId,
+    toAccountId,
+    toAccount,
+    transfer,
+    crossCurrency,
+    parsedAmount,
+    parsedToAmount,
+    parsedFee,
+    fee,
+    feeValid,
     categoryId,
     counterpartyId,
     obligationCounterpartyId,
@@ -240,14 +369,24 @@ export function FieldsCard({
     isCapital,
     note,
     enteredName,
-    role,
+    shownRole,
   ]);
   const hasChanges = Object.keys(patch).length > 0;
+  const draftValid = amountValid && toAmountValid && feeValid;
 
+  // A debt with nobody on the other side is not a debt (§6.6).
+  const whoMissing = debtCategory && categoryMoved && obligationCounterpartyId === null;
+  // A legacy row under a debt category with nobody named is not counted as a debt.
+  const notCounted =
+    debtCategory && !categoryMoved && obligationCounterpartyId === null && role === null;
   const handleSave = useCallback(() => {
-    if (!hasChanges || saving) return;
+    if (!hasChanges || saving || !draftValid) return;
+    if (whoMissing) {
+      setWhoAsked(true);
+      return;
+    }
     onSave(patch);
-  }, [hasChanges, onSave, patch, saving]);
+  }, [draftValid, hasChanges, onSave, patch, saving, whoMissing]);
 
   const formLevelErrors = fieldErrors?.formLevel ?? [];
 
@@ -265,15 +404,18 @@ export function FieldsCard({
 
       <Card>
         <View>
-          <FieldDisclosureRow
-            first
-            label={t("transactions.category")}
-            value={categoryName}
-            placeholder={t("transactions.noCategory")}
-            onPress={onOpenCategoryPicker}
-          />
+          {transfer ? null : (
+            <FieldDisclosureRow
+              first
+              label={t("transactions.category")}
+              value={categoryName}
+              placeholder={t("transactions.noCategory")}
+              onPress={onOpenCategoryPicker}
+            />
+          )}
 
           <FieldDisclosureRow
+            first={transfer}
             label={t("transactions.date")}
             value={date}
             placeholder={t("transactions.date")}
@@ -299,11 +441,96 @@ export function FieldsCard({
           ) : null}
 
           <FieldDisclosureRow
-            label={t("transactions.account")}
+            label={t(transfer ? "transactions.from" : "transactions.account")}
             value={selectedAccountName}
             placeholder={t("transactions.account")}
             onPress={onOpenAccountPicker}
           />
+
+          {transfer ? (
+            <FieldDisclosureRow
+              label={t("transactions.to")}
+              value={toAccountName}
+              placeholder={t("transactions.account")}
+              onPress={handleOpenToAccountPicker}
+            />
+          ) : null}
+
+          <FieldDisclosureRow
+            label={t("transactions.amount")}
+            value={amount}
+            placeholder="—"
+            open={open.has("amount")}
+            onPress={handleToggleAmount}
+          >
+            <TextField
+              label={t("transactions.amount")}
+              value={amount}
+              onChangeText={setAmount}
+              keyboardType="decimal-pad"
+              {...(amountValid
+                ? {}
+                : {
+                    error: t(
+                      exceedsAmountCeiling(amount)
+                        ? "common.amountCeiling"
+                        : "transactions.invalidAmount",
+                    ),
+                  })}
+            />
+          </FieldDisclosureRow>
+
+          {crossCurrency ? (
+            <FieldDisclosureRow
+              label={t("transactions.destinationAmount")}
+              value={toAmount}
+              placeholder="—"
+              open={open.has("toAmount")}
+              onPress={handleToggleToAmount}
+            >
+              <TextField
+                label={t("transactions.destinationAmount")}
+                value={toAmount}
+                onChangeText={setToAmount}
+                keyboardType="decimal-pad"
+                {...(toAmountValid
+                  ? {}
+                  : {
+                      error: t(
+                        exceedsAmountCeiling(toAmount)
+                          ? "common.amountCeiling"
+                          : "transactions.invalidAmount",
+                      ),
+                    })}
+              />
+            </FieldDisclosureRow>
+          ) : null}
+
+          {transfer ? (
+            <FieldDisclosureRow
+              label={t("transactions.fee")}
+              value={fee}
+              placeholder="—"
+              open={open.has("fee")}
+              onPress={handleToggleFee}
+            >
+              <TextField
+                label={t("transactions.fee")}
+                value={fee}
+                onChangeText={setFee}
+                keyboardType="decimal-pad"
+                {...(feeValid
+                  ? {}
+                  : {
+                      error: t(
+                        exceedsAmountCeiling(fee)
+                          ? "common.amountCeiling"
+                          : "transactions.feeInvalid",
+                      ),
+                    })}
+              />
+            </FieldDisclosureRow>
+          ) : null}
 
           {/* Who it was *with* — the commoner fact, and the plainer label. */}
           <FieldDisclosureRow
@@ -313,20 +540,22 @@ export function FieldsCard({
             onPress={handleOpenIdentityPicker}
           />
 
-          <FieldDisclosureRow
-            label={t("transactions.enteredName")}
-            value={enteredName}
-            placeholder="—"
-            open={open.has("enteredName")}
-            onPress={handleToggleEnteredName}
-          >
-            <TextField
+          {transfer ? null : (
+            <FieldDisclosureRow
               label={t("transactions.enteredName")}
               value={enteredName}
-              onChangeText={setEnteredName}
-              maxLength={200}
-            />
-          </FieldDisclosureRow>
+              placeholder="—"
+              open={open.has("enteredName")}
+              onPress={handleToggleEnteredName}
+            >
+              <TextField
+                label={t("transactions.enteredName")}
+                value={enteredName}
+                onChangeText={setEnteredName}
+                maxLength={200}
+              />
+            </FieldDisclosureRow>
+          )}
 
           <FieldDisclosureRow
             label={t("common.note")}
@@ -350,36 +579,51 @@ export function FieldsCard({
             names the shop above and the friend here. Drawn only once somebody
             is named — until then the *Someone owes* chip below asks.
           */}
-          {obligationCounterpartyId === null ? null : (
+          {obligationCounterpartyId === null && !debtCategory ? null : (
             <>
               <FieldDisclosureRow
-                label={t("transactions.obligationParty")}
+                label={
+                  decidingDebt || notCounted
+                    ? t("transactions.who")
+                    : t("transactions.obligationParty")
+                }
                 value={obligationCounterpartyName}
-                placeholder={t("transactions.noObligation")}
+                placeholder={
+                  debtCategory ? t("transactions.whoPlaceholder") : t("transactions.noObligation")
+                }
                 onPress={handleOpenObligationPicker}
+                {...(debtCategory && whoAsked && whoMissing
+                  ? { error: t("transactions.whoRequired") }
+                  : {})}
               />
+              {notCounted ? (
+                <Text style={styles.hint}>{t("transactions.notCountedAsDebt")}</Text>
+              ) : null}
 
-              <FieldDisclosureRow
-                label={t("transactions.role")}
-                value={role === null ? null : t(`transactions.role.${role}`)}
-                placeholder={t("transactions.chooseRole")}
-                open={open.has("role")}
-                onPress={handleToggleRole}
-              >
-                <RadioGroup
+              {/* A debt category fixes the role, so there is nothing to choose. */}
+              {decidingDebt || notCounted ? null : (
+                <FieldDisclosureRow
                   label={t("transactions.role")}
-                  options={roleOptions}
-                  value={role ?? NO_OBLIGATION}
-                  onChange={handleRoleChange}
-                />
-              </FieldDisclosureRow>
+                  value={role === null ? null : t(`transactions.role.${role}`)}
+                  placeholder={t("transactions.chooseRole")}
+                  open={open.has("role")}
+                  onPress={handleToggleRole}
+                >
+                  <RadioGroup
+                    label={t("transactions.role")}
+                    options={roleOptions}
+                    value={role ?? NO_OBLIGATION}
+                    onChange={handleRoleChange}
+                  />
+                </FieldDisclosureRow>
+              )}
             </>
           )}
         </View>
       </Card>
 
       <View style={styles.flags}>
-        {obligationCounterpartyId === null ? (
+        {obligationCounterpartyId === null && !debtCategory ? (
           <Chip placeholder={t("transactions.someoneOwes")} onPress={handleOpenObligationPicker} />
         ) : null}
         <Chip
@@ -418,6 +662,22 @@ export function FieldsCard({
   );
 }
 
+/** Two figures as numbers — `400` and `400.00` are one amount, and neither is a change. */
+function sameFigure(next: string, saved: string | null): boolean {
+  return saved !== null && money.dec(next).eq(saved);
+}
+
+/** Nothing typed and nothing stored are the same fee. */
+function sameFee(next: string | null, saved: string | null): boolean {
+  if (next === null || saved === null) return next === saved;
+  return sameFigure(next, saved);
+}
+
+/** A typed `0` is no fee — "no fee" is `NULL`, never a stored zero (`transactions_fee_positive`). */
+function isZeroFigure(value: string): boolean {
+  return money.dec(value).isZero();
+}
+
 /** The radio value standing for "named, and owing nothing". */
 const NO_OBLIGATION = "none";
 
@@ -438,6 +698,8 @@ type FieldDisclosureRowProps = {
   open?: boolean;
   onPress: () => void;
   first?: boolean;
+  /** A refusal stated on the row it is about. */
+  error?: string;
   children?: React.ReactNode;
 };
 
@@ -455,6 +717,7 @@ function FieldDisclosureRow({
   open = false,
   onPress,
   first = false,
+  error,
   children,
 }: FieldDisclosureRowProps) {
   const t = useT();
@@ -495,6 +758,11 @@ function FieldDisclosureRow({
           </View>
         </Pressable>
       </Animated.View>
+      {error === undefined ? null : (
+        <Text accessibilityRole="alert" style={styles.rowError}>
+          {error}
+        </Text>
+      )}
       {open ? <View style={styles.editor}>{children}</View> : null}
     </View>
   );
@@ -533,6 +801,7 @@ const useStyles = makeStyles((theme) => ({
   },
   editor: { paddingBottom: space.md },
   formLevel: { gap: space.xs },
+  rowError: { color: theme.dangerText, ...text.ui("caption"), paddingBottom: space.md },
   formLevelMessage: { color: theme.dangerText, ...text.ui("caption") },
   actions: { flexDirection: "row", justifyContent: "flex-end" },
   flags: { flexDirection: "row", flexWrap: "wrap", gap: space.md },

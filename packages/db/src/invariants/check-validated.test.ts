@@ -32,6 +32,7 @@ const ACCOUNT = { id: "00000000-0000-4000-8000-000000000001", name: "Bank A · P
 const TO_ACCOUNT = { id: "00000000-0000-4000-8000-000000000002", name: "Cash · PLN" };
 const CATEGORY = { id: "00000000-0000-4000-8000-000000000003", name: "Placeholder category" };
 const COUNTERPARTY = { id: "00000000-0000-4000-8000-000000000004", name: "Anna Placeholder" };
+const OPENING_DEBT = { id: "00000000-0000-4000-8000-0000000000d1" };
 
 let s: Scratch;
 
@@ -46,6 +47,8 @@ beforeAll(async () => {
            (${EUR_ACCOUNT.id}, ${EUR_ACCOUNT.name}, ${OTHER_CURRENCY.code}, 'own', false, '0', 'other')`;
   await s.sql`insert into categories (id, name, kind) values (${CATEGORY.id}, ${CATEGORY.name}, 'expense')`;
   await s.sql`insert into counterparties (id, name) values (${COUNTERPARTY.id}, ${COUNTERPARTY.name})`;
+  await s.sql`insert into opening_debts (id, counterparty_id, currency, direction, amount, date)
+    values (${OPENING_DEBT.id}, ${COUNTERPARTY.id}, ${CURRENCY.code}, 'theyOwe', 10, '2026-01-01')`;
 }, 60_000);
 
 afterAll(async () => {
@@ -145,10 +148,14 @@ const CHECKS: Record<string, () => Promise<unknown>> = {
   // An obligation with no role.
   transactions_obligation_pair_shape: () =>
     insertRow({ obligation_counterparty_id: COUNTERPARTY.id }),
+  // §6.6 — a settlement of an opening debt that is not a debt-role row.
+  transactions_opening_link_shape: () => insertRow({ settles_opening_debt_id: OPENING_DEBT.id }),
   // An occurrence date with no recurring rule behind it.
   transactions_occurrence_shape: () => insertRow({ occurrence_date: "2026-08-12" }),
   // A debt amount with no debt currency.
   transactions_debt_shape: () => insertRow({ debt_amount: "5.00" }),
+  // An amount at the ceiling (`AMOUNT_CEILING_EXCLUSIVE`) — 999 999 999.99 is the largest any row holds.
+  transactions_amount_ceiling: () => insertRow({ amount_original: "1000000000.00" }),
   // A zero fee — "no fee" is null, never zero.
   transactions_fee_positive: () => insertRow({ fee: "0.00" }),
   // §7.0a — the minute is the resolution. Postgres `time` would take a second

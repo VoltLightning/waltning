@@ -30,11 +30,14 @@ import type {
   CreateCounterpartyInput,
   CreateGroupInput,
   CreateTransactionInput,
+  DeleteAccountInput,
+  DeleteOpeningDebtInput,
   DeleteTransactionInput,
   MergeCategoriesInput,
   MergeCounterpartiesInput,
   ReconcileAccountInput,
   RecordDistinctCounterpartiesInput,
+  RecordOpeningDebtInput,
   RenameCategoryInput,
   ReorderAccountsInput,
   ReparentCategoryInput,
@@ -52,9 +55,11 @@ import type {
 } from "@waltning/core/registry/inputs";
 import type { CategoryKind } from "@waltning/schema/enums";
 import { currencies } from "@waltning/schema/sqlite/currencies";
+import { deferredAccountReferences } from "./accounts/account-references.ts";
 import { archiveAccountExecutor } from "./accounts/archive-account.executor.ts";
 import { createAccountExecutor, type LocalAccountRow } from "./accounts/create-account.executor.ts";
 import { createGroupExecutor, type LocalGroupRow } from "./accounts/create-group.executor.ts";
+import { deleteAccountExecutor } from "./accounts/delete-account.executor.ts";
 import { type LocalAccountSummary, readAccounts } from "./accounts/read-accounts.ts";
 import { readBalanceAsOf } from "./accounts/read-balance-as-of.ts";
 import { type LocalGroup, readGroups } from "./accounts/read-groups.ts";
@@ -104,6 +109,10 @@ import {
   type LocalCounterpartyRow,
 } from "./counterparties/create-counterparty.executor.ts";
 import {
+  type DeleteOpeningDebtResult,
+  deleteOpeningDebtExecutor,
+} from "./counterparties/delete-opening-debt.executor.ts";
+import {
   type MergeCounterpartiesResult,
   mergeCounterpartiesExecutor,
 } from "./counterparties/merge-counterparties.executor.ts";
@@ -121,10 +130,15 @@ import {
   readCounterpartyMerges,
 } from "./counterparties/read-counterparty-merges.ts";
 import { readDistinctCounterpartyPairs } from "./counterparties/read-distinct-counterparty-pairs.ts";
+import { type LocalOpeningDebt, readOpeningDebts } from "./counterparties/read-opening-debts.ts";
 import {
   type LocalDistinctPairRow,
   recordDistinctCounterpartiesExecutor,
 } from "./counterparties/record-distinct-counterparties.executor.ts";
+import {
+  type RecordOpeningDebtResult,
+  recordOpeningDebtExecutor,
+} from "./counterparties/record-opening-debt.executor.ts";
 import {
   type SettleDebtResult,
   settleDebtExecutor,
@@ -170,6 +184,7 @@ import {
   type LedgerDiagnostics,
   type LedgerStartupStage,
 } from "./diagnostics.ts";
+import { LocalRefusal } from "./executor.ts";
 import {
   isPreJournalStoreError,
   type LedgerFs,
@@ -256,6 +271,8 @@ export type LocalCapturableCategory = {
   id: Id<"categories">;
   name: string;
   kind: CategoryKind;
+  /** The seed's own tag — the display rule's other input (`@waltning/core/seed-label`). */
+  externalId: string | null;
 };
 
 export type LocalLedgerSession = {
@@ -278,7 +295,10 @@ export type LocalLedgerSession = {
    */
   listEnteredNameHistory: () => readonly EnteredNameHistoryRow[];
   /** §7, one row per counterparty per currency, ageing on companies (O15) — S12. */
-  listCounterpartyBalances: (today: AccountingDate) => readonly LocalCounterpartyBalance[];
+  listCounterpartyBalances: (
+    today: AccountingDate,
+    options?: { excluding?: string },
+  ) => readonly LocalCounterpartyBalance[];
   /**
    * The whole tree **with archived rows** — S19's editor, which has its own
    * archived toggle and is the one screen where "offerable" is not the
@@ -295,6 +315,8 @@ export type LocalLedgerSession = {
   listCounterpartyMerges: (
     counterpartyId: Id<"counterparties">,
   ) => readonly LocalCounterpartyMerge[];
+  /** §6.6 — one person's opening debts, one per currency. See `readOpeningDebts`. */
+  listOpeningDebts: (counterpartyId: Id<"counterparties">) => readonly LocalOpeningDebt[];
   /** S15 §9.1 — every pair `record_distinct_counterparties` has recorded. See `readDistinctCounterpartyPairs`. */
   listDistinctCounterpartyPairs: () => readonly (readonly [
     Id<"counterparties">,
@@ -326,6 +348,7 @@ export type LocalLedgerSession = {
   readIncomeVsExpense: (
     buckets: readonly IncomeExpenseBucket[],
     scope: LedgerScope,
+    options?: Pick<SpendByCategoryOptions, "rebase">,
   ) => readonly IncomeExpenseRow[];
   /** `get_active_layout` — `null` only on an empty, never-migrated database. `DESK4`. */
   readActiveDashboardLayout: () => LocalDashboardLayout | null;
@@ -401,6 +424,8 @@ export type LocalLedgerSession = {
   setTransactionLines: (input: SetTransactionLinesInput, capture: Capture) => LocalTransactionRow;
   updateAccount: (input: UpdateAccountInput, capture: Capture) => LocalAccountRow;
   archiveAccount: (input: ArchiveAccountInput, capture: Capture) => LocalAccountRow;
+  /** `delete_account` — only an account nothing references (§6.9); returns the row it removed. */
+  deleteAccount: (input: DeleteAccountInput, capture: Capture) => LocalAccountRow;
   /** S16 §3 — what the register shows, and what its total counts. */
   setAccountVisibility: (input: SetAccountVisibilityInput, capture: Capture) => LocalAccountRow;
   /** S16 §3 — the whole ordered list; `sort` becomes each id's position. */
@@ -451,6 +476,10 @@ export type LocalLedgerSession = {
     input: RecordDistinctCounterpartiesInput,
     capture: Capture,
   ) => LocalDistinctPairRow;
+  /** §6.6 — a debt that predates the ledger, on the person's page; replaces one in the same currency. */
+  recordOpeningDebt: (input: RecordOpeningDebtInput, capture: Capture) => RecordOpeningDebtResult;
+  /** §6.6 — an existing debt and every repayment made against it, in one write. */
+  deleteOpeningDebt: (input: DeleteOpeningDebtInput, capture: Capture) => DeleteOpeningDebtResult;
   /** H9: takes the amount and what it discharges — never a residual. Returns one. */
   settleDebt: (input: SettleDebtInput, capture: Capture) => SettleDebtResult;
   /** J08's split — one write, one row per share (`allocate-shares.executor.ts`). */
@@ -726,7 +755,19 @@ export function createLocalLedgerSession<TRun>(
   };
 
   return {
-    listAccounts: (listOptions) => readAccounts(requireOpen().replica.db, listOptions),
+    listAccounts: (listOptions) => {
+      const open = requireOpen();
+      const rows = readAccounts(open.replica.db, listOptions);
+      // A deferred capture names an account the replica holds no row for — see
+      // `deferredAccountReferences` — so `hasEntries` is the union of both.
+      const deferred = deferredAccountReferences(
+        open.outbox.db,
+        rows.filter((row) => !row.hasEntries).map((row) => row.id),
+      );
+      return deferred.size === 0
+        ? rows
+        : rows.map((row) => (deferred.has(row.id) ? { ...row, hasEntries: true } : row));
+    },
     listCurrencies: () => readCurrencies(requireOpen().replica.db),
     listCurrencySettings: (settingsOptions) =>
       readCurrencySettings(requireOpen().replica.db, settingsOptions),
@@ -736,7 +777,7 @@ export function createLocalLedgerSession<TRun>(
     listCategories: () =>
       readCategoryTree(requireOpen().replica.db)
         .filter((category) => category.isLeaf && !category.archived)
-        .map(({ id, name, kind }) => ({ id, name, kind })),
+        .map(({ id, name, kind, externalId }) => ({ id, name, kind, externalId })),
     // Archived nodes excluded, same as `listCategories` above — an archived
     // category has stopped being offerable (`TAXONOMY.md` R2), and a picker
     // is exactly where "offerable" matters.
@@ -744,13 +785,16 @@ export function createLocalLedgerSession<TRun>(
       readCategoryTree(requireOpen().replica.db).filter((category) => !category.archived),
     listCounterparties: (options) => readCounterparties(requireOpen().replica.db, options),
     listEnteredNameHistory: () => readEnteredNameHistory(requireOpen().replica.db),
-    listCounterpartyBalances: (today) => readCounterpartyBalances(requireOpen().replica.db, today),
+    listCounterpartyBalances: (today, options) =>
+      readCounterpartyBalances(requireOpen().replica.db, today, options),
     listFullCategoryTree: () => readCategoryTree(requireOpen().replica.db),
     listCategoryUsage: () => readCategoryUsage(requireOpen().replica.db),
     readCategoryReferenceCounts: (categoryId) =>
       readCategoryReferenceCounts(requireOpen().replica.db, categoryId),
     listCounterpartyMerges: (counterpartyId) =>
       readCounterpartyMerges(requireOpen().replica.db, counterpartyId),
+    listOpeningDebts: (counterpartyId) =>
+      readOpeningDebts(requireOpen().replica.db, counterpartyId),
     listDistinctCounterpartyPairs: () => readDistinctCounterpartyPairs(requireOpen().replica.db),
     listNetWorth: () => readNetWorth(requireOpen().replica.db),
     readPeriodSpend: (period) => readPeriodSpend(requireOpen().replica.db, period),
@@ -762,8 +806,8 @@ export function createLocalLedgerSession<TRun>(
     readContextRows: (query) => readContextRows(requireOpen().replica.db, query),
     readSpendByCategory: (period, scope, options) =>
       readSpendByCategory(requireOpen().replica.db, period, scope, options),
-    readIncomeVsExpense: (buckets, scope) =>
-      readIncomeVsExpense(requireOpen().replica.db, buckets, scope),
+    readIncomeVsExpense: (buckets, scope, options) =>
+      readIncomeVsExpense(requireOpen().replica.db, buckets, scope, options),
     readActiveDashboardLayout: () => readActiveLayout(requireOpen().replica.db),
     listUnsettledClearing: () => readUnsettledClearing(requireOpen().replica.db),
     balanceAsOf: (accountId, asOf) => readBalanceAsOf(requireOpen().replica.db, accountId, asOf),
@@ -867,6 +911,23 @@ export function createLocalLedgerSession<TRun>(
         capture,
         ...(options.diagnostics ? { diagnostics: options.diagnostics } : {}),
       }).row,
+    deleteAccount: (input, capture) => {
+      const open = requireOpen();
+      // The outbox is not reachable from an executor, so the one reference the
+      // replica cannot see is checked here, before anything is queued.
+      if (deferredAccountReferences(open.outbox.db, [input.id]).size > 0) {
+        throw new LocalRefusal(
+          `delete_account: ${input.id} has entries (deferred_capture) — archive it instead (§6.9)`,
+        );
+      }
+      return writeLocally(open, {
+        executor: deleteAccountExecutor,
+        registry: ledgerRegistry,
+        input,
+        capture,
+        ...(options.diagnostics ? { diagnostics: options.diagnostics } : {}),
+      }).row;
+    },
     setAccountVisibility: (input, capture) =>
       writeLocally(requireOpen(), {
         executor: setAccountVisibilityExecutor,
@@ -1021,6 +1082,22 @@ export function createLocalLedgerSession<TRun>(
     recordDistinctCounterparties: (input, capture) =>
       writeLocally(requireOpen(), {
         executor: recordDistinctCounterpartiesExecutor,
+        registry: ledgerRegistry,
+        input,
+        capture,
+        ...(options.diagnostics ? { diagnostics: options.diagnostics } : {}),
+      }).row,
+    recordOpeningDebt: (input, capture) =>
+      writeLocally(requireOpen(), {
+        executor: recordOpeningDebtExecutor,
+        registry: ledgerRegistry,
+        input,
+        capture,
+        ...(options.diagnostics ? { diagnostics: options.diagnostics } : {}),
+      }).row,
+    deleteOpeningDebt: (input, capture) =>
+      writeLocally(requireOpen(), {
+        executor: deleteOpeningDebtExecutor,
         registry: ledgerRegistry,
         input,
         capture,

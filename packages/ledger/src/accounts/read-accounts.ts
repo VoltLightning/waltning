@@ -7,6 +7,7 @@ import type { AccountColor } from "@waltning/schema/enums";
 import { and, asc, eq, inArray, isNull, or } from "drizzle-orm";
 import type { ReplicaDb } from "../open.ts";
 import { ledgerSchema } from "../schema-map.ts";
+import { referencedAccounts } from "./account-references.ts";
 
 const { accounts, currencies, transactions } = ledgerSchema;
 
@@ -49,6 +50,14 @@ export type LocalAccountSummary = {
   openingDate: AccountingDate | null;
   memo: string;
   version: number;
+  /**
+   * Whether anything references this account — a transaction on either leg
+   * (soft-deleted ones too), a recurring rule, or a non-zero opening balance
+   * (`account-references.ts`). False is what lets the editor offer *Delete*
+   * (§6.9); true leaves it *Archive*, the only way out for an account with
+   * history.
+   */
+  hasEntries: boolean;
 };
 
 /** Kept as its own name at the net-worth call site — the concept it stands for is "what §3 needs", not "every column". */
@@ -133,8 +142,11 @@ function withBalances<TRun, TSchema extends typeof ledgerSchema>(
           .all()
       : [];
 
+  const referenced = referencedAccounts(db, [...ids]);
+
   return rows.map(({ sort: _sort, ...account }) => ({
     ...account,
+    hasEntries: referenced.has(account.id),
     // §2, through the one fold the phone and the differential test share.
     // `openingBalance` stays on the row too — the editor's own field,
     // distinct from the derived `balance` below.

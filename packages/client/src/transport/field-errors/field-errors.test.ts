@@ -104,4 +104,41 @@ describe("fieldErrorsFromZod", () => {
     }).error;
     expect(fieldErrorsFromZod(err)?.every((error) => error.messageKey === undefined)).toBe(true);
   });
+
+  /**
+   * The amount ceiling (`999 999 999.99`): `zAmount`'s refusal is an English
+   * literal from `packages/core`, which cannot reach a catalogue — so the
+   * issue is tagged with a key the screen resolves, on whichever amount field
+   * it landed.
+   */
+  it("tags an amount past the ceiling with its own key, on the field it named", () => {
+    const bad = createTransactionInput.safeParse({
+      id: "11111111-1111-4111-8111-111111111111",
+      date: "2026-09-03",
+      type: "expense",
+      accountId: "22222222-2222-4222-8222-222222222222",
+      amountOriginal: "1000000000.00",
+      currency: "PLN",
+      enteredName: "coffee",
+    }).error;
+    const errors = fieldErrorsFromZod(bad);
+    expect(errors).toHaveLength(1);
+    expect(errors?.[0]).toMatchObject({
+      path: "amountOriginal",
+      messageKey: "common.amountCeiling",
+    });
+  });
+
+  it("does not tag an amount at the ceiling's edge", () => {
+    const ok = createTransactionInput.safeParse({
+      id: "11111111-1111-4111-8111-111111111111",
+      date: "2026-09-03",
+      type: "expense",
+      accountId: "22222222-2222-4222-8222-222222222222",
+      amountOriginal: "999999999.99",
+      currency: "PLN",
+      enteredName: "coffee",
+    });
+    expect(ok.success).toBe(true);
+  });
 });

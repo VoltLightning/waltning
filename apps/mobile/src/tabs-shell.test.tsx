@@ -58,13 +58,38 @@ vi.mock("expo-router/ui", () => ({
   }),
 }));
 
+let stackOnTop = false;
+const setParams = vi.fn();
 vi.mock("expo-router", () => ({
-  router: { push: vi.fn(), back: vi.fn(), canGoBack: () => true, dismissTo: vi.fn() },
+  router: {
+    push: vi.fn(),
+    back: vi.fn(),
+    canGoBack: () => true,
+    dismissTo: vi.fn(),
+    setParams: (params: unknown) => setParams(params),
+  },
+  useNavigation: () => ({ isFocused: () => !stackOnTop }),
+}));
+
+// Android's hardware back is a platform seam (`platform.native.ts`); the shell
+// subscribes one handler to it, and this keeps that handler for a test to press.
+let hardwareBack: (() => boolean) | null = null;
+vi.mock("./platform", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./platform")>()),
+  subscribeHardwareBack: (onBack: () => boolean) => {
+    hardwareBack = onBack;
+    return () => {
+      hardwareBack = null;
+    };
+  },
 }));
 
 const { TabsShell, handleSelectType } = await import("./tabs-shell");
 const { displayCurrency } = await import("./platform");
 const { router } = await import("expo-router");
+const { forgetStartPage, publishStartPage } = await import(
+  "@waltning/client/ledger/tab-back/start-page-store"
+);
 
 const CHF = currencyCode("CHF");
 const EUR = currencyCode("EUR");
@@ -82,6 +107,7 @@ const BANK_B_EUR: PhoneAccount = {
   isBusiness: false,
   archived: false,
   hidden: false,
+  hasEntries: false,
   inTotal: true,
   color: null,
   expectedBalance: null,
@@ -174,6 +200,10 @@ function resizeTo(width: number) {
  */
 beforeEach(async () => {
   focused = "today";
+  forgetStartPage();
+  stackOnTop = false;
+  setParams.mockClear();
+  for (const fn of Object.values(switchTab)) fn.mockClear();
   await displayCurrency.set(PLN);
 });
 
@@ -486,6 +516,7 @@ const CASH: PhoneAccount = {
   isBusiness: false,
   archived: false,
   hidden: false,
+  hasEntries: false,
   inTotal: true,
   color: null,
   expectedBalance: null,
@@ -501,6 +532,55 @@ const CASH: PhoneAccount = {
  * exists, and the S05 example line reaches `create_transaction` with the
  * resolved row.
  */
+describe("TabsShell hardware back (S04 §2)", () => {
+  async function mountPhone() {
+    resizeTo(390);
+    render(
+      <LedgerProvider controller={fakeController()}>
+        <TabsShell slot={<Text>Route content</Text>} />
+      </LedgerProvider>,
+    );
+    await settleLayout();
+    const press = hardwareBack;
+    if (press === null) throw new Error("the shell subscribed no hardware back handler");
+    return press;
+  }
+
+  it("goes from another tab to Start and says it handled the press", async () => {
+    focused = "accounts";
+    const press = await mountPhone();
+
+    expect(press()).toBe(true);
+    expect(switchTab.today).toHaveBeenCalledWith("today", {});
+  });
+
+  it("goes from Start's Liste to the overview", async () => {
+    const show = vi.fn();
+    publishStartPage("list", show);
+    const press = await mountPhone();
+
+    expect(press()).toBe(true);
+    expect(show).toHaveBeenCalledWith("summary");
+  });
+
+  it("leaves Start's overview to the platform, which exits", async () => {
+    const press = await mountPhone();
+
+    expect(press()).toBe(false);
+    expect(switchTab.today).not.toHaveBeenCalled();
+    expect(setParams).not.toHaveBeenCalled();
+  });
+
+  it("leaves a pushed screen on top of the tabs to the stack", async () => {
+    focused = "accounts";
+    stackOnTop = true;
+    const press = await mountPhone();
+
+    expect(press()).toBe(false);
+    expect(switchTab.today).not.toHaveBeenCalled();
+  });
+});
+
 describe("DeskCommandBar (DESK2)", () => {
   it("S05's own example line saves the right row on Enter", () => {
     // `DeskCommandBar` reads "today" from the device's own calendar (§7.0a) —

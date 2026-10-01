@@ -126,6 +126,7 @@ function account(
     isBusiness: false,
     archived: false,
     hidden: false,
+    hasEntries: false,
     inTotal: true,
     color: null,
     expectedBalance: null,
@@ -184,6 +185,7 @@ function harness(
         isBusiness: input.isBusiness,
         archived: false,
         hidden: false,
+        hasEntries: false,
         inTotal: true,
         color: null,
         expectedBalance: null,
@@ -216,6 +218,7 @@ function harness(
         date: input.date,
         enteredName: input.enteredName,
         categoryName: null,
+        categoryExternalId: null,
         accountName: account.name,
         amount: money.neg(input.amountOriginal),
         currency: input.currency,
@@ -300,6 +303,22 @@ function harness(
         ? { ...candidate, archived: true, version: versionOf(input.id) }
         : candidate,
     );
+  });
+  /** An empty account goes; one something references is refused, the way the executor says it. */
+  const deleteAccount = vi.fn<PhoneLedgerPort["deleteAccount"]>((input) => {
+    const current = accounts.find((candidate) => candidate.id === input.id);
+    if (!current) throw new Error(`delete_account: no account ${input.id}`);
+    if (versionOf(input.id) !== input.version) {
+      throw new Error(
+        `delete_account: stale version — read ${input.version}, row is at ${versionOf(input.id)}`,
+      );
+    }
+    if (current.hasEntries) {
+      throw new Error(
+        `delete_account: ${input.id} has entries (transactions) — archive it instead`,
+      );
+    }
+    accounts = accounts.filter((candidate) => candidate.id !== input.id);
   });
   const reconcileAccount = vi.fn<PhoneLedgerPort["reconcileAccount"]>((input) => {
     const current = accounts.find((candidate) => candidate.id === input.accountId);
@@ -392,6 +411,7 @@ function harness(
     setTransactionLines: vi.fn(),
     updateAccount,
     archiveAccount,
+    deleteAccount,
     setAccountVisibility,
     reconcileAccount,
     createGroup,
@@ -415,6 +435,8 @@ function harness(
     mergeCounterparties: vi.fn(),
     unmergeCounterparties: vi.fn(),
     recordDistinctCounterparties: vi.fn(),
+    recordOpeningDebt: vi.fn(),
+    deleteOpeningDebt: vi.fn(),
     settleDebt: vi.fn(() => ({ residual: money.toMoney("0"), overSettled: false })),
     allocateShares: vi.fn(() => ({ rows: [], remaining: money.toMoney("0") })),
     listCounterpartyBalances: vi.fn(() => []),
@@ -425,6 +447,7 @@ function harness(
     archiveCategory,
     listCounterpartyMerges: vi.fn(() => []),
     listDistinctCounterpartyPairs: vi.fn(() => []),
+    listOpeningDebts: vi.fn(() => []),
     reset,
   };
   const capture = vi.fn(() => ({
@@ -450,10 +473,15 @@ function harness(
     createTransaction,
     updateAccount,
     archiveAccount,
+    deleteAccount,
     setAccountVisibility,
     reconcileAccount,
     createGroup,
     balanceAsOf,
+    /** A row now references every account — the state that turns *Delete* into a refusal. */
+    markReferenced: () => {
+      accounts = accounts.map((row) => ({ ...row, hasEntries: true }));
+    },
     /** The raw port — the FX methods have no fixture state of their own to assert through, so tests spy on this directly. */
     port,
     renameCategory,
@@ -702,6 +730,7 @@ describe("phone ledger controller", () => {
       id: id<"categories">("cccccccc-cccc-4ccc-8ccc-cccccccccccc"),
       name: "Freelance",
       kind: "income",
+      externalId: null,
     };
     const { controller, createTransaction } = harness(undefined, {
       categories: [incomeCategory],
@@ -747,6 +776,7 @@ describe("phone ledger controller", () => {
       id: id<"categories">("cccccccc-cccc-4ccc-8ccc-cccccccccccc"),
       name: "Freelance",
       kind: "income",
+      externalId: null,
     };
     const { controller, createTransaction } = harness(undefined, {
       categories: [category],
@@ -998,6 +1028,7 @@ describe("phone ledger controller", () => {
       id: id<"categories">("66666666-6666-4666-8666-666666666666"),
       name: "Eating out",
       kind: "expense",
+      externalId: null,
     };
     const { controller, createTransaction } = harness(undefined, {
       categories: [expenseCategory],
@@ -1049,6 +1080,7 @@ describe("phone ledger controller", () => {
       id: id<"categories">("66666666-6666-4666-8666-666666666666"),
       name: "Eating out",
       kind: "expense",
+      externalId: null,
     };
     const { controller, createTransaction } = harness(undefined, {
       categories: [expenseCategory],
@@ -1403,6 +1435,46 @@ describe("phone ledger controller", () => {
     });
   });
 
+  describe("deleteAccount", () => {
+    it("removes an account nothing references", () => {
+      const { controller, deleteAccount } = harness();
+      const accountId = idOf(controller.createAccount(minimalDraft("Bank A · PLN", PLN)));
+
+      const result = controller.deleteAccount({ id: accountId, version: 1 });
+
+      expect("id" in result && result.id).toBe(accountId);
+      expect(deleteAccount).toHaveBeenCalledTimes(1);
+      expect(controller.getSnapshot().accounts).toHaveLength(0);
+    });
+
+    it("names the refusal when something references the account, rather than throwing", () => {
+      const { controller, markReferenced } = harness();
+      const accountId = idOf(controller.createAccount(minimalDraft("Bank A · PLN", PLN)));
+      markReferenced();
+
+      const result = controller.deleteAccount({ id: accountId, version: 1 });
+
+      expect("fieldErrors" in result && result.fieldErrors).toEqual([
+        {
+          path: "",
+          message: expect.stringContaining("has entries"),
+          messageKey: "accounts.deleteHasEntries",
+        },
+      ]);
+    });
+
+    it("reads a stale version as the same refusal update and archive give", () => {
+      const { controller } = harness();
+      const accountId = idOf(controller.createAccount(minimalDraft("Bank A · PLN", PLN)));
+
+      const result = controller.deleteAccount({ id: accountId, version: 9 });
+
+      expect("fieldErrors" in result && result.fieldErrors[0]?.messageKey).toBe(
+        "accounts.staleVersion",
+      );
+    });
+  });
+
   describe("reconcileAccount", () => {
     it("writes an adjustment and refuses a zero difference", () => {
       const { controller } = harness();
@@ -1567,6 +1639,21 @@ describe("phone ledger controller — FX (E3)", () => {
     const result = controller.setRateSource({ code: "PLN", version: 1, rateSource: "nbp" });
     expect(result).toEqual({ code: currencyCode("PLN") });
     expect(listener).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    ["update_transaction: amount_original — Re-settle: delete it", "transactions.reSettle"],
+    ["set_transaction_lines: a split line has no person to owe", "transactions.splitDebtCategory"],
+    ["settle_debt: x is split into 2 line(s) — un-split it first", "transactions.unSplitFirst"],
+  ])("§6.6 refusal %j is named onto a catalogue key", (message, messageKey) => {
+    const { controller, port } = harness();
+    (port.setPinned as ReturnType<typeof vi.fn>).mockImplementationOnce(() => {
+      throw new Error(message);
+    });
+    const refused = controller.setPinned({ code: "PLN", version: 1, pinned: true });
+    expect("fieldErrors" in refused && refused.fieldErrors).toEqual([
+      { path: "", message: expect.any(String), messageKey },
+    ]);
   });
 
   it("setPinned: a throwing port maps to fieldErrors, a success calls refresh and returns the code", () => {
@@ -1770,6 +1857,7 @@ describe("phone ledger controller — createCategory", () => {
   it("creates a leaf under the chosen group and the tree refreshes", () => {
     const { controller, createCategory } = categoryHarness();
     const result = controller.createCategory({
+      drawnNames: {},
       name: "Eating out",
       kind: "expense",
       parentId: GROUP,
@@ -1787,10 +1875,43 @@ describe("phone ledger controller — createCategory", () => {
     );
   });
 
+  /**
+   * A starter is drawn in the app's language, so a sibling collides with what
+   * the person sees as well as with what is stored (`SPEC.md` §6.3).
+   */
+  it("refuses a create that collides with a sibling's drawn name, naming it as drawn", () => {
+    const { controller, createCategory } = categoryHarness();
+    const result = controller.createCategory({
+      name: "Lebensmittel",
+      kind: "expense",
+      parentId: GROUP,
+      drawnNames: { [LEAF]: "Lebensmittel" },
+    });
+    expect("fieldErrors" in result && result.fieldErrors).toEqual([
+      { path: "name", message: '"Lebensmittel" already exists here' },
+    ]);
+    expect(createCategory).not.toHaveBeenCalled();
+  });
+
+  it("refuses the stored name of a sibling drawn differently, naming the drawn one", () => {
+    const { controller, createCategory } = categoryHarness();
+    const result = controller.createCategory({
+      name: "Groceries",
+      kind: "expense",
+      parentId: GROUP,
+      drawnNames: { [LEAF]: "Lebensmittel" },
+    });
+    expect("fieldErrors" in result && result.fieldErrors).toEqual([
+      { path: "name", message: '"Lebensmittel" already exists here' },
+    ]);
+    expect(createCategory).not.toHaveBeenCalled();
+  });
+
   /** S06 §6: a name collision lands on the field, naming the existing sibling. */
   it("refuses a sibling with the same folded name in the same group, before writing", () => {
     const { controller, createCategory } = categoryHarness();
     const result = controller.createCategory({
+      drawnNames: {},
       name: "groceries",
       kind: "expense",
       parentId: GROUP,
@@ -1805,6 +1926,7 @@ describe("phone ledger controller — createCategory", () => {
     const { controller, createCategory } = categoryHarness();
     const OTHER_GROUP = id<"categories">("88888888-8888-4888-8888-888888888888");
     const result = controller.createCategory({
+      drawnNames: {},
       name: "Groceries",
       kind: "expense",
       parentId: OTHER_GROUP,
@@ -1837,8 +1959,12 @@ describe("phone ledger controller — transaction detail writes (C5)", () => {
       accountName: "Cash · PLN",
       toAccountId: null,
       toAccountName: null,
+      toAmount: null,
+      toCurrency: null,
+      fee: null,
       categoryId: null,
       categoryName: null,
+      categoryExternalId: null,
       counterpartyId: null,
       counterpartyIdentityName: null,
       obligationCounterpartyId: null,
@@ -1908,6 +2034,7 @@ describe("phone ledger controller — transaction detail writes (C5)", () => {
           amount: line.amount,
           categoryId: line.categoryId ?? null,
           categoryName: null,
+          categoryExternalId: null,
         })),
         version: row.version + 1,
       };
@@ -1989,6 +2116,46 @@ describe("phone ledger controller — transaction detail writes (C5)", () => {
       patch: { enteredName: "Café A · Downtown" },
     });
     expect(controller.getTransaction(TXN)?.enteredName).toBe("Café A · Downtown");
+  });
+
+  /**
+   * **Every key the card sends reaches the ledger.** The counterparty, the
+   * obligation pair and the one-off flag were missing from the forwarding, so
+   * S09 saved nothing for them and reported success.
+   */
+  it("updateTransaction forwards the counterparty, the obligation and the one-off flag", () => {
+    const { controller, updateTransaction } = detailHarness();
+    const WHO = "77777777-7777-4777-8777-777777777777";
+    controller.updateTransaction(TXN, 1, {
+      counterpartyId: WHO,
+      obligationCounterpartyId: WHO,
+      obligationRole: "debt",
+      isCapital: true,
+    });
+    expect(updateTransaction.mock.calls[0]?.[0].patch).toEqual({
+      counterpartyId: WHO,
+      obligationCounterpartyId: WHO,
+      obligationRole: "debt",
+      isCapital: true,
+    });
+  });
+
+  /** A transfer's own fields, as S09's one card sends them. */
+  it("updateTransaction forwards a transfer's destination, second leg and fee", () => {
+    const { controller, updateTransaction } = detailHarness();
+    const SAVINGS = "88888888-8888-4888-8888-888888888888";
+    controller.updateTransaction(TXN, 1, {
+      amountOriginal: "450",
+      toAccountId: SAVINGS,
+      toAmount: "450",
+      toCurrency: "PLN",
+      fee: null,
+    });
+    const patch = updateTransaction.mock.calls[0]?.[0].patch;
+    expect(Object.keys(patch ?? {}).sort()).toEqual(
+      ["amountOriginal", "fee", "toAccountId", "toAmount", "toCurrency"].sort(),
+    );
+    expect(patch?.fee, "null takes a fee off").toBeNull();
   });
 
   /**
@@ -3062,6 +3229,173 @@ describe("phone ledger controller — counterparties and settlement", () => {
   });
 });
 
+describe("phone ledger controller — recordOpeningDebt (§6.6)", () => {
+  const NINA = id<"counterparties">("11111111-1111-4111-8111-111111111111");
+
+  function harness(overrides: Partial<PhoneLedgerPort> = {}) {
+    const recordOpeningDebt = vi.fn<PhoneLedgerPort["recordOpeningDebt"]>(() => ({
+      balance: money.toMoney("200"),
+      repaid: money.ZERO,
+      flipped: false,
+    }));
+    const controller = createPhoneLedger(
+      basePort({ recordOpeningDebt, listCurrencies: () => CURRENCIES, ...overrides }),
+      {
+        capture: () => ({
+          date: accountingDate("2026-08-23"),
+          timeZone: "Europe/Warsaw",
+          offsetMinutes: 120,
+          at: new Date("2026-08-23T10:00:00Z"),
+        }),
+        id: <Table extends IdTable>() => id<Table>("00000000-0000-4000-8000-000000000042"),
+      },
+    );
+    return { controller, recordOpeningDebt };
+  }
+
+  const draft = {
+    counterpartyId: NINA,
+    direction: "theyOwe" as const,
+    amount: "200",
+    currency: "PLN",
+    date: "2026-01-01",
+  };
+
+  it("mints the row's id and hands the port the parsed operation", () => {
+    const { controller, recordOpeningDebt } = harness();
+
+    const result = controller.recordOpeningDebt(draft);
+
+    expect(result).toEqual({
+      id: "00000000-0000-4000-8000-000000000042",
+      balance: money.toMoney("200"),
+      repaid: money.ZERO,
+      flipped: false,
+    });
+    expect(recordOpeningDebt).toHaveBeenCalledWith(
+      {
+        id: "00000000-0000-4000-8000-000000000042",
+        counterpartyId: NINA,
+        direction: "theyOwe",
+        amount: money.toMoney("200"),
+        currency: "PLN",
+        date: "2026-01-01",
+        today: "2026-08-23",
+      },
+      expect.objectContaining({ date: "2026-08-23" }),
+    );
+  });
+
+  it("refuses more decimal places than the currency holds, on the amount field, before the port", () => {
+    const { controller, recordOpeningDebt } = harness();
+    controller.refresh();
+
+    const result = controller.recordOpeningDebt({ ...draft, amount: "10.005" });
+
+    expect("fieldErrors" in result && result.fieldErrors).toEqual([
+      expect.objectContaining({
+        path: "amount",
+        messageKey: "transactions.tooManyDecimals",
+        params: { currency: "PLN", decimals: "2" },
+      }),
+    ]);
+    expect(recordOpeningDebt).not.toHaveBeenCalled();
+  });
+
+  it("refuses an amount past the ceiling, zero and a negative, before the port", () => {
+    const { controller, recordOpeningDebt } = harness();
+
+    for (const amount of ["1000000000", "0", "-5"]) {
+      const result = controller.recordOpeningDebt({ ...draft, amount });
+      expect("fieldErrors" in result, amount).toBe(true);
+    }
+    expect(recordOpeningDebt).not.toHaveBeenCalled();
+  });
+
+  it("carries the port's refusal to fieldErrors rather than throwing", () => {
+    const { controller, recordOpeningDebt } = harness();
+    recordOpeningDebt.mockImplementationOnce(() => {
+      throw new Error("record_opening_debt: no counterparty");
+    });
+
+    const result = controller.recordOpeningDebt(draft);
+
+    expect("fieldErrors" in result && result.fieldErrors).toEqual([
+      { path: "", message: "record_opening_debt: no counterparty" },
+    ]);
+  });
+
+  it("refuses a date later than the device's own day, before the port", () => {
+    const { controller, recordOpeningDebt } = harness();
+
+    const result = controller.recordOpeningDebt({ ...draft, date: "2026-08-24" });
+
+    expect("fieldErrors" in result && result.fieldErrors[0]?.path).toBe("date");
+    expect(recordOpeningDebt).not.toHaveBeenCalled();
+  });
+
+  it("hands back what the write did to the balance, and whether it turned the debt around", () => {
+    const { controller, recordOpeningDebt } = harness();
+    recordOpeningDebt.mockReturnValueOnce({
+      balance: money.toMoney("-50"),
+      repaid: money.toMoney("150"),
+      flipped: true,
+    });
+
+    const result = controller.recordOpeningDebt({ ...draft, amount: "100" });
+
+    expect(result).toMatchObject({
+      balance: "-50.00000000",
+      repaid: "150.00000000",
+      flipped: true,
+    });
+  });
+
+  it("deletes an existing debt through the port, naming only its id", () => {
+    const deleteOpeningDebt = vi.fn<PhoneLedgerPort["deleteOpeningDebt"]>(() => ({
+      deletedRepayments: 2,
+      repaid: money.toMoney("150"),
+    }));
+    const { controller } = harness({ deleteOpeningDebt });
+
+    const result = controller.deleteOpeningDebt("00000000-0000-4000-8000-000000000042");
+
+    expect(deleteOpeningDebt).toHaveBeenCalledWith(
+      { id: "00000000-0000-4000-8000-000000000042" },
+      expect.objectContaining({ date: "2026-08-23" }),
+    );
+    expect(result).toMatchObject({
+      id: "00000000-0000-4000-8000-000000000042",
+      deletedRepayments: 2,
+    });
+  });
+
+  it("carries a refused delete to fieldErrors rather than throwing", () => {
+    const deleteOpeningDebt = vi.fn<PhoneLedgerPort["deleteOpeningDebt"]>(() => {
+      throw new Error("delete_opening_debt: already deleted");
+    });
+    const { controller } = harness({ deleteOpeningDebt });
+
+    const result = controller.deleteOpeningDebt("00000000-0000-4000-8000-000000000042");
+
+    expect("fieldErrors" in result && result.fieldErrors).toEqual([
+      {
+        path: "",
+        message: "delete_opening_debt: already deleted",
+        messageKey: "counterparties.existingDebtGone",
+      },
+    ]);
+  });
+
+  it("reads a person's opening debts through the port", () => {
+    const listOpeningDebts = vi.fn<PhoneLedgerPort["listOpeningDebts"]>(() => []);
+    const { controller } = harness({ listOpeningDebts });
+
+    expect(controller.listOpeningDebts(NINA)).toEqual([]);
+    expect(listOpeningDebts).toHaveBeenCalledWith(NINA);
+  });
+});
+
 /**
  * §6.6's own table, through the controller's on-demand `listCounterpartyBalances`
  * — a fixture that accrues the four events in turn (lend, they repay, you
@@ -3140,7 +3474,11 @@ describe("category writes", () => {
     it("propagates the new name and bumps the version on the port call", () => {
       const { controller, renameCategory } = harness(undefined, { categoryTree: tree() });
 
-      const result = controller.renameCategory({ id: GROCERIES, name: "Groceries & household" });
+      const result = controller.renameCategory({
+        id: GROCERIES,
+        name: "Groceries & household",
+        drawnNames: {},
+      });
 
       expect(idOf(result)).toBe(GROCERIES);
       expect(renameCategory.mock.calls[0]?.[0]).toMatchObject({
@@ -3153,10 +3491,29 @@ describe("category writes", () => {
       );
     });
 
+    it("refuses a rename onto a sibling's drawn name, naming it as drawn", () => {
+      const { controller, renameCategory } = harness(undefined, { categoryTree: tree() });
+
+      const result = controller.renameCategory({
+        id: EATING_OUT,
+        name: "Lebensmittel",
+        drawnNames: { [GROCERIES]: "Lebensmittel" },
+      });
+
+      expect("fieldErrors" in result && result.fieldErrors).toEqual([
+        { path: "name", message: '"Lebensmittel" already exists here' },
+      ]);
+      expect(renameCategory).not.toHaveBeenCalled();
+    });
+
     it("refuses a sibling collision before writing, naming the existing sibling", () => {
       const { controller, renameCategory } = harness(undefined, { categoryTree: tree() });
 
-      const result = controller.renameCategory({ id: EATING_OUT, name: "groceries" });
+      const result = controller.renameCategory({
+        id: EATING_OUT,
+        name: "groceries",
+        drawnNames: {},
+      });
 
       expect("fieldErrors" in result && result.fieldErrors).toEqual([
         { path: "name", message: '"Groceries" already exists here' },
@@ -3166,7 +3523,11 @@ describe("category writes", () => {
 
     it("does not collide with itself when the name is unchanged", () => {
       const { controller } = harness(undefined, { categoryTree: tree() });
-      const result = controller.renameCategory({ id: GROCERIES, name: "Groceries" });
+      const result = controller.renameCategory({
+        id: GROCERIES,
+        name: "Groceries",
+        drawnNames: {},
+      });
       expect(idOf(result)).toBe(GROCERIES);
     });
   });

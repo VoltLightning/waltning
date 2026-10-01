@@ -49,7 +49,11 @@ import {
   createCounterpartyInput,
   createGroupInput,
   createTransactionInput,
+  type DeleteAccountInput,
+  type DeleteOpeningDebtInput,
   type DeleteTransactionInput,
+  deleteAccountInput,
+  deleteOpeningDebtInput,
   deleteTransactionInput,
   type MergeCategoriesInput,
   type MergeCounterpartiesInput,
@@ -58,11 +62,13 @@ import {
   type ObligationRole,
   type ReconcileAccountInput,
   type RecordDistinctCounterpartiesInput,
+  type RecordOpeningDebtInput,
   type RenameCategoryInput,
   type ReorderAccountsInput,
   type ReparentCategoryInput,
   reconcileAccountInput,
   recordDistinctCounterpartiesInput,
+  recordOpeningDebtInput,
   renameCategoryInput,
   reorderAccountsInput,
   reparentCategoryInput,
@@ -181,6 +187,13 @@ export type PhoneAccount = {
   color: AccountColor | null;
   /** The last balance a reconciliation recorded (S16 §5) — `null` before the first one. */
   expectedBalance: Money | null;
+  /**
+   * Whether anything references this account — a transaction on either leg
+   * (soft-deleted ones too), a recurring rule, or a non-zero opening balance.
+   * False is what lets the editor offer *Delete*; true leaves it *Archive*
+   * (§6.9).
+   */
+  hasEntries: boolean;
   /** `AccountEditor`'s own fields — shown and, `version` apart, edited. */
   openingBalance: Money;
   openingDate: AccountingDate | null;
@@ -268,6 +281,7 @@ export type PhoneRecentTransaction = {
   date: AccountingDate;
   enteredName: string;
   categoryName: string | null;
+  categoryExternalId: string | null;
   accountName: string;
   amount: Money;
   currency: CurrencyCode;
@@ -296,6 +310,8 @@ export type PhoneCategory = {
   id: Id<"categories">;
   name: string;
   kind: "income" | "expense";
+  /** The seed's own tag — the display rule's other input (`@waltning/core/seed-label`). */
+  externalId: string | null;
 };
 
 /**
@@ -395,6 +411,48 @@ export type PhoneCounterparty = {
   archived: boolean;
   /** `update_counterparty`'s optimistic-concurrency check (`counterparties.staleVersion`). */
   version: number;
+};
+
+/**
+ * §6.6 — a debt that predates the ledger, as S13 lists it. Structural, like
+ * `PhoneCounterparty` above: the direction is restated rather than imported so
+ * this package stays free of `@waltning/schema`.
+ */
+export type PhoneOpeningDebt = {
+  id: Id<"openingDebts">;
+  counterpartyId: Id<"counterparties">;
+  currency: CurrencyCode;
+  direction: "theyOwe" | "youOwe";
+  amount: Money;
+  date: AccountingDate;
+  /** What the repayments made against it have discharged, in its own currency. */
+  repaid: Money;
+  /** Those repayments, with the account each moved — what deleting the debt takes with it. */
+  repayments: readonly {
+    id: Id<"transactions">;
+    accountId: Id<"accounts">;
+    accountName: string;
+    amount: Money;
+    accountAmount: Money;
+    accountCurrency: CurrencyCode;
+  }[];
+};
+
+/**
+ * What recording an existing debt did to the person's balance — returned the
+ * way `settle_debt` returns its residual (§6.6): a re-recorded figure re-signs
+ * the repayments already made, and `flipped` says the balance now points the
+ * other way from the direction just recorded.
+ */
+export type PhoneRecordOpeningDebtResult = {
+  balance: Money;
+  repaid: Money;
+  flipped: boolean;
+};
+
+export type PhoneDeleteOpeningDebtResult = {
+  deletedRepayments: number;
+  repaid: Money;
 };
 
 /** What settling with someone actually did — H9, never supplied, only returned. */
@@ -512,6 +570,7 @@ export type PhoneSearchTransaction = {
   enteredName: string;
   note: string;
   categoryName: string | null;
+  categoryExternalId: string | null;
   /** `SPEC.md` §14.4b — mirrors `@waltning/ledger`'s `LocalSearchTransaction.brandKey` field-for-field. */
   brandKey: string | null;
   accountId: Id<"accounts">;
@@ -608,6 +667,7 @@ export type PhoneTransactionLine = {
   amount: Money;
   categoryId: Id<"categories"> | null;
   categoryName: string | null;
+  categoryExternalId: string | null;
 };
 
 /**
@@ -638,8 +698,14 @@ export type PhoneTransactionDetail = {
   toAccountId: Id<"accounts"> | null;
   /** Read with the row, so an archived destination keeps its name. */
   toAccountName: string | null;
+  /** A transfer's destination leg, unsigned, in `toCurrency`; `null` on every other type. */
+  toAmount: Money | null;
+  toCurrency: CurrencyCode | null;
+  /** A transfer's fee, in the source currency; `null` when there is none. */
+  fee: Money | null;
   categoryId: Id<"categories"> | null;
   categoryName: string | null;
+  categoryExternalId: string | null;
   /** §6.6.1 — who the transaction was *with*, and the name to draw for it. */
   counterpartyId: Id<"counterparties"> | null;
   /** `counterpartyId`'s own name, archived or not; `counterpartyName` is the obligation's. */
@@ -797,7 +863,10 @@ export type PhoneLedgerPort = {
   /** D2's reader, on demand — D4b's proposal recomputes it only when the typed entered name changes. */
   listEnteredNameHistory: () => readonly PhoneEnteredNameHistoryRow[];
   /** §7 — S12's list. `today` is the caller's own accounting date, the same one `capture()` computes. */
-  listCounterpartyBalances: (today: AccountingDate) => readonly PhoneCounterpartyBalance[];
+  listCounterpartyBalances: (
+    today: AccountingDate,
+    options?: { excluding?: string },
+  ) => readonly PhoneCounterpartyBalance[];
   /** The whole tree, archived rows included — S19's editor. See `PhoneFullCategoryNode`. */
   listFullCategoryTree: () => readonly PhoneFullCategoryNode[];
   /** How many live rows touch each category — see `readCategoryUsage`. */
@@ -808,6 +877,8 @@ export type PhoneLedgerPort = {
   listCounterpartyMerges: (
     counterpartyId: Id<"counterparties">,
   ) => readonly PhoneCounterpartyMerge[];
+  /** §6.6 — one person's opening debts, on demand: S13's line and the form's prefill. */
+  listOpeningDebts: (counterpartyId: Id<"counterparties">) => readonly PhoneOpeningDebt[];
   /** S15 §9.1's own table — read whole, on every refresh (it is small). */
   listDistinctCounterpartyPairs: () => readonly (readonly [
     Id<"counterparties">,
@@ -837,6 +908,7 @@ export type PhoneLedgerPort = {
   readIncomeVsExpense: (
     buckets: readonly PhoneIncomeExpenseBucket[],
     scope: money.LedgerScope,
+    options?: Pick<money.SpendByCategoryOptions, "rebase">,
   ) => readonly PhoneIncomeExpenseRow[];
   /** `get_active_layout` — `null` only on an empty, never-migrated database. `DESK4`. */
   readActiveDashboardLayout: () => PhoneDashboardLayout | null;
@@ -899,6 +971,7 @@ export type PhoneLedgerPort = {
   setTransactionLines: (input: SetTransactionLinesInput, capture: PhoneCapture) => void;
   updateAccount: (input: UpdateAccountInput, capture: PhoneCapture) => void;
   archiveAccount: (input: ArchiveAccountInput, capture: PhoneCapture) => void;
+  deleteAccount: (input: DeleteAccountInput, capture: PhoneCapture) => void;
   setAccountVisibility: (input: SetAccountVisibilityInput, capture: PhoneCapture) => void;
   /** S16 §3 — the whole ordered list, `sort` becoming each id's position. */
   reorderAccounts: (input: ReorderAccountsInput, capture: PhoneCapture) => void;
@@ -957,6 +1030,16 @@ export type PhoneLedgerPort = {
     input: RecordDistinctCounterpartiesInput,
     capture: PhoneCapture,
   ) => void;
+  /** §6.6 — a debt that predates the ledger; replaces the one in the same currency. */
+  recordOpeningDebt: (
+    input: RecordOpeningDebtInput,
+    capture: PhoneCapture,
+  ) => PhoneRecordOpeningDebtResult;
+  /** §6.6 — an existing debt and every repayment made against it, in one write. */
+  deleteOpeningDebt: (
+    input: DeleteOpeningDebtInput,
+    capture: PhoneCapture,
+  ) => PhoneDeleteOpeningDebtResult;
   /**
    * The one port write with a real return value — `residual`/`overSettled`
    * are H9's whole point, computed server-side (or, with none yet, by the
@@ -1297,6 +1380,12 @@ export type CreateCategoryDraft = {
   name: string;
   kind: "income" | "expense";
   parentId: string | null;
+  /**
+   * Category id → the name the screen draws for it (`categoryLabel`). A
+   * starter is drawn in the app's language, so a sibling collides with what
+   * the person *sees* as well as with what is stored (`SPEC.md` §6.3).
+   */
+  drawnNames: Readonly<Record<string, string>>;
 };
 
 /**
@@ -1334,9 +1423,12 @@ export type CategorizeBatchDraft = { transactionIds: readonly string[]; category
 /**
  * What `FieldsCard` can save — every key optional, so `updateTransaction`
  * sends only what changed (the executor refuses an empty patch). Matches
- * `update_transaction`'s own patch shape, narrowed to the fields the screen
- * exposes this wave: counterparty and `is_capital` are deferred — see
- * `PhoneTransactionDetail`.
+ * `update_transaction`'s own patch shape for every field S09's card exposes.
+ *
+ * **Every key the card sends is forwarded.** The counterparty, the obligation
+ * pair and `isCapital` were typed on the card's side and missing here, so the
+ * controller dropped them without a word: a debt named on S09 was never
+ * written, and the card said nothing had gone wrong.
  */
 export type TransactionFieldPatch = {
   date?: string;
@@ -1345,6 +1437,19 @@ export type TransactionFieldPatch = {
   enteredName?: string;
   note?: string;
   isBusiness?: boolean;
+  isCapital?: boolean;
+  /** §6.6.1 — who it was *with*; `null` clears it. */
+  counterpartyId?: string | null;
+  /** §6.6 — who it *owes*, and in what role; `null` clears both. */
+  obligationCounterpartyId?: string | null;
+  obligationRole?: "debt" | "contribution" | null;
+  /** Unsigned, as `create_transaction` takes it — every type has an amount. */
+  amountOriginal?: string;
+  /** A transfer's own fields: its destination, that leg's figure, and the fee (`null` takes it off). */
+  toAccountId?: string;
+  toAmount?: string;
+  toCurrency?: string;
+  fee?: string | null;
 };
 
 /**
@@ -1359,7 +1464,12 @@ export type TransactionLineDraft = {
   categoryId?: string | null;
 };
 /** What S19's rename sheet can save. */
-export type RenameCategoryDraft = { id: string; name: string };
+export type RenameCategoryDraft = {
+  id: string;
+  name: string;
+  /** As on `CreateCategoryDraft`. */
+  drawnNames: Readonly<Record<string, string>>;
+};
 
 /** What S19's move sheet can save — `parentId: null` moves to the root. */
 export type MoveCategoryDraft = { id: string; parentId: string | null };
@@ -1398,6 +1508,12 @@ export type UpdateAccountDraft = {
 };
 
 export type ArchiveAccountDraft = {
+  id: string;
+  version: number;
+};
+
+/** `delete_account`'s draft — the same two fields `archive_account` takes. */
+export type DeleteAccountDraft = {
   id: string;
   version: number;
 };
@@ -1514,6 +1630,15 @@ export type RecordDistinctCounterpartiesDraft = {
   bId: string;
 };
 
+/** S13's *Add an existing debt* — what the sheet asks for; the id is minted by the controller. */
+export type RecordOpeningDebtDraft = {
+  counterpartyId: string;
+  direction: "theyOwe" | "youOwe";
+  amount: string;
+  currency: string;
+  date: string;
+};
+
 /** S14 §3 — what the sheet actually asks for. No `residual`, no `rate`: both are derived (H9, §7.5). */
 export type SettleDebtDraft = {
   counterpartyId: string;
@@ -1525,6 +1650,8 @@ export type SettleDebtDraft = {
   dischargesAmount: string;
   note: string;
   categoryId: string | null;
+  /** S09 — the row this settlement replaces, in the same write. */
+  supersedes?: { id: string; version: number };
 };
 
 /**
@@ -1659,6 +1786,7 @@ export type PhoneLedgerController = {
   readIncomeVsExpense: (
     buckets: readonly PhoneIncomeExpenseBucket[],
     scope: money.LedgerScope,
+    options?: Pick<money.SpendByCategoryOptions, "rebase">,
   ) => readonly PhoneIncomeExpenseRow[];
   /** `get_active_layout`, on demand — `S01`'s grid, read but not rearranged (S24 later). `DESK4`. */
   readActiveDashboardLayout: () => PhoneDashboardLayout | null;
@@ -1670,11 +1798,16 @@ export type PhoneLedgerController = {
    * `money.directionTotals(balances)` folds S12's two direction totals from
    * this call's own result — a pure function, not a second round trip.
    */
-  listCounterpartyBalances: (today: AccountingDate) => readonly PhoneCounterpartyBalance[];
+  listCounterpartyBalances: (
+    today: AccountingDate,
+    options?: { excluding?: string },
+  ) => readonly PhoneCounterpartyBalance[];
   /** S13's overflow, on demand — merges into one counterparty, still live. */
   listCounterpartyMerges: (
     counterpartyId: Id<"counterparties">,
   ) => readonly PhoneCounterpartyMerge[];
+  /** S13 — the person's opening debts (one per currency), on demand. */
+  listOpeningDebts: (counterpartyId: Id<"counterparties">) => readonly PhoneOpeningDebt[];
   /**
    * S16 §5, on demand — `ReconcileSheet`'s "Computed" figure, refolded every
    * time its own date field moves rather than fixed to the balance the sheet
@@ -1768,6 +1901,15 @@ export type PhoneLedgerController = {
   archiveAccount: (
     draft: ArchiveAccountDraft,
   ) => { id: Id<"accounts"> } | { fieldErrors: readonly FieldError[] };
+  /**
+   * Removes an account nothing references (§6.9). Refused with
+   * `accounts.deleteHasEntries` when something does — the screen offers
+   * *Delete* only where `hasEntries` is false, so this is the race (an entry
+   * written between the render and the tap), not the ordinary path.
+   */
+  deleteAccount: (
+    draft: DeleteAccountDraft,
+  ) => { id: Id<"accounts"> } | { fieldErrors: readonly FieldError[] };
   setAccountVisibility: (
     draft: SetAccountVisibilityDraft,
   ) => { id: Id<"accounts"> } | { fieldErrors: readonly FieldError[] };
@@ -1857,6 +1999,25 @@ export type PhoneLedgerController = {
     | { fieldErrors: readonly FieldError[] };
   /** The same lazy toggle as `loadArchived()`, for counterparties. */
   loadArchivedCounterparties: () => void;
+  /**
+   * S13's *Add an existing debt* (§6.6). Sets the person's balance in the
+   * currency and is never income or spending; recording again replaces it.
+   */
+  recordOpeningDebt: (
+    draft: RecordOpeningDebtDraft,
+  ) =>
+    | ({ id: Id<"openingDebts"> } & PhoneRecordOpeningDebtResult)
+    | { fieldErrors: readonly FieldError[] };
+  /**
+   * §6.6 — deletes an existing debt **and every repayment made against it**,
+   * in one write; the screen lists them first, because the accounts they
+   * moved change.
+   */
+  deleteOpeningDebt: (
+    id: string,
+  ) =>
+    | ({ id: Id<"openingDebts"> } & PhoneDeleteOpeningDebtResult)
+    | { fieldErrors: readonly FieldError[] };
   settleDebt: (
     draft: SettleDebtDraft,
   ) =>
@@ -1889,9 +2050,29 @@ export type PhoneLedgerController = {
 function refusalFromThrow<Caught>(error: Caught): readonly FieldError[] {
   // Rendered at form level, so `errorFromThrown` rather than `String`.
   const message = errorFromThrown(error).message;
-  return message.includes("stale version")
-    ? [{ path: "", message, messageKey: "transactions.changedElsewhere" }]
-    : [{ path: "", message }];
+  if (message.includes("stale version")) {
+    return [{ path: "", message, messageKey: "transactions.changedElsewhere" }];
+  }
+  // §6.6 — refusals a person can act on, in their own language rather than the
+  // executor's developer text.
+  if (message.includes("Re-settle")) {
+    return [{ path: "", message, messageKey: "transactions.reSettle" }];
+  }
+  if (message.includes("a split line has no person")) {
+    return [{ path: "", message, messageKey: "transactions.splitDebtCategory" }];
+  }
+  if (message.includes("un-split it first")) {
+    return [{ path: "", message, messageKey: "transactions.unSplitFirst" }];
+  }
+  // §6.6 — a link to an existing debt the table refuses: a person or role changed under it.
+  // §6.6 — one payment written as two rows is changed as a whole.
+  if (message.includes("split against an existing debt")) {
+    return [{ path: "", message, messageKey: "transactions.splitPayment" }];
+  }
+  if (message.includes("transactions_opening_link_shape")) {
+    return [{ path: "", message, messageKey: "transactions.openingLinkShape" }];
+  }
+  return [{ path: "", message }];
 }
 
 /**
@@ -1941,6 +2122,11 @@ function accountWriteRefusal(error: Error): FieldError | null {
       message: error.message,
       messageKey: "accounts.sharedNotBusiness",
     };
+  }
+  // `delete_account`'s own refusal — an entry arrived between the editor
+  // rendering *Delete* and the tap. Form-level: there is no field it belongs to.
+  if (error.message.includes("has entries")) {
+    return { path: "", message: error.message, messageKey: "accounts.deleteHasEntries" };
   }
   return null;
 }
@@ -2265,7 +2451,7 @@ function sharedTrigramCount(a: ReadonlySet<string>, b: ReadonlySet<string>): num
  * `merge_categories` refuses a group on either side, so a candidate outside
  * that scope is one the merge sheet could never act on.
  */
-function collisionsOf(
+export function collisionsOf(
   tree: readonly PhoneFullCategoryNode[],
   usage: ReadonlyMap<Id<"categories">, number>,
 ): readonly PhoneCategoryCollision[] {
@@ -2293,6 +2479,17 @@ function collisionsOf(
   }
 
   return collisions.sort((x, y) => y.score - x.score);
+}
+
+/** A sibling collides on the stored name and on the name the screen draws for it. */
+function namesCollide(
+  node: { id: string; name: string },
+  foldedTarget: string,
+  drawnNames: Readonly<Record<string, string>> | undefined,
+): boolean {
+  if (fold(node.name) === foldedTarget) return true;
+  const drawn = drawnNames?.[node.id];
+  return drawn !== undefined && fold(drawn) === foldedTarget;
 }
 
 /** The category a draft names, or `undefined` — every write below refuses on a miss. */
@@ -2497,10 +2694,17 @@ export function createPhoneLedger(
       options === undefined
         ? port.readSpendByCategory(period, scope)
         : port.readSpendByCategory(period, scope, options),
-    readIncomeVsExpense: (buckets, scope) => port.readIncomeVsExpense(buckets, scope),
+    readIncomeVsExpense: (buckets, scope, options) =>
+      options === undefined
+        ? port.readIncomeVsExpense(buckets, scope)
+        : port.readIncomeVsExpense(buckets, scope, options),
     readActiveDashboardLayout: () => port.readActiveDashboardLayout(),
-    listCounterpartyBalances: (today) => port.listCounterpartyBalances(today),
+    listCounterpartyBalances: (today, options) =>
+      options === undefined
+        ? port.listCounterpartyBalances(today)
+        : port.listCounterpartyBalances(today, options),
     listCounterpartyMerges: (counterpartyId) => port.listCounterpartyMerges(counterpartyId),
+    listOpeningDebts: (counterpartyId) => port.listOpeningDebts(counterpartyId),
     balanceAsOf: (accountId, asOf) => port.balanceAsOf(accountId, asOf),
     listEnteredNameHistory: () => port.listEnteredNameHistory(),
     searchTransactions: (filter, cursor, options) =>
@@ -2808,6 +3012,52 @@ export function createPhoneLedger(
         emitClientDiagnostic(diagnostics, {
           scope: "client_action",
           action: "archive_account",
+          phase: "failure",
+          error: clientFailure(error),
+        });
+        throw error;
+      }
+    },
+    deleteAccount: (draft) => {
+      emitClientDiagnostic(diagnostics, {
+        scope: "client_action",
+        action: "delete_account",
+        phase: "start",
+      });
+      try {
+        const capture = runtime.capture();
+        const parsed = deleteAccountInput.safeParse({ id: draft.id, version: draft.version });
+        if (!parsed.success) {
+          return finish(
+            diagnostics,
+            { scope: "client_action", action: "delete_account" },
+            { fieldErrors: fieldErrorsFromZod(parsed.error) ?? [] },
+          );
+        }
+        try {
+          port.deleteAccount(parsed.data, capture);
+        } catch (refusal) {
+          // A thrown refusal is the only thing these mappers read; anything
+          // else is a fault and is rethrown untouched.
+          if (!(refusal instanceof Error)) throw refusal;
+          const fieldError = accountWriteRefusal(refusal);
+          if (!fieldError) throw refusal;
+          return finish(
+            diagnostics,
+            { scope: "client_action", action: "delete_account" },
+            { fieldErrors: [fieldError] },
+          );
+        }
+        refresh();
+        return finish(
+          diagnostics,
+          { scope: "client_action", action: "delete_account" },
+          { id: parsed.data.id },
+        );
+      } catch (error) {
+        emitClientDiagnostic(diagnostics, {
+          scope: "client_action",
+          action: "delete_account",
           phase: "failure",
           error: clientFailure(error),
         });
@@ -3304,6 +3554,135 @@ export function createPhoneLedger(
       archivedCounterpartiesRequested = true;
       refresh();
     },
+    recordOpeningDebt: (draft) => {
+      emitClientDiagnostic(diagnostics, {
+        scope: "client_action",
+        action: "record_opening_debt",
+        phase: "start",
+      });
+      try {
+        const capture = runtime.capture();
+        // Scale is the currency's own, read from the replica's list: a figure
+        // past it is refused on the amount field, in the person's words,
+        // before anything is queued (`transactions.tooManyDecimals`, as
+        // `settleDebt`'s discharge figure does).
+        const currency = snapshot.currencies.find((candidate) => candidate.code === draft.currency);
+        const parsedAmount = zMoney.safeParse(draft.amount);
+        if (
+          currency !== undefined &&
+          parsedAmount.success &&
+          money.dec(parsedAmount.data).decimalPlaces() > currency.decimals
+        ) {
+          emitClientDiagnostic(diagnostics, {
+            scope: "client_action",
+            action: "record_opening_debt",
+            phase: "failure",
+            error: clientFailure(new Error("transactions.tooManyDecimals")),
+          });
+          return {
+            fieldErrors: [
+              {
+                path: "amount",
+                message: `${currency.code} holds ${currency.decimals} decimal places — this amount has more`,
+                messageKey: "transactions.tooManyDecimals",
+                params: { currency: currency.code, decimals: String(currency.decimals) },
+              },
+            ],
+          };
+        }
+        const parsed = recordOpeningDebtInput.safeParse({
+          id: runtime.id<"openingDebts">(),
+          counterpartyId: draft.counterpartyId,
+          direction: draft.direction,
+          amount: draft.amount,
+          currency: draft.currency,
+          date: draft.date,
+          today: capture.date,
+        });
+        if (!parsed.success) {
+          return finish(
+            diagnostics,
+            { scope: "client_action", action: "record_opening_debt" },
+            { fieldErrors: fieldErrorsFromZod(parsed.error) ?? [] },
+          );
+        }
+        let recorded: PhoneRecordOpeningDebtResult;
+        try {
+          recorded = port.recordOpeningDebt(parsed.data, capture);
+        } catch (writeError) {
+          return finish(
+            diagnostics,
+            { scope: "client_action", action: "record_opening_debt" },
+            { fieldErrors: refusalFromThrow(writeError) },
+          );
+        }
+        refresh();
+        return finish(
+          diagnostics,
+          { scope: "client_action", action: "record_opening_debt" },
+          { id: parsed.data.id, ...recorded },
+        );
+      } catch (error) {
+        emitClientDiagnostic(diagnostics, {
+          scope: "client_action",
+          action: "record_opening_debt",
+          phase: "failure",
+          error: clientFailure(error),
+        });
+        throw error;
+      }
+    },
+    deleteOpeningDebt: (openingDebtId) => {
+      emitClientDiagnostic(diagnostics, {
+        scope: "client_action",
+        action: "delete_opening_debt",
+        phase: "start",
+      });
+      try {
+        const capture = runtime.capture();
+        const parsed = deleteOpeningDebtInput.safeParse({ id: openingDebtId });
+        if (!parsed.success) {
+          return finish(
+            diagnostics,
+            { scope: "client_action", action: "delete_opening_debt" },
+            { fieldErrors: fieldErrorsFromZod(parsed.error) ?? [] },
+          );
+        }
+        let deleted: PhoneDeleteOpeningDebtResult;
+        try {
+          deleted = port.deleteOpeningDebt(parsed.data, capture);
+        } catch (writeError) {
+          // Gone already (a second tap, another device) says so; anything else
+          // is the plain could-not-save — never a silent close.
+          const message = errorFromThrown(writeError).message;
+          return finish(
+            diagnostics,
+            { scope: "client_action", action: "delete_opening_debt" },
+            {
+              fieldErrors: [
+                message.includes("already deleted") || message.includes("no existing debt")
+                  ? { path: "", message, messageKey: "counterparties.existingDebtGone" }
+                  : { path: "", message, messageKey: "common.couldNotSave" },
+              ],
+            },
+          );
+        }
+        refresh();
+        return finish(
+          diagnostics,
+          { scope: "client_action", action: "delete_opening_debt" },
+          { id: parsed.data.id, ...deleted },
+        );
+      } catch (error) {
+        emitClientDiagnostic(diagnostics, {
+          scope: "client_action",
+          action: "delete_opening_debt",
+          phase: "failure",
+          error: clientFailure(error),
+        });
+        throw error;
+      }
+    },
     settleDebt: (draft) => {
       emitClientDiagnostic(diagnostics, {
         scope: "client_action",
@@ -3475,7 +3854,10 @@ export function createPhoneLedger(
         // write would then meet H4's "the balance moved, reload" refusal for
         // a balance that, in every unit either side renders, never moved.
         const balance = port
-          .listCounterpartyBalances(capture.date)
+          .listCounterpartyBalances(
+            capture.date,
+            draft.supersedes === undefined ? undefined : { excluding: draft.supersedes.id },
+          )
           .find(
             (row) =>
               row.counterpartyId === draft.counterpartyId &&
@@ -3495,6 +3877,9 @@ export function createPhoneLedger(
 
         const parsed = settleDebtInput.safeParse({
           id: runtime.id<"transactions">(),
+          // The second row, if this settlement turns out to cross the end of an
+          // existing debt (§6.6) — minted whether or not it does.
+          spillId: runtime.id<"transactions">(),
           counterpartyId: draft.counterpartyId,
           accountId: draft.accountId,
           date: draft.date,
@@ -3504,6 +3889,9 @@ export function createPhoneLedger(
           discharges: { currency: draft.dischargesCurrency, amount: draft.dischargesAmount },
           note: draft.note,
           categoryId: draft.categoryId ?? undefined,
+          ...(draft.supersedes === undefined
+            ? {}
+            : { supersedesId: draft.supersedes.id, supersedesVersion: draft.supersedes.version }),
         });
         if (!parsed.success) {
           emitClientDiagnostic(diagnostics, {
@@ -4007,14 +4395,19 @@ export function createPhoneLedger(
           (node) =>
             node.parentId === (draft.parentId ?? null) &&
             node.kind === draft.kind &&
-            fold(node.name) === target,
+            namesCollide(node, target, draft.drawnNames),
         );
         if (collision) {
           return finish(
             diagnostics,
             { scope: "client_action", action: "create_category" },
             {
-              fieldErrors: [{ path: "name", message: `"${collision.name}" already exists here` }],
+              fieldErrors: [
+                {
+                  path: "name",
+                  message: `"${draft.drawnNames?.[collision.id] ?? collision.name}" already exists here`,
+                },
+              ],
             },
           );
         }
@@ -4067,6 +4460,17 @@ export function createPhoneLedger(
             ...(patch.enteredName !== undefined ? { enteredName: patch.enteredName } : {}),
             ...(patch.note !== undefined ? { note: patch.note } : {}),
             ...(patch.isBusiness !== undefined ? { isBusiness: patch.isBusiness } : {}),
+            ...(patch.isCapital !== undefined ? { isCapital: patch.isCapital } : {}),
+            ...("counterpartyId" in patch ? { counterpartyId: patch.counterpartyId } : {}),
+            ...("obligationCounterpartyId" in patch
+              ? { obligationCounterpartyId: patch.obligationCounterpartyId }
+              : {}),
+            ...("obligationRole" in patch ? { obligationRole: patch.obligationRole } : {}),
+            ...(patch.amountOriginal !== undefined ? { amountOriginal: patch.amountOriginal } : {}),
+            ...(patch.toAccountId !== undefined ? { toAccountId: patch.toAccountId } : {}),
+            ...(patch.toAmount !== undefined ? { toAmount: patch.toAmount } : {}),
+            ...(patch.toCurrency !== undefined ? { toCurrency: patch.toCurrency } : {}),
+            ...("fee" in patch ? { fee: patch.fee } : {}),
           },
         });
         if (!parsed.success) {
@@ -4614,11 +5018,16 @@ export function createPhoneLedger(
             node.id !== current.id &&
             node.parentId === current.parentId &&
             node.kind === current.kind &&
-            fold(node.name) === target,
+            namesCollide(node, target, draft.drawnNames),
         );
         if (collision) {
           return {
-            fieldErrors: [{ path: "name", message: `"${collision.name}" already exists here` }],
+            fieldErrors: [
+              {
+                path: "name",
+                message: `"${draft.drawnNames?.[collision.id] ?? collision.name}" already exists here`,
+              },
+            ],
           };
         }
 

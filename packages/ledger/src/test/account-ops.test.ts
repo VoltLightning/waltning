@@ -416,6 +416,53 @@ describe("reconcile_account", () => {
       .run();
   }
 
+  /**
+   * The ceiling bounds an *amount a row holds*. An observed balance is a
+   * balance — a ledger can legitimately sum past a billion across many rows —
+   * so only the adjustment the reconciliation derives is bounded.
+   */
+  it("takes an observed balance past the per-row ceiling when the adjustment itself is within it", () => {
+    const db = s.ledger.replica.db;
+    db.update(accounts)
+      .set({ openingBalance: money.toMoney("999999999.00") })
+      .where(eq(accounts.id, ACCOUNT_A))
+      .run();
+    db.insert(transactions)
+      .values({
+        id: id<"transactions">("66666666-6666-4666-8666-666666666667"),
+        date: accountingDate("2026-03-01"),
+        type: "income",
+        accountId: ACCOUNT_A,
+        amountOriginal: money.toMoney("999999999.00"),
+        currency: PLN,
+        fxRate: money.pivotPerUnit("1"),
+      })
+      .run();
+
+    // Computed 1 999 999 998; observed 1 500 000 000: the adjustment is
+    // −499 999 998, inside the ceiling, though the observed figure is not.
+    const result = write(reconcileAccountExecutor, {
+      accountId: ACCOUNT_A,
+      adjustmentId: ADJUSTMENT,
+      observedBalance: "1500000000",
+      asOf: "2026-03-12",
+    });
+    expect(result.row.amountOriginal).toBe("-499999998.00000000");
+    expect(account(ACCOUNT_A)?.expectedBalance).toBe("1500000000.00000000");
+  });
+
+  it("refuses a reconciliation whose own adjustment is past the ceiling", () => {
+    seedComputedBalance();
+    expect(() =>
+      write(reconcileAccountExecutor, {
+        accountId: ACCOUNT_A,
+        adjustmentId: ADJUSTMENT,
+        observedBalance: "1500000000",
+        asOf: "2026-03-12",
+      }),
+    ).toThrow();
+  });
+
   it("writes one adjustment for the difference — S16 §5's worked example", () => {
     seedComputedBalance();
 

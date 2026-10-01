@@ -1,3 +1,6 @@
+import { settleResidualDirection } from "@waltning/client/counterparties/counterparty-figures";
+import { debtIntentOf, effectiveRole } from "@waltning/client/counterparties/debt-intent";
+import { planRepayment } from "@waltning/client/counterparties/repayment-plan";
 import { useDevicePreference } from "@waltning/client/device/use-device-preference";
 import type {
   CreateCategoryDraft,
@@ -10,19 +13,26 @@ import { useCategoryPace } from "@waltning/client/ledger/use-category-pace";
 import { useLedgerController } from "@waltning/client/ledger/use-ledger-controller";
 import { usePhoneLedger } from "@waltning/client/ledger/use-phone-ledger";
 import { acceptProposedCategory } from "@waltning/client/transactions/accept-proposed-category";
+import { isCompactWindow } from "@waltning/client/transactions/compact-window";
+import {
+  soleEligibleAccount,
+  useDefaultAccount,
+} from "@waltning/client/transactions/default-account";
 import { useLastUsedAccount } from "@waltning/client/transactions/last-capture";
 import { mapFieldErrors } from "@waltning/client/transport/field-errors";
 import { proposeCategory } from "@waltning/core/capture/entered-name-memory";
 import { fold } from "@waltning/core/capture/names";
 import { recentCategories } from "@waltning/core/capture/recent-categories";
-import { accountingDate, clockIn } from "@waltning/core/date";
+import { accountingDate, clockIn, isAccountingDate } from "@waltning/core/date";
 import * as money from "@waltning/core/money";
 import { AccountPicker, type AccountPickerAccount } from "@waltning/ui/accounts/account-picker";
 import { CategorySheet } from "@waltning/ui/categories/category-sheet";
 import { parseAmount } from "@waltning/ui/fx/amount-field";
+import { drawnNamesOf } from "@waltning/ui/i18n/category-label";
 import { KNOWN_PATHS, resolveFieldErrorMessage } from "@waltning/ui/i18n/field-error-messages";
-import { weekdayLabel } from "@waltning/ui/i18n/locales";
+import { decimalMark, weekdayLabel } from "@waltning/ui/i18n/locales";
 import { useLocale, useT } from "@waltning/ui/i18n/provider";
+import { useCategoryLabel } from "@waltning/ui/i18n/use-category-label";
 import { Button } from "@waltning/ui/primitives/button";
 import { readTyped } from "@waltning/ui/primitives/clock";
 import { useKeyboardHeight } from "@waltning/ui/primitives/keyboard";
@@ -43,7 +53,7 @@ import {
 import { type QuickAddAccount, QuickAddForm } from "@waltning/ui/transactions/quick-add-form";
 import { router, useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Alert, Text, View } from "react-native";
+import { Alert, Text, useWindowDimensions, View } from "react-native";
 import { lastCapture, saveHaptic } from "./platform";
 
 type CreateAccountEscapeDraft = { amount: string; accountId: string | null };
@@ -114,6 +124,7 @@ type KindSegment = "expense" | "income" | "transfer";
 
 export default function QuickAdd() {
   const t = useT();
+  const labelOf = useCategoryLabel();
   const locale = useLocale();
   const raw = useLocalSearchParams<{
     amount?: string | string[];
@@ -159,7 +170,11 @@ export default function QuickAdd() {
    * both forms only ever open a callback this screen owns, the same way
    * they already escape to account creation.
    */
-  const [categoryId, setCategoryId] = useState<string | null>(null);
+  const [categoryId, setCategoryId] = useState<string | null>(
+    snapshot.categories.some((category) => category.id === draft.categoryId)
+      ? (draft.categoryId ?? null)
+      : null,
+  );
   const [categorySheet, setCategorySheet] = useState<{
     open: boolean;
     kind: "income" | "expense";
@@ -177,12 +192,15 @@ export default function QuickAdd() {
     setCategorySheet((current) => ({ ...current, open: false }));
   }, []);
   const handleCreateCategory = useCallback(
-    (categoryDraft: CreateCategoryDraft) => {
-      const result = ledger.createCategory(categoryDraft);
+    (categoryDraft: Omit<CreateCategoryDraft, "drawnNames">) => {
+      const result = ledger.createCategory({
+        ...categoryDraft,
+        drawnNames: drawnNamesOf(labelOf, snapshot.categoryTree),
+      });
       if ("id" in result) return { id: result.id };
       return { error: result.fieldErrors[0]?.message ?? t("common.couldNotSave") };
     },
-    [ledger, t],
+    [ledger, t, labelOf, snapshot.categoryTree],
   );
 
   /**
@@ -226,7 +244,12 @@ export default function QuickAdd() {
   const [composerAccountId, setComposerAccountId] = useState<string | null>(
     accounts.some((account) => account.id === draft.accountId) ? (draft.accountId ?? null) : null,
   );
-  const [composerCategoryId, setComposerCategoryId] = useState<string | null>(null);
+  // A category the draft left with (S15's *+ New* round trip), when it is still offered.
+  const [composerCategoryId, setComposerCategoryId] = useState<string | null>(
+    snapshot.categories.some((category) => category.id === draft.categoryId)
+      ? (draft.categoryId ?? null)
+      : null,
+  );
   /**
    * H1 — S05 §8's Undo, for a proposal the draft applied on its own. Reset
    * whenever the entered name's *fold* changes (the effect beside `enteredNameFold`
@@ -248,6 +271,9 @@ export default function QuickAdd() {
       ? (draft.counterpartyId ?? null)
       : null,
   );
+  // The role a person chose by hand. A debt category's role is not stored
+  // here: it is derived below (`effectiveRole`), so leaving the category takes
+  // it back with nothing to clear, and this stays what the person set.
   const [composerObligationRole, setComposerObligationRole] = useState<ObligationRole | null>(null);
   const [composerCategorySheet, setComposerCategorySheet] = useState<{
     open: boolean;
@@ -265,8 +291,17 @@ export default function QuickAdd() {
 
   const lastCaptureSnapshot = useDevicePreference(lastCapture);
   const lastUsedAccountId = useLastUsedAccount(lastCapture, capture.at.getTime(), composerAccounts);
-  const effectiveAccountId = composerAccountId ?? lastUsedAccountId;
-  const accountMachineFilled = composerAccountId === null && lastUsedAccountId !== null;
+  // Last-used inside its window, else the one account there is (S05 §9.2).
+  const defaultAccountId = useDefaultAccount(lastCapture, capture.at.getTime(), composerAccounts);
+  const effectiveAccountId = composerAccountId ?? defaultAccountId;
+  const accountMachineFilled = composerAccountId === null && defaultAccountId !== null;
+  // Only a fill the machine chose between accounts for is expensive to redo
+  // (S05 §7); the one account there is, is the ledger and not a guess.
+  // The lone account is never a guess, window or no window.
+  const guessedAccount =
+    composerAccountId === null &&
+    lastUsedAccountId !== null &&
+    soleEligibleAccount(composerAccounts) === null;
   const selectedComposerAccount = composerAccounts.find(
     (account) => account.id === effectiveAccountId,
   );
@@ -322,6 +357,96 @@ export default function QuickAdd() {
   const effectiveCategoryId =
     composerCategoryId ?? (categoryAutoFilled ? (categoryProposal?.categoryId ?? null) : null);
   const handleUndoCategory = useCallback(() => setCategoryProposalDismissed(true), []);
+  /**
+   * §6.6 — *Borrowed*, *Lent out* and the two repayments make the entry a
+   * debt, read from the category's seed tag and never from its name (which is
+   * the person's to rename and the language's to translate).
+   */
+  const effectiveCategory = snapshot.categories.find(
+    (category) => category.id === effectiveCategoryId && category.kind === composerType,
+  );
+  const intent = debtIntentOf(effectiveCategory?.externalId);
+  const debtCategory = intent !== null;
+  const obligationRole = effectiveRole(composerObligationRole, intent);
+  /**
+   * **A repayment is `settle_debt`** (S14), decided here before the write: the
+   * person's open debt *in that direction*, the currency it is in, what the
+   * entry discharges of it and what is left — or that there is no such debt, or
+   * no rate to convert with. `planRepayment` is the one place that is worked
+   * out; the hint says it and Save does it.
+   */
+  const personId = intent?.settles ? composerCounterpartyId : null;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: snapshot.revision invalidates the read by identity; it is not read.
+  const personBalances = useMemo(
+    () =>
+      personId === null
+        ? []
+        : ledger.listCounterpartyBalances(today).filter((row) => row.counterpartyId === personId),
+    [ledger, personId, snapshot.revision, today],
+  );
+  const pickedPerson = snapshot.counterparties.find(
+    (counterparty) => counterparty.id === composerCounterpartyId,
+  );
+  const accountCurrency = selectedComposerAccount?.currency ?? null;
+  const enteredAmount = parseAmount(composerAmountRaw);
+  // The rate for the day the row is written on, which is the draft's date and
+  // not today's: a settlement is valued where it happened.
+  const rowDate = isAccountingDate(composerDate) ? accountingDate(composerDate) : today;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: snapshot.revision invalidates the read by identity; it is not read.
+  const repayment = useMemo(
+    () =>
+      personId === null
+        ? null
+        : planRepayment({
+            intent,
+            balances: personBalances,
+            accountCurrency,
+            amount: enteredAmount,
+            crossRate: (from) =>
+              accountCurrency === null
+                ? null
+                : (ledger.readCrossRate({ from, to: accountCurrency, date: rowDate })?.rate ??
+                  null),
+          }),
+    [
+      personId,
+      intent,
+      personBalances,
+      accountCurrency,
+      enteredAmount,
+      ledger,
+      today,
+      snapshot.revision,
+    ],
+  );
+  const mark = decimalMark(locale);
+  const repaymentProblem =
+    repayment?.kind === "no-debt" && pickedPerson !== undefined
+      ? t("transactions.nothingToSettle", { name: pickedPerson.name })
+      : repayment?.kind === "no-rate"
+        ? t("transactions.settleNeedsRate", { currency: repayment.currency })
+        : undefined;
+  const debtHint =
+    repayment === null || pickedPerson === undefined
+      ? undefined
+      : repayment.kind === "settle"
+        ? [
+            t(
+              intent?.direction === "owed" ? "transactions.settlesOwed" : "transactions.settlesOwe",
+              {
+                name: pickedPerson.name,
+                currency: repayment.currency,
+              },
+            ),
+            repayment.over
+              ? t("counterparties.overSettled", {
+                  amount: `${money.forDisplay(money.abs(repayment.residual), repayment.decimals, mark)}\u00a0${repayment.currency}`,
+                })
+              : null,
+          ]
+            .filter((part) => part !== null)
+            .join(" ")
+        : repaymentProblem;
 
   const handleRawChange = useCallback((next: string) => setComposerAmountRaw(next), []);
   const handleLeaveForTransfer = useCallback(() => router.replace("/transfer"), []);
@@ -340,7 +465,7 @@ export default function QuickAdd() {
         // §7's own rule, the same one ✕ keeps: leaving is cheap when the
         // draft is your own typing, and asked about when a machine filled
         // something — the segment is a way out of this draft too.
-        if (!accountMachineFilled) {
+        if (!guessedAccount) {
           router.replace("/transfer");
           return;
         }
@@ -356,7 +481,7 @@ export default function QuickAdd() {
       // while Save still carried its id into `categoryKindMismatch`.
       setComposerCategoryId(null);
     },
-    [accountMachineFilled, handleLeaveForTransfer, t],
+    [guessedAccount, handleLeaveForTransfer, t],
   );
   const kindSegments = useMemo<
     readonly [Segment<KindSegment>, Segment<KindSegment>, Segment<KindSegment>]
@@ -437,10 +562,14 @@ export default function QuickAdd() {
       params: {
         returnTo: "quick-add",
         amount: composerAmountRaw,
+        type: composerType,
         ...(effectiveAccountId ? { accountId: effectiveAccountId } : {}),
+        // A debt's Who? sends the person here; the category it was asked for
+        // must still be the category when they come back.
+        ...(effectiveCategoryId ? { categoryId: effectiveCategoryId } : {}),
       },
     });
-  }, [composerAmountRaw, effectiveAccountId]);
+  }, [composerAmountRaw, composerType, effectiveAccountId, effectiveCategoryId]);
   const needsRateCurrency =
     selectedComposerAccount !== undefined && !selectedComposerAccount.capturable
       ? selectedComposerAccount.currency
@@ -517,7 +646,7 @@ export default function QuickAdd() {
     pace === null || paceCategory === undefined
       ? undefined
       : t("transactions.categoryPace", {
-          category: paceCategory.name,
+          category: labelOf(paceCategory),
           percent: String(pace.percent),
         });
   const handleComposerCounterpartyChange = useCallback(
@@ -533,7 +662,7 @@ export default function QuickAdd() {
     // S05 §7: discarding your own typing is cheap to redo; discarding a
     // machine's guess is not — the confirm exists for exactly the one thing
     // the keypad path ever fills on its own.
-    if (!accountMachineFilled) {
+    if (!guessedAccount) {
       router.back();
       return;
     }
@@ -541,7 +670,7 @@ export default function QuickAdd() {
       { text: t("common.cancel"), style: "cancel" },
       { text: t("common.discard"), style: "destructive", onPress: handleDiscard },
     ]);
-  }, [accountMachineFilled, handleDiscard, t]);
+  }, [guessedAccount, handleDiscard, t]);
 
   // §6.6, never defaulted: a counterparty picked with no role would reach
   // `create_transaction`'s own refine and refuse — so Save refuses first, and
@@ -559,6 +688,12 @@ export default function QuickAdd() {
         ? t("common.chooseOne")
         : selectedComposerAccount?.capturable === false &&
           t("transactions.needsRate", { currency: selectedComposerAccount.currency }),
+    // §6.6 — a debt is between two people: a debt category is refused
+    // without the other one, on the Who? row it asked it on.
+    who:
+      debtCategory && composerCounterpartyId === null
+        ? t("transactions.whoRequired")
+        : repaymentProblem !== undefined && repaymentProblem,
     // §6.6.1 — **no longer required.** Naming a counterparty used to force a
     // role, because `reference` was the only way to say "involved, owes
     // nothing" and the pair-shape CHECK refused a party without one. The
@@ -588,9 +723,58 @@ export default function QuickAdd() {
       // obligation *as well*, with the same counterparty on both: the two
       // differing is S09's edit, not something one chip row can express.
       counterpartyId: composerCounterpartyId,
-      obligationCounterpartyId: composerObligationRole === null ? null : composerCounterpartyId,
-      obligationRole: composerObligationRole,
+      obligationCounterpartyId: obligationRole === null ? null : composerCounterpartyId,
+      obligationRole,
     };
+    /**
+     * **A repayment is `settle_debt`** (S14): same person, same role, the
+     * discharge stamped in the debt's own currency, the direction checked
+     * against the live balance and over-settlement stated rather than clamped.
+     * Only when there is an open debt in the matching direction
+     * (`planRepayment`); with none, Save was already refused on Who?.
+     */
+    if (
+      repayment?.kind === "settle" &&
+      composerCounterpartyId !== null &&
+      selectedComposerAccount !== undefined
+    ) {
+      const settled = ledger.settleDebt({
+        counterpartyId: composerCounterpartyId,
+        accountId: effectiveAccountId,
+        date: composerDate,
+        amount,
+        currency: selectedComposerAccount.currency,
+        dischargesCurrency: repayment.currency,
+        dischargesAmount: repayment.dischargesAmount,
+        note: composerNote,
+        categoryId: effectiveCategoryId,
+      });
+      if (!("id" in settled)) {
+        const resolved = settled.fieldErrors.map((error) => ({
+          path: error.path,
+          message: resolveFieldErrorMessage(t, error),
+        }));
+        setFieldErrors(mapFieldErrors(resolved, KNOWN_PATHS));
+        return;
+      }
+      setFieldErrors(undefined);
+      void lastCapture.set({ accountId: effectiveAccountId, at: Date.now() });
+      saveHaptic();
+      router.dismissTo({
+        pathname: "/",
+        params: {
+          message: t("counterparties.settledToast", {
+            amount: money.forDisplay(money.abs(settled.residual), repayment.decimals, mark),
+            currency: repayment.currency,
+            direction: t(
+              `counterparties.${settleResidualDirection(settled.residual, repayment.decimals)}`,
+            ),
+          }),
+          nonce: String(Date.now()),
+        },
+      });
+      return;
+    }
     const result = ledger.createTransaction(next);
     if (!("id" in result)) {
       const resolved = result.fieldErrors.map((error) => ({
@@ -625,7 +809,9 @@ export default function QuickAdd() {
     composerAmountRaw,
     effectiveCategoryId,
     composerCounterpartyId,
-    composerObligationRole,
+    obligationRole,
+    repayment,
+    mark,
     composerDate,
     composerTime,
     composerIsBusiness,
@@ -655,8 +841,17 @@ export default function QuickAdd() {
    * second time.
    */
   const keyboardHeight = useKeyboardHeight();
+  const keyboardUp = keyboardHeight > 0;
+  /**
+   * A short window is decided from the first frame, from the window's own
+   * height — never from the keyboard's events, which would collapse the page
+   * under the thumb on every open (and a mobile browser's viewport shrinks
+   * instead, reporting no keyboard at all). S05 §3.
+   */
+  const window = useWindowDimensions();
+  const compact = isCompactWindow(window.height, window.fontScale);
   const clearBottom = {
-    paddingBottom: keyboardHeight > 0 ? gutter + keyboardHeight : gutter + insets.bottom,
+    paddingBottom: keyboardUp ? space.md + keyboardHeight : gutter + insets.bottom,
   };
   const composerCategories = useMemo(
     () =>
@@ -667,10 +862,104 @@ export default function QuickAdd() {
     [snapshot.categories, snapshot.categoryUsage],
   );
 
-  /* ── The desk fallback's own draft — unchanged from before this PR ──── */
+  /* ── The desk fallback's own draft ──────────────────────────────────── */
+  // §6.6 — which categories are debts, from their seed tags; the form only
+  // ever asks whether the picked id is in this list.
+  const debtCategoryIds = useMemo(
+    () =>
+      snapshot.categories
+        .filter((category) => debtIntentOf(category.externalId) !== null)
+        .map((category) => category.id),
+    [snapshot.categories],
+  );
+  const deskInitialCounterpartyId = snapshot.counterparties.some(
+    (counterparty) => counterparty.id === draft.counterpartyId,
+  )
+    ? (draft.counterpartyId ?? null)
+    : null;
+  const handleDeskCreateCounterparty = useCallback(
+    (current: { amount: string; type: "expense" | "income" }) => {
+      router.push({
+        pathname: "/counterparty/new",
+        params: {
+          returnTo: "quick-add",
+          amount: current.amount,
+          type: current.type,
+          ...(deskAccountId ? { accountId: deskAccountId } : {}),
+          ...(categoryId ? { categoryId } : {}),
+        },
+      });
+    },
+    [deskAccountId, categoryId],
+  );
+
   const [fieldErrorsDesk, setFieldErrorsDesk] = useState<ReturnType<typeof mapFieldErrors>>();
   const handleDeskSave = useCallback(
     (next: QuickAddDraft) => {
+      /**
+       * §6.6 — the desk's repayment is `settle_debt` too, the same plan the
+       * phone's composer reads: no open debt in the matching direction (or no
+       * rate to convert with) is refused on Who?, an open one is settled.
+       */
+      const deskAccount = composerAccounts.find((candidate) => candidate.id === next.accountId);
+      const deskCategory = snapshot.categories.find(
+        (candidate) => candidate.id === next.categoryId,
+      );
+      const deskIntent = debtIntentOf(deskCategory?.externalId);
+      const deskPerson = next.obligationCounterpartyId;
+      if (deskIntent?.settles && deskPerson !== null && deskAccount !== undefined) {
+        const plan = planRepayment({
+          intent: deskIntent,
+          balances: ledger
+            .listCounterpartyBalances(today)
+            .filter((row) => row.counterpartyId === deskPerson),
+          accountCurrency: deskAccount.currency,
+          amount: next.amount,
+          crossRate: (from) =>
+            ledger.readCrossRate({
+              from,
+              to: deskAccount.currency,
+              date: isAccountingDate(next.date) ? accountingDate(next.date) : today,
+            })?.rate ?? null,
+        });
+        const name = snapshot.counterparties.find((c) => c.id === deskPerson)?.name ?? "";
+        const problem =
+          plan?.kind === "no-debt"
+            ? t("transactions.nothingToSettle", { name })
+            : plan?.kind === "no-rate"
+              ? t("transactions.settleNeedsRate", { currency: plan.currency })
+              : undefined;
+        if (problem !== undefined) {
+          setFieldErrorsDesk(
+            mapFieldErrors([{ path: "obligationCounterpartyId", message: problem }], KNOWN_PATHS),
+          );
+          return;
+        }
+        if (plan?.kind === "settle") {
+          const settled = ledger.settleDebt({
+            counterpartyId: deskPerson,
+            accountId: next.accountId,
+            date: next.date,
+            amount: next.amount,
+            currency: deskAccount.currency,
+            dischargesCurrency: plan.currency,
+            dischargesAmount: plan.dischargesAmount,
+            note: next.note,
+            categoryId: next.categoryId,
+          });
+          if (!("id" in settled)) {
+            const resolved = settled.fieldErrors.map((error) => ({
+              path: error.path,
+              message: resolveFieldErrorMessage(t, error),
+            }));
+            setFieldErrorsDesk(mapFieldErrors(resolved, KNOWN_PATHS));
+            return;
+          }
+          setFieldErrorsDesk(undefined);
+          router.dismissTo("/");
+          return;
+        }
+      }
       const result = ledger.createTransaction(next);
       if (!("id" in result)) {
         const resolved = result.fieldErrors.map((error) => ({
@@ -697,7 +986,7 @@ export default function QuickAdd() {
       }
       router.dismissTo("/");
     },
-    [composerAccounts, ledger, t],
+    [composerAccounts, ledger, snapshot.categories, snapshot.counterparties, t, today],
   );
 
   if (breakpoint === "desk") {
@@ -730,6 +1019,10 @@ export default function QuickAdd() {
             onOpenAccountPicker={handleOpenDeskAccountPicker}
             categoryId={categoryId}
             onOpenCategoryPicker={handleOpenCategoryPicker}
+            debtCategoryIds={debtCategoryIds}
+            initialType={draft.type ?? "expense"}
+            initialCounterpartyId={deskInitialCounterpartyId}
+            onCreateCounterparty={handleDeskCreateCounterparty}
             {...(fieldErrorsDesk === undefined ? {} : { fieldErrors: fieldErrorsDesk })}
             onCancel={handleDeskCancel}
             onSave={handleDeskSave}
@@ -770,13 +1063,15 @@ export default function QuickAdd() {
             ? "transactions.addExpenseTitle"
             : "transactions.addIncomeTitle",
         )}
-        subtitle={weekdayLabel(accountingDate(composerDate), locale)}
+        {...(compact && composerDate === today
+          ? {}
+          : { subtitle: weekdayLabel(accountingDate(composerDate), locale) })}
       />
       {/* `clearBottom={false}` — this panel is not the screen's own bottom
           edge, the Save footer below it is, and that clears the home
           indicator itself. */}
       <GroundPanel clearBottom={false}>
-        <View style={styles.column}>
+        <View style={compact ? styles.columnCompact : styles.column}>
           <SegmentControl
             segments={kindSegments}
             value={composerType}
@@ -789,6 +1084,7 @@ export default function QuickAdd() {
             accounts={composerAccounts}
             accountId={effectiveAccountId}
             accountMachineFilled={accountMachineFilled}
+            compact={compact}
             onOpenAccountPicker={handleOpenComposerAccountPicker}
             onSetRate={handleSetRate}
             categories={composerCategories}
@@ -827,9 +1123,11 @@ export default function QuickAdd() {
             counterparties={snapshot.counterparties}
             obligationCounterpartyId={composerCounterpartyId}
             onCounterpartyChange={handleComposerCounterpartyChange}
-            obligationRole={composerObligationRole}
+            obligationRole={obligationRole}
             onObligationRoleChange={handleComposerObligationRoleChange}
             onCreateCounterparty={handleComposerCreateCounterparty}
+            debtCategory={debtCategory}
+            debtHint={debtHint}
             {...(fieldErrors === undefined ? {} : { fieldErrors })}
             check={composerCheck}
           />
@@ -838,8 +1136,8 @@ export default function QuickAdd() {
       {/* S05 §3 — Save is full-width at the bottom edge, because it is the
           only affirmative action and it is pressed in motion; the line above
           it says what Save means on a phone that may be offline (§6). */}
-      <View style={[styles.footer, clearBottom]}>
-        <Text style={styles.footerNote}>{t("transactions.savedOnPhone")}</Text>
+      <View style={[styles.footer, compact ? styles.footerCompact : null, clearBottom]}>
+        {compact ? null : <Text style={styles.footerNote}>{t("transactions.savedOnPhone")}</Text>}
         <Button
           variant="primary"
           size="lg"
@@ -888,11 +1186,14 @@ const useStyles = makeStyles((theme) => ({
   deskTitle: { color: theme.text, ...text.ui("displayThree") },
   /** The deck's 20 between the kind control and the amount card. */
   column: { gap: space.x4 },
+  /** The same column on a short window — 6 between blocks, so the account row is in the first view. */
+  columnCompact: { gap: space.sm },
   footer: {
     backgroundColor: theme.ground,
     paddingHorizontal: gutter,
     paddingTop: space.lg,
     gap: space.lg,
   },
+  footerCompact: { paddingTop: 0 },
   footerNote: { color: theme.textMuted, ...text.ui("caption"), textAlign: "center" },
 }));

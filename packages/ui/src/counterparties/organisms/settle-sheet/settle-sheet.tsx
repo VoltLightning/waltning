@@ -485,7 +485,7 @@ export function SettleSheet({
           {!overSettled ? null : (
             <Text style={styles.staleLine}>
               {t("counterparties.overSettled", {
-                amount: `${money.forDisplay(money.abs(residual), dischargesDecimals, mark)} ${dischargesCurrency ?? ""}`,
+                amount: `${money.forDisplay(money.abs(residual), dischargesDecimals, mark)}\u00a0${dischargesCurrency ?? ""}`,
               })}
               {residualDirection === undefined ? null : ` · ${residualDirection}`}
             </Text>

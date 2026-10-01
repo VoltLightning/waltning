@@ -20,9 +20,10 @@ import { createAppearance } from "@waltning/client/appearance/create-appearance"
 import { previewResetEnabled } from "@waltning/client/appearance/preview-reset";
 import type { BackupPort } from "@waltning/client/backup/backup-port";
 import { createDisplayCurrencyPreference } from "@waltning/client/currencies/display-currency";
+import { currencyOfTags } from "@waltning/client/currencies/region-currency";
 import { createDevicePreference } from "@waltning/client/device/create-device-preference";
 import { createDeskScopePreference } from "@waltning/client/ledger/desk-scope";
-import { createAppLock } from "@waltning/client/security/app-lock";
+import { type AppLockChoice, createAppLock } from "@waltning/client/security/app-lock";
 import { createLastCapturePreference } from "@waltning/client/transactions/last-capture";
 import { pivotCurrency } from "@waltning/core/currencies";
 import { type AccountingDate, accountingDate, isAccountingDate } from "@waltning/core/date";
@@ -147,6 +148,14 @@ export function setLivePivotReader(reader: () => CurrencyCode | null): void {
   livePivotReader = reader;
 }
 
+/** The codes the ledger holds — wired beside `livePivotReader`, for the same ordering reason. */
+let liveHeldReader: () => readonly CurrencyCode[] | null = () => null;
+
+/** Called once by the phone's ledger session: every currency code its replica holds. */
+export function setLiveHeldReader(reader: () => readonly CurrencyCode[] | null): void {
+  liveHeldReader = reader;
+}
+
 /**
  * M2 — the same indirection as `livePivotReader`, for the ledger's write
  * notifications. `displayCurrency`'s own `subscribe` calls through this on
@@ -162,9 +171,39 @@ export function setLivePivotSubscriber(subscribe: (listener: () => void) => () =
 }
 
 /**
+ * The currency of the device's region — what the display currency opens in
+ * when nothing has been chosen (§7.0). A browser reports a language tag and
+ * no currency, so the tag's region is resolved by the pure table; a tag with
+ * no region, or a region with no known currency, answers `null` and the pivot
+ * stands in.
+ */
+function readRegionCurrency(): CurrencyCode | null {
+  return currencyOfTags(typeof navigator === "undefined" ? [] : [...(navigator.languages ?? [])]);
+}
+
+const ANCHOR_DECIDED_KEY = "waltning.anchorDecided";
+
+/**
+ * Whether this device has already decided its ledger's anchor currency — set the
+ * first time first-start anchoring runs (whatever it did) and whenever a person
+ * changes the anchor, so a ledger found empty later is never anchored again.
+ */
+export const anchorDecided = createDevicePreference<"decided">(
+  {
+    get: () => AsyncStorage.getItem(ANCHOR_DECIDED_KEY),
+    set: (value) => AsyncStorage.setItem(ANCHOR_DECIDED_KEY, value),
+  },
+  { parse: (raw) => (raw === "decided" ? "decided" : null), serialize: (value) => value },
+  mobileDiagnostics,
+);
+
+/** The device region's currency, read once — the display default and the first-start anchor. */
+export const deviceRegionCurrency: CurrencyCode | null = readRegionCurrency();
+
+/**
  * `SPEC.md` §7.0's header toggle — a device preference, never a registry
- * write. The live pivot (`livePivotReader`) is the fallback until something
- * is chosen or `initializeFromPinned` runs; `pivotCurrency.code`
+ * write. With nothing chosen it is the device region's currency when the
+ * ledger holds it, else the live pivot (`livePivotReader`); `pivotCurrency.code`
  * (`@waltning/core/currencies` — USD) is only the seed used before the
  * ledger session is ready to answer at all (H1 — a fresh install whose
  * ledger pivot is PLN must render PLN, not this build-time seed).
@@ -179,6 +218,8 @@ export const displayCurrency = createDisplayCurrencyPreference(
   {
     subscribeToLedger: (listener) => livePivotSubscribe(listener),
     diagnostics: mobileDiagnostics,
+    regionCurrency: deviceRegionCurrency,
+    readHeld: () => liveHeldReader(),
   },
 );
 
@@ -209,6 +250,33 @@ export function dayTickHaptic(): void {}
  * holds a preview ledger and appears in neither of §5.7's tables; the
  * controller settles on `open` and the layout draws the app.
  */
+const APP_LOCK_KEY = "waltning.appLock";
+
+/**
+ * Whether this device already holds ledger data — wired by the ledger session
+ * once it exists, the same indirection (and for the same reason) as
+ * `livePivotReader`: the ledger files import this one. `true` until wired, so a
+ * read before the ledger is up can only lock, never ask.
+ */
+let ledgerHistoryReader: () => boolean = () => true;
+
+/** Called once by the phone's ledger session: whether it holds any account. */
+export function setLedgerHistoryReader(reader: () => boolean): void {
+  ledgerHistoryReader = reader;
+}
+
+/**
+ * The owner's answer to the lock question (`SPEC.md` §5.7) — stored on this
+ * device, never synced. Raw on purpose: the gate decides what a missing,
+ * unreadable or corrupt value means, and a codec that turned each of them into
+ * `null` would make them all look like "never asked".
+ */
+export const appLockChoice: AppLockChoice = {
+  read: () => AsyncStorage.getItem(APP_LOCK_KEY),
+  write: (enabled) => AsyncStorage.setItem(APP_LOCK_KEY, enabled ? "on" : "off"),
+  hasHistory: async () => ledgerHistoryReader(),
+};
+
 export const appLock = createAppLock({
   authenticator: null,
   subscribeAppState: () => () => {},
@@ -412,3 +480,22 @@ export const backupPort: BackupPort = {
       }
     : null,
 };
+
+/**
+ * Start the app over — every screen, every store, read again from nothing.
+ *
+ * On the web that is the page itself, loaded again. The native half needs a
+ * native module to do the same, which is why this is a port and not a call.
+ */
+export function restartApp(): Promise<void> {
+  window.location.reload();
+  return Promise.resolve();
+}
+
+/**
+ * Android's back button — `platform.native.ts`'s half. A browser has its own
+ * history, which the router already keeps, so the web build never calls back.
+ */
+export function subscribeHardwareBack(_onBack: () => boolean): () => void {
+  return () => {};
+}

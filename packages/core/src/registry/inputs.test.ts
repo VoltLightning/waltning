@@ -22,6 +22,7 @@ import type { CurrencyCode, Money, PivotPerUnit, TxnType, UnitsPerPivot } from "
 // rebase against A2's append is a line-level merge, not a symbol-level one.
 // E2's own import — same reason as A3's above.
 import {
+  ACCOUNT_KIND,
   type AccountKind,
   type ArchiveAccountInput,
   addCurrencyInput,
@@ -41,9 +42,11 @@ import {
   createCounterpartyInput,
   createGroupInput,
   createTransactionInput,
+  deleteAccountInput,
   deleteTransactionInput,
   mergeCategoriesInput,
   mergeCounterpartiesInput,
+  NEW_ACCOUNT_KIND,
   reconcileAccountInput,
   recordDistinctCounterpartiesInput,
   renameCategoryInput,
@@ -143,6 +146,19 @@ const paths = (result: {
 /* ── create_account ──────────────────────────────────────────────────────── */
 
 describe("createAccountInput", () => {
+  /** §6.6 — money a person owes you is a debt on them, not an account. */
+  it("refuses a retired kind on a new account, naming the field", () => {
+    const result = createAccountInput.safeParse({ ...account, kind: "loan_receivable" });
+    expect(result.success).toBe(false);
+    expect(paths(result)).toEqual(["kind"]);
+  });
+
+  it("offers every kind but the retired one", () => {
+    expect(NEW_ACCOUNT_KIND).not.toContain("loan_receivable");
+    expect(NEW_ACCOUNT_KIND).toContain("loan_payable");
+    expect(NEW_ACCOUNT_KIND).toHaveLength(ACCOUNT_KIND.length - 1);
+  });
+
   it("parses the minimum payload and brands what it parsed", () => {
     const parsed = createAccountInput.parse({ ...account, currency: " pln " });
 
@@ -527,6 +543,16 @@ export type CategoryKindIsIncomeOrExpense = Expect<
 >;
 
 describe("updateAccountInput", () => {
+  it("refuses switching an account to a retired kind", () => {
+    const result = updateAccountInput.safeParse({
+      id: ACCOUNT_ID,
+      version: 1,
+      patch: { kind: "loan_receivable" },
+    });
+    expect(result.success).toBe(false);
+    expect(paths(result)).toEqual(["patch.kind"]);
+  });
+
   it("refuses an empty patch", () => {
     const result = updateAccountInput.safeParse({ id: ACCOUNT_ID, version: 1, patch: {} });
 
@@ -561,6 +587,50 @@ describe("archiveAccountInput", () => {
 
     expect(result.success).toBe(false);
     expect(paths(result)).toContain("version");
+  });
+});
+
+describe("deleteAccountInput", () => {
+  it("requires a version — the compare-and-swap token, as archive_account does", () => {
+    const result = deleteAccountInput.safeParse({ id: ACCOUNT_ID });
+
+    expect(result.success).toBe(false);
+    expect(paths(result)).toContain("version");
+  });
+
+  it("takes an id and a version", () => {
+    expect(deleteAccountInput.parse({ id: ACCOUNT_ID, version: 2 })).toEqual({
+      id: ACCOUNT_ID,
+      version: 2,
+    });
+  });
+});
+
+describe("the amount ceiling (999 999 999.99)", () => {
+  it("accepts 999999999.99 on a transaction and refuses 1000000000.00", () => {
+    expect(
+      createTransactionInput.safeParse({ ...expense, amountOriginal: "999999999.99" }).success,
+    ).toBe(true);
+    const result = createTransactionInput.safeParse({
+      ...expense,
+      amountOriginal: "1000000000.00",
+    });
+    expect(result.success).toBe(false);
+    expect(paths(result)).toContain("amountOriginal");
+  });
+
+  it("refuses the destination leg, the fee and an opening balance past it", () => {
+    const over = createTransactionInput.safeParse({
+      ...expense,
+      fee: "1000000000",
+    });
+    expect(paths(over)).toContain("fee");
+    expect(createAccountInput.safeParse({ ...account, openingBalance: "1000000000" }).success).toBe(
+      false,
+    );
+    expect(
+      createAccountInput.safeParse({ ...account, openingBalance: "-999999999.99" }).success,
+    ).toBe(true);
   });
 });
 

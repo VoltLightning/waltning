@@ -19,10 +19,12 @@
  * record is the server operation's to write, once one exists.
  */
 
+import type { Id } from "@waltning/core/id";
 import { type MergeCategoriesInput, mergeCategoriesInput } from "@waltning/core/registry/inputs";
-import { eq, sql } from "drizzle-orm";
+import { count, eq, sql } from "drizzle-orm";
 import { defineLocalExecutor, LocalRefusal } from "../executor.ts";
 import { type ReplicaTx, ledgerSchema as schema } from "../schema-map.ts";
+import { isDebtCategory } from "../transactions/debt-categories.ts";
 import type { LocalCategoryRow } from "./create-category.executor.ts";
 
 const { categories, recurringTransactions, transactionLines, transactions } = schema;
@@ -74,6 +76,25 @@ function mergeCategories(input: MergeCategoriesInput, tx: ReplicaTx): MergeCateg
     );
   }
 
+  /**
+   * **§6.6 — a merge into or out of one of the four debt categories is
+   * refused while the loser holds anything.** Moving plain rows under a debt
+   * category would file them as debts with nobody named; moving debts out
+   * would leave the role behind under a category that no longer states it.
+   * Refused rather than converted, because either is a decision about a
+   * person's money that a merge must not make on their behalf: re-file the
+   * rows one by one, then merge the empty category.
+   */
+  if (isDebtCategory(tx, loser.id) || isDebtCategory(tx, winner.id)) {
+    const held = loserHoldings(tx, loser.id);
+    if (held > 0) {
+      throw new LocalRefusal(
+        `merge_categories: ${held} row(s) sit under ${loser.id} and one of the two is a debt category ` +
+          "(SPEC §6.6) — re-file them first, each with the person on the other side",
+      );
+    }
+  }
+
   const movedTransactions = tx
     .update(transactions)
     .set({ categoryId: input.winnerId })
@@ -109,4 +130,24 @@ function mergeCategories(input: MergeCategoriesInput, tx: ReplicaTx): MergeCateg
   }
 
   return { loser: archivedLoser, movedTransactions, movedLines, movedRecurring };
+}
+
+/** Transactions, split lines and recurring rules naming the category — what a merge would move. */
+function loserHoldings(tx: ReplicaTx, categoryId: Id<"categories">): number {
+  const [{ value: rows } = { value: 0 }] = tx
+    .select({ value: count() })
+    .from(transactions)
+    .where(eq(transactions.categoryId, categoryId))
+    .all();
+  const [{ value: rules } = { value: 0 }] = tx
+    .select({ value: count() })
+    .from(recurringTransactions)
+    .where(eq(recurringTransactions.categoryId, categoryId))
+    .all();
+  const [{ value: lines } = { value: 0 }] = tx
+    .select({ value: count() })
+    .from(transactionLines)
+    .where(eq(transactionLines.categoryId, categoryId))
+    .all();
+  return rows + rules + lines;
 }

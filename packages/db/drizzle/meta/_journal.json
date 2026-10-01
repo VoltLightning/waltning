@@ -169,6 +169,34 @@
       "when": 1790268835298,
       "tag": "0023_account_color",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1790268935298,
+      "tag": "0024_account_kind_retired",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1790812435654,
+      "tag": "0025_debt_categories",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1790821952065,
+      "tag": "0026_account_delete_guard_and_amount_ceiling",
+      "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1790870627858,
+      "tag": "0027_opening_debts",
+      "breakpoints": true
     }
   ]
 }

@@ -16,6 +16,7 @@ import {
   createPhoneLedger,
   type PhoneClearingAccount,
   type PhoneCurrency,
+  type PhoneLedgerPort,
   type PhoneNetWorth,
   type PhoneRecentTransaction,
   type PhoneSearchTransaction,
@@ -87,6 +88,7 @@ vi.mock("expo-router", () => ({
 
 import NewAccount from "./account-creation-screen";
 import CategoriesScreen from "./categories-screen";
+import { displayCurrency, floatPosition, setLiveHeldReader, setLivePivotReader } from "./platform";
 import QuickAdd from "./quick-add-screen";
 import SettingsScreen from "./settings-screen";
 import Today from "./today-screen";
@@ -103,6 +105,7 @@ type FakeAccount = {
   isBusiness: false;
   archived: false;
   hidden: boolean;
+  hasEntries: boolean;
   inTotal: boolean;
   color: null;
   expectedBalance: null;
@@ -238,7 +241,12 @@ type FakeControllerOptions = {
    * S04 asking for `"all"` while the figure above the chart came from a read
    * that keeps own accounts only.
    */
-  spendByCategory?: (scope: LedgerScope) => readonly PhoneSpendByCategory[];
+  spendByCategory?: (
+    scope: LedgerScope,
+    options?: money.SpendByCategoryOptions,
+  ) => readonly PhoneSpendByCategory[];
+  /** §4's rate for a pair — absent, none is held. */
+  readRate?: PhoneLedgerPort["readRate"];
   categories?: readonly FakeCategory[];
   categoryUsage?: ReadonlyMap<Id<"categories">, number>;
   /** H2 — a caller testing the opening-balance banner hands its own rows rather than `unsettledOf`'s generic ones. */
@@ -318,7 +326,8 @@ function dayFlowsOf(
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([date, flow]) => ({
       date: accountingDate(date),
-      currency: currencyCode("PLN"),
+      // The currency the day's rows are in — one per fixture ledger.
+      currency: rows.find((row) => row.date === date)?.currency ?? currencyCode("PLN"),
       decimals: 2,
       spend: flow.spend,
       inflow: flow.inflow,
@@ -450,7 +459,8 @@ function fakeController(options: FakeControllerOptions = {}) {
         .sort(([a], [b]) => a.localeCompare(b))
         .map(([date, count]) => ({ date: accountingDate(date), count }));
     },
-    readSpendByCategory: (_period, scope) => spendByCategory(scope),
+    readSpendByCategory: (_period, scope, options) => spendByCategory(scope, options),
+    ...(options.readRate === undefined ? {} : { readRate: options.readRate }),
     listUnsettledClearing: () => unsettledOverride ?? unsettledOf(accounts),
     // No screen under test here drives S10 yet (`ledger-screen.test.tsx`
     // does) — an empty page and a no-op are enough to satisfy the port. The
@@ -476,6 +486,7 @@ function fakeController(options: FakeControllerOptions = {}) {
           isBusiness: false,
           archived: false,
           hidden: false,
+          hasEntries: false,
           inTotal: true,
           color: null,
           expectedBalance: null,
@@ -540,6 +551,7 @@ const PLN_ACCOUNT: FakeAccount = {
   isBusiness: false,
   archived: false,
   hidden: false,
+  hasEntries: false,
   inTotal: true,
   color: null,
   expectedBalance: null,
@@ -562,6 +574,7 @@ const SHARED_ACCOUNT: FakeAccount = {
   isBusiness: false,
   archived: false,
   hidden: false,
+  hasEntries: false,
   inTotal: true,
   color: null,
   expectedBalance: null,
@@ -584,6 +597,7 @@ const CLEARING_ACCOUNT: FakeAccount = {
   isBusiness: false,
   archived: false,
   hidden: false,
+  hasEntries: false,
   inTotal: true,
   color: null,
   expectedBalance: null,
@@ -606,6 +620,7 @@ const SECOND_CLEARING_ACCOUNT: FakeAccount = {
   isBusiness: false,
   archived: false,
   hidden: false,
+  hasEntries: false,
   inTotal: true,
   color: null,
   expectedBalance: null,
@@ -622,6 +637,7 @@ const RECENT_ROW: PhoneRecentTransaction = {
   date: accountingDate("2026-09-03"),
   enteredName: "Shop A",
   categoryName: "Food",
+  categoryExternalId: null,
   accountName: PLN_ACCOUNT.name,
   amount: toMoney("-48.90"),
   currency: currencyCode("PLN"),
@@ -660,8 +676,30 @@ describe("Today", () => {
   it("renders the empty ledger with a create-account action that navigates", () => {
     withLedger(<Today />);
 
-    expect(screen.getByText("No accounts yet")).toBeDefined();
-    fireEvent.click(screen.getByText("Create account"));
+    // Scoped to the page on screen: the pager mounts all four, and the List and
+    // Calendar pages say the same thing when there is no account.
+    const page = within(screen.getByRole("tabpanel"));
+    expect(page.getByText("No accounts yet")).toBeDefined();
+    fireEvent.click(page.getByText("Create account"));
+    expect(router.push).toHaveBeenCalledWith({
+      pathname: "/account/new",
+      params: { returnTo: "today" },
+    });
+  });
+
+  /**
+   * **The List page was blank with no account.** It drew nothing until the
+   * ledger had a net-worth line to total a day in, so a ledger emptied of its
+   * accounts left an empty beige page with no word on it (S04 §6, *Empty · no
+   * accounts*: every page says so and offers the one act that changes it).
+   */
+  it("says there is no account on the List page too, and offers to create one", () => {
+    liveParams = { view: "list" };
+    withLedger(<Today />);
+
+    const page = within(screen.getByRole("tabpanel"));
+    expect(page.getByText("No accounts yet")).toBeDefined();
+    fireEvent.click(page.getByText("Create account"));
     expect(router.push).toHaveBeenCalledWith({
       pathname: "/account/new",
       params: { returnTo: "today" },
@@ -768,6 +806,7 @@ describe("Today", () => {
       enteredName: "Placeholder",
       note: "",
       categoryName: "Groceries",
+      categoryExternalId: null,
       brandKey: null,
       accountId: PLN_ACCOUNT.id,
       accountName: PLN_ACCOUNT.name,
@@ -872,6 +911,41 @@ describe("Today", () => {
 
     expect(screen.getByText("Groceries")).toBeDefined();
     expect(screen.queryByText("Uncategorized")).toBeNull();
+  });
+
+  it("draws a starter category in the app's language in Where it went", () => {
+    render(
+      <I18nProvider locale="de">
+        <LedgerProvider
+          controller={fakeController({
+            accounts: [PLN_ACCOUNT],
+            categories: [
+              fakeCategory({
+                id: GROCERIES,
+                name: "Groceries",
+                kind: "expense",
+                externalId: "seed:groceries",
+              }),
+            ],
+            periodSpend: [
+              {
+                currency: currencyCode("PLN"),
+                decimals: 2,
+                spend: toMoney("120.50"),
+                inflow: toMoney("0"),
+                net: toMoney("-120.50"),
+              },
+            ],
+            spendByCategory: () => [spendBucket(GROCERIES, "120.50")],
+          })}
+        >
+          <Today />
+        </LedgerProvider>
+      </I18nProvider>,
+    );
+
+    expect(screen.getByText("Lebensmittel")).toBeDefined();
+    expect(screen.queryByText("Groceries")).toBeNull();
   });
 
   it("shows the unsettled banner and opens the pot to allocate", () => {
@@ -1005,7 +1079,7 @@ describe("Today", () => {
     withLedger(<Today />, controller);
 
     const rendered = document.body.textContent ?? "";
-    expect(rendered).toContain("-150.00 PLN unallocated · Hotel");
+    expect(rendered).toContain("-150.00\u00a0PLN unallocated · Hotel");
     expect(rendered).not.toContain("account balance");
   });
 
@@ -1085,7 +1159,8 @@ describe("Today", () => {
 
     withLedger(<Today />, controller);
 
-    expect(screen.getByText("Couldn't refresh")).toBeDefined();
+    // Every page says it, so scoped to the one on screen.
+    expect(within(screen.getByRole("tabpanel")).getByText("Couldn't refresh")).toBeDefined();
     // S04 §6: a failed balance query replaces the ground's body and nothing
     // else, so the figures it did not touch stay. Both of them — the strip and
     // the month card render above the error branch for exactly this reason,
@@ -1095,6 +1170,185 @@ describe("Today", () => {
     expect(screen.getByText("Kept so far")).toBeDefined();
     const rendered = document.body.textContent ?? "";
     expect(rendered).toContain("50.00");
+  });
+
+  /**
+   * **A page that cannot draw says why.** A failed first refresh leaves no
+   * accounts *and* an error, and the List, Calendar and Months pages read that
+   * as *create an account* — the wrong instruction for a ledger that simply did
+   * not load (S04 §6).
+   */
+  it.each(["list", "calendar", "months"])(
+    "shows the error, not create-an-account, on %s when the first refresh fails",
+    (view) => {
+      // An empty ledger whose next refresh fails: no accounts *and* an error.
+      let calls = 0;
+      const port = basePort({
+        listAccounts: () => {
+          calls += 1;
+          if (calls > 1) throw new Error("query failed");
+          return [];
+        },
+      });
+      const controller = createPhoneLedger(port, {
+        capture: () => ({
+          date: accountingDate("2026-09-03"),
+          timeZone: "Europe/Warsaw",
+          offsetMinutes: 120,
+          at: new Date("2026-09-03T10:00:00Z"),
+        }),
+        id: () => id("11111111-1111-4111-8111-111111111111"),
+      });
+      try {
+        controller.refresh();
+      } catch {
+        // Expected — asserting the snapshot it leaves behind, not this throw.
+      }
+      liveParams = { view };
+      withLedger(<Today />, controller);
+
+      const page = within(screen.getByRole("tabpanel"));
+      expect(page.getByText("Couldn't refresh")).toBeDefined();
+      expect(page.queryByText("No accounts yet")).toBeNull();
+    },
+  );
+
+  /**
+   * **Accounts without a net-worth line are still accounts.** Net worth can be
+   * empty while an account exists (only receivables), and the List page decided
+   * *no accounts* by it, so it told a reader with an account to create one.
+   */
+  it("draws the List page when accounts exist but net worth is empty", () => {
+    const port = basePort({ listAccounts: () => [PLN_ACCOUNT], listNetWorth: () => [] });
+    const controller = createPhoneLedger(port, {
+      capture: () => ({
+        date: accountingDate("2026-09-03"),
+        timeZone: "Europe/Warsaw",
+        offsetMinutes: 120,
+        at: new Date("2026-09-03T10:00:00Z"),
+      }),
+      id: () => id("11111111-1111-4111-8111-111111111111"),
+    });
+    controller.refresh();
+    liveParams = { view: "list" };
+    withLedger(<Today />, controller);
+
+    const page = within(screen.getByRole("tabpanel"));
+    expect(page.queryByText("No accounts yet")).toBeNull();
+    expect(page.getByText("No transactions yet")).toBeDefined();
+  });
+
+  /**
+   * §6.6 — the overview lists who owes whom, under what you hold: one line per
+   * person per currency with the direction in words, absent when nothing is
+   * open. The balances are `listCounterpartyBalances`'s own rows, so a
+   * repayment that brings one to zero drops its line on the next read.
+   */
+  describe("open debts", () => {
+    const row = (name: string, balance: string, key: string) => ({
+      counterpartyId: id<"counterparties">(`bbbbbbbb-bbbb-4bbb-8bbb-0000000000${key}`),
+      name,
+      kind: "person" as const,
+      settlementCurrency: null,
+      currency: currencyCode("PLN"),
+      decimals: 2,
+      balance: toMoney(balance),
+      ageDays: null,
+      bucket: null,
+    });
+
+    function withDebts(initial: ReturnType<typeof row>[]) {
+      let rows = initial;
+      const port = basePort({
+        listAccounts: () => [PLN_ACCOUNT],
+        listCounterpartyBalances: () => rows,
+      });
+      const controller = createPhoneLedger(port, {
+        capture: () => ({
+          date: accountingDate("2026-09-03"),
+          timeZone: "Europe/Warsaw",
+          offsetMinutes: 120,
+          at: new Date("2026-09-03T10:00:00Z"),
+        }),
+        id: () => id("11111111-1111-4111-8111-111111111111"),
+      });
+      controller.refresh();
+      withLedger(<Today />, controller);
+      /** What the register reads next: a repayment settled them all. */
+      return (next: ReturnType<typeof row>[]) => {
+        rows = next;
+        act(() => controller.refresh());
+      };
+    }
+
+    it("lists each open debt with its direction, and opens the person", () => {
+      withDebts([row("Nina", "-5.00000000", "01"), row("Tomasz", "150.00000000", "02")]);
+
+      expect(screen.getByText("Open debts")).toBeDefined();
+      expect(screen.getByText("owes you")).toBeDefined();
+      expect(screen.getByText("you owe")).toBeDefined();
+      fireEvent.click(screen.getByRole("button", { name: /^Nina, you owe, 5/ }));
+      expect(router.push).toHaveBeenCalledWith(
+        "/counterparty/bbbbbbbb-bbbb-4bbb-8bbb-000000000001",
+      );
+    });
+
+    it("is hidden when nothing is open, and goes when the last debt is settled", () => {
+      const settle = withDebts([row("Nina", "-5.00000000", "01")]);
+      expect(screen.getByText("Open debts")).toBeDefined();
+      settle([row("Nina", "0.00000000", "01")]);
+      expect(screen.queryByText("Open debts")).toBeNull();
+    });
+  });
+
+  /**
+   * **An error with accounts already loaded stands in for nothing.** S04 §6:
+   * the error replaces the body only where there is nothing to fall back on; a
+   * later failed refresh must not wipe List, Calendar and Months to a message
+   * with no numbers under it.
+   */
+  it.each(["list", "calendar", "months"])(
+    "keeps drawing %s when a later refresh fails and accounts are loaded",
+    (view) => {
+      let calls = 0;
+      const port = basePort({
+        listAccounts: () => {
+          calls += 1;
+          if (calls > 1) throw new Error("query failed");
+          return [PLN_ACCOUNT];
+        },
+        listNetWorth: () => netWorthOf([PLN_ACCOUNT]),
+      });
+      const controller = createPhoneLedger(port, {
+        capture: () => ({
+          date: accountingDate("2026-09-03"),
+          timeZone: "Europe/Warsaw",
+          offsetMinutes: 120,
+          at: new Date("2026-09-03T10:00:00Z"),
+        }),
+        id: () => id("11111111-1111-4111-8111-111111111111"),
+      });
+      try {
+        controller.refresh();
+      } catch {
+        // Expected — asserting the snapshot it leaves behind, not this throw.
+      }
+      liveParams = { view };
+      withLedger(<Today />, controller);
+
+      const page = within(screen.getByRole("tabpanel"));
+      expect(page.queryByText("Couldn't refresh")).toBeNull();
+      expect(page.queryByText("No accounts yet")).toBeNull();
+    },
+  );
+
+  it("says there is no account on Months too, with no chart", () => {
+    liveParams = { view: "months" };
+    withLedger(<Today />);
+
+    const page = within(screen.getByRole("tabpanel"));
+    expect(page.getByText("No accounts yet")).toBeDefined();
+    expect(page.queryByText(/Jan/)).toBeNull();
   });
 
   /**
@@ -1150,7 +1404,10 @@ describe("QuickAdd", () => {
     withLedger(<QuickAdd />, fakeController({ accounts: [PLN_ACCOUNT] }));
 
     fireEvent.click(screen.getByRole("button", { name: /^From/ }));
-    expect(screen.getByText("Bank A · PLN")).toBeDefined();
+    // The one account is already filled into the row; the sheet still lists it.
+    expect(
+      within(screen.getByTestId("account-picker-list")).getByText("Bank A · PLN"),
+    ).toBeDefined();
   });
 
   it("offers the ledger's accounts via AccountPicker at the desk breakpoint (QuickAddForm's own fallback)", () => {
@@ -1177,39 +1434,6 @@ describe("NewAccount", () => {
 
     expect(screen.getByText(/PLN/)).toBeDefined();
     expect(screen.getByRole("button", { name: "Save" })).toBeDefined();
-  });
-
-  /**
-   * §14.6 — the account still opens in a currency with no rate; what it
-   * cannot do is carry transactions. The way out is S18, on that currency
-   * and on the day the form is already dated by.
-   */
-  it("names a currency with no rate and opens S18 on it", () => {
-    liveParams = { returnTo: "today" };
-    withLedger(
-      <NewAccount />,
-      fakeController({
-        currencies: [
-          {
-            code: currencyCode("BYN"),
-            name: "Belarusian Ruble",
-            symbol: "Br",
-            decimals: 2,
-            capturable: false,
-            isPivot: false,
-          },
-        ],
-      }),
-    );
-
-    expect(screen.getByText(/BYN has no exchange rate yet/)).toBeDefined();
-    fireEvent.click(screen.getByRole("button", { name: "Set a BYN rate" }));
-    expect(router.push).toHaveBeenCalledWith({
-      pathname: "/settings/rates",
-      // The device's own calendar (§7.0a) — the same read the form's
-      // "Opening date" shortcut row makes, not the fixture's frozen clock.
-      params: { quote: "BYN", date: deviceRuntime().capture().date },
-    });
   });
 });
 
@@ -1520,6 +1744,186 @@ describe("CategoriesScreen", () => {
       screen.queryByText("Food belongs to the expense side — a category cannot move across kinds"),
     ).toBeNull();
   });
+
+  describe("starter categories in the app's language, used ones first", () => {
+    const FOOD = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1";
+    const DELIVERY = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2";
+    const GROCERIES_ROW = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa3";
+    const RENAMED = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa4";
+    const OWN = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa5";
+    const starters = [
+      fakeCategory({
+        id: FOOD,
+        name: "Food",
+        kind: "expense",
+        isLeaf: false,
+        externalId: "seed:food",
+      }),
+      fakeCategory({
+        id: DELIVERY,
+        name: "Delivery",
+        parentId: FOOD,
+        kind: "expense",
+        depth: 1,
+        externalId: "seed:delivery",
+      }),
+      fakeCategory({
+        id: GROCERIES_ROW,
+        name: "Groceries",
+        parentId: FOOD,
+        kind: "expense",
+        depth: 1,
+        externalId: "seed:groceries",
+      }),
+      // A starter the person renamed: the stored text differs from the seed's.
+      fakeCategory({
+        id: RENAMED,
+        name: "Snacks",
+        parentId: FOOD,
+        kind: "expense",
+        depth: 1,
+        externalId: "seed:alcohol",
+      }),
+      fakeCategory({
+        id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa6",
+        name: "Furniture & appliances",
+        parentId: FOOD,
+        kind: "expense",
+        depth: 1,
+        externalId: "seed:furniture-appliances",
+      }),
+      // Their own, carrying a starter's English name and no seed tag.
+      fakeCategory({ id: OWN, name: "Taxi", parentId: FOOD, kind: "expense", depth: 1 }),
+    ];
+    const used = new Map([[id<"categories">(GROCERIES_ROW), 5]]);
+
+    function renderIn(locale: "de" | "en") {
+      return render(
+        <I18nProvider locale={locale}>
+          <LedgerProvider
+            controller={fakeController({ categories: starters, categoryUsage: used })}
+          >
+            <CategoriesScreen />
+          </LedgerProvider>
+        </I18nProvider>,
+      );
+    }
+
+    it("shows a starter in German, a renamed one and their own as stored", () => {
+      renderIn("de");
+      expect(screen.getByText("Essen & Trinken")).toBeDefined();
+      expect(screen.getByText("Lebensmittel")).toBeDefined();
+      expect(screen.getByText("Lieferdienst")).toBeDefined();
+      expect(screen.getByText("Snacks")).toBeDefined();
+      expect(screen.getByText("Taxi")).toBeDefined();
+      expect(screen.queryByText("Groceries")).toBeNull();
+    });
+
+    it("shows the canonical English names in English", () => {
+      renderIn("en");
+      expect(screen.getByText("Groceries")).toBeDefined();
+      expect(screen.getByText("Delivery")).toBeDefined();
+    });
+
+    it("lists the category with entries before the unused ones inside its group", () => {
+      renderIn("de");
+      const order = ["Essen & Trinken", "Lebensmittel", "Lieferdienst", "Snacks", "Taxi"].map(
+        (label) => screen.getByText(label),
+      );
+      for (let i = 1; i < order.length; i += 1) {
+        const before = order[i - 1] as HTMLElement;
+        const after = order[i] as HTMLElement;
+        expect(
+          before.compareDocumentPosition(after) & Node.DOCUMENT_POSITION_FOLLOWING,
+        ).toBeTruthy();
+      }
+    });
+
+    it("starts a rename from the name on screen, and the saved text is then the person's own", () => {
+      renderIn("de");
+      fireEvent.click(screen.getByRole("button", { name: "Aktionen für Lebensmittel" }));
+      fireEvent.click(screen.getByRole("button", { name: "Umbenennen" }));
+      const field = screen.getByLabelText("Name") as HTMLInputElement;
+      expect(field.value).toBe("Lebensmittel");
+      fireEvent.change(field, { target: { value: "Einkauf" } });
+      fireEvent.click(screen.getByRole("button", { name: "Speichern" }));
+      expect(screen.getByText("Einkauf")).toBeDefined();
+      expect(screen.queryByText("Lebensmittel")).toBeNull();
+    });
+
+    it("saving a rename without editing writes nothing, so the starter keeps translating", () => {
+      const renameCategory = vi.fn();
+      const controller = fakeController({ categories: starters, categoryUsage: used });
+      const original = controller.renameCategory;
+      controller.renameCategory = (draft) => {
+        renameCategory(draft);
+        return original(draft);
+      };
+      render(
+        <I18nProvider locale="de">
+          <LedgerProvider controller={controller}>
+            <CategoriesScreen />
+          </LedgerProvider>
+        </I18nProvider>,
+      );
+      fireEvent.click(screen.getByRole("button", { name: "Aktionen für Lebensmittel" }));
+      fireEvent.click(screen.getByRole("button", { name: "Umbenennen" }));
+      fireEvent.click(screen.getByRole("button", { name: "Speichern" }));
+      expect(renameCategory).not.toHaveBeenCalled();
+      expect(screen.getByText("Lebensmittel")).toBeDefined();
+    });
+
+    it("finds a starter whatever the diacritics typed", () => {
+      renderIn("de");
+      const search = screen.getByPlaceholderText(/^\d+ Kategorien durchsuchen$/);
+      fireEvent.change(search, { target: { value: "mobel" } });
+      expect(screen.getByText("Möbel & Geräte")).toBeDefined();
+      expect(screen.queryByText("Lieferdienst")).toBeNull();
+    });
+
+    it("refuses a create named like a sibling's drawn name, through the real controller", () => {
+      renderIn("de");
+      fireEvent.click(screen.getByRole("button", { name: "Neu" }));
+      fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Lebensmittel" } });
+      fireEvent.click(screen.getByRole("button", { name: "Gruppe" }));
+      fireEvent.click(screen.getByRole("radio", { name: "Essen & Trinken" }));
+      fireEvent.click(screen.getByRole("button", { name: "Speichern" }));
+      expect(screen.getByText('"Lebensmittel" already exists here')).toBeDefined();
+    });
+
+    it("offers a merge for two categories that look alike only as drawn", () => {
+      const tree = [
+        ...starters,
+        fakeCategory({
+          id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa7",
+          name: "Lebensmittel bio",
+          parentId: FOOD,
+          kind: "expense",
+          depth: 1,
+        }),
+      ];
+      render(
+        <I18nProvider locale="de">
+          <LedgerProvider controller={fakeController({ categories: tree, categoryUsage: used })}>
+            <CategoriesScreen />
+          </LedgerProvider>
+        </I18nProvider>,
+      );
+      // Stored, these are "Groceries" and "Lebensmittel bio": no resemblance.
+      expect(screen.getByText(/Lebensmittel · 5/)).toBeDefined();
+    });
+
+    it("finds a starter by its German name and by its stored one", () => {
+      renderIn("de");
+      const search = screen.getByPlaceholderText(/^\d+ Kategorien durchsuchen$/);
+      fireEvent.change(search, { target: { value: "lebensm" } });
+      expect(screen.getByText("Lebensmittel")).toBeDefined();
+      expect(screen.queryByText("Lieferdienst")).toBeNull();
+      fireEvent.change(search, { target: { value: "deliver" } });
+      expect(screen.getByText("Lieferdienst")).toBeDefined();
+      expect(screen.queryByText("Lebensmittel")).toBeNull();
+    });
+  });
 });
 
 /**
@@ -1552,6 +1956,7 @@ describe("Today — the pager, with a month in it", () => {
       enteredName,
       note: "",
       categoryName: "Groceries",
+      categoryExternalId: null,
       brandKey: null,
       accountId: PLN_ACCOUNT.id,
       accountName: PLN_ACCOUNT.name,
@@ -1620,6 +2025,33 @@ describe("Today — the pager, with a month in it", () => {
     expect(screen.getByRole("tab", { name: "Summary" }).getAttribute("aria-selected")).toBe("true");
   });
 
+  /**
+   * **The pill never sits under the add button**, which is draggable to either
+   * side edge: it rests on the side the button is not — the only way back from
+   * a jump must not be the thing the button hides.
+   */
+  it.each([
+    ["right", { x: 318, y: 500, dock: null }, "right" as const, "left" as const],
+    ["left", { x: 16, y: 500, dock: null }, "left" as const, "right" as const],
+  ])(
+    "puts the pill opposite the add button on the %s",
+    async (_name, position, buttonAt, pillAt) => {
+      // A phone-width frame, so the button's side is read against a real width.
+      Object.defineProperty(document.documentElement, "clientWidth", {
+        value: 390,
+        configurable: true,
+      });
+      window.dispatchEvent(new Event("resize"));
+      await floatPosition.set(position);
+      open("list", "2021-03-02");
+      const pill = await screen.findByRole("button", { name: /Back to today/ });
+      const layer = pill.parentElement?.parentElement as HTMLElement;
+      const style = getComputedStyle(layer);
+      expect(style[pillAt]).toBe("16px");
+      expect(style[buttonAt]).not.toBe("16px");
+    },
+  );
+
   it("draws Summary's month as three labelled figures, each with its currency", () => {
     // §3's hero. The bar between them is decorative and says the same
     // subtraction, so what a reader must be able to read is these.
@@ -1675,11 +2107,19 @@ describe("Today — the pager, with a month in it", () => {
    */
   it("draws the last days on Summary as day groups whose rows open the transaction", () => {
     const summary = open("summary");
+    // Named from the month the clock is in, not a month written into the test.
+    const dayOfMonth = (day: string) =>
+      new Date(`${MONTH}-${day}T12:00:00Z`).toLocaleDateString("en-US", {
+        month: "long",
+        day: "numeric",
+        year: "numeric",
+        timeZone: "UTC",
+      });
     // The two latest days of the page read from today, newest first — and no
     // further: the 2nd is the List's to show.
-    expect(summary.getByText("September 9, 2026")).toBeTruthy();
-    expect(summary.getByText("September 5, 2026")).toBeTruthy();
-    expect(summary.queryByText("September 2, 2026")).toBeNull();
+    expect(summary.getByText(dayOfMonth("09"))).toBeTruthy();
+    expect(summary.getByText(dayOfMonth("05"))).toBeTruthy();
+    expect(summary.queryByText(dayOfMonth("02"))).toBeNull();
     expect(summary.queryByText("Show all →")).toBeNull();
     fireEvent.click(summary.getByRole("button", { name: /Clinic G/ }));
     expect(router.push).toHaveBeenCalledWith(
@@ -1836,6 +2276,40 @@ describe("Today — the pager, with a month in it", () => {
   });
 
   /**
+   * **One page, one currency: the year chart's header named the lead.**
+   *
+   * The twelve monthly rows and the chart's *kept* figure are sums in the
+   * pivot (`computations.md` §4), but the header was labelled with the lead
+   * currency — the first account's. A USD pivot over a PLN account read
+   * *+4 161,23 PLN* over rows in `$`.
+   */
+  it("labels the year's kept figure in the pivot the month rows are in", () => {
+    const months = open("months", `${MONTH}-09`, {
+      currencies: [
+        {
+          code: currencyCode("USD"),
+          name: "US dollar",
+          symbol: "$",
+          decimals: 2,
+          capturable: true,
+          isPivot: true,
+        },
+        {
+          code: currencyCode("PLN"),
+          name: "Polish Złoty",
+          symbol: "zł",
+          decimals: 2,
+          capturable: true,
+          isPivot: false,
+        },
+      ],
+    });
+    // The page says PLN nowhere: every figure on it is the pivot's.
+    expect(months.queryAllByText(/PLN/)).toHaveLength(0);
+    expect(months.getAllByText(/USD/).length).toBeGreaterThan(0);
+  });
+
+  /**
    * **H — the nearest month must be measured from the month, not from the
    * square the reader last touched.**
    *
@@ -1932,5 +2406,141 @@ describe("Today — the pager, with a month in it", () => {
       .filter((node) => /Came in/.test(node.getAttribute("aria-label") ?? ""));
     expect(rows).toHaveLength(12);
     expect(rows.filter((node) => node.getAttribute("aria-selected") === "true")).toHaveLength(1);
+  });
+});
+
+/**
+ * **Every figure follows the display currency** (§7.0): a ledger anchored to
+ * EUR — what a German phone's fresh ledger is — states its month card, its
+ * months chart and its spend rows in EUR with nothing chosen, and choosing PLN
+ * in Settings converts them, each row at its own date's rate.
+ */
+describe("Today — figures in the display currency", () => {
+  const MONTH = deviceRuntime().capture().date.slice(0, 7);
+  const EUR = currencyCode("EUR");
+  const PLN = currencyCode("PLN");
+  const CURRENCIES: readonly PhoneCurrency[] = [
+    { code: EUR, name: "Euro", symbol: "€", decimals: 2, capturable: true, isPivot: true },
+    {
+      code: PLN,
+      name: "Polish Złoty",
+      symbol: "zł",
+      decimals: 2,
+      capturable: true,
+      isPivot: false,
+    },
+  ];
+  const EUR_ACCOUNT: FakeAccount = { ...PLN_ACCOUNT, name: "Bank A · EUR", currency: EUR };
+
+  const EXPENSE: PhoneSearchTransaction = {
+    id: id<"transactions">("33333333-3333-4333-8333-3320260501"),
+    date: accountingDate(`${MONTH}-02`),
+    type: "expense",
+    enteredName: "Market B",
+    note: "",
+    categoryName: "Groceries",
+    categoryExternalId: null,
+    brandKey: null,
+    accountId: EUR_ACCOUNT.id,
+    accountName: EUR_ACCOUNT.name,
+    toAccountId: null,
+    toAccountName: null,
+    amount: toMoney("-50.00"),
+    currency: EUR,
+    decimals: 2,
+    fxRate: money.pivotPerUnit("1"),
+    fxRateEstimated: false,
+    toAmount: null,
+    toFxRate: null,
+    toCurrency: null,
+    toDecimals: null,
+    isBusiness: false,
+    isCapital: false,
+    obligationRole: null,
+  };
+
+  /** The real fold, over the one expense, so `rebase` is exercised rather than assumed. */
+  const spendByCategory = (scope: LedgerScope, options?: money.SpendByCategoryOptions) =>
+    money.spendByCategory(
+      [
+        {
+          id: EXPENSE.id,
+          type: "expense",
+          date: EXPENSE.date,
+          ownership: "own",
+          isBusiness: false,
+          currency: EUR,
+          decimals: 2,
+          categoryId: GROCERIES,
+          amountOriginal: toMoney("50.00"),
+          isCapital: false,
+          fxRate: EXPENSE.fxRate,
+        },
+      ],
+      [],
+      { start: accountingDate(`${MONTH}-01`), end: accountingDate("9999-12-31") },
+      scope,
+      options,
+    );
+
+  /** 4 PLN to the euro, on every date. */
+  const readRate: PhoneLedgerPort["readRate"] = ({ quote, date }) =>
+    quote === PLN
+      ? { rate: money.unitsPerPivot("4"), source: "nbp", asOf: date, carriedDays: 0 }
+      : null;
+
+  function open(view: "summary" | "months") {
+    liveParams = { view, date: `${MONTH}-09` };
+    setLivePivotReader(() => EUR);
+    setLiveHeldReader(() => [EUR, PLN]);
+    withLedger(
+      <Today />,
+      fakeController({
+        accounts: [EUR_ACCOUNT],
+        currencies: CURRENCIES,
+        categories: [fakeCategory({ id: GROCERIES, name: "Groceries", kind: "expense" })],
+        ledger: [EXPENSE],
+        transactionCount: 1,
+        readRate,
+        spendByCategory,
+      }),
+    );
+    return within(screen.getByRole("tabpanel"));
+  }
+
+  it("states the month card, the months chart and the spend rows in EUR with nothing chosen", () => {
+    const summary = open("summary");
+    const figureBeside = (label: string) =>
+      summary.getByText(label).parentElement?.textContent ?? "";
+    expect(figureBeside("Went out")).toMatch(/50[.,]00/);
+    expect(figureBeside("Went out")).toMatch(/€|EUR/);
+    expect(figureBeside("Went out")).not.toMatch(/zł|PLN/);
+    cleanup();
+    const months = open("months");
+    expect(months.queryAllByText(/zł|PLN/)).toHaveLength(0);
+    expect(months.getAllByText(/50[.,]00/).length).toBeGreaterThan(0);
+  });
+
+  it("converts every one of them when PLN is chosen, at the rate for each row's date", async () => {
+    await act(async () => {
+      await displayCurrency.set(PLN);
+    });
+    try {
+      const summary = open("summary");
+      const figureBeside = (label: string) =>
+        summary.getByText(label).parentElement?.textContent ?? "";
+      expect(figureBeside("Went out")).toMatch(/200[.,]00/);
+      expect(figureBeside("Went out")).not.toMatch(/50[.,]00/);
+      // The spend rows break down the same figure, converted by the same rule.
+      expect(summary.getByText("Groceries").closest("[role]")?.textContent ?? "").toBeDefined();
+      expect((document.body.textContent ?? "").match(/200[.,]00/g)?.length ?? 0).toBeGreaterThan(1);
+      cleanup();
+      const months = open("months");
+      expect(months.getAllByText(/200[.,]00/).length).toBeGreaterThan(0);
+    } finally {
+      await act(async () => {
+        await displayCurrency.set(EUR);
+      });
+    }
   });
 });

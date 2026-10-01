@@ -974,6 +974,7 @@ describe("a card groups rows or holds a figure — never a whole screen", () => 
     "HoldingsCard",
     "LinesCard",
     "MonthSummary",
+    "OpenDebtsCard",
     "RestoreCard",
     "SettingsMenu",
     "SharedGroup",
@@ -1939,6 +1940,7 @@ describe("every src/ is organised by domain, not by layer", () => {
       "accounts",
       "appearance",
       "backup",
+      "categories",
       "connectivity",
       "counterparties",
       "currencies",
@@ -3530,7 +3532,7 @@ describe("the escape is drawn quietly, everywhere", () => {
     /<Button\b(?:(?!<Button\b|\/>)[\s\S])*?\blabel=\{t\("common\.cancel"\)\}(?:(?!<Button\b|\/>)[\s\S])*?\/>/gs;
   const CANCEL_ROOTS = ["packages/ui/src", "apps/mobile/src"];
   /** Every Cancel that exists today. An exact count, so one cannot vanish silently. */
-  const CANCEL_COUNT = 12;
+  const CANCEL_COUNT = 13;
 
   it("gives every Cancel button the ghost variant and no other", () => {
     const offenders: string[] = [];
@@ -3618,8 +3620,8 @@ describe("every pressable answers the finger", () => {
     ],
   ]);
 
-  /** Every bare `<Pressable` tag the scan sees today: 18 hand-wired, 5 backdrops. */
-  const BARE_TAG_COUNT = 22;
+  /** Every bare `<Pressable` tag the scan sees today: 19 hand-wired, 5 backdrops. */
+  const BARE_TAG_COUNT = 24;
   /** The docblocks here name `Pressable` constantly; only rendered tags count. */
   const withoutComments = (text: string) =>
     text.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");

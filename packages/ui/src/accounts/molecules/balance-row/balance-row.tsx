@@ -24,7 +24,7 @@
  * observed, only the value itself, so there is no date to print beside it.
  */
 
-import type * as money from "@waltning/core/money";
+import * as money from "@waltning/core/money";
 import { useMemo } from "react";
 import { Text, View } from "react-native";
 import { Amount } from "../../../fx/atoms/amount/amount";
@@ -63,6 +63,14 @@ export type BalanceRowProps = {
     displayDecimals?: number;
     provenance?: FxProvenance;
   };
+  /**
+   * An asset account below zero (`isOverdrawn`). The row says **overdrawn**
+   * and states the magnitude in the spend colour — *Bank A · overdrawn
+   * 504,20 €* — instead of a bare negative, which read as money owed to
+   * someone. A card or a loan below zero is not this: it stays a signed
+   * figure, owed.
+   */
+  overdrawn?: boolean;
   /** §3.3 — a business row carries the marker in every list it appears in. */
   isBusiness?: boolean;
   /** A clearing account whose balance is not zero (§6.4) — a prompt, not a defect. */
@@ -98,6 +106,7 @@ export function BalanceRow({
   currency,
   decimals = 2,
   conversion,
+  overdrawn = false,
   isBusiness = false,
   unsettled = false,
   expectedBalance,
@@ -136,7 +145,31 @@ export function BalanceRow({
           </View>
         )}
       </View>
-      {conversion ? (
+      {overdrawn ? (
+        <View style={styles.overdrawn}>
+          <Text style={styles.overdrawnWord}>{t("accounts.overdrawn")}</Text>
+          {conversion ? (
+            <FxAmount
+              value={money.abs(balance)}
+              currency={currency}
+              decimals={decimals}
+              rate={conversion.rate}
+              displayCurrency={conversion.displayCurrency}
+              displayDecimals={conversion.displayDecimals ?? 2}
+              provenance={conversion.provenance ?? { kind: "synced" }}
+              kind="spend"
+              stacked
+            />
+          ) : (
+            <Amount
+              value={money.abs(balance)}
+              currency={currency}
+              decimals={decimals}
+              kind="spend"
+            />
+          )}
+        </View>
+      ) : conversion ? (
         <FxAmount
           value={balance}
           currency={currency}
@@ -208,6 +241,9 @@ const useStyles = makeStyles((theme) => ({
   */
   name: { color: theme.text, ...text.ui("body", 500) },
   meta: { color: theme.textMuted, ...text.ui("caption") },
+  /** The word, then the magnitude — one line, right-aligned like every figure in the column. */
+  overdrawn: { flexDirection: "row", alignItems: "flex-start", gap: space.sm },
+  overdrawnWord: { color: theme.spend, ...text.ui("caption"), paddingTop: space.xxs },
   lastObservedLine: { flexDirection: "row", alignItems: "center", gap: space.xxs },
   /** §10's floor, on the target `Pressable` adds — the row's own content already runs taller in practice. */
   pressable: { minHeight: touchTarget.min, justifyContent: "center" },

@@ -841,13 +841,13 @@ describe("set_transaction_lines", () => {
    * straight to the replica, because the executor's decimal check would refuse
    * it first and the point is what the trigger does when the code is wrong.
    *
-   * **A billion, not eighteen.** The first version of this test used
-   * `18.00000000` against `18.00000001` and called it "below floating-point
-   * precision" — a double resolves that trivially (ulp at 18 is about
-   * 3.6e-15), so the test was green against the very code it claims to
-   * regress. The crossover is at 1e9: `1000000000.00000001` and
-   * `1000000000.00000000` are the same double, and the `REAL` comparison
-   * accepted them as equal.
+   * **Nine hundred million, not eighteen.** The first version of this test
+   * used `18.00000000` against `18.00000001` and called it "below
+   * floating-point precision" — a double resolves that trivially (ulp at 18 is
+   * about 3.6e-15), so the test was green against the very code it claims to
+   * regress. The crossover is near the top of the amount ceiling:
+   * `900000000.00000001` and `900000000.00000000` are the same double (ulp
+   * there is about 1.2e-7), and the `REAL` comparison accepted them as equal.
    */
   it("refuses a difference below floating-point precision", () => {
     const v = () => readTxn()?.version ?? 0;
@@ -858,12 +858,12 @@ describe("set_transaction_lines", () => {
       input: {
         transactionId: TXN,
         version: v(),
-        amountOriginal: "1000000000",
+        amountOriginal: "900000000",
         lines: [
           {
             id: id<"transactionLines">("00000000-0000-4000-8000-0000000000e1"),
             description: "Whole",
-            amount: "1000000000",
+            amount: "900000000",
           },
         ],
       },
@@ -872,7 +872,7 @@ describe("set_transaction_lines", () => {
     expect(() =>
       stores.ledger.replica.db
         .update(transactions)
-        .set({ amountOriginal: money.toMoney("1000000000.00000001") })
+        .set({ amountOriginal: money.toMoney("900000000.00000001") })
         .where(eq(transactions.id, TXN))
         .run(),
     ).toThrow(/lines must sum/);

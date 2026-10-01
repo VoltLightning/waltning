@@ -777,11 +777,14 @@ is **not made here**.
 **The gate, on both** (`packages/client/src/security/app-lock`, drawn by `LockedScreen`):
 
 - **It is not a login.** The session token decides whether the phone may talk to the server; this decides whether the person holding the phone may read what it already has. The fallback is the device passcode, never an app PIN — a second secret is one more thing to forget, typed in public more often, usually weaker than the one the device already enforces, and it needs a recovery path that is itself an attack surface.
-- **Enrolment decides whether there is a gate.** A device with no secret set opens without one: the gate cannot be stronger than the device, and refusing would lock the owner out for a setting they never chose. A platform that cannot say whether it is enrolled opens too, with the failure on the log.
-- **The prompt is raised by the app, once per lock**, so opening the app meets Face ID rather than a button asking for it. The button is for after a cancel.
+- **Enrolment decides whether there is a gate.** A device with no secret set opens without one, and is not asked: the gate cannot be stronger than the device, and refusing would lock the owner out for a setting they never chose. A platform that cannot say whether it is enrolled opens too, with the failure on the log.
+- **The owner is asked first, once, and the answer is a device preference.** The first time the app opens on a device that could gate, it stands in front of the ledger and asks — *Lock the app with your fingerprint?* (or *face*, or *fingerprint or face*, or *device passcode*, following what the device offers), with the reason beneath: anyone holding this unlocked phone can read the accounts. **Yes** turns the gate on and opens the ledger for this launch; **Not now** leaves no gate. Nothing is requested from the device — no biometric prompt — until the answer is Yes. The answer is stored on the phone, never synced, never a registry write, and S30's *App lock* row flips it either way; the row exists only where the device can gate. Switching it on or off does not remount the screen it was switched on.
+- **Only a fresh device is asked; every doubt is a lock.** The question appears only when nothing is stored *and* the device holds no ledger data. An install older than the question has a ledger and no answer, and it is **locked**, not asked — asking would let whoever holds the phone choose *Not now* and open it. A stored answer that cannot be read, a read that does not come back within 5 s (`CHOICE_TIMEOUT_MS`, separate from the enrolment's), and any value that is not exactly `on` or `off` are locked too: an unreadable answer is not a *no*. A write that fails after *Yes* is retried once; the gate stays armed for the launch.
+- **Turning the lock off asks the device first.** *Not now* on a device that holds data, and the Settings switch from *On* to *Off*, both require the device's own authentication — whoever holds an unlocked phone cannot disarm the lock with a tap. Turning it on asks nothing. The answer is accepted only from the question, an open ledger or an unlocked one — never from the lock screen.
+- **The prompt is raised by the app, once per lock**, so opening the app meets Face ID rather than a button asking for it — once the owner has said yes. The button is for after a cancel.
 - **Cancelling leaves the ledger locked, not a stale screen behind a dismissed sheet.** Before the first unlock the ledger's tree is not on the page at all; after it, the lock is an opaque layer over the tree, which stays mounted so a return does not lose the screen the reader was on. The reason is stated under the button — cancelled, not recognised, locked out, unavailable — and nothing else is offered.
 - **Leaving covers; staying away re-locks.** The cover is drawn as the app goes to the background — best effort against the switcher's snapshot, which the OS takes on its own clock; the *Screen capture* row is the control that blanks it outright. A return within **30 s** (`RELOCK_AFTER_MS`) lifts it without asking; longer re-locks. The grace exists for the calculator, the camera and the message that arrived mid-capture — a gate that asked on every return is one people learn to hate, then to disable.
-- **The clock is the wall clock, clamped.** A monotonic clock stops while the device sleeps, so eight hours in a drawer read as the seconds the phone was awake; a wall clock set backwards during the stay reads as a long one. Enrolment that does not answer within 5 s opens the ledger with the failure on the log — a platform that cannot say cannot gate.
+- **The clock is the wall clock, clamped.** A monotonic clock stops while the device sleeps, so eight hours in a drawer read as the seconds the phone was awake; a wall clock set backwards during the stay reads as a long one. Enrolment that does not answer within 5 s opens the ledger with the failure on the log — a platform that cannot say cannot gate. **That timeout covers enrolment only**: a platform that cannot say what the owner chose has not said *no*, so the stored answer has its own and fails the other way, locked.
 - **The web build has no gate.** It holds a preview ledger and appears in neither table.
 
 **Web appears in neither table**, because it holds nothing either table
@@ -1184,6 +1187,38 @@ the real taxonomy lives in group names and memo text. Decoded from those:
 date, and `derived` marks a rate triangulated by a pivot change rather than
 published by anyone)
 
+**Starter category names are a display rule, not stored text.** Every seeded
+category and group carries a stable `external_id` (`seed:<key>`) and the
+seed's canonical English name as `name`. A row is drawn in the app's language
+while `name` still equals the canonical name its `external_id` names, and as
+stored text the moment they differ:
+
+| Row | Drawn as |
+|---|---|
+| seed key, `name` equals the canonical name | the catalogue's `taxonomy.<key>` in the current language — a language change re-labels it |
+| seed key, `name` differs (the person renamed it) | `name`, exactly as stored — their own text, never translated again |
+| no seed key (a category the person made) | `name`, exactly as stored |
+
+A rename changes `name` and never `external_id`, so no column records the
+freeze. Renaming a row to exactly its canonical English name makes it a
+starter again, and it translates — the stored text is identical either way.
+The rule is one pure function (`@waltning/core/seed-label`) over `name` and
+`external_id`, and every surface that draws a category name goes through it.
+The stored name stays the canonical one everywhere else: the database's
+sibling-uniqueness index, the agent, exports and sync all read it. Search
+matches both the drawn name and the stored one, with accents dropped
+(*offentlicher* finds *Öffentlicher Nahverkehr*), and so does the sibling check a
+create or a rename makes before it writes (in the phone's screens and controller;
+the replica's executors, the server and the agent compare stored names only): in a German app, creating *Gehalt*
+beside the drawn *Gehalt* is refused, and so is *Salary*, and a refusal names
+the sibling as drawn. A colour is hashed from the seed tag for a starter and
+from the name otherwise, so a language change never repaints a category.
+
+Re-running the server's seed (`packages/db`) upserts the seed's definitions, so
+it resets a starter's stored `name` to the canonical one and a renamed starter
+reads as the catalogue's text again. The phone's bootstrap seeds a ledger once
+and never touches a row afterwards.
+
 ### 6.4 The clearing accounts
 
 `Clearing · PLN` is the third most active account in the system — 678
@@ -1240,7 +1275,34 @@ currencies_decimals_sane              decimals BETWEEN 0 AND 8
 fx_rates_rate_positive                rate > 0
 fx_rates_rate_bounds                  rate > 0.000000000001 AND rate < 999999999999
 fx_rates_distinct                     base <> quote
+transactions_amount_ceiling           abs(amount_original), abs(to_amount), abs(fee), abs(debt_amount) each < 1000000000
+transaction_lines_amount_ceiling      abs(amount) < 1000000000
+accounts_opening_balance_ceiling      abs(opening_balance) < 1000000000
+recurring_transactions_amount_ceiling abs(amount_original) < 1000000000
+debt_reassignments_amount_ceiling      abs(amount) < 1000000000
+opening_debts_amount_ceiling          abs(amount) < 1000000000
+targets_amount_ceiling                abs(amount) < 1000000000
+receipts_total_ceiling                abs(total) < 1000000000
 ```
+
+**No amount a row holds reaches `1 000 000 000`.** The ceiling is `999 999 999.99`
+in absolute value, in the row's own currency; a currency with other decimals
+keeps the same integer bound (fewer than a billion). A figure a hundred times a
+plausible balance is a typo, and it breaks every layout it reaches. It is one
+bound, `AMOUNT_CEILING_EXCLUSIVE` in `money.ts`, stated at every layer: the
+contract schema (`zAmount`, used by every write input's amount field), each
+executor, the eight CHECKs above on Postgres and a trigger per table on the
+replica (the one exception is `opening_debts`, a table created whole, which
+carries the same bound as a CHECK on the replica too — there is no existing row
+for a rebuild to copy through it), and every amount input, which refuses a tenth integer digit and says
+*Maximum 999 999 999,99* in the reader's own notation. The CHECKs are added
+`NOT VALID` and validated at once on a database that holds nothing past the
+bound; a database that does keeps those rows until the owner corrects them and
+validates by hand. On the replica the ceiling is a trigger and not a CHECK
+because a CHECK is a table rebuild, which copies every existing row through the
+new constraint — a device already holding one such figure would fail its own
+upgrade on every launch. `accounts.expected_balance` is not bounded: it is a
+balance the owner observed, not an amount an entry holds.
 
 **`transactions_amount_positive` refuses zero, not only a negative.** A
 zero-amount income, expense or transfer is not a payment event (§6.10), and
@@ -1439,9 +1501,280 @@ Set at write time, never inferred. The alternative — deriving the distinction
 from `accounts.ownership` — works today but silently rewrites the meaning of
 five years of history the moment an account is reclassified.
 
+**The category is what says a capture is a debt.** Four seeded categories carry
+it, read from the taxonomy's seed key (`external_id`, `seed:<key>`) and never
+from a display name, which a person renames and a language translates:
+
+| Seed key | Kind | Side of the debt ledger |
+|---|---|---|
+| `borrowed` | income | you owe — money you received |
+| `repayment-made` | expense | you owe — money you returned |
+| `lent-out` | expense | you are owed — money you handed over |
+| `repayment-received` | income | you are owed — money that came back |
+
+Picking one makes the obligation role `debt` and requires a person on the other
+side (`obligation_counterparty_id`): a debt with nobody on the other end is not
+a debt. Every claim below names the layer that enforces it:
+
+- **The capture surfaces** ask **Who?** where the category is picked and refuse
+  to save without it (Quick add on phone and desk, and S09) — *UI*.
+- **A row under one of the four carries the `debt` role and a person** —
+  `create_transaction`, `update_transaction` and `supersede_transaction`
+  refuse otherwise with a message naming the field, and `categorize_batch`
+  refuses to move rows into one that carry no debt (*service, the replica's
+  executors*); under them, the `transactions_debt_category_shape_insert/update`
+  triggers on the replica (`0021_debt_categories`) and
+  `transactions_debt_category_shape` on Postgres (**WA022**,
+  `0025_debt_categories.sql`) hold when the code is wrong (*database, both
+  engines*). The triggers watch only `category_id`, `obligation_role` and
+  `obligation_counterparty_id`, so an unrelated edit to a legacy row that names
+  nobody (a note, an amount) is never refused by them.
+- **Leaving the four takes the automatic role with it.** `update_transaction`
+  and `categorize_batch` clear the obligation pair of a row they move out of one
+  of the four when the write says nothing about the obligation (the identity
+  link, who it was with, stays); a role a person chose by hand under another
+  category is never touched — *service*. The role is a function of the
+  category on the capture surfaces, not a value written into the draft, so
+  nothing is left to clear — *UI*.
+- **Merging into or out of the four is refused while the loser holds rows**
+  (`merge_categories`, *service*; the triggers refuse the `UPDATE` if it were
+  attempted regardless): plain rows moved under a debt category would be debts
+  with nobody named, and debts moved out would keep a role their category no
+  longer states. Re-file them first, each with the person on the other side;
+  an empty category merges freely. `convert_leaf_group` needs no rule of its
+  own: it already refuses a category any row references, so the four can only
+  become groups while empty.
+- **Rows that already sit under the four** are converted by a one-time
+  migration (`0021_debt_categories` on the replica, `0025_debt_categories` on
+  Postgres, idempotent): a live row that names a **person** (`counterparty_id`
+  of kind `person`) and carries no obligation becomes a debt on that person. A
+  row that names nobody, names a company, or is soft-deleted stays as it is, and
+  S09 says *not counted as a debt — add who* instead of guessing; it does not
+  block unrelated edits. Rows the identity-link migration moved off the retired
+  `reference` role carry no mark and are converted like any other row that names
+  a person.
+- **A repayment is `settle_debt`, never a second path.** *Repayment received*
+  and *Repayment made* are written **only** by `settle_debt` (S14): it reads the
+  live sign, stamps `debt_amount`/`debt_currency` so 25 EUR discharges a PLN
+  debt without opening a reverse EUR one, verifies the direction against the
+  balance and reports `overSettled` (*service*). `create_transaction`,
+  `update_transaction` (a row *entering* one), `supersede_transaction` and
+  `categorize_batch` refuse a repayment category with a message naming
+  `settle_debt` (*service, the replica's executors — and so the agent, which
+  reaches the ledger through them*). The capture surfaces route a repayment
+  through it: Quick add on phone and desk, and S09, where picking a repayment
+  category on an existing row settles the person's open debt with the row's own
+  figures and replaces the row with the settlement — **one operation**:
+  `settle_debt` with `supersedesId` and `supersedesVersion` inserts the
+  settlement and soft-deletes the original in one replica transaction and one
+  outbox entry, carries the original's identity (entered name, scope, time,
+  brand, source, external id) and tags across, leaves the original out of the
+  balance it settles against, and refuses an original with split lines — never a
+  settle followed by a delete (*service*; the shared input schema is the server's
+  contract, and receipts and import matches, which only the server holds,
+  follow the original the way `supersede_transaction` moves them). With no open debt in
+  the matching direction they refuse on Who?: money from somebody who never
+  owed you is a loan to you, which is *Borrowed* (*UI*). *Borrowed* and *Lent
+  out* are ordinary writes.
+- **A settlement's discharge figure follows its amount, when it was its amount.**
+  Editing the amount of a row that carries `debt_amount` restates it in the same
+  write only when the debt is in the row's own currency *and* the two were equal
+  before the edit; where a part was forgiven (S14), or across currencies, or when
+  the row is moved to an account in another currency, the new discharge is not
+  derivable, so `update_transaction` refuses and the repayment is redone with
+  `settle_debt` (*service*). A row that leaves the four
+  categories drops `debt_amount` and `debt_currency` with the role, in
+  `update_transaction` and `categorize_batch` (*service*), so re-entering a debt
+  category does not bring the old figure back.
+- **A split line is never filed under one of the four** — a line has no person
+  to owe or be owed. `set_transaction_lines` refuses it (*service*), and the
+  `transaction_lines_debt_category_*` triggers on the replica and
+  `transaction_lines_debt_category` on Postgres (WA022) hold under it
+  (*database, both engines*); `merge_categories` counts lines when it asks
+  whether the loser holds anything.
+- **An entry captured before the rule is not dropped.** A queued
+  `create_transaction` at `opVersion` 1 is brought to the rule at replay
+  (`upcast`, read-only, in the replica transaction): *Borrowed* / *Lent out*
+  naming a person becomes the debt on that person; naming nobody (or a company)
+  it is kept as a plain, uncategorised row; a repayment with an open debt in the
+  matching direction and the row's currency is replayed as `settle_debt` with the
+  same row id, otherwise it is kept as a plain, uncategorised row — never a
+  reverse debt (*service, `recover.ts`*). The entry is rewritten to what was
+  applied (operation, payload, `opVersion`) before the replica transaction
+  commits, so a later drain sends what the phone ran.
+
+A category a person made and named *Borrowed* carries no seed tag and means
+nothing about debt. The rule is keyed on the four starter categories' seed keys
+(`DEBT_SEED_KEYS`), not on a flag on the category.
+
+**A debt that predates the ledger is an opening debt, entered on the person's
+page.** *Add an existing debt* (S13) takes a direction — they owe you, or you owe
+them — an amount, a currency and the day it dates from, and **sets the person's
+balance in that currency the way an account's opening balance sets an account's:
+it is never income and never spending.** `record_opening_debt` writes one row of
+`opening_debts` per person per currency (`id`, `counterparty_id`, `currency`,
+`direction` — `theyOwe | youOwe`, `amount`, `date`); recording again for the
+same person and currency replaces it, which is how a wrong figure is corrected.
+**The figure is the original debt, never the current balance.** Repayments are
+made with *Settle* and count against it; replacing the figure leaves them where
+they are, so a smaller figure under a larger repayment turns the debt around.
+The sheet therefore says, before *Save*, what has already been repaid and what
+the balance will be, and warns when a save would flip its sign;
+`record_opening_debt` returns the resulting balance and a `flipped` flag the way
+`settle_debt` returns its residual. The date is the day the debt dates from —
+today or earlier, never later. That rule is enforced **only by the contract**
+(`recordOpeningDebtInput` refuses a date after the `today` it carries — the
+device's own day, as `set_manual_rate`'s is) and by the sheet; there is no
+database constraint, because "today" has no stable form in a database. The
+operation is also refused for an archived person, who is out of every picker and
+could never be settled with.
+
+**Why a table of its own, and not an `adjustment` transaction.** A transaction
+carries an account, and an account's balance and every period figure are built
+from transactions, so a debt that was already there before the books began would
+either move an account that never saw the money or count as income or spending
+that never happened — and an adjustment row has to name an account to exist at
+all. A row of its own reaches exactly one figure, the person's balance, where it
+folds in as a lend (`theyOwe`, positive) or a borrow (`youOwe`, negative) —
+§7's own sign rule, with nothing restated. It carries no account and no
+category because the table has no such column; there is nothing for a category
+to be refused on. Net worth meets it only the way it meets any debt: not at all
+(*Receivables sit outside net worth*, below).
+
+`settle_debt` sees it as an open debt and settles against it like any other: an
+opening debt of 200 and a repayment of 50 leave 150, and `overSettled`,
+`nothing to settle` and the archive gate (S15 §6) all read the same fold.
+Every claim below names the layer that enforces it:
+
+- **The shape** — an amount above zero and under the ceiling (the direction
+  carries the sign), a direction that is one of the two, and one row per person
+  and currency — is `opening_debts_amount_positive`,
+  `opening_debts_amount_ceiling`, `opening_debts_direction_known` and
+  `opening_debts_counterparty_currency_uq`, on **Postgres**
+  (`0027_opening_debts.sql`) and on **the replica** (`0023_schema.sql`, the same
+  four, declared in the table so a later rebuild carries them) — *database,
+  both engines*. The executor refuses first, with a message naming the field
+  (*service, the replica's executor*), and the contract schema refuses a figure
+  past the ceiling or not above zero before either (*`recordOpeningDebtInput`*).
+- **The scale** — a figure past its currency's declared decimals — is refused by
+  `record_opening_debt`'s `assertMoneyScale` on the phone and by
+  `opening_debts_amount_scale_matches_currency` on Postgres (`WA016`, the code
+  `debt_reassignments` shares); `currencies_decimals_safe_opening_debts` (`WA018`)
+  keeps a currency from being narrowed past a figure an opening debt holds.
+- **A person the replica does not hold** is refused as a dependency (the same
+  one `settle_debt` names), and the foreign keys hold under it on both engines.
+- **The replica's ceiling is the digit-count test** the `*_amount_ceiling_*`
+  triggers make — more than nine digits before the point — written as the
+  table's CHECK, so `999999999.99999999` is in bounds; `cast … as real` would
+  round it up to a billion and refuse it.
+- **Currencies.** `update_currency` counts a live opening debt among the live
+  references that refuse a decimals shrink and scans every opening debt's figure
+  (soft-deleted ones included) for the over-scale case, as Postgres's
+  `WA018` does (*service, the replica's executor; database, Postgres*).
+
+**Repaying an opening debt is not spending or income, in either direction.**
+`settle_debt` stamps a settlement with the opening debt it pays down
+(`transactions.settles_opening_debt_id`) — **only up to what is still open on
+it, and only when it points the opening debt's own way**: money coming in pays
+down *they owe you*, money going out pays down *you owe them*. The opening debt
+is the oldest the person has (it predates the ledger), so FIFO — the order
+ageing uses — consumes it first; what the linked repayments have discharged is
+taken off its figure, and a repayment past that, or one the other way (paying
+back a loan after being owed an existing debt), is an ordinary repayment of an
+ordinary debt: deleting the opening debt must never delete a real one.
+
+**A settlement that crosses the end of the existing debt is split in the same
+write** into two rows — the part that pays it down (linked) and the rest
+(ordinary), in the same proportion of what changed hands as of what was
+discharged, the remainder landing on the second row so the account moves by
+exactly what was paid. Splitting, not refusing: paying back "everything" is one
+payment, and refusing would make a person record two by hand against a boundary
+only the ledger can see; the second row's id travels on the input (`spillId`).
+Where one side of that proportion rounds to nothing at the account currency's
+scale, it takes one smallest unit instead, so no zero-amount row is written and
+the linked discharge stays capped at exactly what is open — a cent of the
+existing debt is neither left open for ever nor over-linked. That unit is **not
+a rate**: the dust row's implied rate is whatever one smallest unit divided by
+the cent it discharges happens to be, and nothing reads it as one. A crossing
+payment that is itself a single smallest unit cannot be two rows, so it **stays
+whole and unlinked** — an ordinary repayment. The two rows share a
+`payment_pair_id` (the first row's id): **they are one payment everywhere.**
+`supersede_transaction` of either half supersedes the pair — both halves are
+soft-deleted and the import row inserted in one write, then written against the
+debt again exactly as `settle_debt` would write it (linked whole where it fits,
+split again under a minted `spillId` where it still crosses, ordinary where
+nothing is open); `delete_transaction` of either half deletes both;
+`update_transaction` of a half applies the edits that are true of both (date,
+time, name, note, scope) to both halves and **refuses** the ones that would move
+one half's share — amount, account, person, category — with *this payment was
+split against an existing debt — change it as a whole by deleting and recording
+it again*. A linked repayment follows its person, role **and size**
+afterwards: `update_transaction` and `categorize_batch` clear the link when the
+person changes or the debt role goes, and `update_transaction` re-checks it
+whenever the amount, discharge or account changes — it stays only while the whole
+row still fits in what is open (an edit never splits; 80 raised to 500 against a
+debt of 100 is no longer linked), re-derived where the new person has an
+existing debt it fits in. `supersede_transaction` carries the link to a
+replacement only after re-checking the discharge against what is open. The
+upcast of an older queued capture mints its own `spillId`. Such a settlement **moves its account** like any
+payment and appears in lists and history, but **no period figure** — month,
+months, spend by category, income against expense, the desk's — counts it:
+lending and borrowing are not earning and spending, and what was never counted
+when it was lent must not be counted when it comes back. Only a `debt`-role row
+carries the link (`transactions_opening_link_shape` on Postgres; its two
+triggers on the replica — *database, both engines*).
+
+**An existing debt can be deleted, and deleting it deletes the whole chain.**
+`delete_opening_debt` soft-deletes the opening row and **every repayment linked
+to it** in one write — one replica transaction, one outbox entry, all or nothing
+(*service*) — so the accounts those repayments moved change with it. The
+confirmation names them before it asks: *how many, how much, from which
+accounts, and that those balances change.* A deleted opening debt frees its
+person and currency for a new one (the unique index is on live rows).
+
+**Merging two people merges their existing debts.** `merge_counterparties`
+moves the loser's opening debts with the rest of what it holds: a debt in a
+currency the winner has none in changes owner; in a currency both have, the two
+are **summed by sign** into the winner's row (the larger magnitude's direction,
+the earlier date; the loser's row is soft-deleted); if they cancel to nothing
+both rows are dropped. **The repayments linked to either row are then
+re-planned, not re-pointed**: through the rule a new settlement meets — oldest
+first, only a repayment that reduces the combined debt's own direction, only up
+to what is open — and whatever does not fit is unlinked (a re-plan never splits:
+one that would cross the end is unlinked whole). So an outgoing payment to the
+loser does not stay "paying down" a debt the winner is owed, later repayments
+link correctly, and deleting the combined debt cannot delete a payment to
+somebody else. The merge record keeps every link it changed, with the link it
+had, and unmerge puts each back where nobody has changed it since. **Recording
+an existing debt again re-plans its repayments the same way** — a smaller
+figure unlinks those past its end, the other direction unlinks those that no
+longer reduce it, and a larger figure — or a merge that leaves more open —
+links the repayments that now fit, oldest first, whole (a re-plan considers every
+live repayment of that person and currency that reduces the debt's direction,
+linked or not, and never splits one). **An unlinked repayment is an ordinary
+repayment: it counts as income or spending in the period figures like any
+other.** **A repayment can be drawn into an existing debt only if it was written
+after that debt was**: the debt's `created_at` (set at its first write, kept
+across re-records) is the line, a repayment already linked stays a candidate
+whenever it was linked, and for a merge the line is the earlier of the two debts'
+creation. Without it the same data would give different period figures depending
+on history — record 50 and later 60, or 60 directly — recording a debt would
+reach back into months it had no part in, and deleting it would remove cash
+recorded before the debt was known. (`created_at` is the order the two rows
+share; the outbox sequence is on neither row.) A repayment that is itself written
+now is, by definition, after: `settle_debt` needs no such check. The loser is
+archived only once it holds no live opening debt, and the merge record keeps
+what the winner's row held before **and what the merge left it**, so
+`unmerge_counterparties` restores exactly that — and only while the winner's row
+still holds what the merge left it: a figure corrected since is kept, the loser's
+debt is not handed back on top of it, and the result says how many were left
+(`existingDebtsKept`) (*service*; S15 §9.2).
+
 **Debt is derived, never stored.** A counterparty's position is the running sum
-of the `debt`-role transactions referencing them. Nothing is posted twice, so a
-balance cannot drift from its history:
+of the `debt`-role transactions referencing them, plus their opening debts — the
+starting position the history is added to, the way `accounts.opening_balance`
+starts an account. Nothing is posted twice, so a balance cannot drift from its
+history:
 
 ```sql
 CREATE VIEW counterparty_balances AS
@@ -1489,7 +1822,9 @@ CREATE VIEW counterparty_balances AS
 This view is documentation of the rule, not what runs it: the shipped
 implementation is `packages/db/src/figures/counterparty-balance.ts`, a query
 builder over the same fold, and no `counterparty_balances` view exists in the
-migrations.
+migrations. The fold's rows are the debt-role transactions above **and** the
+person's `opening_debts`, each a leg of the same sum: `theyOwe` is `+amount` and
+`youOwe` is `−amount`, grouped by the row's own `currency`.
 
 **The negation is the whole trick.** The ledger signs by *cash flow*; a debt
 balance signs by *obligation*, and they are exact opposites. All four cases fall
@@ -1568,16 +1903,46 @@ accounts (§6.4) gain meaning: a group expense is allocated by attaching each
 share to its counterparty, so `find_unsettled` reports *who* has not settled,
 not merely that something has not.
 
-`loan_receivable` and `loan_payable` remain valid `account_kind` values for
-migration fidelity, but new debt is recorded against counterparties. Direction
-is a property of the balance, not of the account it sits in.
+**A statement means an account; a person means a debt.** A loan from an
+institution — a car loan, a mortgage — has a balance and a statement to
+reconcile against, so it stays a `loan_payable` account, like a card nothing is
+spent from: a payment is a transfer into it for the principal, plus an expense
+under *Interest*. Money between you and a person has no statement, and the
+question it answers is *what does this person owe, in each currency, since
+when* — so it is a debt on the counterparty, never an account. Making a bank a
+counterparty was rejected: it puts a mortgage beside lunch money in the debt
+list and gives interest no home.
+
+**`loan_receivable` is retired for new accounts.** Money a person owes you is a
+debt on them; money an institution owes you is a `deposit` or an `investment`.
+Existing ones keep the kind, archived: the service refuses the kind on
+`create_account` and `update_account`, and `accounts_kind_not_retired` (WA021)
+refuses an *active* one on insert, on a switch to the kind, and on unarchiving
+— an archived one still inserts, because a device syncing down copies every
+row by insert. Direction is a property of the balance, not of the account it
+sits in.
+
+**Transfer, loan or gift is decided by whether the money is still yours.**
+
+| Event | Still yours? | Recorded as |
+|---|---|---|
+| Bank A → Savings | yes, in another of your accounts | a transfer |
+| Lend Nina 300 | yes, but Nina holds it | an expense with *Someone owes*: Nina, `debt` |
+| Nina repays 300 | it comes back | income (or a transfer) with `debt`, Nina |
+| A birthday gift to Nina | no, it is gone | an expense under *Gifts*, *with* Nina, no obligation |
+
+Every type can name a counterparty and carry an obligation, a transfer
+included: a repayment that lands straight in one of your accounts is a
+transfer that names who.
 
 #### Migration opportunity
 
 The counterparty names already exist in the data — as free text in the
 `content` field of loan and clearing transactions (*"‹name› total"*,
 *"coffee for ‹name›"*). Migration extracts distinct names from those rows and
-proposes a counterparty list for review. Extraction is a **suggestion**, never
+proposes a counterparty list for review. Until that review exists, the
+importer brings each person-loan account in **archived** with its balance, so
+the retired kind is never active and nothing is guessed. Extraction is a **suggestion**, never
 an automatic write: the names are inconsistent (first name, first name plus
 initial, nickname) and merging two spellings of one person silently would
 corrupt a balance.
@@ -1995,7 +2360,25 @@ a car, a deposit, or a large medical bill, which an asset model would not.
 purges; the same escape hatch is wanted, and a hard delete in a financial
 ledger is rarely the right default. Every read path filters
 `deleted_at IS NULL`. Reference data (accounts, categories) uses `archived`
-instead — never deleted, because history references it.
+instead, because history references it. The one exception is an **account that
+no row has ever referenced**, which `delete_account` removes outright: no
+transaction on either leg — a soft-deleted one is still a row naming the
+account — no recurring rule, no import batch, and no opening balance, which is
+money the account started with and would leave every total silently. Anything
+referenced is archived, never deleted. `accounts_delete_guard` enforces it in
+Postgres (SQLSTATE `WA023`) and the replica carries the same trigger, so the
+rule holds when the operation's own check is wrong; the operation refuses first
+with a message that says *archive it instead*.
+
+**A delete races another device's entry, and the server decides.** `delete_account`
+is queued in the outbox like every local write — it materialises on the device at once and drains later to
+a backend that can see every device's entries (`architecture/08`). If another
+device's entry reaches the server first, the delete meets `WA023` and is
+`blocked` with its reason on S30, and the account returns to the phone at the
+next sync-down, since the server still holds it. If the delete reaches the
+server first, the other device's entry — naming an account that is gone — is
+refused and kept `blocked` with its payload, never dropped, for the person to
+re-home.
 
 **Archived means "not assignable any more", never "not readable".** The rows
 already on an archived category keep it and still render; archiving one that
@@ -2068,17 +2451,48 @@ The mistake is conflating two unrelated concerns under one name.
 
 | Concept | Nature | Changes |
 |---|---|---|
-| **Pivot currency** | Technical. The hub all FX rates are stored against, so any pair derives by triangulation | Chosen once at setup. **Never** |
+| **Pivot currency**, called the **anchor currency** in the app | Technical. The hub all FX rates are stored against, so any pair derives by triangulation | Set at first start; changeable only while the ledger holds no transaction |
 | **Display currency** | A user preference. What totals are rendered in | Freely, instantly, as often as you like |
 
-**Pivot is `USD`** — the best historical coverage across all seven currencies
-in use, the base that both NBRB and NBG publish against, and what Money Manager
-already stores, so migration needs no rate conversion at all. It is invisible:
-it appears in no screen and no export.
+**The seed's pivot is `USD`** — the best historical coverage across all seven
+currencies in use, the base that both NBRB and NBG publish against, and what
+Money Manager already stores, so migration needs no rate conversion at all.
+**A fresh ledger is anchored to the currency of the device's region at first
+start**, before any account exists, through `change_pivot` (legal while no
+transaction exists): a German phone is EUR-anchored, so its first EUR account
+needs no rate. A ledger that already has an account or a transaction keeps its
+anchor, and so does one whose anchor was already moved off the seed. The anchor
+is shown once, in Settings > Currencies, last and named *anchor currency*; it
+decides nothing a reader sees, and it is never described as the currency
+figures are measured in. The first-start change is an ordinary `change_pivot`,
+recorded in the outbox like any write; `architecture/14` states what pairing
+must do with it.
+
+**The anchor changes only while the ledger holds no transaction**, because the
+phone cannot re-rate existing history. After the first transaction Settings
+states that plainly and what would allow it (no transaction exists), and offers
+nothing that rewrites history.
 
 **Display currency is a header toggle.** `PLN · USD · EUR` pinned, tap to
 re-express every figure on screen. No backfill, no confirmation, no audit
 entry — nothing in the database moves.
+
+**With nothing chosen, the display currency is the currency of the device's
+region** — `de-DE` opens in EUR — provided the ledger holds it, and the anchor
+otherwise (an unknown region, a currency the ledger has never heard of). That
+default is **derived on every read and never stored**: a stored copy would
+freeze on whatever the region or the anchor was at first launch. Only a
+person's choice is stored, marked as one, and beats the region from then on —
+from the header toggle or from *Show figures in* in Settings > Currencies, the
+same preference. An unmarked stored value equal to the anchor is an old build's
+own write, not a choice.
+
+**Every figure on every screen follows the display currency**: the month card,
+the months chart, spend by category, day totals, account and debt figures. Each
+row is converted at **its own date's rate** (§4) and the results summed; a date
+with no rate for the display currency is stated at today's and flagged
+estimated, and a display currency with no rate at all falls back to the anchor
+rather than a guess.
 
 #### Why this works
 

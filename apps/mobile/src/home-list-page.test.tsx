@@ -9,6 +9,8 @@ import { type AccountingDate, accountingDate } from "@waltning/core/date";
 import { id } from "@waltning/core/id";
 import { currencyCode, pivotPerUnit, toMoney } from "@waltning/core/money";
 import { I18nProvider } from "@waltning/ui/i18n/provider";
+import { CollapseInsetProvider } from "@waltning/ui/shell/collapse-inset";
+import { COLLAPSE_TRAVEL } from "@waltning/ui/shell/molecules/pager-header/collapse";
 import { ThemeProvider } from "@waltning/ui/theme/provider";
 import { light } from "@waltning/ui/theme/roles";
 import type { DayRowPlace } from "@waltning/ui/transactions/day-group";
@@ -29,6 +31,7 @@ function row(date: string, n: number, amount: string, over: Partial<PhoneSearchT
     enteredName: `EnteredName ${n}`,
     note: "",
     categoryName: "Groceries",
+    categoryExternalId: null,
     brandKey: null,
     accountId: id<"accounts">("00000000-0000-4000-8000-00000000000a"),
     accountName: "Bank A",
@@ -80,28 +83,37 @@ function draw(
     onVisibleDay?: (date: AccountingDate) => void;
     query?: string | null;
     accountId?: string | null;
+    inset?: number;
+    onClearFilter?: () => void;
+    accountName?: string;
+    pillSide?: "left" | "right";
   } = {},
 ) {
   render(
     <ThemeProvider theme={light}>
       <I18nProvider>
-        <HomeListPage
-          ledger={ledger}
-          anchor={over.anchor ?? TODAY}
-          {...(over.onVisibleDay === undefined ? {} : { onVisibleDay: over.onVisibleDay })}
-          today={TODAY}
-          revision={0}
-          pivotCurrency={PLN}
-          pivotDecimals={2}
-          accountId={over.accountId ?? null}
-          onPickDay={onPickDay}
-          onOpenTransaction={vi.fn()}
-          onReturnToToday={over.onReturnToToday ?? vi.fn()}
-          query={over.query ?? null}
-          scrollY={scrollY}
-          active={active}
-          empty={<Text>nothing yet</Text>}
-        />
+        <CollapseInsetProvider value={over.inset ?? 0}>
+          <HomeListPage
+            ledger={ledger}
+            anchor={over.anchor ?? TODAY}
+            {...(over.onVisibleDay === undefined ? {} : { onVisibleDay: over.onVisibleDay })}
+            today={TODAY}
+            revision={0}
+            pivotCurrency={PLN}
+            pivotDecimals={2}
+            accountId={over.accountId ?? null}
+            onPickDay={onPickDay}
+            onOpenTransaction={vi.fn()}
+            onReturnToToday={over.onReturnToToday ?? vi.fn()}
+            query={over.query ?? null}
+            scrollY={scrollY}
+            active={active}
+            empty={<Text>nothing yet</Text>}
+            onClearFilter={over.onClearFilter ?? vi.fn()}
+            accountName={over.accountName ?? "Bank A"}
+            pillSide={over.pillSide ?? "left"}
+          />
+        </CollapseInsetProvider>
       </I18nProvider>
     </ThemeProvider>,
   );
@@ -114,6 +126,28 @@ it("draws a day, its total, and its rows", () => {
   expect(screen.getByRole("button", { name: /EnteredName 1/ })).toBeTruthy();
   // −96 and −48,90 folded to the day's own figure.
   expect(screen.getByText(/144[,.]90/)).toBeTruthy();
+});
+
+it("leaves the room the header overlays above the first day, and the strip rides the header", () => {
+  // The header collapses over the top of this page, and the page's box must
+  // not move for it: the list carries the room as its own top padding, and the
+  // strip — which does not scroll — is drawn that far down at rest.
+  draw(ledgerWith([row("2026-08-14", 1, "-96")]), vi.fn(), { inset: COLLAPSE_TRAVEL });
+  let node: HTMLElement | null = screen.getByText("August 14, 2026");
+  let padded = false;
+  while (node !== null) {
+    if (node.style.paddingTop === `${COLLAPSE_TRAVEL}px`) padded = true;
+    node = node.parentElement;
+  }
+  expect(padded, "no scroll content carries the header's room as top padding").toBe(true);
+  const strip = screen.getByRole("button", { name: /August 14, 2026, 1 entry/ });
+  let ride: HTMLElement | null = strip;
+  let offset = "";
+  while (ride !== null) {
+    if (ride.style.transform.includes("translateY")) offset = ride.style.transform;
+    ride = ride.parentElement;
+  }
+  expect(offset).toBe(`translateY(${COLLAPSE_TRAVEL}px)`);
 });
 
 it("names a ribbon cell by its date and what happened, not by the number", () => {
@@ -415,27 +449,71 @@ it("draws the ribbon earliest-first, under a list that runs newest-first", () =>
 });
 
 /**
- * **The pill floats over the *list*, and the ribbon is not the list** (S04 §4,
- * which names the two separately). Positioned against the whole panel it sat on
- * the ribbon's first cells — covering a weekday letter outright and two 44pt
- * targets. What an absolutely-positioned box can cover is decided by the box it
- * resolves against, so the claim is about which box that is: the pill and the
- * rows it floats over share one, and the strip is outside it.
+ * **The pill changes no layout** (S04 §4). It is shown while the anchor is off
+ * today, and the anchor moves on every scroll settle, so a band reserved for it
+ * above the rows dropped every row by the pill's height one day off today and
+ * lifted them again on the way back. jsdom has no layout, so the claim is about
+ * the tree: the pill comes *after* the rows, inside the list's own box (nothing
+ * is inserted before them), and `today-pill.test.tsx` pins that it is absolutely
+ * positioned on the add button's line.
  */
-it("floats over the rows, not over the strip above them", () => {
+it("floats after the rows in the list's own box, never in a band before them", () => {
   draw(ledgerWith([row("2021-03-02", 1, "-96")]), vi.fn(), {
     anchor: accountingDate("2021-03-02"),
   });
   const pill = screen.getByRole("button", { name: /Back to today/ });
   const aRow = screen.getByRole("button", { name: /EnteredName 1/ });
+  expect(aRow.compareDocumentPosition(pill) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 
   let box: HTMLElement | null = pill;
   while (box !== null && !box.contains(aRow)) box = box.parentElement;
-  expect(box, "the pill and the rows must share a box at all").not.toBeNull();
+  expect(box, "the pill and the rows share a box").not.toBeNull();
   expect(
     box?.contains(screen.getByRole("list")),
-    "the strip is chrome above the list, and a floating control must not land on it",
+    "that box is the list's own, not the page that also holds the strip",
   ).toBe(false);
+});
+
+/**
+ * **A searched strip says which month it is in.** It is the matched days and
+ * nothing else, so `15 26 15 26` over two months reads as the same two days
+ * repeating. The month changes between two neighbours without either being the
+ * 1st, so the 1st-says-its-month rule never fires; the cue moves to the change.
+ */
+it("names the month where a searched strip changes month", () => {
+  draw(
+    ledgerWith([
+      row("2026-02-26", 1, "-10"),
+      row("2026-02-15", 2, "-10"),
+      row("2026-01-26", 3, "-10"),
+      row("2026-01-15", 4, "-10"),
+    ]),
+    vi.fn(),
+    { accountId: "00000000-0000-4000-8000-00000000000a" },
+  );
+  const cell = (label: RegExp) => screen.getByRole("button", { name: label });
+  expect(cell(/January 15, 2026/).textContent).toMatch(/Jan/);
+  expect(cell(/January 26, 2026/).textContent).not.toMatch(/Jan|Feb/);
+  expect(cell(/February 15, 2026/).textContent).toMatch(/Feb/);
+  expect(cell(/February 26, 2026/).textContent).not.toMatch(/Jan|Feb/);
+});
+
+/**
+ * **An account with nothing on it is not a ledger with nothing in it.** The
+ * carried account filter left the List page saying *No transactions yet* over a
+ * ledger that holds rows elsewhere.
+ */
+it("blames the account filter, offers to clear it, and never says first-run", () => {
+  const onClearFilter = vi.fn();
+  draw(ledgerWith([]), vi.fn(), {
+    anchor: accountingDate("2021-03-02"),
+    accountId: "00000000-0000-4000-8000-00000000000a",
+    onClearFilter,
+  });
+  expect(screen.getByText("Nothing in Bank A yet")).toBeTruthy();
+  expect(screen.queryByText("nothing yet")).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "Clear filters" }));
+  expect(onClearFilter).toHaveBeenCalledTimes(1);
 });
 
 /**
@@ -483,6 +561,7 @@ describe("every entry says which day it is on", () => {
     currency: currencyCode("PLN"),
     accountName: "Cash",
     categoryName: null,
+    categoryExternalId: null,
   } as PhoneSearchTransaction;
 
   it("reads a row's day off the row, not off the entry", () => {

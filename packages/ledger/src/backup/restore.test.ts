@@ -22,6 +22,7 @@ import * as money from "@waltning/core/money";
 import { currencyCode } from "@waltning/core/money";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { readBalanceAsOf } from "../accounts/read-balance-as-of.ts";
+import { createAmountCeilingTriggers, dropAmountCeilingTriggers } from "../migrate.ts";
 import { ledgerSchema } from "../schema-map.ts";
 import { nodeFs, type ScratchStores, scratchStores } from "../test/stores.ts";
 import { BACKUP_FORMAT, parseBackup } from "./document.ts";
@@ -98,6 +99,56 @@ function exported() {
 function emptyStores() {
   return { replica: restored.ledger.replica, outbox: restored.ledger.outbox };
 }
+
+describe("a grandfathered row", () => {
+  /**
+   * A replica upgraded under the amount ceiling may hold a row past it that
+   * predates the rule. The triggers sit at the head, so a restore that did not
+   * lift them would throw on that INSERT and the backup would be unrestorable.
+   */
+  it("round-trips an oversized row, and the ceiling is back afterwards", () => {
+    const BIG = id<"transactions">("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbb01");
+    const db = source.ledger.replica.db;
+    db.transaction((tx) => dropAmountCeilingTriggers(tx));
+    db.insert(ledgerSchema.transactions)
+      .values({
+        id: BIG,
+        date: accountingDate("2026-09-04"),
+        type: "expense",
+        accountId: ACCOUNT,
+        amountOriginal: money.toMoney("100000000000.00"),
+        currency: PLN,
+        fxRate: money.pivotPerUnit("1"),
+      })
+      .run();
+    db.transaction((tx) => createAmountCeilingTriggers(tx));
+    const { backup } = exported();
+    source.close();
+
+    restoreBackup(emptyStores(), backup, { fs: nodeFs });
+
+    const back = restored.ledger.replica.db
+      .select()
+      .from(ledgerSchema.transactions)
+      .all()
+      .find((row) => row.id === BIG);
+    expect(back?.amountOriginal).toBe("100000000000.00000000");
+    expect(() =>
+      restored.ledger.replica.db
+        .insert(ledgerSchema.transactions)
+        .values({
+          id: id<"transactions">("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbb02"),
+          date: accountingDate("2026-09-05"),
+          type: "expense",
+          accountId: ACCOUNT,
+          amountOriginal: money.toMoney("1000000000.00"),
+          currency: PLN,
+          fxRate: money.pivotPerUnit("1"),
+        })
+        .run(),
+    ).toThrow(/amount_ceiling/);
+  });
+});
 
 describe("the drill", () => {
   /**

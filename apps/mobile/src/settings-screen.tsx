@@ -22,6 +22,7 @@ import { useAppearance } from "@waltning/client/appearance/use-appearance";
 import { useDevicePreference } from "@waltning/client/device/use-device-preference";
 import { useLedgerController } from "@waltning/client/ledger/use-ledger-controller";
 import { usePhoneLedger } from "@waltning/client/ledger/use-phone-ledger";
+import { useAppLock } from "@waltning/client/security/use-app-lock";
 import { daysBetween, todayIn } from "@waltning/core/date";
 import {
   dayLabel,
@@ -50,6 +51,7 @@ import { useCallback, useMemo, useState } from "react";
 import { Text, useColorScheme, View } from "react-native";
 import {
   appearance,
+  appLock,
   DEVICE_LOCALES,
   language,
   lastBackup,
@@ -75,12 +77,26 @@ const ROUTES = {
 type Destination = keyof typeof ROUTES;
 
 /** Rows that open a sheet on this screen rather than a route. */
-type Choice = "appearance" | "language";
+type Choice = "appearance" | "language" | "lock";
 
 type Row = Destination | Choice;
 
+/** The hint names only what this device would ask for. */
+const LOCK_HINT = {
+  fingerprint: "settings.lockHintFingerprint",
+  face: "settings.lockHintFace",
+  either: "settings.lockHintEither",
+  passcode: "settings.lockHintPasscode",
+} as const;
+
+const SHEET_TITLE = {
+  appearance: "settings.appearance",
+  language: "settings.language",
+  lock: "settings.lock",
+} as const satisfies Record<Choice, string>;
+
 function isChoice(id: Row): id is Choice {
-  return id === "appearance" || id === "language";
+  return id === "appearance" || id === "language" || id === "lock";
 }
 
 // Split so the option list is a non-empty tuple by construction, as
@@ -124,6 +140,16 @@ const GROUPS = [
   ],
 ] as const satisfies readonly (readonly { id: Row; glyph: SettingsMenuGlyph }[])[];
 
+/**
+ * The lock row closes the device group, **only on a device that can gate**
+ * (`appLock.method()`): the browser and a phone with no secret have nothing
+ * for the switch to do.
+ */
+const LOCK_ROW = { id: "lock", glyph: "lock" } as const satisfies {
+  id: Row;
+  glyph: SettingsMenuGlyph;
+};
+
 /** Appended only in a build that carries `PREVIEW_RESET_ENABLED`. */
 const DEVELOPER_GROUP = [{ id: "developer", glyph: "developer" }] as const satisfies readonly {
   id: Row;
@@ -144,6 +170,12 @@ export default function Settings() {
   const chosenLanguage = useDevicePreference(language).value ?? "system";
   /** The day the last backup was taken, kept on this phone (`backup-screen.tsx`). */
   const backupTaken = useDevicePreference(lastBackup).value;
+  // Subscribed so the row appears once the gate has read the device, and its
+  // value follows the answer.
+  useAppLock(appLock);
+  const lockMethod = appLock.method();
+  const lockAvailable = lockMethod !== null;
+  const lockOn = appLock.enabled();
   const [sheet, setSheet] = useState<Choice | null>(null);
   const [appearanceFailed, setAppearanceFailed] = useState(false);
 
@@ -172,6 +204,7 @@ export default function Settings() {
     const themeWord = t(shown.theme === "dark" ? "settings.dark" : "settings.light");
     const phoneLanguage = LANGUAGE_NAMES[resolveLocale(DEVICE_LOCALES)];
     return {
+      ...(lockAvailable ? { lock: t(lockOn ? "settings.lockOn" : "settings.lockOff") } : {}),
       appearance:
         shown.preference === "system"
           ? t("settings.followPhoneValue", { value: themeWord })
@@ -208,6 +241,8 @@ export default function Settings() {
     chosenLanguage,
     backupTaken,
     locale,
+    lockAvailable,
+    lockOn,
   ]);
 
   /**
@@ -217,10 +252,12 @@ export default function Settings() {
    * empty one — the same flag the reset has always carried, read in one place
    * so a second screen cannot forget it.
    */
-  const visible = useMemo(
-    () => (PREVIEW_RESET_ENABLED ? [...GROUPS, DEVELOPER_GROUP] : GROUPS),
-    [],
-  );
+  const visible = useMemo((): readonly (readonly { id: Row; glyph: SettingsMenuGlyph }[])[] => {
+    const base = lockAvailable
+      ? GROUPS.map((group) => (group[0].id === "appearance" ? [...group, LOCK_ROW] : group))
+      : GROUPS;
+    return PREVIEW_RESET_ENABLED ? [...base, DEVELOPER_GROUP] : base;
+  }, [lockAvailable]);
 
   const groups = useMemo(
     (): readonly (readonly SettingsMenuItem<Row>[])[] =>
@@ -286,6 +323,25 @@ export default function Settings() {
       setAppearanceFailed(true);
     }
   }, []);
+  const lockOptions = useMemo(
+    (): readonly [RadioOption, RadioOption, ...RadioOption[]] => [
+      { value: "on", label: t("settings.lockOn"), hint: t(LOCK_HINT[lockMethod ?? "either"]) },
+      { value: "off", label: t("settings.lockOff") },
+    ],
+    [t, lockMethod],
+  );
+  const handleLock = useCallback(
+    (next: string) => {
+      // Turning it off asks the device first (`SPEC.md` §5.7); a refusal leaves the row as it was.
+      if (next === "on" || next === "off") {
+        void appLock.answer(next === "on", {
+          message: t("lock.prompt"),
+          cancel: t("common.cancel"),
+        });
+      }
+    },
+    [t],
+  );
   const handleLanguage = useCallback((next: string) => {
     const preference: LanguagePreference | null = next === "system" || isLocale(next) ? next : null;
     if (preference !== null) void language.set(preference);
@@ -311,7 +367,7 @@ export default function Settings() {
       */}
       <BottomSheet
         visible={sheet !== null}
-        title={t(sheet === "language" ? "settings.language" : "settings.appearance")}
+        title={t(SHEET_TITLE[sheet ?? "appearance"])}
         onDismiss={handleDismiss}
       >
         {sheet === "language" ? (
@@ -320,6 +376,13 @@ export default function Settings() {
             options={languageOptions}
             value={chosenLanguage}
             onChange={handleLanguage}
+          />
+        ) : sheet === "lock" ? (
+          <RadioGroup
+            label={t("settings.lock")}
+            options={lockOptions}
+            value={lockOn ? "on" : "off"}
+            onChange={handleLock}
           />
         ) : (
           <View style={styles.sheet}>

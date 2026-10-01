@@ -45,8 +45,10 @@ import {
   yearMonth,
 } from "@waltning/core/date";
 import { CategorySheet } from "@waltning/ui/categories/category-sheet";
+import type { CategoryNamed } from "@waltning/ui/i18n/category-label";
 import { monthLabel } from "@waltning/ui/i18n/locales";
 import { useLocale, useT } from "@waltning/ui/i18n/provider";
+import { useCategoryLabel } from "@waltning/ui/i18n/use-category-label";
 import { BottomSheet } from "@waltning/ui/primitives/bottom-sheet";
 import { Chip } from "@waltning/ui/primitives/chip";
 import { pageScrollProps } from "@waltning/ui/primitives/nested-scroll";
@@ -148,6 +150,7 @@ function toDeskRow(
   row: PhoneSearchTransaction,
   accountOwnership: ReadonlyMap<string, string>,
   t: ReturnType<typeof useT>,
+  labelOf: (category: CategoryNamed) => string,
 ): LedgerTableRow {
   const ownership = accountOwnership.get(row.accountId);
   const scope = row.isBusiness
@@ -169,7 +172,10 @@ function toDeskRow(
     id: row.id,
     date: row.date,
     enteredName: row.enteredName,
-    category: row.categoryName ?? "",
+    category:
+      row.categoryName === null
+        ? ""
+        : labelOf({ name: row.categoryName, externalId: row.categoryExternalId }),
     account: accountLabel,
     scope,
     amountValue: row.amount,
@@ -234,6 +240,7 @@ function deskCategorizeConfirmState(
 
 export default function Ledger() {
   const t = useT();
+  const labelOf = useCategoryLabel();
   const locale = useLocale();
   const styles = useStyles();
   /**
@@ -319,8 +326,8 @@ export default function Ledger() {
   /* ── Desk (S10 §3 web): the table's own rows, sorted and selectable ──── */
   const deskSort = useLedgerTableSort<LedgerTableColumn>();
   const unsortedDeskRows = useMemo(
-    () => search.rows.map((row) => toDeskRow(row, snapshot.accountOwnership, t)),
-    [search.rows, snapshot.accountOwnership, t],
+    () => search.rows.map((row) => toDeskRow(row, snapshot.accountOwnership, t, labelOf)),
+    [search.rows, snapshot.accountOwnership, t, labelOf],
   );
   const deskRows = useMemo(
     () => sortLedgerTableRows(unsortedDeskRows, deskSort.sort),
@@ -346,14 +353,18 @@ export default function Ledger() {
   const handlePickDeskCategory = useCallback(
     (categoryId: string) => {
       const category = snapshot.categories.find((candidate) => candidate.id === categoryId);
-      const categoryName = category?.name ?? "";
+      const storedName = category?.name ?? "";
+      const categoryName = category === undefined ? "" : labelOf(category);
       // What each selected row is leaving, de-duplicated in encounter order —
       // the confirm's own "from X, Y → Z" line (M, round 1).
       const fromCategories: string[] = [];
       let alreadyMatching = 0;
       for (const row of selectedRows) {
-        const current = row.categoryName ?? t("transactions.uncategorised");
-        if (row.categoryName === categoryName) {
+        const current =
+          row.categoryName === null
+            ? t("transactions.uncategorised")
+            : labelOf({ name: row.categoryName, externalId: row.categoryExternalId });
+        if (row.categoryName === storedName) {
           // Already the target — counted as unchanged, and *not* listed as
           // a category the batch is leaving (L4). "from Groceries → Groceries"
           // named the destination as an origin and read as a no-op.
@@ -372,7 +383,7 @@ export default function Ledger() {
         alreadyMatching,
       });
     },
-    [selectedRows, snapshot.categories, t],
+    [selectedRows, snapshot.categories, t, labelOf],
   );
   const handleDeclineDeskCategorize = useCallback(() => setDeskCategorize(null), []);
   const handleApproveDeskCategorize = useCallback(() => {
@@ -463,7 +474,7 @@ export default function Ledger() {
   }));
   const categoryOptions: SelectOption[] = snapshot.categories.map((category) => ({
     value: category.id,
-    label: category.name,
+    label: labelOf(category),
   }));
   /**
    * §4's remaining two dimensions, for the desk rail. Both lead with an
@@ -511,7 +522,10 @@ export default function Ledger() {
 
   const activeFilters = activeFilterChips(t, filter, {
     accounts: snapshot.accounts,
-    categories: snapshot.categories,
+    categories: snapshot.categories.map((category) => ({
+      id: category.id,
+      name: labelOf(category),
+    })),
     counterparties: snapshot.counterparties,
     exclusions,
     onRemoveAccount: filters.removeAccount,

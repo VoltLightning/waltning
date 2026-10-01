@@ -84,6 +84,14 @@ export const COUNTERPARTY_KIND = ["person", "company"] as const;
 export const OBLIGATION_ROLE = ["debt", "contribution"] as const;
 
 /**
+ * §6.6 — which way an opening debt (one that predates the ledger) points: the
+ * person owes you, or you owe the person. The same two words `money.ts`'s
+ * `DebtDirection` uses for a balance, without `settled` — an opening debt is
+ * never zero.
+ */
+export const OPENING_DEBT_DIRECTION = ["theyOwe", "youOwe"] as const;
+
+/**
  * §7.6 — `manual` outranks every synced source for the same pair and date.
  *
  * `derived` (M4) marks a row `change_pivot` re-bases onto the new pivot by

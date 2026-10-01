@@ -27,6 +27,14 @@ type MobileDiagnosticEvent =
       phase: "failure";
       component: "ledger";
       error: DiagnosticError;
+    }
+  | {
+      // A screen threw while rendering and `RenderBoundary` caught it.
+      scope: "app_runtime";
+      phase: "failure";
+      component: "render";
+      error: DiagnosticError;
+      componentStack: string;
     };
 
 const BUILD = process.env["EXPO_PUBLIC_BUILD_SHA"] || "dev";

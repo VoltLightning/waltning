@@ -49,8 +49,12 @@ function detail(overrides: Partial<PhoneTransactionDetail> = {}): PhoneTransacti
     accountName: "Cash",
     toAccountId: null,
     toAccountName: null,
+    toAmount: null,
+    toCurrency: null,
+    fee: null,
     categoryId: null,
     categoryName: null,
+    categoryExternalId: null,
     counterpartyId: CAFE,
     counterpartyIdentityName: "Café A",
     obligationCounterpartyId: null,
@@ -351,5 +355,6 @@ function line(amount: string, categoryId: PhoneTransactionDetail["lines"][number
     amount: toMoney(amount),
     categoryId,
     categoryName: null,
+    categoryExternalId: null,
   };
 }

@@ -16,6 +16,7 @@ import { basePort } from "@waltning/client/ledger/test-port";
 import { accountingDate } from "@waltning/core/date";
 import { id } from "@waltning/core/id";
 import { currencyCode, toMoney } from "@waltning/core/money";
+import { I18nProvider } from "@waltning/ui/i18n/provider";
 import type { ReactElement } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -69,6 +70,7 @@ function fakeController(
         isBusiness: false,
         archived: false,
         hidden: false,
+        hasEntries: false,
         inTotal: true,
         color: null,
         capturable: true,
@@ -90,6 +92,7 @@ function fakeController(
         isBusiness: false,
         archived: false,
         hidden: false,
+        hasEntries: false,
         inTotal: true,
         color: null,
         capturable: true,
@@ -163,8 +166,12 @@ const DETAIL: NonNullable<FakeDetail> = {
   accountName: "Cash · PLN",
   toAccountId: null,
   toAccountName: null,
+  toAmount: null,
+  toCurrency: null,
+  fee: null,
   categoryId: null,
   categoryName: null,
+  categoryExternalId: null,
   counterpartyId: null,
   counterpartyIdentityName: null,
   obligationCounterpartyId: null,
@@ -191,6 +198,42 @@ beforeEach(() => {
 });
 
 describe("TransactionDetail", () => {
+  /**
+   * **A transaction is a transaction.** A transfer opens the same fields card
+   * as every other type, with its own rows in it, and saves from it: there is
+   * no second screen a transfer is sent to.
+   */
+  it("edits a transfer on the same card — its legs move together", () => {
+    const updateTransaction = vi.fn<PhoneLedgerPort["updateTransaction"]>();
+    const transfer = {
+      ...DETAIL,
+      type: "transfer" as const,
+      enteredName: "",
+      accountId: ACCOUNT_B,
+      accountName: "Bank A · PLN",
+      toAccountId: ACCOUNT,
+      toAccountName: "Cash · PLN",
+      amount: toMoney("-400.00"),
+      toAmount: toMoney("400.00"),
+      toCurrency: PLN,
+    };
+    withLedger(<TransactionDetail />, fakeController(transfer, { updateTransaction }));
+
+    expect(screen.queryByRole("button", { name: /^Category/ }), "no category").toBeNull();
+    expect(screen.getByRole("button", { name: "From: Bank A · PLN" })).toBeDefined();
+    expect(screen.getByRole("button", { name: "To: Cash · PLN" })).toBeDefined();
+
+    fireEvent.click(screen.getByRole("button", { name: "Amount: 400.00" }));
+    fireEvent.change(screen.getByLabelText("Amount"), { target: { value: "450" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(updateTransaction).toHaveBeenCalledTimes(1);
+    expect(updateTransaction.mock.calls[0]?.[0].patch).toMatchObject({
+      amountOriginal: expect.anything(),
+      toAmount: expect.anything(),
+    });
+  });
+
   it("shows the hero amount and the fields of the row it was pushed for", () => {
     withLedger(<TransactionDetail />);
     // The band says the figure; the header line it folds into only draws it,
@@ -331,6 +374,64 @@ describe("TransactionDetail", () => {
     expect(screen.getByRole("button", { name: "Role: Debt — expected back" })).toBeDefined();
   });
 
+  /**
+   * S09 §3 — the *Who* card follows the pick. A counterparty chosen here is a
+   * draft until Save, and the card above the fields must not go on asking
+   * *Who was this with?* after one is chosen: it names the person, and offers
+   * to change them (one counterparty per transaction — a second pick replaces).
+   */
+  it("the context card names the chosen counterparty and offers to change it", () => {
+    const nina = id<"counterparties">("99999999-9999-4999-8999-999999999999");
+    const tomasz = id<"counterparties">("88888888-8888-4888-8888-888888888888");
+    const person = (counterpartyId: typeof nina, name: string) => ({
+      id: counterpartyId,
+      name,
+      kind: "person" as const,
+      settlementCurrency: null,
+      contact: null,
+      note: "",
+      archived: false,
+      version: 1,
+    });
+    withLedger(
+      <TransactionDetail />,
+      fakeController(DETAIL, {
+        listCounterparties: () => [person(nina, "Nina"), person(tomasz, "Tomasz")],
+      }),
+    );
+
+    expect(screen.getByText("Who was this with?")).toBeDefined();
+
+    fireEvent.click(screen.getByRole("button", { name: "Counterparty" }));
+    fireEvent.click(screen.getByRole("button", { name: "Nina" }));
+
+    expect(screen.queryByText("Who was this with?")).toBeNull();
+    expect(screen.getAllByText("Nina").length).toBeGreaterThan(0);
+    // The pick is a draft: the card says so, and counts this row among theirs.
+    expect(screen.getByText("Not saved yet")).toBeDefined();
+    expect(screen.getByText(/× 1|1×/)).toBeDefined();
+
+    // Change replaces: the same picker, and the card now names the second person.
+    fireEvent.click(screen.getByRole("button", { name: "Change" }));
+    fireEvent.click(screen.getByRole("button", { name: "Tomasz" }));
+    expect(screen.queryByText("Who was this with?")).toBeNull();
+    expect(screen.getAllByText("Tomasz").length).toBeGreaterThan(0);
+    expect(screen.queryByText("Nina")).toBeNull();
+  });
+
+  /** §3 — the amount row is seeded in the reader's mark, at the account's scale. */
+  it("seeds the amount field with the locale's decimal mark", () => {
+    render(
+      <I18nProvider locale="de">
+        <LedgerProvider controller={fakeController(DETAIL)}>
+          <TransactionDetail />
+        </LedgerProvider>
+      </I18nProvider>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Betrag: 48,90" }));
+    expect((screen.getByLabelText("Betrag") as HTMLInputElement).value).toBe("48,90");
+  });
+
   /** §6.8's one-off, whose only producer is this screen. */
   it("offers the one-off flag, off until it is set here", () => {
     withLedger(<TransactionDetail />);
@@ -360,5 +461,107 @@ describe("TransactionDetail", () => {
     // screen's now and carries the only one.
     fireEvent.click(screen.getByRole("button", { name: "Back" }));
     expect(router.back).toHaveBeenCalledTimes(1);
+  });
+});
+
+/**
+ * §6.6 — S09 follows the category. Picking one of the four debt categories
+ * (by its seed tag, not its name) makes the row a debt and asks Who?, which is
+ * required; the pick is held in the card until Save so the category, the
+ * person and the role are written together.
+ */
+describe("TransactionDetail — a debt category", () => {
+  const GROUP = id<"categories">("aaaaaaaa-aaaa-4aaa-8aaa-000000000010");
+  const LENT = id<"categories">("aaaaaaaa-aaaa-4aaa-8aaa-000000000011");
+  const GROCERIES = id<"categories">("aaaaaaaa-aaaa-4aaa-8aaa-000000000012");
+  const NINA = id<"counterparties">("bbbbbbbb-bbbb-4bbb-8bbb-000000000001");
+  const node = (
+    nodeId: typeof LENT,
+    name: string,
+    externalId: string | null,
+    parentId = GROUP,
+  ) => ({
+    id: nodeId,
+    parentId,
+    name,
+    kind: "expense" as const,
+    isLeaf: true,
+    sort: 0,
+    externalId,
+  });
+
+  function debtLedger(updateTransaction: PhoneLedgerPort["updateTransaction"]) {
+    return fakeController(
+      { ...DETAIL, categoryId: GROCERIES, categoryName: "Groceries" },
+      {
+        updateTransaction,
+        listCategories: () => [
+          { id: LENT, name: "Money I handed over", kind: "expense", externalId: "seed:lent-out" },
+          { id: GROCERIES, name: "Groceries", kind: "expense", externalId: "seed:groceries" },
+        ],
+        listCategoryTree: () => [
+          {
+            id: GROUP,
+            parentId: null,
+            name: "Loans",
+            kind: "expense",
+            isLeaf: false,
+            sort: 0,
+            externalId: null,
+          },
+          node(LENT, "Money I handed over", "seed:lent-out"),
+          node(GROCERIES, "Groceries", "seed:groceries"),
+        ],
+        listCounterparties: () => [
+          {
+            id: NINA,
+            name: "Nina",
+            kind: "person" as const,
+            settlementCurrency: null,
+            contact: null,
+            note: "",
+            archived: false,
+            version: 1,
+          },
+        ],
+      },
+    );
+  }
+
+  function pickLentOut() {
+    fireEvent.click(screen.getByRole("button", { name: /^Category/ }));
+    fireEvent.click(screen.getByRole("radio", { name: "Money I handed over" }));
+  }
+
+  it("holds the pick, asks Who?, and refuses Save until a person is named", () => {
+    const updateTransaction = vi.fn();
+    withLedger(<TransactionDetail />, debtLedger(updateTransaction));
+
+    pickLentOut();
+    // Held, not written: the category changes with the role and the person.
+    expect(updateTransaction).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "Category: Money I handed over" })).toBeDefined();
+    expect(screen.getByRole("button", { name: "Who?" })).toBeDefined();
+
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(screen.getByText("Choose who this is with.")).toBeDefined();
+    expect(updateTransaction).not.toHaveBeenCalled();
+  });
+
+  it("writes the category, the person and the debt role together", () => {
+    const updateTransaction = vi.fn();
+    withLedger(<TransactionDetail />, debtLedger(updateTransaction));
+
+    pickLentOut();
+    fireEvent.click(screen.getByRole("button", { name: "Who?" }));
+    fireEvent.click(screen.getByRole("button", { name: "Nina" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(updateTransaction).toHaveBeenCalledOnce();
+    expect(updateTransaction.mock.calls[0]?.[0].patch).toMatchObject({
+      categoryId: LENT,
+      obligationCounterpartyId: NINA,
+      obligationRole: "debt",
+    });
   });
 });

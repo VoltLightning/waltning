@@ -16,7 +16,7 @@ import {
   type DeleteTransactionInput,
   deleteTransactionInput,
 } from "@waltning/core/registry/inputs";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, isNull, ne, sql } from "drizzle-orm";
 import { defineLocalExecutor, LocalRefusal } from "../executor.ts";
 import { type ReplicaTx, ledgerSchema as schema } from "../schema-map.ts";
 import type { LocalTransactionRow } from "./create-transaction.executor.ts";
@@ -73,6 +73,23 @@ function softDeleteTransaction(input: DeleteTransactionInput, tx: ReplicaTx): Lo
 
   if (!updated) {
     throw new Error("delete_transaction: the row changed between read and write");
+  }
+  // §6.6 — one payment written as two rows goes as one payment.
+  if (current.paymentPairId !== null) {
+    tx.update(transactions)
+      .set({
+        deletedAt: new Date(),
+        version: sql`${transactions.version} + 1`,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(transactions.paymentPairId, current.paymentPairId),
+          ne(transactions.id, current.id),
+          isNull(transactions.deletedAt),
+        ),
+      )
+      .run();
   }
   return updated;
 }

@@ -28,9 +28,11 @@
  */
 
 import { useDisplayCurrency } from "@waltning/client/currencies/display-currency";
+import { useDisplayBasis } from "@waltning/client/currencies/use-display-basis";
 import { useDevicePreference } from "@waltning/client/device/use-device-preference";
 import { DEFAULT_DESK_SCOPE, parseDeskScope } from "@waltning/client/ledger/desk-scope";
 import { deviceRuntime } from "@waltning/client/ledger/device-runtime";
+import type { TabName } from "@waltning/client/ledger/tab-back/back-decision";
 import { useLeadCurrency } from "@waltning/client/ledger/use-lead-currency";
 import { useLedgerController } from "@waltning/client/ledger/use-ledger-controller";
 import { usePhoneLedger } from "@waltning/client/ledger/use-phone-ledger";
@@ -38,10 +40,11 @@ import { useLastUsedAccount } from "@waltning/client/transactions/last-capture";
 import { useCommandBar } from "@waltning/client/transactions/use-command-bar";
 import { mapFieldErrors } from "@waltning/client/transport/field-errors";
 import { type CaptureContext, parseCapture } from "@waltning/core/capture/grammar";
-import { currencyCode } from "@waltning/core/money";
+import { add, currencyCode, toPivotByDivision, ZERO } from "@waltning/core/money";
 import { CurrencyChip } from "@waltning/ui/fx/currency-chip";
 import { KNOWN_PATHS, resolveFieldErrorMessage } from "@waltning/ui/i18n/field-error-messages";
 import { useT } from "@waltning/ui/i18n/provider";
+import { useCategoryLabel } from "@waltning/ui/i18n/use-category-label";
 import { SafeAreaProvider, useSafeArea } from "@waltning/ui/primitives/safe-area";
 import { SegmentControl } from "@waltning/ui/primitives/segment-control";
 import { useBreakpoint } from "@waltning/ui/primitives/use-breakpoint";
@@ -66,6 +69,7 @@ import {
   lastCapture,
   subscribeCommandBarHotkey,
 } from "./platform";
+import { useHardwareBack } from "./use-hardware-back.ts";
 import { useTabBarItems } from "./use-tab-bar-items";
 
 function handleAdd() {
@@ -251,6 +255,45 @@ function DeskHero({ collapsed }: { collapsed: boolean }) {
   const ledger = useLedgerController();
   const display = useDisplayCurrency(displayCurrency);
   const lead = useLeadCurrency(ledger, display.currency);
+  const snapshot = usePhoneLedger(ledger);
+  const today = deviceRuntime().capture().date;
+  const basis = useDisplayBasis(
+    ledger,
+    snapshot.currencies,
+    displayCurrency,
+    today,
+    snapshot.revision,
+  );
+  /**
+   * §7.0 — what you hold, in the display currency: every currency's balance
+   * converted at today's rate and added. `null` when any one has no rate, and
+   * then the lead currency's own balance stands, captioned, as before.
+   */
+  const converted = useMemo(() => {
+    if (basis === null || snapshot.subtotals.length === 0) return null;
+    let total = ZERO;
+    for (const entry of snapshot.subtotals) {
+      if (entry.currency === basis.currency) {
+        total = add(total, entry.balance);
+        continue;
+      }
+      const rate = basis.unitsPerDisplay(entry.currency, today);
+      if (rate === null) return null;
+      total = add(total, toPivotByDivision(entry.balance, rate));
+    }
+    return total;
+  }, [basis, snapshot.subtotals, today]);
+  if (basis !== null && converted !== null) {
+    return (
+      <DualTotal
+        mine={converted}
+        ours={null}
+        currency={basis.currency}
+        decimals={basis.decimals}
+        size={collapsed ? "compact" : "band"}
+      />
+    );
+  }
   if (lead === null) return null;
 
   return (
@@ -331,6 +374,7 @@ function DeskScope() {
  */
 function DeskCommandBar() {
   const t = useT();
+  const labelOf = useCategoryLabel();
   const ledger = useLedgerController();
   const snapshot = usePhoneLedger(ledger);
   // L7 — read every render, deliberately: `quick-add-screen.tsx`'s own
@@ -355,10 +399,23 @@ function DeskCommandBar() {
     [snapshot.categories],
   );
 
+  // A category answers to what the app calls it and, where that differs, to
+  // its stored name — so typing either files the line under it.
+  const captureCategories = useMemo(
+    () =>
+      expenseCategories.map((category) => {
+        const label = labelOf(category);
+        return label === category.name
+          ? { id: category.id, name: category.name }
+          : { id: category.id, name: label, aliases: [category.name] };
+      }),
+    [expenseCategories, labelOf],
+  );
+
   const context: CaptureContext = useMemo(
     () => ({
       accounts: snapshot.accounts,
-      categories: expenseCategories,
+      categories: captureCategories,
       defaultAccountId: lastUsedAccountId,
       today,
       // Both languages' words already resolve unconditionally (`dates.ts`'s
@@ -366,7 +423,7 @@ function DeskCommandBar() {
       // need, not a live switch today.
       locale: "en",
     }),
-    [snapshot.accounts, expenseCategories, lastUsedAccountId, today],
+    [snapshot.accounts, captureCategories, lastUsedAccountId, today],
   );
   const parse = useCallback((text: string) => parseCapture(text, context), [context]);
 
@@ -451,6 +508,8 @@ export type TabsShellProps = {
 
 export function TabsShell({ slot }: TabsShellProps) {
   const breakpoint = useBreakpoint();
+  const { deskItems, onSelect } = useTabBarItems();
+  useHardwareBack(deskItems.find((item) => item.active)?.name as TabName | undefined, onSelect);
   const [barHeight, setBarHeight] = useState(0);
   const onBarLayout = useCallback((event: LayoutChangeEvent) => {
     setBarHeight(event.nativeEvent.layout.height);

@@ -162,6 +162,12 @@ frame so nothing appears to move. Days, months and years are a **scale** — a
 year is not a cycle, and a wheel that wraps one lets a reader spin into 1970 by
 accident. They stop at their ends.
 
+**The year column runs a century either side of today**, 201 rows anchored on
+the current year, so rolling the wheel never moves the column under the finger.
+A date outside that window widens it rather than falling off the wheel. Every
+row is drawn, as the minutes' 180 already were. A roll re-renders only the rows
+whose distance from the band changed, so a long column costs a roll nothing.
+
 **The day column offers only days that exist, and clamping is final.** Rolling
 from 31 January to February lands on the 28th, and rolling back to January
 stays on the 28th. The alternative — remembering the 31 — means the value is

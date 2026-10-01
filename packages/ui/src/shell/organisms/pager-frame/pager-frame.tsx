@@ -33,8 +33,13 @@ import { text } from "../../../theme/fonts.ts";
 import { useTheme } from "../../../theme/provider";
 import { makeStyles } from "../../../theme/styles.ts";
 import { focus, radius, space, touchTarget } from "../../../tokens.ts";
+import { CollapseInsetProvider } from "../../atoms/collapse-inset";
 import { type PageTab, PageTabs } from "../../molecules/page-tabs/page-tabs";
-import { chromeSlack, collapseProgress } from "../../molecules/pager-header/collapse.ts";
+import {
+  COLLAPSE_TRAVEL,
+  chromeSlack,
+  collapseProgress,
+} from "../../molecules/pager-header/collapse.ts";
 import { PagerHeader } from "../../molecules/pager-header/pager-header";
 import { Pager, type PagerPage } from "../pager/pager";
 import { usePeriodMotion } from "./use-period-motion.ts";
@@ -141,17 +146,15 @@ function PagerFrameView({
   const progress = useSharedValue(0);
   const period = usePeriodMotion(periodKey, activeKey);
   /**
-   * What the chrome has not yet given back, taken off its own footprint and
-   * handed to the pager as a transform — `chromeSlack` has the whole argument.
-   * The pair is what keeps the pager's layout box identical at every offset,
-   * so the header can no longer resize the scroller it is reading.
+   * What the chrome has not yet given back, taken off its own footprint —
+   * `chromeSlack` has the whole argument. Its height plus this margin is the
+   * collapsed height at every offset, so the pager's box is one box and **never
+   * moves**: the expanded header overlays the top of it, and each page leaves
+   * `COLLAPSE_TRAVEL` of room above its first row (`collapse-inset.tsx`) that
+   * scrolls away at the rate the header closes.
    */
   const give = useAnimatedStyle(
     () => ({ marginBottom: -chromeSlack(collapseProgress(scrollY.value)) }),
-    [scrollY],
-  );
-  const take = useAnimatedStyle(
-    () => ({ transform: [{ translateY: chromeSlack(collapseProgress(scrollY.value)) }] }),
     [scrollY],
   );
   // Not in `useStyles`: that cache is keyed on the theme and this is keyed on
@@ -194,22 +197,16 @@ function PagerFrameView({
           </View>
         ) : null}
       </Animated.View>
-      {/*
-        Two views, because they carry two transforms and a style array does not
-        merge them — the later `transform` replaces the earlier one outright,
-        so a page step would cancel the follow or the follow would cancel the
-        page step. The outer one follows the chrome; the inner one is the
-        period's own motion, which knows nothing about the scroll.
-      */}
-      <Animated.View style={[styles.pages, take]}>
-        <Animated.View style={[styles.period, period]}>
+      {/* The period's own motion; the scroll does not move the pager. */}
+      <Animated.View style={[styles.period, period]}>
+        <CollapseInsetProvider value={COLLAPSE_TRAVEL}>
           <Pager
             pages={pages}
             activeKey={activeKey}
             onActiveKeyChange={onPageChange}
             progress={progress}
           />
-        </Animated.View>
+        </CollapseInsetProvider>
       </Animated.View>
     </View>
   );
@@ -275,7 +272,6 @@ const useStyles = makeStyles((theme) => ({
    * downward from a real number. Measuring the pager instead cannot work: the
    * measurement is derived from the very heights it would be setting.
    */
-  pages: { flex: 1 },
   period: { flex: 1 },
   root: {
     position: "absolute",
@@ -284,21 +280,15 @@ const useStyles = makeStyles((theme) => ({
     right: 0,
     bottom: 0,
     backgroundColor: theme.ground,
-    /**
-     * **The pager hangs one collapse below the screen at rest, and this is
-     * what stops that showing.** Its box is the collapsed size at every
-     * offset — that is the whole point of `chromeSlack` — so while the header
-     * is open the same box is pushed down past the bottom edge by exactly the
-     * height the header has not yet given up. The reader loses nothing: the
-     * part below the edge is the part they are about to scroll to, and
-     * scrolling to it is what brings it up.
-     */
     overflow: "hidden",
   },
   // The chrome sits on the surface, not the ground: it is the thing the pages
   // move under, and a band the same colour as what scrolls past it stops
   // reading as fixed.
   chrome: {
+    // Above the pager: its bottom `COLLAPSE_TRAVEL` overlays the pager's top
+    // while the header is open.
+    zIndex: 1,
     backgroundColor: theme.surface,
     paddingHorizontal: space.x3,
     gap: space.sm,

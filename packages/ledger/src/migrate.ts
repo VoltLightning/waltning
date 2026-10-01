@@ -105,6 +105,7 @@ import { fold } from "@waltning/core/capture/names";
 import { layoutKey, PRESET_LAYOUT } from "@waltning/core/dashboard";
 import { errorFromThrown } from "@waltning/core/diagnostics";
 import { RATE_MAX_EXCLUSIVE, RATE_MIN_EXCLUSIVE } from "@waltning/core/money";
+import { DEBT_SEED_EXTERNAL_IDS } from "@waltning/core/taxonomy";
 import { type SQL, sql } from "drizzle-orm";
 import type { BaseSQLiteDatabase } from "drizzle-orm/sqlite-core";
 import { OUTBOX_STEPS, REPLICA_STEPS } from "./ddl.ts";
@@ -643,11 +644,205 @@ END`,
 ];
 
 /**
+ * WA022 on the replica — `SPEC.md` §6.6: a row filed under one of the four debt
+ * categories carries the `debt` role and a person on the other side. The
+ * backstop under `assertDebtCategoryShape` (`transactions/debt-categories.ts`)
+ * and the mirror of `packages/db`'s `assert_debt_category_shape`
+ * (`0025_debt_categories.sql`), which carries the same four seed keys —
+ * `DEBT_SEED_KEYS`, which `migrate.test.ts` holds both to.
+ *
+ * **On `0021_debt_categories`, not `0017_schema`.** The rule is a replica trigger
+ * like the nine above, and a trigger lives on the last step that rebuilds its
+ * table: `0021` rebuilds nothing, so it is the last step of the chain and the
+ * trigger is created here. **If a later step ever rebuilds `transactions`,
+ * these two move to that step** — `DROP TABLE` takes a table's triggers with it,
+ * silently, and `backfills.test.ts` reads `sqlite_master` after the whole chain
+ * so the failure is red.
+ *
+ * `UPDATE OF` the three columns a debt is made of, for the reason the Postgres
+ * trigger lists them: an unrelated edit to a legacy row that names nobody (a
+ * note, an amount) touches none of them and is not this rule's business.
+ */
+const DEBT_SEEDS_SQL = DEBT_SEED_EXTERNAL_IDS.map((id) => `'${id}'`).join(", ");
+const DEBT_CATEGORY_TRIGGERS: readonly string[] = [
+  `CREATE TRIGGER IF NOT EXISTS \`transactions_debt_category_shape_insert\`
+BEFORE INSERT ON \`transactions\`
+FOR EACH ROW WHEN NEW.\`category_id\` IS NOT NULL
+  AND (NEW.\`obligation_role\` IS NOT 'debt' OR NEW.\`obligation_counterparty_id\` IS NULL)
+BEGIN
+	SELECT RAISE(ABORT, 'a debt category needs the debt role and a person on the other side (WA022)')
+	WHERE EXISTS (
+		SELECT 1 FROM \`categories\`
+		WHERE \`categories\`.\`id\` = NEW.\`category_id\` AND \`categories\`.\`external_id\` IN (${DEBT_SEEDS_SQL})
+	);
+END`,
+  `CREATE TRIGGER IF NOT EXISTS \`transactions_debt_category_shape_update\`
+BEFORE UPDATE OF \`category_id\`, \`obligation_role\`, \`obligation_counterparty_id\` ON \`transactions\`
+FOR EACH ROW WHEN NEW.\`category_id\` IS NOT NULL
+  AND (NEW.\`obligation_role\` IS NOT 'debt' OR NEW.\`obligation_counterparty_id\` IS NULL)
+BEGIN
+	SELECT RAISE(ABORT, 'a debt category needs the debt role and a person on the other side (WA022)')
+	WHERE EXISTS (
+		SELECT 1 FROM \`categories\`
+		WHERE \`categories\`.\`id\` = NEW.\`category_id\` AND \`categories\`.\`external_id\` IN (${DEBT_SEEDS_SQL})
+	);
+END`,
+  // A split line carries no obligation, so it is never filed under a debt category.
+  `CREATE TRIGGER IF NOT EXISTS \`transaction_lines_debt_category_insert\`
+BEFORE INSERT ON \`transaction_lines\`
+FOR EACH ROW WHEN NEW.\`category_id\` IS NOT NULL
+BEGIN
+	SELECT RAISE(ABORT, 'a split line cannot be filed under a debt category (WA022)')
+	WHERE EXISTS (
+		SELECT 1 FROM \`categories\`
+		WHERE \`categories\`.\`id\` = NEW.\`category_id\` AND \`categories\`.\`external_id\` IN (${DEBT_SEEDS_SQL})
+	);
+END`,
+  `CREATE TRIGGER IF NOT EXISTS \`transaction_lines_debt_category_update\`
+BEFORE UPDATE OF \`category_id\` ON \`transaction_lines\`
+FOR EACH ROW WHEN NEW.\`category_id\` IS NOT NULL
+BEGIN
+	SELECT RAISE(ABORT, 'a split line cannot be filed under a debt category (WA022)')
+	WHERE EXISTS (
+		SELECT 1 FROM \`categories\`
+		WHERE \`categories\`.\`id\` = NEW.\`category_id\` AND \`categories\`.\`external_id\` IN (${DEBT_SEEDS_SQL})
+	);
+END`,
+];
+
+/**
  * `seed:standing`, derived rather than repeated — the backfill below and
  * `bootstrap-dashboard.ts` must agree on what names the preset, and two string
  * literals agreeing is the upkeep this whole change exists to remove.
  */
 const PRESET_KEY = layoutKey(PRESET_LAYOUT);
+
+/**
+ * `accounts_delete_guard` on the replica — the mirror of Postgres's WA023: an
+ * account some row references is never deleted (`SPEC.md` §6.9).
+ *
+ * **Every reference, not only transactions.** A transaction on either leg —
+ * soft-deleted ones included, they are still rows — a recurring rule, or a
+ * non-zero opening balance. The foreign keys already refuse the first two once
+ * `foreign_keys` is on; this names the rule, states the third, and does not
+ * depend on a connection pragma. `accounts/account-references.ts` is the same
+ * list in TypeScript, and `delete_account`'s executor refuses first with a
+ * message the screen can use — this is what holds when it is wrong.
+ *
+ * The message carries the Postgres code because it is the only field a
+ * SQLite trigger can speak through; the two engines' refusals should be
+ * greppable as one thing.
+ */
+const ACCOUNT_DELETE_GUARD_TRIGGERS: readonly string[] = [
+  `CREATE TRIGGER IF NOT EXISTS \`accounts_delete_guard\`
+BEFORE DELETE ON \`accounts\`
+WHEN EXISTS (SELECT 1 FROM \`transactions\` WHERE \`account_id\` = OLD.\`id\` OR \`to_account_id\` = OLD.\`id\`)
+  OR EXISTS (SELECT 1 FROM \`recurring_transactions\` WHERE \`account_id\` = OLD.\`id\` OR \`to_account_id\` = OLD.\`id\`)
+  OR CAST(OLD.\`opening_balance\` AS REAL) <> 0
+BEGIN
+  SELECT RAISE(ABORT, 'an account that anything references is archived, never deleted (SPEC.md §6.9, WA023, accounts_delete_guard)');
+END`,
+];
+
+/**
+ * `*_amount_ceiling_*` on the replica — no amount a row holds reaches
+ * `1 000 000 000` in absolute value (`money.ts`'s `AMOUNT_CEILING_EXCLUSIVE`).
+ * Postgres states it as a CHECK per table; here it is a trigger, because a
+ * CHECK on SQLite is a table rebuild, and a rebuild copies every existing row
+ * through the new constraint — a device already holding one figure past the
+ * ceiling would fail its own upgrade, on every launch, with no way forward
+ * from the phone. A trigger checks the write and leaves the past alone, which
+ * is what a ceiling introduced after the fact should do.
+ *
+ * **Decided on the text, not on a number.** Amounts are stored as normalised
+ * decimal strings, so "at or past a billion" is "more than nine digits before
+ * the point" — an exact test. `CAST(… AS REAL)` would round
+ * `999999999.99999999` up to exactly `1e9` and refuse a figure that is in
+ * bounds.
+ *
+ * `BEFORE INSERT` and `BEFORE UPDATE OF <amount columns>`, the shape
+ * `transactions_amount_positive_*` already has: a sync-down reaches the table
+ * by insert, an edit by update, and neither passes through a screen.
+ */
+const integerDigits = (column: string): string =>
+  `length(substr(ltrim(NEW.\`${column}\`, '-'), 1, instr(ltrim(NEW.\`${column}\`, '-') || '.', '.') - 1))`;
+
+const ceilingTriggers = (table: string, columns: readonly string[]): readonly string[] => {
+  const past = columns.map((column) => `${integerDigits(column)} > 9`).join("\n  OR ");
+  const refusal = `an amount is at most 999999999.99 (${table}_amount_ceiling)`;
+  const list = columns.map((column) => `\`${column}\``).join(", ");
+  return [
+    `CREATE TRIGGER IF NOT EXISTS \`${table}_amount_ceiling_insert\`
+BEFORE INSERT ON \`${table}\`
+WHEN ${past}
+BEGIN
+  SELECT RAISE(ABORT, '${refusal}');
+END`,
+    `CREATE TRIGGER IF NOT EXISTS \`${table}_amount_ceiling_update\`
+BEFORE UPDATE OF ${list} ON \`${table}\`
+WHEN ${past}
+BEGIN
+  SELECT RAISE(ABORT, '${refusal}');
+END`,
+  ];
+};
+
+const CEILING_TABLES: ReadonlyArray<readonly [string, readonly string[]]> = [
+  ["transactions", ["amount_original", "to_amount", "fee", "debt_amount"]],
+  ["transaction_lines", ["amount"]],
+  ["accounts", ["opening_balance"]],
+  ["recurring_transactions", ["amount_original"]],
+];
+
+const AMOUNT_CEILING_TRIGGERS: readonly string[] = CEILING_TABLES.flatMap(([table, columns]) =>
+  ceilingTriggers(table, columns),
+);
+
+/**
+ * **A restore writes the past, and the ceiling is about the present.** A
+ * replica may hold a row past the ceiling that predates the rule
+ * (grandfathered: the upgrade never rewrote it), and a backup of that replica
+ * must restore it as it was rather than throw on the INSERT. The restore
+ * drops the ceiling triggers inside its own transaction, loads the document,
+ * and creates them again — DDL is transactional in SQLite, so a failed restore
+ * rolls the triggers back with everything else. A future sync-down, which
+ * copies server rows by insert, takes the same two calls.
+ */
+export function dropAmountCeilingTriggers(tx: SqlRunner): void {
+  for (const [table] of CEILING_TABLES) {
+    tx.run(sql.raw(`DROP TRIGGER IF EXISTS \`${table}_amount_ceiling_insert\``));
+    tx.run(sql.raw(`DROP TRIGGER IF EXISTS \`${table}_amount_ceiling_update\``));
+  }
+}
+
+/** The counterpart of `dropAmountCeilingTriggers` — idempotent, `IF NOT EXISTS`. */
+export function createAmountCeilingTriggers(tx: SqlRunner): void {
+  for (const statement of AMOUNT_CEILING_TRIGGERS) tx.run(sql.raw(statement));
+}
+
+/**
+ * §6.6 — only a `debt`-role transaction settles an opening debt
+ * (`settles_opening_debt_id`). Postgres states it as the CHECK
+ * `transactions_opening_link_shape`; the replica adds the column with `ALTER`,
+ * and a CHECK on an existing table is a rebuild, so it is a trigger — the
+ * shape every guarantee on `transactions` takes here. `0023_schema` rebuilds
+ * nothing, so the pair is created by its hook; **a later step that rebuilds
+ * `transactions` must re-create it**, which `migrate.test.ts` censuses.
+ */
+const OPENING_LINK_TRIGGERS: readonly string[] = [
+  `CREATE TRIGGER IF NOT EXISTS \`transactions_opening_link_shape_insert\`
+BEFORE INSERT ON \`transactions\`
+FOR EACH ROW WHEN NEW.\`settles_opening_debt_id\` IS NOT NULL AND NEW.\`obligation_role\` IS NOT 'debt'
+BEGIN
+	SELECT RAISE(ABORT, 'only a debt-role row can settle an opening debt (transactions_opening_link_shape)');
+END`,
+  `CREATE TRIGGER IF NOT EXISTS \`transactions_opening_link_shape_update\`
+BEFORE UPDATE OF \`settles_opening_debt_id\`, \`obligation_role\` ON \`transactions\`
+FOR EACH ROW WHEN NEW.\`settles_opening_debt_id\` IS NOT NULL AND NEW.\`obligation_role\` IS NOT 'debt'
+BEGIN
+	SELECT RAISE(ABORT, 'only a debt-role row can settle an opening debt (transactions_opening_link_shape)');
+END`,
+];
 
 export const REPLICA_BACKFILLS: Readonly<Record<string, Backfill>> = {
   "0006_schema": {
@@ -758,6 +953,26 @@ export const REPLICA_BACKFILLS: Readonly<Record<string, Backfill>> = {
       for (const statement of AMOUNT_POSITIVE_TRIGGERS) tx.run(sql.raw(statement));
     },
   },
+  "0022_account_guards": {
+    /**
+     * **Four tables' worth of new triggers, on a step that rebuilds none of
+     * them — so an installed device gets them on upgrade.** The hook on
+     * `0017_schema` above cannot: it ran on every database already past that
+     * step and never runs again, and a step's own statements cannot hold a
+     * trigger (`backfills.test.ts`). A step of its own, with no statements,
+     * is how a trigger reaches a database that already exists.
+     *
+     * The rule above still stands and now covers two hooks: **a later step
+     * that rebuilds `transactions`, `transaction_lines`, `accounts` or
+     * `recurring_transactions` must re-create these as well**, because
+     * `DROP TABLE` takes a table's triggers with it. `migrate.test.ts`
+     * censuses the whole chain, so forgetting is red.
+     */
+    objects: (tx) => {
+      for (const statement of ACCOUNT_DELETE_GUARD_TRIGGERS) tx.run(sql.raw(statement));
+      createAmountCeilingTriggers(tx);
+    },
+  },
   "0018_schema": {
     /**
      * **The preset's `seed:<key>`, attached to the rows an installed database
@@ -792,6 +1007,17 @@ export const REPLICA_BACKFILLS: Readonly<Record<string, Backfill>> = {
           `update "dashboard_widgets" set "external_id" = '${PRESET_KEY}:' || "kind" where "external_id" is null and "layout_id" in (select "id" from "dashboard_layouts" where "is_preset" = 1)`,
         ),
       );
+    },
+  },
+  "0023_schema": {
+    objects: (tx) => {
+      for (const statement of OPENING_LINK_TRIGGERS) tx.run(sql.raw(statement));
+    },
+  },
+  "0021_debt_categories": {
+    /** The backfill is the step's own SQL (`0021_debt_categories.sql`); what is created here is the rule that holds afterwards. */
+    objects: (tx) => {
+      for (const statement of DEBT_CATEGORY_TRIGGERS) tx.run(sql.raw(statement));
     },
   },
   "0019_schema": {

@@ -9,7 +9,7 @@
  * already uses for a fixture no other screen shares.
  */
 
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import {
   createPhoneLedger,
   type PhoneAccount,
@@ -44,6 +44,7 @@ vi.mock("expo-router", () => ({
   useLocalSearchParams: () => useLocalSearchParams(),
 }));
 
+import { lastCapture } from "./platform";
 import QuickAdd from "./quick-add-screen";
 
 const PLN = currencyCode("PLN");
@@ -59,6 +60,7 @@ const ACCOUNT = {
   isBusiness: false,
   archived: false,
   hidden: false,
+  hasEntries: false,
   inTotal: true,
   color: null,
   expectedBalance: null,
@@ -73,6 +75,13 @@ const SHARED_ACCOUNT = {
   id: id<"accounts">("33333333-3333-4333-8333-333333333333"),
   name: "Joint · PLN",
   ownership: "shared" as const,
+};
+
+/** A second account, so that a fresh ledger has a choice to make — one account is filled in for you (S05 §9.2). */
+const SECOND_ACCOUNT = {
+  ...ACCOUNT,
+  id: id<"accounts">("66666666-6666-4666-8666-666666666666"),
+  name: "Wallet · PLN",
 };
 
 /** H2 — a smaller-scale account than `ACCOUNT`'s two decimal places. */
@@ -95,7 +104,7 @@ function fakeController(
   } = {},
 ) {
   const port = basePort({
-    listAccounts: () => overrides.accounts ?? [ACCOUNT],
+    listAccounts: () => overrides.accounts ?? [ACCOUNT, SECOND_ACCOUNT],
     listCurrencies: () => [
       {
         code: PLN,
@@ -145,7 +154,7 @@ function withLedger(overrides: Parameters<typeof fakeController>[0] = {}) {
 /** Keypad's own glyphs — `.` is English's decimal mark, mapped to the canonical `,` key. */
 /** The amount is a `TextInput` on the deck's composer — typed, not tapped (S05 §3). */
 function typeAmount(value: string) {
-  fireEvent.change(screen.getByLabelText("How much?"), { target: { value } });
+  fireEvent.change(screen.getByLabelText(/^How much\?/), { target: { value } });
 }
 
 /** The rarer rows — entered name, date, scope, person — wait behind one row (S05 §3). */
@@ -169,7 +178,18 @@ function pickSharedAccount() {
   fireEvent.click(screen.getByRole("radio", { name: "Joint · PLN" }));
 }
 
+/** `react-native-web` re-reads the window on a `resize` — the height a phone's layout decides compactness from. */
+function resizeHeight(height: number) {
+  Object.defineProperty(document.documentElement, "clientHeight", {
+    value: height,
+    configurable: true,
+  });
+  window.dispatchEvent(new Event("resize"));
+}
+
 beforeEach(() => {
+  // Tall by default: the full column. The compact tests name a short phone.
+  resizeHeight(900);
   router.push.mockClear();
   router.back.mockClear();
   router.dismissTo.mockClear();
@@ -177,6 +197,60 @@ beforeEach(() => {
 });
 
 describe("QuickAdd — the phone path (Dock + QuickAddComposer)", () => {
+  it("fills the only account in for a fresh ledger, marks it so, and shows its currency (S05 §9.2)", () => {
+    withLedger({ accounts: [ACCOUNT] });
+    typeAmount("4500");
+    expect(
+      screen.getByRole("button", { name: "From: Cash · PLN, filled automatically" }),
+    ).toBeDefined();
+    // On the account row and beside the figure.
+    expect(screen.getAllByText("PLN")).toHaveLength(2);
+    expect(screen.getByRole("button", { name: "Save expense" })).toHaveProperty("disabled", false);
+  });
+
+  it("still closes without a Discard question inside the last-used window when the lone account is all there is", async () => {
+    await act(async () => {
+      await lastCapture.set({ accountId: ACCOUNT.id, at: Date.now() });
+    });
+    try {
+      withLedger({ accounts: [ACCOUNT] });
+      fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+      expect(router.back).toHaveBeenCalledOnce();
+    } finally {
+      // A capture far outside the window, so the singleton leaves nothing behind.
+      await lastCapture.set({ accountId: ACCOUNT.id, at: 1 });
+    }
+  });
+
+  it("fills a lone account even when its currency has no rate, and lets the banner speak", () => {
+    withLedger({ accounts: [ACCOUNT], capturable: false });
+    expect(
+      screen.getByRole("button", { name: "From: Cash · PLN, filled automatically" }),
+    ).toBeDefined();
+    expect(screen.getByText(/needs an exchange rate/)).toBeDefined();
+  });
+
+  it("leaves a rated account and a rate-less one as a choice of two", () => {
+    withLedger({ accounts: [ACCOUNT, JPY_ACCOUNT] });
+    expect(screen.getByRole("button", { name: "From: Which one?" })).toBeDefined();
+  });
+
+  it("closes without a Discard question when the only thing filled is the lone account", () => {
+    withLedger({ accounts: [ACCOUNT] });
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(router.back).toHaveBeenCalledOnce();
+  });
+
+  it("leaves the account row a question, unerrored, when two accounts could take it", () => {
+    withLedger();
+    typeAmount("4500");
+    expect(screen.getByRole("button", { name: "From: Which one?" })).toBeDefined();
+    expect(screen.queryByText("PLN")).toBeNull();
+    expect(
+      screen.queryByText("The form isn't complete — check the highlighted fields."),
+    ).toBeNull();
+  });
+
   it("refuses Save until an amount and an account are both present (S05 §9.2)", () => {
     withLedger();
     expectSaveRefused();
@@ -220,7 +294,7 @@ describe("QuickAdd — the phone path (Dock + QuickAddComposer)", () => {
 
     expect(screen.getByRole("button", { name: "From: Cash · PLN" })).toBeDefined();
     expect(screen.getByText("JPY holds 0 decimal places — this amount has more.")).toBeDefined();
-    expect(screen.getByLabelText("How much?")).toHaveProperty("value", "48.90");
+    expect(screen.getByLabelText(/^How much\?/)).toHaveProperty("value", "48.90");
   });
 
   /**
@@ -290,7 +364,7 @@ describe("QuickAdd — the phone path (Dock + QuickAddComposer)", () => {
     ).toBeDefined();
     expectSaveRefused();
     // The typed amount stays put — nothing here empties the draft.
-    expect(screen.getByLabelText("How much?")).toHaveProperty("value", "48.90");
+    expect(screen.getByLabelText(/^How much\?/)).toHaveProperty("value", "48.90");
     expect(createTransaction).not.toHaveBeenCalled();
   });
 
@@ -307,6 +381,7 @@ describe("QuickAdd — the phone path (Dock + QuickAddComposer)", () => {
       id: id<"categories">("77777777-7777-4777-8777-777777777777"),
       name: "Eating out",
       kind: "expense",
+      externalId: null,
     };
     const history: EnteredNameHistoryRow[] = [
       { enteredName: "Corner Café", categoryId: category.id, date: accountingDate("2026-08-01") },
@@ -424,7 +499,7 @@ describe("QuickAdd — the kind (S05 §3)", () => {
     withLedger();
     typeAmount("48.90");
     fireEvent.click(screen.getByRole("tab", { name: "Income" }));
-    expect(screen.getByLabelText("How much?")).toHaveProperty("value", "48.90");
+    expect(screen.getByLabelText(/^How much\?/)).toHaveProperty("value", "48.90");
   });
 
   /**
@@ -443,6 +518,19 @@ describe("QuickAdd — the kind (S05 §3)", () => {
     fireEvent.click(screen.getByRole("tab", { name: "Transfer" }));
     expect(router.replace).toHaveBeenCalledWith("/transfer");
     alert.mockRestore();
+  });
+
+  it("runs compact on a 740 pt window from the first frame: no footnote, no day line, the row under the amount", () => {
+    resizeHeight(740);
+    withLedger();
+    expect(screen.queryByText("Saved on your phone — syncs when you're back online")).toBeNull();
+    expect(screen.queryByText(weekdayLabel(deviceRuntime().capture().date, "en"))).toBeNull();
+    expect(screen.getByRole("button", { name: /^From/ })).toBeDefined();
+  });
+
+  it("keeps the footnote on a tall window", () => {
+    withLedger();
+    expect(screen.getByText("Saved on your phone — syncs when you're back online")).toBeDefined();
   });
 
   it("stamps the draft's day under the name", () => {

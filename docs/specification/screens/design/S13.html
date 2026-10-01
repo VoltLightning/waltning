@@ -47,6 +47,11 @@ against <code>packages/ui</code>; this file exists so <code>S13-counterparty-det
   </div>
   </div>
 
+  <div style="flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 0 4px;">
+    <div style="display: flex; flex-direction: column; gap: 2px;"><div style="font-size: 14px;">Existing debt</div><div style="font-size: 12px; color: #8a8478;">They owe you · since 2 January 2026</div></div>
+    <div class="n" style="font-size: 14px; font-weight: 600;">1 000,00 zł</div>
+  </div>
+
   <div style="flex-shrink: 0; display: flex; flex-direction: column; gap: 8px;">
     <div class="k">Open entries</div>
       <div style="background: #ffffff; border: 1px solid #eae3d5; border-radius: 14px; padding: 0; display: flex; flex-direction: column; gap: 0; overflow: hidden;">
@@ -55,6 +60,26 @@ against <code>packages/ui</code>; this file exists so <code>S13-counterparty-det
   </div>
   <div style="flex-shrink: 0; flex-grow: 1;"></div>
   <div style="flex-shrink: 0; background: #5c7357; border-radius: 12px; padding: 15px; text-align: center; font-size: 15px; font-weight: 600; color: #ffffff;">Settle 1 240,00 zł</div>
+  <div style="flex-shrink: 0; text-align: center; font-size: 13px; color: #8a8478;">Add an existing debt</div>
   <div style="flex-shrink: 0; text-align: center; font-size: 13px; color: #8a8478;">Edit this person</div>
+</div></div>
+
+<h1>S13 · Add an existing debt</h1>
+<p class="note">The sheet: direction, currency, amount, a date that is today or earlier. For a currency that already holds one it says what has been repaid and the balance after, and warns when saving would turn the debt around.</p>
+<div class="frame"><div style="width: 390px; height: 844px; background: #faf6ef; color: #33302a; display: flex; flex-direction: column; justify-content: flex-end; box-sizing: border-box; overflow: hidden; font-family: 'IBM Plex Sans', system-ui, sans-serif;">
+  <div style="background: #ffffff; border-radius: 22px 22px 0 0; padding: 22px 20px 28px 20px; display: flex; flex-direction: column; gap: 16px; box-shadow: 0 -10px 34px -14px rgba(51,48,42,.3);">
+    <div style="font-size: 18px; font-weight: 600;">Existing debt with A. Kowal</div>
+    <div style="font-size: 12px; color: #8a8478; line-height: 1.5;">A debt that already existed before this ledger. It sets the starting balance and is neither income nor spending, and neither are the repayments made against it. Enter the original amount, not what is left.</div>
+    <div style="display: flex; background: #f1ebe0; border-radius: 10px; padding: 3px; gap: 3px;"><div style="flex: 1; text-align: center; padding: 9px; border-radius: 8px; background: #ffffff; font-size: 14px; font-weight: 600;">They owe you</div><div style="flex: 1; text-align: center; padding: 9px; font-size: 14px; color: #8a8478;">You owe them</div></div>
+    <div style="display: flex; gap: 10px;"><div style="flex: 1; border: 1px solid #eae3d5; border-radius: 10px; padding: 10px 12px;"><div class="k">Currency</div><div style="font-size: 15px;">PLN</div></div><div style="flex: 2; border: 1px solid #eae3d5; border-radius: 10px; padding: 10px 12px;"><div class="k">Amount</div><div class="n" style="font-size: 15px;">1 000,00</div></div></div>
+    <div style="border: 1px solid #eae3d5; border-radius: 10px; padding: 10px 12px;"><div class="k">Date of the debt</div><div style="font-size: 15px;">2 January 2026</div></div>
+    <div style="display: flex; flex-direction: column; gap: 6px; border-top: 1px solid #f1ebe0; padding-top: 12px;">
+      <div style="font-size: 12px; color: #8a8478;">This replaces the existing debt in PLN.</div>
+      <div style="display: flex; justify-content: space-between;"><span class="k">Already repaid</span><span class="n" style="font-size: 14px;">150,00 zł</span></div>
+      <div style="display: flex; justify-content: space-between;"><span class="k">Balance after saving</span><span class="n" style="font-size: 14px;">850,00 zł · they owe you</span></div>
+    </div>
+    <div style="display: flex; justify-content: flex-end; gap: 22px; align-items: center;"><span style="font-size: 14px; color: #8a8478;">Cancel</span><span style="background: #5c7357; color: #fff; border-radius: 12px; padding: 12px 20px; font-size: 15px; font-weight: 600;">Save debt</span></div>
+    <div style="text-align: center; font-size: 13px; color: #a3463c;">Delete this debt</div>
+  </div>
 </div></div>
 </body></html>

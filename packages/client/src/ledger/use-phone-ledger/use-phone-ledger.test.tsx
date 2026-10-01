@@ -44,6 +44,7 @@ describe("usePhoneLedger", () => {
               isBusiness: input.isBusiness,
               archived: false,
               hidden: false,
+              hasEntries: false,
               inTotal: true,
               color: null,
               expectedBalance: null,

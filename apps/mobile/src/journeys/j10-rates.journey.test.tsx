@@ -81,6 +81,8 @@ vi.mock("expo-router", () => ({
     return currentStub.router;
   },
   useLocalSearchParams: () => currentStub?.useLocalSearchParams() ?? {},
+  useGlobalSearchParams: () => ({}),
+  useNavigation: () => ({ isFocused: () => true }),
 }));
 
 const { JourneyHarness, createJourneyLedger, createJourneyRouterStub, seedJourneyFixture } =
@@ -222,7 +224,7 @@ describe("J10 — currency and rates", () => {
     act(() => stub.pushWithParams("quick-add", {}));
     await settleLayout();
 
-    fireEvent.change(screen.getByLabelText("How much?"), { target: { value: "100" } });
+    fireEvent.change(screen.getByLabelText(/^How much\?/), { target: { value: "100" } });
     fireEvent.click(screen.getByRole("button", { name: /^More details/ }));
     // The row opens the drum itself — no sheet, no field, nothing to close.
     fireEvent.click(screen.getByRole("button", { name: /^Date/ }));

@@ -61,6 +61,7 @@ scrolling one.
 | `FilterBar` | Account · category · scope · currency · date range · counterparty. Reports the count each filter excludes (§5.6) |
 | `SearchField` | Entered name, note, amount, **and receipt contents** — merchant plus line descriptions. A match inside a receipt states which line matched, so the result is explicable rather than surprising |
 | `TransactionRow` / `TransferRow` | `BIZ` where business; `FxAmount` where foreign |
+| `TransactionRow` title | **The entered name; failing that the category; failing that the kind** — *Income*, *Expense*, *Transfer*, *Adjustment*. An imported or quickly captured row often has no payee, and a dash over a `?` says the row is broken when it is only unnamed. The line beneath never repeats what became the title, and the monogram follows the title. The desk table's identity column follows the same rule; its category column still shows the category |
 | `BrandIcon` | The leading mark on both surfaces — `TransactionRow`'s on mobile, and the desk table's identity column, between the date and the entered name. Same component and catalogue as S04 (§14.4b); an unrecognised entered name falls back to its monogram rather than to nothing |
 | `EmptyState(filtered)` | Names the excluding filter and its hidden count |
 | `EmptyState(first-run)` | Nothing has ever existed |
@@ -82,7 +83,7 @@ act on, and that is what keeps the filter drainable to zero.
 | Reads | Writes |
 |---|---|
 | `search_transactions(filter, page)` | — (a row's own edits are S09's) |
-| Running total for the active filter | `categorize_batch` — web multi-select |
+| Running total for the active filter | `categorize_batch` — web multi-select. **The total is a sum of the filtered rows, not a period figure**, so it includes a repayment of an existing debt (`SPEC.md` §6.6) when the filter shows it; the period figures elsewhere leave those out |
 
 ## 6. States
 

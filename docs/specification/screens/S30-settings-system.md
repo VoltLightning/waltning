@@ -57,7 +57,7 @@ backup's time is kept — renders its label alone.
 to look at their money rather than to configure something. The rest are
 reference data, in the order they depend on each other.
 
-**Appearance and Language close the list, as a group of their own** — how this
+**Appearance, Language and App lock close the list, as a group of their own** — how this
 phone shows the ledger, as against what the ledger holds. Both are device
 preferences (`design-system/02` §2.9): stored on the phone, never a registry
 operation, never synced. Each opens a sheet of radios rather than a screen,
@@ -67,6 +67,14 @@ for the same reason.
 
 - **Appearance** — *Match the phone* · *Light* · *Dark*. The value line says
   what is in force: *Dark*, or *Match the phone · Light*.
+- **App lock** — only on a device that can gate (a secret set; never the
+  browser). *On* · *Off*, in the same group and the same sheet of radios. It is
+  the device preference the first-run question writes (`SPEC.md` §5.7): the
+  app asks once, *Lock the app with your fingerprint?* — the noun follows what
+  the device offers — with *Yes* and *Not now*, and this row flips the answer
+  afterwards. The value line says *On* or *Off*, and the hint under *On* names
+  only what this device would ask for. **Switching it off asks the device
+  first**; switching it on asks nothing.
 - **Language** — *Match the phone*, then every shipped language **named in
   itself**: *English*, *Polski*, *Deutsch*, *Русский*, *Беларуская*. A phone
   left in a language the reader cannot read is put back by finding their own
@@ -81,6 +89,32 @@ grouped rows is exactly a list of destinations, and three stacked buttons in a
 titled card was a card pretending to be a screen. A row is added here when the
 screen it leads to exists, never before: a menu entry to a placeholder is a
 promise the app cannot keep.
+
+### Developer — preview builds only
+
+A preview build carries one more row, *Developer*, and a production build has
+no such row, so the screen cannot be reached there. It holds two controls:
+*Load demo data* and *Reset preview data*. Reset asks twice, because it deletes
+both stores and nothing undoes that.
+
+**The demo is written in the app's language.** The people, the accounts, the
+shops and the notes are invented names that sound like the language — a German
+demo has German names, a Russian one Russian, and no Cyrillic contact appears
+in the German app. Only the words change: the accounts, amounts, dates and who
+owes whom are the same in every language. The international services every
+locale shares (a streaming subscription, a ride-hailing app) stay as they are.
+
+**Load covers the whole app, then restarts it.** While the history is written,
+a full-screen busy state covers everything, the tabs included, and states how
+far it has got (*Writing history… 240 of 540*). The hardware back button does
+nothing while it is up. A clean run ends in a true restart, so every screen
+reads the new ledger from scratch. The phone reloads its JavaScript runtime and
+the browser reloads the page.
+
+**A run with refusals does not restart.** It stays on its count (*… · 12
+refused*) with *Restart now* beside it. Restarting would wipe the only sentence
+saying the dataset is smaller than it looks. A restart the platform refuses
+falls back to the same count and button.
 
 ## 3. Layout
 

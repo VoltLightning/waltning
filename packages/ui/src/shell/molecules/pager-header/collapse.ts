@@ -130,36 +130,36 @@ export function headerHeight(progress: number): number {
 /**
  * How much of its height the chrome has **not yet** given back, in points.
  *
- * **This is what stops the header from resizing the page it is reading.** The
- * chrome sat in the flow above the pager, so its animated height was the
- * pager's height: measured in Chrome, collapsing the header grew the scroll
- * viewport from 640 to 676 in lockstep with it. That is a loop — the offset
- * sets the header's height, the height sets the viewport, and the viewport
- * sets the largest offset the scroller will hold, so a page whose content is
- * within 36pt of a screenful gets scrolled *back* by its own header and the
- * bar flickers in and out for as long as you hold the gesture. It is also a
- * full layout of four mounted pages every frame, which is the lag.
+ * **This is what stops the header from resizing the page it is reading, and a
+ * second rule stops it from moving it.** The chrome sits in the flow above the
+ * pager, so its animated height would be the pager's height: collapsing the
+ * header grew the scroll viewport in lockstep, the viewport set the largest
+ * offset the scroller would hold, and a short page was scrolled *back* by its
+ * own header.
  *
- * The fix is that the chrome carries a negative bottom margin of exactly what
- * it has not yet given up. Its height and its margin then always sum to the
- * collapsed height, so the pager's *layout* box is the same box at every
- * offset, and the pager is moved down by the same number as a transform. The
- * loop is gone by construction, and measurably: the viewport reads 732 at both
- * ends of the travel where it used to read 640 and 676.
+ * The chrome therefore carries a negative bottom margin of exactly what it has
+ * not yet given up. Its height and its margin always sum to the collapsed
+ * height, so the pager's layout box is the same box at every offset. The
+ * expanded header overhangs the top of that box, drawn over it, and each page
+ * leaves `COLLAPSE_TRAVEL` of room above its first row
+ * (`atoms/collapse-inset.tsx`) that scrolls away at exactly the rate the header
+ * closes.
+ *
+ * **Nothing moves the pager.** An earlier version handed this same number to the
+ * pager as a translate, which kept the pager *looking* in the right place and
+ * made the scroller's own frame a function of its own offset: the finger drags
+ * the content by `d`, the frame moves `d` under the finger, the scroller reads
+ * the difference, and each step of that arrives a frame late. At the offset
+ * where the header changes shape that is an oscillation — the whole screen
+ * shaking under a held finger. A frame that does not move cannot feed back.
  *
  * **What this is not is zero layout work.** The margin is a layout property
  * written every frame, alongside the height it cancels, so the chrome still
- * commits per frame — what stops is the *pager* being re-measured, and the
- * four mounted pages under it. That the pages are now skipped rests on the
- * layout engine returning cached geometry for a subtree whose constraints did
- * not change; it is the reason the change is worth making and it has not been
- * profiled. A chrome with a static height and its visible band drawn by an
- * absolutely positioned child would have no animated layout property at all;
- * that is the next thing to measure if this is still not fast enough.
+ * commits per frame; what stops is the *pager* being re-measured, and the four
+ * mounted pages under it.
  *
- * One function for both because they are one fact: the margin takes it away
- * and the transform gives it back, and two constants that had to stay equal
- * would eventually not be.
+ * One function because the margin and the page's own room are one fact, and two
+ * constants that had to stay equal would eventually not be.
  */
 export function chromeSlack(progress: number): number {
   "worklet";

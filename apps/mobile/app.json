@@ -3,10 +3,13 @@
     "name": "Waltning",
     "slug": "waltning",
     "scheme": "waltning",
-    "version": "0.0.0",
+    "version": "0.1.0",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
+    "icon": "./assets/icon/icon.png",
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "app.waltning.ios",
@@ -16,11 +19,20 @@
     },
     "android": {
       "package": "app.waltning.android",
-      "allowBackup": false
+      "allowBackup": false,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/icon/adaptive-foreground.png",
+        "backgroundColor": "#F4EBDD"
+      }
     },
     "web": {
       "bundler": "metro",
-      "output": "single"
+      "output": "single",
+      "favicon": "./assets/icon/favicon.png"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/14d63e62-922d-4825-b240-4d0ce1f425b1",
+      "checkAutomatically": "NEVER"
     },
     "plugins": [
       "expo-router",

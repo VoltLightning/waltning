@@ -39,6 +39,7 @@
  */
 
 import { useDisplayCurrency } from "@waltning/client/currencies/display-currency";
+import { useDisplayBasis } from "@waltning/client/currencies/use-display-basis";
 import { useDevicePreference } from "@waltning/client/device/use-device-preference";
 import { clientFailure, emitClientDiagnostic } from "@waltning/client/diagnostics";
 import { DEFAULT_DESK_SCOPE } from "@waltning/client/ledger/desk-scope";
@@ -60,6 +61,7 @@ import { RecentWidget } from "@waltning/ui/dashboard/recent-widget";
 import { SpendByCategoryWidget } from "@waltning/ui/dashboard/spend-by-category-widget";
 import { dayLabel, monthLabel } from "@waltning/ui/i18n/locales";
 import { useLocale, useT } from "@waltning/ui/i18n/provider";
+import { useCategoryLabel } from "@waltning/ui/i18n/use-category-label";
 import { GroundPanel } from "@waltning/ui/shell/card";
 import { UnsettledBanner } from "@waltning/ui/shell/unsettled-banner";
 import { EmptyState } from "@waltning/ui/states/empty-state";
@@ -104,13 +106,13 @@ function handleOpenTransaction(id: string) {
 
 export default function Dashboard() {
   const t = useT();
+  const labelOf = useCategoryLabel();
   const locale = useLocale();
   const styles = useStyles();
   const ledger = useLedgerController();
   const snapshot = usePhoneLedger(ledger);
   const display = useDisplayCurrency(displayCurrency);
   const storedScope = useDevicePreference(deskScope);
-  const leadCurrency = display.currency;
   const scope = storedScope.value ?? DEFAULT_DESK_SCOPE;
 
   const currentMonth = yearMonth(deviceRuntime().capture().date.slice(0, 7));
@@ -127,8 +129,35 @@ export default function Dashboard() {
   );
 
   const layout = useDashboardLayout(ledger, snapshot.revision);
-  const spendRows = useSpendByCategory(ledger, period, scope, snapshot.revision);
-  const flowRows = useIncomeVsExpense(ledger, buckets, scope, snapshot.revision);
+  // §7.0 — every figure is stated in the display currency, each row at its own
+  // date's rate; what cannot be converted stays in its own currency, as an
+  // "other" row, never folded in unconverted.
+  const basis = useDisplayBasis(
+    ledger,
+    snapshot.currencies,
+    displayCurrency,
+    deviceRuntime().capture().date,
+    snapshot.revision,
+  );
+  const leadCurrency = basis?.currency ?? display.currency;
+  const rawSpendRows = useSpendByCategory(
+    ledger,
+    period,
+    scope,
+    snapshot.revision,
+    basis?.spendRebase,
+  );
+  const spendRows = useMemo(
+    () => (basis === null ? rawSpendRows : basis.restateSpend(rawSpendRows)),
+    [basis, rawSpendRows],
+  );
+  const flowRows = useIncomeVsExpense(
+    ledger,
+    buckets,
+    scope,
+    snapshot.revision,
+    basis?.spendRebase,
+  );
   const unsettledModel = useUnsettledBanner(snapshot.unsettledClearing);
 
   const today = deviceRuntime().capture().date;
@@ -169,7 +198,12 @@ export default function Dashboard() {
   const flowRangeLabel = t("dashboard.flowRange", { count: COMPLETE_FLOW_MONTHS });
 
   const categoryNameOf = new Map<string, string>(
-    snapshot.categoryTree.map((category) => [category.id, category.name]),
+    snapshot.categoryTree.map((category) => [category.id, labelOf(category)]),
+  );
+  const tintKeyOf = new Map<string, string>(
+    snapshot.categoryTree.flatMap((category) =>
+      category.externalId?.startsWith("seed:") ? [[category.id, category.externalId]] : [],
+    ),
   );
   const spendForLead = spendRows.filter((row) => row.currency === leadCurrency);
   const { top: topSpend, restTotal: otherTotal } = money.topByAmount(spendForLead, TOP_CATEGORIES);
@@ -179,6 +213,9 @@ export default function Dashboard() {
       label: row.categoryId
         ? (categoryNameOf.get(row.categoryId) ?? t("dashboard.uncategorized"))
         : t("dashboard.uncategorized"),
+      ...(row.categoryId !== null && tintKeyOf.has(row.categoryId)
+        ? { tintKey: tintKeyOf.get(row.categoryId) as string }
+        : {}),
       amount: row.amount,
       currency: row.currency,
       decimals: row.decimals,
@@ -266,7 +303,10 @@ export default function Dashboard() {
   const recentRows = snapshot.recent.map((row) => ({
     id: row.id,
     enteredName: row.enteredName,
-    meta: row.categoryName ?? row.accountName,
+    meta:
+      row.categoryName === null
+        ? row.accountName
+        : labelOf({ name: row.categoryName, externalId: row.categoryExternalId }),
     amount: row.amount,
     currency: row.currency,
     decimals: row.decimals,
@@ -328,7 +368,12 @@ export default function Dashboard() {
       <SpendByCategoryWidget
         title={t("dashboard.spendByCategory")}
         currency={leadCurrency}
-        period={`${periodLabel} · ${t("dashboard.byLeafCategory")}`}
+        period={[
+          `${periodLabel} · ${t("dashboard.byLeafCategory")}`,
+          spendRows.some((row) => row.estimated === true) ? t("shell.estimatedAtToday") : null,
+        ]
+          .filter((part) => part !== null)
+          .join(" · ")}
         scope={scopeLabel}
         segments={spendSegments}
         others={spendOthers}
@@ -340,7 +385,11 @@ export default function Dashboard() {
       <IncomeVsExpenseWidget
         title={t("dashboard.incomeVsExpense")}
         currency={leadCurrency}
-        period={flowRangeLabel}
+        period={
+          flowRows.some((row) => row.estimated === true)
+            ? `${flowRangeLabel} · ${t("shell.estimatedAtToday")}`
+            : flowRangeLabel
+        }
         scope={scopeLabel}
         bars={flowBars}
         others={flowOthers}

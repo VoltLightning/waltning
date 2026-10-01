@@ -29,5 +29,5 @@ import { decimalMark } from "../i18n/locales.ts";
 const RATE_DECIMALS = 4;
 
 export function formatRate(rate: string, locale: Locale, decimals = RATE_DECIMALS): string {
-  return money.forDisplay(money.toMoney(rate), decimals, decimalMark(locale));
+  return money.forDisplay(money.toMoney(rate, decimals), decimals, decimalMark(locale));
 }

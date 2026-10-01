@@ -28,6 +28,8 @@ export const en = {
     close: "Close",
     name: "Name",
     loading: "Loading…",
+    /** The amount ceiling (`money.ts`) — the figure is written the way this language writes it. */
+    amountCeiling: "Maximum 999,999,999.99",
     search: "Search…",
     /** A filter that matched nothing must say so — an empty panel reads as broken. */
     noMatches: "Nothing matches.",
@@ -147,9 +149,7 @@ export const en = {
      * the sentence states the consequence rather than refusing.
      */
     currencyNotCapturable:
-      "{{currency}} has no exchange rate yet. The account opens fine; transactions in it cannot be recorded until one is set.",
-    /** The way out of the sentence above — S18, opened on that currency and today's date. */
-    setRate: "Set a {{currency}} rate",
+      "{{currency}} has no exchange rate for today. Enter one below; it is saved together with the account, so transactions in it can be recorded.",
     moreDetails: "More details",
     fewerDetails: "Fewer details",
     kind: "Kind",
@@ -240,6 +240,16 @@ export const en = {
     moveUp: "Move {{name}} up",
     moveDown: "Move {{name}} down",
     archivedToast: "Account archived.",
+    /** `delete_account` (§6.9) — offered only where nothing references the account; otherwise *Archive* stays. */
+    delete: "Delete account",
+    deleteConfirmTitle: "Delete this account?",
+    deleteConfirmBody:
+      "“{{name}}” has no entries, so it is removed completely. This cannot be undone.",
+    deleteConfirmSubmit: "Delete",
+    deletedToast: "Account deleted.",
+    deleteHasEntries: "This account now has entries and can only be archived.",
+    /** A bank, cash or deposit account below zero — not a debt to a lender, so not *owed* (S04, S16). */
+    overdrawn: "overdrawn",
     reconcile: "Reconcile…",
     reconcileTitle: "Reconcile",
     computed: "Computed",
@@ -319,6 +329,9 @@ export const en = {
      * own window would contradict the number over its head.
      */
     noMatchesHere: "Nothing here matches \u201C{{query}}\u201D.",
+    accountEmptyTitle: "Nothing in {{account}} yet",
+    accountEmptyBody:
+      "No transactions have been recorded on it. Clear the filter to see the rest of the ledger.",
     amount: "Amount",
     account: "Account",
     /**
@@ -328,6 +341,7 @@ export const en = {
      * itself in with its own name.
      */
     chooseAccount: "Which one?",
+    amountWaitsForAccount: "Choose an account first",
     chooseCategory: "What was it for?",
     /**
      * §14.6: holding a currency and capturing in it are separate capabilities.
@@ -501,7 +515,9 @@ export const en = {
     transferArrow: "→",
     transferTo: "To {{account}}",
     transferKind: "Transfer",
-    /** Short swipe's action (S10 §4, §7) — announced, not only shown. */
+    /** A row with no entered name and no category is titled by what it is. */
+    adjustmentKind: "Adjustment",
+    /** The selection bar's batch-categorise action (S10 §7) — announced, not only shown. */
     categorise: "Categorise",
     /** `Skeleton`'s accessible label while a page loads. */
     loadingTransactions: "Loading transactions",
@@ -611,6 +627,7 @@ export const en = {
     newLine: "New line",
     total: "Adds up to",
     linesUnbalanced: "The lines must add up to the transaction's total.",
+    lineAmountMissing: "Enter an amount.",
     /** §6.9: every read path filters `deleted_at` — a soft-deleted row answers this, not a crash. */
     notFound: "This transaction no longer exists.",
     /** S09 — the chip that opens the obligation picker when nobody is named yet. */
@@ -619,6 +636,8 @@ export const en = {
     contextLabel: "What this means",
     contextInMonth: "{{month}} · {{times}}×",
     contextSeeAll: "See all",
+    contextChange: "Change",
+    contextUnsaved: "Not saved yet",
     contextUsual: "usual",
     contextOneOff: "One-off — left out of comparisons",
     /** §5 — another row in the card was a one-off and is not in its figures. */
@@ -655,6 +674,27 @@ export const en = {
 
     /** S15's escape from S05's counterparty sheet — the same shape `onCreateAccount` gives the account sheet. */
     newCounterparty: "+ New person or company",
+    /** §6.6 — a debt category asks who the other side is, and cannot be saved without. */
+    who: "Who?",
+    whoPlaceholder: "Choose a person",
+    whoRequired: "Choose who this is with.",
+    /** S09 — a legacy row under a debt category that names nobody. */
+    notCountedAsDebt: "Not counted as a debt yet. Add who, and it is.",
+    /** Under Who?, when the person has an open debt this entry pays down. */
+    settlesOwed: "Settles what {{name}} owes you, in {{currency}}.",
+    settlesOwe: "Settles what you owe {{name}}, in {{currency}}.",
+    nothingToSettle: "Nothing to settle with {{name}}: no open debt in this direction.",
+    settleNeedsRate: "No exchange rate for {{currency}}. Please settle from the person's page.",
+    openingLinkShape:
+      "A repayment can be linked to an existing debt only while it is still a debt with that person.",
+    splitPayment:
+      "This payment was split against an existing debt — change it as a whole by deleting it and recording it again.",
+    reSettle:
+      "This repayment settles a different figure than its amount (another currency, or a part forgiven), so a new amount does not say how much of the debt it settles. Please delete it and record the repayment again.",
+    splitDebtCategory:
+      "A split line cannot be filed under Borrowed, Lent out or a repayment: a debt has a person, and a line has none. Please file the whole transaction under it instead.",
+    unSplitFirst:
+      "This transaction is split into lines, and a repayment has none. Please remove the split first.",
 
     /* ── DESK2 · the desk command bar, `screens/S05-quick-add.md` §3 web ── */
     /**
@@ -781,7 +821,7 @@ export const en = {
     addSomeone: "+ Add someone",
     leftToAllocate: "left to allocate",
     /** S36 §3 — the commit states the figure, because the figure is the point. */
-    commit: "Allocate {{amount}} {{currency}}",
+    commit: "Allocate {{amount}}\u00a0{{currency}}",
     debtsOpen_one: "{{count}} debt open · the pot returns to zero",
     debtsOpen_few: "{{count}} debts open · the pot returns to zero",
     debtsOpen_many: "{{count}} debts open · the pot returns to zero",
@@ -791,7 +831,7 @@ export const en = {
     emptyBody:
       "This pot is at zero. Transfer what you laid out for a group into it, then split it here.",
     /** J08 §4 — the split may be committed incomplete; the banner is what says so. */
-    incomplete: "{{amount}} {{currency}} will stay on the pot",
+    incomplete: "{{amount}}\u00a0{{currency}} will stay on the pot",
     over: "That is more than the pot holds",
     editShare: "{{name}}'s share",
     shareOf: "{{name}}'s share",
@@ -809,6 +849,34 @@ export const en = {
     notFound: "This person is no longer here. They may have been merged or removed.",
     /** `SettleSheet`'s title (S14 §3). */
     settlingWith: "Settling with {{name}}",
+    /** S13's *Add an existing debt* (§6.6) — a debt from before the ledger; sets the balance, is neither income nor spending. */
+    existingDebtAdd: "Add an existing debt",
+    existingDebtTitle: "Existing debt with {{name}}",
+    existingDebtHint:
+      "A debt that already existed before this ledger. It sets the starting balance and is neither income nor spending, and neither are the repayments made against it. Enter the original amount, not what is left. Recording it again in the same currency replaces it.",
+    existingDebtDirection: "Who owes whom",
+    existingDebtTheyOwe: "They owe you",
+    existingDebtYouOwe: "You owe them",
+    existingDebtCurrency: "Currency",
+    existingDebtDate: "Date of the debt",
+    existingDebtSave: "Save debt",
+    existingDebtSaved: "Existing debt saved",
+    existingDebtRow: "Existing debt",
+    existingDebtRowMeta: "{{direction}} · since {{date}}",
+    existingDebtReplaces: "This replaces the existing debt in {{currency}}.",
+    existingDebtDelete: "Delete this debt",
+    existingDebtDeleteTitle: "Delete the existing debt?",
+    existingDebtDeleteBody: "The existing debt with {{name}} is deleted.",
+    existingDebtDeleteChain:
+      "Repayments made against it are deleted too: {{count}} in all, from {{accounts}}. The balances of those accounts change.",
+    existingDebtDeleteSubmit: "Delete",
+    existingDebtDeleted: "Existing debt deleted",
+    existingDebtGone: "This existing debt has already been deleted.",
+    existingDebtRepaid: "Already repaid",
+    existingDebtBalanceAfter: "Balance after saving",
+    existingDebtFlips:
+      "More has already been repaid than this amount, so saving turns the debt around.",
+    existingDebtDateFuture: "An existing debt dates from today or earlier.",
     /** The balance picker (S14 §9.1). */
     discharges: "Discharges",
     theyOweYou: "they owe you",
@@ -865,8 +933,8 @@ export const en = {
     youLent: "You lent",
     youOweLabel: "You owe",
     owedNet: "You owe, on balance",
-    unallocated: "{{amount}} {{currency}} unallocated",
-    unallocatedNamed: "{{amount}} {{currency}} unallocated · {{enteredName}} · {{date}}",
+    unallocated: "{{amount}}\u00a0{{currency}} unallocated",
+    unallocatedNamed: "{{amount}}\u00a0{{currency}} unallocated · {{enteredName}} · {{date}}",
     allocate: "Allocate",
     add: "+ Add",
     emptyFirstRunTitle: "No one yet",
@@ -904,7 +972,7 @@ export const en = {
     /** P1 — the derived total's own rate and date, never shown without both. */
     atRateDate: "@ {{rate}} · {{date}}",
     /** S13 — after a successful settle: the residual, named in words, never a bare sign (P5). */
-    settledToast: "Settled. {{amount}} {{currency}} {{direction}}.",
+    settledToast: "Settled. {{amount}}\u00a0{{currency}} {{direction}}.",
     addTransaction: "Add transaction",
     history: "History",
     /** S13 §3's own toggle — the count it is hiding is stated, never silent. */
@@ -1100,6 +1168,8 @@ export const en = {
     noBalances: "No accounts yet",
     noRecent: "Nothing recorded yet",
     noDebt: "Nobody owes, and you owe nobody",
+    /** The overview's list of who owes whom. */
+    openDebts: "Open debts",
     noSpend: "Nothing spent this period",
     /** M4 — a database with no active layout row at all, which the seed migration is supposed to make impossible. */
     noLayout: "No dashboard layout",
@@ -1194,6 +1264,7 @@ export const en = {
     plusOtherCurrencies_few: "+ {{count}} other currencies",
     plusOtherCurrencies_many: "+ {{count}} other currencies",
     plusOtherCurrencies_other: "+ {{count}} other currencies",
+    estimatedAtToday: "≈ some days at today's rate",
     /**
      * The *Go to* cards' figures (S04 §3). **Every card carries one**, which is
      * what makes the grid a status board rather than a menu — *Between us* as a
@@ -1254,14 +1325,14 @@ export const en = {
     spent: "spent",
     net: "net",
     /** The unsettled-clearing banner (§8) — C2. `Open` goes to the account, filtered. */
-    unsettled: "{{amount}} {{currency}} unallocated · {{account}}",
+    unsettled: "{{amount}}\u00a0{{currency}} unallocated · {{account}}",
     /**
      * S04 §3 draws one banner row; a second unsettled account folds into this
      * one's text (`count` is every account past the first) rather than
      * stacking a second alert — `Banner`'s own doc: "page-level, one tone,
      * one action."
      */
-    unsettledMore: "{{amount}} {{currency}} unallocated · {{account}} · and {{count}} more",
+    unsettledMore: "{{amount}}\u00a0{{currency}} unallocated · {{account}} · and {{count}} more",
     /**
      * §8's third field — `find_unsettled`'s own reason for existing — is
      * what lets this name the transaction rather than the account, once
@@ -1274,13 +1345,13 @@ export const en = {
      * for the one case where showing only the remainder would look like it
      * disagreed with the figure a tap on `Open` leads to.
      */
-    unsettledNamed: "{{remainder}} {{currency}} unallocated · {{enteredName}}",
+    unsettledNamed: "{{remainder}}\u00a0{{currency}} unallocated · {{enteredName}}",
     unsettledNamedMore:
-      "{{remainder}} {{currency}} unallocated · {{enteredName}} · and {{count}} more",
+      "{{remainder}}\u00a0{{currency}} unallocated · {{enteredName}} · and {{count}} more",
     unsettledNamedDiffers:
-      "{{remainder}} {{currency}} unallocated · {{enteredName}} ({{amount}} {{currency}} account balance)",
+      "{{remainder}}\u00a0{{currency}} unallocated · {{enteredName}} ({{amount}}\u00a0{{currency}} account balance)",
     unsettledNamedDiffersMore:
-      "{{remainder}} {{currency}} unallocated · {{enteredName}} ({{amount}} {{currency}} account balance) · and {{count}} more",
+      "{{remainder}}\u00a0{{currency}} unallocated · {{enteredName}} ({{amount}}\u00a0{{currency}} account balance) · and {{count}} more",
     /**
      * H2 — the oldest unconsumed entry is the account's own opening balance,
      * not a transaction (`oldestUnconsumedTransactionId` is `null`): there is
@@ -1288,9 +1359,9 @@ export const en = {
      * that does not exist. `Open` still falls back to the account's own
      * filtered ledger, same as before this entry existed.
      */
-    unsettledOpening: "{{remainder}} {{currency}} unallocated · opening balance",
+    unsettledOpening: "{{remainder}}\u00a0{{currency}} unallocated · opening balance",
     unsettledOpeningMore:
-      "{{remainder}} {{currency}} unallocated · opening balance · and {{count}} more",
+      "{{remainder}}\u00a0{{currency}} unallocated · opening balance · and {{count}} more",
     unsettledOpen: "Open",
     /** S04 §6 — the balance query failed; the hero keeps its last known figure. */
     balanceQueryFailed: "Couldn't refresh",
@@ -1391,6 +1462,13 @@ export const en = {
     language: "Language",
     followPhone: "Match the phone",
     followPhoneHint: "Currently {{value}}",
+    lock: "App lock",
+    lockOn: "On",
+    lockOff: "Off",
+    lockHintFingerprint: "Asks for your fingerprint when the app opens.",
+    lockHintFace: "Asks for your face when the app opens.",
+    lockHintEither: "Asks for your fingerprint or face when the app opens.",
+    lockHintPasscode: "Asks for your device passcode when the app opens.",
     followPhoneValue: "Match the phone · {{value}}",
     light: "Light",
     dark: "Dark",
@@ -1429,6 +1507,9 @@ export const en = {
     loading: "Writing history… {{written}} of {{of}}",
     loaded: "{{transactions}} rows · {{accounts}} accounts · {{people}} people",
     refused: " · {{count}} refused",
+    busyTitle: "Loading demo data",
+    restarting: "Restarting…",
+    restartNow: "Restart now",
   },
   routes: {
     developer: "Developer",
@@ -1613,20 +1694,25 @@ export const en = {
     symbolBefore: "Before the figure",
     symbolAfter: "After the figure",
     decimals: "Decimal places",
-    pivotLabel: "Pivot: {{code}}",
-    pivotKicker: "The one everything is measured in",
-    pivotName: "{{name}} · the pivot",
+    pivotLabel: "Anchor currency: {{code}}",
+    pivotKicker: "Anchor currency",
+    pivotName: "{{name}} · the anchor",
     pivotExplained:
-      "Every figure in the app is this currency underneath. Changing it restates the whole ledger, so it is set once.",
-    changePivotStart: "Change the pivot…",
+      "Exchange rates are stored against this currency so any pair can be worked out. It decides nothing you see; figures are shown in the currency above.",
+    displayExplained:
+      "Until you choose, this follows your phone's region. Switching changes only how figures are shown; nothing you have recorded changes.",
+    displayNeedsRate:
+      "Not applied yet: {{currency}} has no exchange rate, so figures stay in {{shown}}. Set a {{currency}} rate to use it.",
+    changePivotStart: "Change the anchor currency…",
     groupShown: "In the header toggle",
     groupHeld: "Held, not in the toggle",
-    changePivot: "Change pivot",
-    pivotConfirmTitle: "Change the pivot currency?",
+    changePivot: "Change anchor currency",
+    pivotConfirmTitle: "Change the anchor currency?",
     pivotConfirmBody:
-      "The pivot is the technical hub every rate is stored against. Refused once any transaction exists — a phone alone has no way to re-rate the history that would leave behind. Changing it is rare, audited, and never something moving abroad requires.",
+      "The anchor currency is the technical hub every rate is stored against. It can only change while no transaction exists, because this phone cannot re-rate existing history. Changing it is rare and recorded in the audit log.",
     pivotConfirmSubmit: "Yes, change it",
-    pivotChangeRefused: "The pivot can't change while a transaction exists.",
+    pivotChangeRefused:
+      "The anchor currency can't change once a transaction exists: this phone cannot re-rate existing history. It can be changed only while the ledger holds no transactions.",
     /**
      * M2 — §7.0's *"dropped rather than left mis-quoted"*, said out loud. The
      * rewrite keeps only the dates that hold a real published rate against
@@ -1639,18 +1725,21 @@ export const en = {
      * grammar than English needs the same key set present here.
      */
     pivotChangeDroppedDates_one:
-      "Pivot changed · {{count}} date had no rate to rebase and was dropped",
+      "Anchor currency changed · {{count}} date had no rate to rebase and was dropped",
     pivotChangeDroppedDates_few:
-      "Pivot changed · {{count}} dates had no rate to rebase and were dropped",
+      "Anchor currency changed · {{count}} dates had no rate to rebase and were dropped",
     pivotChangeDroppedDates_many:
-      "Pivot changed · {{count}} dates had no rate to rebase and were dropped",
+      "Anchor currency changed · {{count}} dates had no rate to rebase and were dropped",
     pivotChangeDroppedDates_other:
-      "Pivot changed · {{count}} dates had no rate to rebase and were dropped",
+      "Anchor currency changed · {{count}} dates had no rate to rebase and were dropped",
     /** C1 — the executor's other refusal: the chosen code is already the pivot. */
-    pivotAlreadyPivot: "That currency is already the pivot.",
+    pivotAlreadyPivot: "That currency is already the anchor.",
     /** C1 — the target `Select` in the pivot-change flow, ahead of the confirm dialog. */
-    pivotTarget: "New pivot",
+    pivotTarget: "New anchor currency",
     pivotTargetPlaceholder: "Choose a currency",
+    displayShowIn: "Show figures in",
+    anchorBlocked:
+      "Locked: the ledger already holds transactions, and this phone cannot re-rate them. The anchor currency can be changed only while there are none.",
     /** S18. */
     pairLabel: "Quote, against {{base}}",
     sourceStopped: "{{source}} has not answered since {{date}}.",
@@ -1665,7 +1754,7 @@ export const en = {
     tileDays_other: "{{count}} days",
     pairChip: "{{quote}}/{{base}}",
     pairPlaceholder: "Choose a currency",
-    noQuoteCurrency: "No currency to compare against the pivot yet.",
+    noQuoteCurrency: "No currency to compare against the anchor currency yet.",
     range30d: "30 d",
     range90d: "90 d",
     rangeYear: "Year",
@@ -1745,6 +1834,14 @@ export const en = {
     failed: "That wasn't recognised. Try again.",
     lockout: "Too many attempts. Use your device passcode.",
     unavailable: "This device can't unlock right now.",
+    askTitleFingerprint: "Lock the app with your fingerprint?",
+    askTitleFace: "Lock the app with your face?",
+    askTitleEither: "Lock the app with your fingerprint or face?",
+    askTitlePasscode: "Lock the app with your device passcode?",
+    askBody:
+      "Anyone holding this unlocked phone can read your accounts. You can change this at any time in Settings.",
+    askYes: "Yes",
+    askLater: "Not now",
   },
   startup: {
     /**
@@ -1753,6 +1850,10 @@ export const en = {
      * or not another attempt could clear it.
      */
     ledgerFailedTitle: "The ledger could not open",
+    renderFailedTitle: "This screen stopped working",
+    renderFailedBody:
+      "Something went wrong while drawing it. Your ledger is untouched. Try again; if it keeps happening, restart the app.",
+    renderFailedRestart: "Restart the app",
     /**
      * The failing layer's own sentence, shown verbatim on the terminal branch
      * — the migrator writes for a person, so replacing it would lose the one
@@ -1776,6 +1877,87 @@ export const en = {
      * `CompileError`), and reloading is the one thing that helps.
      */
     ledgerUnavailableBody: "The ledger engine did not start. Reloading usually fixes it.",
+  },
+  /**
+   * The starter categories' display names, keyed by their seed key
+   * (`packages/core/src/taxonomy.ts`). English is the canonical name the seed stores;
+   * a row that has been renamed no longer reads from here (`packages/core/src/seed-label.ts`).
+   */
+  taxonomy: {
+    "business-revenue": "Business revenue",
+    services: "Services",
+    "other-revenue": "Other revenue",
+    employment: "Employment",
+    salary: "Salary",
+    "bonus-equity": "Bonus & equity",
+    returns: "Returns",
+    "investment-returns": "Investment returns",
+    interest: "Interest",
+    "other-inflows": "Other inflows",
+    "gift-received": "Gift received",
+    refund: "Refund",
+    borrowed: "Borrowed",
+    "repayment-received": "Repayment received",
+    "other-inflow": "Other inflow",
+    home: "Home",
+    "property-purchase": "Property purchase",
+    rent: "Rent",
+    utilities: "Utilities",
+    "furniture-appliances": "Furniture & appliances",
+    "household-supplies": "Household supplies",
+    renovation: "Renovation & building",
+    plumbing: "Plumbing",
+    "electrical-network": "Electrical & network",
+    "facade-exterior": "Facade & exterior",
+    garden: "Garden",
+    food: "Food",
+    groceries: "Groceries",
+    "eating-out": "Eating out",
+    delivery: "Delivery",
+    alcohol: "Alcohol",
+    transport: "Transport",
+    car: "Car",
+    taxi: "Taxi",
+    "public-transport": "Public transport",
+    "fuel-parking": "Fuel & parking",
+    travel: "Travel",
+    "flights-tickets": "Flights & tickets",
+    accommodation: "Accommodation",
+    "travel-food": "Travel food & activities",
+    health: "Health",
+    "medical-dental": "Medical & dental",
+    pharmacy: "Pharmacy",
+    "sport-fitness": "Sport & fitness",
+    "beauty-grooming": "Beauty & grooming",
+    personal: "Personal",
+    "clothing-shoes": "Clothing & shoes",
+    technology: "Technology",
+    hobbies: "Hobbies",
+    education: "Education",
+    social: "Social",
+    "friends-going-out": "Friends & going out",
+    "gifts-given": "Gifts given",
+    celebrations: "Celebrations",
+    entertainment: "Entertainment",
+    subscriptions: "Subscriptions",
+    "software-tools": "Software & tools",
+    "media-streaming": "Media & streaming",
+    "mobile-internet": "Mobile & internet",
+    financial: "Financial",
+    tax: "Tax",
+    "bank-fees": "Bank fees & commission",
+    "legal-professional": "Legal & professional",
+    insurance: "Insurance",
+    business: "Business",
+    accountant: "Accountant",
+    "business-services": "Business services",
+    "zus-business-tax": "ZUS & business tax",
+    "business-other": "Business other",
+    "debt-giving": "Debt & giving",
+    "lent-out": "Lent out",
+    "repayment-made": "Repayment made",
+    charity: "Charity",
+    uncategorized: "Uncategorized",
   },
 } as const;
 

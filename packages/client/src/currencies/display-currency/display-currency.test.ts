@@ -111,7 +111,7 @@ describe("createDisplayCurrencyPreference", () => {
     const write = pref.set(EUR);
     expect(pref.getSnapshot().currency).toBe(EUR);
     await write;
-    expect(store.stored()).toBe("EUR");
+    expect(store.stored()).toBe("choice:EUR");
   });
 
   it("a chosen value wins over the live pivot regardless of what it reads", async () => {
@@ -119,32 +119,94 @@ describe("createDisplayCurrencyPreference", () => {
     await pref.set(EUR);
     expect(pref.getSnapshot().currency).toBe(EUR);
   });
+});
 
-  describe("initializeFromPinned", () => {
-    it("adopts the first pinned currency when nothing has been chosen", () => {
-      const pref = createDisplayCurrencyPreference(memoryStore(null), noPivot, USD);
-      pref.initializeFromPinned([PLN, EUR]);
-      expect(pref.getSnapshot().currency).toBe(PLN);
-    });
+describe("createDisplayCurrencyPreference — the device's region (§7.0)", () => {
+  const held = () => [USD, PLN, EUR];
 
-    it("falls back to the live pivot when nothing is pinned", () => {
-      const pref = createDisplayCurrencyPreference(memoryStore(null), () => PLN, USD);
-      pref.initializeFromPinned([]);
-      expect(pref.getSnapshot().currency).toBe(PLN);
+  it("a fresh ledger in a euro region opens in EUR, not the pivot", () => {
+    const pref = createDisplayCurrencyPreference(memoryStore(null), () => USD, USD, {
+      regionCurrency: EUR,
+      readHeld: held,
     });
+    expect(pref.getSnapshot().currency).toBe(EUR);
+  });
 
-    it("never overrides a value someone already chose", async () => {
-      const pref = createDisplayCurrencyPreference(memoryStore(null), noPivot, USD);
-      await pref.set(EUR);
-      pref.initializeFromPinned([PLN]);
-      expect(pref.getSnapshot().currency).toBe(EUR);
+  it("an unknown region falls on the pivot", () => {
+    const pref = createDisplayCurrencyPreference(memoryStore(null), () => USD, USD, {
+      regionCurrency: null,
+      readHeld: held,
     });
+    expect(pref.getSnapshot().currency).toBe(USD);
+  });
 
-    it("is a no-op the second time it is called", () => {
-      const pref = createDisplayCurrencyPreference(memoryStore(null), noPivot, USD);
-      pref.initializeFromPinned([PLN]);
-      pref.initializeFromPinned([EUR]);
-      expect(pref.getSnapshot().currency).toBe(PLN);
+  it("a region currency the ledger does not hold falls on the pivot", () => {
+    const pref = createDisplayCurrencyPreference(memoryStore(null), () => USD, USD, {
+      regionCurrency: currencyCode("CHF"),
+      readHeld: held,
     });
+    expect(pref.getSnapshot().currency).toBe(USD);
+  });
+
+  it("a ledger not ready to say what it holds falls on the pivot, then follows once it can", () => {
+    let codes: CurrencyCode[] | null = null;
+    const pref = createDisplayCurrencyPreference(memoryStore(null), () => USD, USD, {
+      regionCurrency: EUR,
+      readHeld: () => codes,
+    });
+    expect(pref.getSnapshot().currency).toBe(USD);
+    codes = [USD, EUR];
+    expect(pref.getSnapshot().currency).toBe(EUR);
+  });
+
+  it("an explicit choice beats the region", async () => {
+    const pref = createDisplayCurrencyPreference(memoryStore("PLN"), () => USD, USD, {
+      regionCurrency: EUR,
+      readHeld: held,
+    });
+    await pref.hydrate();
+    expect(pref.getSnapshot().currency).toBe(PLN);
+  });
+});
+
+describe("createDisplayCurrencyPreference — a stored value's origin (§7.0)", () => {
+  // The old build wrote the pivot on its own at first start, unmarked.
+  it("an unmarked value equal to the live pivot is that auto-write, not a choice", async () => {
+    const pref = createDisplayCurrencyPreference(memoryStore("USD"), () => USD, USD, {
+      regionCurrency: EUR,
+      readHeld: () => [USD, EUR],
+    });
+    await pref.hydrate();
+    expect(pref.getSnapshot().currency).toBe(EUR);
+  });
+
+  it("an unmarked value that is not the pivot was picked in the toggle, and stands", async () => {
+    const pref = createDisplayCurrencyPreference(memoryStore("PLN"), () => USD, USD, {
+      regionCurrency: EUR,
+      readHeld: () => [USD, PLN, EUR],
+    });
+    await pref.hydrate();
+    expect(pref.getSnapshot().currency).toBe(PLN);
+  });
+
+  it("a marked choice equal to the pivot is a choice, and beats the region", async () => {
+    const pref = createDisplayCurrencyPreference(memoryStore("choice:USD"), () => USD, USD, {
+      regionCurrency: EUR,
+      readHeld: () => [USD, EUR],
+    });
+    await pref.hydrate();
+    expect(pref.getSnapshot().currency).toBe(USD);
+  });
+
+  it("choosing the pivot after an unmarked pivot value makes it a choice", async () => {
+    const store = memoryStore("USD");
+    const pref = createDisplayCurrencyPreference(store, () => USD, USD, {
+      regionCurrency: EUR,
+      readHeld: () => [USD, EUR],
+    });
+    await pref.hydrate();
+    await pref.set(USD);
+    expect(store.stored()).toBe("choice:USD");
+    expect(pref.getSnapshot().currency).toBe(USD);
   });
 });

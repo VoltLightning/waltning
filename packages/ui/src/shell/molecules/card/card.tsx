@@ -101,7 +101,7 @@
  * spreads the values onto the list's own `contentContainerStyle`.
  */
 
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
 import { Text, View } from "react-native";
 import Animated, {
   useAnimatedRef,
@@ -121,6 +121,7 @@ import { useSafeArea } from "../../../primitives/safe-area";
 import { text } from "../../../theme/fonts.ts";
 import { makeStyles } from "../../../theme/styles.ts";
 import { gutter, radius, space } from "../../../tokens.ts";
+import { useCollapseInset } from "../../atoms/collapse-inset";
 import { useFloatingClearance } from "../../atoms/floating-clearance";
 
 /**
@@ -240,6 +241,13 @@ export type GroundPanelProps = {
    * is placed in. **Read in `scroll="page"` only.**
    */
   topWash?: string;
+  /**
+   * A count that, each time it rises, scrolls the page back to its top. The
+   * shell uses it for a re-tap on the tab you are on (`S04` §2): the count is
+   * the request, so the panel needs no handle and the screen no ref.
+   * **Read in `scroll="page"` only.**
+   */
+  scrollToTopKey?: number;
 };
 
 export function GroundPanel({
@@ -248,10 +256,12 @@ export function GroundPanel({
   clearBottom = true,
   onScroll,
   topWash,
+  scrollToTopKey = 0,
 }: GroundPanelProps) {
   const styles = useStyles();
   const insets = useSafeArea();
   const floatClearance = useFloatingClearance();
+  const collapseInset = useCollapseInset();
   const panel = useRef<View>(null);
   // An animated ref, because the top edge below reads this scroller's offset
   // on the UI thread — it is an ordinary ref everywhere else it is used.
@@ -265,7 +275,19 @@ export function GroundPanel({
   // platforms return early in the observing effect — and the hook still runs,
   // so the hook order does not change between modes.
   const offset = useScrollViewOffset(scroll === "own" ? null : scroller);
-  const edge = useAnimatedStyle(() => ({ opacity: edgeOpacity(offset.value) }), [offset]);
+  const edge = useAnimatedStyle(
+    // Under a collapsing header the first `collapseInset` points of offset are
+    // the header's own room leaving; the content only passes under the chrome
+    // after that, and a hairline drawn earlier shows as two stray corner arcs.
+    () => ({ opacity: edgeOpacity(offset.value - collapseInset) }),
+    [offset, collapseInset],
+  );
+  const seenTopKey = useRef(scrollToTopKey);
+  useEffect(() => {
+    if (seenTopKey.current === scrollToTopKey) return;
+    seenTopKey.current = scrollToTopKey;
+    scroller.current?.scrollTo({ y: 0, animated: true });
+  }, [scrollToTopKey, scroller]);
 
   if (scroll === "own") {
     // **No gutter and no bottom clearance here.** Both belong to the scroller
@@ -282,6 +304,9 @@ export function GroundPanel({
   const deviceBottom = clearBottom ? insets.bottom : 0;
   const wash = topWash === undefined ? null : { backgroundColor: topWash };
   const clearance = {
+    // The room a collapsing header overlays, scrolling away as it collapses
+    // (`atoms/collapse-inset.tsx`). Added to the design padding, not instead.
+    paddingTop: space.x2 + collapseInset,
     paddingLeft: gutter + insets.left,
     paddingRight: gutter + insets.right,
     // `room`: what the keyboard covers of *this* scroller, so the last field

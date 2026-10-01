@@ -28,6 +28,10 @@ tools/e2e/.logs/
 .superpowers/
 
 # Expo / React Native
+# Continuous native generation: EAS runs `expo prebuild` on every build, so the
+# native projects are output, never source — `app.json` and its plugins are.
+apps/mobile/ios/
+apps/mobile/android/
 .expo/
 .expo-shared/
 *.jks
@@ -142,3 +146,8 @@ CONTEXT.md
 AGENTS.md
 CLAUDE.md
 # END ai-rulez
+
+# Design exports (the icon generator's full 38-PNG set). What the app uses is
+# committed under `apps/mobile/assets/icon/`; this is the raw export, and EAS
+# uploads anything git does not ignore.
+/output/

@@ -22,7 +22,6 @@ moment of entry rather than in a report months later.
 |---|---|---|
 | Any tab | `+` long-press → Transfer | The tab you came from |
 | S16 | An account row → *Transfer from here* | S16, source prefilled |
-| S09 | Editing an existing transfer | S09 |
 
 **Quick add's kind menu offers Expense and Income only** (S05 §9.1). A transfer
 is two accounts, two amounts and a live rate; the one entry point that offers
@@ -40,10 +39,12 @@ exists rather than in the middle of one.
 │                                                 │
 │  ┌─────────────────────────────────────────────┐│
 │  │ LEAVES                                   ⇅  ││  ← swap, one control
-│  │ 500,00  zł                                  ││  ← you type this
 │  │ ┌─────────────────────────────────────────┐ ││
-│  │ │ From                          12 480,20 │ ││  ← the leg, and what it holds
+│  │ │ From                          12 480,20 │ ││  ← the leg first, and what it holds
 │  │ │ Bank A · PLN                            │ ││
+│  │ └─────────────────────────────────────────┘ ││
+│  │ 500,00  zł                                  ││  ← you type this, in the From account's currency
+│  │ ┌─────────────────────────────────────────┐ ││
 │  │ │ To                             1 240,00 │ ││
 │  │ │ Bank B · EUR                            │ ││
 │  │ │ More details                          › │ ││  ← fee · date · note, folded
@@ -67,7 +68,7 @@ exists rather than in the middle of one.
 └─────────────────────────────────────────────────┘
 ```
 
-**Two cards, one per leg.** *Leaves* holds the amount you type and the two
+**Two cards, one per leg.** *Leaves* holds the *From* row first, the amount you type under it (a figure waits for its currency), and the two
 accounts as rows — each with what it holds, because which account has the
 money is half of why you are here. *Arrives* holds the destination amount, the
 rate used and what it costs, and is drawn only across currencies.

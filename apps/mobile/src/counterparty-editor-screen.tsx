@@ -77,11 +77,15 @@ export default function CounterpartyEditor() {
     returnTo,
     amount,
     accountId,
+    categoryId,
+    type,
   } = useLocalSearchParams<{
     id?: string;
     returnTo?: string;
     amount?: string;
     accountId?: string;
+    categoryId?: string;
+    type?: string;
   }>();
   const editMode = rawId !== undefined;
   const counterparty = editMode
@@ -182,13 +186,21 @@ export default function CounterpartyEditor() {
       if (returnTo === "quick-add") {
         router.dismissTo({
           pathname: "/quick-add",
-          params: { amount: amount ?? "", ...(accountId ? { accountId } : {}), counterpartyId: id },
+          params: {
+            amount: amount ?? "",
+            ...(accountId ? { accountId } : {}),
+            // The draft's category and kind, so a debt category (whose Who? sent
+            // the person here) is still the category on the way back.
+            ...(categoryId ? { categoryId } : {}),
+            ...(type ? { type } : {}),
+            counterpartyId: id,
+          },
         });
         return;
       }
       router.back();
     },
-    [accountId, amount, returnTo],
+    [accountId, amount, categoryId, returnTo, type],
   );
 
   const handleSave = useCallback(

@@ -441,6 +441,15 @@ describe("every objects hook creates something the chain would not otherwise hav
       "transactions_lines_sum_matches_update",
       "transactions_amount_positive_insert",
       "transactions_amount_positive_update",
+      "accounts_delete_guard",
+      "accounts_amount_ceiling_insert",
+      "accounts_amount_ceiling_update",
+      "transactions_amount_ceiling_insert",
+      "transactions_amount_ceiling_update",
+      "transaction_lines_amount_ceiling_insert",
+      "transaction_lines_amount_ceiling_update",
+      "recurring_transactions_amount_ceiling_insert",
+      "recurring_transactions_amount_ceiling_update",
     ]) {
       expect(names.has(trigger), `${trigger} survived the chain`).toBe(true);
     }

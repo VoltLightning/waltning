@@ -41,6 +41,7 @@ import {
 } from "../money.ts";
 import {
   zAccountingDate,
+  zAmount,
   zCurrencyCode,
   zFee,
   zId,
@@ -79,6 +80,40 @@ export const ACCOUNT_KIND = [
   "deposit",
   "other",
 ] as const;
+
+/**
+ * §6.6 — kinds an existing account may still hold but a new one may not.
+ * Money a person owes you is a debt on that person, so `loan_receivable` is
+ * history: converted accounts keep it, archived. `accounts_kind_not_retired`
+ * (WA021) is the same rule in Postgres.
+ */
+export const RETIRED_ACCOUNT_KIND: ReadonlySet<(typeof ACCOUNT_KIND)[number]> = new Set([
+  "loan_receivable",
+]);
+
+/**
+ * The kinds that can be **overdrawn**: bank, cash and deposit accounts, where
+ * a balance below zero is an account gone under nothing and no lender stands
+ * behind it. Every other kind below zero keeps the label it always had — *owed*
+ * — whether that is a card or a loan (a real debt) or a clearing, investment
+ * or other account (`computations.md` §3.1; S04, S16).
+ */
+export const OVERDRAWABLE_ACCOUNT_KIND: ReadonlySet<(typeof ACCOUNT_KIND)[number]> = new Set([
+  "bank",
+  "cash",
+  "deposit",
+]);
+
+/** A bank, cash or deposit account whose balance is below zero. */
+export function isOverdrawn(kind: (typeof ACCOUNT_KIND)[number], balance: Money): boolean {
+  return OVERDRAWABLE_ACCOUNT_KIND.has(kind) && dec(balance).lt(0);
+}
+
+/** The kinds a new account can be given — `ACCOUNT_KIND` less the retired ones. */
+export const NEW_ACCOUNT_KIND = ACCOUNT_KIND.filter((kind) => !RETIRED_ACCOUNT_KIND.has(kind));
+
+const RETIRED_KIND_MESSAGE =
+  "loan_receivable is retired: record money a person owes you as a debt on them (§6.6)";
 
 /** §6.7 — a shared account is ordinary; it just belongs to a different total. */
 const OWNERSHIP = ["own", "shared"] as const;
@@ -141,7 +176,10 @@ export const createAccountInput = z
      * `ZTYPE = 0` on all 68 accounts (§6.3), so `other` is the honest value for
      * an account nobody has classified — not a hole to be filled later.
      */
-    kind: z.enum(ACCOUNT_KIND).default("other"),
+    kind: z
+      .enum(ACCOUNT_KIND)
+      .default("other")
+      .refine((kind) => !RETIRED_ACCOUNT_KIND.has(kind), { message: RETIRED_KIND_MESSAGE }),
 
     /**
      * Required, and the reason is a trigger: §6.5 guarantees
@@ -165,7 +203,7 @@ export const createAccountInput = z
      * scale, from the same field. `.prefault` feeds the default *through*
      * `zMoney`, so the absent case and the present case are the same value.
      */
-    openingBalance: zMoney.prefault("0"),
+    openingBalance: zAmount.prefault("0"),
 
     /** §8.0 — the migration carries balances and their as-of date, not history. */
     openingDate: zAccountingDate.optional(),
@@ -334,7 +372,7 @@ export const createTransactionInput = z
      * own sign, because reconciling an account *downward* is the ordinary use.
      * Refused below rather than here, so the message can name the type.
      */
-    amountOriginal: zMoney,
+    amountOriginal: zAmount,
 
     /** §7.1 — this *is* the account's currency; the §6.5 trigger enforces it. */
     currency: zCurrencyCode,
@@ -365,7 +403,7 @@ export const createTransactionInput = z
 
     /* The destination leg — a transfer, and only a transfer (§7.5). */
     toAccountId: zId<"accounts">().optional(),
-    toAmount: zMoney.optional(),
+    toAmount: zAmount.optional(),
     toCurrency: zCurrencyCode.optional(),
 
     /**
@@ -609,12 +647,17 @@ export type CreateTransactionInput = z.output<typeof createTransactionInput>;
 const accountPatch = z
   .object({
     name: z.string().trim().min(1).max(120).optional(),
-    kind: z.enum(ACCOUNT_KIND).optional(),
+    kind: z
+      .enum(ACCOUNT_KIND)
+      .optional()
+      .refine((kind) => kind === undefined || !RETIRED_ACCOUNT_KIND.has(kind), {
+        message: RETIRED_KIND_MESSAGE,
+      }),
     groupId: zId<"accountGroups">().nullable().optional(),
     ownership: z.enum(OWNERSHIP).optional(),
     memo: z.string().trim().max(2000).optional(),
     isBusiness: z.boolean().optional(),
-    openingBalance: zMoney.optional(),
+    openingBalance: zAmount.optional(),
     openingDate: zAccountingDate.nullable().optional(),
     /**
      * A colour of the account's own, or `null` for its kind's (`02-tokens`
@@ -637,12 +680,31 @@ export const updateAccountInput = z
   });
 export type UpdateAccountInput = z.output<typeof updateAccountInput>;
 
-/** `archive_account` — structural, `operations.md` *Accounts*. Never deletes (§6.9). */
+/** `archive_account` — structural, `operations.md` *Accounts*. Flips a flag and deletes nothing: an account anything has referenced is archived, never removed (§6.9). */
 export const archiveAccountInput = z.object({
   id: zId<"accounts">(),
   version: z.number().int().positive(),
 });
 export type ArchiveAccountInput = z.output<typeof archiveAccountInput>;
+
+/**
+ * `delete_account` — structural, `operations.md` *Accounts*. Removes an account
+ * **no row has ever referenced** (§6.9): no transaction on either leg —
+ * soft-deleted ones included, they are still rows — no recurring rule, no
+ * import batch, and no opening balance. Anything referenced is archived, never
+ * deleted.
+ *
+ * `version` is the compare-and-swap token, same as `archive_account`: a delete
+ * decided on a stale read of the account is refused rather than applied to a
+ * row that has since changed. That the account is *empty* is not an input — it
+ * is a fact the executor reads and the database enforces
+ * (`accounts_delete_guard`, WA023).
+ */
+export const deleteAccountInput = z.object({
+  id: zId<"accounts">(),
+  version: z.number().int().positive(),
+});
+export type DeleteAccountInput = z.output<typeof deleteAccountInput>;
 
 /**
  * `set_account_visibility` — S16 §3's two pills. What the register shows, and
@@ -871,13 +933,13 @@ const transactionPatch = z
      */
     timeOfDay: zTimeOfDay.nullable().optional(),
     accountId: zId<"accounts">().optional(),
-    amountOriginal: zMoney.optional(),
+    amountOriginal: zAmount.optional(),
     categoryId: zId<"categories">().nullable().optional(),
     counterpartyId: zId<"counterparties">().nullable().optional(),
     obligationCounterpartyId: zId<"counterparties">().nullable().optional(),
     obligationRole: z.enum(OBLIGATION_ROLE).nullable().optional(),
     toAccountId: zId<"accounts">().nullable().optional(),
-    toAmount: zMoney.nullable().optional(),
+    toAmount: zAmount.nullable().optional(),
     toCurrency: zCurrencyCode.nullable().optional(),
     fxRate: zPivotPerUnit.optional(),
     toFxRate: zPivotPerUnit.nullable().optional(),
@@ -967,7 +1029,7 @@ export type DeleteTransactionInput = z.output<typeof deleteTransactionInput>;
 const transactionLine = z.object({
   id: zId<"transactionLines">(),
   description: z.string().trim().min(1).max(200),
-  amount: zMoney,
+  amount: zAmount,
   quantity: z
     .string()
     .regex(/^\d+(\.\d{1,3})?$/)
@@ -998,7 +1060,7 @@ export const setTransactionLinesInput = z.object({
   transactionId: zId<"transactions">(),
   version: z.number().int().positive(),
   lines: z.array(transactionLine).max(200),
-  amountOriginal: zMoney.optional(),
+  amountOriginal: zAmount.optional(),
 });
 export type SetTransactionLinesInput = z.output<typeof setTransactionLinesInput>;
 
@@ -1015,6 +1077,14 @@ export const supersedeTransactionInput = z
     supersedesId: zId<"transactions">(),
     supersedesVersion: z.number().int().positive(),
     replacement: createTransactionInput,
+    /**
+     * The id of a second row, for a replacement of a payment that was split
+     * against an existing debt (§6.6) and still crosses the end of it: the same
+     * boundary `settle_debt` writes two rows for. Minted by the caller whether
+     * or not it turns out to be needed; without it a crossing replacement is
+     * written whole and ordinary.
+     */
+    spillId: zId<"transactions">().optional(),
   })
   /**
    * The replacement is a new row. Allowing `replacement.id === supersedesId`
@@ -1450,17 +1520,36 @@ export const settleDebtInput = z
     accountId: zId<"accounts">(),
     date: zAccountingDate,
     /** What actually changed hands. Positive — direction is derived, not entered. */
-    amount: zMoney,
+    amount: zAmount,
     currency: zCurrencyCode,
     /** They owe you (`income`) or you owe them (`expense`) — see above. */
     type: z.enum(["income", "expense"]),
     /** Which balance this discharges, and how much of it — §6.6's settlement table. */
     discharges: z.object({
       currency: zCurrencyCode,
-      amount: zMoney,
+      amount: zAmount,
     }),
     note: z.string().trim().max(2000).default(""),
     categoryId: zId<"categories">().optional(),
+    /**
+     * **Re-filing an existing row as a repayment** (S09, §6.6): the settlement
+     * *replaces* this row in the same write — one operation, one outbox entry —
+     * instead of a settlement beside a delete that could fail or be interrupted
+     * between the two. The original is soft-deleted, its identity fields (entered
+     * name, scope, time, brand, source, external id) and its tags carry across,
+     * and it is excluded from the balance the settlement is checked against, so
+     * a row that already counts toward the debt is not counted twice. Both or
+     * neither; refused when the original has split lines.
+     */
+    supersedesId: zId<"transactions">().optional(),
+    supersedesVersion: z.number().int().positive().optional(),
+    /**
+     * **The id of the second row, for a settlement that crosses the end of an
+     * existing debt** (§6.6): part of it pays down the opening debt, the rest is
+     * an ordinary repayment, and the write is those two rows. Minted by the
+     * caller like every id, whether or not this settlement turns out to cross.
+     */
+    spillId: zId<"transactions">().optional(),
     // Not here, on purpose:
     //   `residual`  — derived from the live balance, never supplied (H9, above).
     //   `rate`      — §7.5: `discharges.amount ÷ amount` is derived by the
@@ -1490,8 +1579,83 @@ export const settleDebtInput = z
         message: "the discharged amount is positive",
       });
     }
+    if ((v.supersedesId === undefined) !== (v.supersedesVersion === undefined)) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["supersedesId"],
+        message: "supersedesId and supersedesVersion travel together",
+      });
+    }
+    if (v.supersedesId !== undefined && v.supersedesId === v.id) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["supersedesId"],
+        message: "the settlement is a new row; it cannot replace itself",
+      });
+    }
   });
 export type SettleDebtInput = z.output<typeof settleDebtInput>;
+
+/**
+ * `record_opening_debt` — §6.6's debt that predates the ledger, entered on the
+ * person's page (S13): *they owe you* or *you owe them*, an amount, a currency
+ * and the day it dates from.
+ *
+ * It sets the person's balance in that currency the way an opening balance
+ * sets an account's, and is **never income and never spending** — it is not a
+ * transaction, so no category, no account and no period figure can see it.
+ * `settle_debt` then settles against it like any other debt.
+ *
+ * **One per person per currency, and recording again replaces it.** A
+ * correction is the same write with the right figure; a second row would be
+ * a debt entered twice. `id` is the row's own, used when there is none yet.
+ *
+ * **`amount` is positive and the direction carries the sign** — the same rule
+ * `settle_debt` takes for what changed hands: a negative debt is a debt the
+ * other way, and a figure that could say both would let a typo flip it.
+ */
+export const recordOpeningDebtInput = z
+  .object({
+    id: zId<"openingDebts">(),
+    counterpartyId: zId<"counterparties">(),
+    direction: z.enum(["theyOwe", "youOwe"]),
+    amount: zAmount,
+    currency: zCurrencyCode,
+    /** The day the debt dates from — never later than `today`: the feature is for debts that predate the ledger. */
+    date: zAccountingDate,
+    /** The device's own day, as `set_manual_rate`'s is: nothing below the client has a zone. */
+    today: zAccountingDate,
+  })
+  .superRefine((v, ctx) => {
+    // As `settleDebtInput`: a malformed figure already carries `zMoney`'s own
+    // issue and `dec()` would throw on it, so positivity is skipped for it.
+    if (safeDec(v.amount)?.lte(0) === true) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["amount"],
+        message: "an existing debt is a positive amount — the direction says who owes whom",
+      });
+    }
+    // A bare date compares as text (§7.0a) — no `Date`, no zone.
+    if (v.date > v.today) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["date"],
+        message: "an existing debt dates from today or earlier — it predates the ledger",
+      });
+    }
+  });
+export type RecordOpeningDebtInput = z.output<typeof recordOpeningDebtInput>;
+
+/**
+ * `delete_opening_debt` — takes an existing debt out of the ledger **and every
+ * repayment made against it**, in one write (§6.6). The repayments are the
+ * settlements that drew on it (`settles_opening_debt_id`); they are soft-deleted
+ * with it, so their accounts' balances change. The screen says exactly which
+ * before asking. Refused when the row is already gone.
+ */
+export const deleteOpeningDebtInput = z.object({ id: zId<"openingDebts">() });
+export type DeleteOpeningDebtInput = z.output<typeof deleteOpeningDebtInput>;
 
 /**
  * `allocate_shares` — J08's whole write, and it had none. The journey's path
@@ -1541,7 +1705,7 @@ export const allocateSharesInput = z
           /** `null` is your own share — a category, no debt (J08 §4). */
           counterpartyId: zId<"counterparties">().nullable(),
           /** Positive. Direction is what the row is, never what the figure says. */
-          amount: zMoney,
+          amount: zAmount,
         }),
       )
       .min(1),

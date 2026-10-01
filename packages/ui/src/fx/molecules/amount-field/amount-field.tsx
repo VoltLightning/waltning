@@ -23,9 +23,10 @@
  * the thing `parseAmount`'s own comment exists to prevent.
  */
 
+import * as money from "@waltning/core/money";
 import { useCallback, useState } from "react";
 import { Text, View } from "react-native";
-import { decimalMark } from "../../../i18n/locales.ts";
+import { decimalMark, type Locale } from "../../../i18n/locales.ts";
 import { useLocale, useT } from "../../../i18n/provider";
 import { PressableScaled } from "../../../primitives/atoms/pressable-scaled/pressable-scaled";
 import { SheetAwareTextInput } from "../../../primitives/sheet-input";
@@ -33,7 +34,7 @@ import { focusBorder } from "../../../theme/focus.ts";
 import { inputStep, text, textCap } from "../../../theme/fonts.ts";
 import { useInputHeight } from "../../../theme/input-height.ts";
 import { makeStyles } from "../../../theme/styles.ts";
-import { radius, space, tabularNums } from "../../../tokens.ts";
+import { radius, space, tabularNums, touchTarget } from "../../../tokens.ts";
 import { CurrencyMark } from "../../currency-marks";
 
 export type AmountFieldFieldProps = {
@@ -49,7 +50,12 @@ export type AmountFieldFieldProps = {
    */
   currency?: string;
   /** The decimal string, or `null` when what is typed is not yet an amount. */
-  onChange: (value: string | null) => void;
+  onChange?: (value: string | null) => void;
+  /**
+   * The text exactly as typed — for a caller that keeps the draft itself
+   * (`"5,"` is mid-entry, and `""` is "no amount yet").
+   */
+  onChangeText?: (typed: string) => void;
   initial?: string;
   error?: string | undefined;
 };
@@ -86,6 +92,30 @@ export type AmountFieldHeroProps = {
 export type AmountFieldProps = AmountFieldFieldProps | AmountFieldHeroProps;
 
 /**
+ * The most integer digits an amount holds — nine, because no amount a row holds
+ * reaches a billion (`money.ts`'s `AMOUNT_CEILING_EXCLUSIVE`; `999 999 999.99`
+ * at two decimals). One constant for every input: the field, the keypad's
+ * `applyKey`, the composers' `maxLength`.
+ */
+export const AMOUNT_INTEGER_DIGITS = 9;
+
+/**
+ * Whether what was typed is a number whose whole part is past the ceiling —
+ * the one reason `parseAmount` refuses that a person can be told about. A
+ * string that is not a number at all is a different refusal and answers
+ * `false` here, so a field says *too large* only about something that would
+ * have been an amount.
+ *
+ * Counted by *significance*, not by character: `0000000001` is one digit.
+ */
+export function exceedsAmountCeiling(input: string): boolean {
+  const normalized = input.replace(/\s| /g, "").replace(",", ".");
+  if (!/^-?\d*\.?\d*$/.test(normalized) || !/\d/.test(normalized)) return false;
+  const integerPart = normalized.replace("-", "").split(".")[0] ?? "";
+  return integerPart.replace(/^0+(?=\d)/, "").length > AMOUNT_INTEGER_DIGITS;
+}
+
+/**
  * What was typed → a decimal string, or `null`.
  *
  * Accepts either separator because both are typed in practice: a Polish
@@ -120,21 +150,34 @@ export function parseAmount(input: string): string | null {
   // separator is still mid-entry, the same "not yet a number" state as "."
   // alone, and belongs on the same side of the refusal.
   if (normalized.endsWith(".")) return null;
-  // M1 — `zMoney`'s own refine (`dec(v).abs().lt("1000000000000")`): at most
-  // twelve integer digits. Past that the schema would refuse the write
-  // anyway; catching it here makes Save refuse a figure the account never
-  // held, rather than attempt it.
+  // The amount ceiling (`zAmount`): at most nine integer digits. Past that the
+  // schema would refuse the write anyway; catching it here makes Save refuse a
+  // figure no row may hold, rather than attempt it — and `exceedsAmountCeiling`
+  // is how a field says why.
   //
-  // L — counted by *significance*, not by character: `zMoney`'s refine
-  // compares the numeric value, so "0000000000001" (thirteen characters, one
-  // significant digit) is nowhere near the cap it describes — a bare
-  // `.length` would have refused it anyway, disabling Save on a figure the
-  // schema was always going to accept.
-  const integerPart = normalized.replace("-", "").split(".")[0] ?? "";
-  const significantIntegerDigits = integerPart.replace(/^0+(?=\d)/, "").length;
-  if (significantIntegerDigits > 12) return null;
+  // Counted by *significance*, not by character: the ceiling compares the
+  // numeric value, so "0000000001" (ten characters, one significant digit) is
+  // nowhere near it — a bare `.length` would have refused it anyway, disabling
+  // Save on a figure the schema was always going to accept.
+  if (exceedsAmountCeiling(normalized)) return null;
 
   return normalized;
+}
+
+/**
+ * A stored amount → what an input is seeded with: the account's display
+ * decimals and the reader's decimal mark, **ungrouped** (a group separator
+ * typed into a field is a second separator, which `parseAmount` refuses).
+ *
+ * The inverse of `parseAmount` for a figure that has not been touched: `400.00000000`
+ * is `numeric(20,8)` storage, never something to put in front of a person.
+ * `""` stays `""` — no amount yet is not zero.
+ */
+export function formatAmountDraft(value: string, decimals: number, locale: Locale): string {
+  if (value === "") return "";
+  // `forDisplay` is the one rounding (half-up, and `-0.001` is unsigned `0`);
+  // the group separator is what a typed field cannot hold.
+  return money.forDisplay(money.toMoney(value), decimals, decimalMark(locale)).replace(/\s/g, "");
 }
 
 export function AmountField(props: AmountFieldProps) {
@@ -213,20 +256,27 @@ function EditableAmountField({
   label,
   currency,
   onChange,
+  onChangeText,
   initial = "",
   error,
 }: AmountFieldFieldProps) {
   const [text, setText] = useState(initial);
   const [focused, setFocused] = useState(false);
+  const t = useT();
+
+  // A caller's own refusal wins; otherwise a figure past the ceiling says so
+  // under the field — *Maximum 999 999 999,99*, in the language's own notation.
+  const shownError = error ?? (exceedsAmountCeiling(text) ? t("common.amountCeiling") : undefined);
 
   const styles = useStyles();
   const inputHeight = useInputHeight("displayThree");
   const handleTextChange = useCallback(
     (next: string) => {
       setText(next);
-      onChange(parseAmount(next));
+      onChangeText?.(next);
+      onChange?.(parseAmount(next));
     },
-    [onChange],
+    [onChange, onChangeText],
   );
   const handleFocus = useCallback(() => setFocused(true), []);
   const handleBlur = useCallback(() => setFocused(false), []);
@@ -237,12 +287,12 @@ function EditableAmountField({
       <View
         style={[
           styles.field,
-          error ? styles.invalid : null,
+          shownError ? styles.invalid : null,
           // §2.6: the ring goes on the field — `[input][affix]` — not the
           // `TextInput` alone, the same rule `search-field.tsx`'s fix states.
           // An errored field's ring is the danger colour instead of the
           // ordinary one.
-          focused ? (error ? styles.focusedError : styles.focused) : null,
+          focused ? (shownError ? styles.focusedError : styles.focused) : null,
         ]}
       >
         <SheetAwareTextInput
@@ -262,7 +312,7 @@ function EditableAmountField({
           </Text>
         )}
       </View>
-      {error ? <Text style={styles.error}>{error}</Text> : null}
+      {shownError ? <Text style={styles.error}>{shownError}</Text> : null}
     </View>
   );
 }
@@ -293,6 +343,15 @@ const useStyles = makeStyles((theme) => ({
   },
   input: {
     flex: 1,
+    // `inputHeight` is one line of the display step — about half the field. An
+    // Android `EditText` keeps its own vertical padding inside a box that short
+    // and clips the glyphs out of view while typing still works. The floor is
+    // the field's inside (its touch target less the border), and the padding
+    // and font padding are the platform's to give up, not the text's.
+    minHeight: touchTarget.min - 2,
+    paddingVertical: 0,
+    textAlignVertical: "center",
+    includeFontPadding: false,
     color: theme.text,
     ...inputStep(text.display("displayThree")),
     // Right-aligned and tabular so a column of entered amounts lines up with

@@ -32,15 +32,15 @@
  */
 
 import type { AccountingDate } from "@waltning/core/date";
-import type { Id } from "@waltning/core/id";
+import { id as brand, type Id } from "@waltning/core/id";
 import type { CurrencyCode, Money } from "@waltning/core/money";
 import * as money from "@waltning/core/money";
 import type { CounterpartyKind } from "@waltning/schema/enums";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, isNull, ne } from "drizzle-orm";
 import type { ReplicaDb } from "../open.ts";
 import { ledgerSchema, type ReplicaTx } from "../schema-map.ts";
 
-const { counterparties, currencies, transactions } = ledgerSchema;
+const { counterparties, currencies, openingDebts, transactions } = ledgerSchema;
 
 /**
  * `amountOriginal`/`toAmount`, coalesced with `debt_amount` when
@@ -68,6 +68,34 @@ function coalesceDebtAmount<T extends { amountOriginal: Money; toAmount?: Money 
   };
 }
 
+/**
+ * **An opening debt folds in as the transaction it stands in for.** §6.6: a
+ * debt that predates the ledger is one row in `opening_debts`, not a
+ * transaction — and the balance fold has exactly two kinds of row, a lend
+ * (`expense`: `−signed` is positive, they owe you) and a borrow (`income`:
+ * negative, you owe them). `theyOwe` is the first and `youOwe` the second, so
+ * the fold's own sign rule applies to it unchanged and nothing here restates
+ * §7's arithmetic. The same mapping, in SQL, is `counterparty-balance.ts`'s
+ * opening leg on the server.
+ */
+function openingDebtLeg(row: {
+  id: string;
+  date: AccountingDate;
+  direction: "theyOwe" | "youOwe";
+  amount: Money;
+  currency: CurrencyCode;
+}): DebtLegRow {
+  return {
+    id: row.id,
+    date: row.date,
+    type: row.direction === "theyOwe" ? "expense" : "income",
+    amountOriginal: row.amount,
+    toAmount: null,
+    side: "from",
+    currency: row.currency,
+  };
+}
+
 export type LocalCounterpartyBalance = {
   counterpartyId: Id<"counterparties">;
   name: string;
@@ -82,7 +110,8 @@ export type LocalCounterpartyBalance = {
 };
 
 type DebtLegRow = {
-  id: Id<"transactions">;
+  /** A transaction's id, or an opening debt's — ageing only needs them distinct. */
+  id: string;
   date: AccountingDate;
   type: money.TxnType;
   amountOriginal: Money;
@@ -94,6 +123,12 @@ type DebtLegRow = {
 export function readCounterpartyBalances<TRun, TSchema extends typeof ledgerSchema>(
   db: ReplicaDb<TRun, TSchema>,
   today: AccountingDate,
+  /**
+   * A row to leave out of the fold: the one a re-filing is about to replace
+   * (`settle_debt`'s `supersedesId`). Its own contribution is not part of the
+   * debt the replacement settles against.
+   */
+  options: { excluding?: string } = {},
 ): readonly LocalCounterpartyBalance[] {
   const rows = db
     .select({
@@ -113,7 +148,15 @@ export function readCounterpartyBalances<TRun, TSchema extends typeof ledgerSche
     })
     .from(transactions)
     .innerJoin(counterparties, eq(transactions.obligationCounterpartyId, counterparties.id))
-    .where(and(isNull(transactions.deletedAt), eq(transactions.obligationRole, "debt")))
+    .where(
+      and(
+        isNull(transactions.deletedAt),
+        eq(transactions.obligationRole, "debt"),
+        options.excluding === undefined
+          ? undefined
+          : ne(transactions.id, brand<"transactions">(options.excluding)),
+      ),
+    )
     // M3 — deterministic input order. `fifoOldestOpen` re-sorts by
     // `(date, id)` internally so this never changes ageing, but the fold
     // below builds `byCounterparty` (and each bucket's own `balances`) by
@@ -162,6 +205,39 @@ export function readCounterpartyBalances<TRun, TSchema extends typeof ledgerSche
       side,
       currency,
     });
+    byCounterparty.set(row.counterpartyId, bucket);
+  }
+
+  // §6.6 — the debts that predate the ledger. `options.excluding` names a
+  // transaction a re-filing replaces, and an opening debt is never one, so
+  // nothing here is excluded.
+  const openingRows = db
+    .select({
+      counterpartyId: openingDebts.counterpartyId,
+      name: counterparties.name,
+      kind: counterparties.kind,
+      settlementCurrency: counterparties.settlementCurrency,
+      archived: counterparties.archived,
+      id: openingDebts.id,
+      date: openingDebts.date,
+      direction: openingDebts.direction,
+      amount: openingDebts.amount,
+      currency: openingDebts.currency,
+    })
+    .from(openingDebts)
+    .innerJoin(counterparties, eq(openingDebts.counterpartyId, counterparties.id))
+    .where(isNull(openingDebts.deletedAt))
+    .orderBy(openingDebts.counterpartyId, openingDebts.currency)
+    .all();
+  for (const row of openingRows) {
+    const bucket = byCounterparty.get(row.counterpartyId) ?? {
+      name: row.name,
+      kind: row.kind,
+      settlementCurrency: row.settlementCurrency,
+      archived: row.archived,
+      rows: [],
+    };
+    bucket.rows.push(openingDebtLeg(row));
     byCounterparty.set(row.counterpartyId, bucket);
   }
 
@@ -246,8 +322,21 @@ export function balancesForCounterparty(
     )
     .all();
 
-  return money.counterpartyBalance(
-    rows.map((row) => {
+  const opening = tx
+    .select({
+      id: openingDebts.id,
+      date: openingDebts.date,
+      direction: openingDebts.direction,
+      amount: openingDebts.amount,
+      currency: openingDebts.currency,
+    })
+    .from(openingDebts)
+    .where(and(eq(openingDebts.counterpartyId, counterpartyId), isNull(openingDebts.deletedAt)))
+    .all();
+
+  return money.counterpartyBalance([
+    ...opening.map(openingDebtLeg),
+    ...rows.map((row) => {
       const { amountOriginal, toAmount } = coalesceDebtAmount(
         row,
         row.debtCurrency,
@@ -261,5 +350,5 @@ export function balancesForCounterparty(
         currency: row.debtCurrency ?? row.currency,
       };
     }),
-  );
+  ]);
 }

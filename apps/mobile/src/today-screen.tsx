@@ -1,6 +1,10 @@
 import { useHoldings } from "@waltning/client/accounts/use-holdings";
+import { openDebtLines } from "@waltning/client/counterparties/open-debts";
+import { useDisplayBasis } from "@waltning/client/currencies/use-display-basis";
+import { useDevicePreference } from "@waltning/client/device/use-device-preference";
 import { deviceRuntime } from "@waltning/client/ledger/device-runtime";
 import { isPagerPageKey } from "@waltning/client/ledger/pager-date";
+import { useScrollToTopRequest } from "@waltning/client/ledger/tab-back/use-scroll-to-top-request";
 import { useDayFlows } from "@waltning/client/ledger/use-day-flows";
 import { useDayRows } from "@waltning/client/ledger/use-day-rows";
 import { useLedgerController } from "@waltning/client/ledger/use-ledger-controller";
@@ -32,18 +36,22 @@ import {
 } from "@waltning/core/date";
 import * as money from "@waltning/core/money";
 import { HoldingsCard, type HoldingsLens } from "@waltning/ui/accounts/holdings-card";
+import { OpenDebtsCard } from "@waltning/ui/counterparties/open-debts-card";
 import { SpendRows } from "@waltning/ui/dashboard/spend-rows";
 import { Amount } from "@waltning/ui/fx/amount";
 import {
   dayLabel,
   monthLabel,
   monthShort,
+  monthTitle,
   weekdayInitial,
   weekStart,
 } from "@waltning/ui/i18n/locales";
 import { useLocale, useT } from "@waltning/ui/i18n/provider";
+import { useCategoryLabel } from "@waltning/ui/i18n/use-category-label";
 import { PressableScaled } from "@waltning/ui/primitives/pressable-scaled";
 import { Card, GroundPanel } from "@waltning/ui/shell/card";
+import { floatSide } from "@waltning/ui/shell/float-geometry";
 import { GatewayGrid } from "@waltning/ui/shell/molecules/gateway-grid/gateway-grid";
 import { MonthSummary } from "@waltning/ui/shell/month-summary";
 import { PagerFrame } from "@waltning/ui/shell/organisms/pager-frame/pager-frame";
@@ -71,11 +79,12 @@ import { MonthList } from "@waltning/ui/transactions/organisms/month-list/month-
 import { YearChart, type YearColumn } from "@waltning/ui/transactions/year-chart";
 import { router, useLocalSearchParams } from "expo-router";
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
-import { Text as RNText, View } from "react-native";
-import { useAnimatedScrollHandler, useSharedValue } from "react-native-reanimated";
+import { Text as RNText, useWindowDimensions, View } from "react-native";
+import { useSharedValue } from "react-native-reanimated";
 import { HomeListPage } from "./home-list-page";
 import { openUnsettled } from "./open-unsettled.ts";
-import { dayTickHaptic } from "./platform";
+import { dayTickHaptic, displayCurrency, floatPosition } from "./platform";
+import { useHeaderOffset } from "./use-header-offset.ts";
 import { usePagerRoute } from "./use-pager-route.ts";
 
 function handleCreateAccount() {
@@ -197,6 +206,10 @@ export default function Today() {
     [t],
   );
   const snapshot = usePhoneLedger(ledger);
+  // The pill rests opposite the add button, which is draggable to either side.
+  const addButton = useDevicePreference(floatPosition);
+  const pillSide =
+    floatSide(addButton.value, useWindowDimensions().width) === "left" ? "right" : "left";
   const { message, nonce, account } = useLocalSearchParams<{
     message?: string;
     nonce?: string;
@@ -445,6 +458,8 @@ export default function Today() {
   const listAnchor = useDeferredValue(heldAnchor.current);
 
   const scrollY = useSharedValue(0);
+  // A re-tap on the Start tab (`use-tab-bar-items.tsx`) scrolls the overview up.
+  const scrollToTopKey = useScrollToTopRequest();
   /**
    * Whether List is the page on screen — for the list's own settle worklet,
    * and for nothing React renders. A boolean prop here re-rendered the List
@@ -458,15 +473,6 @@ export default function Today() {
   // rebuilds the handler on every render, and `pages` is built from it — so a
   // stable handler is what lets the four page elements stay the same objects
   // and React skip the pages it did not change.
-  const handleScroll = useAnimatedScrollHandler(
-    {
-      onScroll: (event) => {
-        scrollY.value = event.contentOffset.y;
-      },
-    },
-    [scrollY],
-  );
-
   const barLabels = useMemo(
     () => ({
       previous: t(pager.stepUnit === "year" ? "shell.previousYear" : "shell.previousMonth"),
@@ -526,6 +532,15 @@ export default function Today() {
   // The period's day rows — the same read Months folds, so the card and that
   // month's row add up the same rows and cannot disagree.
   const periodFlows = useDayFlows(ledger, period, snapshot);
+  // §7.0 — what every figure below is stated in: the display currency, each
+  // row at its own date's rate; the pivot where that cannot be stated.
+  const basis = useDisplayBasis(
+    ledger,
+    snapshot.currencies,
+    displayCurrency,
+    today,
+    snapshot.revision,
+  );
 
   const leadNetWorth = snapshot.netWorth[0];
   /**
@@ -541,8 +556,12 @@ export default function Today() {
    * one-currency ledger, which is why it stood.
    */
   const pivotCurrency = useMemo(
-    () => snapshot.currencies.find((currency) => currency.isPivot),
-    [snapshot.currencies],
+    () => (basis === null ? undefined : { code: basis.currency, decimals: basis.decimals }),
+    [basis],
+  );
+  const shownPeriodFlows = useMemo(
+    () => (basis === null ? periodFlows : basis.rebaseFlows(periodFlows)),
+    [basis, periodFlows],
   );
   /**
    * The month card's figures: every currency, in the pivot, each transaction
@@ -551,8 +570,11 @@ export default function Today() {
    */
   const periodFigures = useMemo(
     () =>
-      periodInPivot(periodFlows, pivotCurrency?.code ?? leadNetWorth?.currency ?? LEAD_FALLBACK),
-    [periodFlows, pivotCurrency, leadNetWorth],
+      periodInPivot(
+        shownPeriodFlows,
+        pivotCurrency?.code ?? leadNetWorth?.currency ?? LEAD_FALLBACK,
+      ),
+    [shownPeriodFlows, pivotCurrency, leadNetWorth],
   );
 
   const unsettledModel = useUnsettledBanner(snapshot.unsettledClearing);
@@ -586,10 +608,31 @@ export default function Today() {
    * §3's fold — own accounts, counted, at today's rate, loans apart — and it
    * is a balance, so the period stepper does not move it.
    */
+  // In the display currency: a balance is converted at today's rate, which
+  // `unitsPerDisplay` states in the direction `holdings` reads (§7.0).
+  const holdingsRates = useMemo(
+    () => ({
+      readRate: ({ quote, date }: { quote: money.CurrencyCode; date: AccountingDate }) => {
+        if (basis === null) return null;
+        const rate = basis.unitsPerDisplay(quote, date);
+        return rate === null ? null : { rate };
+      },
+    }),
+    [basis],
+  );
+  const holdingsCurrencies = useMemo(
+    () =>
+      snapshot.currencies.map((currency) => ({
+        code: currency.code,
+        decimals: currency.decimals,
+        isPivot: basis === null ? currency.isPivot : currency.code === basis.currency,
+      })),
+    [snapshot.currencies, basis],
+  );
   const holdings = useHoldings(
-    ledger,
+    holdingsRates,
     snapshot.accounts,
-    snapshot.currencies,
+    holdingsCurrencies,
     today,
     snapshot.revision,
   );
@@ -618,6 +661,29 @@ export default function Today() {
     ],
   );
 
+  /**
+   * **Who owes whom, under what you hold** (S04 §3). A live read, never cached
+   * in the snapshot — `snapshot.revision` is the signal that a write could have
+   * moved a balance, exactly as the Debt register's own memo reads it. One line
+   * per person per currency, never folded; the card draws nothing when no debt
+   * is open.
+   */
+  const handleOpenCounterparty = useCallback((counterpartyId: string) => {
+    router.push(`/counterparty/${counterpartyId}`);
+  }, []);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: snapshot.revision invalidates the read by identity; it is not read.
+  const openDebts = useMemo(
+    () => openDebtLines(ledger.listCounterpartyBalances(today)),
+    [ledger, snapshot.revision, today],
+  );
+  const debtsCard = useMemo(
+    () =>
+      openDebts.length === 0 ? null : (
+        <OpenDebtsCard lines={openDebts} onOpenCounterparty={handleOpenCounterparty} />
+      ),
+    [openDebts, handleOpenCounterparty],
+  );
+
   /** Under the hero, compact: §5's three figures in the shape `net = inflow − spend`. */
   const monthCard = useMemo(
     () =>
@@ -629,6 +695,7 @@ export default function Today() {
           currency={pivotCurrency?.code ?? leadNetWorth.currency}
           decimals={pivotCurrency?.decimals ?? leadNetWorth.decimals}
           otherCurrencies={periodFigures.otherCurrencies}
+          estimated={periodFigures.estimated}
           layout="compact"
         />
       ) : null,
@@ -657,14 +724,26 @@ export default function Today() {
    * `ownership` and `isBusiness` are different axes and only `"business"`
    * reads the second, so the business half stays in both figures.
    */
-  const spendByCategory = useSpendByCategory(ledger, period, "mine", snapshot.revision);
+  const spendByCategory = useSpendByCategory(
+    ledger,
+    period,
+    "mine",
+    snapshot.revision,
+    basis?.spendRebase,
+  );
+  const labelOf = useCategoryLabel();
+  // Names as drawn (`categoryLabel`): a starter reads in the app's language.
+  const labelledTree = useMemo(
+    () => snapshot.fullCategoryTree.map((node) => ({ ...node, name: labelOf(node) })),
+    [snapshot.fullCategoryTree, labelOf],
+  );
   const whereItWentRows = useWhereItWent(
     spendByCategory,
     // The archived-inclusive tree. `categoryTree` drops archived rows for the
     // picker that reads it, and archiving a category does not rewrite the
     // transactions filed under it — so resolving names from that tree
     // relabelled last month's spending as the honest blank.
-    snapshot.fullCategoryTree,
+    labelledTree,
     // The pivot: the bars break down the card's *went out*, which is stated
     // in it — every currency, each row at its own rate.
     pivotCurrency?.code ?? leadNetWorth?.currency,
@@ -684,10 +763,13 @@ export default function Today() {
     () =>
       pivotCurrency === undefined
         ? []
-        : toLedgerItems(recentRows, pivotCurrency.code)
+        : toLedgerItems(
+            basis === null ? recentRows : basis.rebaseRows(recentRows),
+            pivotCurrency.code,
+          )
             .filter((item) => item.kind === "day")
             .slice(0, RECENT_DAYS),
-    [recentRows, pivotCurrency],
+    [recentRows, pivotCurrency, basis],
   );
   /**
    * **No last days is not by itself a first run.** `recentDays` is a page read
@@ -717,10 +799,11 @@ export default function Today() {
             rows={whereItWentRows}
             currency={pivotCurrency?.code ?? leadNetWorth.currency}
             decimals={pivotCurrency?.decimals ?? leadNetWorth.decimals}
+            estimated={spendByCategory.some((row) => row.estimated === true)}
           />
         </Card>
       ),
-    [whereItWentRows, pivotCurrency, leadNetWorth, t],
+    [whereItWentRows, spendByCategory, pivotCurrency, leadNetWorth, t],
   );
 
   // S04 §3 draws exactly one banner row, and `Banner`'s own doc is explicit —
@@ -922,11 +1005,12 @@ export default function Today() {
         `null`, so the first run is unaffected.
       */}
         {holdingsCard}
+        {debtsCard}
         {monthCard}
         {ledgerBody}
       </>
     ),
-    [notice, noticeToken, handleDismissToast, holdingsCard, monthCard, ledgerBody],
+    [notice, noticeToken, handleDismissToast, holdingsCard, debtsCard, monthCard, ledgerBody],
   );
 
   /**
@@ -948,6 +1032,61 @@ export default function Today() {
       />
     ),
     [t, addTransactionAction],
+  );
+
+  /** §6 *Empty · no accounts* — the same words on every page that has nothing to draw without one. */
+  const noAccountsEmpty = useMemo(
+    () => (
+      <EmptyState
+        variant="first-run"
+        title={t("shell.noAccounts")}
+        body={t("shell.noAccountsBody")}
+        primaryAction={createAccountAction}
+      />
+    ),
+    [t, createAccountAction],
+  );
+
+  /**
+   * **What stands in for a page that has nothing to draw from**: no account —
+   * and if the read failed, the error rather than *create an account*. **An
+   * error with accounts already loaded stands in for nothing**: the pages keep
+   * their last-known figures and the error shows where the summary shows it (§6). Decided on the accounts, not on a net-worth line —
+   * net worth can be empty while accounts exist (only receivables), and a
+   * failed first refresh leaves both empty. `null` when the page can draw.
+   */
+  const unavailable = useMemo(
+    () =>
+      hasAccounts ? null : snapshot.error ? (
+        <ErrorState
+          variant="recoverable"
+          what={t("shell.balanceQueryFailed")}
+          why={t("shell.balanceQueryFailedBody")}
+          action={{ label: t("common.retry"), onPress: handleRetry }}
+        />
+      ) : (
+        noAccountsEmpty
+      ),
+    [snapshot.error, hasAccounts, noAccountsEmpty, t, handleRetry],
+  );
+  // One handler per page for the header's single offset (`header-offset.ts`).
+  // `unavailable` swapping in or out is a swap of a page's content while it may
+  // be the one on screen, which hands the header the new content's offset.
+  const summaryScroll = useHeaderOffset(
+    scrollY,
+    pager.state.page === "summary",
+    unavailable !== null,
+  );
+  const listScroll = useHeaderOffset(scrollY, pager.state.page === "list", unavailable !== null);
+  const calendarScroll = useHeaderOffset(
+    scrollY,
+    pager.state.page === "calendar",
+    unavailable !== null,
+  );
+  const monthsScroll = useHeaderOffset(
+    scrollY,
+    pager.state.page === "months",
+    unavailable !== null,
   );
 
   /* ── Calendar ─────────────────────────────────────────────────────────── */
@@ -1044,8 +1183,11 @@ export default function Today() {
    * and a figure genuinely in the pivot flagged approximate.
    */
   const dayEntries = useMemo(
-    () => (pivotCurrency ? toLedgerItems(dayRows, pivotCurrency.code) : []),
-    [dayRows, pivotCurrency],
+    () =>
+      pivotCurrency
+        ? toLedgerItems(basis === null ? dayRows : basis.rebaseRows(dayRows), pivotCurrency.code)
+        : [],
+    [dayRows, pivotCurrency, basis],
   );
   /**
    * **The blank half of the calendar page, which meant three different things
@@ -1118,7 +1260,7 @@ export default function Today() {
         <EmptyState
           variant="filtered"
           title={t("transactions.calendarFilteredTitle", {
-            month: monthLabel(month, locale).replace(/\s+\d{4}$/, ""),
+            month: monthTitle(month, locale),
           })}
           body={t("transactions.calendarFilteredBody", { query: pager.state.query ?? "" })}
           primaryAction={{ label: t("transactions.calendarClearSearch"), onPress: closeSearch }}
@@ -1145,7 +1287,7 @@ export default function Today() {
       <EmptyState
         variant="range"
         title={t("transactions.calendarRangeTitle", {
-          month: monthLabel(month, locale).replace(/\s+\d{4}$/, ""),
+          month: monthTitle(month, locale),
         })}
         body={t("transactions.calendarRangeBody", {
           nearest: monthLabel(nearestToMonth.month, locale),
@@ -1267,7 +1409,11 @@ export default function Today() {
     }),
     [shownYear],
   );
-  const yearFlows = useDayFlows(ledger, yearPeriod, snapshot);
+  const rawYearFlows = useDayFlows(ledger, yearPeriod, snapshot);
+  const yearFlows = useMemo(
+    () => (basis === null ? rawYearFlows : basis.rebaseFlows(rawYearFlows)),
+    [basis, rawYearFlows],
+  );
   const yearMatchDays = useMatchDays(ledger, yearPeriod, pager.state.query, snapshot);
   const monthMatches = useMemo(
     () => (pager.state.query === null ? null : matchesByMonth(yearMatchDays)),
@@ -1289,16 +1435,21 @@ export default function Today() {
   const monthRows = useMemo<readonly MonthRow[]>(() => {
     return yearRows.map((row) => ({
       month: row.month,
-      label: monthLabel(row.month, locale).replace(/\s+\d{4}$/, ""),
+      label: monthTitle(row.month, locale),
       inflow: row.inflow,
       spend: row.spend,
       net: row.net,
       currency: pivotCurrency?.code ?? leadNetWorth?.currency ?? "",
       decimals: pivotCurrency?.decimals ?? leadNetWorth?.decimals ?? 2,
       note:
-        row.otherCurrencies === 0
-          ? null
-          : t("shell.plusOtherCurrencies", { count: row.otherCurrencies }),
+        [
+          row.otherCurrencies === 0
+            ? null
+            : t("shell.plusOtherCurrencies", { count: row.otherCurrencies }),
+          row.estimated ? t("shell.estimatedAtToday") : null,
+        ]
+          .filter((part) => part !== null)
+          .join(" · ") || null,
       ahead: row.ahead,
       // Absent from the map is nothing found, which is a fact worth drawing —
       // §7's *how often, and when* includes *not in this month*.
@@ -1348,7 +1499,11 @@ export default function Today() {
       yearFlows,
       pivotCurrency?.code ?? leadNetWorth?.currency ?? LEAD_FALLBACK,
     );
-    return others === 0 ? undefined : t("shell.plusOtherCurrencies", { count: others });
+    const parts = [
+      others === 0 ? null : t("shell.plusOtherCurrencies", { count: others }),
+      yearFlows.some((flow) => flow.estimated === true) ? t("shell.estimatedAtToday") : null,
+    ].filter((part) => part !== null);
+    return parts.length === 0 ? undefined : parts.join(" · ");
   }, [yearFlows, pivotCurrency, leadNetWorth, t]);
 
   const thisYear = Number(today.slice(0, 4));
@@ -1410,37 +1565,47 @@ export default function Today() {
     is what says this holds (`tools/e2e/specs/renders.spec.ts`).
   */
   const summaryNode = useMemo(
-    () => <GroundPanel onScroll={handleScroll}>{body}</GroundPanel>,
-    [body, handleScroll],
+    () => (
+      <GroundPanel onScroll={summaryScroll} scrollToTopKey={scrollToTopKey}>
+        {body}
+      </GroundPanel>
+    ),
+    [body, summaryScroll, scrollToTopKey],
   );
   const listNode = useMemo(
     () =>
-      leadNetWorth ? (
+      unavailable !== null ? (
+        <GroundPanel onScroll={listScroll}>{unavailable}</GroundPanel>
+      ) : (
         <HomeListPage
           ledger={ledger}
           anchor={listAnchor}
           onVisibleDay={handleVisibleDay}
           today={today}
           revision={snapshot.revision}
-          {...(pivotCurrency === undefined
-            ? // Unreachable once `currencies` has loaded: the server holds a
-              // partial unique index and a trigger over `is_pivot`, so a
-              // ledger has exactly one pivot. Rendering nothing beats
-              // rendering a figure under a currency this screen guessed.
-              { pivotCurrency: leadNetWorth.currency, pivotDecimals: leadNetWorth.decimals }
-            : { pivotCurrency: pivotCurrency.code, pivotDecimals: pivotCurrency.decimals })}
+          // The pivot, or the lead currency while `currencies` has not loaded;
+          // with accounts but no net-worth line (only receivables) the same
+          // fallback every other page here makes.
+          pivotCurrency={pivotCurrency?.code ?? leadNetWorth?.currency ?? LEAD_FALLBACK}
+          pivotDecimals={pivotCurrency?.decimals ?? leadNetWorth?.decimals ?? 2}
+          basis={basis}
           onPickDay={handlePickDay}
           onOpenTransaction={handleOpenTransaction}
           onReturnToToday={returnToToday}
           query={pager.state.query}
           accountId={filteredAccount?.id ?? null}
+          accountName={filteredAccount?.name ?? ""}
           scrollY={scrollY}
           onTick={dayTickHaptic}
           active={listActive}
           empty={listEmpty}
+          onClearFilter={clearAccountFilter}
+          pillSide={pillSide}
         />
-      ) : null,
+      ),
     [
+      unavailable,
+      listScroll,
       leadNetWorth,
       ledger,
       listAnchor,
@@ -1448,32 +1613,40 @@ export default function Today() {
       today,
       snapshot.revision,
       pivotCurrency,
+      basis,
       handlePickDay,
       returnToToday,
       pager.state.query,
       scrollY,
       listActive,
       listEmpty,
+      clearAccountFilter,
+      pillSide,
       filteredAccount?.id,
+      filteredAccount?.name,
     ],
   );
   const calendarNode = useMemo(
-    () => (
-      <GroundPanel onScroll={handleScroll}>
-        <MonthGrid
-          weeks={weeks}
-          headings={dayHeadings}
-          current={pager.state.date}
-          today={today}
-          labelFor={dayName}
-          onPickDay={handlePickDay}
-          {...(dayMatches === undefined ? {} : { matches: dayMatches })}
-        />
-        {calendarEmpty ?? dayPanel}
-      </GroundPanel>
-    ),
+    () =>
+      unavailable !== null ? (
+        <GroundPanel onScroll={calendarScroll}>{unavailable}</GroundPanel>
+      ) : (
+        <GroundPanel onScroll={calendarScroll}>
+          <MonthGrid
+            weeks={weeks}
+            headings={dayHeadings}
+            current={pager.state.date}
+            today={today}
+            labelFor={dayName}
+            onPickDay={handlePickDay}
+            {...(dayMatches === undefined ? {} : { matches: dayMatches })}
+          />
+          {calendarEmpty ?? dayPanel}
+        </GroundPanel>
+      ),
     [
-      handleScroll,
+      unavailable,
+      calendarScroll,
       weeks,
       dayHeadings,
       pager.state.date,
@@ -1486,45 +1659,50 @@ export default function Today() {
     ],
   );
   const monthsNode = useMemo(
-    () => (
-      <GroundPanel onScroll={handleScroll}>
-        <View style={sectionStyles.year}>
-          <YearChart
-            year={shownYear}
-            columns={yearColumns}
-            current={month}
-            kept={
-              <Amount
-                value={yearKept}
-                currency={leadNetWorth?.currency ?? ""}
-                decimals={leadNetWorth?.decimals ?? 2}
-                size="caption"
-                signed
-              />
-            }
-            {...(yearKeptNote === undefined ? {} : { keptNote: yearKeptNote })}
-            {...(shownYear > FIRST_YEAR ? { onOlder: previousYear } : {})}
-            {...(shownYear < thisYear ? { onNewer: nextYear } : {})}
-            onPickYear={openYearPicker}
-            labels={chartLabels}
-          />
-          <MonthList
-            rows={monthRows}
-            current={month}
-            labels={flowLabels}
-            onPickMonth={handlePickMonth}
-          />
-        </View>
-      </GroundPanel>
-    ),
+    () =>
+      unavailable !== null ? (
+        <GroundPanel onScroll={monthsScroll}>{unavailable}</GroundPanel>
+      ) : (
+        <GroundPanel onScroll={monthsScroll}>
+          <View style={sectionStyles.year}>
+            <YearChart
+              year={shownYear}
+              columns={yearColumns}
+              current={month}
+              kept={
+                <Amount
+                  value={yearKept}
+                  currency={pivotCurrency?.code ?? leadNetWorth?.currency ?? ""}
+                  decimals={pivotCurrency?.decimals ?? leadNetWorth?.decimals ?? 2}
+                  size="caption"
+                  signed
+                />
+              }
+              {...(yearKeptNote === undefined ? {} : { keptNote: yearKeptNote })}
+              {...(shownYear > FIRST_YEAR ? { onOlder: previousYear } : {})}
+              {...(shownYear < thisYear ? { onNewer: nextYear } : {})}
+              onPickYear={openYearPicker}
+              labels={chartLabels}
+            />
+            <MonthList
+              rows={monthRows}
+              current={month}
+              labels={flowLabels}
+              onPickMonth={handlePickMonth}
+            />
+          </View>
+        </GroundPanel>
+      ),
     [
-      handleScroll,
+      unavailable,
+      monthsScroll,
       sectionStyles.year,
       shownYear,
       yearColumns,
       month,
       yearKept,
       leadNetWorth,
+      pivotCurrency,
       yearKeptNote,
       previousYear,
       nextYear,
@@ -1573,9 +1751,7 @@ export default function Today() {
               },
             })}
         periodLabel={
-          pager.state.page === "months"
-            ? String(shownYear)
-            : monthLabel(titleMonth, locale).replace(/\s+\d{4}$/, "")
+          pager.state.page === "months" ? String(shownYear) : monthTitle(titleMonth, locale)
         }
         periodDetail={pager.state.page === "months" ? null : titleMonth.slice(0, 4)}
         /*

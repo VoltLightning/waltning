@@ -12,6 +12,8 @@
  * as a plain number rather than the mocked trend line.
  */
 
+import { usedFirst } from "@waltning/client/categories/used-first";
+import { useDisplayBasis } from "@waltning/client/currencies/use-display-basis";
 import type {
   ArchiveCategoryDraft,
   ConvertCategoryDraft,
@@ -20,6 +22,7 @@ import type {
   MoveCategoryDraft,
   RenameCategoryDraft,
 } from "@waltning/client/ledger/create-phone-ledger";
+import { collisionsOf } from "@waltning/client/ledger/create-phone-ledger";
 import { useCategoryReferenceCounts } from "@waltning/client/ledger/use-category-reference-counts";
 import { useLedgerController } from "@waltning/client/ledger/use-ledger-controller";
 import { usePhoneLedger } from "@waltning/client/ledger/use-phone-ledger";
@@ -35,8 +38,10 @@ import { CreateCategorySheet } from "@waltning/ui/categories/create-category-she
 import { MergeCategorySheet } from "@waltning/ui/categories/merge-category-sheet";
 import { MoveCategorySheet } from "@waltning/ui/categories/move-category-sheet";
 import { RenameCategorySheet } from "@waltning/ui/categories/rename-category-sheet";
+import { categorySearchFold, drawnNamesOf } from "@waltning/ui/i18n/category-label";
 import { monthLabel } from "@waltning/ui/i18n/locales";
 import { useLocale, useT } from "@waltning/ui/i18n/provider";
+import { useCategoryLabel } from "@waltning/ui/i18n/use-category-label";
 import { Button } from "@waltning/ui/primitives/button";
 import { PressableScaled } from "@waltning/ui/primitives/pressable-scaled";
 import { SearchField } from "@waltning/ui/primitives/search-field";
@@ -49,6 +54,7 @@ import { makeStyles } from "@waltning/ui/theme/styles";
 import { space, touchTarget } from "@waltning/ui/tokens";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { Text, View } from "react-native";
+import { displayCurrency } from "./platform";
 import { PushedPage } from "./pushed-page";
 
 type ActionsState = {
@@ -141,17 +147,22 @@ function isUncategorized(node: CategoryTreeNode): boolean {
  */
 function visibleTree(
   nodes: readonly CategoryTreeNode[],
-  options: { search: string; showArchived: boolean },
+  options: { search: string; showArchived: boolean; storedNames: ReadonlyMap<string, string> },
 ): readonly CategoryTreeNode[] {
   const eligible = nodes.filter(
     (node) => !isUncategorized(node) && (options.showArchived || !node.archived),
   );
-  const query = options.search.trim().toLowerCase();
+  const query = categorySearchFold(options.search.trim());
   if (query === "") return eligible;
 
   const matchingLeafIds = new Set(
     eligible
-      .filter((node) => node.isLeaf && node.name.toLowerCase().includes(query))
+      .filter(
+        (node) =>
+          node.isLeaf &&
+          (categorySearchFold(node.name).includes(query) ||
+            categorySearchFold(options.storedNames.get(node.id) ?? "").includes(query)),
+      )
       .map((n) => n.id),
   );
   const parentIds = new Set(
@@ -221,48 +232,109 @@ export default function CategoriesScreen() {
       end: accountingDate(`${shiftMonth(first, 1)}-01`),
     };
   }, []);
-  const leadCode = snapshot.netWorth[0]?.currency;
+  // §7.0 — the figures are stated in the display currency, each row at its own
+  // date's rate; with no basis yet, the lead currency's own rows as before.
+  const basis = useDisplayBasis(
+    ledger,
+    snapshot.currencies,
+    displayCurrency,
+    todayIn(Intl.DateTimeFormat().resolvedOptions().timeZone),
+    snapshot.revision,
+  );
+  const leadCode = basis?.currency ?? snapshot.netWorth[0]?.currency;
   const pivot = snapshot.currencies.find((currency) => currency.code === leadCode);
-  const monthSpend = useSpendByCategory(ledger, month, "mine", snapshot.revision);
+  const rawMonthSpend = useSpendByCategory(
+    ledger,
+    month,
+    "mine",
+    snapshot.revision,
+    basis?.spendRebase,
+  );
+  const monthSpend = useMemo(
+    () => (basis === null ? rawMonthSpend : basis.restateSpend(rawMonthSpend)),
+    [basis, rawMonthSpend],
+  );
+  const approximate = useMemo(
+    () => rawMonthSpend.some((row) => row.estimated === true),
+    [rawMonthSpend],
+  );
   const spend = useMemo(
     () => categorySpend(monthSpend, snapshot.fullCategoryTree, leadCode),
     [monthSpend, snapshot.fullCategoryTree, leadCode],
   );
 
+  const labelOf = useCategoryLabel();
+  /** What each row is stored as — what search, undo and the collision finder go back to. */
+  const storedNames = useMemo(
+    () => new Map(snapshot.fullCategoryTree.map((node) => [node.id as string, node.name])),
+    [snapshot.fullCategoryTree],
+  );
+  const drawnNames = useMemo(
+    () => drawnNamesOf(labelOf, snapshot.fullCategoryTree),
+    [snapshot.fullCategoryTree, labelOf],
+  );
   const nodes: readonly CategoryTreeNode[] = useMemo(
     () =>
-      snapshot.fullCategoryTree.map((node) => {
-        const spent = spend.spent.get(node.id);
-        return {
-          id: node.id,
-          parentId: node.parentId,
-          name: node.name,
-          kind: node.kind,
-          isLeaf: node.isLeaf,
-          archived: node.archived,
-          depth: node.depth,
-          usageCount: snapshot.categoryUsage.get(node.id) ?? 0,
-          externalId: node.externalId,
-          ...(spent === undefined || pivot === undefined
-            ? {}
-            : {
-                spent: {
-                  amount: spent,
-                  // `04`: the pivot's symbol, every other currency's code.
-                  currency: pivot.isPivot ? (pivot.symbol ?? pivot.code) : pivot.code,
-                  decimals: pivot.decimals,
-                },
-                share: spend.share.get(node.id) ?? 0,
-              }),
-        };
-      }),
-    [snapshot.fullCategoryTree, snapshot.categoryUsage, spend, pivot],
+      usedFirst(
+        snapshot.fullCategoryTree.map((node) => {
+          const spent = spend.spent.get(node.id);
+          return {
+            id: node.id,
+            parentId: node.parentId,
+            name: labelOf(node),
+            kind: node.kind,
+            isLeaf: node.isLeaf,
+            archived: node.archived,
+            depth: node.depth,
+            usageCount: snapshot.categoryUsage.get(node.id) ?? 0,
+            externalId: node.externalId,
+            ...(spent === undefined || pivot === undefined
+              ? {}
+              : {
+                  spent: {
+                    amount: spent,
+                    // `04`: the pivot's symbol, every other currency's code.
+                    currency: pivot.isPivot ? (pivot.symbol ?? pivot.code) : pivot.code,
+                    decimals: pivot.decimals,
+                    ...(approximate ? { approximate } : {}),
+                  },
+                  share: spend.share.get(node.id) ?? 0,
+                }),
+          };
+        }),
+      ),
+    [snapshot.fullCategoryTree, snapshot.categoryUsage, spend, pivot, labelOf, approximate],
   );
 
+  // Near-duplicates on the stored names, plus on the names as drawn — a
+  // translated starter can sit beside a person's own category it resembles.
+  const collisions = useMemo(() => {
+    const drawn = collisionsOf(
+      snapshot.fullCategoryTree.map((node) => ({
+        ...node,
+        name: drawnNames[node.id] ?? node.name,
+      })),
+      snapshot.categoryUsage,
+    );
+    const seen = new Set<string>();
+    const merged = [...snapshot.categoryCollisions, ...drawn].filter((collision) => {
+      const key = [collision.a.id, collision.b.id].sort().join("|");
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+    return merged
+      .sort((x, y) => y.score - x.score)
+      .map((collision) => ({
+        ...collision,
+        a: { ...collision.a, name: drawnNames[collision.a.id] ?? collision.a.name },
+        b: { ...collision.b, name: drawnNames[collision.b.id] ?? collision.b.name },
+      }));
+  }, [snapshot.categoryCollisions, snapshot.fullCategoryTree, snapshot.categoryUsage, drawnNames]);
   const uncategorized = nodes.find(isUncategorized) ?? null;
   const rows = useMemo(
-    () => visibleTree(nodes, { search, showArchived }),
-    [nodes, search, showArchived],
+    () => visibleTree(nodes, { search, showArchived, storedNames }),
+    [nodes, search, showArchived, storedNames],
   );
   const matchedLeaves = search.trim() === "" ? undefined : rows.filter((n) => n.isLeaf).length;
 
@@ -342,8 +414,16 @@ export default function CategoriesScreen() {
   const handleSaveRename = useCallback(
     (name: string) => {
       if (sheet?.type !== "rename") return;
-      const oldName = sheet.category.name;
-      const draft: RenameCategoryDraft = { id: sheet.category.id, name };
+      // Undo puts back what was *stored*, which for a starter still carrying
+      // its canonical name is the name that keeps translating.
+      const oldName = storedNames.get(sheet.category.id) ?? sheet.category.name;
+      // Saving the text it was opened with changes nothing, and writing it
+      // would freeze a starter at its translation.
+      if (name.trim() === sheet.category.name) {
+        setSheet(null);
+        return;
+      }
+      const draft: RenameCategoryDraft = { id: sheet.category.id, name, drawnNames };
       const result = ledger.renameCategory(draft);
       if ("fieldErrors" in result) {
         setSheet({ ...sheet, error: messageOf(result.fieldErrors) });
@@ -353,11 +433,11 @@ export default function CategoriesScreen() {
       showToast({
         message: t("categories.rename"),
         undo: () => {
-          ledger.renameCategory({ id: sheet.category.id, name: oldName });
+          ledger.renameCategory({ id: sheet.category.id, name: oldName, drawnNames: {} });
         },
       });
     },
-    [sheet, ledger, t, messageOf, showToast],
+    [sheet, ledger, t, messageOf, showToast, storedNames, drawnNames],
   );
 
   const handleSaveMove = useCallback(
@@ -387,8 +467,8 @@ export default function CategoriesScreen() {
 
   const handleOpenCreate = useCallback(() => setSheet({ type: "create" }), []);
   const handleSaveCreate = useCallback(
-    (draft: CreateCategoryDraft) => {
-      const result = ledger.createCategory(draft);
+    (draft: Omit<CreateCategoryDraft, "drawnNames">) => {
+      const result = ledger.createCategory({ ...draft, drawnNames });
       if ("fieldErrors" in result) {
         setSheet({ type: "create", error: messageOf(result.fieldErrors) });
         return;
@@ -396,7 +476,7 @@ export default function CategoriesScreen() {
       setSheet(null);
       showToast({ message: t("categories.newCategory") });
     },
-    [ledger, t, messageOf, showToast],
+    [ledger, t, messageOf, showToast, drawnNames],
   );
 
   const handleConfirmMerge = useCallback(
@@ -530,10 +610,7 @@ export default function CategoriesScreen() {
             onClear={handleClearSearch}
             {...(matchedLeaves === undefined ? {} : { resultCount: matchedLeaves })}
           />
-          <CollisionFinder
-            candidates={snapshot.categoryCollisions}
-            onReview={handleReviewCollision}
-          />
+          <CollisionFinder candidates={collisions} onReview={handleReviewCollision} />
           {uncategorized === null ? null : (
             <View style={styles.uncategorized}>
               <Text style={styles.uncategorizedName}>{uncategorized.name}</Text>

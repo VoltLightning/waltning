@@ -14,11 +14,12 @@
  * executors make — and would therefore produce data that behaves differently
  * from data you entered, which is the one thing a test fixture must not do.
  *
- * **Every account, employer and client is invented; the merchants are real.**
- * Those are two different rules. The placeholder rule protects *this* ledger's
- * private data — which bank, which employer, which client — and none of that
- * appears here. A supermarket is not private data, and naming real ones is the
- * only way §14.4b's offline matcher has anything to recognise.
+ * **Every account, employer, client, person and shop is invented.** The
+ * placeholder rule protects *this* ledger's private data, and a public repo has
+ * no business naming real brands either, so a streaming service is "Streaming
+ * service" and a supermarket is "Supermarket". **The words are the app's
+ * language** (`demo-names.ts`): this file is the structure and the English
+ * keys, and a German demo reads German.
  *
  * Deliberately separate from `packages/db`'s Postgres fixture, which serves
  * the API-backed dev flow and cannot be imported from a phone bundle. The two
@@ -28,6 +29,7 @@
 import type { CurrencyCode } from "@waltning/core/money";
 import * as money from "@waltning/core/money";
 import type { AccountKind } from "@waltning/core/registry/inputs";
+import { type DemoLocale, demoText } from "./demo-names.ts";
 
 export type DemoAccount = {
   /** Referenced by the patterns below, never shown. */
@@ -104,20 +106,12 @@ export const DEMO_ACCOUNTS: readonly DemoAccount[] = [
     openingBalance: "0.00",
   },
   /**
-   * **Both directions of a loan, as two kinds rather than one signed
-   * balance.** `loan_receivable` reads positive while somebody is repaying
-   * you; `loan_payable` reads negative while you still owe. A demo with only
-   * one of them shows half the register's money colours and none of the
-   * question S16 asks by sorting these two sections last — *what of this is
-   * not really mine?*
+   * **A loan from a bank is an account; a loan to a person is a debt.** The
+   * car loan has a statement to reconcile against, so it is `loan_payable`,
+   * reading negative while you still owe and paid down by transfer. Money
+   * lent to a friend is not here at all: it is Tomasz's debt (`DEMO_DEBTS`),
+   * because `loan_receivable` is retired (§6.6).
    */
-  {
-    ref: "loan-out",
-    name: "Lent to a friend",
-    currency: "PLN" as CurrencyCode,
-    kind: "loan_receivable",
-    openingBalance: "4000.00",
-  },
   {
     ref: "loan-in",
     name: "Car loan",
@@ -175,9 +169,10 @@ export type DemoCategory = { name: string; kind: "income" | "expense"; group: st
  * everything else names its parent.
  */
 export const DEMO_CATEGORIES: readonly DemoCategory[] = [
-  { name: "Income", kind: "income", group: null },
-  { name: "Salary", kind: "income", group: "Income" },
-  { name: "Services", kind: "income", group: "Income" },
+  { name: "Employment", kind: "income", group: null },
+  { name: "Salary", kind: "income", group: "Employment" },
+  { name: "Business revenue", kind: "income", group: null },
+  { name: "Services", kind: "income", group: "Business revenue" },
 
   { name: "Food", kind: "expense", group: null },
   { name: "Groceries", kind: "expense", group: "Food" },
@@ -196,12 +191,12 @@ export const DEMO_CATEGORIES: readonly DemoCategory[] = [
   { name: "Media & streaming", kind: "expense", group: "Subscriptions" },
   { name: "Software & tools", kind: "expense", group: "Subscriptions" },
 
-  { name: "Shopping", kind: "expense", group: null },
-  { name: "Household supplies", kind: "expense", group: "Shopping" },
+  { name: "Household supplies", kind: "expense", group: "Home" },
 
-  // Lending and repaying, so the two loan accounts have somewhere to file
-  // their movement. `Lent out` is a real outgoing (§6.6: a receivable sits
-  // outside net worth), and `Repayment made` is what comes back the other way.
+  // Lending and repaying. `Lent out` is the outgoing that opens a debt on a
+  // person (§6.6) and `Repayment made` is paying one of yours down; a person
+  // paying theirs back is the taxonomy's own `Repayment received`, as
+  // `Borrowed` is.
   { name: "Debt & giving", kind: "expense", group: null },
   { name: "Lent out", kind: "expense", group: "Debt & giving" },
   { name: "Repayment made", kind: "expense", group: "Debt & giving" },
@@ -246,7 +241,7 @@ export const DEMO_PATTERNS: readonly DemoPattern[] = [
   },
 
   {
-    enteredName: "Netflix",
+    enteredName: "Streaming service",
     category: "Media & streaming",
     type: "expense",
     account: "card-a",
@@ -254,7 +249,7 @@ export const DEMO_PATTERNS: readonly DemoPattern[] = [
     days: [3],
   },
   {
-    enteredName: "Spotify",
+    enteredName: "Music service",
     category: "Media & streaming",
     type: "expense",
     account: "card-a",
@@ -262,7 +257,7 @@ export const DEMO_PATTERNS: readonly DemoPattern[] = [
     days: [3],
   },
   {
-    enteredName: "YouTube Premium",
+    enteredName: "Video service",
     category: "Media & streaming",
     type: "expense",
     account: "card-a",
@@ -270,7 +265,7 @@ export const DEMO_PATTERNS: readonly DemoPattern[] = [
     days: [8],
   },
   {
-    enteredName: "Anthropic",
+    enteredName: "AI assistant",
     category: "Software & tools",
     type: "expense",
     account: "card-a",
@@ -296,7 +291,7 @@ export const DEMO_PATTERNS: readonly DemoPattern[] = [
   },
 
   {
-    enteredName: "Lidl",
+    enteredName: "Supermarket",
     category: "Groceries",
     type: "expense",
     account: "bank-a",
@@ -304,7 +299,7 @@ export const DEMO_PATTERNS: readonly DemoPattern[] = [
     days: [2, 16, 29],
   },
   {
-    enteredName: "Żabka",
+    enteredName: "Corner shop",
     category: "Groceries",
     type: "expense",
     account: "cash",
@@ -312,7 +307,7 @@ export const DEMO_PATTERNS: readonly DemoPattern[] = [
     days: [9, 23],
   },
   {
-    enteredName: "ORLEN",
+    enteredName: "Fuel station",
     category: "Fuel & parking",
     type: "expense",
     account: "bank-a",
@@ -320,15 +315,14 @@ export const DEMO_PATTERNS: readonly DemoPattern[] = [
     days: [7, 21],
   },
   {
-    enteredName: "Uber",
+    enteredName: "Ride app",
     category: "Taxi",
     type: "expense",
     account: "card-a",
     amount: "24.00",
     days: [6, 20],
   },
-  // Deliberately not in the catalogue — an unmatched entered name has to fall back to
-  // a monogram, and a ledger where everything matched would never show that.
+  // A generic name, so nothing here is a real shop.
   {
     enteredName: "Corner Cafe",
     category: "Eating out",
@@ -338,7 +332,7 @@ export const DEMO_PATTERNS: readonly DemoPattern[] = [
     days: [4, 11, 18, 25],
   },
   {
-    enteredName: "Allegro",
+    enteredName: "Online shop",
     category: "Household supplies",
     type: "expense",
     account: "bank-a",
@@ -347,7 +341,7 @@ export const DEMO_PATTERNS: readonly DemoPattern[] = [
     every: 2,
   },
   {
-    enteredName: "IKEA",
+    enteredName: "Furniture store",
     category: "Furniture & appliances",
     type: "expense",
     account: "bank-a",
@@ -451,16 +445,6 @@ export const DEMO_PATTERNS: readonly DemoPattern[] = [
     amount: "620.00",
     days: [8],
   },
-  // And the friend repays you, into the account the money left from.
-  {
-    enteredName: "Repayment received",
-    category: "",
-    type: "expense",
-    account: "loan-out",
-    toAccount: "bank-a",
-    amount: "150.00",
-    days: [12],
-  },
   // The studio pays its owner, so a business account does not grow forever
   // either. Its own costs are the `card-b` software line above.
   {
@@ -493,15 +477,14 @@ export const DEMO_PATTERNS: readonly DemoPattern[] = [
 ];
 
 /**
- * The three people and companies money moves between, and the three states
+ * The people and companies money moves between, and the three states
  * S14 sorts them into: **one who owes you, one you owe, and one settled.**
  *
  * A demo with no counterparties leaves Debt drawing its empty state and S15
  * unreachable, so the whole debt half of the app could not be looked at —
  * which is how it stayed uncompared against its own drawing for months.
  *
- * Invented, like every account and employer here (the merchants are the only
- * real names, and `demo-plan`'s header says why).
+ * Invented, like every account, employer and shop here.
  */
 export type DemoCounterparty = {
   /** Referenced by `DEMO_DEBTS`, never shown. */
@@ -515,15 +498,19 @@ export const DEMO_COUNTERPARTIES: readonly DemoCounterparty[] = [
   { ref: "owing", name: "Marta", kind: "person", settlementCurrency: null },
   { ref: "owed", name: "Piotr", kind: "person", settlementCurrency: null },
   { ref: "settled", name: "Studio B", kind: "company", settlementCurrency: null },
-  // **Not only Polish names.** The ledger is kept in three languages, and a
-  // directory of Polish names never exercises `fold()` on an umlaut or on
-  // Cyrillic at all — the two scripts its uniqueness rule most needs to hold
-  // for. A German friend settling in euros, and a Belarusian one written in
-  // his own alphabet.
+  // **One person per currency and per script the names are shown in.** The
+  // name in the app is the language's own (`demo-names.ts`) — a German demo's
+  // contacts are German, a Russian demo's are written in Cyrillic, which is
+  // what keeps `fold()`'s umlaut and Cyrillic cases exercised. The one who
+  // settles in euros and the one who settles in dollars are the currency
+  // cases; here they carry the plan's English placeholder.
   { ref: "de-owing", name: "Jürgen", kind: "person", settlementCurrency: "EUR" },
-  { ref: "by-owed", name: "Алесь", kind: "person", settlementCurrency: null },
+  { ref: "by-owed", name: "Alex", kind: "person", settlementCurrency: null },
   // And a dollar debt, so S12's totals carry a third currency.
-  { ref: "us-owing", name: "John Henry", kind: "person", settlementCurrency: "USD" },
+  { ref: "us-owing", name: "Michael", kind: "person", settlementCurrency: "USD" },
+  // A real loan to a friend, paid back monthly — lending as a debt on a
+  // person, which is how the app records it (§6.6), not an account.
+  { ref: "lent", name: "Tomasz", kind: "person", settlementCurrency: null },
 ];
 
 /**
@@ -547,6 +534,30 @@ export type DemoDebt = {
 };
 
 export const DEMO_DEBTS: readonly DemoDebt[] = [
+  // Lent to a friend: the money leaves as a debt on him, and comes back a
+  // month at a time against the same debt — 4 000 out, 750 of it repaid.
+  {
+    counterparty: "lent",
+    role: "debt",
+    account: "bank-a",
+    category: "Lent out",
+    enteredName: "Loan to Tomasz",
+    type: "expense",
+    amount: "4000.00",
+    daysAgo: 160,
+  },
+  ...[132, 102, 72, 42, 12].map(
+    (daysAgo): DemoDebt => ({
+      counterparty: "lent",
+      role: "debt",
+      account: "bank-a",
+      category: "Repayment received",
+      enteredName: "Tomasz · repayment",
+      type: "income",
+      amount: "150.00",
+      daysAgo,
+    }),
+  ),
   // They owe you: you paid, on their behalf.
   {
     counterparty: "owing",
@@ -678,6 +689,10 @@ function iso(year: number, month: number, day: number): string {
 }
 
 /**
+ * **The plan's own words are the English ones, and they are keys.** A name is
+ * shown in the app's language (`demo-names.ts`); the structure — refs, amounts,
+ * days — is the same whichever language asks.
+ *
  * Every transaction to create, walking back a month at a time from `today`.
  *
  * **Months rather than consecutive days**, so the ledger has whole months
@@ -685,7 +700,11 @@ function iso(year: number, month: number, day: number): string {
  * read against, and the one a run of consecutive days never produces. Nothing
  * is dated later than `today`: rows in the future are a different feature.
  */
-export function demoTransactions(today: string, months: number): readonly DemoTransaction[] {
+export function demoTransactions(
+  today: string,
+  months: number,
+  locale: DemoLocale = "en",
+): readonly DemoTransaction[] {
   const [thisYear, thisMonth, todayDay] = today.split("-").map(Number);
   if (thisYear === undefined || thisMonth === undefined || todayDay === undefined) {
     throw new Error(`demo data needs a YYYY-MM-DD to walk back from, got ${today}`);
@@ -708,7 +727,9 @@ export function demoTransactions(today: string, months: number): readonly DemoTr
         rows.push({
           account: pattern.account,
           category: pattern.category,
-          enteredName: pattern.enteredName,
+          // The words follow the app's language; the amount's variation is
+          // keyed by the plan's own text, so it is identical in every one.
+          enteredName: demoText(locale, pattern.enteredName),
           type: pattern.toAccount === undefined ? pattern.type : "transfer",
           ...(pattern.toAccount === undefined ? {} : { toAccount: pattern.toAccount }),
           amount: vary(pattern.amount, `${pattern.enteredName}-${date}`),

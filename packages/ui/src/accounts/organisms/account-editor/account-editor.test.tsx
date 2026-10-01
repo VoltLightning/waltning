@@ -30,6 +30,7 @@ const account: AccountEditorAccount = {
   version: 3,
   expectedBalance: null,
   color: null,
+  hasEntries: true,
 };
 
 const groups: readonly AccountEditorGroup[] = [{ id: "group-1", name: "Household" }];
@@ -51,6 +52,7 @@ it("shows the currency as text, never a control", () => {
       onCancel={noop}
       onSave={noop}
       onArchive={noop}
+      onDelete={noop}
       onReconcile={noop}
       onCreateGroup={noopCreateGroup}
     />,
@@ -68,6 +70,7 @@ it("omits Last observed until an account has been reconciled", () => {
       onCancel={noop}
       onSave={noop}
       onArchive={noop}
+      onDelete={noop}
       onReconcile={noop}
       onCreateGroup={noopCreateGroup}
     />,
@@ -84,6 +87,7 @@ it("shows Last observed once reconcile_account has recorded one", () => {
       onCancel={noop}
       onSave={noop}
       onArchive={noop}
+      onDelete={noop}
       onReconcile={noop}
       onCreateGroup={noopCreateGroup}
     />,
@@ -101,6 +105,7 @@ it("Save starts disabled — nothing has changed yet", () => {
       onCancel={noop}
       onSave={noop}
       onArchive={noop}
+      onDelete={noop}
       onReconcile={noop}
       onCreateGroup={noopCreateGroup}
     />,
@@ -118,6 +123,7 @@ it("emits a patch with only the field that changed", () => {
       onCancel={noop}
       onSave={onSave}
       onArchive={noop}
+      onDelete={noop}
       onReconcile={noop}
       onCreateGroup={noopCreateGroup}
     />,
@@ -139,6 +145,7 @@ function renderEditor(
       onCancel={noop}
       onSave={onSave}
       onArchive={noop}
+      onDelete={noop}
       onReconcile={noop}
       onCreateGroup={noopCreateGroup}
     />,
@@ -176,6 +183,7 @@ it("forces business off when ownership moves to shared, and disables the toggle"
       onCancel={noop}
       onSave={onSave}
       onArchive={noop}
+      onDelete={noop}
       onReconcile={noop}
       onCreateGroup={noopCreateGroup}
     />,
@@ -198,6 +206,7 @@ it("shows the opening-balance confirm line only once it changed", () => {
       onCancel={noop}
       onSave={noop}
       onArchive={noop}
+      onDelete={noop}
       onReconcile={noop}
       onCreateGroup={noopCreateGroup}
     />,
@@ -233,6 +242,7 @@ function openingBalanceIn(locale: "en" | "pl", overrides: Partial<AccountEditorA
         onCancel={noop}
         onSave={noop}
         onArchive={noop}
+        onDelete={noop}
         onReconcile={noop}
         onCreateGroup={noopCreateGroup}
       />
@@ -287,6 +297,7 @@ it("does not count the presented figure as an edit", () => {
       onCancel={noop}
       onSave={onSave}
       onArchive={noop}
+      onDelete={noop}
       onReconcile={noop}
       onCreateGroup={noopCreateGroup}
     />,
@@ -321,6 +332,7 @@ it("puts an opening-balance refusal on the opening-balance field", () => {
       onCancel={noop}
       onSave={noop}
       onArchive={noop}
+      onDelete={noop}
       onReconcile={noop}
       onCreateGroup={noopCreateGroup}
     />,
@@ -341,6 +353,7 @@ it("Archive and Reconcile call their own handlers, not Save", () => {
       onCancel={noop}
       onSave={onSave}
       onArchive={onArchive}
+      onDelete={noop}
       onReconcile={onReconcile}
       onCreateGroup={noopCreateGroup}
     />,
@@ -363,6 +376,7 @@ it("creates a group inline and selects it", () => {
       onCancel={noop}
       onSave={onSave}
       onArchive={noop}
+      onDelete={noop}
       onReconcile={noop}
       onCreateGroup={onCreateGroup}
     />,
@@ -388,6 +402,7 @@ it("renders a field error on name", () => {
       onCancel={noop}
       onSave={noop}
       onArchive={noop}
+      onDelete={noop}
       onReconcile={noop}
       onCreateGroup={noopCreateGroup}
     />,
@@ -405,10 +420,118 @@ it("renders a form-level refusal, such as a stale version", () => {
       onCancel={noop}
       onSave={noop}
       onArchive={noop}
+      onDelete={noop}
       onReconcile={noop}
       onCreateGroup={noopCreateGroup}
     />,
   );
   const alert = screen.getByRole("alert");
   expect(alert.textContent).toContain("version: this account changed elsewhere");
+});
+
+/**
+ * §6.6 — a retired kind is offered only to the account already holding it,
+ * so its value still reads; nothing else can be switched onto one.
+ */
+it("offers a retired kind only to the account that already has it", () => {
+  const { unmount } = render(
+    <AccountEditor
+      account={account}
+      today={TODAY}
+      groups={groups}
+      onCancel={noop}
+      onSave={noop}
+      onArchive={noop}
+      onDelete={noop}
+      onReconcile={noop}
+      onCreateGroup={noopCreateGroup}
+    />,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Kind: Bank" }));
+  expect(screen.queryByRole("radio", { name: "Owed to you" }), "not onto a bank").toBeNull();
+  unmount();
+
+  render(
+    <AccountEditor
+      account={{ ...account, kind: "loan_receivable" }}
+      today={TODAY}
+      groups={groups}
+      onCancel={noop}
+      onSave={noop}
+      onArchive={noop}
+      onDelete={noop}
+      onReconcile={noop}
+      onCreateGroup={noopCreateGroup}
+    />,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Kind: Owed to you" }));
+  expect(screen.getByRole("radio", { name: "Owed to you" }), "its own value reads").toBeDefined();
+});
+
+/**
+ * §6.9 — an account no row references may be deleted; anything referenced is
+ * archived and never offered a Delete at all.
+ */
+it("offers Delete only for an account with no entries", () => {
+  const { unmount } = render(
+    <AccountEditor
+      account={account}
+      today={TODAY}
+      groups={groups}
+      onCancel={noop}
+      onSave={noop}
+      onArchive={noop}
+      onDelete={noop}
+      onReconcile={noop}
+      onCreateGroup={noopCreateGroup}
+    />,
+  );
+  expect(screen.queryByRole("button", { name: "Delete account" })).toBeNull();
+  expect(screen.getByRole("button", { name: "Archive" })).toBeDefined();
+  unmount();
+
+  render(
+    <AccountEditor
+      account={{ ...account, hasEntries: false }}
+      today={TODAY}
+      groups={groups}
+      onCancel={noop}
+      onSave={noop}
+      onArchive={noop}
+      onDelete={noop}
+      onReconcile={noop}
+      onCreateGroup={noopCreateGroup}
+    />,
+  );
+  expect(screen.getByRole("button", { name: "Delete account" })).toBeDefined();
+  expect(screen.getByRole("button", { name: "Archive" })).toBeDefined();
+});
+
+it("asks before it deletes, and deletes only on the dialog's own confirmation", () => {
+  const onDelete = vi.fn();
+  render(
+    <AccountEditor
+      account={{ ...account, hasEntries: false }}
+      today={TODAY}
+      groups={groups}
+      onCancel={noop}
+      onSave={noop}
+      onArchive={noop}
+      onDelete={onDelete}
+      onReconcile={noop}
+      onCreateGroup={noopCreateGroup}
+    />,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Delete account" }));
+  expect(onDelete).not.toHaveBeenCalled();
+  expect(screen.getByText("Delete this account?")).toBeDefined();
+
+  // Cancelling leaves the account alone.
+  fireEvent.click(screen.getAllByRole("button", { name: "Cancel" }).at(-1) as HTMLElement);
+  expect(onDelete).not.toHaveBeenCalled();
+  expect(screen.queryByText("Delete this account?")).toBeNull();
+
+  fireEvent.click(screen.getByRole("button", { name: "Delete account" }));
+  fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+  expect(onDelete).toHaveBeenCalledTimes(1);
 });

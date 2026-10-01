@@ -24,11 +24,26 @@ shows today is the list that shows every day before it.
 | Push notification | Unsettled clearing, failed backup | The thing it names |
 
 **Exits** — `+` → S05 · Scan → S07a · say-a-transaction → S05 in voice mode ·
-a row → S09 · *What you hold*'s count → S16, and a breakdown row → S16 on that row's lens · unsettled banner → J8 allocation ·
+a row → S09 · *What you hold*'s header row and its figure → S16 (one target, not the count alone), and a breakdown row → S16 on that row's lens · unsettled banner → J8 allocation ·
 tab bar → S16, S12, S30.
 
 **S04 has no *show all*, and the tab bar has no Ledger or Calendar tab.**
 Browsing the ledger and picking a date are this screen, one swipe away. See §3.
+
+**Back (Android's system button, from a tab's root).** A pushed screen
+closes first — that is the stack's own pop — and a sheet or dialog drawn as a
+modal closes itself (Android sends back to its close handler before any screen
+hears it). Otherwise: on any tab
+but Home, back goes to Home, which keeps the page it was left on; on Home, on
+Liste, Kalender or Monate, back goes to Summary; on Home's Summary with nothing
+open, back leaves the app. Switching a tab or a page pushes no history, so
+these are rules rather than a record of where the reader has been. The web
+keeps the browser's history and adds nothing.
+
+**Tapping the selected tab.** On Home it returns to Summary from any other page,
+and on Summary scrolls to the top. On any other tab a re-tap does nothing. The
+bar is covered by a pushed screen, so a re-tap never meets one.
+The tab bar is specified in `design-system/05-composites.md`.
 
 ## 3. Layout
 
@@ -139,6 +154,13 @@ it is one control resizing, not two headers swapping.
   want while reading a month — so the control arrives exactly when the reason
   for it does.
 
+**The title is the month's name alone** — *April*, *kwiecień*, *апрель*,
+*September* — in its standalone, nominative form in every language, never the
+form a full date takes (*апреля*) and never a name that carries its own year
+(*апрель 2025 г.*). The year is the separate label beside or under it, so it is
+stated once. The month's name is never truncated at a 360-point width, expanded
+or collapsed, for the longest month of any language.
+
 The month never moves sideways and never changes colour; it changes size. The
 year travels: it sits under the month at rest at a caption's size and stands
 beside it collapsed at the month's own, and it crosses between the two in one
@@ -228,28 +250,38 @@ that has not happened is disabled rather than absent (§6).
 number, so the header rises at exactly the speed of the content beneath it and
 the two read as one sheet sliding under another.
 
-**The chrome never resizes the page it is reading.** It gives up 36 points of
-height and takes the same 36 back as a negative margin, so its footprint is the
-collapsed one at every offset and the pager below it is the same box the whole
-way; the pager is then moved down by that number as a transform. Without that
-the chrome's height *was* the pager's height, and the pager is the scroller the
-header reads: the offset set the header's height, the height set the scroll
-viewport, and the viewport set the largest offset the scroller would hold. On
-any page whose content is within one collapse of a screenful that closes — the
-scroller pulls the offset back, the header re-opens, and the bar flickers in and
-out for as long as the gesture is held. It also laid out four mounted pages
-every frame. Measured in Chrome, the viewport moved 640 → 676 with the header
-before and holds at 732 across the whole travel after.
+**The header's shape is a function of the scroll, and the scroll is a function
+of nothing the header does.** The header overlays the top of the pager; it never
+moves or resizes the pager's box, so a scroller's frame is the same box at every
+offset. It gives up 36 points of height and takes the same 36 back as a negative
+margin, so the chrome's footprint is the collapsed one at every offset, and the
+expanded header hangs over the top 36 points of the pager. Each page leaves those
+36 points above its first row as room in its own scroll content (List carries it
+as the top padding of its list, and draws its day strip that far down at rest,
+following the header up by the same amount as the offset grows). The room
+scrolls away at exactly the rate the header closes, so at the end of the travel
+the first row sits against the collapsed header with nothing between them — and
+the content moves one-for-one with the finger at every offset, header open,
+closing or closed.
 
-The pager therefore hangs one collapse below the screen while the header is
-open, and the frame clips it. **That is only invisible while a page can be
-scrolled far enough to close the header**: content is lost when a page's
-scrollable travel is shorter than the collapse by more than its own bottom
-padding, because then the header never closes, the pager never rises, and no
-gesture reveals the bottom. Every page in the pager clears that today by ~94
-points of bottom inset from `useGroundInset`, which is the condition to check
-before adding a page that does not use it, or before this shell renders
-anywhere `useFloatingClearance()` is zero.
+A frame that is a function of its own offset is a feedback loop. A header that
+moved the pager to stay beneath it moved the scroller under the finger by the
+amount the finger had just scrolled it, and the scroller read the difference a
+frame late; at the offset where the header changes shape that is an oscillation,
+the whole screen shaking under a held hand. A header that resized the pager did
+the same through the largest offset the scroller would hold. Smoothing the
+offset would hide the loop rather than remove it, so nothing here is debounced:
+collapse progress is a pure, monotonic function of the offset, and the same
+offset always draws the same header.
+
+**The header follows the page on screen.** Each page keeps its own offset and
+lends it to the header only while it is the page the reader is on; arriving on a
+page hands the header that page's offset, so a List at the top is never under a
+header a Summary scroll collapsed. The header reaches that shape by a short
+timing (200 ms) rather than a snap, and at once under reduced motion. A page
+that is not on screen never moves the header, however its own offset changes.
+The page's top hairline appears only once content
+passes under the collapsed header.
 
 **The header navigates; the page reports.** It carries no figure. A draft put
 the current period's total in the row's trailing half and it did not survive
@@ -293,6 +325,10 @@ same action as swiping to it; neither is the primary.
 │  │ ─────────────────────────────────────────── ││
 │  │               Break it down ⌄               ││
 │  └─────────────────────────────────────────────┘│
+│  ┌ Open debts ─────────────────────────────────┐│  ← OpenDebtsCard, only while one is open
+│  │ Tomasz  owes you                   150,00 zł ›││
+│  │ Nina    you owe                      5,00 zł ›││
+│  └─────────────────────────────────────────────┘│
 │  ┌ Kept so far ────────────────── +3 529,82 zł ┐│  ← MonthSummary, compact
 │  │ ██████████████████████████ ████████████████ ││  ← FlowBar: in (green) | out (red)
 │  │ Came in +9 200,00         Went out 5 670,18 ││
@@ -326,7 +362,12 @@ as S16 draws them), or **By account** (every counted account in its own
 colour — its kind's, or one picked in the editor — and its own figure). The bar under the figure is always the lens's composition, **largest first, left to right**, and the rows under it in the same order, so the closed
 card already says what the total is made of, and opening it names the parts.
 Cards are negative and draw red; the bar is what is **held**, and the line above
-it says what is owed, because a negative cannot be a share of a whole. A kind
+it says what is below zero, because a negative cannot be a share of a whole —
+in two words for two things. **Owed** is what any other kind is below
+zero by — a card above all, a real debt to a lender. **Overdrawn** is what a bank, cash or deposit
+account is below zero by, which has no lender behind it and is not money owed to
+anyone (`computations.md` §3.1). A line reads *50 670,52 held · 504,20 overdrawn
+· 299,63 owed*, each part only where there is something to say. A kind
 or currency row is a door into S16 **on the same lens** — the register groups
 by kind or by currency with the same switch — so the parts named here are the
 sections there. An account row opens that account's transactions, the
@@ -486,6 +527,11 @@ count one currency, the *lead* — the first of the net-worth rows — and a
 ledger whose lead was the card's euros drew a year of spend and not one bar
 of income, because the salary was in złoty.
 
+**One page, one currency.** The chart's year net, its bars and every row are
+the pivot's figures, and the year net carries the pivot's mark — never the
+lead's. A ledger whose pivot is dollars over a złoty first account reads
+`+4 161,23 $` over rows in `$`.
+
 **Empty means nothing happened.** A month whose rows could not be converted —
 none, when every row carries its rate — keeps its slot at zero height and its
 row says *+1 other currency*; the year's own total carries the same note.
@@ -556,11 +602,12 @@ happened*.
 | `SearchField` | The search itself, pinned under `PageTabs` while one is on, with the live match count and an `✕` that **leaves the search** — it empties the field and closes it in one press, because this field is pinned open and the ✕ is the only way back to an unnarrowed ledger. It is therefore offered whether or not anything is typed, which is the opposite of the clear control's own rule elsewhere (`03` §3.7: a clear button on an empty field is a target with nothing to do). Drawn inline — no border, no fill — on a band that is already a surface. **Under the tabs, not in the header**: the header's shape is a function of the scroll — the title travels, scales and hands its room to a stepper — so a field placed there would either inherit the collapse or fight it, and the period would leave the screen exactly when §7 wants the reader stepping through periods. It stays open for as long as the search is on, which is what says the screen is narrowed |
 | `Pager` | The four pages, swiped or tapped between, over one shared date |
 | `GatewayGrid` | Summary's *Go to* — rows on the ground, two across, each with a figure. Not cards: a card groups rows or holds a hero, and a single destination is neither. Only destinations neither the tab bar **nor the shared bar** carries, which is why Accounts, Debt and the agent are absent from it |
-| `HoldingsCard` | The hero, over `holdings()` (`computations.md` §3.1). Title and account count on one line (the count → S16; *9 of 10 accounts* when one has no rate), the total at display size, a *held · owed* line, the lens's composition bar, and *Break it down*. Open, a `SegmentControl` (*By kind* · *By currency* · *By account*) and rows — swatch, name, count, figure, chevron → S16 on that lens, or an account's own transactions — then, by kind, *Loans · outside the total*. Labelled *mine* only where *ours* is drawn under the figure; otherwise *What you hold* (§6.7). Renders above the error branch, so a failed refresh keeps it (§6) |
-| `MonthSummary` | The compact card under the hero, opening month only. Label and signed figure on one line, a `FlowBar`, then the labelled pair. Every currency, in the pivot, each transaction at its own rate — the same fold as that month's Months row, so the two cannot disagree. Draws three zeroes for a period the ledger did not exist in — that is the true answer, not an empty state. **The three labels are a prop**, defaulting to this screen's: S12 §3 holds debt's subtraction in the same card, and a second component would be the same shape twice |
+| `HoldingsCard` | The hero, over `holdings()` (`computations.md` §3.1). Title and account count on one line (*9 of 10 accounts* when one has no rate), the total at display size — **the header row and the total are one press target → S16**, with the row's hit area, while *Break it down* stays its own control — and the total is `fit`: one line at any length, shrinking rather than wrapping (`04` §4.1). A *held · overdrawn · owed* line whose parts (each a figure and its word, and the last two only where non-zero) wrap between them and never inside one, the lens's composition bar, and *Break it down*. Open, a `SegmentControl` (*By kind* · *By currency* · *By account*) and rows — swatch, name, count, figure, chevron → S16 on that lens, or an account's own transactions — then, by kind, *Loans · outside the total*. Labelled *mine* only where *ours* is drawn under the figure; otherwise *What you hold* (§6.7). Renders above the error branch, so a failed refresh keeps it (§6) |
+| `OpenDebtsCard` | Under the hero: who owes whom, one line per person per currency — name, `DebtDirectionTag` (*owes you* · *you owe*, words and never colour alone) and the magnitude through `<Amount>`; a line opens the person (S13). Never folded across people or currencies (§6.6). **Absent when nothing is open**: a settled ledger says *All settled* on S12, not here. It is a list of people, not a *Go to* door into the Debt tab. Lines are `openDebtLines` over the same balances S12 reads, so a repayment that settles one removes its line |
+| `MonthSummary` | The compact card under the hero, opening month only. Label and signed figure on one line — **or the figure under its label, on a line of its own, when the label takes more than half the row** (a long label, or any label at a large text size), decided on the label's width — a `FlowBar`, then the labelled pair. Every currency, in the pivot, each transaction at its own rate — the same fold as that month's Months row, so the two cannot disagree. Draws three zeroes for a period the ledger did not exist in — that is the true answer, not an empty state. **The three labels are a prop**, defaulting to this screen's: S12 §3 holds debt's subtraction in the same card, and a second component would be the same shape twice |
 | `FlowBar` | *Came in* green on the left and *went out* red on the right, each its share of the two, meeting at a 2pt gap. A month that took in 3 000 and spent 2 000 reads 60% green. It was a red fill of spend over a track of income, which painted that month two-thirds red — a ratio of one figure to the other, where a reader sees which colour there is more of. Nothing in and nothing out is an empty neutral track |
 | `SpendRows` | *Where it went* — §6 at leaf granularity, five rows plus a named remainder, bars proportional to the largest row, one colour. Opening month only. In the pivot, each transaction at its own stored rate — the same terms as the *went out* it breaks down, so a category spent in two currencies is one bar and the bars add up to the card above them |
-| `DayRibbon` | Under `PageTabs`, on the List page only. **A scrubber, not a selector** — the highlight is a ring fixed at the middle of the band and never moves; what moves under it is the run of days, driven by the list's own scroll offset. Continuous and **endless to a hand** — a cell for **every** day, from a 1 January ten years before the oldest day the list has heard of, to today and past it — because the distance between two marks is part of what the strip draws, and a strip a thumb can reach the end of after six weeks is a window, not a scrubber. A cell's index is *the number of days since that first day*: pure arithmetic, so nothing is clamped to an end and nothing is re-cut as the reader moves (a run re-centred around the anchor moved every cell's index under a strip that was in the middle of landing on one). The list collapses a five-year gap into one row and the strip cannot — so it is **virtualised**: a dozen cells are on screen, a few bands either side of them are drawn, and a day is asked for when its cell is. **Three kinds of day hold no rows and they are not the same**: between two loaded days it is *quiet* (the faint dot, *“nothing”*) — a gap there really is a gap in the ledger; past today, once the list reaches today, it is *not yet*; anywhere else it is **unread** — no mark at all and a label that is only its date, because *nothing* would be a claim about a day the list has never loaded. **The 1st says its month and 1 January its year**, in the weekday letter's place: two years from anything that names them, bare day numbers say nothing about where the reader is. Under a search the strip is the matched days and nothing else — not continuous, since a gap between two matches says nothing about the ledger. **Earliest at the left.** Past today it keeps going: enough further days to reach the band's right edge, drawn in `textMuted` — quieter in ink, never in opacity, which mixes the ground into the number and lands at 2.7:1 where 4.5 is required. Without them a centred ring has nothing to its right on a cold open, and the strip reads as truncated rather than as a position in a run. That count is a function of the measured band, so the resting state is the same on every device and in every month; it is **not** the list's forward horizon, which is §9's month-end and a different question. Horizontally scrollable, clipped at both edges. 48×66 cells with the day number at 17px and room around the weekday letter. Activity mark per §3 |
+| `DayRibbon` | Under `PageTabs`, on the List page only. **A scrubber, not a selector** — the highlight is a ring fixed at the middle of the band and never moves; what moves under it is the run of days, driven by the list's own scroll offset. Continuous and **endless to a hand** — a cell for **every** day, from a 1 January ten years before the oldest day the list has heard of, to today and past it — because the distance between two marks is part of what the strip draws, and a strip a thumb can reach the end of after six weeks is a window, not a scrubber. A cell's index is *the number of days since that first day*: pure arithmetic, so nothing is clamped to an end and nothing is re-cut as the reader moves (a run re-centred around the anchor moved every cell's index under a strip that was in the middle of landing on one). The list collapses a five-year gap into one row and the strip cannot — so it is **virtualised**: a dozen cells are on screen, a few bands either side of them are drawn, and a day is asked for when its cell is. **Three kinds of day hold no rows and they are not the same**: between two loaded days it is *quiet* (the faint dot, *“nothing”*) — a gap there really is a gap in the ledger; past today, once the list reaches today, it is *not yet*; anywhere else it is **unread** — no mark at all and a label that is only its date, because *nothing* would be a claim about a day the list has never loaded. **The 1st says its month and 1 January its year**, in the weekday letter's place: two years from anything that names them, bare day numbers say nothing about where the reader is. Under a search the strip is the matched days and nothing else — not continuous, since a gap between two matches says nothing about the ledger. **Its cells are not neighbours on the calendar, so the month is named where it changes**: the first cell, and every cell whose month differs from the one to its left, say their month in the weekday letter's place — with the two-digit year beside it where the year changes too (*Mar 26*), since a bare year would read as January — the 1st's rule, moved from *the first of a month* to *the first of a month's matches*, because `15 26 15 26` over two months reads as the same two days repeating. **Earliest at the left.** Past today it keeps going: enough further days to reach the band's right edge, drawn in `textMuted` — quieter in ink, never in opacity, which mixes the ground into the number and lands at 2.7:1 where 4.5 is required. Without them a centred ring has nothing to its right on a cold open, and the strip reads as truncated rather than as a position in a run. That count is a function of the measured band, so the resting state is the same on every device and in every month; it is **not** the list's forward horizon, which is §9's month-end and a different question. Horizontally scrollable, clipped at both edges. 48×66 cells with the day number at 17px and room around the weekday letter. Activity mark per §3 |
 | `MonthGrid` | Calendar's own grid — a day per cell with `DayRibbon`'s activity mark, ≥44px |
 | `EmptyState` | Calendar's three, under the grid — §8.1's `filtered`, `range` and `first-run`, never a blank |
 | `YearChart` | Months' hero — twelve paired columns scaled to the busiest month of the year, the current month ticked, empty months drawn as stubs. Carries the year, its net, its two arrows and the button that opens `YearPicker` |
@@ -574,7 +621,7 @@ happened*.
 | `BrandIcon` | `TransactionRow`'s leading mark for a recognised merchant (§14.4b). Offline, never blank: an unmatched entered name falls back to its monogram |
 | `FxAmount` | Any foreign row — `local · rate · display`, the rate for that row's own date (P1) |
 | `Banner(warn)` | Unsettled clearing — rendered **only when non-zero**, with one action |
-| `TodayPill` | Floats over the list when the list's **anchor** is not today — which is what a jump moves, and a jump is what §6 says this exists for. Deliberately not *scrolled away from today*: paging backwards walks day by day and can be walked back, where a jump loaded a neighbourhood with nothing between it and here. The only way back from a jump (§6). Top-centre **of the list**, not of the page: the add button owns the bottom corners and settles against either side edge at any height (`02-tokens` §2.9), and `DayRibbon` owns the band above the list — a pill resolved against the whole page lands on the strip's first cells, which are both data and 44pt targets. A floating control over an infinite list covers something; it covers a sliver of content the reader can scroll, never chrome they cannot. Its edge says *above the page*, not `shadow-float`, which §2.5 keeps for the add button and the toast — the things above the whole screen rather than above one list |
+| `TodayPill` | Shown when the list's **anchor** is not today — which is what a jump moves, and a jump is what §6 says this exists for. Deliberately not *scrolled away from today*: paging backwards walks day by day and can be walked back, where a jump loaded a neighbourhood with nothing between it and here. The only way back from a jump (§6). **It floats and changes no layout**: on the line the add button holds, at the same inset and the same centre, over the list's own box, **on the side the button is not** — the button is draggable to either edge and defaults to bottom-right, so the pill defaults to bottom-left and moves across when the button is left on the left; a pill under the button would hide the only way back from a jump. The anchor moves on every scroll settle, so anything that took room from the list for the pill — a band above the rows — shifted every row by its height one day off today and back again. The list ends with the add button's clearance, so at the end of the list the pill covers nothing, as the button does; mid-scroll it overlaps rows as the button does. It was floated top-centre, on the first day header and the first row's title. Its edge says *above the page*, not `shadow-float`, which §2.5 keeps for the add button and the toast — the things above the whole screen rather than above one list |
 | `FilterChip` | The carried filter, pinned under `PageTabs`: what it is, and an `✕` that clears it. One chip — this screen receives a filter, it does not compose them. Composing is `FilterBar`, and it is S10's, on the desk |
 | `TabBar` | 4 tabs, all ≥44px — Home · Accounts · **Debt** · Settings, the third slot the agent's once S03 exists (`05-composites`). **No Ledger tab**: this screen is the ledger, so one would lead where you already are — search is this screen's header search, and the table is the desk's (S10). `+` is not a tab, though it may come to rest between Accounts and Debt (`02-tokens` §2.9) |
 | `FloatingAdd` | The `+`, above everything, wherever it was last put (`02-tokens` §2.9) |
@@ -636,10 +683,10 @@ say about this day*.
 |---|---|
 | Loading | Not modelled for the replica window — the read is synchronous SQLite. Beyond it, §10 |
 | Populated | As drawn |
-| Empty · no accounts | `EmptyState(first-run)`, offering create. **No summary, no strip, no empty chart** — nothing has happened, so the screen says so and offers the two ways to make it happen |
+| Empty · no accounts | `EmptyState(first-run)`, offering create. **No summary, no strip, no empty chart** — nothing has happened, so the screen says so and offers the two ways to make it happen. **All four pages say it, not only Summary**: List, Calendar and Months draw the same state in place of their content — no grid, no chart, no rows of zeroes — because a blank page says nothing. It is decided on the accounts, not on a net-worth line (net worth can be empty while an account exists), and a failed read is checked first: a ledger that did not load gets the error state, never *create an account*. The floating add is disabled for the same reason — a transaction needs an account — and the state under it is what says so |
 | Empty · no transactions | Strip and month card stay: three zeroes is the true answer for that period. *No transactions yet*, S10's wording, in place of the list. *Where it went* draws nothing |
-| Empty · before the ledger | A jump landed behind everything the ledger holds. One muted line naming the anchor — *nothing recorded on or before 25 May 2026* — with `TodayPill` above it, which is already the way back. **Never the first-run wording**: the reader has rows, all of them newer than where they are standing, and offering a first capture would tell them their ledger is empty while it is not |
-| Empty · filtered | `EmptyState(filtered)` — names the account or group and the count it excluded, with a *Clear* that drops the chip. Never the first-run wording: the ledger holds rows, this filter does not |
+| Empty · before the ledger | A jump landed behind everything the ledger holds. One muted line naming the anchor — *nothing recorded on or before 25 May 2026* — with `TodayPill` floating over the list, which is already the way back. **Never the first-run wording**: the reader has rows, all of them newer than where they are standing, and offering a first capture would tell them their ledger is empty while it is not |
+| Empty · filtered | `EmptyState(filtered)` — names the account or group and the count it excluded, with a *Clear* that drops the chip. Never the first-run wording: the ledger holds rows, this filter does not. The List page draws it, naming the account, when the carried account holds nothing; a search that matches nothing draws one muted line naming the query |
 | Empty · today only | The month card stays; today gets a named card saying nothing is recorded and what is next, with one action. The list continues into yesterday beneath it |
 | Error | Balance query failed → `ErrorState(recoverable)` in the ground panel; **the strip and the month card keep their last known figures** rather than blanking. They render above the error branch, which a test pins |
 | Offline | Cached, with `Banner(neutral)`. Capture stays fully available; that is the point of the outbox. Past the replica window, §10 |

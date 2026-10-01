@@ -5,6 +5,11 @@
 
 import type { Meta, StoryObj } from "@storybook/react-native-web-vite";
 import * as money from "@waltning/core/money";
+import type { ReactNode } from "react";
+import { View } from "react-native";
+import type { Locale } from "../../../i18n/locales.ts";
+import { I18nProvider } from "../../../i18n/provider";
+import { makeStyles } from "../../../theme/styles.ts";
 import { HoldingsCard, type HoldingsCardProps } from "./holdings-card";
 
 function noop() {}
@@ -15,6 +20,7 @@ const BASE: HoldingsCardProps = {
   mine: money.toMoney("49415.84"),
   ours: null,
   held: money.toMoney("50670.52"),
+  overdrawn: money.toMoney("0"),
   owed: money.toMoney("1254.68"),
   counted: 9,
   of: 9,
@@ -136,6 +142,20 @@ export const Closed: Story = {};
 /** Broken down by kind, loans under their own rule and not in the figure. */
 export const ByKind: Story = { args: { initiallyOpen: true } };
 
+/**
+ * **A bank below zero is *overdrawn*, a card below zero is *owed*** — two
+ * words for two things, where one used to read the overdraft as money owed to
+ * someone.
+ */
+export const Overdrawn: Story = {
+  args: {
+    mine: money.toMoney("48611.64"),
+    overdrawn: money.toMoney("504.20"),
+    owed: money.toMoney("299.63"),
+    held: money.toMoney("49415.47"),
+  },
+};
+
 /** A shared account: the title becomes *Mine*, and *ours* sits under the figure. */
 export const Shared: Story = { args: { ours: money.toMoney("61240.10") } };
 
@@ -148,3 +168,48 @@ export const OneWithoutARate: Story = { args: { of: 10 } };
  * the editor is read.
  */
 export const ByAccount: Story = { args: { initiallyOpen: true, initialLens: "account" } };
+
+function PhoneFrame({ locale, children }: { locale: Locale; children: ReactNode }) {
+  const styles = useFrameStyles();
+  return (
+    <I18nProvider locale={locale}>
+      <View style={styles.frame}>{children}</View>
+    </I18nProvider>
+  );
+}
+
+function withPhoneDe(Story: () => ReactNode) {
+  return (
+    <PhoneFrame locale="de">
+      <Story />
+    </PhoneFrame>
+  );
+}
+
+function withPhoneEn(Story: () => ReactNode) {
+  return (
+    <PhoneFrame locale="en">
+      <Story />
+    </PhoneFrame>
+  );
+}
+
+const useFrameStyles = makeStyles(() => ({
+  // A phone's 360pt less the page's own gutters.
+  frame: { width: 328 },
+}));
+
+/**
+ * **The widest figure `numeric(20,8)` holds, in an overdraft.** The hero is one
+ * line at any length: it gives up point size, never a digit, and its mark stays
+ * beside it. The line under it breaks between *held* and *owed*, never inside a
+ * figure.
+ */
+const MAX_FIGURE = {
+  mine: money.toMoney("-999999999999.99"),
+  held: money.toMoney("0"),
+  owed: money.toMoney("999999999999.99"),
+};
+
+export const MaxFigureDe: Story = { args: MAX_FIGURE, decorators: [withPhoneDe] };
+export const MaxFigureEn: Story = { args: MAX_FIGURE, decorators: [withPhoneEn] };

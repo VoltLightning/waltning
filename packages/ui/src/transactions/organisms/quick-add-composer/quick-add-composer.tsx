@@ -1,7 +1,8 @@
 /**
- * `<QuickAddComposer>` — `screens/S05-quick-add.md` §3: the amount in its
- * card, the choices under it as rows, a few categories within reach, and a
- * note. The deck's anatomy for *Add an expense*, on the deck's density.
+ * `<QuickAddComposer>` — `screens/S05-quick-add.md` §3: the account row, with
+ * the currency it fixes, then the amount in its card, then the category and
+ * the rest as rows, a few categories within reach, and a note. The account is
+ * asked first because a figure with no currency under it asks *of what?*.
  *
  * **The header is not here.** `ComposerHeader` is a fixed band the screen
  * composes above `GroundPanel`, because this component renders inside the page
@@ -36,8 +37,10 @@ import { accountingDate, isAccountingDate, type TimeOfDay } from "@waltning/core
 import type { CurrencyCode } from "@waltning/core/money";
 import { type ReactNode, useCallback, useMemo, useState } from "react";
 import { Text, View } from "react-native";
+import { categoryTintKey } from "../../../i18n/category-label.ts";
 import { dayLabel } from "../../../i18n/locales";
 import { useLocale, useT } from "../../../i18n/provider";
+import { useCategoryLabel } from "../../../i18n/use-category-label.ts";
 import { Button } from "../../../primitives/atoms/button/button";
 import { DateField } from "../../../primitives/atoms/date-field/date-field";
 import { RadioGroup, type RadioGroupProps } from "../../../primitives/atoms/radio/radio";
@@ -57,8 +60,9 @@ import { categoryTintFor } from "../../../primitives/monogram.ts";
 import { BottomSheet } from "../../../primitives/organisms/bottom-sheet/bottom-sheet";
 import { SheetAwareTextInput } from "../../../primitives/sheet-input";
 import { useBreakpoint } from "../../../primitives/use-breakpoint.ts";
+import { useFrozenOrder } from "../../../primitives/use-frozen-order.ts";
 import type { SubmitCheck } from "../../../primitives/use-submit-check.ts";
-import { HouseIcon } from "../../../shell/phosphor";
+import { CaretRightIcon, HouseIcon } from "../../../shell/phosphor";
 import { Banner } from "../../../states/molecules/banner/banner";
 import { focusBorder } from "../../../theme/focus.ts";
 import { inputStep, text } from "../../../theme/fonts.ts";
@@ -79,6 +83,8 @@ type ObligationRole = (typeof OBLIGATION_ROLES)[number];
 /** How many categories the chip row offers — the deck draws four. */
 const CHIP_COUNT = 4;
 
+const chipId = (chip: { id: string }) => chip.id;
+
 export type QuickAddComposerAccount = {
   id: string;
   name: string;
@@ -94,6 +100,8 @@ export type QuickAddComposerAccount = {
 export type QuickAddComposerCategory = {
   id: string;
   name: string;
+  /** The seed's own tag — the display rule's other input (`categoryLabel`). */
+  externalId?: string | null | undefined;
   kind: "income" | "expense";
   /** How often this ledger has used it — what puts a category among the chips. */
   usage?: number;
@@ -113,6 +121,13 @@ export type QuickAddComposerProps = {
   accountId: string | null;
   /** The account row fills machine, carrying the trail — `useLastUsedAccount`'s own result. */
   accountMachineFilled: boolean;
+  /**
+   * The window is short: the amount card gives up its label and some air so
+   * the account row, the amount and the start of the category row sit in the
+   * first view instead of under the fold (S05 §3 gives the measured fit). Decided from the window's height by the screen,
+   * never from the keyboard's events.
+   */
+  compact?: boolean;
   /** Opens `AccountPicker` (`accounts/`) — the screen composes it and wires its own pick straight to `accountId`, this only ever asks. */
   onOpenAccountPicker: () => void;
   /**
@@ -172,6 +187,15 @@ export type QuickAddComposerProps = {
    * screen that has not wired S15 yet (a story, an older test) still renders.
    */
   onCreateCounterparty?: () => void;
+  /**
+   * §6.6 — the picked category is a debt (*Borrowed*, *Lent out*, a repayment):
+   * the role is fixed to `debt`, **Who?** is asked in the first view and is
+   * required, and the person row under *More details* steps aside. The screen
+   * decides this from the category's seed key; the composer only draws it.
+   */
+  debtCategory?: boolean;
+  /** Under Who?, when the person picked has an open debt this entry settles — already worded. */
+  debtHint?: string | undefined;
   /** The one finished line under the figure — `useCategoryPace`, already worded by the screen. */
   pace?: string | undefined;
   /** `create_transaction`'s own field paths — same keys `QuickAddForm` resolves. */
@@ -192,7 +216,7 @@ export type QuickAddComposerProps = {
  * says that by itself, so a role is an answer somebody gives when there is an
  * obligation — never a blank the composer waits on.
  */
-export type QuickAddCheckField = "amount" | "account";
+export type QuickAddCheckField = "amount" | "account" | "who";
 
 type OpenSheet = "date" | "time" | "scope" | "enteredName" | "counterparty" | null;
 
@@ -203,6 +227,7 @@ export function QuickAddComposer({
   accounts,
   accountId,
   accountMachineFilled,
+  compact = false,
   onOpenAccountPicker,
   onSetRate,
   categories,
@@ -230,11 +255,14 @@ export function QuickAddComposer({
   obligationRole,
   onObligationRoleChange,
   onCreateCounterparty,
+  debtCategory = false,
+  debtHint,
   pace,
   fieldErrors,
   check,
 }: QuickAddComposerProps) {
   const t = useT();
+  const labelOf = useCategoryLabel();
   const locale = useLocale();
   const theme = useTheme();
   const styles = useStyles();
@@ -256,6 +284,14 @@ export function QuickAddComposer({
   const handleOpenEnteredNameSheet = useCallback(() => setOpenSheet("enteredName"), []);
   const handleOpenCounterpartySheet = useCallback(() => setOpenSheet("counterparty"), []);
   const handleToggleMore = useCallback(() => setMoreShown((shown) => !shown), []);
+  /** A debt's Who? is answered in one pick: the sheet closes on it. */
+  const handlePickCounterparty = useCallback(
+    (next: string) => {
+      onCounterpartyChange(next);
+      if (debtCategory) setOpenSheet(null);
+    },
+    [debtCategory, onCounterpartyChange],
+  );
 
   const handleScopePick = useCallback(
     (next: boolean) => {
@@ -286,8 +322,9 @@ export function QuickAddComposer({
     categoryProposal !== undefined &&
     categoryProposal !== null &&
     categoryProposal.confidence < PROPOSAL_DISPLAY_THRESHOLD;
-  const categoryValue =
-    pickedCategory?.name ?? (proposedBelowThreshold ? undefined : proposedCategory?.name);
+  const shownCategoryRow =
+    pickedCategory ?? (proposedBelowThreshold ? undefined : proposedCategory);
+  const categoryValue = shownCategoryRow === undefined ? undefined : labelOf(shownCategoryRow);
   /**
    * Machine-filled (P2) either while an at-or-above-threshold proposal is
    * shown but not applied, or (H1) while `categoryId` itself is the applied
@@ -306,7 +343,7 @@ export function QuickAddComposer({
    */
   const categoryPlaceholder =
     proposedBelowThreshold && proposedCategory !== undefined
-      ? t("transactions.categorySuggested", { name: proposedCategory.name })
+      ? t("transactions.categorySuggested", { name: labelOf(proposedCategory) })
       : t("transactions.chooseCategory");
   /**
    * H1, S05 §8's P2 trail — the caption and Undo for an applied proposal,
@@ -329,7 +366,15 @@ export function QuickAddComposer({
    * gone. Ordered by use, then by name so two never-used categories keep a
    * stable order between renders.
    */
-  const chips = useMemo(() => {
+  /**
+   * **The order is the one the composer opened with** (`useFrozenOrder`).
+   * Saving counts the picked category as used, which would float it up the row
+   * in the very render that precedes the screen closing: a keyed reorder of
+   * tinted `Pressable`s that Fabric on Android answers with "addViewAt: View
+   * already has a parent" and a white screen, for a category used for the
+   * first time. The next composer opens with the new ranking.
+   */
+  const ranked = useMemo(() => {
     const ofKind = categories
       .filter((category) => category.kind === type)
       .sort((a, b) => (b.usage ?? 0) - (a.usage ?? 0) || a.name.localeCompare(b.name));
@@ -338,8 +383,9 @@ export function QuickAddComposer({
     if (picked !== undefined && !top.some((category) => category.id === picked.id)) {
       top.splice(CHIP_COUNT - 1, 1, picked);
     }
-    return top.map(({ id, name }) => ({ id, name }));
+    return top.map(({ id, name, externalId }) => ({ id, name, externalId }));
   }, [categories, type, categoryId]);
+  const chips = useFrozenOrder(ranked, chipId);
 
   const pickedCounterparty = counterparties.find(
     (counterparty) => counterparty.id === obligationCounterpartyId,
@@ -355,6 +401,8 @@ export function QuickAddComposer({
       : obligationRole === null
         ? t("transactions.obligationRoleMissing", { name: pickedCounterparty.name })
         : pickedCounterparty.name;
+
+  const whoError = check?.errorFor("who") ?? fieldErrors?.byField["obligationCounterpartyId"]?.[0];
 
   const amountError = check?.errorFor("amount") ?? fieldErrors?.byField["amountOriginal"]?.[0];
   /**
@@ -413,7 +461,7 @@ export function QuickAddComposer({
     enteredName.trim() === "" ? null : enteredName,
     date === today ? null : dateWords,
     isBusiness ? t("shell.scopeBusiness") : null,
-    pickedCounterparty?.name ?? null,
+    debtCategory ? null : (pickedCounterparty?.name ?? null),
   ]
     .filter((part) => part !== null)
     .join(" · ");
@@ -421,11 +469,11 @@ export function QuickAddComposer({
   const categoryTint =
     categoryValue === undefined
       ? { fill: theme.subtleFill, ink: theme.textMuted }
-      : categoryTintFor(categoryValue, theme);
+      : categoryTintFor(categoryTintKey(shownCategoryRow ?? { name: categoryValue }), theme);
   const categoryGlyph = categoryValue === undefined ? "?" : categoryValue.slice(0, 1).toUpperCase();
 
   return (
-    <View style={styles.root}>
+    <View style={compact ? styles.rootCompact : styles.root}>
       {fieldErrors && fieldErrors.formLevel.length > 0 ? (
         // A refusal a person cannot see is a refusal that never happened
         // (`field-errors.ts`): whatever `mapFieldErrors` could not place on a
@@ -439,6 +487,34 @@ export function QuickAddComposer({
           ))}
         </View>
       ) : null}
+      <ComposerRows>
+        <Anchored check={check} field="account">
+          <ComposerRow
+            first
+            label={t(type === "income" ? "transactions.intoAccount" : "transactions.fromAccount")}
+            value={selectedAccount?.name}
+            spokenValue={
+              selectedAccount === undefined
+                ? undefined
+                : selectedAccount.name.includes(selectedAccount.currency)
+                  ? selectedAccount.name
+                  : `${selectedAccount.name}, ${selectedAccount.currency}`
+            }
+            trailing={
+              selectedAccount === undefined ? undefined : (
+                <AccountCurrency code={selectedAccount.currency} />
+              )
+            }
+            placeholder={t("transactions.chooseAccount")}
+            tile={<HouseIcon size={15} color={theme.accentText} />}
+            tileFill={theme.accentFill}
+            onPress={onOpenAccountPicker}
+            machineFilled={accountMachineFilled && selectedAccount !== undefined}
+            error={accountError}
+          />
+        </Anchored>
+      </ComposerRows>
+
       <Anchored check={check} field="amount">
         <AmountCard
           label={t("transactions.howMuch")}
@@ -449,26 +525,16 @@ export function QuickAddComposer({
           currency={selectedAccount?.currency}
           kind={type}
           context={pace}
+          waiting={t("transactions.amountWaitsForAccount")}
           error={amountError}
           autoFocus
+          compact={compact}
         />
       </Anchored>
 
       <ComposerRows>
-        <Anchored check={check} field="account">
-          <ComposerRow
-            first
-            label={t(type === "income" ? "transactions.intoAccount" : "transactions.fromAccount")}
-            value={selectedAccount?.name}
-            placeholder={t("transactions.chooseAccount")}
-            tile={<HouseIcon size={15} color={theme.accentText} />}
-            tileFill={theme.accentFill}
-            onPress={onOpenAccountPicker}
-            machineFilled={accountMachineFilled && selectedAccount !== undefined}
-            error={accountError}
-          />
-        </Anchored>
         <ComposerRow
+          first
           label={t("transactions.category")}
           value={categoryValue}
           placeholder={categoryPlaceholder}
@@ -478,6 +544,25 @@ export function QuickAddComposer({
           machineFilled={categoryMachineFilled}
           error={categoryError}
         />
+        {/*
+          **Who?, in the first view, the moment the category is a debt** (§6.6).
+          A debt with nobody on the other side is not a debt, so this is asked
+          where the category was just picked rather than found under *More
+          details*, and Save refuses without it.
+        */}
+        {debtCategory ? (
+          <Anchored check={check} field="who">
+            <ComposerRow
+              label={t("transactions.who")}
+              value={pickedCounterparty?.name}
+              placeholder={t("transactions.whoPlaceholder")}
+              tile={<ComposerTileGlyph glyph="&" ink={theme.textMuted} />}
+              tileFill={theme.subtleFill}
+              onPress={handleOpenCounterpartySheet}
+              error={whoError}
+            />
+          </Anchored>
+        ) : null}
         {/*
           No `Anchored` here: the more-details row holds no field the composer
           checks before submitting. It wrapped `obligationRole` while naming a
@@ -528,7 +613,7 @@ export function QuickAddComposer({
               onPress={handleOpenScopeSheet}
               error={scopeError}
             />
-            {counterparties.length === 0 ? null : (
+            {counterparties.length === 0 || debtCategory ? null : (
               <ComposerRow
                 label={t("transactions.person")}
                 value={counterpartyValue}
@@ -549,6 +634,9 @@ export function QuickAddComposer({
           {...(setRateAction === undefined ? {} : { action: setRateAction })}
         />
       )}
+      {debtCategory && debtHint !== undefined ? (
+        <Text style={styles.trailCaption}>{debtHint}</Text>
+      ) : null}
       {!categoryLowConfidence ? null : (
         <Text style={styles.lowConfidence}>{t("categories.lowConfidence")}</Text>
       )}
@@ -662,13 +750,14 @@ export function QuickAddComposer({
 
       <BottomSheet
         visible={openSheet === "counterparty"}
-        title={t("transactions.counterparty")}
+        title={debtCategory ? t("transactions.who") : t("transactions.counterparty")}
         onDismiss={closeSheet}
       >
         <CounterpartyPicker
           counterparties={counterparties}
           obligationCounterpartyId={obligationCounterpartyId}
-          onCounterpartyChange={onCounterpartyChange}
+          onCounterpartyChange={handlePickCounterparty}
+          roleFixed={debtCategory}
           obligationRole={obligationRole}
           onObligationRoleChange={onObligationRoleChange}
         />
@@ -699,6 +788,20 @@ function Anchored({
     <FieldAnchor check={check} field={field}>
       {children}
     </FieldAnchor>
+  );
+}
+
+type AccountCurrencyProps = { code: string };
+
+/** The account row's right edge: the currency the entry will be in, then the caret. */
+function AccountCurrency({ code }: AccountCurrencyProps) {
+  const styles = useStyles();
+  const theme = useTheme();
+  return (
+    <View style={styles.accountCurrency}>
+      <Text style={styles.accountCurrencyCode}>{code}</Text>
+      <CaretRightIcon size={15} color={theme.textFaint} />
+    </View>
   );
 }
 
@@ -763,6 +866,8 @@ type CounterpartyPickerProps = {
   onCounterpartyChange: (obligationCounterpartyId: string) => void;
   obligationRole: ObligationRole | null;
   onObligationRoleChange: (role: ObligationRole | null) => void;
+  /** The category decides the role (a debt), so there is nothing to pick. */
+  roleFixed: boolean;
 };
 
 /** §6.6 — the role picker lives in the same sheet, and defaults to no obligation. */
@@ -772,6 +877,7 @@ function CounterpartyPicker({
   onCounterpartyChange,
   obligationRole,
   onObligationRoleChange,
+  roleFixed,
 }: CounterpartyPickerProps) {
   const t = useT();
   const options = useMemo(
@@ -813,7 +919,7 @@ function CounterpartyPicker({
         onChange={onCounterpartyChange}
         searchable
       />
-      {obligationCounterpartyId ? (
+      {obligationCounterpartyId && !roleFixed ? (
         <RadioGroup
           label={t("transactions.role")}
           options={roleOptions}
@@ -835,6 +941,7 @@ function isObligationRole(value: string): value is ObligationRole {
 const useStyles = makeStyles((theme) => ({
   // The deck's 20 between blocks — the same gap the page keeps between its cards.
   root: { gap: space.x4 },
+  rootCompact: { gap: space.sm },
   formLevel: { gap: space.xs, paddingHorizontal: space.xs },
   formLevelHeading: { color: theme.dangerText, ...text.ui("body", 600) },
   fieldError: { color: theme.dangerText, ...text.ui("caption") },
@@ -847,6 +954,8 @@ const useStyles = makeStyles((theme) => ({
     gap: space.sm,
     paddingHorizontal: space.xs,
   },
+  accountCurrency: { flexDirection: "row", alignItems: "center", gap: space.sm },
+  accountCurrencyCode: { color: theme.accentText, ...text.ui("label", 700) },
   trailCaption: { color: theme.textMuted, ...text.ui("caption") },
   // The deck's note: one line in its own card, 14 above and below, 16 at the sides.
   noteCard: {

@@ -25,6 +25,7 @@
  * See SPEC.md §6–§7 for the reasoning behind each.
  */
 
+import { AMOUNT_CEILING_EXCLUSIVE } from "@waltning/core/money";
 import { type SQL, sql } from "drizzle-orm";
 import {
   type AnyPgColumn,
@@ -51,6 +52,13 @@ import {
 
 /** Money. `numeric` is exact; scale 8 accommodates crypto balances. */
 const money = (name: string) => numeric(name, { precision: 20, scale: 8 });
+
+/**
+ * No amount reaches the ceiling — `abs(col) < 1 000 000 000`, NULL passing
+ * (`money.ts`'s `AMOUNT_CEILING_EXCLUSIVE`; `999 999 999.99` at two decimals).
+ */
+const below = (col: AnyPgColumn): SQL =>
+  sql`(${col} is null or abs(${col}) < ${sql.raw(AMOUNT_CEILING_EXCLUSIVE)})`;
 
 /** Normalized name for uniqueness: case- and whitespace-insensitive. */
 const normalized = (col: AnyPgColumn): SQL => sql`lower(btrim(${col}))`;
@@ -126,6 +134,7 @@ import { currenciesColumns } from "@waltning/schema/pg/currencies";
 import { dashboardLayoutsColumns } from "@waltning/schema/pg/dashboard-layouts";
 import { dashboardWidgetsColumns } from "@waltning/schema/pg/dashboard-widgets";
 import { fxRatesColumns } from "@waltning/schema/pg/fx-rates";
+import { openingDebtsColumns } from "@waltning/schema/pg/opening-debts";
 import { recurringTransactionsColumns } from "@waltning/schema/pg/recurring-transactions";
 import { tagsColumns } from "@waltning/schema/pg/tags";
 import { transactionLinesColumns } from "@waltning/schema/pg/transaction-lines";
@@ -227,6 +236,11 @@ export const accounts = pgTable("accounts", accountsColumns(), (t) => [
     "accounts_color_known",
     sql.raw(`color is null or color in (${ACCOUNT_COLOR.map((c) => `'${c}'`).join(", ")})`),
   ),
+  // No amount reaches the ceiling (`money.ts`'s `AMOUNT_CEILING_EXCLUSIVE`). The
+  // migration that adds it writes it `NOT VALID` first, like every amount
+  // CHECK before it — `drizzle-kit generate` cannot say that, so a
+  // regeneration of that migration must have it hand-added back.
+  check("accounts_opening_balance_ceiling", below(t.openingBalance)),
 ]);
 
 /* ------------------------------------------------------------------ *
@@ -410,6 +424,28 @@ export const counterpartyMerges = pgTable(
 );
 
 /**
+ * `record_opening_debt` — §6.6's debt that predates the ledger. The balance a
+ * person starts with, folded into `counterparty_balances` as a lend or a
+ * borrow; never a transaction, so never income, spending or an account's
+ * figure.
+ *
+ * Every shape guarantee is a constraint, because the executor's own checks are
+ * not the guarantee: an amount above zero and under the ceiling (the direction
+ * carries the sign), a direction that is one of the two, and **one row per
+ * person per currency** — recording again replaces it, never stacks a second.
+ * The scale against the currency's own decimals is the trigger below the table
+ * (`0027`), the same shape `debt_reassignments` has.
+ */
+export const openingDebts = pgTable("opening_debts", openingDebtsColumns(), (t) => [
+  uniqueIndex("opening_debts_counterparty_currency_uq")
+    .on(t.counterpartyId, t.currency)
+    .where(sql`${t.deletedAt} is null`),
+  check("opening_debts_amount_positive", sql`${t.amount} > 0`),
+  check("opening_debts_amount_ceiling", below(t.amount)),
+  check("opening_debts_direction_known", sql`${t.direction} in ('theyOwe', 'youOwe')`),
+]);
+
+/**
  * `record_distinct_counterparties` — S15 §9.1's *these are different*
  * decision, so `MatchWarning` never asks about the same pair twice.
  *
@@ -448,6 +484,9 @@ export const transactions = pgTable("transactions", transactionsColumns(), (t) =
   index("transactions_to_account_idx").on(t.toAccountId),
   index("transactions_counterparty_idx").on(t.counterpartyId),
   index("transactions_obligation_counterparty_idx").on(t.obligationCounterpartyId),
+  index("transactions_opening_debt_idx")
+    .on(t.settlesOpeningDebtId)
+    .where(sql`${t.settlesOpeningDebtId} is not null`),
   index("transactions_entered_name_idx").on(t.enteredName),
   index("transactions_capital_idx").on(t.isCapital).where(sql`${t.isCapital}`),
   // Excludes soft-deleted rows: otherwise deleting an imported row makes its
@@ -538,6 +577,11 @@ export const transactions = pgTable("transactions", transactionsColumns(), (t) =
     "transactions_obligation_pair_shape",
     sql`(${t.obligationCounterpartyId} is not null) = (${t.obligationRole} is not null)`,
   ),
+  // §6.6 — only a debt-role row can settle an opening debt.
+  check(
+    "transactions_opening_link_shape",
+    sql`${t.settlesOpeningDebtId} is null or coalesce(${t.obligationRole} = 'debt', false)`,
+  ),
   check(
     "transactions_occurrence_shape",
     sql`(${t.recurringId} is null) = (${t.occurrenceDate} is null)`,
@@ -547,6 +591,12 @@ export const transactions = pgTable("transactions", transactionsColumns(), (t) =
   // either — a typed `0` fee is "no fee", and the app drops it to `null`
   // before the write ever reaches here.
   check("transactions_fee_positive", sql`${t.fee} is null or ${t.fee} > 0`),
+  // No amount a transaction holds reaches the ceiling — the four columns
+  // that carry one, in one constraint so a fifth is one edit.
+  check(
+    "transactions_amount_ceiling",
+    sql`${below(t.amountOriginal)} and ${below(t.toAmount)} and ${below(t.fee)} and ${below(t.debtAmount)}`,
+  ),
   // `SPEC.md` §14.4b. Catalogue membership of `brand_key` is a
   // contract/service concern (`registry/inputs.ts`), not a CHECK: the
   // catalogue is versioned code, the same reason `service`
@@ -584,6 +634,7 @@ export const recurringTransactions = pgTable(
   "recurring_transactions",
   recurringTransactionsColumns(),
   (t) => [
+    check("recurring_transactions_amount_ceiling", below(t.amountOriginal)),
     // `SPEC.md` §14.4b — the same guarantee as `transactions_brand_shape`
     // (see its own comment for the three-value shape), ahead of the write
     // path that will eventually set these two columns.
@@ -626,7 +677,10 @@ export const receipts = pgTable(
     confidence: numeric("confidence", { precision: 4, scale: 3 }),
     capturedAt: timestamp("captured_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [index("receipts_transaction_idx").on(t.transactionId)],
+  (t) => [
+    index("receipts_transaction_idx").on(t.transactionId),
+    check("receipts_total_ceiling", below(t.total)),
+  ],
 );
 
 /**
@@ -648,6 +702,7 @@ export const transactionLines = pgTable(
     // category on every render the merge sheet is open for; `transactions`
     // already had `transactions_category_idx`, this table did not.
     index("transaction_lines_category_idx").on(t.categoryId),
+    check("transaction_lines_amount_ceiling", below(t.amount)),
   ],
 );
 
@@ -916,6 +971,7 @@ export const debtReassignments = pgTable(
     // Reassigning to oneself is the Money Manager artefact, not a thing to keep.
     check("debt_reassignments_distinct", sql`${t.fromCounterpartyId} <> ${t.toCounterpartyId}`),
     check("debt_reassignments_positive", sql`${t.amount} > 0`),
+    check("debt_reassignments_amount_ceiling", below(t.amount)),
   ],
 );
 
@@ -985,18 +1041,22 @@ export const agentMemory = pgTable(
 
 export const targetPeriod = pgEnum("target_period", ["month", "year"]);
 
-export const targets = pgTable("targets", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  /** Null category = an overall target. */
-  categoryId: uuid("category_id").references(() => categories.id),
-  period: targetPeriod("period").notNull().default("month"),
-  amount: money("amount").notNull(),
-  currency: text("currency")
-    .notNull()
-    .references(() => currencies.code),
-  activeFrom: date("active_from").notNull(),
-  activeTo: date("active_to"),
-});
+export const targets = pgTable(
+  "targets",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    /** Null category = an overall target. */
+    categoryId: uuid("category_id").references(() => categories.id),
+    period: targetPeriod("period").notNull().default("month"),
+    amount: money("amount").notNull(),
+    currency: text("currency")
+      .notNull()
+      .references(() => currencies.code),
+    activeFrom: date("active_from").notNull(),
+    activeTo: date("active_to"),
+  },
+  (t) => [check("targets_amount_ceiling", below(t.amount))],
+);
 
 /* ------------------------------------------------------------------ *
  * Dashboard — widgets are data, so the agent can configure them (§11.0)

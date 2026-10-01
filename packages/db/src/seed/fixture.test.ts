@@ -20,14 +20,15 @@
  * question.
  */
 
-import { ACCOUNT_KIND } from "@waltning/schema/enums";
+import { NEW_ACCOUNT_KIND } from "@waltning/core/registry/inputs";
 import { describe, expect, it } from "vitest";
 import { ACCOUNTS, MOVES, OBLIGATIONS, PATTERNS } from "./fixture.ts";
 
 describe("the seeded fixture", () => {
-  it("carries at least one account of every kind", () => {
+  /** Every kind a new account can have; a retired one is refused on insert (WA021). */
+  it("carries at least one account of every kind a new account can have", () => {
     const present = new Set(ACCOUNTS.map((account) => account.kind));
-    const missing = ACCOUNT_KIND.filter((kind) => !present.has(kind));
+    const missing = NEW_ACCOUNT_KIND.filter((kind) => !present.has(kind));
     expect(missing, "kinds with no fixture account — their screens render nothing").toEqual([]);
   });
 
@@ -75,17 +76,22 @@ describe("the seeded fixture", () => {
   });
 
   /**
-   * §6.6's two directions, as two kinds rather than one signed balance — and
-   * the fixture has to show both signs or the register's money colours are
-   * only half rendered.
+   * §6.6's split: a bank loan is an account, reading negative while you owe;
+   * a loan to a person is a debt on them, and no account is `loan_receivable`
+   * — the kind is retired, and the seed would be refused (WA021) if one were.
    */
-  it("opens a payable loan negative and a receivable one positive", () => {
+  it("borrows from a bank as an account and lends to a person as a debt", () => {
     const payable = ACCOUNTS.find((account) => account.kind === "loan_payable");
-    const receivable = ACCOUNTS.find((account) => account.kind === "loan_receivable");
     expect(payable?.openingBalance.startsWith("-"), "money you owe reads negative").toBe(true);
-    expect(receivable?.openingBalance.startsWith("-"), "money owed to you reads positive").toBe(
-      false,
-    );
+    expect(ACCOUNTS.filter((account) => account.kind === "loan_receivable")).toEqual([]);
+    const lent = OBLIGATIONS.filter((row) => row.category === "Lent out");
+    expect(lent, "a loan to a person").toHaveLength(1);
+    expect(
+      OBLIGATIONS.some(
+        (row) => row.counterparty === lent[0]?.counterparty && row.type === "income",
+      ),
+      "repaid against the same debt",
+    ).toBe(true);
   });
 
   /**

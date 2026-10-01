@@ -21,7 +21,9 @@
  */
 
 import { useCallback } from "react";
+import { categoryTintKey } from "../../../i18n/category-label.ts";
 import { useT } from "../../../i18n/provider";
+import { useCategoryLabel } from "../../../i18n/use-category-label";
 import { TransactionRow } from "../transaction-row/transaction-row";
 import { TransferRow } from "../transfer-row/transfer-row";
 import type { LedgerEntry } from "./ledger-entry.ts";
@@ -44,6 +46,7 @@ export type EntryRowProps = {
 
 export function EntryRow({ row, onPress, withAccount, withDate }: EntryRowProps) {
   const t = useT();
+  const labelOf = useCategoryLabel();
   const handlePress = useCallback(() => onPress(row.id), [onPress, row.id]);
   /**
    * `debt` earns no tag: it is what the debt screens are *for*, so saying it
@@ -67,6 +70,7 @@ export function EntryRow({ row, onPress, withAccount, withDate }: EntryRowProps)
         toCurrency={row.toCurrency}
         toDecimals={row.toDecimals ?? row.decimals}
         {...(withDate === undefined ? {} : { withDate })}
+        onPress={handlePress}
       />
     );
   }
@@ -74,7 +78,16 @@ export function EntryRow({ row, onPress, withAccount, withDate }: EntryRowProps)
     <TransactionRow
       date={row.date}
       enteredName={row.enteredName}
-      category={row.categoryName}
+      categoryTintKey={
+        row.categoryName === null
+          ? null
+          : categoryTintKey({ name: row.categoryName, externalId: row.categoryExternalId })
+      }
+      category={
+        row.categoryName === null
+          ? null
+          : labelOf({ name: row.categoryName, externalId: row.categoryExternalId })
+      }
       amount={row.amount}
       currency={row.currency}
       decimals={row.decimals}

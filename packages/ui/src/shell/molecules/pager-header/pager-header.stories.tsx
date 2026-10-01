@@ -8,7 +8,9 @@
  */
 
 import type { Meta, StoryObj } from "@storybook/react-native-web-vite";
+import { View } from "react-native";
 import type { SharedValue } from "react-native-reanimated";
+import { makeStyles } from "../../../theme/styles.ts";
 import { COLLAPSE_TRAVEL } from "./collapse.ts";
 import { PagerHeader } from "./pager-header";
 
@@ -92,4 +94,46 @@ export const AtTheHorizon: Story = {
   // cannot spell that in `args` — so the story renders the component itself.
   render: (args) => <PagerHeader {...args} onNext={undefined} />,
   args: { scrollY: at(COLLAPSE_TRAVEL) },
+};
+
+/**
+ * **The longest month in a language, in a 360pt phone.** The chrome's own
+ * gutter takes 16 either side, so the header is 328 wide and the title has
+ * what the three controls leave — and the month is the word alone, never the
+ * word and a year: a title that carried its own year ran out of room and
+ * ended in an ellipsis beside a second copy of the year.
+ */
+function Phone({ children }: { children: React.ReactNode }) {
+  const styles = useStyles();
+  return <View style={styles.phone}>{children}</View>;
+}
+
+function onPhone(Story: () => React.JSX.Element) {
+  return (
+    <Phone>
+      <Story />
+    </Phone>
+  );
+}
+
+const useStyles = makeStyles(() => ({ phone: { width: 328 } }));
+
+export const LongMonthPolish: Story = {
+  decorators: [onPhone],
+  args: { scrollY: at(0), label: "październik", detail: "2026" },
+};
+
+export const LongMonthPolishScrolled: Story = {
+  decorators: [onPhone],
+  args: { scrollY: at(COLLAPSE_TRAVEL), label: "październik", detail: "2026" },
+};
+
+export const LongMonthRussian: Story = {
+  decorators: [onPhone],
+  args: { scrollY: at(0), label: "сентябрь", detail: "2026" },
+};
+
+export const LongMonthRussianScrolled: Story = {
+  decorators: [onPhone],
+  args: { scrollY: at(COLLAPSE_TRAVEL), label: "сентябрь", detail: "2026" },
 };

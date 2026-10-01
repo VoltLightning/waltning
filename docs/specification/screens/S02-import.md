@@ -180,6 +180,17 @@ Bulk accept states its count and its threshold in the button itself. It is
    | **Skip** | Your existing row is right. The import row is dropped |
    | **Supersede** | The statement is authoritative. The import row commits; your earlier manual entry is **soft-deleted**, with the replacement recorded in its audit trail |
 
+   A manual row that is one half of a payment split against an existing debt
+   (`SPEC.md` §6.6) is superseded **together with its other half**: both are
+   soft-deleted, the import row lands once, and it is written against the debt
+   again as a settlement would be — linked where it fits, split again where it
+   still crosses the end (the server-side import mints the `spillId` for the
+   second row, so a crossing import is split rather than written whole),
+   ordinary where nothing is open — so the account moves
+   by the statement's figure exactly once. Where a single linked repayment is
+   replaced, its link is carried only if its discharge still fits in what is
+   open on the debt.
+
    Supersede covers the commonest collision: you guessed at the till and the
    bank knows better. The row shows **the difference** between the two amounts,
    because that is the figure the decision turns on.

@@ -51,6 +51,7 @@ function expenseRow(overrides: Partial<PhoneSearchTransaction> = {}): PhoneSearc
     enteredName: "Corner Bakery",
     note: "",
     categoryName: "Eating out",
+    categoryExternalId: null,
     accountId: ACCOUNT,
     accountName: "Bank A · PLN",
     toAccountId: null,

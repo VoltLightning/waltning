@@ -6,12 +6,13 @@
  */
 
 import type { Meta, StoryObj } from "@storybook/react-native-web-vite";
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { Text, View } from "react-native";
 import { useSharedValue } from "react-native-reanimated";
 import { text } from "../../../theme/fonts.ts";
 import { makeStyles } from "../../../theme/styles.ts";
 import { space } from "../../../tokens.ts";
+import { useCollapseInset } from "../../atoms/collapse-inset";
 import { COLLAPSE_TRAVEL } from "../../molecules/pager-header/collapse.ts";
 import { PagerFrame } from "./pager-frame";
 
@@ -35,20 +36,26 @@ type FrameStoryProps = {
   scrolled?: boolean;
 };
 
-function Page({ name }: { name: string }) {
+/**
+ * A page as the pager expects one: its first row starts below the room the
+ * header overlays, less however much of that room has scrolled away.
+ */
+function Page({ name, scrolled }: { name: string; scrolled: boolean }) {
   const styles = useStyles();
+  const room = useCollapseInset();
+  const top = { paddingTop: space.x4 + (scrolled ? 0 : room) };
   return (
-    <View style={styles.page}>
+    <View style={[styles.page, top]}>
       <Text style={styles.pageText}>{name}</Text>
     </View>
   );
 }
 
-const PAGES = [
-  { key: "summary", label: "Summary", node: <Page name="Summary page" /> },
-  { key: "list", label: "List", node: <Page name="List page" /> },
-  { key: "calendar", label: "Calendar", node: <Page name="Calendar page" /> },
-  { key: "months", label: "Months", node: <Page name="Months page" /> },
+const pagesFor = (scrolled: boolean) => [
+  { key: "summary", label: "Summary", node: <Page name="Summary page" scrolled={scrolled} /> },
+  { key: "list", label: "List", node: <Page name="List page" scrolled={scrolled} /> },
+  { key: "calendar", label: "Calendar", node: <Page name="Calendar page" scrolled={scrolled} /> },
+  { key: "months", label: "Months", node: <Page name="Months page" scrolled={scrolled} /> },
 ];
 
 function Frame({
@@ -62,6 +69,7 @@ function Frame({
 }: FrameStoryProps) {
   const styles = useStyles();
   const scrollY = useSharedValue(scrolled ? COLLAPSE_TRAVEL : 0);
+  const pages = useMemo(() => pagesFor(scrolled), [scrolled]);
   const [active, setActive] = useState("list");
   const [query, setQuery] = useState(searchQuery);
   const handlePage = useCallback((key: string) => setActive(key), []);
@@ -84,7 +92,7 @@ function Frame({
         {...(filter === undefined ? {} : { filter: { label: filter, onClear: noop } })}
         searchPlaceholder="Search payee, note, amount"
         {...(searchCount === undefined ? {} : { searchCount })}
-        pages={PAGES}
+        pages={pages}
         activeKey={active}
         onPageChange={handlePage}
       />

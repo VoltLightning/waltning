@@ -81,6 +81,25 @@ export function monthLabel(month: YearMonth, locale: Locale): string {
 }
 
 /**
+ * A month's own name, alone — *September*, *wrzesień*, *сентябрь*.
+ *
+ * **The standalone form, which is the point.** `monthLabel` says *September
+ * 2026*, and the obvious way to drop the year — cutting a trailing four digits
+ * off it — is wrong in exactly the languages that put something after the
+ * year: Russian says *апрель 2025 г.*, so the cut left *апрель 2025 г.* with
+ * its year and its abbreviation intact, under a year label of its own. Asking
+ * `Intl` for the month and nothing else yields the nominative name in every
+ * locale without any string surgery — *апрель*, never *апреля* (that is the
+ * form a full date takes, and it is wrong for a title).
+ *
+ * For the header title and the row labels that sit beside a year of their own.
+ */
+export function monthTitle(month: YearMonth, locale: Locale): string {
+  const mo = Number(month.split("-")[1]);
+  return monthName(mo - 1, locale);
+}
+
+/**
  * One accounting date, named — "September 5, 2026", "5 września 2026".
  *
  * The same `Intl` argument `monthLabel` makes one line up, and the same
@@ -226,6 +245,22 @@ export function monthShort(month: YearMonth, locale: Locale): string {
   return new Intl.DateTimeFormat(locale, { month: "short", timeZone: "UTC" }).format(
     new Date(Date.UTC(year, mo - 1, 1)),
   );
+}
+
+/**
+ * A month and its year in the room of one weekday letter — `Mar ’26`.
+ *
+ * **Three letters and an apostrophe year, because the cell is 48pt wide.**
+ * Russian's short months carry a trailing dot and run to four letters
+ * (*февр.*, *сент.*, *нояб.*), which with a year wraps the caption and breaks
+ * the cell's height. The dot goes, the month is cut to three characters of the
+ * *short* form (so never a cut of the full name, which is what `monthShort`'s
+ * own note rules out), and the year takes an apostrophe so `Mar ’26` cannot be
+ * read as the date *26 March* under a day number.
+ */
+export function monthYearShort(month: YearMonth, locale: Locale): string {
+  const name = monthShort(month, locale).replace(/\.$/, "").slice(0, 3);
+  return `${name}\u00A0\u2019${month.slice(2, 4)}`;
 }
 
 /**

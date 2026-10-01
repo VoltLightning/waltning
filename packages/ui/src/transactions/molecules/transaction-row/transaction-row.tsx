@@ -41,6 +41,7 @@ import { text } from "../../../theme/fonts.ts";
 import { makeStyles } from "../../../theme/styles.ts";
 import { focus, space, tabularNums, touchTarget } from "../../../tokens.ts";
 import { BrandIcon } from "../../atoms/brand-icon/brand-icon";
+import { useRowTitle } from "./use-row-title.ts";
 
 /** The ledger's own vocabulary — `schema/enums`. */
 export type TransactionType = "expense" | "income" | "transfer" | "adjustment";
@@ -61,6 +62,8 @@ export type TransactionRowProps = {
   withDate?: boolean;
   enteredName: string;
   category?: string | null;
+  /** What the category's colour is hashed from, when not `category` itself — language-independent. */
+  categoryTintKey?: string | null;
   account?: string | null;
   /** **Already signed** per §1. */
   amount: money.Money;
@@ -110,6 +113,7 @@ export function TransactionRow({
   withDate = true,
   enteredName,
   category,
+  categoryTintKey,
   account,
   amount,
   currency,
@@ -120,7 +124,9 @@ export function TransactionRow({
   brandKey,
   onPress,
 }: TransactionRowProps) {
-  const meta = [account, category].filter(Boolean).join(" · ");
+  // The title, and the category only if it is not already the title.
+  const named = useRowTitle(enteredName, category, transactionType);
+  const meta = [account, named.category].filter(Boolean).join(" · ");
 
   const styles = useStyles();
   const { hovered, focused, handlers } = useInteraction();
@@ -138,13 +144,17 @@ export function TransactionRow({
       {/* `SPEC.md` §14.4b — absent entirely, not a fallback monogram, for a
           caller that has not passed `brandKey` yet (see the prop's own doc). */}
       {brandKey === undefined ? null : (
-        <BrandIcon brandKey={brandKey} enteredName={enteredName} category={category} size={24} />
+        <BrandIcon
+          brandKey={brandKey}
+          enteredName={named.title}
+          category={categoryTintKey ?? category}
+          size={24}
+        />
       )}
       <View style={styles.identity}>
         <View style={styles.enteredNameLine}>
-          {/* A blank row reads as missing data; imported rows often have no
-              enteredName, so the fallback is a dash rather than nothing. */}
-          <Text style={styles.enteredName}>{enteredName || "—"}</Text>
+          {/* An unnamed row is titled by its category, then by its kind — S10 §4. */}
+          <Text style={styles.enteredName}>{named.title}</Text>
           {isBusiness ? <Tag variant="biz">biz</Tag> : null}
           {roleTag === undefined ? null : <Tag>{roleTag}</Tag>}
         </View>

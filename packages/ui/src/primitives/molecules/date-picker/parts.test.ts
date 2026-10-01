@@ -52,14 +52,21 @@ describe("a date and its parts", () => {
 });
 
 describe("the years on offer", () => {
-  it("surrounds the value, so a date already loaded is always reachable", () => {
-    const years = yearsAround(2026);
-    expect(years).toContain(2026);
-    expect(years[0], "eight back").toBe(2018);
-    expect(years.at(-1), "one ahead").toBe(2027);
+  it("runs a century either side of today", () => {
+    const years = yearsAround(2026, 2026);
+    expect(years[0], "a hundred back").toBe(1926);
+    expect(years.at(-1), "a hundred ahead").toBe(2126);
+    expect(years).toHaveLength(201);
   });
 
-  it("re-centres on an older value rather than leaving it off the wheel", () => {
-    expect(yearsAround(2014)).toContain(2014);
+  /** Anchored on today: rolling the wheel does not move the column under it. */
+  it("stays put for any value inside the window", () => {
+    expect(yearsAround(1990, 2026)).toEqual(yearsAround(2026, 2026));
+  });
+
+  it("widens rather than leaving an older value off the wheel", () => {
+    const years = yearsAround(1901, 2026);
+    expect(years[0]).toBe(1901);
+    expect(years.at(-1)).toBe(2126);
   });
 });

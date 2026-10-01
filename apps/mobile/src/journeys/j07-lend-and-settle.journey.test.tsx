@@ -66,6 +66,8 @@ vi.mock("expo-router", () => ({
     return currentStub.router;
   },
   useLocalSearchParams: () => currentStub?.useLocalSearchParams() ?? {},
+  useGlobalSearchParams: () => ({}),
+  useNavigation: () => ({ isFocused: () => true }),
 }));
 
 const { JourneyHarness, createJourneyLedger, createJourneyRouterStub, seedJourneyFixture } =
@@ -133,7 +135,7 @@ describe("J07 — lend and settle", () => {
     // S12 — the counterparty row, its net stated in words and in the figure.
     // `<Amount>` nests the currency in its own `<Text>` (§4.1's own affix), so
     // the figure is read off the rendered body rather than one text node.
-    expect(document.body.textContent ?? "").toContain("100.00 PLN");
+    expect(document.body.textContent ?? "").toContain("100.00\u00a0PLN");
 
     // S12 → S13.
     fireEvent.click(screen.getByRole("button", { name: /Placeholder/ }));
@@ -179,7 +181,7 @@ describe("J07 — lend and settle", () => {
     // with no UI control to reach it. The counterparty's row is gone;
     // nothing left to settle.
     act(() => stub.pushWithParams("counterparties", {}));
-    expect(document.body.textContent ?? "").not.toContain("100.00 PLN");
+    expect(document.body.textContent ?? "").not.toContain("100.00\u00a0PLN");
   });
 
   /**
@@ -196,7 +198,7 @@ describe("J07 — lend and settle", () => {
     render(<JourneyHarness controller={ledger.controller} stub={stub} />);
     await settleLayout();
 
-    fireEvent.change(screen.getByLabelText("How much?"), { target: { value: "250" } });
+    fireEvent.change(screen.getByLabelText(/^How much\?/), { target: { value: "250" } });
     fireEvent.click(screen.getByRole("button", { name: /^From/ }));
     fireEvent.click(screen.getByRole("radio", { name: "Cash · PLN" }));
     fireEvent.click(screen.getByRole("button", { name: /^More details/ }));
@@ -218,7 +220,7 @@ describe("J07 — lend and settle", () => {
     // §7's *"who owes me money"* is answerable.
     act(() => stub.pushWithParams("counterparties", {}));
     await settleLayout();
-    expect(document.body.textContent ?? "").toContain("350.00 PLN");
+    expect(document.body.textContent ?? "").toContain("350.00\u00a0PLN");
   });
 
   /**

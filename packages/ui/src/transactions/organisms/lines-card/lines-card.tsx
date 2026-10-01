@@ -42,8 +42,15 @@ import { useCallback, useMemo, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import Animated from "react-native-reanimated";
 import { Amount } from "../../../fx/atoms/amount/amount";
-import { AmountField, parseAmount } from "../../../fx/molecules/amount-field/amount-field";
-import { useT } from "../../../i18n/provider";
+import {
+  AmountField,
+  exceedsAmountCeiling,
+  formatAmountDraft,
+  parseAmount,
+} from "../../../fx/molecules/amount-field/amount-field";
+import type { Locale } from "../../../i18n/locales.ts";
+import { useLocale, useT } from "../../../i18n/provider";
+import { useCategoryLabel } from "../../../i18n/use-category-label.ts";
 import { Button } from "../../../primitives/atoms/button/button";
 import { TextField } from "../../../primitives/atoms/text-field/text-field";
 import { useDisclosureMotion } from "../../../primitives/disclosure-motion.ts";
@@ -63,6 +70,8 @@ export type LinesCardLine = {
   amount: money.Money;
   categoryId: string | null;
   categoryName: string | null;
+  /** The category's `seed:<key>` tag, when it has one — the display rule reads it. */
+  categoryExternalId?: string | null | undefined;
 };
 
 /** What `onSave` sends — the whole set, `set_transaction_lines`'s own shape. */
@@ -90,10 +99,18 @@ type DraftLine = {
   amount: string;
   categoryId: string | null;
   categoryName: string | null;
+  /** The category's `seed:<key>` tag, when it has one — the display rule reads it. */
+  categoryExternalId?: string | null | undefined;
 };
 
-function toDraft(line: LinesCardLine): DraftLine {
-  return { ...line, amount: line.amount };
+/**
+ * A line's `amount` in the draft is **the text in its field**, exactly as typed
+ * (`"5,"`, `""`), the way `FieldsCard` keeps its own amount. Seeded from the
+ * stored figure in the currency's decimals and the locale's mark; parsed only
+ * to read it (`parseAmount`), never written back into the field.
+ */
+function toDraft(line: LinesCardLine, decimals: number, locale: Locale): DraftLine {
+  return { ...line, amount: formatAmountDraft(line.amount, decimals, locale) };
 }
 
 export function LinesCard({
@@ -108,7 +125,11 @@ export function LinesCard({
   const t = useT();
   const styles = useStyles();
 
-  const [draft, setDraft] = useState<readonly DraftLine[]>(() => lines.map(toDraft));
+  const locale = useLocale();
+
+  const [draft, setDraft] = useState<readonly DraftLine[]>(() =>
+    lines.map((line) => toDraft(line, decimals, locale)),
+  );
   const [open, setOpen] = useState<ReadonlySet<string>>(new Set());
 
   const handleAdd = useCallback(() => {
@@ -127,29 +148,45 @@ export function LinesCard({
       .map((value) => money.toMoney(value));
     return amounts.length > 0 ? money.sum(amounts) : money.toMoney("0");
   }, [draft]);
-  const balanced = draft.length === 0 || money.eq(sum, total);
+  // A line with no amount yet is not a zero line: it cannot be saved.
+  const complete = draft.every((line) => parseAmount(line.amount) !== null);
+  const balanced = draft.length === 0 || (complete && money.eq(sum, total));
 
   const changed = useMemo(() => {
     if (draft.length !== lines.length) return true;
     return draft.some((line, index) => {
       const saved = lines[index];
+      const typed = parseAmount(line.amount);
       return (
         !saved ||
         saved.id !== line.id ||
         saved.description !== line.description ||
-        saved.amount !== line.amount
+        typed === null ||
+        !money.eq(money.toMoney(typed), saved.amount)
       );
     });
   }, [draft, lines]);
 
-  const check = useSubmitCheck({ total: !balanced && t("transactions.linesUnbalanced") });
+  // An incomplete line is its own objection, on its own field; the total's is
+  // only for a sum that is really wrong.
+  const objections = useMemo(() => {
+    const found: Record<string, string | false> = {
+      total: complete && !balanced && t("transactions.linesUnbalanced"),
+    };
+    for (const line of draft) {
+      found[`line:${line.id}`] =
+        parseAmount(line.amount) === null && t("transactions.lineAmountMissing");
+    }
+    return found;
+  }, [balanced, complete, draft, t]);
+  const check = useSubmitCheck(objections);
   const save = useCallback(() => {
     if (!changed || !balanced || saving) return;
     onSave(
       draft.map((line) => ({
         id: line.id,
         description: line.description,
-        amount: line.amount,
+        amount: parseAmount(line.amount) ?? line.amount,
         categoryId: line.categoryId,
       })),
     );
@@ -181,6 +218,7 @@ export function LinesCard({
           first={index === 0}
           setDraft={setDraft}
           setOpen={setOpen}
+          error={check.errorFor(`line:${line.id}`)}
         />
       ))}
 
@@ -235,6 +273,7 @@ type LineRowProps = {
   decimals: number;
   isOpen: boolean;
   first: boolean;
+  error: string | undefined;
   setDraft: (updater: (current: readonly DraftLine[]) => readonly DraftLine[]) => void;
   setOpen: (updater: (current: ReadonlySet<string>) => ReadonlySet<string>) => void;
 };
@@ -245,8 +284,18 @@ type LineRowProps = {
  * inside a pressable's label (`CLAUDE.md`). Tapping the row opens the editor
  * below it, `FieldsCard`'s own disclosure.
  */
-function LineRow({ line, currency, decimals, isOpen, first, setDraft, setOpen }: LineRowProps) {
+function LineRow({
+  line,
+  currency,
+  decimals,
+  isOpen,
+  first,
+  error,
+  setDraft,
+  setOpen,
+}: LineRowProps) {
   const t = useT();
+  const labelOf = useCategoryLabel();
   const styles = useStyles();
   const { focused, handlers } = useInteraction();
   const press = usePressScale();
@@ -273,10 +322,10 @@ function LineRow({ line, currency, decimals, isOpen, first, setDraft, setOpen }:
   );
 
   const handleAmountChange = useCallback(
-    (next: string | null) => {
+    (next: string) => {
       setDraft((current) =>
         current.map((candidate) =>
-          candidate.id === line.id ? { ...candidate, amount: next ?? "" } : candidate,
+          candidate.id === line.id ? { ...candidate, amount: next } : candidate,
         ),
       );
     },
@@ -312,7 +361,11 @@ function LineRow({ line, currency, decimals, isOpen, first, setDraft, setOpen }:
             <Text style={[styles.description, filled ? null : styles.descriptionMuted]}>
               {description}
             </Text>
-            {line.categoryName ? <Text style={styles.category}>{line.categoryName}</Text> : null}
+            {line.categoryName ? (
+              <Text style={styles.category}>
+                {labelOf({ name: line.categoryName, externalId: line.categoryExternalId })}
+              </Text>
+            ) : null}
           </View>
           <View style={styles.lineValue}>
             {amountValue === null ? (
@@ -338,7 +391,18 @@ function LineRow({ line, currency, decimals, isOpen, first, setDraft, setOpen }:
             label={t("transactions.amount")}
             currency={currency}
             initial={line.amount}
-            onChange={handleAmountChange}
+            onChangeText={handleAmountChange}
+            {...(error !== undefined
+              ? { error }
+              : parsedAmount === null && line.amount !== ""
+                ? {
+                    error: t(
+                      exceedsAmountCeiling(line.amount)
+                        ? "common.amountCeiling"
+                        : "transactions.invalidAmount",
+                    ),
+                  }
+                : {})}
           />
           <Button label={t("transactions.delete")} onPress={handleRemove} variant="ghost" />
         </View>

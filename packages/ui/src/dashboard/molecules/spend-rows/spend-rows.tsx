@@ -35,6 +35,7 @@
 import * as money from "@waltning/core/money";
 import { Text, View } from "react-native";
 import { Amount } from "../../../fx/atoms/amount/amount";
+import { useT } from "../../../i18n/provider";
 import { categoryTintFor } from "../../../primitives/monogram.ts";
 import { text } from "../../../theme/fonts.ts";
 import { useTheme } from "../../../theme/provider";
@@ -44,6 +45,8 @@ import { radius, space } from "../../../tokens.ts";
 export type SpendRow = {
   key: string;
   label: string;
+  /** What the bar's colour is hashed from, when not `label` — language-independent. */
+  tintKey?: string;
   amount: money.Money;
 };
 
@@ -52,11 +55,14 @@ export type SpendRowsProps = {
   rows: readonly SpendRow[];
   currency: string;
   decimals?: number;
+  /** Some row was stated at a rate that is not its own date's — says so under the rows. */
+  estimated?: boolean;
 };
 
 const BAR_HEIGHT = 9;
 
-export function SpendRows({ rows, currency, decimals = 2 }: SpendRowsProps) {
+export function SpendRows({ rows, currency, decimals = 2, estimated = false }: SpendRowsProps) {
+  const t = useT();
   const styles = useStyles();
   const theme = useTheme();
 
@@ -93,7 +99,7 @@ export function SpendRows({ rows, currency, decimals = 2 }: SpendRowsProps) {
       width: `${share(row.amount, widest)}%` as const,
       // A bar is the category's *mark*, not its wash: the pale tint is 1.1:1
       // against the track.
-      backgroundColor: categoryTintFor(row.label, theme).solid,
+      backgroundColor: categoryTintFor(row.tintKey ?? row.label, theme).solid,
     },
   }));
 
@@ -112,6 +118,7 @@ export function SpendRows({ rows, currency, decimals = 2 }: SpendRowsProps) {
           </View>
         </View>
       ))}
+      {estimated ? <Text style={styles.estimated}>{t("shell.estimatedAtToday")}</Text> : null}
     </View>
   );
 }
@@ -129,6 +136,7 @@ function share(amount: money.Money, widest: money.Money): number {
 
 const useStyles = makeStyles((theme) => ({
   root: { gap: space.lg },
+  estimated: { color: theme.textMuted, ...text.ui("caption") },
   row: { flexDirection: "row", alignItems: "center", gap: space.x3 },
   label: { width: 74, color: theme.text, ...text.ui("label") },
   track: {

@@ -36,6 +36,7 @@ import { currencies } from "@waltning/schema/sqlite/currencies";
 import { dashboardLayouts } from "@waltning/schema/sqlite/dashboard-layouts";
 import { dashboardWidgets } from "@waltning/schema/sqlite/dashboard-widgets";
 import { fxRates } from "@waltning/schema/sqlite/fx-rates";
+import { openingDebts } from "@waltning/schema/sqlite/opening-debts";
 import { recurringTransactions } from "@waltning/schema/sqlite/recurring-transactions";
 import { tags } from "@waltning/schema/sqlite/tags";
 import { transactionLines } from "@waltning/schema/sqlite/transaction-lines";
@@ -73,6 +74,7 @@ const REPLICA_IMPORTS = {
   dashboardLayouts,
   dashboardWidgets,
   fxRates,
+  openingDebts,
   recurringTransactions,
   tags,
   transactionLines,

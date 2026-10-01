@@ -678,6 +678,7 @@ nudge.
 | `motion-move` | 220ms | `cubic-bezier(.77,0,.175,1)` | Something already visible **moving** — the title sliding into its collapsed place. Ease-in-out: a visible thing leaves gently too |
 | `motion-fold` | 260ms | `cubic-bezier(.2,0,0,1)` | The header collapsing and expanding; its moving parts use `move` |
 | `motion-sheet` | 280ms | `cubic-bezier(.32,.72,0,1)` | Bottom sheet rise — the iOS drawer curve: quick off the edge, long settle |
+| `motion-screen` | 150ms | the platform's fade | **A pushed screen arriving** — a short fade, never a slide, so a tap on a card does not swap the page with nothing in between. On a phone it is the navigator's own transition; **the web build's navigator draws none, so each screen fades itself in on mount** (Reanimated, same duration). Sheets and modals keep their own motion. Under the OS Reduce motion setting it is `motion-none` |
 | `motion-none` | 0 | — | `prefers-reduced-motion` branch |
 
 **Three rules from the practitioners, adopted.** Nothing on a UI element runs
@@ -726,6 +727,15 @@ and the sheet rise are all currently unbranched (§10).
 
 [Phosphor Icons](https://phosphoricons.com) — `fill` for brand and emphasis,
 `duotone` for navigation. Icon-only buttons always carry an accessible label.
+
+**The app icon** is a sage wallet with a golden bolt on beige `#F4EBDD`, drawn
+once in `apps/mobile/assets/icon/icon.svg`. Expo cuts every platform size from
+two images, so those two are all the repo keeps: `icon.png` (1024, opaque —
+App Store Connect refuses an icon with an alpha channel) and
+`adaptive-foreground.png` (1024, transparent, the art scaled to 81% so it stays
+inside Android's 66/108 safe zone under any launcher mask), with the beige as
+the adaptive background. The bolt is the one yellow in the product, and it is
+the icon's, never the interface's.
 
 ### 2.9 The moving parts of the screen
 

@@ -27,9 +27,9 @@
 
 import * as money from "@waltning/core/money";
 import type { AccountColor, AccountKind } from "@waltning/core/registry/inputs";
-import { useCallback, useMemo, useState } from "react";
-import { Text, View } from "react-native";
-import { Amount } from "../../../fx/atoms/amount/amount";
+import { type ReactNode, useCallback, useMemo, useState } from "react";
+import { type LayoutChangeEvent, Text, View } from "react-native";
+import { Amount, type AmountKind } from "../../../fx/atoms/amount/amount";
 import { useT } from "../../../i18n/provider";
 import { PressableScaled } from "../../../primitives/atoms/pressable-scaled/pressable-scaled";
 import { SegmentControl } from "../../../primitives/atoms/segment-control/segment-control";
@@ -78,6 +78,13 @@ export type HoldingsCardProps = {
   /** Drawn under the figure, and the title becomes *Mine* — or `null`, and neither. */
   ours: money.Money | null;
   held: money.Money;
+  /**
+   * What asset accounts (bank, cash, deposit…) are below zero by — said as
+   * *overdrawn*, because there is no lender behind it. A magnitude, like
+   * `owed`.
+   */
+  overdrawn: money.Money;
+  /** What liability accounts (a card) are below zero by — a real debt, said as *owed*. */
   owed: money.Money;
   counted: number;
   of: number;
@@ -113,6 +120,7 @@ export function HoldingsCard({
   mine,
   ours,
   held,
+  overdrawn,
   owed,
   counted,
   of,
@@ -130,6 +138,13 @@ export function HoldingsCard({
   const theme = useTheme();
   const [open, setOpen] = useState(initiallyOpen);
   const [lens, setLens] = useState<CardLens>(initialLens);
+
+  // The room a figure in the line under the total has — measured here, because
+  // in that row a figure would only ever measure itself (`Amount`'s `fitWidth`).
+  const [lineWidth, setLineWidth] = useState<number | null>(null);
+  const handleFiguresLayout = useCallback((event: LayoutChangeEvent) => {
+    setLineWidth(Math.floor(event.nativeEvent.layout.width));
+  }, []);
 
   const handleToggle = useCallback(() => setOpen((current) => !current), []);
   const handleOpenKind = useCallback(() => onOpenAccounts("kind"), [onOpenAccounts]);
@@ -206,41 +221,79 @@ export function HoldingsCard({
         beneath it names its own in ink — two cards on one screen titling their
         figures in two different tones read as two different kinds of card.
       */}
-      <View style={styles.header}>
-        <Text style={styles.title}>
-          {ours === null ? t("accounts.holdingsTitle") : t("accounts.holdingsTitleMine")}
-        </Text>
-        <CountLink label={countLabel} onPress={handleOpenKind} />
-      </View>
-      <View style={styles.figures}>
-        <Amount value={mine} currency={currency} decimals={decimals} size="medium" />
+      {/*
+        **The header row and the hero figure are one door to S16.** The count
+        alone was the target, and a reader pressing the figure or the title —
+        the two things the eye lands on — got nothing.
+      */}
+      <Opener onPress={handleOpenKind}>
+        <View style={styles.header}>
+          <Text style={styles.title}>
+            {ours === null ? t("accounts.holdingsTitle") : t("accounts.holdingsTitleMine")}
+          </Text>
+          <View style={styles.countLink}>
+            <Text style={styles.muted}>{countLabel}</Text>
+            <View style={[styles.chevron, styles.chevronRight]} />
+          </View>
+        </View>
+        <Amount value={mine} currency={currency} decimals={decimals} size="medium" fit />
+      </Opener>
+      <View style={styles.figures} onLayout={handleFiguresLayout}>
         {ours === null ? null : (
           <View style={styles.line}>
-            <Text style={styles.muted}>{t("shell.ours")}</Text>
-            <Amount
-              value={ours}
-              currency={currency}
-              decimals={decimals}
-              size="small"
-              emphasis="muted"
-            />
-          </View>
-        )}
-        <View style={styles.line}>
-          <Amount value={held} currency={currency} decimals={decimals} size="small" />
-          <Text style={styles.soft}>{t("accounts.held")}</Text>
-          {money.isPositive(owed) ? (
-            <>
-              <Text style={styles.soft}>·</Text>
+            <View style={styles.part}>
+              <Text style={styles.muted}>{t("shell.ours")}</Text>
               <Amount
-                value={owed}
+                value={ours}
                 currency={currency}
                 decimals={decimals}
                 size="small"
+                emphasis="muted"
+              />
+            </View>
+          </View>
+        )}
+        {/*
+          **Wraps between its parts, never inside one.** Each part is a figure
+          and its label in a row that does not wrap, so a narrow card breaks
+          after *held ·* and not between a figure and the word that says what
+          it is.
+        */}
+        <View style={styles.line}>
+          <View style={styles.part}>
+            <FittedPart
+              value={held}
+              currency={currency}
+              decimals={decimals}
+              lineWidth={lineWidth}
+              label={t("accounts.held")}
+              dot={money.isPositive(overdrawn) || money.isPositive(owed)}
+            />
+          </View>
+          {money.isPositive(overdrawn) ? (
+            <View style={styles.part}>
+              <FittedPart
+                value={overdrawn}
+                currency={currency}
+                decimals={decimals}
+                lineWidth={lineWidth}
+                label={t("accounts.overdrawn")}
+                kind="spend"
+                dot={money.isPositive(owed)}
+              />
+            </View>
+          ) : null}
+          {money.isPositive(owed) ? (
+            <View style={styles.part}>
+              <FittedPart
+                value={owed}
+                currency={currency}
+                decimals={decimals}
+                lineWidth={lineWidth}
+                label={t("accounts.owed")}
                 kind="spend"
               />
-              <Text style={styles.soft}>{t("accounts.owed")}</Text>
-            </>
+            </View>
           ) : null}
         </View>
       </View>
@@ -386,19 +439,68 @@ function AccountRow({
   );
 }
 
-/** The header's door to S16 — the count is what it opens. */
-function CountLink({ label, onPress }: { label: string; onPress: () => void }) {
+/**
+ * A figure and the word beside it (and a dot after *held*), the figure fitted
+ * to the room the word leaves, **measured off the word**: how wide a long
+ * Polish label is depends on the language and the reader's text size.
+ */
+function FittedPart({
+  value,
+  currency,
+  decimals,
+  lineWidth,
+  label,
+  dot = false,
+  kind = "auto",
+}: {
+  value: money.Money;
+  currency: string;
+  decimals: number;
+  lineWidth: number | null;
+  label: string;
+  dot?: boolean;
+  kind?: AmountKind;
+}) {
+  const styles = useStyles();
+  const [tail, setTail] = useState<number | null>(null);
+  const handleTailLayout = useCallback((event: LayoutChangeEvent) => {
+    setTail(Math.floor(event.nativeEvent.layout.width));
+  }, []);
+  // `null` until the line and the word are both measured, which keeps the
+  // figure unseen rather than drawn at a size it will not keep.
+  const room =
+    tail === null || lineWidth === null ? null : Math.max(0, lineWidth - tail - space.xs);
+  return (
+    <>
+      <Amount
+        value={value}
+        currency={currency}
+        decimals={decimals}
+        size="small"
+        kind={kind}
+        fit
+        fitWidth={room}
+      />
+      <View style={styles.tail} onLayout={handleTailLayout}>
+        <Text style={styles.soft}>{label}</Text>
+        {dot ? <Text style={styles.soft}>{"\u00b7"}</Text> : null}
+      </View>
+    </>
+  );
+}
+
+/** The card's door to S16 — its header row and its figure, as one target. */
+function Opener({ onPress, children }: { onPress: () => void; children: ReactNode }) {
   const styles = useStyles();
   const { hovered, focused, handlers } = useInteraction();
   return (
     <PressableScaled
       accessibilityRole="link"
       onPress={onPress}
-      style={[styles.countLink, hovered ? styles.hovered : null, focused ? styles.focused : null]}
+      style={[styles.opener, hovered ? styles.hovered : null, focused ? styles.focused : null]}
       {...handlers}
     >
-      <Text style={styles.muted}>{label}</Text>
-      <View style={[styles.chevron, styles.chevronRight]} />
+      {children}
     </PressableScaled>
   );
 }
@@ -527,14 +629,16 @@ const useStyles = makeStyles((theme) => ({
     borderTopColor: theme.border,
   },
   toggleLabel: { color: theme.accentText, ...text.ui("label", 600) },
+  opener: { gap: space.xs, borderRadius: radius.xs },
   countLink: {
     minHeight: touchTarget.min,
     flexDirection: "row",
     alignItems: "center",
     gap: space.sm,
     paddingHorizontal: space.xs,
-    borderRadius: radius.xs,
   },
+  tail: { flexDirection: "row", alignItems: "baseline", gap: space.xs },
+  part: { flexDirection: "row", alignItems: "baseline", gap: space.xs, flexShrink: 1, minWidth: 0 },
   hovered: { backgroundColor: theme.hoverFill },
   focused: {
     outlineWidth: focus.width,

@@ -24,6 +24,9 @@ import { chooseLocale } from "@waltning/ui/i18n/locales";
 import { I18nProvider, useT } from "@waltning/ui/i18n/provider";
 import { FormAlertHost } from "@waltning/ui/primitives/form-alert-host";
 import { HapticsProvider } from "@waltning/ui/primitives/haptics";
+import { useReducedMotion } from "@waltning/ui/primitives/reduced-motion";
+import { stackMotion } from "@waltning/ui/primitives/stack-motion";
+import { RenderBoundary } from "@waltning/ui/states/render-boundary";
 import { StartupFailed } from "@waltning/ui/states/startup-failed";
 import { ThemeProvider, useTheme, useThemeName } from "@waltning/ui/theme/provider";
 import { makeStyles } from "@waltning/ui/theme/styles";
@@ -46,7 +49,9 @@ import {
   displayCurrency,
   floatPosition,
   language,
+  restartApp,
 } from "../src/platform";
+import { screenLayout } from "../src/screen-fade";
 
 export default function RootLayout() {
   const [loaded, error] = useFonts(FONT_ASSETS);
@@ -264,11 +269,16 @@ function AppStack() {
   const t = useT();
   const theme = useTheme();
   const themeName = useThemeName();
+  const motion = stackMotion(useReducedMotion());
 
   return (
     <Stack
+      screenLayout={screenLayout}
       screenOptions={{
         contentStyle: { backgroundColor: theme.ground },
+        // **Every pushed screen fades in** (~150 ms), or arrives instantly
+        // under Reduce motion — `stackMotion`'s two branches.
+        ...motion,
         // **Once, for every route.** Set per screen it comes back the first
         // time somebody adds one; the `title`s below stay because the OS
         // reads them — the back gesture's label, the web document title —
@@ -396,9 +406,31 @@ function AppShell() {
   const styles = useStyles();
   return (
     <View style={styles.root}>
-      <AppStack />
+      <RenderBoundary onError={reportRenderFailure} onRestart={handleRestart}>
+        <AppStack />
+      </RenderBoundary>
     </View>
   );
+}
+
+/** Try again can throw again, so the failure screen also restarts the app. */
+function handleRestart() {
+  restartApp().catch(() => undefined);
+}
+
+/**
+ * **A screen that throws while rendering is a screen, not a white window.**
+ * `RenderBoundary` replaces the navigator with a recoverable state and hands
+ * the error here, so it is in the log beside the startup failures.
+ */
+function reportRenderFailure(error: Error, componentStack: string) {
+  mobileDiagnostics({
+    scope: "app_runtime",
+    phase: "failure",
+    component: "render",
+    error: describeDiagnosticError(error),
+    componentStack,
+  });
 }
 
 const useStyles = makeStyles((theme) => ({

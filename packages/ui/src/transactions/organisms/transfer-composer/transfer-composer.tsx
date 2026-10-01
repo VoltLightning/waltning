@@ -36,7 +36,11 @@ import { Text, View } from "react-native";
 import { Amount } from "../../../fx/atoms/amount/amount";
 import { CurrencyMark } from "../../../fx/currency-marks";
 import { formatRate } from "../../../fx/format-rate.ts";
-import { parseAmount } from "../../../fx/molecules/amount-field/amount-field";
+import {
+  AMOUNT_INTEGER_DIGITS,
+  exceedsAmountCeiling,
+  parseAmount,
+} from "../../../fx/molecules/amount-field/amount-field";
 import { dayLabel, decimalMark } from "../../../i18n/locales";
 import { useLocale, useT } from "../../../i18n/provider";
 import { DateField } from "../../../primitives/atoms/date-field/date-field";
@@ -55,7 +59,7 @@ import { text } from "../../../theme/fonts.ts";
 import { useTheme } from "../../../theme/provider";
 import { makeStyles } from "../../../theme/styles.ts";
 import { focus, radius, space, tabularNums } from "../../../tokens.ts";
-import { AMOUNT_INTEGER_DIGITS, sanitizeAmount } from "../../amount-keys.ts";
+import { sanitizeAmount } from "../../amount-keys.ts";
 import { ComposerRow, ComposerRows } from "../../molecules/composer-rows/composer-rows";
 import { FigureInput } from "../../molecules/figure-input/figure-input";
 
@@ -274,8 +278,16 @@ export function TransferComposer({
   const feeError =
     fieldErrors?.byField["fee"]?.[0] ?? (feeUnparsable ? t("transactions.feeInvalid") : undefined);
   const toAccountError = check?.errorFor("to") ?? fieldErrors?.byField["toAccountId"]?.[0];
-  const amountError = check?.errorFor("amount") ?? fieldErrors?.byField["amountOriginal"]?.[0];
-  const toAmountError = check?.errorFor("toAmount") ?? fieldErrors?.byField["toAmount"]?.[0];
+  // A figure past the amount ceiling is held and says so under its field; a
+  // refusal the write itself made takes precedence.
+  const amountError =
+    check?.errorFor("amount") ??
+    fieldErrors?.byField["amountOriginal"]?.[0] ??
+    (exceedsAmountCeiling(amountRaw) ? t("common.amountCeiling") : undefined);
+  const toAmountError =
+    check?.errorFor("toAmount") ??
+    fieldErrors?.byField["toAmount"]?.[0] ??
+    (exceedsAmountCeiling(toAmountRaw) ? t("common.amountCeiling") : undefined);
   const dateError = fieldErrors?.byField["date"]?.[0];
   // §14.6 — declined before the write, with the currency named: the
   // controller refuses `create_transaction` on `accountId` (the *from* leg)
@@ -357,6 +369,31 @@ export function TransferComposer({
             </View>
           </IconButton>
         </View>
+        <ComposerRows>
+          <Anchored check={check} field="from">
+            <ComposerRow
+              first
+              label={t("transactions.from")}
+              value={from?.name}
+              placeholder={t("transactions.account")}
+              onPress={onOpenFromAccountPicker}
+              error={accountIdError}
+              {...(from?.balance === undefined
+                ? {}
+                : {
+                    trailing: (
+                      <Amount
+                        value={from.balance}
+                        currency={from.currency}
+                        decimals={from.decimals}
+                        size="compact"
+                        emphasis="muted"
+                      />
+                    ),
+                  })}
+            />
+          </Anchored>
+        </ComposerRows>
         <Anchored check={check} field="amount">
           <View style={[styles.figure, focused === "amount" ? styles.figureFocused : null]}>
             <FigureInput
@@ -385,31 +422,9 @@ export function TransferComposer({
           <Text style={styles.fieldError}>{toAmountError}</Text>
         ) : null}
         <ComposerRows>
-          <Anchored check={check} field="from">
-            <ComposerRow
-              first
-              label={t("transactions.from")}
-              value={from?.name}
-              placeholder={t("transactions.account")}
-              onPress={onOpenFromAccountPicker}
-              error={accountIdError}
-              {...(from?.balance === undefined
-                ? {}
-                : {
-                    trailing: (
-                      <Amount
-                        value={from.balance}
-                        currency={from.currency}
-                        decimals={from.decimals}
-                        size="compact"
-                        emphasis="muted"
-                      />
-                    ),
-                  })}
-            />
-          </Anchored>
           <Anchored check={check} field="to">
             <ComposerRow
+              first
               label={t("transactions.to")}
               value={to?.name}
               placeholder={t("transactions.account")}

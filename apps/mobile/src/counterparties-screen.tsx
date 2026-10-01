@@ -27,11 +27,14 @@ import {
 } from "@waltning/client/counterparties/counterparty-figures";
 import { debtHero } from "@waltning/client/counterparties/debt-hero";
 import { debtTotalLines } from "@waltning/client/counterparties/debt-totals";
+import { useDisplayBasis } from "@waltning/client/currencies/use-display-basis";
 import { clientFailure, emitClientDiagnostic } from "@waltning/client/diagnostics";
 import { deviceRuntime } from "@waltning/client/ledger/device-runtime";
 import { useLedgerController } from "@waltning/client/ledger/use-ledger-controller";
 import { usePhoneLedger } from "@waltning/client/ledger/use-phone-ledger";
 import { useUnsettledBanner } from "@waltning/client/ledger/use-unsettled-banner";
+import type { AccountingDate } from "@waltning/core/date";
+import type { CurrencyCode } from "@waltning/core/money";
 import * as money from "@waltning/core/money";
 import { CounterpartyRow } from "@waltning/ui/counterparties/counterparty-row";
 import { Amount } from "@waltning/ui/fx/amount";
@@ -51,6 +54,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Text, View } from "react-native";
 import { mobileDiagnostics } from "./diagnostics.ts";
 import { openUnsettled } from "./open-unsettled.ts";
+import { displayCurrency } from "./platform";
 
 /**
  * **Open, or everyone.** S12 absorbed S37: one screen holds both the parties
@@ -179,11 +183,27 @@ export default function Counterparties() {
       error: totalsFailureReason,
     });
   }, [totalsFailureReason?.message]);
-  const pivot = snapshot.currencies.find((currency) => currency.isPivot)?.code;
+  // §7.0 — figures are stated in the display currency; `readRate` answers in its direction.
+  const basis = useDisplayBasis(
+    ledger,
+    snapshot.currencies,
+    displayCurrency,
+    today,
+    snapshot.revision,
+  );
+  const pivot = basis?.currency;
+  const readRate = useMemo(
+    () =>
+      basis === null
+        ? ledger.readRate
+        : (pair: { quote: CurrencyCode; date: AccountingDate }) =>
+            basis.readFromDisplay(pair.quote, pair.date),
+    [basis, ledger.readRate],
+  );
 
   const rows = useMemo((): readonly DebtRow[] => {
     if (!pivot) return [];
-    const rateOf = makeRateOf(ledger.readRate, pivot, today);
+    const rateOf = makeRateOf(readRate, pivot, today);
     return groupByCounterparty(balances).map((group) => ({
       counterpartyId: group.counterpartyId,
       name: group.name,
@@ -193,7 +213,7 @@ export default function Counterparties() {
       ageDays: group.ageDays,
       ageBucket: group.ageBucket,
     }));
-  }, [balances, ledger.readRate, pivot, snapshot.currencies, today]);
+  }, [balances, readRate, pivot, snapshot.currencies, today]);
 
   /**
    * S12 §3's hero — S04's own card, holding debt's subtraction: its bar splits
@@ -209,11 +229,11 @@ export default function Counterparties() {
    */
   const hero = useMemo(() => {
     if (!pivot) return null;
-    const rateOf = makeRateOf(ledger.readRate, pivot, today);
+    const rateOf = makeRateOf(readRate, pivot, today);
     const lines = groupByCounterparty(balances).flatMap((group) => group.balances);
     const decimals = snapshot.currencies.find((currency) => currency.code === pivot)?.decimals ?? 2;
     return debtHero(lines, pivot, rateOf, decimals);
-  }, [balances, ledger.readRate, pivot, snapshot.currencies, today]);
+  }, [balances, readRate, pivot, snapshot.currencies, today]);
 
   /*
     The lines the card draws, zero halves already dropped — *you owe · EUR
@@ -247,7 +267,7 @@ export default function Counterparties() {
       return [...rows.filter(isOpen)].sort((a, b) => a.name.localeCompare(b.name));
     }
     if (!pivot) return [];
-    const rateOf = makeRateOf(ledger.readRate, pivot, today);
+    const rateOf = makeRateOf(readRate, pivot, today);
     const withBalances = new Map(rows.map((row) => [row.counterpartyId, row]));
     const everyone = snapshot.counterparties
       .filter((counterparty) => !counterparty.archived)
@@ -269,7 +289,7 @@ export default function Counterparties() {
           },
       );
     return everyone.sort((a, b) => a.name.localeCompare(b.name));
-  }, [ledger.readRate, pivot, rows, segment, snapshot.counterparties, snapshot.currencies, today]);
+  }, [readRate, pivot, rows, segment, snapshot.counterparties, snapshot.currencies, today]);
 
   /**
    * **People and companies, by legal nature.** Only in *Everyone*: the open

@@ -148,6 +148,27 @@
       "when": 1790268849904,
       "tag": "0020_schema",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "6",
+      "when": 1790812434887,
+      "tag": "0021_debt_categories",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "6",
+      "when": 1790821957664,
+      "tag": "0022_account_guards",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "6",
+      "when": 1790870628371,
+      "tag": "0023_schema",
+      "breakpoints": true
     }
   ]
 }

@@ -1,6 +1,7 @@
 /** @vitest-environment jsdom */
 
 import { act, renderHook } from "@testing-library/react";
+import { forgetStartPage, startPage } from "@waltning/client/ledger/tab-back/start-page-store";
 import { accountingDate, yearMonth } from "@waltning/core/date";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { URL_LAG_MS, usePagerRoute } from "./use-pager-route.ts";
@@ -39,6 +40,19 @@ it("reads the page and the day out of the URL", () => {
   params = { view: "list", date: "2026-05-25" };
   const { result } = renderHook(() => usePagerRoute(TODAY));
   expect(result.current.state).toEqual({ page: "list", date: "2026-05-25", query: null });
+});
+
+it("publishes the page on screen at once, not when the URL catches up", () => {
+  // Swipe to Calendar and press back inside `URL_LAG_MS`: the decision must see Calendar.
+  const { result, unmount } = renderHook(() => usePagerRoute(TODAY));
+  act(() => {
+    result.current.showPage("calendar");
+  });
+  expect(setParams).not.toHaveBeenCalled();
+  expect(startPage()).toBe("calendar");
+  unmount();
+  expect(startPage()).toBe("summary");
+  forgetStartPage();
 });
 
 it("lands somewhere sensible when the URL is nonsense", () => {

@@ -1,6 +1,6 @@
 /**
- * `CategorySheet` — S06. One picker, composed the same way from Quick add, a
- * ledger row's swipe, and the detail screen.
+ * `CategorySheet` — S06. One picker, composed the same way from Quick add
+ * and the detail screen.
  *
  * `WithProposal` and `LowConfidence` are D2's contract, photographed: the
  * proposal is a value the caller computed and handed in, never something

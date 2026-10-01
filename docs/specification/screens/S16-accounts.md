@@ -160,6 +160,25 @@ matches* about a row the register is deliberately holding back would be lying
 about the ledger. The count of hidden accounts sits below the list as the way
 back in, so no decision made here is one the screen cannot undo.
 
+**An account below zero says what it is.** A bank, cash or deposit account
+under nothing is **overdrawn**: its row reads *Bank A · overdrawn 504,20 €*,
+the word and the magnitude in the spend colour, and not a bare negative that
+reads as money owed to someone. Any other kind below zero — a card or a loan, a real debt to a lender, but also
+clearing, investment and other accounts — keeps its signed figure. The rule is
+the account's kind (`isOverdrawn`: bank, cash, deposit), and it is words only: the balance and every total are
+the figures they were.
+
+**An account nothing references can be deleted.** In the editor an account with
+no entries — no transaction on either leg, soft-deleted ones included, no
+recurring rule, no import batch and no opening balance — offers **Delete
+account** beside *Archive*, behind a `ConfirmDialog` that names the account and
+says it cannot be undone. An account with any entry offers *Archive* alone
+(§6.9): its history still names it. If an entry lands between the editor
+drawing *Delete* and the tap, the write is refused and the editor says the
+account now has entries and can only be archived. A delete that loses a race
+to another device's entry is refused by the backend, blocked on S30, and the
+account returns at the next sync-down (`architecture/08`).
+
 **Hiding is not archiving, and the sheet says so.** Archiving means the account
 is finished: it refuses an account still holding money and takes it out of
 every picker. This is a view preference on a live account.
@@ -207,7 +226,7 @@ otherwise buried in an editor.
 
 | Reads | Writes |
 |---|---|
-| `get_accounts` with computed balances | `create_account` · `update_account` · `archive_account` |
+| `get_accounts` with computed balances | `create_account` · `update_account` · `archive_account` · `delete_account` |
 | `opening_balance + Σ signed legs` per account | `reorder_accounts` |
 | `accounts.expected_balance` — what you last observed | **`reconcile_account(account_id, observed_balance, as_of, note)`** |
 
@@ -245,13 +264,22 @@ second is gated (`architecture/14` §14.6). An account opens in any currency the
 replica holds; a *transaction* in a non-pivot currency needs a rate, and a
 replica that has never synced may have none.
 
-So the create form states it where the choice is made rather than letting the
-executor refuse one capture at a time later: under the currency grid, a
-currency whose `capturable` is false draws a line naming it — *"BYN has no
-exchange rate yet. The account opens fine; transactions in it cannot be
-recorded until one is set."* — and offers **Set a BYN rate**, which opens S18
-on that currency and on today's date. Save is never blocked by it: refusing an
-account for a missing rate would refuse the thing that is legal.
+So the create form takes the rate where the choice is made, rather than sending
+anyone to another screen mid-form or letting the executor refuse one capture at
+a time later. Under the currency grid, a non-pivot currency with no usable rate
+for today draws **one line** — a sentence saying so, and the rate field in the
+direction S18 states, *Rate · BYN per USD* — pre-filled with the last real rate
+the ledger held for that pair when there is one, empty when there never was.
+**Save writes both in one action**: the rate for today (`set_manual_rate`, the
+same operation S18 uses), then the account (`create_account`); a pivot
+currency, or a currency that already has a usable rate, draws no line.
+
+**The form never leaves.** A missing rate is a field error on the rate line
+(*Required*) and nothing is written; a refusal of either write is stated on the
+form and everything typed — the name, the rate, *More details* — is kept. The
+rate goes first, so an account is never created in a currency it cannot yet
+value; a rate left behind by an account that then refuses is a true statement
+about the currency and harmless.
 
 ### Opening balance and opening date
 
@@ -354,7 +382,7 @@ takes the whole ordered list and a filtered register cannot state one.
 
 Not a long-press drag: the gesture is invisible, it collides with the scroll
 this screen is mostly doing, and it cannot say which rows are movable. Archive
-stays in the editor, not a swipe.
+and Delete stay in the editor, not a swipe.
 
 ### Web
 Inline edit, `Tab` between cells, sortable headers.
@@ -373,7 +401,9 @@ trigger (§6.5); allowing it would silently reinterpret every row.
   without one. It does not *print* it: one date for every row means one rate
   per currency, so the figure shows and the rate lives in S18
   (`design-system/04` §4.2).
-- **Archive, never delete** — history references accounts (§6.9).
+- **Archive what history references; delete only what nothing does** — an
+  account no row has ever referenced may be deleted, and any other is archived
+  (§6.9).
 - **§8.4** — opening balance is derived on migration, typed only for accounts
   created afterwards.
 

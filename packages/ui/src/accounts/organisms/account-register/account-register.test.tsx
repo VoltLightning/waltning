@@ -727,3 +727,29 @@ it("switches counting off with showing", () => {
 
   expect(onSetVisibility).toHaveBeenCalledWith("bank-1", { hidden: true, inTotal: false });
 });
+
+/**
+ * A bank below zero is **overdrawn** — *Bank A · overdrawn 504.20* — and a card
+ * below zero keeps its signed figure, because that one is a debt to someone. One
+ * rendering for both read the overdraft as money owed.
+ */
+it("says overdrawn for an asset account below zero and leaves a card's debt signed", () => {
+  render(
+    <AccountRegister
+      accounts={[
+        account({ id: "bank-1", name: "Bank A", kind: "bank", balance: money.toMoney("-504.20") }),
+        account({ id: "card-1", name: "Card A", kind: "card", balance: money.toMoney("-299.63") }),
+      ]}
+      archivedAccounts={[]}
+      pivot={PIVOT}
+      onSelectAccount={vi.fn()}
+      onLoadArchived={vi.fn()}
+      onCreateAccount={vi.fn()}
+    />,
+  );
+  expect(screen.getAllByText("overdrawn")).toHaveLength(1);
+  expect(screen.getByText("504.20")).toBeDefined();
+  expect(screen.queryByText("-504.20")).toBeNull();
+  // The card: no word, and the figure keeps its sign.
+  expect(screen.getByText("-299.63")).toBeDefined();
+});

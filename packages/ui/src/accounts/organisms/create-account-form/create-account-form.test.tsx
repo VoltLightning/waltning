@@ -82,7 +82,7 @@ it("trims the name and saves it with the chosen currency, through the shared def
   fireEvent.change(screen.getByLabelText("Name"), { target: { value: "  Bank A  " } });
   fireEvent.click(screen.getByRole("radio", { name: /BYN/ }));
   screen.getByRole("button", { name: "Save" }).click();
-  expect(onSave).toHaveBeenCalledWith({ ...minimal, name: "Bank A", currency: "BYN" });
+  expect(onSave).toHaveBeenCalledWith({ ...minimal, name: "Bank A", currency: "BYN" }, null);
 });
 
 /**
@@ -104,7 +104,7 @@ it("preselects the first currency it was given, not a hardcoded one", () => {
   );
   fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Bank A" } });
   screen.getByRole("button", { name: "Save" }).click();
-  expect(onSave).toHaveBeenCalledWith({ ...minimal, name: "Bank A", currency: "PLN" });
+  expect(onSave).toHaveBeenCalledWith({ ...minimal, name: "Bank A", currency: "PLN" }, null);
 });
 
 it("prevents a name longer than the shared 120-character contract", () => {
@@ -244,17 +244,20 @@ it("reaches onSave with the whole draft once More details is filled in", () => {
 
   fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
-  expect(onSave).toHaveBeenCalledWith({
-    name: "Bank A",
-    currency: "PLN",
-    kind: "investment",
-    ownership: "own",
-    isBusiness: true,
-    openingBalance: "1234.56",
-    openingDate: "2026-01-15",
-    memo: "Migrated from Money Manager",
-    groupId: "group-1",
-  });
+  expect(onSave).toHaveBeenCalledWith(
+    {
+      name: "Bank A",
+      currency: "PLN",
+      kind: "investment",
+      ownership: "own",
+      isBusiness: true,
+      openingBalance: "1234.56",
+      openingDate: "2026-01-15",
+      memo: "Migrated from Money Manager",
+      groupId: "group-1",
+    },
+    null,
+  );
 });
 
 it("renders two errors from one map on their own fields", () => {
@@ -304,39 +307,109 @@ it("renders nothing extra with no fieldErrors prop", () => {
   expect(screen.queryByRole("alert")).toBeNull();
 });
 
+const USD = currencyCode("USD");
+const referenceBynRate = (code: string) =>
+  code === "BYN" ? { reference: { rate: "3.25", source: "nbp", date: "2026-06-10" } } : null;
+const needNoRate = () => null;
+const rated: readonly CreateAccountCurrency[] = [
+  { code: currencyCode("BYN"), name: "Belarusian Ruble", symbol: "Br", capturable: false },
+  { code: currencyCode("PLN"), name: "Polish Złoty", symbol: "zł", capturable: true },
+];
+
 /**
- * §14.6 — holding a currency and capturing in it are two capabilities. The
- * account still opens; the form says what the missing rate costs and offers
- * the one screen that fixes it.
+ * §14.6 — holding a currency and capturing in it are two capabilities. A
+ * currency with no rate for today asks for one **on the form itself**: one line,
+ * in the direction S18 states (`{quote} per {base}`), and the form never leaves.
  */
-it("names a currency with no rate, and offers S18 with it", () => {
-  const onSetRate = vi.fn();
+it("draws a rate line for a currency with no rate, and hands the typed rate to onSave", () => {
+  const onSave = vi.fn();
   render(
     <CreateAccountForm
-      currencies={[
-        { code: currencyCode("BYN"), name: "Belarusian Ruble", symbol: "Br", capturable: false },
-        { code: currencyCode("PLN"), name: "Polish Złoty", symbol: "zł", capturable: true },
-      ]}
+      currencies={rated}
+      today={TODAY}
+      groups={[]}
+      onCancel={vi.fn()}
+      onSave={onSave}
+      pivot={USD}
+    />,
+  );
+
+  // **BYN has to be chosen first**: the form opens on the first currency a
+  // capture can be valued in rather than the first one by code.
+  expect(screen.queryByLabelText("Rate · BYN per USD")).toBeNull();
+  fireEvent.click(screen.getByRole("radio", { name: /^BYN/ }));
+  expect(screen.getByText(/BYN has no exchange rate for today/)).toBeDefined();
+  fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Bank A" } });
+  fireEvent.change(screen.getByLabelText("Rate · BYN per USD"), { target: { value: "3.25" } });
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
+  expect(onSave).toHaveBeenCalledWith({ ...minimal, name: "Bank A", currency: "BYN" }, "3.25");
+
+  // Choosing one that can be valued takes the line away.
+  fireEvent.click(screen.getByRole("radio", { name: "PLN — Polish Złoty" }));
+  expect(screen.queryByLabelText("Rate · BYN per USD")).toBeNull();
+  expect(screen.queryByText(/has no exchange rate for today/)).toBeNull();
+});
+
+it("refuses Save with a field error on the rate line, and keeps the name", () => {
+  const onSave = vi.fn();
+  render(
+    <CreateAccountForm
+      currencies={rated}
+      today={TODAY}
+      groups={[]}
+      onCancel={vi.fn()}
+      onSave={onSave}
+      pivot={USD}
+    />,
+  );
+  fireEvent.click(screen.getByRole("radio", { name: /^BYN/ }));
+  fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Bank A" } });
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+  expect(onSave).not.toHaveBeenCalled();
+  expect(screen.getByText("Required")).toBeDefined();
+  expect(screen.getByLabelText("Name")).toHaveProperty("value", "Bank A");
+});
+
+it("shows the last known rate as a reference, never as the value", () => {
+  const onSave = vi.fn();
+  render(
+    <CreateAccountForm
+      currencies={rated}
+      today={TODAY}
+      groups={[]}
+      onCancel={vi.fn()}
+      onSave={onSave}
+      pivot={USD}
+      rateNeed={referenceBynRate}
+    />,
+  );
+  fireEvent.click(screen.getByRole("radio", { name: /^BYN/ }));
+  expect(screen.getByLabelText("Rate · BYN per USD")).toHaveProperty("value", "");
+  expect(screen.getByText("reference 3.2500 · nbp · 2026-06-10")).toBeDefined();
+  fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Bank A" } });
+  // A rate nobody typed is not one anybody asserted: Save refuses.
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
+  expect(onSave).not.toHaveBeenCalled();
+  fireEvent.change(screen.getByLabelText("Rate · BYN per USD"), { target: { value: "3.3" } });
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
+  expect(onSave).toHaveBeenCalledWith({ ...minimal, name: "Bank A", currency: "BYN" }, "3.3");
+});
+
+it("draws no line for a currency that already has a usable rate", () => {
+  render(
+    <CreateAccountForm
+      currencies={rated}
       today={TODAY}
       groups={[]}
       onCancel={vi.fn()}
       onSave={vi.fn()}
-      onSetRate={onSetRate}
+      pivot={USD}
+      rateNeed={needNoRate}
     />,
   );
-
-  // **BYN has to be chosen first now.** The form opens on the first currency a
-  // capture can be valued in rather than the first one by code, so the warning
-  // is about a currency the owner picked rather than one they were handed.
   fireEvent.click(screen.getByRole("radio", { name: /^BYN/ }));
-  expect(screen.getByText(/BYN has no exchange rate yet/)).toBeDefined();
-  fireEvent.click(screen.getByRole("button", { name: "Set a BYN rate" }));
-  expect(onSetRate).toHaveBeenCalledWith("BYN");
-
-  // Choosing one that can be valued takes the note away — and Save was never
-  // blocked by it in the first place.
-  fireEvent.click(screen.getByRole("radio", { name: "PLN — Polish Złoty" }));
-  expect(screen.queryByText(/has no exchange rate yet/)).toBeNull();
+  expect(screen.queryByLabelText("Rate · BYN per USD")).toBeNull();
 });
 
 /** A caller that never resolved the question is not claiming a currency is unusable. */
@@ -350,7 +423,7 @@ it("says nothing about rates when no currency declares capturable", () => {
       onSave={vi.fn()}
     />,
   );
-  expect(screen.queryByText(/has no exchange rate yet/)).toBeNull();
+  expect(screen.queryByText(/has no exchange rate for today/)).toBeNull();
 });
 
 /**
@@ -376,7 +449,7 @@ it("opens on a currency a capture can be valued in, not the first one by code", 
   );
 
   // Nothing is warned about, because nothing unusable is selected.
-  expect(screen.queryByText(/has no exchange rate yet/)).toBeNull();
+  expect(screen.queryByText(/has no exchange rate for today/)).toBeNull();
   expect(screen.getByRole("radio", { name: /^PLN/ }).getAttribute("aria-checked")).toBe("true");
   expect(screen.getByRole("radio", { name: /^BYN/ }).getAttribute("aria-checked")).toBe("false");
 });
@@ -392,7 +465,28 @@ it("still selects something when no currency is capturable", () => {
       groups={[]}
       onCancel={vi.fn()}
       onSave={vi.fn()}
+      pivot={USD}
     />,
   );
-  expect(screen.getByText(/BYN has no exchange rate yet/)).toBeDefined();
+  expect(screen.getByText(/BYN has no exchange rate for today/)).toBeDefined();
+});
+
+/**
+ * §6.6 — money a person owes you is a debt on them, so a new account is never
+ * *Owed to you*. *You owe* stays: a bank loan is an account with a statement.
+ */
+it("offers no retired kind for a new account", () => {
+  render(
+    <CreateAccountForm
+      currencies={currencies}
+      today={TODAY}
+      groups={groups}
+      onCancel={vi.fn()}
+      onSave={vi.fn()}
+    />,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "More details" }));
+  fireEvent.click(screen.getByRole("button", { name: "Kind: Other" }));
+  expect(screen.queryByRole("radio", { name: "Owed to you" })).toBeNull();
+  expect(screen.getByRole("radio", { name: "You owe" })).toBeDefined();
 });

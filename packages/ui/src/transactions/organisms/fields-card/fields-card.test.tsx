@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { FieldsCard, type TransactionFields } from "./fields-card";
 
 const ACCOUNTS = [
@@ -26,8 +26,13 @@ const ACCOUNTS = [
 ];
 
 const FIELDS: TransactionFields = {
+  type: "expense",
   date: "2026-08-06",
   accountId: "account-a",
+  amount: "48.90",
+  toAccountId: null,
+  toAmount: null,
+  fee: null,
   categoryId: "cat-eating-out",
   counterpartyId: null,
   obligationCounterpartyId: null,
@@ -187,4 +192,250 @@ it("sends the one-off flag, which is off until it is turned on here", () => {
   fireEvent.click(toggle);
   fireEvent.click(screen.getByRole("button", { name: "Save" }));
   expect(onSave).toHaveBeenCalledWith({ isCapital: true });
+});
+
+/** One card for every type: an expense's amount is a row like any other field. */
+it("edits an expense's amount, unsigned, and sends only that", () => {
+  const { onSave } = renderCard();
+  fireEvent.click(screen.getByRole("button", { name: "Amount: 48.90" }));
+  fireEvent.change(screen.getByLabelText("Amount"), { target: { value: "52.10" } });
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
+  expect(onSave).toHaveBeenCalledWith({ amountOriginal: "52.10" });
+});
+
+it("counts 48.9 and 48.90 as the same amount — nothing to save", () => {
+  renderCard();
+  fireEvent.click(screen.getByRole("button", { name: "Amount: 48.90" }));
+  fireEvent.change(screen.getByLabelText("Amount"), { target: { value: "48.9" } });
+  expect(screen.queryByRole("button", { name: "Save" })).toBeNull();
+});
+
+describe("a transfer — the same card, with a transfer's own rows", () => {
+  const EUR_CARD = {
+    id: "account-c",
+    name: "Card A · EUR",
+    currency: "EUR",
+    kind: "card" as const,
+    capturable: true,
+    ownership: "own" as const,
+    groupId: null,
+  };
+  const TRANSFER: TransactionFields = {
+    ...FIELDS,
+    type: "transfer",
+    accountId: "account-b",
+    amount: "400.00",
+    toAccountId: "account-a",
+    toAmount: "400.00",
+    fee: null,
+    categoryId: null,
+    enteredName: "",
+  };
+  function renderTransfer(overrides: Partial<Parameters<typeof FieldsCard>[0]> = {}) {
+    const onOpenToAccountPicker = vi.fn();
+    const rendered = renderCard({
+      fields: TRANSFER,
+      accounts: [...ACCOUNTS, EUR_CARD],
+      accountId: "account-b",
+      toAccountId: "account-a",
+      onOpenToAccountPicker,
+      categoryId: null,
+      categoryName: null,
+      ...overrides,
+    });
+    return { ...rendered, onOpenToAccountPicker };
+  }
+
+  it("names both legs and the amount, and has no category or entered name", () => {
+    renderTransfer();
+    expect(screen.getByRole("button", { name: "From: Bank A · PLN" })).toBeDefined();
+    expect(screen.getByRole("button", { name: "To: Cash · PLN" })).toBeDefined();
+    expect(screen.getByRole("button", { name: "Amount: 400.00" })).toBeDefined();
+    expect(screen.getByRole("button", { name: "Fee" })).toBeDefined();
+    expect(screen.queryByRole("button", { name: /^Category/ }), "no category").toBeNull();
+    expect(screen.queryByRole("button", { name: /^Payee/ }), "no entered name").toBeNull();
+    // One currency, one figure: no second amount to state.
+    expect(screen.queryByRole("button", { name: /^Destination amount/ })).toBeNull();
+  });
+
+  it("keeps who it was with and who owes — a repayment can land in an account", () => {
+    renderTransfer();
+    expect(screen.getByRole("button", { name: "Counterparty" })).toBeDefined();
+    expect(screen.getByRole("button", { name: "Someone owes" })).toBeDefined();
+  });
+
+  it("opens the destination through the screen's own picker", () => {
+    const { onOpenToAccountPicker } = renderTransfer();
+    fireEvent.click(screen.getByRole("button", { name: "To: Cash · PLN" }));
+    expect(onOpenToAccountPicker).toHaveBeenCalledTimes(1);
+  });
+
+  it("moves both legs together within one currency", () => {
+    const { onSave } = renderTransfer();
+    fireEvent.click(screen.getByRole("button", { name: "Amount: 400.00" }));
+    fireEvent.change(screen.getByLabelText("Amount"), { target: { value: "450" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(onSave).toHaveBeenCalledWith({ amountOriginal: "450", toAmount: "450" });
+  });
+
+  it("asks for the destination figure once the currencies differ, and sends its currency", () => {
+    const { onSave } = renderTransfer({ toAccountId: "account-c" });
+    fireEvent.click(screen.getByRole("button", { name: /^Destination amount/ }));
+    fireEvent.change(screen.getByLabelText("Destination amount"), {
+      target: { value: "93.20" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(onSave).toHaveBeenCalledWith({
+      toAccountId: "account-c",
+      toCurrency: "EUR",
+      toAmount: "93.20",
+    });
+  });
+
+  it("adds a fee, and a typed 0 is no fee", () => {
+    const { onSave } = renderTransfer();
+    fireEvent.click(screen.getByRole("button", { name: "Fee" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Fee" }), { target: { value: "0" } });
+    expect(screen.queryByRole("button", { name: "Save" }), "0 is nothing").toBeNull();
+    fireEvent.change(screen.getByRole("textbox", { name: "Fee" }), { target: { value: "2.50" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(onSave).toHaveBeenCalledWith({ fee: "2.50" });
+  });
+});
+
+/**
+ * §6.6 — S09 follows the category: a debt category makes the role `debt`, asks
+ * **Who?** and cannot be saved without it; leaving the category takes back the
+ * role it gave, and the person it was asked for with it.
+ */
+describe("a debt category — Who? is required, the role follows the category", () => {
+  const DEBT = {
+    categoryId: "cat-borrowed",
+    categoryName: "Money from friends",
+    debtCategory: true,
+  };
+  const NINA = { obligationCounterpartyId: "cp-nina", obligationCounterpartyName: "Nina" };
+
+  it("asks Who? with no role to choose, and refuses Save on that row until a person is named", () => {
+    const { onSave } = renderCard(DEBT);
+    expect(screen.getByRole("button", { name: "Who?" })).toBeDefined();
+    expect(screen.queryByRole("button", { name: /^Role/ })).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(screen.getByText("Choose who this is with.")).toBeDefined();
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
+  it("saves the category, the person and the debt role together", () => {
+    const { onSave } = renderCard({ ...DEBT, ...NINA });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(onSave).toHaveBeenCalledWith({
+      categoryId: "cat-borrowed",
+      obligationCounterpartyId: "cp-nina",
+      obligationRole: "debt",
+    });
+  });
+
+  /** The saved row is a debt under a debt category; the pick moves it to a plain one. */
+  function renderSavedDebt(obligationRole: "debt" | "contribution") {
+    const saved: TransactionFields = {
+      ...FIELDS,
+      categoryId: "cat-borrowed",
+      obligationCounterpartyId: "cp-nina",
+      obligationRole,
+    };
+    const onSave = vi.fn();
+    const props = {
+      fields: saved,
+      accounts: ACCOUNTS,
+      accountId: "account-a",
+      onOpenAccountPicker: vi.fn(),
+      today: "2026-08-06",
+      onOpenCategoryPicker: vi.fn(),
+      counterpartyId: null,
+      counterpartyName: null,
+      ...NINA,
+      onOpenCounterpartyPicker: vi.fn(),
+      onSave,
+    };
+    const view = render(<FieldsCard {...props} {...DEBT} />);
+    return { onSave, view, props };
+  }
+
+  it("takes the role and the person back when the category stops being a debt", () => {
+    const { onSave, view, props } = renderSavedDebt("debt");
+    view.rerender(
+      <FieldsCard {...props} categoryId="cat-salary" categoryName="Salary" debtCategory={false} />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(onSave).toHaveBeenCalledWith({
+      categoryId: "cat-salary",
+      obligationCounterpartyId: null,
+      obligationRole: null,
+    });
+  });
+
+  it("keeps a role somebody chose by hand when the category changes", () => {
+    const { onSave, view, props } = renderSavedDebt("contribution");
+    view.rerender(
+      <FieldsCard {...props} categoryId="cat-salary" categoryName="Salary" debtCategory={false} />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    // Only the category moved: the contribution and its person stay.
+    expect(onSave).toHaveBeenCalledWith({ categoryId: "cat-salary" });
+  });
+});
+
+/**
+ * A legacy row — filed under a debt category before the rule — is shown as it
+ * is. Opening it changes nothing and an unrelated edit is never held up.
+ */
+describe("a legacy row under a debt category", () => {
+  const DEBT = {
+    categoryId: "cat-borrowed",
+    categoryName: "Money from friends",
+    debtCategory: true,
+  };
+  const legacy = (overrides: Partial<TransactionFields>): TransactionFields => ({
+    ...FIELDS,
+    categoryId: "cat-borrowed",
+    ...overrides,
+  });
+
+  it("does not open with Save showing when it carries a contribution", () => {
+    renderCard({
+      ...DEBT,
+      fields: legacy({ obligationCounterpartyId: "cp-nina", obligationRole: "contribution" }),
+      obligationCounterpartyId: "cp-nina",
+      obligationCounterpartyName: "Nina",
+    });
+    expect(screen.queryByRole("button", { name: "Save" })).toBeNull();
+  });
+
+  it("says it is not counted as a debt, and a note edit saves without asking for who", () => {
+    const { onSave } = renderCard({ ...DEBT, fields: legacy({}) });
+    expect(screen.getByText(/^Not counted as a debt yet/)).toBeDefined();
+    expect(screen.queryByRole("button", { name: "Save" })).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Note" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Note" }), {
+      target: { value: "a note" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(onSave).toHaveBeenCalledWith({ note: "a note" });
+  });
+
+  it("becomes a debt the moment somebody is named", () => {
+    const { onSave } = renderCard({
+      ...DEBT,
+      fields: legacy({}),
+      obligationCounterpartyId: "cp-nina",
+      obligationCounterpartyName: "Nina",
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(onSave).toHaveBeenCalledWith({
+      obligationCounterpartyId: "cp-nina",
+      obligationRole: "debt",
+    });
+  });
 });

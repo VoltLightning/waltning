@@ -183,14 +183,22 @@ describe("readTransaction", () => {
         currency: USD,
         toCurrency: USD,
         fxRate: money.pivotPerUnit("1"),
+        fee: money.toMoney("2.5"),
         enteredName: "",
       })
       .run();
-    expect(readTransaction(db, MOVE)).toMatchObject({
+    // Both legs and the fee: S31 edits a transfer by all three.
+    const move = readTransaction(db, MOVE);
+    expect(move).toMatchObject({
       toAccountId: SAVINGS,
       toAccountName: "Savings · USD",
+      toCurrency: USD,
     });
-    expect(readTransaction(db, TXN)?.toAccountId).toBeNull();
+    expect(move?.toAmount === null ? null : money.dec(move?.toAmount ?? "0").toNumber()).toBe(100);
+    expect(move?.fee === null ? null : money.dec(move?.fee ?? "0").toNumber()).toBe(2.5);
+    const expense = readTransaction(db, TXN);
+    expect(expense?.toAccountId).toBeNull();
+    expect(expense?.toAmount, "no second leg on any other type").toBeNull();
   });
 
   it("returns null for a row that does not exist", () => {

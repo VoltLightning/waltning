@@ -53,6 +53,7 @@ export type LocalSearchTransaction = {
   /** `SPEC.md` §14.4b — see `readRecent`'s identical field (S10). */
   brandKey: string | null;
   categoryName: string | null;
+  categoryExternalId: string | null;
   accountId: Id<"accounts">;
   accountName: string;
   /** Present only on a transfer (`toAccountId` is the schema's own transfer marker). */

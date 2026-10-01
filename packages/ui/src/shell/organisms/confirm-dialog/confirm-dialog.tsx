@@ -26,6 +26,8 @@ export type ConfirmDialogProps = {
   confirmLabel: string;
   onConfirm: () => void;
   onCancel: () => void;
+  /** Figures the sentence names, drawn under it through `<Amount>` — never formatted into the body. */
+  children?: React.ReactNode;
 };
 
 export function ConfirmDialog({
@@ -35,6 +37,7 @@ export function ConfirmDialog({
   confirmLabel,
   onConfirm,
   onCancel,
+  children,
 }: ConfirmDialogProps) {
   const t = useT();
   const [backdropFocused, setBackdropFocused] = useState(false);
@@ -57,6 +60,7 @@ export function ConfirmDialog({
         <View accessibilityLabel={title} accessibilityViewIsModal style={styles.card}>
           <Text style={styles.title}>{title}</Text>
           <Text style={styles.body}>{body}</Text>
+          {children}
           <View style={styles.actions}>
             <Button label={t("common.cancel")} onPress={onCancel} variant="ghost" />
             <Button label={confirmLabel} onPress={onConfirm} variant="danger" />
