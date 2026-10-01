@@ -29,6 +29,7 @@ import type {
   QuickAddDraft,
   SettleDebtDraft,
 } from "../create-phone-ledger/create-phone-ledger.ts";
+import { type DemoLocale, demoAccountName, demoCounterpartyName, demoText } from "./demo-names.ts";
 import {
   DEMO_ACCOUNTS,
   DEMO_CATEGORIES,
@@ -209,6 +210,8 @@ export async function loadDemo(
   months: number = DEMO_MONTHS,
   /** History rows written so far, of how many — called after every chunk. */
   onProgress?: (written: number, of: number) => void,
+  /** The app's language: people, accounts, shops and notes are named in it (`demo-names.ts`). */
+  locale: DemoLocale = "en",
 ): Promise<DemoOutcome> {
   const outcome: DemoOutcome = {
     rates: 0,
@@ -294,7 +297,7 @@ export async function loadDemo(
   for (const account of DEMO_ACCOUNTS) {
     const id = accepted(() =>
       target.createAccount({
-        name: account.name,
+        name: demoAccountName(locale, account.ref, account.name),
         currency: account.currency,
         kind: account.kind,
         ownership: "own",
@@ -320,7 +323,7 @@ export async function loadDemo(
   for (const counterparty of DEMO_COUNTERPARTIES) {
     const id = accepted(() =>
       target.createCounterparty({
-        name: counterparty.name,
+        name: demoCounterpartyName(locale, counterparty.ref, counterparty.name),
         kind: counterparty.kind,
         settlementCurrency: counterparty.settlementCurrency,
         contact: null,
@@ -350,7 +353,7 @@ export async function loadDemo(
         accountId,
         categoryId: categoryIds.get(debt.category) ?? null,
         date,
-        enteredName: debt.enteredName,
+        enteredName: demoText(locale, debt.enteredName),
         note: "",
         isBusiness: false,
         // §6.6.1 — both links. Who the row was *with* is a different fact from
@@ -437,7 +440,7 @@ export async function loadDemo(
   // Everything a screen needs to be complete is written above; this is only
   // the history, and each chunk is one `batch` — one snapshot rebuild rather
   // than one per row — followed by a yield so the screen can draw progress.
-  const history = [...demoTransactions(today, months)];
+  const history = [...demoTransactions(today, months, locale)];
   for (let at = 0; at < history.length; at += HISTORY_CHUNK) {
     const chunk = history.slice(at, at + HISTORY_CHUNK);
     const writeChunk = () => {

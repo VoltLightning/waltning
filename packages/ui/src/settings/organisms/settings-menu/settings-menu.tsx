@@ -43,6 +43,7 @@ import {
   ClockCounterClockwiseIcon,
   CreditCardIcon,
   CurrencyCircleDollarIcon,
+  LockIcon,
   ShieldCheckIcon,
   SlidersHorizontalIcon,
   TagIcon,
@@ -63,6 +64,7 @@ export type SettingsMenuGlyph =
   | "restore"
   | "appearance"
   | "language"
+  | "lock"
   | "developer";
 
 const GLYPHS = {
@@ -74,6 +76,7 @@ const GLYPHS = {
   restore: ClockCounterClockwiseIcon,
   appearance: CircleHalfRegularIcon,
   language: TranslateIcon,
+  lock: LockIcon,
   developer: SlidersHorizontalIcon,
 } as const satisfies Record<SettingsMenuGlyph, (props: PhosphorIconProps) => ReactElement>;
 

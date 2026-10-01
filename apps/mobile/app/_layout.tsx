@@ -24,6 +24,8 @@ import { chooseLocale } from "@waltning/ui/i18n/locales";
 import { I18nProvider, useT } from "@waltning/ui/i18n/provider";
 import { FormAlertHost } from "@waltning/ui/primitives/form-alert-host";
 import { HapticsProvider } from "@waltning/ui/primitives/haptics";
+import { useReducedMotion } from "@waltning/ui/primitives/reduced-motion";
+import { stackMotion } from "@waltning/ui/primitives/stack-motion";
 import { RenderBoundary } from "@waltning/ui/states/render-boundary";
 import { StartupFailed } from "@waltning/ui/states/startup-failed";
 import { ThemeProvider, useTheme, useThemeName } from "@waltning/ui/theme/provider";
@@ -49,6 +51,7 @@ import {
   language,
   restartApp,
 } from "../src/platform";
+import { screenLayout } from "../src/screen-fade";
 
 export default function RootLayout() {
   const [loaded, error] = useFonts(FONT_ASSETS);
@@ -266,11 +269,16 @@ function AppStack() {
   const t = useT();
   const theme = useTheme();
   const themeName = useThemeName();
+  const motion = stackMotion(useReducedMotion());
 
   return (
     <Stack
+      screenLayout={screenLayout}
       screenOptions={{
         contentStyle: { backgroundColor: theme.ground },
+        // **Every pushed screen fades in** (~150 ms), or arrives instantly
+        // under Reduce motion — `stackMotion`'s two branches.
+        ...motion,
         // **Once, for every route.** Set per screen it comes back the first
         // time somebody adds one; the `title`s below stay because the OS
         // reads them — the back gesture's label, the web document title —
