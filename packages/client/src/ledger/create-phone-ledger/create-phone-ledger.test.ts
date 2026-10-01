@@ -1775,6 +1775,7 @@ describe("phone ledger controller — createCategory", () => {
   it("creates a leaf under the chosen group and the tree refreshes", () => {
     const { controller, createCategory } = categoryHarness();
     const result = controller.createCategory({
+      drawnNames: {},
       name: "Eating out",
       kind: "expense",
       parentId: GROUP,
@@ -1828,6 +1829,7 @@ describe("phone ledger controller — createCategory", () => {
   it("refuses a sibling with the same folded name in the same group, before writing", () => {
     const { controller, createCategory } = categoryHarness();
     const result = controller.createCategory({
+      drawnNames: {},
       name: "groceries",
       kind: "expense",
       parentId: GROUP,
@@ -1842,6 +1844,7 @@ describe("phone ledger controller — createCategory", () => {
     const { controller, createCategory } = categoryHarness();
     const OTHER_GROUP = id<"categories">("88888888-8888-4888-8888-888888888888");
     const result = controller.createCategory({
+      drawnNames: {},
       name: "Groceries",
       kind: "expense",
       parentId: OTHER_GROUP,
@@ -3222,7 +3225,11 @@ describe("category writes", () => {
     it("propagates the new name and bumps the version on the port call", () => {
       const { controller, renameCategory } = harness(undefined, { categoryTree: tree() });
 
-      const result = controller.renameCategory({ id: GROCERIES, name: "Groceries & household" });
+      const result = controller.renameCategory({
+        id: GROCERIES,
+        name: "Groceries & household",
+        drawnNames: {},
+      });
 
       expect(idOf(result)).toBe(GROCERIES);
       expect(renameCategory.mock.calls[0]?.[0]).toMatchObject({
@@ -3253,7 +3260,11 @@ describe("category writes", () => {
     it("refuses a sibling collision before writing, naming the existing sibling", () => {
       const { controller, renameCategory } = harness(undefined, { categoryTree: tree() });
 
-      const result = controller.renameCategory({ id: EATING_OUT, name: "groceries" });
+      const result = controller.renameCategory({
+        id: EATING_OUT,
+        name: "groceries",
+        drawnNames: {},
+      });
 
       expect("fieldErrors" in result && result.fieldErrors).toEqual([
         { path: "name", message: '"Groceries" already exists here' },
@@ -3263,7 +3274,11 @@ describe("category writes", () => {
 
     it("does not collide with itself when the name is unchanged", () => {
       const { controller } = harness(undefined, { categoryTree: tree() });
-      const result = controller.renameCategory({ id: GROCERIES, name: "Groceries" });
+      const result = controller.renameCategory({
+        id: GROCERIES,
+        name: "Groceries",
+        drawnNames: {},
+      });
       expect(idOf(result)).toBe(GROCERIES);
     });
   });

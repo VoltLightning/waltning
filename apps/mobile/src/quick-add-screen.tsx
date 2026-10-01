@@ -185,7 +185,7 @@ export default function QuickAdd() {
     setCategorySheet((current) => ({ ...current, open: false }));
   }, []);
   const handleCreateCategory = useCallback(
-    (categoryDraft: CreateCategoryDraft) => {
+    (categoryDraft: Omit<CreateCategoryDraft, "drawnNames">) => {
       const result = ledger.createCategory({
         ...categoryDraft,
         drawnNames: drawnNamesOf(labelOf, snapshot.categoryTree),

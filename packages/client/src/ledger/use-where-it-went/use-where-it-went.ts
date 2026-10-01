@@ -95,7 +95,9 @@ export function useWhereItWent(
     // keyed on the branded id would never match one.
     const names = new Map<string, string>(categoryTree.map((node) => [node.id, node.name]));
     const tintKeys = new Map<string, string>(
-      categoryTree.flatMap((node) => (node.externalId == null ? [] : [[node.id, node.externalId]])),
+      categoryTree.flatMap((node) =>
+        node.externalId?.startsWith("seed:") ? [[node.id, node.externalId]] : [],
+      ),
     );
 
     // The seed's own blank, if this tree carries one — its bucket merges into

@@ -1208,7 +1208,8 @@ The stored name stays the canonical one everywhere else: the database's
 sibling-uniqueness index, the agent, exports and sync all read it. Search
 matches both the drawn name and the stored one, with accents dropped
 (*offentlicher* finds *Öffentlicher Nahverkehr*), and so does the sibling check a
-create or a rename makes before it writes: in a German app, creating *Gehalt*
+create or a rename makes before it writes (in the phone's screens and controller;
+the replica's executors, the server and the agent compare stored names only): in a German app, creating *Gehalt*
 beside the drawn *Gehalt* is refused, and so is *Salary*, and a refusal names
 the sibling as drawn. A colour is hashed from the seed tag for a starter and
 from the name otherwise, so a language change never repaints a category.

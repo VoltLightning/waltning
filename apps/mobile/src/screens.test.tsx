@@ -1837,6 +1837,38 @@ describe("CategoriesScreen", () => {
       expect(screen.queryByText("Lieferdienst")).toBeNull();
     });
 
+    it("refuses a create named like a sibling's drawn name, through the real controller", () => {
+      renderIn("de");
+      fireEvent.click(screen.getByRole("button", { name: "Neu" }));
+      fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Lebensmittel" } });
+      fireEvent.click(screen.getByRole("button", { name: "Gruppe" }));
+      fireEvent.click(screen.getByRole("radio", { name: "Essen & Trinken" }));
+      fireEvent.click(screen.getByRole("button", { name: "Speichern" }));
+      expect(screen.getByText('"Lebensmittel" already exists here')).toBeDefined();
+    });
+
+    it("offers a merge for two categories that look alike only as drawn", () => {
+      const tree = [
+        ...starters,
+        fakeCategory({
+          id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa7",
+          name: "Lebensmittel bio",
+          parentId: FOOD,
+          kind: "expense",
+          depth: 1,
+        }),
+      ];
+      render(
+        <I18nProvider locale="de">
+          <LedgerProvider controller={fakeController({ categories: tree, categoryUsage: used })}>
+            <CategoriesScreen />
+          </LedgerProvider>
+        </I18nProvider>,
+      );
+      // Stored, these are "Groceries" and "Lebensmittel bio": no resemblance.
+      expect(screen.getByText(/Lebensmittel · 5/)).toBeDefined();
+    });
+
     it("finds a starter by its German name and by its stored one", () => {
       renderIn("de");
       const search = screen.getByPlaceholderText(/^\d+ Kategorien durchsuchen$/);

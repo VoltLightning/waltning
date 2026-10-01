@@ -407,7 +407,7 @@ export default function CategoriesScreen() {
       showToast({
         message: t("categories.rename"),
         undo: () => {
-          ledger.renameCategory({ id: sheet.category.id, name: oldName });
+          ledger.renameCategory({ id: sheet.category.id, name: oldName, drawnNames: {} });
         },
       });
     },
@@ -441,7 +441,7 @@ export default function CategoriesScreen() {
 
   const handleOpenCreate = useCallback(() => setSheet({ type: "create" }), []);
   const handleSaveCreate = useCallback(
-    (draft: CreateCategoryDraft) => {
+    (draft: Omit<CreateCategoryDraft, "drawnNames">) => {
       const result = ledger.createCategory({ ...draft, drawnNames });
       if ("fieldErrors" in result) {
         setSheet({ type: "create", error: messageOf(result.fieldErrors) });

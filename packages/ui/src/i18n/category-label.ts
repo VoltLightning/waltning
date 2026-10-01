@@ -34,7 +34,7 @@ export type CategoryNamed = {
  * a starter's is never translated, so what is drawn is what is stored).
  */
 export function categoryTintKey(category: CategoryNamed): string {
-  return category.externalId ?? category.name;
+  return category.externalId?.startsWith("seed:") ? category.externalId : category.name;
 }
 
 /**

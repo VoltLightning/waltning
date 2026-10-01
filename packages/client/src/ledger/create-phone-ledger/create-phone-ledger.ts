@@ -1313,7 +1313,7 @@ export type CreateCategoryDraft = {
    * starter is drawn in the app's language, so a sibling collides with what
    * the person *sees* as well as with what is stored (`SPEC.md` §6.3).
    */
-  drawnNames?: Readonly<Record<string, string>>;
+  drawnNames: Readonly<Record<string, string>>;
 };
 
 /**
@@ -1396,7 +1396,7 @@ export type RenameCategoryDraft = {
   id: string;
   name: string;
   /** As on `CreateCategoryDraft`. */
-  drawnNames?: Readonly<Record<string, string>>;
+  drawnNames: Readonly<Record<string, string>>;
 };
 
 /** What S19's move sheet can save — `parentId: null` moves to the root. */

@@ -175,7 +175,7 @@ export default function Dashboard() {
   );
   const tintKeyOf = new Map<string, string>(
     snapshot.categoryTree.flatMap((category) =>
-      category.externalId == null ? [] : [[category.id, category.externalId]],
+      category.externalId?.startsWith("seed:") ? [[category.id, category.externalId]] : [],
     ),
   );
   const spendForLead = spendRows.filter((row) => row.currency === leadCurrency);
