@@ -198,7 +198,7 @@ describe("J07 — lend and settle", () => {
     render(<JourneyHarness controller={ledger.controller} stub={stub} />);
     await settleLayout();
 
-    fireEvent.change(screen.getByLabelText("How much?"), { target: { value: "250" } });
+    fireEvent.change(screen.getByLabelText(/^How much\?/), { target: { value: "250" } });
     fireEvent.click(screen.getByRole("button", { name: /^From/ }));
     fireEvent.click(screen.getByRole("radio", { name: "Cash · PLN" }));
     fireEvent.click(screen.getByRole("button", { name: /^More details/ }));

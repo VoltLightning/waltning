@@ -52,6 +52,14 @@ export type AmountCardProps = {
   decimals: number;
   /** Drawn after the figure, in the accent — absent until an account is chosen. */
   currency?: string | undefined;
+  /**
+   * Drawn in the currency's place, on the figure's own line, while there is no
+   * currency to draw — *Choose an account first*. It adds no line: the card is
+   * as tall with it as without. It is drawn while the figure is empty and gives
+   * way the moment a digit is typed, so it can never cost the figure width; it
+   * is spoken with the field's label throughout.
+   */
+  waiting?: string | undefined;
   /** Which way the money goes, which is the figure's own colour on its sign. */
   kind: "expense" | "income";
   /** One finished sentence under the figure — *Groceries this month: 61% of usual*. */
@@ -70,6 +78,7 @@ export function AmountCard({
   onChangeRaw,
   decimals,
   currency,
+  waiting,
   kind,
   context,
   error,
@@ -115,14 +124,25 @@ export function AmountCard({
     >
       {compact ? null : <Text style={styles.label}>{label}</Text>}
       <FigureInput
-        label={label}
+        // The drawn row is hidden from assistive technology, so the hint is spoken here.
+        label={
+          currency === undefined && waiting !== undefined
+            ? t("common.fieldValue", { field: label, value: waiting })
+            : label
+        }
         value={display}
         onChangeText={handleChange}
         step={compact ? "displayOne" : "displayHero"}
         maxLength={AMOUNT_INTEGER_DIGITS + 1 + decimals}
         sign={sign}
         affix={
-          currency === undefined ? undefined : (
+          currency === undefined ? (
+            waiting === undefined || raw !== "" ? undefined : (
+              <Text numberOfLines={1} style={styles.waiting}>
+                {waiting}
+              </Text>
+            )
+          ) : (
             <Text maxFontSizeMultiplier={textCap("displayHero")} style={styles.affix}>
               <CurrencyMark code={currency} />
             </Text>
@@ -165,6 +185,9 @@ const useStyles = makeStyles((theme) => ({
   focused: focusBorder(theme.focusRing, { horizontal: space.x3b, vertical: space.x5 }),
   focusedCompact: focusBorder(theme.focusRing, { horizontal: space.x3b, vertical: space.lg }),
   affix: { color: theme.accentText, ...text.ui("displayTwo") },
+  // The hint gives way to the figure: it shrinks (and ellipsizes) a hundred
+  // times faster than the digits, which are never cut for it.
+  waiting: { color: theme.textMuted, ...text.ui("caption"), flexShrink: 100, minWidth: 0 },
   contextRow: { flexDirection: "row", marginTop: space.xs },
   context: {
     color: theme.accentText,

@@ -41,6 +41,8 @@ export type ComposerRowProps = {
   /** The 32 tile at the left — an icon or a letter, already tinted by the caller. S31's leg rows carry none. */
   tile?: ReactNode;
   tileFill?: string;
+  /** What assistive technology hears as the value when it says more than the value draws — the account with its currency. */
+  spokenValue?: string | undefined;
   /** What sits at the right instead of the caret — a balance on a transfer's leg row. */
   trailing?: ReactNode;
   onPress: () => void;
@@ -55,6 +57,7 @@ export type ComposerRowProps = {
 export function ComposerRow({
   label,
   value,
+  spokenValue,
   placeholder,
   tile,
   tileFill,
@@ -70,6 +73,7 @@ export function ComposerRow({
   const { hovered, focused, handlers } = useInteraction();
   const fill = { backgroundColor: tileFill ?? theme.subtleFill };
   const shown = value ?? placeholder ?? "";
+  const heard = spokenValue ?? value ?? "";
   // An empty row announces its placeholder too — the below-threshold category
   // suggestion lives only there, and text nobody hears is tint alone (P5).
   const accessibilityLabel =
@@ -78,8 +82,8 @@ export function ComposerRow({
         ? label
         : t("common.fieldValue", { field: label, value: placeholder })
       : machineFilled
-        ? t("transactions.fieldMachineFilled", { field: label, value })
-        : t("common.fieldValue", { field: label, value });
+        ? t("transactions.fieldMachineFilled", { field: label, value: heard })
+        : t("common.fieldValue", { field: label, value: heard });
 
   return (
     <View style={first ? null : styles.separated}>
