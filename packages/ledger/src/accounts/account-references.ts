@@ -97,7 +97,11 @@ export function referencedAccounts<TRun, TSchema extends typeof ledgerSchema>(
   return reasons;
 }
 
-/** Operations that act on an account itself — they name it without being an entry in it. */
+/**
+ * Operations that act only on the account row itself. Every other operation
+ * naming the account counts — `reconcile_account` included, since it writes an
+ * adjustment row.
+ */
 const STRUCTURAL = [
   "create_account",
   "update_account",
@@ -105,7 +109,6 @@ const STRUCTURAL = [
   "delete_account",
   "set_account_visibility",
   "reorder_accounts",
-  "reconcile_account",
 ];
 
 /**
@@ -113,7 +116,8 @@ const STRUCTURAL = [
  * rate yet leaves nothing in `transactions`, so the replica-side census above
  * cannot see it — yet it names the account, and a delete that went through
  * would strand it on replay. The outbox is its own file, so this is a second
- * read, over entries marked `deferred`, whose payload names the id.
+ * read, over entries marked `deferred` or `blocked` (kept editable on S30, so
+ * they need an account to be re-homed to), whose payload names the id.
  */
 export function deferredAccountReferences<TRun, TSchema extends typeof ledgerSchema>(
   outboxDb: OutboxDb<TRun, TSchema>,
@@ -124,7 +128,12 @@ export function deferredAccountReferences<TRun, TSchema extends typeof ledgerSch
   const rows = outboxDb
     .select({ payload: outbox.payload })
     .from(outbox)
-    .where(and(eq(outbox.disposition, "deferred"), notInArray(outbox.operation, STRUCTURAL)))
+    .where(
+      and(
+        or(eq(outbox.disposition, "deferred"), eq(outbox.state, "blocked")),
+        notInArray(outbox.operation, STRUCTURAL),
+      ),
+    )
     .all();
   const text = rows.map((row) => JSON.stringify(row.payload));
   for (const id of ids) if (text.some((payload) => payload.includes(id))) found.add(id);

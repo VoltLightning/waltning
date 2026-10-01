@@ -604,4 +604,29 @@ describe("delete_account and a capture the replica has not applied", () => {
     proof.close();
     session.close();
   });
+
+  it("counts a deferred reconcile, which writes an adjustment row, and a blocked entry", () => {
+    const session = createLocalLedgerSession(options());
+    session.createAccount(accountInput(), capture);
+    const reconcile = {
+      accountId,
+      adjustmentId: id<"transactions">("33333333-3333-4333-8333-333333333333"),
+      observedBalance: "5",
+      asOf: accountingDate("2026-08-23"),
+      note: "",
+    };
+    expect(() => session.reconcileAccount(reconcile as never, capture)).toThrow(
+      /no last-known rate/,
+    );
+    expect(session.listAccounts()[0]?.hasEntries).toBe(true);
+    const version = session.listAccounts()[0]?.version ?? 0;
+    expect(() => session.deleteAccount({ id: accountId, version }, capture)).toThrow(/has entries/);
+
+    // A blocked entry stays editable on S30, so it counts as well.
+    const raw = new Database(paths.outbox);
+    raw.prepare("update outbox set disposition = null, state = 'blocked'").run();
+    raw.close();
+    expect(session.listAccounts()[0]?.hasEntries).toBe(true);
+    session.close();
+  });
 });
