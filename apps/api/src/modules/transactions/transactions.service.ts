@@ -36,6 +36,9 @@ export type TransactionRow = {
   /** Signed per §1, as a decimal string in the account's currency. */
   amount: money.Money;
   currency: string;
+  /** §7.8 — what was handed over when that was not the account's currency; `null` otherwise. */
+  paidAmount: money.Money | null;
+  paidCurrency: string | null;
   accountName: string;
   categoryName: string | null;
 };
@@ -146,6 +149,8 @@ export async function searchTransactions(
       enteredName: transactions.enteredName,
       amount: signedFromLeg,
       currency: transactions.currency,
+      paidAmount: transactions.paidAmount,
+      paidCurrency: transactions.paidCurrency,
       accountName: accounts.name,
       categoryName: categories.name,
     })
@@ -187,6 +192,9 @@ export type TransactionDetail = {
   amount: money.Money;
   currency: string;
   decimals: number;
+  /** §7.8 — what was handed over when that was not the account's currency; `amount` is what it was charged. */
+  paidAmount: money.Money | null;
+  paidCurrency: string | null;
   version: number;
   lines: TransactionLineRow[];
 };
@@ -216,6 +224,8 @@ export async function getTransactionById(
       amount: signedFromLeg,
       currency: transactions.currency,
       decimals: currencies.decimals,
+      paidAmount: transactions.paidAmount,
+      paidCurrency: transactions.paidCurrency,
       version: transactions.version,
     })
     .from(transactions)

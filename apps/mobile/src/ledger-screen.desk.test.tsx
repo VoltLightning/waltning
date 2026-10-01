@@ -65,6 +65,9 @@ function expenseRow(overrides: Partial<PhoneSearchTransaction> = {}): PhoneSearc
     toFxRate: null,
     toCurrency: null,
     toDecimals: null,
+    paidAmount: null,
+    paidCurrency: null,
+    paidDecimals: null,
     isBusiness: false,
     isCapital: false,
     // §14.4b — an unrecognised entered name, which is what "Corner Bakery" is

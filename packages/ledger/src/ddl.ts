@@ -674,6 +674,13 @@ WHERE \`deleted_at\` IS NULL
       `ALTER TABLE \`transactions\` ADD \`payment_pair_id\` text`,
     ],
   },
+  {
+    tag: "0024_schema",
+    statements: [
+      `ALTER TABLE \`transactions\` ADD \`paid_amount\` text`,
+      `ALTER TABLE \`transactions\` ADD \`paid_currency\` text REFERENCES currencies(code)`,
+    ],
+  },
 ];
 
 /** One step per file in `drizzle/outbox`, filename order — the queue, its index, and the counter `claimSeq` allocates from. */

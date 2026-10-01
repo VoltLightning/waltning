@@ -69,6 +69,31 @@ describe("LedgerTable", () => {
     expect(screen.getAllByText("Mine").length).toBeGreaterThan(0);
   });
 
+  /** §7.8 — the desk table's amount column draws what was paid under the figure the account was charged. */
+  it("draws what was paid under the charged figure, and nothing under an ordinary row", () => {
+    render(
+      <LedgerTable
+        rows={[
+          row({
+            id: "p",
+            amountValue: money.toMoney("-14.02"),
+            currency: "EUR",
+            paidAmount: money.toMoney("350"),
+            paidCurrency: "CZK",
+          }),
+          row({ id: "q" }),
+        ]}
+        sort={null}
+        onSortColumn={noop}
+        selection={selectionOf()}
+        onOpenRow={noop}
+      />,
+    );
+    expect(screen.getByText("-14.02")).toBeDefined();
+    expect(screen.getByText("350.00")).toBeDefined();
+    expect(screen.getAllByText("CZK")).toHaveLength(1);
+  });
+
   /** S10 §4 — an unnamed row is titled by its kind, never by a dash in the identity column. */
   it("titles an unnamed row by its kind when it has no category either", () => {
     render(

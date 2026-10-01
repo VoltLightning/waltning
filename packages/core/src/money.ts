@@ -453,6 +453,25 @@ export const margin = ({
   };
 };
 
+/**
+ * §7.8 — what an account is charged for an amount paid in another currency, at
+ * a cross rate (`paid` in `from`, `rate` from `from` to the account's currency):
+ * `350 CZK` at `0,0401` is `14,04 €`. Rounded to the account currency's own
+ * `decimals` — the pre-filled figure is a figure the bank statement may
+ * disagree with, and it is stored at the scale the bank charges at.
+ */
+export const chargedFor = (paid: Money, rate: CrossRate, decimals: number): Money =>
+  round(toMoney(dec(paid).times(rate)), decimals);
+
+/**
+ * §7.8 — the rate an entry realised: what the account was charged for each unit
+ * paid. **Derived, never stored** — stored beside the pair it would be a third
+ * figure that could disagree with them. `null` for a zero or negative paid
+ * amount, which has no rate.
+ */
+export const realisedRate = (paid: Money, charged: Money): CrossRate | null =>
+  dec(paid).lte(0) ? null : crossRate(dec(charged).dividedBy(paid));
+
 /** Round to a currency's presentation scale — display only, never storage. */
 export const round = (v: Money, decimals: number): Money => dec(v).toFixed(decimals) as Money;
 

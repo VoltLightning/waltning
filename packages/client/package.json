@@ -89,6 +89,7 @@
     "./transactions/ledger-days": "./src/transactions/ledger-days/ledger-days.ts",
     "./transactions/match-counts": "./src/transactions/match-counts/match-counts.ts",
     "./transactions/month-grid": "./src/transactions/month-grid/month-grid.ts",
+    "./transactions/use-foreign-spend": "./src/transactions/use-foreign-spend/use-foreign-spend.ts",
     "./transactions/use-command-bar": "./src/transactions/use-command-bar/use-command-bar.ts",
     "./transactions/use-ledger-table-selection": "./src/transactions/use-ledger-table-selection/use-ledger-table-selection.ts",
     "./transactions/use-ledger-table-sort": "./src/transactions/use-ledger-table-sort/use-ledger-table-sort.ts",

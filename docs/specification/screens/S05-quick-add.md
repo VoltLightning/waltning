@@ -78,9 +78,31 @@ part that gives way: it is one line that shrinks and ellipsizes, and it is not d
 at all once a digit is typed, so it never costs the figure width. It is spoken
 with the amount field's label throughout.
 The row is above the figure, so the keyboard never covers it, and changing the
-account is one tap on it. An entry's currency is its account's: the data model
-holds a transaction in its account's currency alone, so there is no currency
-chip, and a foreign purchase is captured in the account that was charged.
+account is one tap on it.
+
+**The currency is a chip, and it is how a foreign purchase is captured**
+(`SPEC.md` §7.8). An entry is in its account's currency by default; the chip
+beside the figure — at the card's right edge, because the drawn figure is
+under the input and a button inside it would never be reached — opens *Paid in*,
+a sheet whose first answer is the account's own currency (the way back) and then
+every other currency the ledger holds. Choosing one makes the figure that
+currency — *350 CZK* — and draws a second card under it, **Charged to <the account's
+name>** (*Charged to Bank A · EUR*): the figure the account was actually charged, pre-filled at the entry day's
+cross rate and left editable, because the bank statement is the truth. The line
+under it says the rate it was filled at (*1 CZK = 0,0401 € on this day*, or *at the rate of
+28 August* when the rate is carried from an earlier day than the entry's) or that
+there is none (*No rate for CZK on this day — enter what the bank charged*), in
+which case the card is empty and Save asks for it; nothing is priced at `1`.
+Typed over, the figure stops following the amount, the date and the rate; choosing
+another currency is a new question and drops the edit. The chip says the entry is
+foreign by its accent outline and by the card under it, never by colour alone.
+A figure typed over belongs to the account it was typed for: changing to an account
+in another currency drops it and re-prices. The chip stays on a repayment
+(`settle_debt` discharges a debt in its own currency and has no paid side) so the way
+back to the account's own currency is there, but Save is refused while the amount is
+foreign, on the amount, rather than reading *350 CZK* as 350 of the account's
+currency; it is not offered while there is no other currency to choose. Save writes the charged figure as the entry's amount and the typed one
+as what was paid.
 
 **The amount is the largest thing on the screen** because it is the only field
 that is always required and always typed. It is a `TextInput` in its own card
@@ -133,7 +155,15 @@ Save footer clears the last visible line by about 8 pt (14 pt before the
 order changed); at 1.15 with a 330 pt keyboard, with no pace line, *Category* shows about 26 pt of
 its row, and with a pace line the line ends about 6 pt under the footer and
 *Category* is fully under the fold. *Who?* on a
-Borrowed or Lent draft is under the fold at both, as it was. The currency — on the account row and beside the figure — appears the
+Borrowed or Lent draft is under the fold at both, as it was. **In the foreign state the charged card is compact too**: no label (the input keeps
+it, with the rate sentence, for assistive technology), 4 of padding above and below,
+and the rate sentence on the figure's row, shrunk and ellipsized before the figure is.
+It is one figure tall — 52 pt, 58 with the gap — against about 114 in a tall window.
+That is more than the 8 pt of slack above, so on a 360 × 740 pt phone at text scale
+1.0 with a 300 pt keyboard the card takes the place *Category* had: the account row,
+the amount and the charged figure are in the first view with the Save footer fixed
+under them, and *Category* is under the fold. (These are the layout constants summed,
+not a device measurement.) The currency — on the account row and beside the figure — appears the
 moment an account is known, whether chosen or filled; with none it shows
 nothing.
 

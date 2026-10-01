@@ -33,6 +33,8 @@ export const KNOWN_PATHS = [
   "isBusiness",
   "obligationCounterpartyId",
   "obligationRole",
+  "paidAmount",
+  "paidCurrency",
 ];
 
 /**

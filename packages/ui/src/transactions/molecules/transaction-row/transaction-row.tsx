@@ -70,6 +70,14 @@ export type TransactionRowProps = {
   currency: string;
   decimals?: number;
   /**
+   * §7.8 — what was handed over, when that was not the account's currency:
+   * drawn small and muted under the figure the account was charged, which stays
+   * the row's own. Unsigned, as stored — the direction is the figure above's.
+   */
+  paidAmount?: money.Money;
+  paidCurrency?: string;
+  paidDecimals?: number;
+  /**
    * Decides the figure's colour, not its sign. Optional because older callers
    * do not carry it; absent, the row falls back to sign — right for expense
    * and income, wrong for the two legs of a transfer.
@@ -118,6 +126,9 @@ export function TransactionRow({
   amount,
   currency,
   decimals = 2,
+  paidAmount,
+  paidCurrency,
+  paidDecimals = 2,
   type: transactionType,
   isBusiness = false,
   roleTag,
@@ -160,13 +171,24 @@ export function TransactionRow({
         </View>
         {meta ? <Text style={styles.meta}>{meta}</Text> : null}
       </View>
-      <Amount
-        value={amount}
-        currency={currency}
-        decimals={decimals}
-        size="small"
-        kind={transactionType ? TRANSACTION_AMOUNT_KIND[transactionType] : "auto"}
-      />
+      <View style={styles.figures}>
+        <Amount
+          value={amount}
+          currency={currency}
+          decimals={decimals}
+          size="small"
+          kind={transactionType ? TRANSACTION_AMOUNT_KIND[transactionType] : "auto"}
+        />
+        {paidAmount === undefined || paidCurrency === undefined ? null : (
+          <Amount
+            value={paidAmount}
+            currency={paidCurrency}
+            decimals={paidDecimals}
+            size="caption"
+            emphasis="muted"
+          />
+        )}
+      </View>
     </>
   );
 
@@ -245,6 +267,8 @@ const useStyles = makeStyles((theme) => ({
    * few pixels per release until it is not dense.
    */
   identity: { flex: 1 },
+  // §7.8 — the account's figure, and under it what was paid.
+  figures: { alignItems: "flex-end" },
   enteredNameLine: { flexDirection: "row", alignItems: "center", gap: space.md },
   /**
    * Medium, where the metadata under it is regular. The entered name is what the eye

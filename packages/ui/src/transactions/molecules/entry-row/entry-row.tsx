@@ -91,6 +91,13 @@ export function EntryRow({ row, onPress, withAccount, withDate }: EntryRowProps)
       amount={row.amount}
       currency={row.currency}
       decimals={row.decimals}
+      {...(row.paidAmount != null && row.paidCurrency != null
+        ? {
+            paidAmount: row.paidAmount,
+            paidCurrency: row.paidCurrency,
+            paidDecimals: row.paidDecimals ?? 2,
+          }
+        : {})}
       {...(withAccount === true ? { account: row.accountName } : {})}
       {...(withDate === undefined ? {} : { withDate })}
       type={row.type}

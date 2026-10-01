@@ -72,11 +72,16 @@ import { makeStyles } from "../../../theme/styles.ts";
 import { radius, space, touchTarget } from "../../../tokens.ts";
 import { AmountCard } from "../../molecules/amount-card/amount-card";
 import { CategoryChips } from "../../molecules/category-chips/category-chips";
+import { ChargedCard } from "../../molecules/charged-card/charged-card";
 import {
   ComposerRow,
   ComposerRows,
   ComposerTileGlyph,
 } from "../../molecules/composer-rows/composer-rows";
+import {
+  type PaidCurrencyChoice,
+  PaidCurrencySheet,
+} from "../../molecules/paid-currency-sheet/paid-currency-sheet";
 
 const OBLIGATION_ROLES = ["debt", "contribution"] as const;
 type ObligationRole = (typeof OBLIGATION_ROLES)[number];
@@ -107,6 +112,27 @@ export type QuickAddComposerCategory = {
   usage?: number;
 };
 export type QuickAddComposerCounterparty = { id: string; name: string };
+
+/**
+ * §7.8 — an entry made in another currency than its account's. The screen owns
+ * the state (the paid currency, the charged figure and whether it was typed
+ * over) and the rate; the composer draws the chip, the sheet and the charged
+ * card. Absent, the amount is in the account's currency and no chip is drawn.
+ */
+export type QuickAddComposerForeign = {
+  /** Every currency the amount could be paid in, the account's own excluded or not. */
+  currencies: readonly PaidCurrencyChoice[];
+  /** The chosen foreign currency, or `null` for the account's own. */
+  paidCurrency: string | null;
+  onPaidCurrencyChange: (code: string | null) => void;
+  /** The paid currency's fraction digits — the amount card's cap while it is foreign. */
+  paidDecimals: number;
+  /** The raw string the charged figure holds — pre-filled by the screen, editable. */
+  chargedRaw: string;
+  onChargedChange: (raw: string) => void;
+  /** The finished sentence under the charged figure — the rate it was filled at, or that there is none. */
+  hint?: string | undefined;
+};
 
 export type QuickAddComposerProps = {
   /** The raw string the draft holds — `AmountCard`'s own value. */
@@ -206,6 +232,8 @@ export type QuickAddComposerProps = {
    * has been pressed.
    */
   check?: SubmitCheck<QuickAddCheckField>;
+  /** §7.8 — the currency chip and the charged figure. Absent, no chip is drawn. */
+  foreign?: QuickAddComposerForeign;
 };
 
 /** The fields a capture cannot be saved without. */
@@ -216,9 +244,9 @@ export type QuickAddComposerProps = {
  * says that by itself, so a role is an answer somebody gives when there is an
  * obligation — never a blank the composer waits on.
  */
-export type QuickAddCheckField = "amount" | "account" | "who";
+export type QuickAddCheckField = "amount" | "account" | "who" | "charged";
 
-type OpenSheet = "date" | "time" | "scope" | "enteredName" | "counterparty" | null;
+type OpenSheet = "date" | "time" | "scope" | "enteredName" | "counterparty" | "currency" | null;
 
 export function QuickAddComposer({
   raw,
@@ -260,6 +288,7 @@ export function QuickAddComposer({
   pace,
   fieldErrors,
   check,
+  foreign,
 }: QuickAddComposerProps) {
   const t = useT();
   const labelOf = useCategoryLabel();
@@ -281,6 +310,7 @@ export function QuickAddComposer({
   const clearTime = useCallback(() => onTimeChange(""), [onTimeChange]);
   const phone = useBreakpoint() === "phone";
   const handleOpenScopeSheet = useCallback(() => setOpenSheet("scope"), []);
+  const handleOpenCurrencySheet = useCallback(() => setOpenSheet("currency"), []);
   const handleOpenEnteredNameSheet = useCallback(() => setOpenSheet("enteredName"), []);
   const handleOpenCounterpartySheet = useCallback(() => setOpenSheet("counterparty"), []);
   const handleToggleMore = useCallback(() => setMoreShown((shown) => !shown), []);
@@ -291,6 +321,15 @@ export function QuickAddComposer({
       if (debtCategory) setOpenSheet(null);
     },
     [debtCategory, onCounterpartyChange],
+  );
+
+  const onPaidCurrencyChange = foreign?.onPaidCurrencyChange;
+  const handlePaidCurrencyPick = useCallback(
+    (code: string | null) => {
+      onPaidCurrencyChange?.(code);
+      setOpenSheet(null);
+    },
+    [onPaidCurrencyChange],
   );
 
   const handleScopePick = useCallback(
@@ -404,7 +443,18 @@ export function QuickAddComposer({
 
   const whoError = check?.errorFor("who") ?? fieldErrors?.byField["obligationCounterpartyId"]?.[0];
 
-  const amountError = check?.errorFor("amount") ?? fieldErrors?.byField["amountOriginal"]?.[0];
+  const amountError =
+    check?.errorFor("amount") ??
+    fieldErrors?.byField[foreignActive(foreign) ? "paidAmount" : "amountOriginal"]?.[0];
+  // §7.8 — the charged figure is the entry's own `amountOriginal`: its refusals are named on that path.
+  const chargedError = check?.errorFor("charged") ?? fieldErrors?.byField["amountOriginal"]?.[0];
+  const otherCurrencies = (foreign?.currencies ?? []).filter(
+    (currency) => currency.code !== selectedAccount?.currency,
+  );
+  const chargedLabel =
+    selectedAccount === undefined
+      ? ""
+      : t("transactions.chargedTo", { account: selectedAccount.name });
   /**
    * L2 — `resolveFieldErrorMessage` maps the controller's own
    * `transactions.needsRate` key onto `byField.accountId`, so a refusal left
@@ -520,17 +570,44 @@ export function QuickAddComposer({
           label={t("transactions.howMuch")}
           raw={raw}
           onChangeRaw={onRawChange}
-          decimals={selectedAccount?.decimals ?? 2}
+          decimals={
+            foreign?.paidCurrency != null ? foreign.paidDecimals : (selectedAccount?.decimals ?? 2)
+          }
           // The code: `AmountCard` draws the pivot's symbol or the code (`04` §4.1).
-          currency={selectedAccount?.currency}
+          currency={foreign?.paidCurrency ?? selectedAccount?.currency}
           kind={type}
           context={pace}
           waiting={t("transactions.amountWaitsForAccount")}
           error={amountError}
           autoFocus
           compact={compact}
+          {...(foreign === undefined ||
+          selectedAccount === undefined ||
+          otherCurrencies.length === 0
+            ? {}
+            : {
+                onPressCurrency: handleOpenCurrencySheet,
+                currencyLabel: t("transactions.paidCurrencyChip", {
+                  currency: foreign.paidCurrency ?? selectedAccount.currency,
+                }),
+                foreign: foreign.paidCurrency !== null,
+              })}
         />
       </Anchored>
+      {foreign?.paidCurrency != null && selectedAccount !== undefined ? (
+        <Anchored check={check} field="charged">
+          <ChargedCard
+            label={chargedLabel}
+            raw={foreign.chargedRaw}
+            onChangeRaw={foreign.onChargedChange}
+            currency={selectedAccount.currency}
+            decimals={selectedAccount.decimals}
+            hint={foreign.hint}
+            error={chargedError}
+            compact={compact}
+          />
+        </Anchored>
+      ) : null}
 
       <ComposerRows>
         <ComposerRow
@@ -721,6 +798,17 @@ export function QuickAddComposer({
         />
       </BottomSheet>
 
+      {foreign === undefined || selectedAccount === undefined ? null : (
+        <PaidCurrencySheet
+          visible={openSheet === "currency"}
+          accountCurrency={selectedAccount.currency}
+          currencies={otherCurrencies}
+          value={foreign.paidCurrency}
+          onPick={handlePaidCurrencyPick}
+          onDismiss={closeSheet}
+        />
+      )}
+
       <BottomSheet
         visible={openSheet === "scope"}
         title={t("transactions.scope")}
@@ -771,6 +859,11 @@ export function QuickAddComposer({
       </BottomSheet>
     </View>
   );
+}
+
+/** §7.8 — the amount is typed in a currency other than the account's. */
+function foreignActive(foreign: QuickAddComposerForeign | undefined): boolean {
+  return foreign !== undefined && foreign.paidCurrency !== null;
 }
 
 /** A `FieldAnchor` when the screen passed a check, the field alone when it did not. */

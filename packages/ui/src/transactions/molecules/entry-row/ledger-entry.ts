@@ -33,6 +33,14 @@ export type LedgerEntry = {
   toCurrency?: CurrencyCode | null;
   toDecimals?: number | null;
   /**
+   * §7.8 — what was handed over when that was not the account's currency
+   * (`350` in `CZK` on a EUR card), all three present together. `amount` stays
+   * what the account was charged, so the row's own figure is the account side.
+   */
+  paidAmount?: Money | null;
+  paidCurrency?: CurrencyCode | null;
+  paidDecimals?: number | null;
+  /**
    * §6.6's three roles. Named as a union rather than `string` so the i18n key
    * this builds is one the catalogue is known to hold — a widened role would
    * make `counterparties.role.${role}` a key nobody can prove exists.

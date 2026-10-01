@@ -591,6 +591,30 @@ export const transactions = pgTable("transactions", transactionsColumns(), (t) =
   // either — a typed `0` fee is "no fee", and the app drops it to `null`
   // before the write ever reaches here.
   check("transactions_fee_positive", sql`${t.fee} is null or ${t.fee} > 0`),
+  // §7.8 — the paid pair travels together, names a currency other than the
+  // account's, and is a real positive figure under the ceiling. The account's
+  // own currency is `currency` (`transactions_currency_matches_account`), so
+  // "other than the account's" is `paid_currency <> currency`.
+  check("transactions_paid_shape", sql`(${t.paidAmount} is null) = (${t.paidCurrency} is null)`),
+  check(
+    "transactions_paid_distinct",
+    sql`${t.paidCurrency} is null or ${t.paidCurrency} <> ${t.currency}`,
+  ),
+  // …and only an income or an expense has a paid side: a transfer's second
+  // face is its destination leg (§7.5), and an adjustment is a balance
+  // correction in the account's own currency.
+  check(
+    "transactions_paid_type",
+    sql`${t.paidAmount} is null or ${t.type} in ('income', 'expense')`,
+  ),
+  // …and never on a settlement: a repayment's discharge (`debt_amount`) is in the debt's
+  // currency, and a paid side beside it would be a third figure for one payment.
+  check(
+    "transactions_paid_not_settlement",
+    sql`${t.paidAmount} is null or ${t.debtAmount} is null`,
+  ),
+  check("transactions_paid_amount_positive", sql`${t.paidAmount} is null or ${t.paidAmount} > 0`),
+  check("transactions_paid_amount_ceiling", below(t.paidAmount)),
   // No amount a transaction holds reaches the ceiling — the four columns
   // that carry one, in one constraint so a fifth is one edit.
   check(

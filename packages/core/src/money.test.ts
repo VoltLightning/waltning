@@ -531,3 +531,18 @@ describe("dayFlows", () => {
     expect(money.isPositive(day?.spend ?? money.ZERO)).toBe(true);
   });
 });
+
+describe("a foreign spend (§7.8)", () => {
+  it("prices what was paid at the day's cross rate, to the account currency's decimals", () => {
+    expect(money.chargedFor(money.toMoney("350"), money.crossRate("0.040057"), 2)).toBe("14.02");
+  });
+
+  it("rounds to the account currency's own decimals, whole units included", () => {
+    expect(money.chargedFor(money.toMoney("12.5"), money.crossRate("35.5"), 0)).toBe("444");
+  });
+
+  it("derives the realised rate from the pair, and has none for a zero payment", () => {
+    expect(money.realisedRate(money.toMoney("350"), money.toMoney("14.02"))).toBe("0.040057142857");
+    expect(money.realisedRate(money.toMoney("0"), money.toMoney("14.02"))).toBeNull();
+  });
+});

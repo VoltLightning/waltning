@@ -76,6 +76,7 @@ function archiveCurrency(input: ArchiveCurrencyInput, tx: ReplicaTx): LocalCurre
           eq(transactions.currency, input.code),
           eq(transactions.toCurrency, input.code),
           eq(transactions.debtCurrency, input.code),
+          eq(transactions.paidCurrency, input.code),
         ),
         isNull(transactions.deletedAt),
       ),

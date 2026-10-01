@@ -23,6 +23,13 @@
  * **The figure itself is `FigureInput`** — text drawn in a row with a
  * transparent input over it — which has the whole argument for why, and the
  * three ways the other arrangement failed on a device.
+ *
+ * **The currency is a chip when the caller can say what to do with a tap**
+ * (S05 §3, §7.8): the input lies over the whole drawn row, so a button drawn
+ * inside it would never be reached. The chip sits beside the figure instead,
+ * at the card's right edge, and *replaces* the drawn affix — the currency is
+ * said once. It is the one way an entry is switched to a foreign currency;
+ * without a handler the card is exactly what it was.
  */
 
 import { useCallback, useMemo, useState } from "react";
@@ -34,11 +41,14 @@ import {
 } from "../../../fx/molecules/amount-field/amount-field";
 import { decimalMark } from "../../../i18n/locales";
 import { useLocale, useT } from "../../../i18n/provider";
+import { PressableScaled } from "../../../primitives/atoms/pressable-scaled/pressable-scaled";
+import { useInteraction } from "../../../primitives/interaction.ts";
+import { CaretDownIcon } from "../../../shell/phosphor";
 import { focusBorder } from "../../../theme/focus.ts";
 import { text, textCap } from "../../../theme/fonts.ts";
 import { useTheme } from "../../../theme/provider";
 import { makeStyles } from "../../../theme/styles.ts";
-import { radius, space } from "../../../tokens.ts";
+import { radius, space, touchTarget } from "../../../tokens.ts";
 import { sanitizeAmount } from "../../amount-keys.ts";
 import { FigureInput } from "../figure-input/figure-input";
 
@@ -70,6 +80,19 @@ export type AmountCardProps = {
   autoFocus?: boolean;
   /** Short window: the label is dropped (the input keeps it for assistive tech), the figure steps down to `displayOne` and the card is shorter. */
   compact?: boolean;
+  /**
+   * Makes the currency a chip that opens the currency choice (§7.8). Absent,
+   * the currency is only drawn after the figure, as it always was.
+   */
+  onPressCurrency?: (() => void) | undefined;
+  /** The chip's spoken name — *Currency of the amount: CZK. Change it.* */
+  currencyLabel?: string | undefined;
+  /**
+   * The amount is in a currency other than the account's: the chip says so in
+   * the accent, and not by colour alone — the charged line under the card is
+   * the second signal.
+   */
+  foreign?: boolean;
 };
 
 export function AmountCard({
@@ -84,6 +107,9 @@ export function AmountCard({
   error,
   autoFocus = false,
   compact = false,
+  onPressCurrency,
+  currencyLabel,
+  foreign = false,
 }: AmountCardProps) {
   const t = useT();
   const locale = useLocale();
@@ -114,6 +140,42 @@ export function AmountCard({
     [kind, theme],
   );
 
+  // The chip is its own control with its own border: it shows focus in that border (§2.6).
+  const { focused: chipFocused, handlers: chipHandlers } = useInteraction();
+  const chip = currency !== undefined && onPressCurrency !== undefined;
+  const figure = (
+    <FigureInput
+      // The drawn row is hidden from assistive technology, so the hint is spoken here.
+      label={
+        currency === undefined && waiting !== undefined
+          ? t("common.fieldValue", { field: label, value: waiting })
+          : label
+      }
+      value={display}
+      onChangeText={handleChange}
+      step={compact ? "displayOne" : "displayHero"}
+      maxLength={AMOUNT_INTEGER_DIGITS + 1 + decimals}
+      sign={sign}
+      affix={
+        chip ? undefined : currency === undefined ? (
+          waiting === undefined || raw !== "" ? undefined : (
+            <Text numberOfLines={1} style={styles.waiting}>
+              {waiting}
+            </Text>
+          )
+        ) : (
+          <Text maxFontSizeMultiplier={textCap("displayHero")} style={styles.affix}>
+            <CurrencyMark code={currency} />
+          </Text>
+        )
+      }
+      focused={focused}
+      onFocus={handleFocus}
+      onBlur={handleBlur}
+      autoFocus={autoFocus}
+    />
+  );
+
   return (
     <View
       style={[
@@ -123,36 +185,29 @@ export function AmountCard({
       ]}
     >
       {compact ? null : <Text style={styles.label}>{label}</Text>}
-      <FigureInput
-        // The drawn row is hidden from assistive technology, so the hint is spoken here.
-        label={
-          currency === undefined && waiting !== undefined
-            ? t("common.fieldValue", { field: label, value: waiting })
-            : label
-        }
-        value={display}
-        onChangeText={handleChange}
-        step={compact ? "displayOne" : "displayHero"}
-        maxLength={AMOUNT_INTEGER_DIGITS + 1 + decimals}
-        sign={sign}
-        affix={
-          currency === undefined ? (
-            waiting === undefined || raw !== "" ? undefined : (
-              <Text numberOfLines={1} style={styles.waiting}>
-                {waiting}
-              </Text>
-            )
-          ) : (
-            <Text maxFontSizeMultiplier={textCap("displayHero")} style={styles.affix}>
+      {chip ? (
+        <View style={styles.figureRow}>
+          <View style={styles.figureFill}>{figure}</View>
+          <PressableScaled
+            accessibilityRole="button"
+            accessibilityLabel={currencyLabel ?? currency}
+            onPress={onPressCurrency}
+            {...chipHandlers}
+            style={[
+              styles.chip,
+              foreign ? styles.chipForeign : null,
+              chipFocused ? styles.chipFocused : null,
+            ]}
+          >
+            <Text maxFontSizeMultiplier={textCap("displayTwo")} style={styles.chipMark}>
               <CurrencyMark code={currency} />
             </Text>
-          )
-        }
-        focused={focused}
-        onFocus={handleFocus}
-        onBlur={handleBlur}
-        autoFocus={autoFocus}
-      />
+            <CaretDownIcon size={14} color={theme.accentText} />
+          </PressableScaled>
+        </View>
+      ) : (
+        figure
+      )}
       {shownError === undefined ? null : <Text style={styles.error}>{shownError}</Text>}
       {context === undefined ? null : (
         <View style={styles.contextRow}>
@@ -185,6 +240,23 @@ const useStyles = makeStyles((theme) => ({
   focused: focusBorder(theme.focusRing, { horizontal: space.x3b, vertical: space.x5 }),
   focusedCompact: focusBorder(theme.focusRing, { horizontal: space.x3b, vertical: space.lg }),
   affix: { color: theme.accentText, ...text.ui("displayTwo") },
+  figureRow: { flexDirection: "row", alignItems: "center", gap: space.md },
+  figureFill: { flex: 1, minWidth: 0 },
+  // Sharp, never a pill (`waltning-design-taste`): the same 1pt outline and
+  // `radius.sm` the other chips carry. The accent fill is the foreign state.
+  chip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: space.sm,
+    minHeight: touchTarget.min,
+    paddingHorizontal: space.lg,
+    borderWidth: 1,
+    borderColor: theme.borderInteractive,
+    borderRadius: radius.sm,
+  },
+  chipForeign: { borderColor: theme.accent, backgroundColor: theme.accentFill },
+  chipFocused: focusBorder(theme.focusRing, { horizontal: space.lg }),
+  chipMark: { color: theme.accentText, ...text.ui("bodySm", 700) },
   // The hint gives way to the figure: it shrinks (and ellipsizes) a hundred
   // times faster than the digits, which are never cut for it.
   waiting: { color: theme.textMuted, ...text.ui("caption"), flexShrink: 100, minWidth: 0 },

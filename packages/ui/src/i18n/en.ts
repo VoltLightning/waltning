@@ -342,6 +342,25 @@ export const en = {
      */
     chooseAccount: "Which one?",
     amountWaitsForAccount: "Choose an account first",
+    paidCurrencyChip: "Currency of the amount: {{currency}}. Change it.",
+    paidInTitle: "Paid in",
+    paidInOwn: "{{currency}} — the account's own",
+    chargedTo: "Charged to {{account}}",
+    chargedRate: "1 {{paid}} = {{rate}} {{charged}} on this day",
+    chargedNoRate: "No rate for {{paid}} on this day — enter what the bank charged.",
+    chargedNoRateShort: "No rate — enter what was charged.",
+    paid: "Paid",
+    paidAnother: "Paid in another currency",
+    paidInCurrency: "Currency paid in",
+    paidAmount: "Amount paid",
+    charged: "Charged to the account",
+    paidMissingCurrency: "Enter the currency as well.",
+    paidMissingAmount: "Enter the amount as well.",
+    paidNotForRepayment:
+      "A repayment is recorded in the account's currency — choose the account's own currency.",
+    chargedRateCarried: "1 {{paid}} = {{rate}} {{charged}} at the rate of {{date}}",
+    paidNotForRepaymentDetail:
+      "A repayment is recorded in the account's currency — take the paid currency off this entry first.",
     chooseCategory: "What was it for?",
     /**
      * §14.6: holding a currency and capturing in it are separate capabilities.

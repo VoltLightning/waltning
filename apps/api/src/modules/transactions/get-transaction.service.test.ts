@@ -25,13 +25,15 @@ const FOOD = id<"categories">("33333333-3333-3333-3333-000000000002");
 const TXN = id<"transactions">("33333333-3333-3333-3333-000000000003");
 const DELETED_TXN = id<"transactions">("33333333-3333-3333-3333-000000000004");
 const LINE = id<"transactionLines">("33333333-3333-3333-3333-000000000005");
+const FOREIGN_TXN = id<"transactions">("33333333-3333-3333-3333-000000000006");
 
 beforeAll(async () => {
   s = await scratchDatabase("get-transaction");
   const PLN = currencyCode("PLN");
-  await s.db
-    .insert(currencies)
-    .values({ code: PLN, name: "Polish Złoty", decimals: 2, isPivot: true });
+  await s.db.insert(currencies).values([
+    { code: PLN, name: "Polish Złoty", decimals: 2, isPivot: true },
+    { code: currencyCode("CZK"), name: "Czech koruna", decimals: 2 },
+  ]);
   await s.db.insert(accounts).values({ id: ACCOUNT, name: "Bank A · PLN", currency: PLN });
   await s.db.insert(categories).values({ id: FOOD, name: "Food", kind: "expense" });
   await s.db.insert(transactions).values([
@@ -46,6 +48,19 @@ beforeAll(async () => {
       fxRate: money.pivotPerUnit("1"),
       enteredName: "Café A",
       note: "Meeting",
+    },
+    {
+      // §7.8 — 350 CZK paid with a card in an account held in PLN: the row's own
+      // figure is what the account was charged, the paid pair rides beside it.
+      id: FOREIGN_TXN,
+      date: accountingDate("2026-09-02"),
+      type: "expense",
+      accountId: ACCOUNT,
+      amountOriginal: money.toMoney("70"),
+      currency: PLN,
+      fxRate: money.pivotPerUnit("1"),
+      paidAmount: money.toMoney("350"),
+      paidCurrency: currencyCode("CZK"),
     },
     {
       id: DELETED_TXN,
@@ -86,6 +101,20 @@ describe("getTransactionById", () => {
     expect(row?.lines).toEqual([
       expect.objectContaining({ id: LINE, description: "Coffee", amount: "48.90000000" }),
     ]);
+  });
+
+  it("carries what was paid beside what the account was charged (§7.8)", async () => {
+    const row = await getTransactionById(s.db, FOREIGN_TXN);
+    expect(row).toMatchObject({
+      amount: "-70.00000000",
+      currency: "PLN",
+      paidAmount: "350.00000000",
+      paidCurrency: "CZK",
+    });
+    expect(await getTransactionById(s.db, TXN)).toMatchObject({
+      paidAmount: null,
+      paidCurrency: null,
+    });
   });
 
   it("returns null for a soft-deleted row — the same 'not there' as a missing one", async () => {

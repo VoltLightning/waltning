@@ -72,6 +72,14 @@ export type LocalSearchTransaction = {
   toFxRate: PivotPerUnit | null;
   toCurrency: CurrencyCode | null;
   toDecimals: number | null;
+  /**
+   * §7.8 — what was handed over, in `paidCurrency`, when that was not the
+   * account's currency; `null` otherwise. `amount` stays the account-side
+   * figure, so every total and balance reads what the account was charged.
+   */
+  paidAmount: Money | null;
+  paidCurrency: CurrencyCode | null;
+  paidDecimals: number | null;
   isBusiness: boolean;
   isCapital: boolean;
   /** `null` off any row with no counterparty at all — the ordinary case. */
@@ -249,6 +257,7 @@ export function searchTransactions<TRun, TSchema extends typeof ledgerSchema>(
         enteredName: transactions.enteredName,
         note: transactions.note,
         amountOriginal: transactions.amountOriginal,
+        paidAmount: transactions.paidAmount,
       })
       .from(transactions)
       .innerJoin(accounts, eq(transactions.accountId, accounts.id))
@@ -461,6 +470,7 @@ export function readMatchDays<TRun, TSchema extends typeof ledgerSchema>(
       enteredName: transactions.enteredName,
       note: transactions.note,
       amountOriginal: transactions.amountOriginal,
+      paidAmount: transactions.paidAmount,
     })
     .from(transactions)
     .innerJoin(accounts, eq(transactions.accountId, accounts.id))
