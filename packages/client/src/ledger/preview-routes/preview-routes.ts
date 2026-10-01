@@ -52,17 +52,21 @@ export function parseQuickAddRoute(params: {
   type?: RouteValue;
   /** S15's own return trip — `counterparty/new`'s `returnTo: "quick-add"` (E4). */
   counterpartyId?: RouteValue;
+  /** The category the draft held when it left for S15 — a debt category must survive the round trip. */
+  categoryId?: RouteValue;
 }): {
   amount: string;
   accountId: string | undefined;
   type: "expense" | "income" | undefined;
   counterpartyId: string | undefined;
+  categoryId: string | undefined;
 } {
   return {
     amount: one(params.amount) ?? "",
     accountId: one(params.accountId),
     type: quickAddType(params.type),
     counterpartyId: one(params.counterpartyId),
+    categoryId: one(params.categoryId),
   };
 }
 

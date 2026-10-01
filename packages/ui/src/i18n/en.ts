@@ -661,6 +661,23 @@ export const en = {
 
     /** S15's escape from S05's counterparty sheet — the same shape `onCreateAccount` gives the account sheet. */
     newCounterparty: "+ New person or company",
+    /** §6.6 — a debt category asks who the other side is, and cannot be saved without. */
+    who: "Who?",
+    whoPlaceholder: "Choose a person",
+    whoRequired: "Choose who this is with.",
+    /** S09 — a legacy row under a debt category that names nobody. */
+    notCountedAsDebt: "Not counted as a debt yet. Add who, and it is.",
+    /** Under Who?, when the person has an open debt this entry pays down. */
+    settlesOwed: "Settles what {{name}} owes you, in {{currency}}.",
+    settlesOwe: "Settles what you owe {{name}}, in {{currency}}.",
+    nothingToSettle: "Nothing to settle with {{name}}: no open debt in this direction.",
+    settleNeedsRate: "No exchange rate for {{currency}}. Please settle from the person's page.",
+    reSettle:
+      "This repayment settles a different figure than its amount (another currency, or a part forgiven), so a new amount does not say how much of the debt it settles. Please delete it and record the repayment again.",
+    splitDebtCategory:
+      "A split line cannot be filed under Borrowed, Lent out or a repayment: a debt has a person, and a line has none. Please file the whole transaction under it instead.",
+    unSplitFirst:
+      "This transaction is split into lines, and a repayment has none. Please remove the split first.",
 
     /* ── DESK2 · the desk command bar, `screens/S05-quick-add.md` §3 web ── */
     /**
@@ -1106,6 +1123,8 @@ export const en = {
     noBalances: "No accounts yet",
     noRecent: "Nothing recorded yet",
     noDebt: "Nobody owes, and you owe nobody",
+    /** The overview's list of who owes whom. */
+    openDebts: "Open debts",
     noSpend: "Nothing spent this period",
     /** M4 — a database with no active layout row at all, which the seed migration is supposed to make impossible. */
     noLayout: "No dashboard layout",
@@ -1810,6 +1829,87 @@ export const en = {
      * `CompileError`), and reloading is the one thing that helps.
      */
     ledgerUnavailableBody: "The ledger engine did not start. Reloading usually fixes it.",
+  },
+  /**
+   * The starter categories' display names, keyed by their seed key
+   * (`packages/core/src/taxonomy.ts`). English is the canonical name the seed stores;
+   * a row that has been renamed no longer reads from here (`packages/core/src/seed-label.ts`).
+   */
+  taxonomy: {
+    "business-revenue": "Business revenue",
+    services: "Services",
+    "other-revenue": "Other revenue",
+    employment: "Employment",
+    salary: "Salary",
+    "bonus-equity": "Bonus & equity",
+    returns: "Returns",
+    "investment-returns": "Investment returns",
+    interest: "Interest",
+    "other-inflows": "Other inflows",
+    "gift-received": "Gift received",
+    refund: "Refund",
+    borrowed: "Borrowed",
+    "repayment-received": "Repayment received",
+    "other-inflow": "Other inflow",
+    home: "Home",
+    "property-purchase": "Property purchase",
+    rent: "Rent",
+    utilities: "Utilities",
+    "furniture-appliances": "Furniture & appliances",
+    "household-supplies": "Household supplies",
+    renovation: "Renovation & building",
+    plumbing: "Plumbing",
+    "electrical-network": "Electrical & network",
+    "facade-exterior": "Facade & exterior",
+    garden: "Garden",
+    food: "Food",
+    groceries: "Groceries",
+    "eating-out": "Eating out",
+    delivery: "Delivery",
+    alcohol: "Alcohol",
+    transport: "Transport",
+    car: "Car",
+    taxi: "Taxi",
+    "public-transport": "Public transport",
+    "fuel-parking": "Fuel & parking",
+    travel: "Travel",
+    "flights-tickets": "Flights & tickets",
+    accommodation: "Accommodation",
+    "travel-food": "Travel food & activities",
+    health: "Health",
+    "medical-dental": "Medical & dental",
+    pharmacy: "Pharmacy",
+    "sport-fitness": "Sport & fitness",
+    "beauty-grooming": "Beauty & grooming",
+    personal: "Personal",
+    "clothing-shoes": "Clothing & shoes",
+    technology: "Technology",
+    hobbies: "Hobbies",
+    education: "Education",
+    social: "Social",
+    "friends-going-out": "Friends & going out",
+    "gifts-given": "Gifts given",
+    celebrations: "Celebrations",
+    entertainment: "Entertainment",
+    subscriptions: "Subscriptions",
+    "software-tools": "Software & tools",
+    "media-streaming": "Media & streaming",
+    "mobile-internet": "Mobile & internet",
+    financial: "Financial",
+    tax: "Tax",
+    "bank-fees": "Bank fees & commission",
+    "legal-professional": "Legal & professional",
+    insurance: "Insurance",
+    business: "Business",
+    accountant: "Accountant",
+    "business-services": "Business services",
+    "zus-business-tax": "ZUS & business tax",
+    "business-other": "Business other",
+    "debt-giving": "Debt & giving",
+    "lent-out": "Lent out",
+    "repayment-made": "Repayment made",
+    charity: "Charity",
+    uncategorized: "Uncategorized",
   },
 } as const;
 

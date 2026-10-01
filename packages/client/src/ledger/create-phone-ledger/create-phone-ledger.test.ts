@@ -216,6 +216,7 @@ function harness(
         date: input.date,
         enteredName: input.enteredName,
         categoryName: null,
+        categoryExternalId: null,
         accountName: account.name,
         amount: money.neg(input.amountOriginal),
         currency: input.currency,
@@ -702,6 +703,7 @@ describe("phone ledger controller", () => {
       id: id<"categories">("cccccccc-cccc-4ccc-8ccc-cccccccccccc"),
       name: "Freelance",
       kind: "income",
+      externalId: null,
     };
     const { controller, createTransaction } = harness(undefined, {
       categories: [incomeCategory],
@@ -747,6 +749,7 @@ describe("phone ledger controller", () => {
       id: id<"categories">("cccccccc-cccc-4ccc-8ccc-cccccccccccc"),
       name: "Freelance",
       kind: "income",
+      externalId: null,
     };
     const { controller, createTransaction } = harness(undefined, {
       categories: [category],
@@ -998,6 +1001,7 @@ describe("phone ledger controller", () => {
       id: id<"categories">("66666666-6666-4666-8666-666666666666"),
       name: "Eating out",
       kind: "expense",
+      externalId: null,
     };
     const { controller, createTransaction } = harness(undefined, {
       categories: [expenseCategory],
@@ -1049,6 +1053,7 @@ describe("phone ledger controller", () => {
       id: id<"categories">("66666666-6666-4666-8666-666666666666"),
       name: "Eating out",
       kind: "expense",
+      externalId: null,
     };
     const { controller, createTransaction } = harness(undefined, {
       categories: [expenseCategory],
@@ -1569,6 +1574,21 @@ describe("phone ledger controller — FX (E3)", () => {
     expect(listener).toHaveBeenCalledTimes(1);
   });
 
+  it.each([
+    ["update_transaction: amount_original — Re-settle: delete it", "transactions.reSettle"],
+    ["set_transaction_lines: a split line has no person to owe", "transactions.splitDebtCategory"],
+    ["settle_debt: x is split into 2 line(s) — un-split it first", "transactions.unSplitFirst"],
+  ])("§6.6 refusal %j is named onto a catalogue key", (message, messageKey) => {
+    const { controller, port } = harness();
+    (port.setPinned as ReturnType<typeof vi.fn>).mockImplementationOnce(() => {
+      throw new Error(message);
+    });
+    const refused = controller.setPinned({ code: "PLN", version: 1, pinned: true });
+    expect("fieldErrors" in refused && refused.fieldErrors).toEqual([
+      { path: "", message: expect.any(String), messageKey },
+    ]);
+  });
+
   it("setPinned: a throwing port maps to fieldErrors, a success calls refresh and returns the code", () => {
     const { controller, port } = harness();
     const listener = vi.fn();
@@ -1770,6 +1790,7 @@ describe("phone ledger controller — createCategory", () => {
   it("creates a leaf under the chosen group and the tree refreshes", () => {
     const { controller, createCategory } = categoryHarness();
     const result = controller.createCategory({
+      drawnNames: {},
       name: "Eating out",
       kind: "expense",
       parentId: GROUP,
@@ -1787,10 +1808,43 @@ describe("phone ledger controller — createCategory", () => {
     );
   });
 
+  /**
+   * A starter is drawn in the app's language, so a sibling collides with what
+   * the person sees as well as with what is stored (`SPEC.md` §6.3).
+   */
+  it("refuses a create that collides with a sibling's drawn name, naming it as drawn", () => {
+    const { controller, createCategory } = categoryHarness();
+    const result = controller.createCategory({
+      name: "Lebensmittel",
+      kind: "expense",
+      parentId: GROUP,
+      drawnNames: { [LEAF]: "Lebensmittel" },
+    });
+    expect("fieldErrors" in result && result.fieldErrors).toEqual([
+      { path: "name", message: '"Lebensmittel" already exists here' },
+    ]);
+    expect(createCategory).not.toHaveBeenCalled();
+  });
+
+  it("refuses the stored name of a sibling drawn differently, naming the drawn one", () => {
+    const { controller, createCategory } = categoryHarness();
+    const result = controller.createCategory({
+      name: "Groceries",
+      kind: "expense",
+      parentId: GROUP,
+      drawnNames: { [LEAF]: "Lebensmittel" },
+    });
+    expect("fieldErrors" in result && result.fieldErrors).toEqual([
+      { path: "name", message: '"Lebensmittel" already exists here' },
+    ]);
+    expect(createCategory).not.toHaveBeenCalled();
+  });
+
   /** S06 §6: a name collision lands on the field, naming the existing sibling. */
   it("refuses a sibling with the same folded name in the same group, before writing", () => {
     const { controller, createCategory } = categoryHarness();
     const result = controller.createCategory({
+      drawnNames: {},
       name: "groceries",
       kind: "expense",
       parentId: GROUP,
@@ -1805,6 +1859,7 @@ describe("phone ledger controller — createCategory", () => {
     const { controller, createCategory } = categoryHarness();
     const OTHER_GROUP = id<"categories">("88888888-8888-4888-8888-888888888888");
     const result = controller.createCategory({
+      drawnNames: {},
       name: "Groceries",
       kind: "expense",
       parentId: OTHER_GROUP,
@@ -1842,6 +1897,7 @@ describe("phone ledger controller — transaction detail writes (C5)", () => {
       fee: null,
       categoryId: null,
       categoryName: null,
+      categoryExternalId: null,
       counterpartyId: null,
       counterpartyIdentityName: null,
       obligationCounterpartyId: null,
@@ -1911,6 +1967,7 @@ describe("phone ledger controller — transaction detail writes (C5)", () => {
           amount: line.amount,
           categoryId: line.categoryId ?? null,
           categoryName: null,
+          categoryExternalId: null,
         })),
         version: row.version + 1,
       };
@@ -3183,7 +3240,11 @@ describe("category writes", () => {
     it("propagates the new name and bumps the version on the port call", () => {
       const { controller, renameCategory } = harness(undefined, { categoryTree: tree() });
 
-      const result = controller.renameCategory({ id: GROCERIES, name: "Groceries & household" });
+      const result = controller.renameCategory({
+        id: GROCERIES,
+        name: "Groceries & household",
+        drawnNames: {},
+      });
 
       expect(idOf(result)).toBe(GROCERIES);
       expect(renameCategory.mock.calls[0]?.[0]).toMatchObject({
@@ -3196,10 +3257,29 @@ describe("category writes", () => {
       );
     });
 
+    it("refuses a rename onto a sibling's drawn name, naming it as drawn", () => {
+      const { controller, renameCategory } = harness(undefined, { categoryTree: tree() });
+
+      const result = controller.renameCategory({
+        id: EATING_OUT,
+        name: "Lebensmittel",
+        drawnNames: { [GROCERIES]: "Lebensmittel" },
+      });
+
+      expect("fieldErrors" in result && result.fieldErrors).toEqual([
+        { path: "name", message: '"Lebensmittel" already exists here' },
+      ]);
+      expect(renameCategory).not.toHaveBeenCalled();
+    });
+
     it("refuses a sibling collision before writing, naming the existing sibling", () => {
       const { controller, renameCategory } = harness(undefined, { categoryTree: tree() });
 
-      const result = controller.renameCategory({ id: EATING_OUT, name: "groceries" });
+      const result = controller.renameCategory({
+        id: EATING_OUT,
+        name: "groceries",
+        drawnNames: {},
+      });
 
       expect("fieldErrors" in result && result.fieldErrors).toEqual([
         { path: "name", message: '"Groceries" already exists here' },
@@ -3209,7 +3289,11 @@ describe("category writes", () => {
 
     it("does not collide with itself when the name is unchanged", () => {
       const { controller } = harness(undefined, { categoryTree: tree() });
-      const result = controller.renameCategory({ id: GROCERIES, name: "Groceries" });
+      const result = controller.renameCategory({
+        id: GROCERIES,
+        name: "Groceries",
+        drawnNames: {},
+      });
       expect(idOf(result)).toBe(GROCERIES);
     });
   });

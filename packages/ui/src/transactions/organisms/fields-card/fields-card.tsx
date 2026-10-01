@@ -142,6 +142,14 @@ export type FieldsCardProps = {
   categoryName: string | null;
   onOpenCategoryPicker: () => void;
   /**
+   * §6.6 — the category shown (the saved one, or a pick not yet saved) is a
+   * debt: the screen reads it from the category's seed tag. The role is then
+   * `debt`, **Who?** takes the obligation row's place and is required, and
+   * leaving the category takes back the role it gave (one chosen by hand is
+   * kept). This card draws the consequence; it never reads a category's name.
+   */
+  debtCategory?: boolean;
+  /**
    * The counterparty pick, controlled from the screen — `categoryId`'s own
    * contract, for the same reason: `counterparties/` is a sibling domain and
    * its picker is the screen's to compose (`architecture/11`).
@@ -175,6 +183,7 @@ export function FieldsCard({
   categoryId,
   categoryName,
   onOpenCategoryPicker,
+  debtCategory = false,
   counterpartyId,
   counterpartyName,
   obligationCounterpartyId,
@@ -199,7 +208,30 @@ export function FieldsCard({
   const [note, setNote] = useState(fields.note);
   const [isBusiness, setIsBusiness] = useState(fields.isBusiness);
   const [isCapital, setIsCapital] = useState(fields.isCapital);
-  const [role, setRole] = useState<ObligationRoleValue | null>(fields.obligationRole);
+  /**
+   * The role somebody *chose*. A debt category's role is derived (`shownRole`)
+   * and never stored here, so moving to another category takes it back with
+   * nothing to clear. A saved `debt` under a debt category is the category's
+   * own, not a choice: it reads as unchosen, so it goes when the category does.
+   */
+  const [role, setRole] = useState<ObligationRoleValue | null>(() =>
+    debtCategory && fields.obligationRole === "debt" ? null : fields.obligationRole,
+  );
+  /**
+   * **Nothing is rewritten on open.** A debt category gives the role only when
+   * something is being decided — the category moved here, or a person was
+   * picked for it — or when the saved row already is that debt. A legacy row
+   * that sits under one of the four with no person, or with a `contribution`
+   * (which a debt category does not state), is shown as it is and is not an
+   * unsaved change: Save does not appear just from opening it, and an
+   * unrelated edit is never held up by it.
+   */
+  const categoryMoved = categoryId !== fields.categoryId;
+  const personMoved = obligationCounterpartyId !== fields.obligationCounterpartyId;
+  const decidingDebt =
+    debtCategory && (categoryMoved || personMoved || fields.obligationRole === "debt");
+  const shownRole: ObligationRoleValue | null = decidingDebt ? "debt" : role;
+  const [whoAsked, setWhoAsked] = useState(false);
 
   const toggleField = useCallback((field: OpenField) => {
     setOpen((current) => {
@@ -300,14 +332,17 @@ export function FieldsCard({
     }
     if (categoryId !== fields.categoryId) next.categoryId = categoryId;
     if (counterpartyId !== fields.counterpartyId) next.counterpartyId = counterpartyId;
-    if (obligationCounterpartyId !== fields.obligationCounterpartyId) {
-      next.obligationCounterpartyId = obligationCounterpartyId;
+    // §6.6 — the pair is both or neither: no role, nobody owed. A debt category's
+    // role going away with its category clears the person it was asked for.
+    const owed =
+      shownRole === null && fields.obligationRole !== null ? null : obligationCounterpartyId;
+    if (owed !== fields.obligationCounterpartyId) {
+      next.obligationCounterpartyId = owed;
       // §6.6 — a role belongs to the person it is about. Whoever is picked
       // next has their own, and nobody at all has none.
-      if (obligationCounterpartyId === null) next.obligationRole = null;
+      if (owed === null) next.obligationRole = null;
     }
-    if (obligationCounterpartyId !== null && role !== fields.obligationRole)
-      next.obligationRole = role;
+    if (owed !== null && shownRole !== fields.obligationRole) next.obligationRole = shownRole;
     if (isCapital !== fields.isCapital) next.isCapital = isCapital;
     if (enteredName !== fields.enteredName) next.enteredName = enteredName;
     if (note !== fields.note) next.note = note;
@@ -334,15 +369,24 @@ export function FieldsCard({
     isCapital,
     note,
     enteredName,
-    role,
+    shownRole,
   ]);
   const hasChanges = Object.keys(patch).length > 0;
   const draftValid = amountValid && toAmountValid && feeValid;
 
+  // A debt with nobody on the other side is not a debt (§6.6).
+  const whoMissing = debtCategory && categoryMoved && obligationCounterpartyId === null;
+  // A legacy row under a debt category with nobody named is not counted as a debt.
+  const notCounted =
+    debtCategory && !categoryMoved && obligationCounterpartyId === null && role === null;
   const handleSave = useCallback(() => {
     if (!hasChanges || saving || !draftValid) return;
+    if (whoMissing) {
+      setWhoAsked(true);
+      return;
+    }
     onSave(patch);
-  }, [draftValid, hasChanges, onSave, patch, saving]);
+  }, [draftValid, hasChanges, onSave, patch, saving, whoMissing]);
 
   const formLevelErrors = fieldErrors?.formLevel ?? [];
 
@@ -511,36 +555,51 @@ export function FieldsCard({
             names the shop above and the friend here. Drawn only once somebody
             is named — until then the *Someone owes* chip below asks.
           */}
-          {obligationCounterpartyId === null ? null : (
+          {obligationCounterpartyId === null && !debtCategory ? null : (
             <>
               <FieldDisclosureRow
-                label={t("transactions.obligationParty")}
+                label={
+                  decidingDebt || notCounted
+                    ? t("transactions.who")
+                    : t("transactions.obligationParty")
+                }
                 value={obligationCounterpartyName}
-                placeholder={t("transactions.noObligation")}
+                placeholder={
+                  debtCategory ? t("transactions.whoPlaceholder") : t("transactions.noObligation")
+                }
                 onPress={handleOpenObligationPicker}
+                {...(debtCategory && whoAsked && whoMissing
+                  ? { error: t("transactions.whoRequired") }
+                  : {})}
               />
+              {notCounted ? (
+                <Text style={styles.hint}>{t("transactions.notCountedAsDebt")}</Text>
+              ) : null}
 
-              <FieldDisclosureRow
-                label={t("transactions.role")}
-                value={role === null ? null : t(`transactions.role.${role}`)}
-                placeholder={t("transactions.chooseRole")}
-                open={open.has("role")}
-                onPress={handleToggleRole}
-              >
-                <RadioGroup
+              {/* A debt category fixes the role, so there is nothing to choose. */}
+              {decidingDebt || notCounted ? null : (
+                <FieldDisclosureRow
                   label={t("transactions.role")}
-                  options={roleOptions}
-                  value={role ?? NO_OBLIGATION}
-                  onChange={handleRoleChange}
-                />
-              </FieldDisclosureRow>
+                  value={role === null ? null : t(`transactions.role.${role}`)}
+                  placeholder={t("transactions.chooseRole")}
+                  open={open.has("role")}
+                  onPress={handleToggleRole}
+                >
+                  <RadioGroup
+                    label={t("transactions.role")}
+                    options={roleOptions}
+                    value={role ?? NO_OBLIGATION}
+                    onChange={handleRoleChange}
+                  />
+                </FieldDisclosureRow>
+              )}
             </>
           )}
         </View>
       </Card>
 
       <View style={styles.flags}>
-        {obligationCounterpartyId === null ? (
+        {obligationCounterpartyId === null && !debtCategory ? (
           <Chip placeholder={t("transactions.someoneOwes")} onPress={handleOpenObligationPicker} />
         ) : null}
         <Chip
@@ -615,6 +674,8 @@ type FieldDisclosureRowProps = {
   open?: boolean;
   onPress: () => void;
   first?: boolean;
+  /** A refusal stated on the row it is about. */
+  error?: string;
   children?: React.ReactNode;
 };
 
@@ -632,6 +693,7 @@ function FieldDisclosureRow({
   open = false,
   onPress,
   first = false,
+  error,
   children,
 }: FieldDisclosureRowProps) {
   const t = useT();
@@ -672,6 +734,11 @@ function FieldDisclosureRow({
           </View>
         </Pressable>
       </Animated.View>
+      {error === undefined ? null : (
+        <Text accessibilityRole="alert" style={styles.rowError}>
+          {error}
+        </Text>
+      )}
       {open ? <View style={styles.editor}>{children}</View> : null}
     </View>
   );
@@ -710,6 +777,7 @@ const useStyles = makeStyles((theme) => ({
   },
   editor: { paddingBottom: space.md },
   formLevel: { gap: space.xs },
+  rowError: { color: theme.dangerText, ...text.ui("caption"), paddingBottom: space.md },
   formLevelMessage: { color: theme.dangerText, ...text.ui("caption") },
   actions: { flexDirection: "row", justifyContent: "flex-end" },
   flags: { flexDirection: "row", flexWrap: "wrap", gap: space.md },

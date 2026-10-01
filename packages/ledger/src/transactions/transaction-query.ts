@@ -101,6 +101,7 @@ export type SignedLedgerRow = {
   note: string;
   brandKey: string | null;
   categoryName: string | null;
+  categoryExternalId: string | null;
   accountId: Id<"accounts">;
   accountName: string;
   toAccountId: Id<"accounts"> | null;
@@ -146,6 +147,7 @@ export function ledgerRowsQuery<TRun, TSchema extends typeof ledgerSchema>(
       note: transactions.note,
       brandKey: transactions.brandKey,
       categoryName: categories.name,
+      categoryExternalId: categories.externalId,
       accountId: transactions.accountId,
       accountName: accounts.name,
       toAccountId: transactions.toAccountId,

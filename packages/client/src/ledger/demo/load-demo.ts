@@ -240,7 +240,13 @@ export async function loadDemo(
     }
 
     const id = accepted(() =>
-      target.createCategory({ name: category.name, kind: category.kind, parentId }),
+      target.createCategory({
+        name: category.name,
+        kind: category.kind,
+        parentId,
+        // Nothing is drawn yet; the demo's names are the canonical ones.
+        drawnNames: {},
+      }),
     );
     if (id === null) {
       outcome.refused += 1;

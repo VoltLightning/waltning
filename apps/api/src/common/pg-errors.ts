@@ -93,6 +93,13 @@ export const SQLSTATE = {
    * them.
    */
   ACCOUNT_KIND_RETIRED: "WA021",
+  /**
+   * §6.6 — a row filed under one of the four debt categories (*Borrowed*, *Lent
+   * out*, *Repayment received*, *Repayment made*, by seed key) carries the
+   * `debt` role and a person on the other side
+   * (`0025_debt_categories.sql`).
+   */
+  DEBT_CATEGORY_SHAPE: "WA022",
 } as const;
 
 export type GuardState = (typeof SQLSTATE)[keyof typeof SQLSTATE];
@@ -144,6 +151,7 @@ export const TRIGGER = {
   LINES_CATEGORY_NOT_ARCHIVED: "transaction_lines_category_not_archived",
   ONE_ACTIVE_LAYOUT: "dashboard_layouts_exactly_one_active",
   ACCOUNT_KIND_NOT_RETIRED: "accounts_kind_not_retired",
+  DEBT_CATEGORY_SHAPE: "transactions_debt_category_shape",
 } as const;
 
 /**
@@ -213,6 +221,10 @@ export const GUARDS: Record<GuardState, Guard> = {
   [SQLSTATE.ACCOUNT_KIND_RETIRED]: {
     code: "validation",
     constraint: TRIGGER.ACCOUNT_KIND_NOT_RETIRED,
+  },
+  [SQLSTATE.DEBT_CATEGORY_SHAPE]: {
+    code: "validation",
+    constraint: TRIGGER.DEBT_CATEGORY_SHAPE,
   },
 };
 

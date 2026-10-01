@@ -1,4 +1,5 @@
 import { useHoldings } from "@waltning/client/accounts/use-holdings";
+import { openDebtLines } from "@waltning/client/counterparties/open-debts";
 import { useDisplayBasis } from "@waltning/client/currencies/use-display-basis";
 import { useDevicePreference } from "@waltning/client/device/use-device-preference";
 import { deviceRuntime } from "@waltning/client/ledger/device-runtime";
@@ -35,6 +36,7 @@ import {
 } from "@waltning/core/date";
 import * as money from "@waltning/core/money";
 import { HoldingsCard, type HoldingsLens } from "@waltning/ui/accounts/holdings-card";
+import { OpenDebtsCard } from "@waltning/ui/counterparties/open-debts-card";
 import { SpendRows } from "@waltning/ui/dashboard/spend-rows";
 import { Amount } from "@waltning/ui/fx/amount";
 import {
@@ -46,6 +48,7 @@ import {
   weekStart,
 } from "@waltning/ui/i18n/locales";
 import { useLocale, useT } from "@waltning/ui/i18n/provider";
+import { useCategoryLabel } from "@waltning/ui/i18n/use-category-label";
 import { PressableScaled } from "@waltning/ui/primitives/pressable-scaled";
 import { Card, GroundPanel } from "@waltning/ui/shell/card";
 import { floatSide } from "@waltning/ui/shell/float-geometry";
@@ -658,6 +661,29 @@ export default function Today() {
     ],
   );
 
+  /**
+   * **Who owes whom, under what you hold** (S04 §3). A live read, never cached
+   * in the snapshot — `snapshot.revision` is the signal that a write could have
+   * moved a balance, exactly as the Debt register's own memo reads it. One line
+   * per person per currency, never folded; the card draws nothing when no debt
+   * is open.
+   */
+  const handleOpenCounterparty = useCallback((counterpartyId: string) => {
+    router.push(`/counterparty/${counterpartyId}`);
+  }, []);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: snapshot.revision invalidates the read by identity; it is not read.
+  const openDebts = useMemo(
+    () => openDebtLines(ledger.listCounterpartyBalances(today)),
+    [ledger, snapshot.revision, today],
+  );
+  const debtsCard = useMemo(
+    () =>
+      openDebts.length === 0 ? null : (
+        <OpenDebtsCard lines={openDebts} onOpenCounterparty={handleOpenCounterparty} />
+      ),
+    [openDebts, handleOpenCounterparty],
+  );
+
   /** Under the hero, compact: §5's three figures in the shape `net = inflow − spend`. */
   const monthCard = useMemo(
     () =>
@@ -704,13 +730,19 @@ export default function Today() {
     snapshot.revision,
     basis?.spendRebase,
   );
+  const labelOf = useCategoryLabel();
+  // Names as drawn (`categoryLabel`): a starter reads in the app's language.
+  const labelledTree = useMemo(
+    () => snapshot.fullCategoryTree.map((node) => ({ ...node, name: labelOf(node) })),
+    [snapshot.fullCategoryTree, labelOf],
+  );
   const whereItWentRows = useWhereItWent(
     spendByCategory,
     // The archived-inclusive tree. `categoryTree` drops archived rows for the
     // picker that reads it, and archiving a category does not rewrite the
     // transactions filed under it — so resolving names from that tree
     // relabelled last month's spending as the honest blank.
-    snapshot.fullCategoryTree,
+    labelledTree,
     // The pivot: the bars break down the card's *went out*, which is stated
     // in it — every currency, each row at its own rate.
     pivotCurrency?.code ?? leadNetWorth?.currency,
@@ -971,11 +1003,12 @@ export default function Today() {
         `null`, so the first run is unaffected.
       */}
         {holdingsCard}
+        {debtsCard}
         {monthCard}
         {ledgerBody}
       </>
     ),
-    [notice, noticeToken, handleDismissToast, holdingsCard, monthCard, ledgerBody],
+    [notice, noticeToken, handleDismissToast, holdingsCard, debtsCard, monthCard, ledgerBody],
   );
 
   /**

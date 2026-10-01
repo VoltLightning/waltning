@@ -74,6 +74,8 @@ export type ContextStripCard =
   | (Figures & {
       kind: "category";
       name: string;
+      /** What the swatch's colour is hashed from, when not `name` — language-independent. */
+      tintKey?: string;
       month: YearMonth;
       spent: money.Money;
       usual: money.Money | null;
@@ -249,7 +251,7 @@ function CategoryCard({ card }: { card: Extract<ContextStripCard, { kind: "categ
   const theme = useTheme();
   const t = useT();
   const locale = useLocale();
-  const tint = categoryTintFor(card.name, theme);
+  const tint = categoryTintFor(card.tintKey ?? card.name, theme);
   const swatch = { backgroundColor: tint.solid };
 
   // One scale for all three marks: the longer of the month and the usual.

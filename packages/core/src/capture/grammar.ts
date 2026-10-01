@@ -22,7 +22,8 @@ export type CaptureContext = {
     currency: string;
     aliases?: readonly string[];
   }[];
-  categories: readonly { id: string; name: string }[];
+  /** `aliases` are other names the same category answers to — the stored one, when `name` is what the app shows. */
+  categories: readonly { id: string; name: string; aliases?: readonly string[] }[];
   defaultAccountId: string | null;
   today: AccountingDate;
   locale: "en" | "pl";

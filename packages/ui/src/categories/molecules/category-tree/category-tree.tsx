@@ -19,6 +19,7 @@ import type * as money from "@waltning/core/money";
 import { useCallback, useMemo } from "react";
 import { Text, View } from "react-native";
 import { Amount } from "../../../fx/atoms/amount/amount";
+import { categoryTintKey } from "../../../i18n/category-label.ts";
 import { useT } from "../../../i18n/provider";
 import { IconButton } from "../../../primitives/atoms/icon-button/icon-button";
 import { Tag } from "../../../primitives/atoms/tag";
@@ -93,7 +94,7 @@ function CategoryTreeRow({ node, onOpenActions }: CategoryTreeRowProps) {
   const t = useT();
   const styles = useStyles();
   const theme = useTheme();
-  const tint = categoryTintFor(node.name, theme);
+  const tint = categoryTintFor(categoryTintKey(node), theme);
   const mark = useMemo(() => ({ backgroundColor: tint.solid }), [tint.solid]);
   const bar = useMemo(
     () => ({
