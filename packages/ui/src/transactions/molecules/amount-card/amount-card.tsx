@@ -52,6 +52,12 @@ export type AmountCardProps = {
   decimals: number;
   /** Drawn after the figure, in the accent — absent until an account is chosen. */
   currency?: string | undefined;
+  /**
+   * Drawn in the currency's place, on the figure's own line, while there is no
+   * currency to draw — *Choose an account first*. It adds no line: the card is
+   * as tall with it as without.
+   */
+  waiting?: string | undefined;
   /** Which way the money goes, which is the figure's own colour on its sign. */
   kind: "expense" | "income";
   /** One finished sentence under the figure — *Groceries this month: 61% of usual*. */
@@ -70,6 +76,7 @@ export function AmountCard({
   onChangeRaw,
   decimals,
   currency,
+  waiting,
   kind,
   context,
   error,
@@ -122,7 +129,11 @@ export function AmountCard({
         maxLength={AMOUNT_INTEGER_DIGITS + 1 + decimals}
         sign={sign}
         affix={
-          currency === undefined ? undefined : (
+          currency === undefined ? (
+            waiting === undefined ? undefined : (
+              <Text style={styles.waiting}>{waiting}</Text>
+            )
+          ) : (
             <Text maxFontSizeMultiplier={textCap("displayHero")} style={styles.affix}>
               <CurrencyMark code={currency} />
             </Text>
@@ -165,6 +176,7 @@ const useStyles = makeStyles((theme) => ({
   focused: focusBorder(theme.focusRing, { horizontal: space.x3b, vertical: space.x5 }),
   focusedCompact: focusBorder(theme.focusRing, { horizontal: space.x3b, vertical: space.lg }),
   affix: { color: theme.accentText, ...text.ui("displayTwo") },
+  waiting: { color: theme.textMuted, ...text.ui("caption") },
   contextRow: { flexDirection: "row", marginTop: space.xs },
   context: {
     color: theme.accentText,

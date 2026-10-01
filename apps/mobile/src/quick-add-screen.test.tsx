@@ -201,7 +201,7 @@ describe("QuickAdd — the phone path (Dock + QuickAddComposer)", () => {
     withLedger({ accounts: [ACCOUNT] });
     typeAmount("4500");
     expect(
-      screen.getByRole("button", { name: "From: Cash · PLN, filled automatically" }),
+      screen.getByRole("button", { name: "From: Cash · PLN, PLN, filled automatically" }),
     ).toBeDefined();
     // On the account row and beside the figure.
     expect(screen.getAllByText("PLN")).toHaveLength(2);
@@ -225,7 +225,7 @@ describe("QuickAdd — the phone path (Dock + QuickAddComposer)", () => {
   it("fills a lone account even when its currency has no rate, and lets the banner speak", () => {
     withLedger({ accounts: [ACCOUNT], capturable: false });
     expect(
-      screen.getByRole("button", { name: "From: Cash · PLN, filled automatically" }),
+      screen.getByRole("button", { name: "From: Cash · PLN, PLN, filled automatically" }),
     ).toBeDefined();
     expect(screen.getByText(/needs an exchange rate/)).toBeDefined();
   });
@@ -292,7 +292,7 @@ describe("QuickAdd — the phone path (Dock + QuickAddComposer)", () => {
     fireEvent.click(screen.getByRole("button", { name: /^From/ }));
     fireEvent.click(screen.getByRole("radio", { name: "Cash · JPY" }));
 
-    expect(screen.getByRole("button", { name: "From: Cash · PLN" })).toBeDefined();
+    expect(screen.getByRole("button", { name: "From: Cash · PLN, PLN" })).toBeDefined();
     expect(screen.getByText("JPY holds 0 decimal places — this amount has more.")).toBeDefined();
     expect(screen.getByLabelText("How much?")).toHaveProperty("value", "48.90");
   });

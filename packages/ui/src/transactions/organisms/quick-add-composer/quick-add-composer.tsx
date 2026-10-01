@@ -1,7 +1,8 @@
 /**
- * `<QuickAddComposer>` — `screens/S05-quick-add.md` §3: the amount in its
- * card, the choices under it as rows, a few categories within reach, and a
- * note. The deck's anatomy for *Add an expense*, on the deck's density.
+ * `<QuickAddComposer>` — `screens/S05-quick-add.md` §3: the account row, with
+ * the currency it fixes, then the amount in its card, then the category and
+ * the rest as rows, a few categories within reach, and a note. The account is
+ * asked first because a figure with no currency under it asks *of what?*.
  *
  * **The header is not here.** `ComposerHeader` is a fixed band the screen
  * composes above `GroundPanel`, because this component renders inside the page
@@ -121,7 +122,8 @@ export type QuickAddComposerProps = {
   /** The account row fills machine, carrying the trail — `useLastUsedAccount`'s own result. */
   accountMachineFilled: boolean;
   /**
-   * The window is short: the amount card gives up its label and some air so the account row sits in the first view, under the amount,
+   * The window is short: the amount card gives up its label and some air so
+   * the account row, the amount, and the first category row all sit in the first view
    * instead of under the fold. Decided from the window's height by the screen,
    * never from the keyboard's events.
    */
@@ -491,6 +493,11 @@ export function QuickAddComposer({
             first
             label={t(type === "income" ? "transactions.intoAccount" : "transactions.fromAccount")}
             value={selectedAccount?.name}
+            spokenValue={
+              selectedAccount === undefined
+                ? undefined
+                : `${selectedAccount.name}, ${selectedAccount.currency}`
+            }
             trailing={
               selectedAccount === undefined ? undefined : (
                 <AccountCurrency code={selectedAccount.currency} />
@@ -515,10 +522,8 @@ export function QuickAddComposer({
           // The code: `AmountCard` draws the pivot's symbol or the code (`04` §4.1).
           currency={selectedAccount?.currency}
           kind={type}
-          context={
-            pace ??
-            (selectedAccount === undefined ? t("transactions.amountWaitsForAccount") : undefined)
-          }
+          context={pace}
+          waiting={t("transactions.amountWaitsForAccount")}
           error={amountError}
           autoFocus
           compact={compact}
@@ -767,20 +772,6 @@ export function QuickAddComposer({
 }
 
 /** A `FieldAnchor` when the screen passed a check, the field alone when it did not. */
-type AccountCurrencyProps = { code: string };
-
-/** The account row's right edge: the currency the entry will be in, then the caret. */
-function AccountCurrency({ code }: AccountCurrencyProps) {
-  const styles = useStyles();
-  const theme = useTheme();
-  return (
-    <View style={styles.accountCurrency}>
-      <Text style={styles.accountCurrencyCode}>{code}</Text>
-      <CaretRightIcon size={15} color={theme.textFaint} />
-    </View>
-  );
-}
-
 function Anchored({
   check,
   field,
@@ -795,6 +786,20 @@ function Anchored({
     <FieldAnchor check={check} field={field}>
       {children}
     </FieldAnchor>
+  );
+}
+
+type AccountCurrencyProps = { code: string };
+
+/** The account row's right edge: the currency the entry will be in, then the caret. */
+function AccountCurrency({ code }: AccountCurrencyProps) {
+  const styles = useStyles();
+  const theme = useTheme();
+  return (
+    <View style={styles.accountCurrency}>
+      <Text style={styles.accountCurrencyCode}>{code}</Text>
+      <CaretRightIcon size={15} color={theme.textFaint} />
+    </View>
   );
 }
 

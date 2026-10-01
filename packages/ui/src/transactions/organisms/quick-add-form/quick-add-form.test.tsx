@@ -110,6 +110,21 @@ it("reveals date, note, business and counterparty only after More", () => {
   expect(screen.getByText("Counterparty")).toBeDefined();
 });
 
+it("asks for the kind, then the account, then the amount, and says the amount waits for an account", () => {
+  renderForm();
+  const follows = (first: HTMLElement, second: HTMLElement) =>
+    (first.compareDocumentPosition(second) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
+  const kind = screen.getByRole("tab", { name: "Expense" });
+  const account = screen.getByRole("button", { name: "Account" });
+  const amount = screen.getByLabelText("Amount");
+  expect(follows(kind, account)).toBe(true);
+  expect(follows(account, amount)).toBe(true);
+  expect(screen.getByText("Choose an account first")).toBeDefined();
+  cleanup();
+  renderForm({ accountId: "account-a" });
+  expect(screen.queryByText("Choose an account first")).toBeNull();
+});
+
 it("saves the resting draft — amount and account, everything else at its default", () => {
   const onSave = vi.fn();
   renderForm({ onSave });

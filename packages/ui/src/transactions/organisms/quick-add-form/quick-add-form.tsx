@@ -309,18 +309,7 @@ export function QuickAddForm({
           ))}
         </View>
       ) : null}
-      {/* No account chosen yet, so no currency is known — and a placeholder
-          currency here would be a figure labelled in something the money is
-          not. The field carries the label alone until one is picked. */}
-      <FieldAnchor check={check} field="amount">
-        <AmountField
-          label={t("transactions.amount")}
-          {...(selected ? { currency: selected.currency } : {})}
-          initial={initialAmount}
-          onChange={handleAmountChange}
-          error={amountError}
-        />
-      </FieldAnchor>
+      <SegmentControl segments={typeSegments} value={type} onChange={handleTypeChange} />
       <FieldAnchor check={check} field="account" style={styles.root}>
         <Chip
           placeholder={t("transactions.account")}
@@ -339,8 +328,21 @@ export function QuickAddForm({
           <Text style={styles.fieldError}>{accountError}</Text>
         )}
       </FieldAnchor>
-
-      <SegmentControl segments={typeSegments} value={type} onChange={handleTypeChange} />
+      {/* No account chosen yet, so no currency is known — and a placeholder
+          currency here would be a figure labelled in something the money is
+          not. The field carries the label alone until one is picked. */}
+      <FieldAnchor check={check} field="amount">
+        <AmountField
+          label={t("transactions.amount")}
+          {...(selected ? { currency: selected.currency } : {})}
+          initial={initialAmount}
+          onChange={handleAmountChange}
+          error={amountError}
+        />
+      </FieldAnchor>
+      {selected ? null : (
+        <Text style={styles.waits}>{t("transactions.amountWaitsForAccount")}</Text>
+      )}
       <Chip
         placeholder={t("transactions.category")}
         value={selectedCategory?.kind === type ? selectedCategory.name : undefined}
@@ -436,6 +438,7 @@ const useStyles = makeStyles((theme) => ({
   root: { gap: space.x3 },
   blocked: { color: theme.textMuted, ...text.ui("caption") },
   more: { gap: space.x3 },
+  waits: { color: theme.textMuted, ...text.ui("caption") },
   fieldError: { color: theme.dangerText, ...text.ui("caption") },
   formLevel: { gap: space.xs },
   formLevelHeading: { color: theme.dangerText, ...text.ui("body", 600) },

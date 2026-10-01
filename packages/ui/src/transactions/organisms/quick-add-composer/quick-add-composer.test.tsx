@@ -243,7 +243,7 @@ it("summarises the rarer fields on the More row while they are folded away", () 
 it("marks the account row machine-filled when the last-used window filled it (P2)", () => {
   draw({ accountId: "account-a", accountMachineFilled: true });
   expect(
-    screen.getByRole("button", { name: "From: Cash · PLN, filled automatically" }),
+    screen.getByRole("button", { name: "From: Cash · PLN, PLN, filled automatically" }),
   ).toBeDefined();
 });
 
@@ -399,6 +399,11 @@ it("states the amount waits for an account while none is known, and drops the hi
   cleanup();
   draw({ accountId: "account-a" });
   expect(screen.queryByText("Choose an account first")).toBeNull();
+});
+
+it("speaks the account's currency on the account row", () => {
+  draw({ accountId: "account-eur", accounts: [...ACCOUNTS, EUR_CARD] });
+  expect(screen.getByRole("button", { name: "From: Card · EUR, EUR" })).toBeDefined();
 });
 
 it("shows the account's currency on the account row, and follows a change of account", () => {
