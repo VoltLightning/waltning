@@ -1753,7 +1753,16 @@ links the repayments that now fit, oldest first, whole (a re-plan considers ever
 live repayment of that person and currency that reduces the debt's direction,
 linked or not, and never splits one). **An unlinked repayment is an ordinary
 repayment: it counts as income or spending in the period figures like any
-other.** The loser is
+other.** **A repayment can be drawn into an existing debt only if it was written
+after that debt was**: the debt's `created_at` (set at its first write, kept
+across re-records) is the line, a repayment already linked stays a candidate
+whenever it was linked, and for a merge the line is the earlier of the two debts'
+creation. Without it the same data would give different period figures depending
+on history — record 50 and later 60, or 60 directly — recording a debt would
+reach back into months it had no part in, and deleting it would remove cash
+recorded before the debt was known. (`created_at` is the order the two rows
+share; the outbox sequence is on neither row.) A repayment that is itself written
+now is, by definition, after: `settle_debt` needs no such check. The loser is
 archived only once it holds no live opening debt, and the merge record keeps
 what the winner's row held before **and what the merge left it**, so
 `unmerge_counterparties` restores exactly that — and only while the winner's row

@@ -424,7 +424,13 @@ function patchTransaction(input: UpdateTransactionInput, tx: ReplicaTx): LocalTr
         ? restatedDebt.debtAmount
         : current.debtAmount;
     // An edit never splits a row: it fits whole, or it is no longer linked.
-    return link !== null && money.cmp(discharge, link.open) <= 0
+    // The row may move to a debt only if it was written after that debt was
+    // (a row staying with the debt it is linked to always was).
+    const predates =
+      link !== null && link.id !== current.settlesOpeningDebtId
+        ? current.createdAt > link.createdAt
+        : true;
+    return link !== null && predates && money.cmp(discharge, link.open) <= 0
       ? { settlesOpeningDebtId: link.id }
       : cleared;
   })();

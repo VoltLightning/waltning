@@ -129,7 +129,8 @@ export function mergeOpeningDebts(
     // reduces the combined debt's own direction, oldest first, up to what is
     // open — an outgoing payment to the loser must not stay "paying down" a
     // debt the winner is owed.
-    const links = replanOpeningLinks(tx, [winner.id, loser.id], winner.id);
+    const since = loser.createdAt < winner.createdAt ? loser.createdAt : winner.createdAt;
+    const links = replanOpeningLinks(tx, [winner.id, loser.id], winner.id, since);
     moved.push({ mode: "combined", id: loser.id, into: winner.id, winnerBefore, links, after });
   }
   return moved;

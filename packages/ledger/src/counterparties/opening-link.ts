@@ -22,13 +22,15 @@
  */
 
 import * as money from "@waltning/core/money";
-import { and, eq, inArray, isNotNull, isNull, ne } from "drizzle-orm";
+import { and, eq, gt, inArray, isNotNull, isNull, ne } from "drizzle-orm";
 import { type ReplicaTx, ledgerSchema as schema } from "../schema-map.ts";
 
 const { currencies, openingDebts, transactions } = schema;
 
 export type OpeningLink = {
   id: typeof openingDebts.$inferSelect.id;
+  /** When the opening debt was first written — it keeps this across re-records. */
+  createdAt: Date;
   /** What is still open on the opening debt, in its own currency. */
   open: money.Money;
 };
@@ -72,7 +74,7 @@ export function openingLinkFor(
     .reduce((sum, row) => money.add(sum, row.amount ?? row.own), money.ZERO);
 
   const open = money.sub(debt.amount, repaid);
-  return money.cmp(open, money.ZERO) > 0 ? { id: debt.id, open } : null;
+  return money.cmp(open, money.ZERO) > 0 ? { id: debt.id, open, createdAt: debt.createdAt } : null;
 }
 
 /** One row of a settlement: what changed hands, what it discharged, and the debt it pays down. */
@@ -161,6 +163,17 @@ export type LinkChange = { id: string; was: string | null; now: string | null };
  * repayments that now fit, and lowering it unlinks those past its end.
  * `target: null` unlinks them all — the debt is gone.
  *
+ * **A repayment can be drawn in only if it was written after the existing debt
+ * was** (`since`, by default the target's own `created_at`, which survives
+ * re-records). A repayment already linked stays a candidate whenever it was
+ * linked; one that is not is a candidate only from after that moment. Without
+ * this the same data would give different period figures depending on history —
+ * record 50 and later 60, or 60 directly — and recording a debt would reach
+ * back into months it had no part in, and let deleting it remove cash recorded
+ * before the debt was known. `created_at` is the write order the two rows
+ * share: it is stored on both, set once at the first write, and the outbox
+ * sequence (the other candidate) is on neither row, nor visible to an executor.
+ *
  * Returns every row whose link changed, with the link it had, so a merge can
  * record them and unmerge can put them back.
  */
@@ -168,6 +181,7 @@ export function replanOpeningLinks(
   tx: ReplicaTx,
   fromIds: readonly OpeningLink["id"][],
   target: OpeningLink["id"] | null,
+  since?: Date,
 ): readonly LinkChange[] {
   const debt =
     target === null
@@ -195,12 +209,17 @@ export function replanOpeningLinks(
               eq(transactions.debtCurrency, debt.currency),
               eq(transactions.type, debt.direction === "theyOwe" ? "income" : "expense"),
               isNotNull(transactions.debtAmount),
+              gt(transactions.createdAt, since ?? debt.createdAt),
             ),
           )
           .all();
   const byId = new Map([...linked, ...scoped].map((row) => [row.id, row] as const));
   const rows = [...byId.values()].sort(
-    (a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id),
+    // Oldest first; among rows of one day, those already linked keep their place.
+    (a, b) =>
+      a.date.localeCompare(b.date) ||
+      Number(b.settlesOpeningDebtId !== null) - Number(a.settlesOpeningDebtId !== null) ||
+      a.id.localeCompare(b.id),
   );
   if (rows.length === 0) return [];
 

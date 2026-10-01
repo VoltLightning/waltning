@@ -100,6 +100,12 @@ function recordOpening(over: Record<string, unknown> = {}) {
   });
 }
 
+/** The existing debt was written a while ago: its repayments written since are eligible to link on a re-plan. */
+const ageOpening = (counterpartyId: string, seconds = 1000) =>
+  s.ledger.replica.db.run(
+    sql`update opening_debts set created_at = created_at - ${seconds} where counterparty_id = ${counterpartyId}`,
+  );
+
 const entries = () => s.ledger.outbox.db.select().from(outbox).all();
 
 const balanceOf = (counterpartyId: string, currency: string) =>
@@ -816,6 +822,7 @@ describe("a linked repayment's link follows its person and role", () => {
   it("re-derives the link where the new person has an existing debt the repayment fits in", () => {
     recordOpening();
     recordOpening({ counterpartyId: MAREK, amount: "80" });
+    ageOpening(MAREK);
     const paid = settle({ amount: "50", discharges: { currency: "PLN", amount: "50" } });
 
     write(updateTransactionExecutor, {
@@ -824,6 +831,21 @@ describe("a linked repayment's link follows its person and role", () => {
       patch: { obligationCounterpartyId: MAREK },
     });
     expect(linkOf(paid.row.row.id)).toBe(readOpeningDebts(s.ledger.replica.db, MAREK)[0]?.id);
+  });
+
+  it("does not move a repayment to a debt that was written after it", () => {
+    recordOpening();
+    ageOpening(NINA);
+    const paid = settle({ amount: "50", discharges: { currency: "PLN", amount: "50" } });
+    // Marek's debt is entered after the repayment was written: not eligible.
+    recordOpening({ counterpartyId: MAREK, amount: "80" });
+
+    write(updateTransactionExecutor, {
+      id: paid.row.row.id,
+      version: paid.row.row.version,
+      patch: { obligationCounterpartyId: MAREK },
+    });
+    expect(linkOf(paid.row.row.id)).toBeNull();
   });
 
   it("clears the link, without an error, when the debt role is taken away", () => {
@@ -1398,6 +1420,7 @@ describe("raising an existing debt links the repayments that now fit", () => {
     const spill = crossed.spill;
     expect(linkOf(spill?.id ?? "")).toBeNull();
     expect(inflow()).toBe(50);
+    ageOpening(NINA);
 
     recordOpening({ amount: "200" });
 
@@ -1408,6 +1431,8 @@ describe("raising an existing debt links the repayments that now fit", () => {
   it("a merge that leaves more open links them too", () => {
     const crossed = crossedHundredFifty();
     recordOpening({ counterpartyId: MAREK, amount: "100" });
+    ageOpening(NINA);
+    ageOpening(MAREK);
 
     write(mergeCounterpartiesExecutor, {
       mergeId: id<"counterpartyMerges">(nextId()),
@@ -1458,5 +1483,63 @@ describe("unmerge of a record in the previous format", () => {
       write(unmergeCounterpartiesExecutor, { mergeId: merged.row.merge.id }),
     ).not.toThrow();
     expect(linkOf(paidMarek.row.row.id)).toBe(readOpeningDebts(s.ledger.replica.db, MAREK)[0]?.id);
+  });
+});
+
+describe("a repayment links only to an existing debt that was written before it", () => {
+  const FEB = { start: accountingDate("2026-02-01"), end: accountingDate("2026-03-01") };
+  const febInflow = () =>
+    readIncomeVsExpense(s.ledger.replica.db, [{ ...FEB, label: "Feb" }], "mine").reduce(
+      (sum, row) => sum + Number(row.income),
+      0,
+    );
+
+  // Jan: you lent 50. Feb: it was repaid 50. Mar: the existing debt is entered.
+  const history = (recordTwice: boolean) => {
+    debtRow({ date: accountingDate("2026-01-10"), amountOriginal: money.toMoney("50") });
+    const repaid = settle({
+      date: "2026-02-10",
+      amount: "50",
+      discharges: { currency: "PLN", amount: "50" },
+    });
+    if (recordTwice) {
+      recordOpening({ amount: "50" });
+      recordOpening({ amount: "60" });
+    } else {
+      recordOpening({ amount: "60" });
+    }
+    return repaid;
+  };
+
+  for (const recordTwice of [true, false]) {
+    it(`${recordTwice ? "record 50 then re-record 60" : "record 60 directly"}: February's inflow stays 50 and deleting the debt keeps the cash`, () => {
+      const repaid = history(recordTwice);
+
+      expect(linkOf(repaid.row.row.id)).toBeNull();
+      expect(febInflow()).toBe(50);
+
+      write(deleteOpeningDebtExecutor, { id: readOpeningDebts(s.ledger.replica.db, NINA)[0]?.id });
+      expect(liveTransactions().map((row) => row.id)).toContain(repaid.row.row.id);
+    });
+  }
+
+  it("a repayment written after the debt is still eligible once the debt is raised", () => {
+    recordOpening({ amount: "50" });
+    ageOpening(NINA);
+    debtRow({ amountOriginal: money.toMoney("100") });
+    // Pays 50 of the debt and 70 of the lend: split 50 / 70.
+    const crossed = settle({
+      amount: "120",
+      discharges: { currency: "PLN", amount: "120" },
+      spillId: nextId(),
+    });
+    expect(linkOf(crossed.row.spill?.id ?? "")).toBeNull();
+
+    recordOpening({ amount: "100" });
+
+    expect(linkOf(crossed.row.spill?.id ?? "")).toBeNull();
+    // 100 open, 50 already linked: the 70 does not fit whole, so it stays ordinary.
+    recordOpening({ amount: "130" });
+    expect(linkOf(crossed.row.spill?.id ?? "")).not.toBeNull();
   });
 });
