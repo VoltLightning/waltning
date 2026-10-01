@@ -37,6 +37,8 @@ export type YearMonthRow = {
   otherCurrencies: number;
   /** After the month the ledger has reached — reachable, drawn quieter. */
   ahead: boolean;
+  /** Some day was stated at a rate that is not its own (a display currency with no quote that day) — draw `≈`. */
+  estimated: boolean;
 };
 
 const MONTHS_IN_YEAR = 12;
@@ -49,6 +51,7 @@ export function yearMonths(
 ): readonly YearMonthRow[] {
   const totals = new Map<string, { inflow: money.Money; spend: money.Money }>();
   const others = new Map<string, Set<string>>();
+  const estimatedMonths = new Set<string>();
 
   for (const flow of flows) {
     const month = flow.date.slice(0, 7);
@@ -60,6 +63,7 @@ export function yearMonths(
       continue;
     }
     const bucket = totals.get(month) ?? { inflow: money.ZERO, spend: money.ZERO };
+    if (flow.estimated === true) estimatedMonths.add(month);
     totals.set(month, {
       inflow: money.add(bucket.inflow, figures.inflow),
       spend: money.add(bucket.spend, figures.spend),
@@ -76,6 +80,7 @@ export function yearMonths(
       net: money.sub(bucket.inflow, bucket.spend),
       otherCurrencies: others.get(month)?.size ?? 0,
       ahead: month > today,
+      estimated: estimatedMonths.has(month),
     };
   });
 }
@@ -116,10 +121,17 @@ function inPivot(
 export function periodInPivot(
   flows: readonly money.DayFlowRow[],
   pivot: money.CurrencyCode,
-): { inflow: money.Money; spend: money.Money; net: money.Money; otherCurrencies: number } {
+): {
+  inflow: money.Money;
+  spend: money.Money;
+  net: money.Money;
+  otherCurrencies: number;
+  estimated: boolean;
+} {
   let inflow = money.ZERO;
   let spend = money.ZERO;
   const others = new Set<string>();
+  let estimated = false;
   for (const flow of flows) {
     const figures = inPivot(flow, pivot);
     if (figures === null) {
@@ -128,8 +140,15 @@ export function periodInPivot(
     }
     inflow = money.add(inflow, figures.inflow);
     spend = money.add(spend, figures.spend);
+    if (flow.estimated === true) estimated = true;
   }
-  return { inflow, spend, net: money.sub(inflow, spend), otherCurrencies: others.size };
+  return {
+    inflow,
+    spend,
+    net: money.sub(inflow, spend),
+    otherCurrencies: others.size,
+    estimated,
+  };
 }
 
 /** The currencies the year could not count — none, when every row carried its rate. */

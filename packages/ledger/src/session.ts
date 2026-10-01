@@ -335,6 +335,7 @@ export type LocalLedgerSession = {
   readIncomeVsExpense: (
     buckets: readonly IncomeExpenseBucket[],
     scope: LedgerScope,
+    options?: Pick<SpendByCategoryOptions, "rebase">,
   ) => readonly IncomeExpenseRow[];
   /** `get_active_layout` — `null` only on an empty, never-migrated database. `DESK4`. */
   readActiveDashboardLayout: () => LocalDashboardLayout | null;
@@ -786,8 +787,8 @@ export function createLocalLedgerSession<TRun>(
     readContextRows: (query) => readContextRows(requireOpen().replica.db, query),
     readSpendByCategory: (period, scope, options) =>
       readSpendByCategory(requireOpen().replica.db, period, scope, options),
-    readIncomeVsExpense: (buckets, scope) =>
-      readIncomeVsExpense(requireOpen().replica.db, buckets, scope),
+    readIncomeVsExpense: (buckets, scope, options) =>
+      readIncomeVsExpense(requireOpen().replica.db, buckets, scope, options),
     readActiveDashboardLayout: () => readActiveLayout(requireOpen().replica.db),
     listUnsettledClearing: () => readUnsettledClearing(requireOpen().replica.db),
     balanceAsOf: (accountId, asOf) => readBalanceAsOf(requireOpen().replica.db, accountId, asOf),

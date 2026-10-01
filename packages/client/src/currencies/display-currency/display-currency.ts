@@ -6,15 +6,18 @@
  * write: nothing here is an operation, an outbox entry, or a thing the
  * server ever hears about.
  *
- * **Never `null` to a caller.** §7.0 names a default — "the first pinned
- * currency, else the pivot" — precisely so a screen never has to render
- * *no* display currency while deciding. `initializeFromPinned` applies that
- * default exactly once, the first time a screen learns which currencies are
- * pinned; until then, and whenever nothing has been chosen, the snapshot
- * falls back to the *live* pivot (`readPivot`), and only to the build-time
+ * **Never `null` to a caller, and only a person's choice is ever stored.**
+ * With nothing chosen the display currency is derived, live, on every read:
+ * the currency of the device's region when the ledger holds it (`regionCurrency`,
+ * `readHeld`), else the live pivot (`readPivot`), and only to the build-time
  * `seed` when no live pivot is available yet (H1 — a fresh install whose
  * ledger pivot differs from the seed must render its own pivot, not the
- * seed frozen at build time).
+ * seed frozen at build time). Nothing here ever writes a default: a stored
+ * copy would freeze on whatever the region or the pivot was at first launch.
+ *
+ * **A stored value carries its origin** (`choice:EUR`). An older build wrote
+ * the pivot, unmarked, on its own at first start; an unmarked value equal to
+ * the live pivot is that write, not a choice, and reads as nothing chosen.
  *
  * **`getSnapshot` returns a cached object, not a fresh one every call.**
  * `useSyncExternalStore` compares what it returns by reference — a snapshot
@@ -44,20 +47,24 @@ export type DisplayCurrencyController = {
   subscribe: (listener: () => void) => () => void;
   hydrate: () => Promise<void>;
   set: (currency: CurrencyCode) => Promise<void>;
-  /**
-   * §7.0's default, applied once: the first pinned currency, when nothing
-   * has been chosen yet. A no-op once a value exists (chosen by a person,
-   * or by an earlier call to this) — never overrides a real choice, hydrated
-   * or not.
-   */
-  initializeFromPinned: (pinned: readonly CurrencyCode[]) => void;
 };
 
 const ISO_SHAPE = /^[A-Z]{3}$/;
 
+/**
+ * A stored value carries its **origin**: `choice:EUR` is a person's pick. A bare
+ * `EUR` is what an older build wrote on its own at first start (the first
+ * pinned currency — the pivot, on a seeded ledger), indistinguishable from a
+ * choice except by this marker. `parse` reads both; `serialize` always writes
+ * the marked form.
+ */
+const CHOICE = "choice:";
 const codec = {
-  parse: (raw: string): CurrencyCode | null => (ISO_SHAPE.test(raw) ? currencyCode(raw) : null),
-  serialize: (value: CurrencyCode): string => value,
+  parse: (raw: string): CurrencyCode | null => {
+    const code = raw.startsWith(CHOICE) ? raw.slice(CHOICE.length) : raw;
+    return ISO_SHAPE.test(code) ? currencyCode(code) : null;
+  },
+  serialize: (value: CurrencyCode): string => `${CHOICE}${value}`,
 };
 
 export type DisplayCurrencyPreferenceOptions = {
@@ -70,6 +77,16 @@ export type DisplayCurrencyPreferenceOptions = {
    */
   subscribeToLedger?: (listener: () => void) => () => void;
   diagnostics?: ClientDiagnostics;
+  /**
+   * The currency of the device's region, when the platform knows one (§7.0).
+   * It is the default a ledger opens in — *after* a stored choice and
+   * *before* the pivot — and only when the ledger holds it (`readHeld`), so a
+   * region whose currency the ledger has never heard of falls on the pivot
+   * exactly as an unknown region does.
+   */
+  regionCurrency?: CurrencyCode | null;
+  /** A live read of the codes the ledger holds. `null` before the ledger is ready. */
+  readHeld?: () => readonly CurrencyCode[] | null;
 };
 
 export function createDisplayCurrencyPreference(
@@ -80,7 +97,42 @@ export function createDisplayCurrencyPreference(
   seed: CurrencyCode,
   options?: DisplayCurrencyPreferenceOptions,
 ): DisplayCurrencyController {
-  const inner = createDevicePreference<CurrencyCode>(store, codec, options?.diagnostics);
+  /**
+   * Whether what was read off the disk is an unmarked value — written by an
+   * older build, not chosen. Cleared by the first real `set`.
+   */
+  let unmarked = false;
+  const inner = createDevicePreference<CurrencyCode>(
+    {
+      get: async () => {
+        const raw = await store.get();
+        unmarked = raw !== null && !raw.startsWith(CHOICE);
+        return raw;
+      },
+      set: store.set,
+    },
+    codec,
+    options?.diagnostics,
+  );
+  /**
+   * The stored choice — except an **unmarked value equal to the live pivot or
+   * to the build's seed**, which is the old build's own auto-write of the pivot
+   * (the seed, on an install since anchored to its region) and so no choice at
+   * all. An unmarked value that is *not* the pivot was picked in the toggle
+   * and stands.
+   */
+  const readChoice = (): CurrencyCode | null => {
+    const value = inner.getSnapshot().value;
+    if (value === null) return null;
+    return unmarked && (value === readPivot() || value === seed) ? null : value;
+  };
+
+  /** The region's currency, derived live and never stored — a later pivot change or a real choice must not meet a frozen default. */
+  const readRegionDefault = (): CurrencyCode | null => {
+    const region = options?.regionCurrency ?? null;
+    if (region === null) return null;
+    return options?.readHeld?.()?.includes(region) === true ? region : null;
+  };
 
   // See the file doc: cached so `useSyncExternalStore` sees the same
   // reference across renders where nothing actually changed. Rebuilt when
@@ -93,7 +145,7 @@ export function createDisplayCurrencyPreference(
   return {
     getSnapshot: () => {
       const snapshot = inner.getSnapshot();
-      const currency = snapshot.value ?? readPivot() ?? seed;
+      const currency = readChoice() ?? readRegionDefault() ?? readPivot() ?? seed;
       if (cached !== undefined && cachedInner === snapshot && cached.currency === currency) {
         return cached;
       }
@@ -114,11 +166,9 @@ export function createDisplayCurrencyPreference(
       };
     },
     hydrate: inner.hydrate,
-    set: inner.set,
-    initializeFromPinned: (pinned) => {
-      if (inner.getSnapshot().value !== null) return;
-      const first = pinned[0];
-      if (first !== undefined) void inner.set(first);
+    set: (currency) => {
+      unmarked = false;
+      return inner.set(currency);
     },
   };
 }

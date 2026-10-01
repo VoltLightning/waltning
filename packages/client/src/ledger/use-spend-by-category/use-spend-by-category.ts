@@ -33,12 +33,17 @@ export function useSpendByCategory(
   period: money.Period,
   scope: money.LedgerScope,
   revision: number,
+  /** §7.0 — re-express each bucket's `amountPivot` in the display currency, at each row's own date. */
+  rebase?: money.SpendByCategoryOptions["rebase"],
 ): readonly PhoneSpendByCategory[] {
   // `revision` is not read in the body — it is the invalidation signal
   // itself, the same pattern `useCounterpartyHistory`'s own `revision` uses.
   // biome-ignore lint/correctness/useExhaustiveDependencies: revision invalidates this memo by identity, not by being read.
   return useMemo(
-    () => ledger.readSpendByCategory(period, scope),
-    [ledger, period, scope, revision],
+    () =>
+      rebase === undefined
+        ? ledger.readSpendByCategory(period, scope)
+        : ledger.readSpendByCategory(period, scope, { rebase }),
+    [ledger, period, scope, revision, rebase],
   );
 }

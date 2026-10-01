@@ -77,8 +77,7 @@ export const de: Messages = {
     archivedNone: "Keine archivierten Konten.",
     archivedNoMatches: "Keine archivierten Konten passen.",
     currencyNotCapturable:
-      "Für {{currency}} gibt es noch keinen Wechselkurs. Das Konto lässt sich anlegen; Buchungen darin sind erst möglich, wenn einer gesetzt ist.",
-    setRate: "Kurs für {{currency}} setzen",
+      "Für {{currency}} gibt es heute noch keinen Wechselkurs. Tragen Sie unten einen ein; er wird zusammen mit dem Konto gespeichert, damit Buchungen in dieser Währung möglich sind.",
     moreDetails: "Mehr Details",
     fewerDetails: "Weniger Details",
     kind: "Art",
@@ -664,6 +663,7 @@ export const de: Messages = {
     plusOtherCurrencies_few: "+ {{count}} weitere Währungen",
     plusOtherCurrencies_many: "+ {{count}} weitere Währungen",
     plusOtherCurrencies_other: "+ {{count}} weitere Währungen",
+    estimatedAtToday: "≈ einige Tage zum heutigen Kurs",
     gatewayPeople_one: "{{count}} Person",
     gatewayPeople_few: "{{count}} Personen",
     gatewayPeople_many: "{{count}} Personen",
@@ -946,32 +946,39 @@ export const de: Messages = {
     symbolBefore: "Vor dem Betrag",
     symbolAfter: "Nach dem Betrag",
     decimals: "Nachkommastellen",
-    pivotLabel: "Bezugswährung: {{code}}",
-    pivotKicker: "Die, in der alles gemessen wird",
-    pivotName: "{{name}} · Bezugswährung",
+    pivotLabel: "Ankerwährung: {{code}}",
+    pivotKicker: "Ankerwährung",
+    pivotName: "{{name}} · Anker",
     pivotExplained:
-      "Jeder Betrag in der App steht darunter in dieser Währung. Eine Änderung rechnet das ganze Buch um, deshalb wird sie einmal festgelegt.",
-    changePivotStart: "Bezugswährung ändern…",
+      "Wechselkurse werden gegenüber dieser Währung gespeichert, damit sich jedes Paar berechnen lässt. Sie bestimmt nichts von dem, was Sie sehen; Beträge erscheinen in der oben gewählten Währung.",
+    displayExplained:
+      "Solange Sie nichts wählen, richtet sich dies nach der Region Ihres Telefons. Das Umstellen ändert nur die Darstellung; an Ihren Buchungen ändert sich nichts.",
+    displayNeedsRate:
+      "Noch nicht angewendet: Für {{currency}} gibt es keinen Wechselkurs, daher bleiben die Beträge in {{shown}}. Setzen Sie einen Kurs für {{currency}}, um sie zu verwenden.",
+    changePivotStart: "Ankerwährung ändern…",
     groupShown: "Im Umschalter der Kopfzeile",
     groupHeld: "Gehalten, nicht im Umschalter",
-    changePivot: "Bezugswährung ändern",
-    pivotConfirmTitle: "Bezugswährung ändern?",
+    changePivot: "Ankerwährung ändern",
+    pivotConfirmTitle: "Ankerwährung ändern?",
     pivotConfirmBody:
-      "Die Bezugswährung ist der technische Knoten, gegen den jeder Kurs gespeichert wird. Abgelehnt, sobald eine Buchung existiert — ein Telefon allein kann die Historie, die dabei zurückbliebe, nicht neu bewerten. Eine Änderung ist selten, wird protokolliert und ist für einen Umzug ins Ausland nie nötig.",
+      "Die Ankerwährung ist der technische Bezugspunkt, gegen den jeder Kurs gespeichert wird. Sie lässt sich nur ändern, solange keine Buchung existiert, weil dieses Telefon bestehende Buchungen nicht neu bewerten kann. Eine Änderung ist selten und wird protokolliert.",
     pivotConfirmSubmit: "Ja, ändern",
     pivotChangeRefused:
-      "Die Bezugswährung kann nicht geändert werden, solange eine Buchung existiert.",
+      "Die Ankerwährung kann nicht mehr geändert werden, sobald eine Buchung existiert: Dieses Telefon kann bestehende Buchungen nicht neu bewerten. Änderbar ist sie nur, solange das Buch keine Buchungen enthält.",
     pivotChangeDroppedDates_one:
-      "Bezugswährung geändert · {{count}} Datum hatte keinen Kurs zum Umrechnen und wurde verworfen",
+      "Ankerwährung geändert · {{count}} Datum hatte keinen Kurs zum Umrechnen und wurde verworfen",
     pivotChangeDroppedDates_few:
-      "Bezugswährung geändert · {{count}} Daten hatten keinen Kurs zum Umrechnen und wurden verworfen",
+      "Ankerwährung geändert · {{count}} Daten hatten keinen Kurs zum Umrechnen und wurden verworfen",
     pivotChangeDroppedDates_many:
-      "Bezugswährung geändert · {{count}} Daten hatten keinen Kurs zum Umrechnen und wurden verworfen",
+      "Ankerwährung geändert · {{count}} Daten hatten keinen Kurs zum Umrechnen und wurden verworfen",
     pivotChangeDroppedDates_other:
-      "Bezugswährung geändert · {{count}} Daten hatten keinen Kurs zum Umrechnen und wurden verworfen",
-    pivotAlreadyPivot: "Diese Währung ist bereits die Bezugswährung.",
-    pivotTarget: "Neue Bezugswährung",
+      "Ankerwährung geändert · {{count}} Daten hatten keinen Kurs zum Umrechnen und wurden verworfen",
+    pivotAlreadyPivot: "Diese Währung ist bereits die Ankerwährung.",
+    pivotTarget: "Neue Ankerwährung",
     pivotTargetPlaceholder: "Währung wählen",
+    displayShowIn: "Beträge anzeigen in",
+    anchorBlocked:
+      "Gesperrt: Das Buch enthält bereits Buchungen, und dieses Telefon kann sie nicht neu bewerten. Die Ankerwährung lässt sich nur ändern, solange keine existieren.",
     pairLabel: "Kurs, gegen {{base}}",
     sourceStopped: "{{source}} antwortet seit {{date}} nicht mehr.",
     sourceStoppedWhy:
@@ -985,7 +992,7 @@ export const de: Messages = {
     tileDays_other: "{{count}} Tage",
     pairChip: "{{quote}}/{{base}}",
     pairPlaceholder: "Währung wählen",
-    noQuoteCurrency: "Noch keine Währung zum Vergleich mit der Bezugswährung.",
+    noQuoteCurrency: "Noch keine Währung zum Vergleich mit der Ankerwährung.",
     range30d: "30 T.",
     range90d: "90 T.",
     rangeYear: "Jahr",

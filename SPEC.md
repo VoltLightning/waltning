@@ -2281,17 +2281,48 @@ The mistake is conflating two unrelated concerns under one name.
 
 | Concept | Nature | Changes |
 |---|---|---|
-| **Pivot currency** | Technical. The hub all FX rates are stored against, so any pair derives by triangulation | Chosen once at setup. **Never** |
+| **Pivot currency**, called the **anchor currency** in the app | Technical. The hub all FX rates are stored against, so any pair derives by triangulation | Set at first start; changeable only while the ledger holds no transaction |
 | **Display currency** | A user preference. What totals are rendered in | Freely, instantly, as often as you like |
 
-**Pivot is `USD`** — the best historical coverage across all seven currencies
-in use, the base that both NBRB and NBG publish against, and what Money Manager
-already stores, so migration needs no rate conversion at all. It is invisible:
-it appears in no screen and no export.
+**The seed's pivot is `USD`** — the best historical coverage across all seven
+currencies in use, the base that both NBRB and NBG publish against, and what
+Money Manager already stores, so migration needs no rate conversion at all.
+**A fresh ledger is anchored to the currency of the device's region at first
+start**, before any account exists, through `change_pivot` (legal while no
+transaction exists): a German phone is EUR-anchored, so its first EUR account
+needs no rate. A ledger that already has an account or a transaction keeps its
+anchor, and so does one whose anchor was already moved off the seed. The anchor
+is shown once, in Settings > Currencies, last and named *anchor currency*; it
+decides nothing a reader sees, and it is never described as the currency
+figures are measured in. The first-start change is an ordinary `change_pivot`,
+recorded in the outbox like any write; `architecture/14` states what pairing
+must do with it.
+
+**The anchor changes only while the ledger holds no transaction**, because the
+phone cannot re-rate existing history. After the first transaction Settings
+states that plainly and what would allow it (no transaction exists), and offers
+nothing that rewrites history.
 
 **Display currency is a header toggle.** `PLN · USD · EUR` pinned, tap to
 re-express every figure on screen. No backfill, no confirmation, no audit
 entry — nothing in the database moves.
+
+**With nothing chosen, the display currency is the currency of the device's
+region** — `de-DE` opens in EUR — provided the ledger holds it, and the anchor
+otherwise (an unknown region, a currency the ledger has never heard of). That
+default is **derived on every read and never stored**: a stored copy would
+freeze on whatever the region or the anchor was at first launch. Only a
+person's choice is stored, marked as one, and beats the region from then on —
+from the header toggle or from *Show figures in* in Settings > Currencies, the
+same preference. An unmarked stored value equal to the anchor is an old build's
+own write, not a choice.
+
+**Every figure on every screen follows the display currency**: the month card,
+the months chart, spend by category, day totals, account and debt figures. Each
+row is converted at **its own date's rate** (§4) and the results summed; a date
+with no rate for the display currency is stated at today's and flagged
+estimated, and a display currency with no rate at all falls back to the anchor
+rather than a guess.
 
 #### Why this works
 
