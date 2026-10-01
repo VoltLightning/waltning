@@ -15,13 +15,15 @@ import { type Scratch, scratchDatabase } from "../test/scratch.ts";
 
 const BANK = "00000000-0000-4000-8000-0000000000c1";
 const OTHER = "00000000-0000-4000-8000-0000000000c2";
+const EURO = "00000000-0000-4000-8000-0000000000c4";
 const TXN = "00000000-0000-4000-8000-0000000000c3";
 
 let s: Scratch;
 
 beforeAll(async () => {
   s = await scratchDatabase("amount_ceiling");
-  await s.sql`insert into currencies (code, name, decimals, is_pivot) values ('PLN', 'Polish Zloty', 2, true)`;
+  await s.sql`insert into currencies (code, name, decimals, is_pivot) values ('PLN', 'Polish Zloty', 2, true), ('EUR', 'Euro', 2, false)`;
+  await s.sql`insert into accounts (id, name, currency) values (${EURO}, 'Bank C · EUR', 'EUR')`;
   await s.sql`insert into accounts (id, name, currency) values (${BANK}, 'Bank A · PLN', 'PLN'), (${OTHER}, 'Bank B · PLN', 'PLN')`;
   await s.sql`insert into transactions (id, date, type, account_id, amount_original, currency, fx_rate)
     values (${TXN}, '2026-01-01', 'expense', ${BANK}, 10, 'PLN', 1)`;
@@ -49,11 +51,17 @@ describe("transactions_amount_ceiling", () => {
     ).rejects.toThrow(/transactions_amount_ceiling/);
   });
 
+  /**
+   * Cross-currency, so `transactions_transfer_same_currency_equal` has nothing
+   * to say and the ceiling is the only constraint that can refuse the row —
+   * and the in-bounds twin proves the row is otherwise valid.
+   */
   it("refuses a transfer's destination leg at the ceiling", async () => {
-    await expect(
+    const leg = (toAmount: string) =>
       s.sql`insert into transactions (date, type, account_id, amount_original, currency, fx_rate, to_account_id, to_amount, to_currency, to_fx_rate)
-        values ('2026-01-01', 'transfer', ${BANK}, 10, 'PLN', 1, ${OTHER}, 1000000000, 'PLN', 1)`,
-    ).rejects.toThrow(/transactions_amount_ceiling|transactions_transfer_same_currency_equal/);
+        values ('2026-01-01', 'transfer', ${BANK}, 10, 'PLN', 1, ${EURO}, ${toAmount}, 'EUR', 1)`;
+    await leg("999999999.99");
+    await expect(leg("1000000000")).rejects.toThrow(/transactions_amount_ceiling/);
   });
 
   it("refuses a negative adjustment past the ceiling in absolute value", async () => {
@@ -83,6 +91,29 @@ describe("accounts_opening_balance_ceiling", () => {
   });
 });
 
+describe("the other tables that hold a typed figure", () => {
+  it("bounds a reassigned debt, a target and a receipt's total", async () => {
+    const CP1 = "00000000-0000-4000-8000-0000000000d1";
+    const CP2 = "00000000-0000-4000-8000-0000000000d2";
+    await s.sql`insert into counterparties (id, name, kind) values (${CP1}, 'Nina', 'person'), (${CP2}, 'Tomasz', 'person')`;
+    const reassign = (amount: string) =>
+      s.sql`insert into debt_reassignments (date, from_counterparty_id, to_counterparty_id, currency, amount)
+        values ('2026-01-01', ${CP1}, ${CP2}, 'PLN', ${amount})`;
+    await reassign("999999999.99");
+    await expect(reassign("1000000000")).rejects.toThrow(/debt_reassignments_amount_ceiling/);
+
+    const target = (amount: string) =>
+      s.sql`insert into targets (period, amount, currency, active_from) values ('month', ${amount}, 'PLN', '2026-01-01')`;
+    await target("999999999.99");
+    await expect(target("1000000000")).rejects.toThrow(/targets_amount_ceiling/);
+
+    const receipt = (total: string) =>
+      s.sql`insert into receipts (image_key, total, currency) values ('k', ${total}, 'PLN')`;
+    await receipt("999999999.99");
+    await expect(receipt("1000000000")).rejects.toThrow(/receipts_total_ceiling/);
+  });
+});
+
 describe("recurring_transactions_amount_ceiling", () => {
   it("takes 999999999.99 and refuses 1000000000", async () => {
     await s.sql`insert into recurring_transactions (type, account_id, amount_original, currency, rrule)
@@ -99,7 +130,10 @@ it("leaves every constraint VALID on a fresh install", async () => {
     select conname, convalidated from pg_constraint where conname like '%\\_ceiling' escape '\\'`;
   expect(rows.map((r) => r.conname).sort()).toEqual([
     "accounts_opening_balance_ceiling",
+    "debt_reassignments_amount_ceiling",
+    "receipts_total_ceiling",
     "recurring_transactions_amount_ceiling",
+    "targets_amount_ceiling",
     "transaction_lines_amount_ceiling",
     "transactions_amount_ceiling",
   ]);

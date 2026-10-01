@@ -61,11 +61,17 @@ export function assertMoneyScale<TRun>(
   value: string,
   currency: CurrencyCode,
   where: string,
+  /**
+   * `false` for a figure that is a *balance* and not an amount a row holds — a
+   * reconciliation's observed balance may legitimately exceed the per-row
+   * ceiling; only the adjustment it derives is bounded.
+   */
+  ceiling = true,
 ): void {
   // The ceiling rides on the scale check: every figure a row is about to hold
   // passes through here, and a caller that remembered one and forgot the other
   // is the defect this avoids. It needs no currency lookup, so it runs first.
-  assertAmountCeiling(value, where);
+  if (ceiling) assertAmountCeiling(value, where);
   const [row] = tx
     .select({ decimals: currencies.decimals })
     .from(currencies)

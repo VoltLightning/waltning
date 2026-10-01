@@ -646,7 +646,10 @@ export const receipts = pgTable(
     confidence: numeric("confidence", { precision: 4, scale: 3 }),
     capturedAt: timestamp("captured_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [index("receipts_transaction_idx").on(t.transactionId)],
+  (t) => [
+    index("receipts_transaction_idx").on(t.transactionId),
+    check("receipts_total_ceiling", below(t.total)),
+  ],
 );
 
 /**
@@ -937,6 +940,7 @@ export const debtReassignments = pgTable(
     // Reassigning to oneself is the Money Manager artefact, not a thing to keep.
     check("debt_reassignments_distinct", sql`${t.fromCounterpartyId} <> ${t.toCounterpartyId}`),
     check("debt_reassignments_positive", sql`${t.amount} > 0`),
+    check("debt_reassignments_amount_ceiling", below(t.amount)),
   ],
 );
 
@@ -1006,18 +1010,22 @@ export const agentMemory = pgTable(
 
 export const targetPeriod = pgEnum("target_period", ["month", "year"]);
 
-export const targets = pgTable("targets", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  /** Null category = an overall target. */
-  categoryId: uuid("category_id").references(() => categories.id),
-  period: targetPeriod("period").notNull().default("month"),
-  amount: money("amount").notNull(),
-  currency: text("currency")
-    .notNull()
-    .references(() => currencies.code),
-  activeFrom: date("active_from").notNull(),
-  activeTo: date("active_to"),
-});
+export const targets = pgTable(
+  "targets",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    /** Null category = an overall target. */
+    categoryId: uuid("category_id").references(() => categories.id),
+    period: targetPeriod("period").notNull().default("month"),
+    amount: money("amount").notNull(),
+    currency: text("currency")
+      .notNull()
+      .references(() => currencies.code),
+    activeFrom: date("active_from").notNull(),
+    activeTo: date("active_to"),
+  },
+  (t) => [check("targets_amount_ceiling", below(t.amount))],
+);
 
 /* ------------------------------------------------------------------ *
  * Dashboard — widgets are data, so the agent can configure them (§11.0)

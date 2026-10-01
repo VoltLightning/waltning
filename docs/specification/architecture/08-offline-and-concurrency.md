@@ -545,10 +545,13 @@ the same rule as everywhere above: **the backend admits every write**, and
   person can move it to another account. The entry is the capture of something
   that happened; the account it named was the only thing that stopped existing.
 
-`delete_account` is **not offline-eligible**, like every structural operation: it
-materialises on the device at once and drains only to a backend that sees every
-device's entries. That is what makes the first case a refusal rather than a
-silent divergence.
+`delete_account` is queued in the outbox like every local write: it materialises
+on the device at once and drains later. The device refuses first what it can
+see — an entry in the replica, a deferred capture in the outbox that names the
+account, a stale `version` — before anything is queued, so a refused delete
+leaves no blocked entry to discard. What it cannot see is another device's
+unsent entry, and the backend's guard is what makes that case a refusal rather
+than a silent divergence.
 
 ---
 

@@ -71,8 +71,9 @@ export type Holdings = {
   /**
    * The positive half of `mine`, and the negative half as two magnitudes that
    * together are everything below zero: `overdrawn` is an asset account that
-   * has gone negative (bank, cash, deposit — no lender, just a balance below
-   * nothing), `owed` is a liability kind below zero (a card). The split is
+   * has gone negative (bank, cash or deposit — no lender, just a balance below
+   * nothing), `owed` is every other kind below zero (a card, and clearing,
+   * investment or other accounts, which keep their previous label). The split is
    * words, not figures: `held − overdrawn − owed` is `mine`, exactly as
    * `held − (overdrawn + owed)` always was.
    */

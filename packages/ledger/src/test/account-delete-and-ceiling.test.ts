@@ -223,7 +223,7 @@ describe("the amount ceiling", () => {
     it("takes 999 999 999.99 and refuses 1 000 000 000.00 on a raw transaction insert", () => {
       insertTransaction("999999999.99");
       s.ledger.replica.db.delete(transactions).where(eq(transactions.id, TXN)).run();
-      expect(() => insertTransaction("1000000000.00")).toThrow(/WA023/);
+      expect(() => insertTransaction("1000000000.00")).toThrow(/_amount_ceiling/);
     });
 
     it("does not round a figure in bounds up to the ceiling", () => {
@@ -239,14 +239,14 @@ describe("the amount ceiling", () => {
           .set({ amountOriginal: money.toMoney("1000000000.00") })
           .where(eq(transactions.id, TXN))
           .run(),
-      ).toThrow(/WA023/);
+      ).toThrow(/_amount_ceiling/);
       expect(() =>
         s.ledger.replica.db
           .update(transactions)
           .set({ toAmount: money.toMoney("1000000000.00") })
           .where(eq(transactions.id, TXN))
           .run(),
-      ).toThrow(/WA023/);
+      ).toThrow(/_amount_ceiling/);
     });
 
     it("refuses an opening balance past the ceiling on a raw insert and update", () => {
@@ -260,14 +260,14 @@ describe("the amount ceiling", () => {
             openingBalance: money.toMoney("-1000000000.00"),
           })
           .run(),
-      ).toThrow(/WA023/);
+      ).toThrow(/_amount_ceiling/);
       expect(() =>
         s.ledger.replica.db
           .update(accounts)
           .set({ openingBalance: money.toMoney("1000000000.00") })
           .where(eq(accounts.id, EMPTY))
           .run(),
-      ).toThrow(/WA023/);
+      ).toThrow(/_amount_ceiling/);
     });
   });
 });

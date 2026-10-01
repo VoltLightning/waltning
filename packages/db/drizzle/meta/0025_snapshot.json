@@ -1,5 +1,5 @@
 {
-  "id": "c5ecde3c-eea2-4618-b174-5a9947e52c87",
+  "id": "c890ed11-dda4-41c9-85d3-0828c3807660",
   "prevId": "92855580-1b86-4d40-8b83-97ed93bcfc6e",
   "version": "7",
   "dialect": "postgresql",
@@ -2085,6 +2085,10 @@
         "debt_reassignments_positive": {
           "name": "debt_reassignments_positive",
           "value": "\"debt_reassignments\".\"amount\" > 0"
+        },
+        "debt_reassignments_amount_ceiling": {
+          "name": "debt_reassignments_amount_ceiling",
+          "value": "(\"debt_reassignments\".\"amount\" is null or abs(\"debt_reassignments\".\"amount\") < 1000000000)"
         }
       },
       "isRLSEnabled": false
@@ -2611,7 +2615,12 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "receipts_total_ceiling": {
+          "name": "receipts_total_ceiling",
+          "value": "(\"receipts\".\"total\" is null or abs(\"receipts\".\"total\") < 1000000000)"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.recurring_transactions": {
@@ -3112,7 +3121,12 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "targets_amount_ceiling": {
+          "name": "targets_amount_ceiling",
+          "value": "(\"targets\".\"amount\" is null or abs(\"targets\".\"amount\") < 1000000000)"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.tax_jurisdictions": {

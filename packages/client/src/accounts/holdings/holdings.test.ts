@@ -93,6 +93,22 @@ describe("holdings", () => {
     ]);
   });
 
+  /** Only bank, cash and deposit can be overdrawn; clearing, investment and other keep *owed*. */
+  it("keeps owed for a clearing, investment or other account below zero", () => {
+    const h = holdings(
+      [
+        account({ kind: "clearing", balance: money.toMoney("-10") }),
+        account({ kind: "investment", balance: money.toMoney("-20") }),
+        account({ kind: "other", balance: money.toMoney("-30") }),
+        account({ kind: "cash", balance: money.toMoney("-5") }),
+        account({ kind: "deposit", balance: money.toMoney("-6") }),
+      ],
+      DISPLAY,
+      rateOf,
+    );
+    expect([fig(h.overdrawn), fig(h.owed)]).toEqual(["11.00", "60.00"]);
+  });
+
   /** The third lens: every counted account, own figure and converted, in the order handed in. */
   it("lists each counted account, loans and shared ones apart", () => {
     const h = holdings(

@@ -1279,6 +1279,9 @@ transactions_amount_ceiling           abs(amount_original), abs(to_amount), abs(
 transaction_lines_amount_ceiling      abs(amount) < 1000000000
 accounts_opening_balance_ceiling      abs(opening_balance) < 1000000000
 recurring_transactions_amount_ceiling abs(amount_original) < 1000000000
+debt_reassignments_amount_ceiling      abs(amount) < 1000000000
+targets_amount_ceiling                abs(amount) < 1000000000
+receipts_total_ceiling                abs(total) < 1000000000
 ```
 
 **No amount a row holds reaches `1 000 000 000`.** The ceiling is `999 999 999.99`
@@ -1287,7 +1290,7 @@ keeps the same integer bound (fewer than a billion). A figure a hundred times a
 plausible balance is a typo, and it breaks every layout it reaches. It is one
 bound, `AMOUNT_CEILING_EXCLUSIVE` in `money.ts`, stated at every layer: the
 contract schema (`zAmount`, used by every write input's amount field), each
-executor, the four CHECKs above on Postgres and a trigger per table on the
+executor, the seven CHECKs above on Postgres and a trigger per table on the
 replica, and every amount input, which refuses a tenth integer digit and says
 *Maximum 999 999 999,99* in the reader's own notation. The CHECKs are added
 `NOT VALID` and validated at once on a database that holds nothing past the
@@ -2092,8 +2095,8 @@ rule holds when the operation's own check is wrong; the operation refuses first
 with a message that says *archive it instead*.
 
 **A delete races another device's entry, and the server decides.** `delete_account`
-is structural — it materialises on the device at once and drains only to a
-backend that can see every device's entries (`architecture/08`). If another
+is queued in the outbox like every local write — it materialises on the device at once and drains later to
+a backend that can see every device's entries (`architecture/08`). If another
 device's entry reaches the server first, the delete meets `WA022` and is
 `blocked` with its reason on S30, and the account returns to the phone at the
 next sync-down, since the server still holds it. If the delete reaches the

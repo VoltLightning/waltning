@@ -163,9 +163,9 @@ back in, so no decision made here is one the screen cannot undo.
 **An account below zero says what it is.** A bank, cash or deposit account
 under nothing is **overdrawn**: its row reads *Bank A · overdrawn 504,20 €*,
 the word and the magnitude in the spend colour, and not a bare negative that
-reads as money owed to someone. A card or a loan below zero is not that — it is
-a debt to a lender, and keeps its signed figure. The rule is the account's
-kind (`isOverdrawn`), and it is words only: the balance and every total are
+reads as money owed to someone. Any other kind below zero — a card or a loan, a real debt to a lender, but also
+clearing, investment and other accounts — keeps its signed figure. The rule is
+the account's kind (`isOverdrawn`: bank, cash, deposit), and it is words only: the balance and every total are
 the figures they were.
 
 **An account nothing references can be deleted.** In the editor an account with

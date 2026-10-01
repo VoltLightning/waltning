@@ -53,6 +53,7 @@ import type {
 } from "@waltning/core/registry/inputs";
 import type { CategoryKind } from "@waltning/schema/enums";
 import { currencies } from "@waltning/schema/sqlite/currencies";
+import { deferredAccountReferences } from "./accounts/account-references.ts";
 import { archiveAccountExecutor } from "./accounts/archive-account.executor.ts";
 import { createAccountExecutor, type LocalAccountRow } from "./accounts/create-account.executor.ts";
 import { createGroupExecutor, type LocalGroupRow } from "./accounts/create-group.executor.ts";
@@ -172,6 +173,7 @@ import {
   type LedgerDiagnostics,
   type LedgerStartupStage,
 } from "./diagnostics.ts";
+import { LocalRefusal } from "./executor.ts";
 import {
   isPreJournalStoreError,
   type LedgerFs,
@@ -732,7 +734,19 @@ export function createLocalLedgerSession<TRun>(
   };
 
   return {
-    listAccounts: (listOptions) => readAccounts(requireOpen().replica.db, listOptions),
+    listAccounts: (listOptions) => {
+      const open = requireOpen();
+      const rows = readAccounts(open.replica.db, listOptions);
+      // A deferred capture names an account the replica holds no row for — see
+      // `deferredAccountReferences` — so `hasEntries` is the union of both.
+      const deferred = deferredAccountReferences(
+        open.outbox.db,
+        rows.filter((row) => !row.hasEntries).map((row) => row.id),
+      );
+      return deferred.size === 0
+        ? rows
+        : rows.map((row) => (deferred.has(row.id) ? { ...row, hasEntries: true } : row));
+    },
     listCurrencies: () => readCurrencies(requireOpen().replica.db),
     listCurrencySettings: (settingsOptions) =>
       readCurrencySettings(requireOpen().replica.db, settingsOptions),
@@ -873,14 +887,23 @@ export function createLocalLedgerSession<TRun>(
         capture,
         ...(options.diagnostics ? { diagnostics: options.diagnostics } : {}),
       }).row,
-    deleteAccount: (input, capture) =>
-      writeLocally(requireOpen(), {
+    deleteAccount: (input, capture) => {
+      const open = requireOpen();
+      // The outbox is not reachable from an executor, so the one reference the
+      // replica cannot see is checked here, before anything is queued.
+      if (deferredAccountReferences(open.outbox.db, [input.id]).size > 0) {
+        throw new LocalRefusal(
+          `delete_account: ${input.id} has entries (deferred_capture) — archive it instead (§6.9)`,
+        );
+      }
+      return writeLocally(open, {
         executor: deleteAccountExecutor,
         registry: ledgerRegistry,
         input,
         capture,
         ...(options.diagnostics ? { diagnostics: options.diagnostics } : {}),
-      }).row,
+      }).row;
+    },
     setAccountVisibility: (input, capture) =>
       writeLocally(requireOpen(), {
         executor: setAccountVisibilityExecutor,

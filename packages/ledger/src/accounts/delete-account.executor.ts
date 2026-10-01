@@ -30,8 +30,34 @@ export const deleteAccountExecutor = defineLocalExecutor<
   opVersion: 1,
   input: deleteAccountInput,
   mints: () => [],
+  /**
+   * **The refusals that name a reason, before the outbox commits.** A refused
+   * delete must not leave a blocked entry behind for the person to discard on
+   * S30: the answer is knowable here, so it is given here. A row this device
+   * does not hold is skipped — `apply` refuses it as a dependency.
+   */
+  validate: (input, tx) => {
+    const [current] = tx.select().from(accounts).where(eq(accounts.id, input.id)).all();
+    if (!current) return;
+    if (current.version !== input.version) {
+      throw new LocalRefusal(
+        `delete_account: stale version — read ${input.version}, row is at ${current.version}`,
+      );
+    }
+    assertUnreferenced(input.id, tx);
+  },
   apply: (input, tx) => deleteAccount(input, tx),
 });
+
+function assertUnreferenced(id: DeleteAccountInput["id"], tx: ReplicaTx): void {
+  const reference = accountReference(tx, id);
+  if (reference !== undefined) {
+    throw new LocalRefusal(
+      `delete_account: ${id} has entries (${reference}) — archive it instead (§6.9, accounts_delete_guard)`,
+      { params: { reference } },
+    );
+  }
+}
 
 function deleteAccount(input: DeleteAccountInput, tx: ReplicaTx): LocalAccountRow {
   const [current] = tx.select().from(accounts).where(eq(accounts.id, input.id)).all();
@@ -43,13 +69,7 @@ function deleteAccount(input: DeleteAccountInput, tx: ReplicaTx): LocalAccountRo
       `delete_account: stale version — read ${input.version}, row is at ${current.version}`,
     );
   }
-  const reference = accountReference(tx, input.id);
-  if (reference !== undefined) {
-    throw new LocalRefusal(
-      `delete_account: ${input.id} has entries (${reference}) — archive it instead (§6.9, accounts_delete_guard)`,
-      { params: { reference } },
-    );
-  }
+  assertUnreferenced(input.id, tx);
 
   const [deleted] = tx
     .delete(accounts)

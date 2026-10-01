@@ -701,7 +701,7 @@ const integerDigits = (column: string): string =>
 
 const ceilingTriggers = (table: string, columns: readonly string[]): readonly string[] => {
   const past = columns.map((column) => `${integerDigits(column)} > 9`).join("\n  OR ");
-  const refusal = `an amount is at most 999999999.99 (WA023, ${table}_amount_ceiling)`;
+  const refusal = `an amount is at most 999999999.99 (${table}_amount_ceiling)`;
   const list = columns.map((column) => `\`${column}\``).join(", ");
   return [
     `CREATE TRIGGER IF NOT EXISTS \`${table}_amount_ceiling_insert\`
@@ -719,12 +719,38 @@ END`,
   ];
 };
 
-const AMOUNT_CEILING_TRIGGERS: readonly string[] = [
-  ...ceilingTriggers("transactions", ["amount_original", "to_amount", "fee", "debt_amount"]),
-  ...ceilingTriggers("transaction_lines", ["amount"]),
-  ...ceilingTriggers("accounts", ["opening_balance"]),
-  ...ceilingTriggers("recurring_transactions", ["amount_original"]),
+const CEILING_TABLES: ReadonlyArray<readonly [string, readonly string[]]> = [
+  ["transactions", ["amount_original", "to_amount", "fee", "debt_amount"]],
+  ["transaction_lines", ["amount"]],
+  ["accounts", ["opening_balance"]],
+  ["recurring_transactions", ["amount_original"]],
 ];
+
+const AMOUNT_CEILING_TRIGGERS: readonly string[] = CEILING_TABLES.flatMap(([table, columns]) =>
+  ceilingTriggers(table, columns),
+);
+
+/**
+ * **A restore writes the past, and the ceiling is about the present.** A
+ * replica may hold a row past the ceiling that predates the rule
+ * (grandfathered: the upgrade never rewrote it), and a backup of that replica
+ * must restore it as it was rather than throw on the INSERT. The restore
+ * drops the ceiling triggers inside its own transaction, loads the document,
+ * and creates them again — DDL is transactional in SQLite, so a failed restore
+ * rolls the triggers back with everything else. A future sync-down, which
+ * copies server rows by insert, takes the same two calls.
+ */
+export function dropAmountCeilingTriggers(tx: SqlRunner): void {
+  for (const [table] of CEILING_TABLES) {
+    tx.run(sql.raw(`DROP TRIGGER IF EXISTS \`${table}_amount_ceiling_insert\``));
+    tx.run(sql.raw(`DROP TRIGGER IF EXISTS \`${table}_amount_ceiling_update\``));
+  }
+}
+
+/** The counterpart of `dropAmountCeilingTriggers` — idempotent, `IF NOT EXISTS`. */
+export function createAmountCeilingTriggers(tx: SqlRunner): void {
+  for (const statement of AMOUNT_CEILING_TRIGGERS) tx.run(sql.raw(statement));
+}
 
 export const REPLICA_BACKFILLS: Readonly<Record<string, Backfill>> = {
   "0006_schema": {
@@ -852,7 +878,7 @@ export const REPLICA_BACKFILLS: Readonly<Record<string, Backfill>> = {
      */
     objects: (tx) => {
       for (const statement of ACCOUNT_DELETE_GUARD_TRIGGERS) tx.run(sql.raw(statement));
-      for (const statement of AMOUNT_CEILING_TRIGGERS) tx.run(sql.raw(statement));
+      createAmountCeilingTriggers(tx);
     },
   },
   "0018_schema": {

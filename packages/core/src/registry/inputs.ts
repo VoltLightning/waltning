@@ -92,21 +92,21 @@ export const RETIRED_ACCOUNT_KIND: ReadonlySet<(typeof ACCOUNT_KIND)[number]> = 
 ]);
 
 /**
- * The kinds whose negative balance is a debt — money a person owes someone —
- * rather than an account that has gone below zero. A card below zero is *owed*
- * and a loan you pay is *owed*; a bank, cash or deposit account below zero is
- * **overdrawn**, which is a state of an asset account and not a lender
- * (`computations.md` §3; S04, S16).
+ * The kinds that can be **overdrawn**: bank, cash and deposit accounts, where
+ * a balance below zero is an account gone under nothing and no lender stands
+ * behind it. Every other kind below zero keeps the label it always had — *owed*
+ * — whether that is a card or a loan (a real debt) or a clearing, investment
+ * or other account (`computations.md` §3.1; S04, S16).
  */
-export const LIABILITY_ACCOUNT_KIND: ReadonlySet<(typeof ACCOUNT_KIND)[number]> = new Set([
-  "card",
-  "loan_payable",
-  "loan_receivable",
+export const OVERDRAWABLE_ACCOUNT_KIND: ReadonlySet<(typeof ACCOUNT_KIND)[number]> = new Set([
+  "bank",
+  "cash",
+  "deposit",
 ]);
 
-/** An account that is not a liability, and whose balance is below zero. */
+/** A bank, cash or deposit account whose balance is below zero. */
 export function isOverdrawn(kind: (typeof ACCOUNT_KIND)[number], balance: Money): boolean {
-  return !LIABILITY_ACCOUNT_KIND.has(kind) && dec(balance).lt(0);
+  return OVERDRAWABLE_ACCOUNT_KIND.has(kind) && dec(balance).lt(0);
 }
 
 /** The kinds a new account can be given — `ACCOUNT_KIND` less the retired ones. */

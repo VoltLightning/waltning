@@ -546,3 +546,62 @@ describe("the phone ledger session", () => {
     proof.close();
   });
 });
+
+describe("delete_account and a capture the replica has not applied", () => {
+  /**
+   * A capture with no rate yet is **deferred**: it sits in the outbox naming
+   * the account and leaves no row in `transactions`. The replica-side census of
+   * references cannot see it, so without the outbox read *Delete* would be
+   * offered, would succeed, and the capture would be stranded on replay.
+   */
+  it("counts a deferred capture as an entry: hasEntries, and the delete is refused with nothing queued", () => {
+    const session = createLocalLedgerSession(options());
+    session.createAccount(accountInput(), capture);
+    // PLN against a USD pivot, with no asserted rate and no rate row: deferred.
+    const { fxRate: _rate, ...unrated } = expenseInput();
+    // The deferral is thrown to the caller; the intent stays in the outbox, marked.
+    expect(() =>
+      session.createTransaction(unrated as ReturnType<typeof expenseInput>, capture),
+    ).toThrow(/no last-known rate/);
+
+    const proof = new Database(paths.outbox, { readonly: true });
+    const deferred = proof
+      .prepare("select count(*) as n from outbox where disposition = 'deferred'")
+      .get();
+    expect(deferred).toEqual({ n: 1 });
+    const queued = proof.prepare("select count(*) as n from outbox").get() as { n: number };
+
+    expect(session.listAccounts()[0]?.hasEntries).toBe(true);
+    const version = session.listAccounts()[0]?.version ?? 0;
+    expect(() => session.deleteAccount({ id: accountId, version }, capture)).toThrow(
+      /has entries \(deferred_capture\)/,
+    );
+    // The refusal came before the outbox: no blocked delete entry is left behind.
+    expect(proof.prepare("select count(*) as n from outbox").get()).toEqual(queued);
+    proof.close();
+    session.close();
+  });
+
+  it("does not count the account's own creation as an entry", () => {
+    const session = createLocalLedgerSession(options());
+    session.createAccount(accountInput(), capture);
+    expect(session.listAccounts()[0]?.hasEntries).toBe(false);
+    const version = session.listAccounts()[0]?.version ?? 0;
+    session.deleteAccount({ id: accountId, version }, capture);
+    expect(session.listAccounts()).toEqual([]);
+    session.close();
+  });
+
+  it("refuses a stale delete before the outbox, so no blocked entry is left to discard", () => {
+    const session = createLocalLedgerSession(options());
+    session.createAccount(accountInput(), capture);
+    const proof = new Database(paths.outbox, { readonly: true });
+    const before = proof.prepare("select count(*) as n from outbox").get();
+    expect(() => session.deleteAccount({ id: accountId, version: 99 }, capture)).toThrow(
+      /stale version/,
+    );
+    expect(proof.prepare("select count(*) as n from outbox").get()).toEqual(before);
+    proof.close();
+    session.close();
+  });
+});

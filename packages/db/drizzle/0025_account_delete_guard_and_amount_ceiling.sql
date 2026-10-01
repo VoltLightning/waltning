@@ -41,7 +41,9 @@ CREATE TRIGGER accounts_delete_guard
 -- No amount a row holds reaches 1 000 000 000 in absolute value
 -- (`money.ts`'s `AMOUNT_CEILING_EXCLUSIVE`; 999 999 999.99 at two decimals,
 -- and the same integer bound for a currency with other decimals). One CHECK
--- per table, covering every amount column it carries.
+-- per table, covering every amount column it carries — the entries' tables and
+-- the three that hold a figure a person typed (a reassigned debt, a target, a
+-- receipt's total).
 --
 -- Added `NOT VALID`, the shape `transactions_amount_positive` and
 -- `fx_rates_rate_bounds` already take: the rule binds every new or updated row
@@ -57,7 +59,10 @@ CREATE TRIGGER accounts_delete_guard
 --   ALTER TABLE <table> VALIDATE CONSTRAINT <name>;
 -- That step belongs to the owner, not to this migration.
 ALTER TABLE "accounts" ADD CONSTRAINT "accounts_opening_balance_ceiling" CHECK (("accounts"."opening_balance" is null or abs("accounts"."opening_balance") < 1000000000)) NOT VALID;--> statement-breakpoint
+ALTER TABLE "debt_reassignments" ADD CONSTRAINT "debt_reassignments_amount_ceiling" CHECK (("debt_reassignments"."amount" is null or abs("debt_reassignments"."amount") < 1000000000)) NOT VALID;--> statement-breakpoint
+ALTER TABLE "receipts" ADD CONSTRAINT "receipts_total_ceiling" CHECK (("receipts"."total" is null or abs("receipts"."total") < 1000000000)) NOT VALID;--> statement-breakpoint
 ALTER TABLE "recurring_transactions" ADD CONSTRAINT "recurring_transactions_amount_ceiling" CHECK (("recurring_transactions"."amount_original" is null or abs("recurring_transactions"."amount_original") < 1000000000)) NOT VALID;--> statement-breakpoint
+ALTER TABLE "targets" ADD CONSTRAINT "targets_amount_ceiling" CHECK (("targets"."amount" is null or abs("targets"."amount") < 1000000000)) NOT VALID;--> statement-breakpoint
 ALTER TABLE "transaction_lines" ADD CONSTRAINT "transaction_lines_amount_ceiling" CHECK (("transaction_lines"."amount" is null or abs("transaction_lines"."amount") < 1000000000)) NOT VALID;--> statement-breakpoint
 ALTER TABLE "transactions" ADD CONSTRAINT "transactions_amount_ceiling" CHECK (("transactions"."amount_original" is null or abs("transactions"."amount_original") < 1000000000) and ("transactions"."to_amount" is null or abs("transactions"."to_amount") < 1000000000) and ("transactions"."fee" is null or abs("transactions"."fee") < 1000000000) and ("transactions"."debt_amount" is null or abs("transactions"."debt_amount") < 1000000000)) NOT VALID;--> statement-breakpoint
 DO $$
@@ -65,8 +70,17 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM "accounts" WHERE abs("opening_balance") >= 1000000000) THEN
     ALTER TABLE "accounts" VALIDATE CONSTRAINT "accounts_opening_balance_ceiling";
   END IF;
+  IF NOT EXISTS (SELECT 1 FROM "debt_reassignments" WHERE abs("amount") >= 1000000000) THEN
+    ALTER TABLE "debt_reassignments" VALIDATE CONSTRAINT "debt_reassignments_amount_ceiling";
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM "receipts" WHERE abs("total") >= 1000000000) THEN
+    ALTER TABLE "receipts" VALIDATE CONSTRAINT "receipts_total_ceiling";
+  END IF;
   IF NOT EXISTS (SELECT 1 FROM "recurring_transactions" WHERE abs("amount_original") >= 1000000000) THEN
     ALTER TABLE "recurring_transactions" VALIDATE CONSTRAINT "recurring_transactions_amount_ceiling";
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM "targets" WHERE abs("amount") >= 1000000000) THEN
+    ALTER TABLE "targets" VALIDATE CONSTRAINT "targets_amount_ceiling";
   END IF;
   IF NOT EXISTS (SELECT 1 FROM "transaction_lines" WHERE abs("amount") >= 1000000000) THEN
     ALTER TABLE "transaction_lines" VALIDATE CONSTRAINT "transaction_lines_amount_ceiling";

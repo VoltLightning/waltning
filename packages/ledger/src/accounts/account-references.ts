@@ -19,11 +19,12 @@
 
 import type { Id } from "@waltning/core/id";
 import * as money from "@waltning/core/money";
-import { inArray, or } from "drizzle-orm";
+import { and, eq, inArray, notInArray, or } from "drizzle-orm";
 import type { BaseSQLiteDatabase } from "drizzle-orm/sqlite-core";
+import type { OutboxDb } from "../open.ts";
 import { ledgerSchema } from "../schema-map.ts";
 
-const { accounts, recurringTransactions, transactions } = ledgerSchema;
+const { accounts, outbox, recurringTransactions, transactions } = ledgerSchema;
 
 /**
  * Either the replica handle or a transaction on it — a reader and an executor
@@ -32,7 +33,11 @@ const { accounts, recurringTransactions, transactions } = ledgerSchema;
 type Reader<TRun, TSchema extends typeof ledgerSchema> = BaseSQLiteDatabase<"sync", TRun, TSchema>;
 
 /** Why an account cannot be deleted; absent when nothing references it. */
-export type AccountReference = "transactions" | "recurring" | "opening_balance";
+export type AccountReference =
+  | "transactions"
+  | "recurring"
+  | "opening_balance"
+  | "deferred_capture";
 
 /**
  * The ids, out of `ids`, that some row references — and the first reason found
@@ -90,6 +95,40 @@ export function referencedAccounts<TRun, TSchema extends typeof ledgerSchema>(
   }
 
   return reasons;
+}
+
+/** Operations that act on an account itself — they name it without being an entry in it. */
+const STRUCTURAL = [
+  "create_account",
+  "update_account",
+  "archive_account",
+  "delete_account",
+  "set_account_visibility",
+  "reorder_accounts",
+  "reconcile_account",
+];
+
+/**
+ * **A deferred capture is an entry the replica has not applied.** One with no
+ * rate yet leaves nothing in `transactions`, so the replica-side census above
+ * cannot see it — yet it names the account, and a delete that went through
+ * would strand it on replay. The outbox is its own file, so this is a second
+ * read, over entries marked `deferred`, whose payload names the id.
+ */
+export function deferredAccountReferences<TRun, TSchema extends typeof ledgerSchema>(
+  outboxDb: OutboxDb<TRun, TSchema>,
+  ids: readonly Id<"accounts">[],
+): ReadonlySet<Id<"accounts">> {
+  const found = new Set<Id<"accounts">>();
+  if (ids.length === 0) return found;
+  const rows = outboxDb
+    .select({ payload: outbox.payload })
+    .from(outbox)
+    .where(and(eq(outbox.disposition, "deferred"), notInArray(outbox.operation, STRUCTURAL)))
+    .all();
+  const text = rows.map((row) => JSON.stringify(row.payload));
+  for (const id of ids) if (text.some((payload) => payload.includes(id))) found.add(id);
+  return found;
 }
 
 /** Whether anything references this one account, and what. */

@@ -359,8 +359,8 @@ colour — its kind's, or one picked in the editor — and its own figure). The 
 card already says what the total is made of, and opening it names the parts.
 Cards are negative and draw red; the bar is what is **held**, and the line above
 it says what is below zero, because a negative cannot be a share of a whole —
-in two words for two things. **Owed** is what a card or other liability is below
-zero by, a real debt to a lender. **Overdrawn** is what a bank, cash or deposit
+in two words for two things. **Owed** is what any other kind is below
+zero by — a card above all, a real debt to a lender. **Overdrawn** is what a bank, cash or deposit
 account is below zero by, which has no lender behind it and is not money owed to
 anyone (`computations.md` §3.1). A line reads *50 670,52 held · 504,20 overdrawn
 · 299,63 owed*, each part only where there is something to say. A kind
