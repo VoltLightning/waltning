@@ -181,6 +181,12 @@ is refused with an error on Who?. Moving the row to any other category takes the
 role back and clears the person it was asked for, while a role chosen by hand
 stays. Any other category pick is written at once, as it always was.
 
+**Picking *Repayment received* or *Repayment made* is not a patch.** The row's
+own figures settle the person's open debt in the matching direction (S14,
+`settle_debt`) and the settlement replaces the row — Who? is required, and the
+refusals are Quick add's (*Nothing to settle with …*; no exchange rate). The
+other two (*Borrowed*, *Lent out*) are ordinary edits.
+
 **A row that was filed under one of the four before the rule is shown as it
 is.** One that names nobody carries *Not counted as a debt yet. Add who, and it
 is.* under its Who? row, and an edit that touches neither the category nor the

@@ -34,7 +34,8 @@ import { readNearestRate } from "../currencies/read-rate.ts";
 import { defineLocalExecutor, LocalDeferral, LocalRefusal } from "../executor.ts";
 import { assertMoneyScale } from "../scale.ts";
 import { type ReplicaTx, ledgerSchema as schema } from "../schema-map.ts";
-import { assertDebtCategoryShape } from "./debt-categories.ts";
+import { assertDebtCategoryShape, assertNotRepaymentEntry } from "./debt-categories.ts";
+import { upcastCreateTransaction } from "./upcast-create-transaction.ts";
 
 const { accounts, categories, currencies, transactions } = schema;
 
@@ -48,7 +49,10 @@ export const createTransactionExecutor = defineLocalExecutor<
 >({
   /** Byte-for-byte the server operation's name — `recover.ts` looks it up by this. */
   operation: "create_transaction",
-  opVersion: 1,
+  // 2 — a debt category is a debt and a repayment is `settle_debt` (SPEC §6.6);
+  // an entry captured before that is upcast at replay (`upcast-create-transaction.ts`).
+  opVersion: 2,
+  upcast: upcastCreateTransaction,
   input: createTransactionInput,
 
   /**
@@ -86,11 +90,17 @@ export const createTransactionExecutor = defineLocalExecutor<
 export function insertTransaction(
   input: CreateTransactionInput,
   tx: ReplicaTx,
+  /** `settle_debt` only: it is the one writer of a repayment category (SPEC §6.6). */
+  options: { settlement?: boolean } = {},
 ): LocalTransactionRow {
   assertBusinessNotShared(input, tx);
   assertCategoryNotArchived(tx, input.categoryId, "create_transaction: category_id");
   // §6.6 — a debt category is a debt: the role and a person, or no row.
   assertDebtCategoryShape(tx, input.categoryId, input, "create_transaction: category_id");
+  // …and a repayment is `settle_debt`'s, never a plain capture.
+  if (options.settlement !== true) {
+    assertNotRepaymentEntry(tx, input.categoryId, "create_transaction: category_id");
+  }
   // R4 re-review — restored. L10 had dropped this call on the theory that
   // `create_transaction`'s own `validate` already ran it, pre-outbox, on this
   // exact `input`, so a second call here would check nothing new — true only

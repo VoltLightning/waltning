@@ -15,7 +15,7 @@
  */
 
 import type { Id } from "@waltning/core/id";
-import { DEBT_SEED_EXTERNAL_IDS } from "@waltning/core/taxonomy";
+import { DEBT_SEED_EXTERNAL_IDS, REPAYMENT_SEED_EXTERNAL_IDS } from "@waltning/core/taxonomy";
 import { eq, inArray } from "drizzle-orm";
 import { LocalRefusal } from "../executor.ts";
 import { type ReplicaTx, ledgerSchema as schema } from "../schema-map.ts";
@@ -46,6 +46,58 @@ export function debtCategoryIds(tx: ReplicaTx): Id<"categories">[] {
     .map((row) => row.id);
 }
 
+/** Whether this category is *Repayment received* or *Repayment made* — the two only `settle_debt` writes. */
+export function isRepaymentCategory(
+  tx: ReplicaTx,
+  categoryId: Id<"categories"> | null | undefined,
+): boolean {
+  if (categoryId === null || categoryId === undefined) return false;
+  const row = tx
+    .select({ externalId: categories.externalId })
+    .from(categories)
+    .where(eq(categories.id, categoryId))
+    .get();
+  return row?.externalId != null && REPAYMENT_SEED_EXTERNAL_IDS.includes(row.externalId);
+}
+
+/**
+ * **A row enters a repayment category only through `settle_debt`.** A plain
+ * write under *Repayment received* would carry the debt role without the
+ * discharge in the debt's currency, without the direction check and without
+ * "nothing to settle" — and, against a debt the other way round, would quietly
+ * open a reverse one. `settle_debt` passes `settlement: true`; everyone else
+ * (the agent, a plain `update_transaction`, `categorize_batch`) is refused with
+ * a message that names the way in.
+ */
+export function assertNotRepaymentEntry(
+  tx: ReplicaTx,
+  categoryId: Id<"categories"> | null | undefined,
+  where: string,
+): void {
+  if (!isRepaymentCategory(tx, categoryId)) return;
+  throw new LocalRefusal(
+    `${where}: category ${categoryId} is a repayment category (SPEC §6.6) — a repayment is written ` +
+      "by settle_debt, which discharges the debt it pays; use settle_debt",
+  );
+}
+
+/**
+ * **A split line is never filed under a debt category.** A line carries no
+ * obligation of its own, so a line under *Borrowed* would be a debt with nobody
+ * on the other side; a debt is the whole transaction, with its person.
+ */
+export function assertLineNotDebtCategory(
+  tx: ReplicaTx,
+  categoryId: Id<"categories"> | null | undefined,
+  where: string,
+): void {
+  if (!isDebtCategory(tx, categoryId)) return;
+  throw new LocalRefusal(
+    `${where}: category ${categoryId} is a debt category (SPEC §6.6) — a split line has no ` +
+      "person to owe or be owed; file the whole transaction under it instead",
+  );
+}
+
 export type ObligationFields = {
   obligationCounterpartyId?: string | null | undefined;
   obligationRole?: string | null | undefined;
@@ -71,24 +123,41 @@ export function assertDebtCategoryShape(
 }
 
 /**
- * **Leaving a debt category takes the automatic role with it.** A patch that
- * moves a row out of one of the four and says nothing about the obligation
- * clears the pair (the identity link stays — who it was with is still true),
- * because under these categories the role is the category's, not a choice. A
- * patch that names the obligation fields is taken at its word.
+ * **Leaving a debt category takes the automatic role with it — and the
+ * discharge figure that role stamped.** A write that moves a row out of one of
+ * the four clears `debt_amount` and `debt_currency` (they describe a settlement
+ * that is no longer one, and must not come back if the row re-enters a debt
+ * category), and — when it says nothing about the obligation — the obligation
+ * pair too (the identity link stays: who it was with is still true). A write
+ * that names the obligation fields is taken at its word for the pair.
  */
-export function obligationAfterLeaving(
+export function leavingDebtCategory(
   tx: ReplicaTx,
   current: { categoryId: Id<"categories"> | null; obligationRole: string | null },
   patch: { categoryId?: Id<"categories"> | null | undefined },
   obligationInPatch: boolean,
-): { obligationCounterpartyId: null; obligationRole: null } | undefined {
-  if (obligationInPatch || !("categoryId" in patch)) return undefined;
-  if (current.obligationRole !== "debt") return undefined;
+):
+  | { debtAmount: null; debtCurrency: null }
+  | {
+      debtAmount: null;
+      debtCurrency: null;
+      obligationCounterpartyId: null;
+      obligationRole: null;
+    }
+  | undefined {
+  if (!("categoryId" in patch)) return undefined;
   if (!isDebtCategory(tx, current.categoryId) || isDebtCategory(tx, patch.categoryId)) {
     return undefined;
   }
-  return { obligationCounterpartyId: null, obligationRole: null };
+  if (obligationInPatch || current.obligationRole !== "debt") {
+    return { debtAmount: null, debtCurrency: null };
+  }
+  return {
+    debtAmount: null,
+    debtCurrency: null,
+    obligationCounterpartyId: null,
+    obligationRole: null,
+  };
 }
 
 /** Which of the named rows would break the rule under `categoryId` — for a bulk re-categorisation. */

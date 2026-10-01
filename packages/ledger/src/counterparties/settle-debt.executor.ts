@@ -179,6 +179,7 @@ function settleDebt(input: SettleDebtInput, tx: ReplicaTx): SettleDebtResult {
       ...(input.categoryId !== undefined ? { categoryId: input.categoryId } : {}),
     }),
     tx,
+    { settlement: true },
   );
 
   // `SPEC.md` §7.2 — `debt_amount` fits `debt_currency`'s own declared

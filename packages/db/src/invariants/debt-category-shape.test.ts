@@ -17,6 +17,7 @@ import { type Scratch, scratchDatabase } from "../test/scratch.ts";
 
 const ACCOUNT = "11111111-1111-4111-8111-111111111111";
 const NINA = "22222222-2222-4222-8222-222222222222";
+const ACME = "22222222-2222-4222-8222-222222222223";
 const BORROWED = "33333333-3333-4333-8333-333333333331";
 const SALARY = "33333333-3333-4333-8333-333333333332";
 /** A category a person made and called Borrowed: no seed tag, so not a debt. */
@@ -31,6 +32,7 @@ beforeAll(async () => {
     INSERT INTO accounts (id, name, kind, currency, ownership)
       VALUES ('${ACCOUNT}', 'Bank A · PLN', 'bank', 'PLN', 'own');
     INSERT INTO counterparties (id, name, kind) VALUES ('${NINA}', 'Nina', 'person');
+    INSERT INTO counterparties (id, name, kind) VALUES ('${ACME}', 'Acme', 'company');
     INSERT INTO categories (id, name, kind, is_leaf, external_id)
       VALUES ('${BORROWED}', 'Money from friends', 'income', true, 'seed:borrowed');
     INSERT INTO categories (id, name, kind, is_leaf, external_id)
@@ -135,6 +137,28 @@ describe("a debt category is a debt (WA022)", () => {
   });
 });
 
+describe("a split line is never filed under a debt category (WA022)", () => {
+  it("refuses a line under Borrowed on insert and on update, and admits any other", async () => {
+    const parent = nextId();
+    await s.sql.unsafe(`
+      INSERT INTO transactions (id, account_id, date, type, amount_original, currency, fx_rate)
+      VALUES ('${parent}', '${ACCOUNT}', '2026-03-01', 'income', 10, 'PLN', 1)`);
+    const line = (id: string, category: string) =>
+      s.sql.unsafe(`
+        INSERT INTO transaction_lines (id, transaction_id, description, amount, category_id)
+        VALUES ('${id}', '${parent}', 'Half', 10, '${category}')`);
+    expect(await refusal(() => line(nextId(), BORROWED))).toBe("WA022");
+
+    const ok = nextId();
+    expect(await refusal(() => line(ok, SALARY))).toBeNull();
+    expect(
+      await refusal(() =>
+        s.sql.unsafe(`UPDATE transaction_lines SET category_id = '${BORROWED}' WHERE id = '${ok}'`),
+      ),
+    ).toBe("WA022");
+  });
+});
+
 describe("the backfill — existing rows with a person become debts", () => {
   const backfill = readFileSync(
     fileURLToPath(new URL("../../drizzle/0025_debt_categories.sql", import.meta.url)),
@@ -145,15 +169,21 @@ describe("the backfill — existing rows with a person become debts", () => {
     .filter((line) => !line.trimStart().startsWith("--"))
     .join("\n");
 
-  it("converts a row that names a person, leaves one that names nobody, and is idempotent", async () => {
+  it("converts a row that names a person, leaves one that names nobody, a company and a deleted row, and is idempotent", async () => {
     const withPerson = nextId();
     const withoutPerson = nextId();
+    const withCompany = nextId();
+    const deleted = nextId();
     await s.sql.unsafe(`ALTER TABLE transactions DISABLE TRIGGER transactions_debt_category_shape`);
     await s.sql.unsafe(`
       INSERT INTO transactions (id, account_id, date, type, amount_original, currency, fx_rate, category_id, counterparty_id)
       VALUES ('${withPerson}', '${ACCOUNT}', '2026-02-01', 'income', 10, 'PLN', 1, '${BORROWED}', '${NINA}');
       INSERT INTO transactions (id, account_id, date, type, amount_original, currency, fx_rate, category_id)
-      VALUES ('${withoutPerson}', '${ACCOUNT}', '2026-02-01', 'income', 10, 'PLN', 1, '${BORROWED}')`);
+      VALUES ('${withoutPerson}', '${ACCOUNT}', '2026-02-01', 'income', 10, 'PLN', 1, '${BORROWED}');
+      INSERT INTO transactions (id, account_id, date, type, amount_original, currency, fx_rate, category_id, counterparty_id)
+      VALUES ('${withCompany}', '${ACCOUNT}', '2026-02-01', 'income', 10, 'PLN', 1, '${BORROWED}', '${ACME}');
+      INSERT INTO transactions (id, account_id, date, type, amount_original, currency, fx_rate, category_id, counterparty_id, deleted_at)
+      VALUES ('${deleted}', '${ACCOUNT}', '2026-02-01', 'income', 10, 'PLN', 1, '${BORROWED}', '${NINA}', now())`);
     await s.sql.unsafe(`ALTER TABLE transactions ENABLE TRIGGER transactions_debt_category_shape`);
 
     expect(backfill, "the migration's first statement").toContain("UPDATE transactions");
@@ -166,6 +196,14 @@ describe("the backfill — existing rows with a person become debts", () => {
       )[0];
     expect(await after(withPerson)).toEqual({ who: NINA, role: "debt" });
     expect(await after(withoutPerson)).toEqual({ who: null, role: null });
+    expect(await after(withCompany), "a company is not a person").toEqual({
+      who: null,
+      role: null,
+    });
+    expect(await after(deleted), "a soft-deleted row is left alone").toEqual({
+      who: null,
+      role: null,
+    });
 
     const again = await s.sql.unsafe(backfill ?? "");
     expect(again.count, "a second run finds nothing left to convert").toBe(0);

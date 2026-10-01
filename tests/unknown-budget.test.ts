@@ -71,8 +71,12 @@ const BUDGET: Record<string, { max: number; why: string }> = {
   // `create-account.executor.ts` above, once per executor file — the driver's
   // run-result, in a position nothing consumes.
   "packages/ledger/src/executor.ts": {
+    max: 5,
+    why: "three raw-payload doors (`invoke`, `mintedIds`, `upcast`) taking JSON off a disk, which is exactly as trustworthy as JSON off a wire, `upcast`'s answer (the payload it hands back for the executor to parse — it may belong to another operation, so no one type fits), and one widened `Row` in a constraint position — a registry is heterogeneous and TypeScript has no existential type for `returns something`",
+  },
+  "packages/ledger/src/transactions/upcast-create-transaction.ts": {
     max: 3,
-    why: "two raw-payload doors (`invoke`, `mintedIds`) taking JSON off a disk, which is exactly as trustworthy as JSON off a wire, and one widened `Row` in a constraint position — a registry is heterogeneous and TypeScript has no existential type for `returns something`",
+    why: "the raw payload of a queued entry off a disk (`raw`), and the payload it hands back for the executor to parse (`Upcast.payload`, `plain`) — an upcast may turn the intent into another operation's input, so no one type fits, and the executor's own schema is the check",
   },
   "packages/ledger/src/open.ts": {
     max: 1,

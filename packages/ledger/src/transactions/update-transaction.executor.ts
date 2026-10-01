@@ -24,7 +24,11 @@ import {
   assertCategoryNotArchived,
   type LocalTransactionRow,
 } from "./create-transaction.executor.ts";
-import { assertDebtCategoryShape, obligationAfterLeaving } from "./debt-categories.ts";
+import {
+  assertDebtCategoryShape,
+  assertNotRepaymentEntry,
+  leavingDebtCategory,
+} from "./debt-categories.ts";
 
 const { transactionLines, transactions } = schema;
 
@@ -167,24 +171,32 @@ function patchTransaction(input: UpdateTransactionInput, tx: ReplicaTx): LocalTr
    * moving the row, is.
    *
    * Moving a row *out* of the four with nothing said about the obligation
-   * takes the automatic role with it (`obligationAfterLeaving`), so the row
+   * takes the automatic role with it (`leavingDebtCategory`), so the row
    * does not keep a debt its category no longer states.
    */
   const obligationInPatch =
     "obligationRole" in input.patch || "obligationCounterpartyId" in input.patch;
-  const afterLeaving = obligationAfterLeaving(tx, current, input.patch, obligationInPatch);
+  const afterLeaving = leavingDebtCategory(tx, current, input.patch, obligationInPatch);
+  // A repayment is written by `settle_debt` and nothing else (SPEC §6.6): a row
+  // *entering* one through a plain patch would carry the debt role without the
+  // discharge, the direction check or "nothing to settle".
+  if ("categoryId" in input.patch && input.patch.categoryId !== current.categoryId) {
+    assertNotRepaymentEntry(tx, merged.categoryId, "update_transaction: category_id");
+  }
   if ("categoryId" in input.patch || obligationInPatch) {
     assertDebtCategoryShape(
       tx,
       merged.categoryId,
-      afterLeaving ?? {
-        obligationCounterpartyId:
-          "obligationCounterpartyId" in input.patch
-            ? input.patch.obligationCounterpartyId
-            : current.obligationCounterpartyId,
-        obligationRole:
-          "obligationRole" in input.patch ? input.patch.obligationRole : current.obligationRole,
-      },
+      afterLeaving && "obligationRole" in afterLeaving
+        ? afterLeaving
+        : {
+            obligationCounterpartyId:
+              "obligationCounterpartyId" in input.patch
+                ? input.patch.obligationCounterpartyId
+                : current.obligationCounterpartyId,
+            obligationRole:
+              "obligationRole" in input.patch ? input.patch.obligationRole : current.obligationRole,
+          },
       "update_transaction: category_id",
     );
   }
@@ -235,6 +247,30 @@ function patchTransaction(input: UpdateTransactionInput, tx: ReplicaTx): LocalTr
   }
 
   /**
+   * **A settlement's discharge figure follows its amount.** A row `settle_debt`
+   * wrote carries `debt_amount`/`debt_currency` — what it discharged, in the
+   * debt's currency — and the balance reads that figure, not the amount. Edit
+   * the amount without it and the balance stays at the old figure while the row
+   * says another. In the debt's own currency the two are one figure and move
+   * together; across currencies the new discharge is not derivable from the new
+   * amount (it is the rate the two parties agreed), so the edit is refused and
+   * the settlement has to be redone. Skipped when the row is leaving its debt
+   * category, which clears the figure anyway.
+   */
+  const restatedDebt = (() => {
+    if (afterLeaving !== undefined) return {};
+    if (input.patch.amountOriginal === undefined || current.debtAmount === null) return {};
+    if (current.debtCurrency === current.currency) {
+      return { debtAmount: input.patch.amountOriginal };
+    }
+    throw new LocalRefusal(
+      `update_transaction: amount_original — this row discharged ${current.debtCurrency} in ` +
+        `${current.currency}, so a new amount does not say how much it discharges. Re-settle: ` +
+        "delete it and record the repayment again with settle_debt",
+    );
+  })();
+
+  /**
    * `SPEC.md` §14.4b. `resolveBrandPatch` is the single place this decision is
    * made — see its own doc for the four cases (explicit assign, explicit clear
    * to a sticky `"none"`, re-match, or leave alone). It is called only when
@@ -273,6 +309,7 @@ function patchTransaction(input: UpdateTransactionInput, tx: ReplicaTx): LocalTr
       ...input.patch,
       ...brandFields,
       ...(afterLeaving ?? {}),
+      ...restatedDebt,
       version: sql`${transactions.version} + 1`,
       updatedAt: new Date(),
     })

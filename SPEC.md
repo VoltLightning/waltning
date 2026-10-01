@@ -1484,18 +1484,50 @@ a debt. Every claim below names the layer that enforces it:
   become groups while empty.
 - **Rows that already sit under the four** are converted by a one-time
   migration (`0021_debt_categories` on the replica, `0025_debt_categories` on
-  Postgres, idempotent): a row that names a person (`counterparty_id`) and
-  carries no obligation becomes a debt on that person. A row that names nobody
-  stays plain, and S09 says *not counted as a debt — add who* instead of
-  guessing; it does not block unrelated edits.
+  Postgres, idempotent): a live row that names a **person** (`counterparty_id`
+  of kind `person`) and carries no obligation becomes a debt on that person. A
+  row that names nobody, names a company, or is soft-deleted stays as it is, and
+  S09 says *not counted as a debt — add who* instead of guessing; it does not
+  block unrelated edits. Rows the identity-link migration moved off the retired
+  `reference` role carry no mark and are converted like any other row that names
+  a person.
 - **A repayment is `settle_debt`, never a second path.** *Repayment received*
-  and *Repayment made* with a person who has an open debt in the matching
-  direction settle against it (S14): `settle_debt` reads the live sign, stamps
-  `debt_amount`/`debt_currency` so 25 EUR discharges a PLN debt without
-  opening a reverse EUR one, verifies the direction against the balance and
-  reports `overSettled` (*service*). With no open debt in that direction the
-  capture surface refuses on Who?: if they never owed you, money from them is
-  a loan to you, which is *Borrowed*.
+  and *Repayment made* are written **only** by `settle_debt` (S14): it reads the
+  live sign, stamps `debt_amount`/`debt_currency` so 25 EUR discharges a PLN
+  debt without opening a reverse EUR one, verifies the direction against the
+  balance and reports `overSettled` (*service*). `create_transaction`,
+  `update_transaction` (a row *entering* one), `supersede_transaction` and
+  `categorize_batch` refuse a repayment category with a message naming
+  `settle_debt` (*service, the replica's executors — and so the agent, which
+  reaches the ledger through them*). The capture surfaces route a repayment
+  through it: Quick add on phone and desk, and S09, where picking a repayment
+  category on an existing row settles the person's open debt with the row's own
+  figures and replaces the row with the settlement (*UI*). With no open debt in
+  the matching direction they refuse on Who?: money from somebody who never
+  owed you is a loan to you, which is *Borrowed* (*UI*). *Borrowed* and *Lent
+  out* are ordinary writes.
+- **A settlement's discharge figure follows its amount.** Editing the amount of
+  a row that carries `debt_amount` restates it in the same write when the debt
+  is in the row's own currency; across currencies the new discharge is not
+  derivable from the new amount, so `update_transaction` refuses and the
+  repayment is redone with `settle_debt` (*service*). A row that leaves the four
+  categories drops `debt_amount` and `debt_currency` with the role, in
+  `update_transaction` and `categorize_batch` (*service*), so re-entering a debt
+  category does not bring the old figure back.
+- **A split line is never filed under one of the four** — a line has no person
+  to owe or be owed. `set_transaction_lines` refuses it (*service*), and the
+  `transaction_lines_debt_category_*` triggers on the replica and
+  `transaction_lines_debt_category` on Postgres (WA022) hold under it
+  (*database, both engines*); `merge_categories` counts lines when it asks
+  whether the loser holds anything.
+- **An entry captured before the rule is not dropped.** A queued
+  `create_transaction` at `opVersion` 1 is brought to the rule at replay
+  (`upcast`, read-only, in the replica transaction): *Borrowed* / *Lent out*
+  naming a person becomes the debt on that person; naming nobody (or a company)
+  it is kept as a plain, uncategorised row; a repayment with an open debt in the
+  matching direction and the row's currency is replayed as `settle_debt` with the
+  same row id, otherwise it is kept as a plain, uncategorised row — never a
+  reverse debt (*service, `recover.ts`*).
 
 A category a person made and named *Borrowed* carries no seed tag and means
 nothing about debt. The rule is keyed on the four starter categories' seed keys

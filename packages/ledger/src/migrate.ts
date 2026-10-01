@@ -687,6 +687,27 @@ BEGIN
 		WHERE \`categories\`.\`id\` = NEW.\`category_id\` AND \`categories\`.\`external_id\` IN (${DEBT_SEEDS_SQL})
 	);
 END`,
+  // A split line carries no obligation, so it is never filed under a debt category.
+  `CREATE TRIGGER IF NOT EXISTS \`transaction_lines_debt_category_insert\`
+BEFORE INSERT ON \`transaction_lines\`
+FOR EACH ROW WHEN NEW.\`category_id\` IS NOT NULL
+BEGIN
+	SELECT RAISE(ABORT, 'a split line cannot be filed under a debt category (WA022)')
+	WHERE EXISTS (
+		SELECT 1 FROM \`categories\`
+		WHERE \`categories\`.\`id\` = NEW.\`category_id\` AND \`categories\`.\`external_id\` IN (${DEBT_SEEDS_SQL})
+	);
+END`,
+  `CREATE TRIGGER IF NOT EXISTS \`transaction_lines_debt_category_update\`
+BEFORE UPDATE OF \`category_id\` ON \`transaction_lines\`
+FOR EACH ROW WHEN NEW.\`category_id\` IS NOT NULL
+BEGIN
+	SELECT RAISE(ABORT, 'a split line cannot be filed under a debt category (WA022)')
+	WHERE EXISTS (
+		SELECT 1 FROM \`categories\`
+		WHERE \`categories\`.\`id\` = NEW.\`category_id\` AND \`categories\`.\`external_id\` IN (${DEBT_SEEDS_SQL})
+	);
+END`,
 ];
 
 /**

@@ -177,6 +177,19 @@ export type LocalExecutor<Input extends z.ZodTypeAny, Row, Tx> = {
   opVersion: number;
 
   /**
+   * Bring an entry captured at an older `opVersion` to this one **at replay**
+   * (`recover.ts`), inside the replica transaction so it may read the ledger it
+   * is about to write into. Optional: most operations have never changed shape.
+   *
+   * It returns the payload to apply — and, when the old intent now belongs to a
+   * different operation (a repayment captured as a plain `create_transaction`
+   * is a `settle_debt` today), the operation to apply it with. Read-only and
+   * deterministic, and never a reason to drop an entry: a payload it cannot
+   * improve it returns unchanged, for the executor to refuse as it always did.
+   */
+  upcast?(raw: unknown, fromVersion: number, tx: Tx): { operation?: string; payload: unknown };
+
+  /**
    * The same schema the server operation declares.
    *
    * Not "a schema like it" — §14.7's claim is one definition read twice, and

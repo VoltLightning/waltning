@@ -23,7 +23,7 @@ import { mapFieldErrors } from "@waltning/client/transport/field-errors";
 import { proposeCategory } from "@waltning/core/capture/entered-name-memory";
 import { fold } from "@waltning/core/capture/names";
 import { recentCategories } from "@waltning/core/capture/recent-categories";
-import { accountingDate, clockIn } from "@waltning/core/date";
+import { accountingDate, clockIn, isAccountingDate } from "@waltning/core/date";
 import * as money from "@waltning/core/money";
 import { AccountPicker, type AccountPickerAccount } from "@waltning/ui/accounts/account-picker";
 import { CategorySheet } from "@waltning/ui/categories/category-sheet";
@@ -383,6 +383,9 @@ export default function QuickAdd() {
   );
   const accountCurrency = selectedComposerAccount?.currency ?? null;
   const enteredAmount = parseAmount(composerAmountRaw);
+  // The rate for the day the row is written on, which is the draft's date and
+  // not today's: a settlement is valued where it happened.
+  const rowDate = isAccountingDate(composerDate) ? accountingDate(composerDate) : today;
   // biome-ignore lint/correctness/useExhaustiveDependencies: snapshot.revision invalidates the read by identity; it is not read.
   const repayment = useMemo(
     () =>
@@ -396,7 +399,8 @@ export default function QuickAdd() {
             crossRate: (from) =>
               accountCurrency === null
                 ? null
-                : (ledger.readCrossRate({ from, to: accountCurrency, date: today })?.rate ?? null),
+                : (ledger.readCrossRate({ from, to: accountCurrency, date: rowDate })?.rate ??
+                  null),
           }),
     [
       personId,
@@ -906,7 +910,11 @@ export default function QuickAdd() {
           accountCurrency: deskAccount.currency,
           amount: next.amount,
           crossRate: (from) =>
-            ledger.readCrossRate({ from, to: deskAccount.currency, date: today })?.rate ?? null,
+            ledger.readCrossRate({
+              from,
+              to: deskAccount.currency,
+              date: isAccountingDate(next.date) ? accountingDate(next.date) : today,
+            })?.rate ?? null,
         });
         const name = snapshot.counterparties.find((c) => c.id === deskPerson)?.name ?? "";
         const problem =

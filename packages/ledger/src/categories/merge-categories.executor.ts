@@ -132,7 +132,7 @@ function mergeCategories(input: MergeCategoriesInput, tx: ReplicaTx): MergeCateg
   return { loser: archivedLoser, movedTransactions, movedLines, movedRecurring };
 }
 
-/** Live transactions and recurring rules naming the category — what a merge would move. */
+/** Transactions, split lines and recurring rules naming the category — what a merge would move. */
 function loserHoldings(tx: ReplicaTx, categoryId: Id<"categories">): number {
   const [{ value: rows } = { value: 0 }] = tx
     .select({ value: count() })
@@ -144,5 +144,10 @@ function loserHoldings(tx: ReplicaTx, categoryId: Id<"categories">): number {
     .from(recurringTransactions)
     .where(eq(recurringTransactions.categoryId, categoryId))
     .all();
-  return rows + rules;
+  const [{ value: lines } = { value: 0 }] = tx
+    .select({ value: count() })
+    .from(transactionLines)
+    .where(eq(transactionLines.categoryId, categoryId))
+    .all();
+  return rows + rules + lines;
 }

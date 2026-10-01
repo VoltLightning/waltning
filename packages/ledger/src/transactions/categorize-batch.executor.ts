@@ -50,7 +50,12 @@ import {
   assertCategoryNotArchived,
   type LocalTransactionRow,
 } from "./create-transaction.executor.ts";
-import { debtCategoryIds, isDebtCategory, rowsMissingDebt } from "./debt-categories.ts";
+import {
+  assertNotRepaymentEntry,
+  debtCategoryIds,
+  isDebtCategory,
+  rowsMissingDebt,
+} from "./debt-categories.ts";
 
 const { transactions, categories } = schema;
 
@@ -80,6 +85,7 @@ function categorize(input: CategorizeBatchInput, tx: ReplicaTx): LocalTransactio
    * rows *out* of one takes the automatic role with it, in the same write.
    * Both before the bulk `UPDATE`, for the reason M2 gives.
    */
+  assertNotRepaymentEntry(tx, input.categoryId, "categorize_batch: category_id");
   if (isDebtCategory(tx, input.categoryId)) {
     const missing = rowsMissingDebt(tx, input.transactionIds);
     if (missing.length > 0) {
@@ -161,7 +167,13 @@ function categorize(input: CategorizeBatchInput, tx: ReplicaTx): LocalTransactio
 
   if (leaving.length > 0) {
     tx.update(transactions)
-      .set({ obligationCounterpartyId: null, obligationRole: null })
+      .set({
+        obligationCounterpartyId: null,
+        obligationRole: null,
+        // The discharge a settlement stamped goes with its role.
+        debtAmount: null,
+        debtCurrency: null,
+      })
       .where(inArray(transactions.id, leaving))
       .run();
   }

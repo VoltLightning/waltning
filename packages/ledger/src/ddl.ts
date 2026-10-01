@@ -634,7 +634,8 @@ export const REPLICA_STEPS: readonly {
     statements: [
       `UPDATE \`transactions\`
 SET \`obligation_counterparty_id\` = \`counterparty_id\`, \`obligation_role\` = 'debt'
-WHERE \`counterparty_id\` IS NOT NULL
+WHERE \`deleted_at\` IS NULL
+  AND \`counterparty_id\` IN (SELECT \`id\` FROM \`counterparties\` WHERE \`kind\` = 'person')
   AND \`obligation_counterparty_id\` IS NULL
   AND \`obligation_role\` IS NULL
   AND \`type\` IN ('income', 'expense')

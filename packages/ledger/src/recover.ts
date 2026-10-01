@@ -162,6 +162,7 @@ export function recoverOnLaunch<TRun, TSchema extends LedgerSchema>(
       seq: outbox.seq,
       operation: outbox.operation,
       payload: outbox.payload,
+      opVersion: outbox.opVersion,
       // M1 — an executor derives "today" from where and when the capture
       // happened (`LocalExecutor.apply`), and those three facts are recorded
       // on the entry itself precisely so a replay is not left guessing them
@@ -203,7 +204,17 @@ export function recoverOnLaunch<TRun, TSchema extends LedgerSchema>(
 
     try {
       ledger.replica.db.transaction((tx) => {
-        executor.invoke(entry.payload, tx, captureOf(entry));
+        // An entry captured at an older `opVersion` is brought to this build's
+        // shape first — possibly into a different operation — never dropped.
+        const upcast =
+          entry.opVersion < executor.opVersion
+            ? executor.upcast?.(entry.payload, entry.opVersion, tx)
+            : undefined;
+        const target = upcast?.operation === undefined ? executor : registry[upcast.operation];
+        if (target === undefined) {
+          throw new Error(`no local executor for the upcast of "${entry.operation}"`);
+        }
+        target.invoke(upcast === undefined ? entry.payload : upcast.payload, tx, captureOf(entry));
         advanceAppliedSeq(tx, entry.seq);
       });
     } catch (error) {

@@ -52,6 +52,19 @@ export const DEBT_SEED_KEYS = [
 
 export type DebtSeedKey = (typeof DEBT_SEED_KEYS)[number];
 
+/**
+ * The two of the four that are **repayments**: written only by `settle_debt`
+ * (S14), never by `create_transaction` or `update_transaction`, because only a
+ * settlement stamps the discharge in the debt's own currency, checks the
+ * direction against the live balance and states over-settlement.
+ */
+export const REPAYMENT_SEED_KEYS = ["repayment-received", "repayment-made"] as const;
+
+/** `REPAYMENT_SEED_KEYS` as stored. */
+export const REPAYMENT_SEED_EXTERNAL_IDS: readonly string[] = REPAYMENT_SEED_KEYS.map(
+  (key) => `seed:${key}`,
+);
+
 /** `DEBT_SEED_KEYS` as stored: `seed:borrowed`, … */
 export const DEBT_SEED_EXTERNAL_IDS: readonly string[] = DEBT_SEED_KEYS.map((key) => `seed:${key}`);
 
