@@ -49,6 +49,7 @@ import {
 } from "../../../fx/molecules/amount-field/amount-field";
 import type { Locale } from "../../../i18n/locales.ts";
 import { useLocale, useT } from "../../../i18n/provider";
+import { useCategoryLabel } from "../../../i18n/use-category-label.ts";
 import { Button } from "../../../primitives/atoms/button/button";
 import { TextField } from "../../../primitives/atoms/text-field/text-field";
 import { useDisclosureMotion } from "../../../primitives/disclosure-motion.ts";
@@ -68,6 +69,8 @@ export type LinesCardLine = {
   amount: money.Money;
   categoryId: string | null;
   categoryName: string | null;
+  /** The category's `seed:<key>` tag, when it has one — the display rule reads it. */
+  categoryExternalId?: string | null | undefined;
 };
 
 /** What `onSave` sends — the whole set, `set_transaction_lines`'s own shape. */
@@ -95,6 +98,8 @@ type DraftLine = {
   amount: string;
   categoryId: string | null;
   categoryName: string | null;
+  /** The category's `seed:<key>` tag, when it has one — the display rule reads it. */
+  categoryExternalId?: string | null | undefined;
 };
 
 /**
@@ -289,6 +294,7 @@ function LineRow({
   setOpen,
 }: LineRowProps) {
   const t = useT();
+  const labelOf = useCategoryLabel();
   const styles = useStyles();
   const { focused, handlers } = useInteraction();
   const press = usePressScale();
@@ -354,7 +360,11 @@ function LineRow({
             <Text style={[styles.description, filled ? null : styles.descriptionMuted]}>
               {description}
             </Text>
-            {line.categoryName ? <Text style={styles.category}>{line.categoryName}</Text> : null}
+            {line.categoryName ? (
+              <Text style={styles.category}>
+                {labelOf({ name: line.categoryName, externalId: line.categoryExternalId })}
+              </Text>
+            ) : null}
           </View>
           <View style={styles.lineValue}>
             {amountValue === null ? (

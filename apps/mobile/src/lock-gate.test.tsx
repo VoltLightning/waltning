@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 
-import { act, render, screen } from "@testing-library/react";
+import { act, cleanup, render, screen } from "@testing-library/react";
 import {
   type AppActivity,
   type AppLockAttempt,
@@ -156,4 +156,94 @@ it("draws the lock over a sheet the app had open, not under it", async () => {
   // Later in document order is later in the stack, on the web as on a phone.
   expect(sheet.compareDocumentPosition(cover) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0);
   expect(cover.closest('[aria-modal="true"], [role="dialog"]')).not.toBeNull();
+});
+
+/**
+ * **The first launch asks, and asks before the device does.** Until it is
+ * answered there is no biometric prompt at all — the tester's first surprise
+ * was a fingerprint request with no word of why.
+ */
+const PROMPT = { message: "Unlock", cancel: "Cancel" };
+
+function askingDevice(stored: string | null) {
+  let disk: string | null = stored;
+  const authenticate = vi.fn(async (): Promise<AppLockAttempt> => ({ ok: true }));
+  const lock = createAppLock({
+    authenticator: {
+      enrolment: async () => "biometric",
+      authenticate,
+      method: async () => "fingerprint",
+    },
+    subscribeAppState: () => () => {},
+    now: () => 0,
+    choice: {
+      read: async () => disk,
+      write: async (enabled) => {
+        disk = enabled ? "on" : "off";
+      },
+      hasHistory: async () => false,
+    },
+  });
+  return { lock, authenticate, disk: () => disk };
+}
+
+it("asks on first launch, with the reason, and makes no biometric call", async () => {
+  const { lock, authenticate } = askingDevice(null);
+  draw(lock);
+  await settle();
+  expect(screen.getByText("Lock the app with your fingerprint?")).toBeDefined();
+  expect(screen.getByText(/Anyone holding this unlocked phone/)).toBeDefined();
+  expect(screen.queryByText("the ledger"), "the ledger waits for the answer").toBeNull();
+  expect(authenticate).not.toHaveBeenCalled();
+});
+
+it("Yes turns the lock on: the ledger opens, and the next launch prompts", async () => {
+  const first = askingDevice(null);
+  draw(first.lock);
+  await settle();
+  await act(async () => {
+    screen.getByRole("button", { name: "Yes" }).click();
+  });
+  expect(screen.getByText("the ledger")).toBeDefined();
+  expect(first.disk()).toBe("on");
+  expect(first.authenticate).not.toHaveBeenCalled();
+  cleanup();
+
+  const next = askingDevice(first.disk());
+  draw(next.lock);
+  await settle();
+  expect(next.authenticate, "the next launch raises the prompt").toHaveBeenCalledOnce();
+});
+
+it("Not now leaves no lock: the ledger opens, and no launch prompts", async () => {
+  const first = askingDevice(null);
+  draw(first.lock);
+  await settle();
+  await act(async () => {
+    screen.getByRole("button", { name: "Not now" }).click();
+  });
+  expect(screen.getByText("the ledger")).toBeDefined();
+  expect(first.disk()).toBe("off");
+  cleanup();
+
+  const next = askingDevice(first.disk());
+  draw(next.lock);
+  await settle();
+  expect(screen.getByText("the ledger")).toBeDefined();
+  expect(next.authenticate).not.toHaveBeenCalled();
+});
+
+it("does not remount the screen when Settings switches the lock on or off", async () => {
+  const { lock } = askingDevice("off");
+  draw(lock);
+  await settle();
+  const before = screen.getByText("the ledger");
+  await act(async () => {
+    await lock.answer(true, PROMPT);
+  });
+  expect(screen.getByText("the ledger"), "same node: the screen kept its place").toBe(before);
+  await act(async () => {
+    await lock.answer(false, PROMPT);
+  });
+  expect(screen.getByText("the ledger")).toBe(before);
 });

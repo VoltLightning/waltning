@@ -56,9 +56,11 @@ import {
   type CategorySheetCreateDraft,
 } from "@waltning/ui/categories/category-sheet";
 import { CounterpartyPicker } from "@waltning/ui/counterparties/counterparty-picker";
+import { categoryTintKey, drawnNamesOf } from "@waltning/ui/i18n/category-label";
 import { resolveFieldErrorMessage } from "@waltning/ui/i18n/field-error-messages";
 import { dayLabel, decimalMark } from "@waltning/ui/i18n/locales";
 import { useLocale, useT } from "@waltning/ui/i18n/provider";
+import { useCategoryLabel } from "@waltning/ui/i18n/use-category-label";
 import { Button } from "@waltning/ui/primitives/button";
 import { useBreakpoint } from "@waltning/ui/primitives/use-breakpoint";
 import { ErrorState } from "@waltning/ui/states/error-state";
@@ -163,7 +165,7 @@ function toStripCards(
     counterparty: string | null;
     fromAccount: string;
     toAccount: string | null;
-    categoryName: (id: string) => string | null;
+    categoryName: (id: string) => { name: string; tintKey: string } | null;
   },
   actions: { onOpenCounterparty: () => void; onLink: () => void; counterpartyUnsaved: boolean },
 ): ContextStripCard[] {
@@ -187,9 +189,9 @@ function toStripCards(
         });
         break;
       case "category": {
-        const name = names.categoryName(card.categoryId);
-        if (name === null) break;
-        cards.push({ ...card, name });
+        const named = names.categoryName(card.categoryId);
+        if (named === null) break;
+        cards.push({ ...card, name: named.name, tintKey: named.tintKey });
         break;
       }
       case "link":
@@ -202,6 +204,7 @@ function toStripCards(
 
 export default function TransactionDetail() {
   const t = useT();
+  const labelOf = useCategoryLabel();
   const styles = useStyles();
   const locale = useLocale();
   const ledger = useLedgerController();
@@ -333,11 +336,14 @@ export default function TransactionDetail() {
 
   const handleCreateCategory = useCallback(
     (draft: CategorySheetCreateDraft) => {
-      const result = ledger.createCategory(draft);
+      const result = ledger.createCategory({
+        ...draft,
+        drawnNames: drawnNamesOf(labelOf, snapshot.categoryTree),
+      });
       if ("id" in result) return { id: result.id };
       return { error: result.fieldErrors[0]?.message ?? t("common.couldNotSave") };
     },
-    [ledger, t],
+    [ledger, t, labelOf, snapshot.categoryTree],
   );
 
   const handleSaveFields = useCallback(
@@ -349,8 +355,8 @@ export default function TransactionDetail() {
        * it — `update_transaction` refuses that, because a plain patch would
        * carry the debt role without the discharge, the direction check or
        * "nothing to settle". The row's own figures settle the person's open debt
-       * in the matching direction, and the original is replaced by the
-       * settlement.
+       * in the matching direction, and the settlement replaces the original in
+       * the same write (`supersedes`) — never a settle followed by a delete.
        */
       const intoCategory = snapshot.categories.find((category) => category.id === patch.categoryId);
       const repaymentIntent = debtIntentOf(intoCategory?.externalId);
@@ -365,7 +371,8 @@ export default function TransactionDetail() {
         const plan = planRepayment({
           intent: repaymentIntent,
           balances: ledger
-            .listCounterpartyBalances(deviceRuntime().capture().date)
+            // Without the row being replaced: it is not part of the debt it settles.
+            .listCounterpartyBalances(deviceRuntime().capture().date, { excluding: transactionId })
             .filter((row) => row.counterpartyId === person),
           accountCurrency: account.currency,
           amount,
@@ -402,14 +409,11 @@ export default function TransactionDetail() {
             dischargesAmount: plan.dischargesAmount,
             note: patch.note ?? detail.note,
             categoryId: patch.categoryId,
+            // One operation: the settlement replaces this row in the same write.
+            supersedes: { id: transactionId, version: detail.version },
           });
           if (!("id" in settled)) {
             setFieldsErrors(toFormLevel(t, settled.fieldErrors));
-            return;
-          }
-          const removed = ledger.deleteTransaction(transactionId, detail.version);
-          if (!("id" in removed)) {
-            setFieldsErrors(toFormLevel(t, removed.fieldErrors));
             return;
           }
           router.dismissTo({
@@ -530,10 +534,13 @@ export default function TransactionDetail() {
               counterparty: pickedIdentity?.name ?? live.counterpartyIdentityName,
               fromAccount: live.accountName,
               toAccount: live.toAccountName,
-              categoryName: (id) =>
-                id === live.categoryId
-                  ? live.categoryName
-                  : (live.lines.find((line) => line.categoryId === id)?.categoryName ?? null),
+              categoryName: (id) => {
+                const named =
+                  id === live.categoryId ? live : live.lines.find((line) => line.categoryId === id);
+                if (named?.categoryName == null) return null;
+                const row = { name: named.categoryName, externalId: named.categoryExternalId };
+                return { name: labelOf(row), tintKey: categoryTintKey(row) };
+              },
             },
             {
               onOpenCounterparty: handleOpenCounterparty,
@@ -542,7 +549,7 @@ export default function TransactionDetail() {
                 pickedIdentity !== undefined && pickedIdentity.id !== live.counterpartyId,
             },
           ),
-    [context, live, pickedIdentity, handleLinkCounterparty, handleOpenCounterparty],
+    [context, live, pickedIdentity, handleLinkCounterparty, handleOpenCounterparty, labelOf],
   );
 
   const today = useMemo(() => deviceRuntime().capture().date, []);
@@ -583,15 +590,29 @@ export default function TransactionDetail() {
 
   // The header draws the row as it is now; the fields draw the draft's base.
   const shown = live ?? detail;
+  const shownCategory =
+    shown.categoryName === null
+      ? null
+      : labelOf({ name: shown.categoryName, externalId: shown.categoryExternalId });
+  const shownTintKey =
+    shown.categoryName === null
+      ? null
+      : categoryTintKey({ name: shown.categoryName, externalId: shown.categoryExternalId });
+  const detailCategory =
+    detail.categoryName === null
+      ? null
+      : labelOf({ name: detail.categoryName, externalId: detail.categoryExternalId });
   const effectiveAccountId = pickedAccountId ?? detail.accountId;
   const effectiveToAccountId = pickedToAccountId ?? detail.toAccountId;
   // The pick until it is saved, the saved row afterwards — `accountId`'s own rule.
   const effectiveCategoryId = pickedCategoryId ?? detail.categoryId;
+  // A held pick is drawn like any other category: through the seed-label rule,
+  // so a held Borrowed reads in the language of the app, not as its stored name.
+  const pickedCategory = snapshot.categories.find((category) => category.id === pickedCategoryId);
   const effectiveCategoryName =
-    pickedCategoryId === null
-      ? detail.categoryName
-      : (snapshot.categories.find((category) => category.id === pickedCategoryId)?.name ??
-        detail.categoryName);
+    pickedCategoryId === null || pickedCategory === undefined
+      ? detailCategory
+      : labelOf({ name: pickedCategory.name, externalId: pickedCategory.externalId });
   // The pick until it is saved, the saved row afterwards — `accountId`'s own rule.
   // The pick until it is saved, the saved row afterwards — `accountId`'s own
   // rule, once per link. A name comes from the directory rather than the row's
@@ -610,8 +631,8 @@ export default function TransactionDetail() {
   return (
     <PushedPage
       title={dayLabel(shown.date, locale)}
-      tint={heroTint(shown.categoryName, theme).fill}
-      topWash={heroTint(shown.categoryName, theme).fill}
+      tint={heroTint(shownCategory, theme, shownTintKey).fill}
+      topWash={heroTint(shownCategory, theme, shownTintKey).fill}
       titleNode={
         <HeroHeaderTitle
           scrollY={heroScroll.scrollY}
@@ -632,7 +653,8 @@ export default function TransactionDetail() {
         type={shown.type}
         accountName={shown.accountName}
         toAccountName={shown.toAccountName}
-        categoryName={shown.categoryName}
+        categoryName={shownCategory}
+        categoryTintKey={shownTintKey}
         enteredName={shown.enteredName}
         brandKey={shown.brandKey}
         scrollY={heroScroll.scrollY}

@@ -379,6 +379,7 @@ describe("QuickAdd — the phone path (Dock + QuickAddComposer)", () => {
       id: id<"categories">("77777777-7777-4777-8777-777777777777"),
       name: "Eating out",
       kind: "expense",
+      externalId: null,
     };
     const history: EnteredNameHistoryRow[] = [
       { enteredName: "Corner Café", categoryId: category.id, date: accountingDate("2026-08-01") },

@@ -12,6 +12,7 @@
     "./appearance/use-appearance": "./src/appearance/use-appearance/use-appearance.ts",
     "./backup/*": "./src/backup/*.ts",
     "./connectivity/use-probe": "./src/connectivity/use-probe.ts",
+    "./categories/used-first": "./src/categories/used-first/used-first.ts",
     "./counterparties/counterparty-figures": "./src/counterparties/counterparty-figures/counterparty-figures.ts",
     "./counterparties/debt-hero": "./src/counterparties/debt-hero/debt-hero.ts",
     "./counterparties/debt-intent": "./src/counterparties/debt-intent/debt-intent.ts",

@@ -187,10 +187,9 @@ type Pattern = {
 
 export const PATTERNS: Pattern[] = [
   // ── income ────────────────────────────────────────────────────────────
-  // Employers and clients stay abstract: a real one would be *this* ledger's
-  // private data, which is the thing the placeholder rule is about. Merchants
-  // are not — they are public brands, and the point of naming them is that the
-  // offline matcher (§14.4b) has something real to recognise.
+  // Employers, clients and merchants are all generic placeholders: a real one
+  // would be *this* ledger's private data, which is the thing the placeholder
+  // rule is about, and a real brand has no business in a public fixture.
   {
     enteredName: "Employer",
     category: "Salary",
@@ -217,9 +216,9 @@ export const PATTERNS: Pattern[] = [
     every: 3,
   },
 
-  // ── subscriptions, every one of them a catalogue hit ──────────────────
+  // ── subscriptions ─────────────────────────────────────────────────────
   {
-    enteredName: "Netflix",
+    enteredName: "Streaming service",
     category: "Media & streaming",
     type: "expense",
     account: "card-a",
@@ -227,7 +226,7 @@ export const PATTERNS: Pattern[] = [
     days: [3],
   },
   {
-    enteredName: "Spotify",
+    enteredName: "Music service",
     category: "Media & streaming",
     type: "expense",
     account: "card-a",
@@ -235,7 +234,7 @@ export const PATTERNS: Pattern[] = [
     days: [3],
   },
   {
-    enteredName: "YouTube Premium",
+    enteredName: "Video service",
     category: "Media & streaming",
     type: "expense",
     account: "card-a",
@@ -243,7 +242,7 @@ export const PATTERNS: Pattern[] = [
     days: [8],
   },
   {
-    enteredName: "Anthropic",
+    enteredName: "AI assistant",
     category: "Software & tools",
     type: "expense",
     account: "card-a",
@@ -271,7 +270,7 @@ export const PATTERNS: Pattern[] = [
 
   // ── week to week ──────────────────────────────────────────────────────
   {
-    enteredName: "Lidl",
+    enteredName: "Supermarket",
     category: "Groceries",
     type: "expense",
     account: "bank-a",
@@ -279,7 +278,7 @@ export const PATTERNS: Pattern[] = [
     days: [2, 16, 29],
   },
   {
-    enteredName: "Żabka",
+    enteredName: "Corner shop",
     category: "Groceries",
     type: "expense",
     account: "cash",
@@ -287,7 +286,7 @@ export const PATTERNS: Pattern[] = [
     days: [9, 23],
   },
   {
-    enteredName: "ORLEN",
+    enteredName: "Fuel station",
     category: "Fuel & parking",
     type: "expense",
     account: "bank-a",
@@ -295,17 +294,15 @@ export const PATTERNS: Pattern[] = [
     days: [7, 21],
   },
   {
-    enteredName: "Uber",
+    enteredName: "Ride app",
     category: "Taxi",
     type: "expense",
     account: "card-a",
     amount: "24.00",
     days: [6, 20],
   },
-  // **Deliberately not in the catalogue.** An unmatched entered name is the other
-  // half of the feature: it must fall back to a monogram rather than borrow
-  // somebody else's mark, and a fixture where everything matches would never
-  // show that.
+  // An entered name the brand catalogue does not know falls back to a
+  // monogram rather than borrowing somebody else's mark.
   {
     enteredName: "Corner Cafe",
     category: "Eating out",
@@ -315,7 +312,7 @@ export const PATTERNS: Pattern[] = [
     days: [4, 11, 18, 25],
   },
   {
-    enteredName: "Allegro",
+    enteredName: "Online shop",
     category: "Household supplies",
     type: "expense",
     account: "bank-a",
@@ -326,7 +323,7 @@ export const PATTERNS: Pattern[] = [
   // Occasional and large — the shape a "this month against the usual" figure
   // has to survive without calling every month an anomaly.
   {
-    enteredName: "IKEA",
+    enteredName: "Furniture store",
     category: "Furniture & appliances",
     type: "expense",
     account: "bank-a",
@@ -439,10 +436,9 @@ const COUNTERPARTIES: FixtureCounterparty[] = [
   { ref: "owed", name: "Olek Placeholder", kind: "person" },
   { ref: "settled", name: "Studio B", kind: "company" },
   { ref: "company", name: "Agency C", kind: "company" },
-  // Not only Polish: an umlaut and Cyrillic are the two scripts
-  // `counterparties_name_uq`'s fold most needs to hold for.
+  // An umlaut is a case `counterparties_name_uq`'s fold has to hold for.
   { ref: "de-owing", name: "Jürgen Platzhalter", kind: "person" },
-  { ref: "by-owed", name: "Алесь Заменнік", kind: "person" },
+  { ref: "by-owed", name: "Alex Placeholder", kind: "person" },
   // Lent to, and paying it back — lending as a debt on a person (§6.6).
   { ref: "lent", name: "Tomasz Placeholder", kind: "person" },
 ];

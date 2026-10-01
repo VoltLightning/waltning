@@ -183,8 +183,10 @@ stays. Any other category pick is written at once, as it always was.
 
 **Picking *Repayment received* or *Repayment made* is not a patch.** The row's
 own figures settle the person's open debt in the matching direction (S14,
-`settle_debt`) and the settlement replaces the row — Who? is required, and the
-refusals are Quick add's (*Nothing to settle with …*; no exchange rate). The
+`settle_debt` with `supersedes`) and the settlement replaces the row in one
+operation, carrying its entered name, scope, time and tags, and counting the
+replaced row out of the debt it settles. A transaction split into lines is
+refused until it is un-split. Who? is required, and the refusals are Quick add's (*Nothing to settle with …*; no exchange rate). The
 other two (*Borrowed*, *Lent out*) are ordinary edits.
 
 **A row that was filed under one of the four before the rule is shown as it

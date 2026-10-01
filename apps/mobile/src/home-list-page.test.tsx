@@ -31,6 +31,7 @@ function row(date: string, n: number, amount: string, over: Partial<PhoneSearchT
     enteredName: `EnteredName ${n}`,
     note: "",
     categoryName: "Groceries",
+    categoryExternalId: null,
     brandKey: null,
     accountId: id<"accounts">("00000000-0000-4000-8000-00000000000a"),
     accountName: "Bank A",
@@ -563,6 +564,7 @@ describe("every entry says which day it is on", () => {
     currency: currencyCode("PLN"),
     accountName: "Cash",
     categoryName: null,
+    categoryExternalId: null,
   } as PhoneSearchTransaction;
 
   it("reads a row's day off the row, not off the entry", () => {

@@ -777,11 +777,14 @@ is **not made here**.
 **The gate, on both** (`packages/client/src/security/app-lock`, drawn by `LockedScreen`):
 
 - **It is not a login.** The session token decides whether the phone may talk to the server; this decides whether the person holding the phone may read what it already has. The fallback is the device passcode, never an app PIN — a second secret is one more thing to forget, typed in public more often, usually weaker than the one the device already enforces, and it needs a recovery path that is itself an attack surface.
-- **Enrolment decides whether there is a gate.** A device with no secret set opens without one: the gate cannot be stronger than the device, and refusing would lock the owner out for a setting they never chose. A platform that cannot say whether it is enrolled opens too, with the failure on the log.
-- **The prompt is raised by the app, once per lock**, so opening the app meets Face ID rather than a button asking for it. The button is for after a cancel.
+- **Enrolment decides whether there is a gate.** A device with no secret set opens without one, and is not asked: the gate cannot be stronger than the device, and refusing would lock the owner out for a setting they never chose. A platform that cannot say whether it is enrolled opens too, with the failure on the log.
+- **The owner is asked first, once, and the answer is a device preference.** The first time the app opens on a device that could gate, it stands in front of the ledger and asks — *Lock the app with your fingerprint?* (or *face*, or *fingerprint or face*, or *device passcode*, following what the device offers), with the reason beneath: anyone holding this unlocked phone can read the accounts. **Yes** turns the gate on and opens the ledger for this launch; **Not now** leaves no gate. Nothing is requested from the device — no biometric prompt — until the answer is Yes. The answer is stored on the phone, never synced, never a registry write, and S30's *App lock* row flips it either way; the row exists only where the device can gate. Switching it on or off does not remount the screen it was switched on.
+- **Only a fresh device is asked; every doubt is a lock.** The question appears only when nothing is stored *and* the device holds no ledger data. An install older than the question has a ledger and no answer, and it is **locked**, not asked — asking would let whoever holds the phone choose *Not now* and open it. A stored answer that cannot be read, a read that does not come back within 5 s (`CHOICE_TIMEOUT_MS`, separate from the enrolment's), and any value that is not exactly `on` or `off` are locked too: an unreadable answer is not a *no*. A write that fails after *Yes* is retried once; the gate stays armed for the launch.
+- **Turning the lock off asks the device first.** *Not now* on a device that holds data, and the Settings switch from *On* to *Off*, both require the device's own authentication — whoever holds an unlocked phone cannot disarm the lock with a tap. Turning it on asks nothing. The answer is accepted only from the question, an open ledger or an unlocked one — never from the lock screen.
+- **The prompt is raised by the app, once per lock**, so opening the app meets Face ID rather than a button asking for it — once the owner has said yes. The button is for after a cancel.
 - **Cancelling leaves the ledger locked, not a stale screen behind a dismissed sheet.** Before the first unlock the ledger's tree is not on the page at all; after it, the lock is an opaque layer over the tree, which stays mounted so a return does not lose the screen the reader was on. The reason is stated under the button — cancelled, not recognised, locked out, unavailable — and nothing else is offered.
 - **Leaving covers; staying away re-locks.** The cover is drawn as the app goes to the background — best effort against the switcher's snapshot, which the OS takes on its own clock; the *Screen capture* row is the control that blanks it outright. A return within **30 s** (`RELOCK_AFTER_MS`) lifts it without asking; longer re-locks. The grace exists for the calculator, the camera and the message that arrived mid-capture — a gate that asked on every return is one people learn to hate, then to disable.
-- **The clock is the wall clock, clamped.** A monotonic clock stops while the device sleeps, so eight hours in a drawer read as the seconds the phone was awake; a wall clock set backwards during the stay reads as a long one. Enrolment that does not answer within 5 s opens the ledger with the failure on the log — a platform that cannot say cannot gate.
+- **The clock is the wall clock, clamped.** A monotonic clock stops while the device sleeps, so eight hours in a drawer read as the seconds the phone was awake; a wall clock set backwards during the stay reads as a long one. Enrolment that does not answer within 5 s opens the ledger with the failure on the log — a platform that cannot say cannot gate. **That timeout covers enrolment only**: a platform that cannot say what the owner chose has not said *no*, so the stored answer has its own and fails the other way, locked.
 - **The web build has no gate.** It holds a preview ledger and appears in neither table.
 
 **Web appears in neither table**, because it holds nothing either table
@@ -1184,6 +1187,38 @@ the real taxonomy lives in group names and memo text. Decoded from those:
 date, and `derived` marks a rate triangulated by a pivot change rather than
 published by anyone)
 
+**Starter category names are a display rule, not stored text.** Every seeded
+category and group carries a stable `external_id` (`seed:<key>`) and the
+seed's canonical English name as `name`. A row is drawn in the app's language
+while `name` still equals the canonical name its `external_id` names, and as
+stored text the moment they differ:
+
+| Row | Drawn as |
+|---|---|
+| seed key, `name` equals the canonical name | the catalogue's `taxonomy.<key>` in the current language — a language change re-labels it |
+| seed key, `name` differs (the person renamed it) | `name`, exactly as stored — their own text, never translated again |
+| no seed key (a category the person made) | `name`, exactly as stored |
+
+A rename changes `name` and never `external_id`, so no column records the
+freeze. Renaming a row to exactly its canonical English name makes it a
+starter again, and it translates — the stored text is identical either way.
+The rule is one pure function (`@waltning/core/seed-label`) over `name` and
+`external_id`, and every surface that draws a category name goes through it.
+The stored name stays the canonical one everywhere else: the database's
+sibling-uniqueness index, the agent, exports and sync all read it. Search
+matches both the drawn name and the stored one, with accents dropped
+(*offentlicher* finds *Öffentlicher Nahverkehr*), and so does the sibling check a
+create or a rename makes before it writes (in the phone's screens and controller;
+the replica's executors, the server and the agent compare stored names only): in a German app, creating *Gehalt*
+beside the drawn *Gehalt* is refused, and so is *Salary*, and a refusal names
+the sibling as drawn. A colour is hashed from the seed tag for a starter and
+from the name otherwise, so a language change never repaints a category.
+
+Re-running the server's seed (`packages/db`) upserts the seed's definitions, so
+it resets a starter's stored `name` to the canonical one and a renamed starter
+reads as the catalogue's text again. The phone's bootstrap seeds a ledger once
+and never touches a row afterwards.
+
 ### 6.4 The clearing accounts
 
 `Clearing · PLN` is the third most active account in the system — 678
@@ -1502,15 +1537,25 @@ a debt. Every claim below names the layer that enforces it:
   reaches the ledger through them*). The capture surfaces route a repayment
   through it: Quick add on phone and desk, and S09, where picking a repayment
   category on an existing row settles the person's open debt with the row's own
-  figures and replaces the row with the settlement (*UI*). With no open debt in
+  figures and replaces the row with the settlement — **one operation**:
+  `settle_debt` with `supersedesId` and `supersedesVersion` inserts the
+  settlement and soft-deletes the original in one replica transaction and one
+  outbox entry, carries the original's identity (entered name, scope, time,
+  brand, source, external id) and tags across, leaves the original out of the
+  balance it settles against, and refuses an original with split lines — never a
+  settle followed by a delete (*service*; the shared input schema is the server's
+  contract, and receipts and import matches, which only the server holds,
+  follow the original the way `supersede_transaction` moves them). With no open debt in
   the matching direction they refuse on Who?: money from somebody who never
   owed you is a loan to you, which is *Borrowed* (*UI*). *Borrowed* and *Lent
   out* are ordinary writes.
-- **A settlement's discharge figure follows its amount.** Editing the amount of
-  a row that carries `debt_amount` restates it in the same write when the debt
-  is in the row's own currency; across currencies the new discharge is not
-  derivable from the new amount, so `update_transaction` refuses and the
-  repayment is redone with `settle_debt` (*service*). A row that leaves the four
+- **A settlement's discharge figure follows its amount, when it was its amount.**
+  Editing the amount of a row that carries `debt_amount` restates it in the same
+  write only when the debt is in the row's own currency *and* the two were equal
+  before the edit; where a part was forgiven (S14), or across currencies, or when
+  the row is moved to an account in another currency, the new discharge is not
+  derivable, so `update_transaction` refuses and the repayment is redone with
+  `settle_debt` (*service*). A row that leaves the four
   categories drops `debt_amount` and `debt_currency` with the role, in
   `update_transaction` and `categorize_batch` (*service*), so re-entering a debt
   category does not bring the old figure back.
@@ -1527,7 +1572,9 @@ a debt. Every claim below names the layer that enforces it:
   it is kept as a plain, uncategorised row; a repayment with an open debt in the
   matching direction and the row's currency is replayed as `settle_debt` with the
   same row id, otherwise it is kept as a plain, uncategorised row — never a
-  reverse debt (*service, `recover.ts`*).
+  reverse debt (*service, `recover.ts`*). The entry is rewritten to what was
+  applied (operation, payload, `opVersion`) before the replica transaction
+  commits, so a later drain sends what the phone ran.
 
 A category a person made and named *Borrowed* carries no seed tag and means
 nothing about debt. The rule is keyed on the four starter categories' seed keys

@@ -44,6 +44,8 @@ import { radius, space } from "../../../tokens.ts";
 export type SpendRow = {
   key: string;
   label: string;
+  /** What the bar's colour is hashed from, when not `label` — language-independent. */
+  tintKey?: string;
   amount: money.Money;
 };
 
@@ -93,7 +95,7 @@ export function SpendRows({ rows, currency, decimals = 2 }: SpendRowsProps) {
       width: `${share(row.amount, widest)}%` as const,
       // A bar is the category's *mark*, not its wash: the pale tint is 1.1:1
       // against the track.
-      backgroundColor: categoryTintFor(row.label, theme).solid,
+      backgroundColor: categoryTintFor(row.tintKey ?? row.label, theme).solid,
     },
   }));
 

@@ -252,21 +252,43 @@ function patchTransaction(input: UpdateTransactionInput, tx: ReplicaTx): LocalTr
    * debt's currency — and the balance reads that figure, not the amount. Edit
    * the amount without it and the balance stays at the old figure while the row
    * says another. In the debt's own currency the two are one figure and move
-   * together; across currencies the new discharge is not derivable from the new
-   * amount (it is the rate the two parties agreed), so the edit is refused and
-   * the settlement has to be redone. Skipped when the row is leaving its debt
+   * together — but only when it *is* the amount (equal before the edit);
+   * across currencies, or where a part was forgiven, the new discharge is not
+   * derivable from the new amount, so the edit is refused and the settlement
+   * has to be redone. A move to an account in another currency is the same. Skipped when the row is leaving its debt
    * category, which clears the figure anyway.
    */
   const restatedDebt = (() => {
-    if (afterLeaving !== undefined) return {};
-    if (input.patch.amountOriginal === undefined || current.debtAmount === null) return {};
-    if (current.debtCurrency === current.currency) {
+    if (afterLeaving !== undefined || current.debtAmount === null) return {};
+    const newAccountCurrency =
+      "accountId" in input.patch && input.patch.accountId !== undefined
+        ? tx
+            .select({ currency: schema.accounts.currency })
+            .from(schema.accounts)
+            .where(eq(schema.accounts.id, input.patch.accountId))
+            .get()?.currency
+        : undefined;
+    const currencyMoves =
+      newAccountCurrency !== undefined && newAccountCurrency !== current.currency;
+    const amountMoves = input.patch.amountOriginal !== undefined;
+    if (!currencyMoves && !amountMoves) return {};
+    // The one figure that moves with the amount is a discharge that *is* the
+    // amount: same currency, and equal before the edit. Anything else — another
+    // currency, or a part forgiven (S14: the discharge differs from what was
+    // paid) — says something the new amount does not, so the edit is refused.
+    if (
+      !currencyMoves &&
+      current.debtCurrency === current.currency &&
+      input.patch.amountOriginal !== undefined &&
+      money.eq(current.debtAmount, current.amountOriginal)
+    ) {
       return { debtAmount: input.patch.amountOriginal };
     }
     throw new LocalRefusal(
-      `update_transaction: amount_original — this row discharged ${current.debtCurrency} in ` +
-        `${current.currency}, so a new amount does not say how much it discharges. Re-settle: ` +
-        "delete it and record the repayment again with settle_debt",
+      `update_transaction: amount_original — this row discharged ${current.debtAmount} ` +
+        `${current.debtCurrency} for ${current.amountOriginal} ${current.currency}, so a new amount ` +
+        "or account does not say how much it discharges. Re-settle: delete it and record the " +
+        "repayment again with settle_debt",
     );
   })();
 

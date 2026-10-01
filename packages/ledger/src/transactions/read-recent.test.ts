@@ -22,7 +22,9 @@ beforeEach(() => {
     .values({ code: USD, name: "US dollar", symbol: "$", decimals: 2, isPivot: true })
     .run();
   db.insert(accounts).values({ id: ACCOUNT, name: "Wallet · USD", currency: USD }).run();
-  db.insert(categories).values({ id: CATEGORY, name: "Food", kind: "expense", isLeaf: true }).run();
+  db.insert(categories)
+    .values({ id: CATEGORY, name: "Food", kind: "expense", isLeaf: true, externalId: "seed:food" })
+    .run();
 
   db.insert(transactions)
     .values(
@@ -68,6 +70,11 @@ describe("readRecent", () => {
       decimals: 2,
     });
     expect(result[1]?.isBusiness).toBe(true);
+  });
+
+  it("carries the category's seed tag, which the display rule needs to translate a starter", () => {
+    const [, , third] = readRecent(stores.ledger.replica.db, 5);
+    expect(third).toMatchObject({ categoryName: "Food", categoryExternalId: "seed:food" });
   });
 
   it("keeps date, creation time, and id ordering after reopen", () => {

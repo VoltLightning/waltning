@@ -268,6 +268,7 @@ export type PhoneRecentTransaction = {
   date: AccountingDate;
   enteredName: string;
   categoryName: string | null;
+  categoryExternalId: string | null;
   accountName: string;
   amount: Money;
   currency: CurrencyCode;
@@ -296,12 +297,8 @@ export type PhoneCategory = {
   id: Id<"categories">;
   name: string;
   kind: "income" | "expense";
-  /**
-   * The seed's own tag (`seed:borrowed`) — the identity a rename or a
-   * translation leaves alone, and what `debtIntentOf` reads. Absent or `null`
-   * for a category a person made.
-   */
-  externalId?: string | null;
+  /** The seed's own tag — the display rule's other input (`@waltning/core/seed-label`). */
+  externalId: string | null;
 };
 
 /**
@@ -518,6 +515,7 @@ export type PhoneSearchTransaction = {
   enteredName: string;
   note: string;
   categoryName: string | null;
+  categoryExternalId: string | null;
   /** `SPEC.md` §14.4b — mirrors `@waltning/ledger`'s `LocalSearchTransaction.brandKey` field-for-field. */
   brandKey: string | null;
   accountId: Id<"accounts">;
@@ -614,6 +612,7 @@ export type PhoneTransactionLine = {
   amount: Money;
   categoryId: Id<"categories"> | null;
   categoryName: string | null;
+  categoryExternalId: string | null;
 };
 
 /**
@@ -651,6 +650,7 @@ export type PhoneTransactionDetail = {
   fee: Money | null;
   categoryId: Id<"categories"> | null;
   categoryName: string | null;
+  categoryExternalId: string | null;
   /** §6.6.1 — who the transaction was *with*, and the name to draw for it. */
   counterpartyId: Id<"counterparties"> | null;
   /** `counterpartyId`'s own name, archived or not; `counterpartyName` is the obligation's. */
@@ -808,7 +808,10 @@ export type PhoneLedgerPort = {
   /** D2's reader, on demand — D4b's proposal recomputes it only when the typed entered name changes. */
   listEnteredNameHistory: () => readonly PhoneEnteredNameHistoryRow[];
   /** §7 — S12's list. `today` is the caller's own accounting date, the same one `capture()` computes. */
-  listCounterpartyBalances: (today: AccountingDate) => readonly PhoneCounterpartyBalance[];
+  listCounterpartyBalances: (
+    today: AccountingDate,
+    options?: { excluding?: string },
+  ) => readonly PhoneCounterpartyBalance[];
   /** The whole tree, archived rows included — S19's editor. See `PhoneFullCategoryNode`. */
   listFullCategoryTree: () => readonly PhoneFullCategoryNode[];
   /** How many live rows touch each category — see `readCategoryUsage`. */
@@ -1308,6 +1311,12 @@ export type CreateCategoryDraft = {
   name: string;
   kind: "income" | "expense";
   parentId: string | null;
+  /**
+   * Category id → the name the screen draws for it (`categoryLabel`). A
+   * starter is drawn in the app's language, so a sibling collides with what
+   * the person *sees* as well as with what is stored (`SPEC.md` §6.3).
+   */
+  drawnNames: Readonly<Record<string, string>>;
 };
 
 /**
@@ -1386,7 +1395,12 @@ export type TransactionLineDraft = {
   categoryId?: string | null;
 };
 /** What S19's rename sheet can save. */
-export type RenameCategoryDraft = { id: string; name: string };
+export type RenameCategoryDraft = {
+  id: string;
+  name: string;
+  /** As on `CreateCategoryDraft`. */
+  drawnNames: Readonly<Record<string, string>>;
+};
 
 /** What S19's move sheet can save — `parentId: null` moves to the root. */
 export type MoveCategoryDraft = { id: string; parentId: string | null };
@@ -1552,6 +1566,8 @@ export type SettleDebtDraft = {
   dischargesAmount: string;
   note: string;
   categoryId: string | null;
+  /** S09 — the row this settlement replaces, in the same write. */
+  supersedes?: { id: string; version: number };
 };
 
 /**
@@ -1697,7 +1713,10 @@ export type PhoneLedgerController = {
    * `money.directionTotals(balances)` folds S12's two direction totals from
    * this call's own result — a pure function, not a second round trip.
    */
-  listCounterpartyBalances: (today: AccountingDate) => readonly PhoneCounterpartyBalance[];
+  listCounterpartyBalances: (
+    today: AccountingDate,
+    options?: { excluding?: string },
+  ) => readonly PhoneCounterpartyBalance[];
   /** S13's overflow, on demand — merges into one counterparty, still live. */
   listCounterpartyMerges: (
     counterpartyId: Id<"counterparties">,
@@ -1916,9 +1935,21 @@ export type PhoneLedgerController = {
 function refusalFromThrow<Caught>(error: Caught): readonly FieldError[] {
   // Rendered at form level, so `errorFromThrown` rather than `String`.
   const message = errorFromThrown(error).message;
-  return message.includes("stale version")
-    ? [{ path: "", message, messageKey: "transactions.changedElsewhere" }]
-    : [{ path: "", message }];
+  if (message.includes("stale version")) {
+    return [{ path: "", message, messageKey: "transactions.changedElsewhere" }];
+  }
+  // §6.6 — refusals a person can act on, in their own language rather than the
+  // executor's developer text.
+  if (message.includes("Re-settle")) {
+    return [{ path: "", message, messageKey: "transactions.reSettle" }];
+  }
+  if (message.includes("a split line has no person")) {
+    return [{ path: "", message, messageKey: "transactions.splitDebtCategory" }];
+  }
+  if (message.includes("un-split it first")) {
+    return [{ path: "", message, messageKey: "transactions.unSplitFirst" }];
+  }
+  return [{ path: "", message }];
 }
 
 /**
@@ -2292,7 +2323,7 @@ function sharedTrigramCount(a: ReadonlySet<string>, b: ReadonlySet<string>): num
  * `merge_categories` refuses a group on either side, so a candidate outside
  * that scope is one the merge sheet could never act on.
  */
-function collisionsOf(
+export function collisionsOf(
   tree: readonly PhoneFullCategoryNode[],
   usage: ReadonlyMap<Id<"categories">, number>,
 ): readonly PhoneCategoryCollision[] {
@@ -2320,6 +2351,17 @@ function collisionsOf(
   }
 
   return collisions.sort((x, y) => y.score - x.score);
+}
+
+/** A sibling collides on the stored name and on the name the screen draws for it. */
+function namesCollide(
+  node: { id: string; name: string },
+  foldedTarget: string,
+  drawnNames: Readonly<Record<string, string>> | undefined,
+): boolean {
+  if (fold(node.name) === foldedTarget) return true;
+  const drawn = drawnNames?.[node.id];
+  return drawn !== undefined && fold(drawn) === foldedTarget;
 }
 
 /** The category a draft names, or `undefined` — every write below refuses on a miss. */
@@ -2526,7 +2568,10 @@ export function createPhoneLedger(
         : port.readSpendByCategory(period, scope, options),
     readIncomeVsExpense: (buckets, scope) => port.readIncomeVsExpense(buckets, scope),
     readActiveDashboardLayout: () => port.readActiveDashboardLayout(),
-    listCounterpartyBalances: (today) => port.listCounterpartyBalances(today),
+    listCounterpartyBalances: (today, options) =>
+      options === undefined
+        ? port.listCounterpartyBalances(today)
+        : port.listCounterpartyBalances(today, options),
     listCounterpartyMerges: (counterpartyId) => port.listCounterpartyMerges(counterpartyId),
     balanceAsOf: (accountId, asOf) => port.balanceAsOf(accountId, asOf),
     listEnteredNameHistory: () => port.listEnteredNameHistory(),
@@ -3502,7 +3547,10 @@ export function createPhoneLedger(
         // write would then meet H4's "the balance moved, reload" refusal for
         // a balance that, in every unit either side renders, never moved.
         const balance = port
-          .listCounterpartyBalances(capture.date)
+          .listCounterpartyBalances(
+            capture.date,
+            draft.supersedes === undefined ? undefined : { excluding: draft.supersedes.id },
+          )
           .find(
             (row) =>
               row.counterpartyId === draft.counterpartyId &&
@@ -3531,6 +3579,9 @@ export function createPhoneLedger(
           discharges: { currency: draft.dischargesCurrency, amount: draft.dischargesAmount },
           note: draft.note,
           categoryId: draft.categoryId ?? undefined,
+          ...(draft.supersedes === undefined
+            ? {}
+            : { supersedesId: draft.supersedes.id, supersedesVersion: draft.supersedes.version }),
         });
         if (!parsed.success) {
           emitClientDiagnostic(diagnostics, {
@@ -4034,14 +4085,19 @@ export function createPhoneLedger(
           (node) =>
             node.parentId === (draft.parentId ?? null) &&
             node.kind === draft.kind &&
-            fold(node.name) === target,
+            namesCollide(node, target, draft.drawnNames),
         );
         if (collision) {
           return finish(
             diagnostics,
             { scope: "client_action", action: "create_category" },
             {
-              fieldErrors: [{ path: "name", message: `"${collision.name}" already exists here` }],
+              fieldErrors: [
+                {
+                  path: "name",
+                  message: `"${draft.drawnNames?.[collision.id] ?? collision.name}" already exists here`,
+                },
+              ],
             },
           );
         }
@@ -4652,11 +4708,16 @@ export function createPhoneLedger(
             node.id !== current.id &&
             node.parentId === current.parentId &&
             node.kind === current.kind &&
-            fold(node.name) === target,
+            namesCollide(node, target, draft.drawnNames),
         );
         if (collision) {
           return {
-            fieldErrors: [{ path: "name", message: `"${collision.name}" already exists here` }],
+            fieldErrors: [
+              {
+                path: "name",
+                message: `"${draft.drawnNames?.[collision.id] ?? collision.name}" already exists here`,
+              },
+            ],
           };
         }
 

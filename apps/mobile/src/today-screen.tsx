@@ -47,6 +47,7 @@ import {
   weekStart,
 } from "@waltning/ui/i18n/locales";
 import { useLocale, useT } from "@waltning/ui/i18n/provider";
+import { useCategoryLabel } from "@waltning/ui/i18n/use-category-label";
 import { PressableScaled } from "@waltning/ui/primitives/pressable-scaled";
 import { Card, GroundPanel } from "@waltning/ui/shell/card";
 import { floatSide } from "@waltning/ui/shell/float-geometry";
@@ -685,13 +686,19 @@ export default function Today() {
    * reads the second, so the business half stays in both figures.
    */
   const spendByCategory = useSpendByCategory(ledger, period, "mine", snapshot.revision);
+  const labelOf = useCategoryLabel();
+  // Names as drawn (`categoryLabel`): a starter reads in the app's language.
+  const labelledTree = useMemo(
+    () => snapshot.fullCategoryTree.map((node) => ({ ...node, name: labelOf(node) })),
+    [snapshot.fullCategoryTree, labelOf],
+  );
   const whereItWentRows = useWhereItWent(
     spendByCategory,
     // The archived-inclusive tree. `categoryTree` drops archived rows for the
     // picker that reads it, and archiving a category does not rewrite the
     // transactions filed under it — so resolving names from that tree
     // relabelled last month's spending as the honest blank.
-    snapshot.fullCategoryTree,
+    labelledTree,
     // The pivot: the bars break down the card's *went out*, which is stated
     // in it — every currency, each row at its own rate.
     pivotCurrency?.code ?? leadNetWorth?.currency,

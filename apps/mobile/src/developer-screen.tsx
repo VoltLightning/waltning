@@ -28,7 +28,7 @@ import { loadDemo } from "@waltning/client/ledger/demo/load-demo";
 import { useLedgerController } from "@waltning/client/ledger/use-ledger-controller";
 import { usePhoneLedger } from "@waltning/client/ledger/use-phone-ledger";
 import { todayIn } from "@waltning/core/date";
-import { useT } from "@waltning/ui/i18n/provider";
+import { useLocale, useT } from "@waltning/ui/i18n/provider";
 import { Button } from "@waltning/ui/primitives/button";
 import { Banner } from "@waltning/ui/states/banner";
 import { BusyScreen } from "@waltning/ui/states/busy-screen";
@@ -42,6 +42,7 @@ import { PushedPage } from "./pushed-page";
 
 export default function Developer() {
   const t = useT();
+  const locale = useLocale();
   const styles = useStyles();
   const ledger = useLedgerController();
   const snapshot = usePhoneLedger(ledger);
@@ -83,6 +84,8 @@ export default function Developer() {
       todayIn(Intl.DateTimeFormat().resolvedOptions().timeZone),
       undefined,
       (written, of) => setProgress({ written, of }),
+      // The demo is named in the app's language (`demo-names.ts`).
+      locale,
     );
     if (outcome.refused === 0) {
       setRestarting(true);
@@ -105,7 +108,7 @@ export default function Developer() {
         people: outcome.counterparties,
       }) + (outcome.refused > 0 ? t("developer.refused", { count: outcome.refused }) : ""),
     );
-  }, [ledger, snapshot.categoryTree, snapshot.currencies, t]);
+  }, [ledger, snapshot.categoryTree, snapshot.currencies, t, locale]);
 
   const handleRestart = useCallback(() => {
     setRestarting(true);
