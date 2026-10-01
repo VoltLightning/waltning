@@ -587,9 +587,9 @@ export const en = {
     /** The visible chip a filter arrives with from another screen (S10 §7 shared). */
     accountFilterFrom: "From {{account}}",
     /** S09's `FieldsCard`, and D4b's own chip label — a person types it there, D2 only ever reads it back. */
-    enteredName: "Paid to",
+    enteredName: "Shop / payee",
     /** D4b's chip row, empty — S05 §3: `[+ entered name]`, typed, optional. */
-    addEnteredName: "+ Paid to",
+    addEnteredName: "+ Shop / payee",
     /** S05 §3 — the composer's own words, on the deck's anatomy. */
     addExpenseTitle: "Add an expense",
     addIncomeTitle: "Add income",
@@ -598,7 +598,7 @@ export const en = {
     intoAccount: "Into",
     person: "Person",
     moreDetails: "More details",
-    moreDetailsHint: "Paid to, date, time, scope, with whom",
+    moreDetailsHint: "Shop / payee, date, time, scope, with whom",
     notePlaceholder: "A note, if you want one",
     savedOnPhone: "Saved on your phone — syncs when you're back online",
     saveExpense: "Save expense",

@@ -57,7 +57,7 @@ something no list row can.
   │ Paid from     Cash · PLN            › │
   │ Amount        48.90                 › │
   │ With whom     Café A                › │
-  │ Paid to       Café A                › │
+  │ Shop / payee  Café A                › │
   │ Note          —                     › │
   └───────────────────────────────────────┘
   [+ Someone owes]  [+ Business]  [+ One-off]

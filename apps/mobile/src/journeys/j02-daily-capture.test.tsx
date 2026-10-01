@@ -371,8 +371,8 @@ describe("J02 — daily capture, under ten seconds, offline", () => {
     fireEvent.change(screen.getByLabelText(/^How much\?/), { target: { value: "48.90" } });
 
     fireEvent.click(screen.getByRole("button", { name: /^More details/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Paid to" }));
-    fireEvent.change(screen.getByRole("textbox", { name: "Paid to" }), {
+    fireEvent.click(screen.getByRole("button", { name: "Shop / payee" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Shop / payee" }), {
       target: { value: "Corner Café" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
@@ -414,8 +414,8 @@ describe("J02 — daily capture, under ten seconds, offline", () => {
     fireEvent.click(screen.getByRole("button", { name: "Add" }));
     fireEvent.change(screen.getByLabelText(/^How much\?/), { target: { value: "48.90" } });
     fireEvent.click(screen.getByRole("button", { name: /^More details/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Paid to" }));
-    fireEvent.change(screen.getByRole("textbox", { name: "Paid to" }), {
+    fireEvent.click(screen.getByRole("button", { name: "Shop / payee" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Shop / payee" }), {
       target: { value: "Corner Café" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Close" }));

@@ -120,11 +120,13 @@ it("draws two rows at rest — the account and the category — and the rest beh
   expect(screen.getByRole("button", { name: /^From/ })).toBeDefined();
   expect(screen.getByRole("button", { name: "Category: What was it for?" })).toBeDefined();
   expect(
-    screen.getByRole("button", { name: "More details: Paid to, date, time, scope, with whom" }),
+    screen.getByRole("button", {
+      name: "More details: Shop / payee, date, time, scope, with whom",
+    }),
   ).toBeDefined();
-  expect(screen.queryByRole("button", { name: "Paid to" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "Shop / payee" })).toBeNull();
   openMore();
-  expect(screen.getByRole("button", { name: "Paid to" })).toBeDefined();
+  expect(screen.getByRole("button", { name: "Shop / payee" })).toBeDefined();
   expect(screen.getByRole("button", { name: "Date: Today" })).toBeDefined();
   expect(screen.getByRole("button", { name: "Scope" })).toBeDefined();
 });
@@ -219,8 +221,8 @@ it("shows a below-threshold proposal as a suggestion in the placeholder, never a
 it("lets someone type a enteredName through its own sheet, and the More row then says so", () => {
   const props = draw();
   openMore();
-  fireEvent.click(screen.getByRole("button", { name: "Paid to" }));
-  fireEvent.change(screen.getByRole("textbox", { name: "Paid to" }), {
+  fireEvent.click(screen.getByRole("button", { name: "Shop / payee" }));
+  fireEvent.change(screen.getByRole("textbox", { name: "Shop / payee" }), {
     target: { value: "Corner Café" },
   });
   expect(props.onEnteredNameChange).toHaveBeenCalledWith("Corner Café");

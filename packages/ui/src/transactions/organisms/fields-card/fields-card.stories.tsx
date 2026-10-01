@@ -90,8 +90,8 @@ export const Default: Story = {};
 export const Opened: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await userEvent.click(await canvas.findByRole("button", { name: "Paid to: Café A" }));
-    await expect(canvas.findByLabelText("Paid to")).resolves.toBeDefined();
+    await userEvent.click(await canvas.findByRole("button", { name: "Shop / payee: Café A" }));
+    await expect(canvas.findByLabelText("Shop / payee")).resolves.toBeDefined();
   },
 };
 
@@ -99,8 +99,8 @@ export const Opened: Story = {
 export const Changed: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await userEvent.click(await canvas.findByRole("button", { name: "Paid to: Café A" }));
-    const field = await canvas.findByLabelText("Paid to");
+    await userEvent.click(await canvas.findByRole("button", { name: "Shop / payee: Café A" }));
+    const field = await canvas.findByLabelText("Shop / payee");
     fireEvent.change(field, { target: { value: "Bakery A" } });
     await expect(canvas.findByRole("button", { name: "Save" })).resolves.not.toHaveProperty(
       "disabled",

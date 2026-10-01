@@ -272,7 +272,7 @@ describe("Ledger at desk width", () => {
     }));
     withLedger(<Ledger />, controller);
 
-    expect(screen.getByRole("button", { name: "Paid to" })).toBeDefined();
+    expect(screen.getByRole("button", { name: "Shop / payee" })).toBeDefined();
     expect(screen.getByRole("button", { name: "Amount" })).toBeDefined();
     expect(screen.getByText("Corner Bakery")).toBeDefined();
   });
@@ -380,7 +380,7 @@ describe("Ledger at desk width", () => {
     }));
     withLedger(<Ledger />, controller);
 
-    fireEvent.click(screen.getByRole("button", { name: "Paid to" }));
+    fireEvent.click(screen.getByRole("button", { name: "Shop / payee" }));
     const cells = screen.getAllByText(/^(Zed|Abe)$/);
     expect(cells.map((cell) => cell.textContent)).toEqual(["Abe", "Zed"]);
   });

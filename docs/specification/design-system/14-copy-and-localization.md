@@ -105,7 +105,7 @@ first is the noun and the second the short label or verb.
 | Transfer (between own accounts) | transfer | Umbuchung | перевод между своими счетами · перевод | przelew własny | перавод паміж сваімі рахункамі · перавод |
 | Category | category | Kategorie | категория | kategoria | катэгорыя |
 | Person or company | person or company · *Contacts* (the page) · *People* / *Companies* (its groups) · *With whom* (a transaction's field) | Person oder Firma · *Kontakte* · *Personen* / *Firmen* · *Mit wem* | человек или компания · *Контакты* · *Люди* / *Компании* · *С кем* | osoba lub firma · *Kontakty* · *Osoby* / *Firmy* · *Z kim* | чалавек або кампанія · *Кантакты* · *Людзі* / *Кампаніі* · *З кім* |
-| Paid to (the payee as the receipt prints it) | paid to | Empfänger | получатель | odbiorca | атрымальнік |
+| Shop / payee (the name the receipt or statement prints) | shop / payee | Geschäft / Empfänger | магазин / получатель | sklep / odbiorca | крама / атрымальнік |
 | Contact details (the field on a person's page — never the page's own word) | contact details | Kontaktdaten | контактные данные | dane kontaktowe | кантактныя даныя |
 | Debt | debt | Schuld | долг | dług | доўг |
 | Repayment | repayment | Rückzahlung | возврат долга | spłata | вяртанне доўгу |
@@ -136,8 +136,9 @@ tag or a column where the two accounts stand beside it.
 **The page and its parts never share a word.** *Contacts* is the page; *People*
 and *Companies* are its groups; the field on one person's page is *Contact
 details*, never *Contact*. On a transaction, *With whom* names the person or
-company and *Paid to* the payee as the receipt prints it — two rows that can
-name different parties (S09).
+company and *Shop / payee* the name the receipt prints — two rows that can
+name different parties (S09). It is never *Paid to*: the *Paid* row, on the same screen,
+is the amount paid in another currency, and the two would read as one.
 
 **Words the glossary rules out**, because each is the literal or the jargon
 choice a reader stumbles on:
