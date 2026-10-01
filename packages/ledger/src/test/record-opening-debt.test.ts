@@ -460,6 +460,44 @@ describe("a repayment of an existing debt", () => {
     );
   });
 
+  it("is left out of the display-currency rebased paths too: its date is never even asked a rate", () => {
+    recordOpening({ counterpartyId: MAREK, direction: "youOwe", amount: "80" });
+    s.ledger.replica.db
+      .insert(transactions)
+      .values({
+        id: id<"transactions">(nextId()),
+        date: accountingDate("2026-09-01"),
+        type: "expense",
+        accountId: ACCOUNT,
+        amountOriginal: money.toMoney("40"),
+        currency: PLN,
+        fxRate: money.pivotPerUnit("1"),
+      })
+      .run();
+    settle({
+      counterpartyId: MAREK,
+      type: "expense",
+      date: "2026-09-20",
+      amount: "30",
+      discharges: { currency: "PLN", amount: "30" },
+    });
+
+    const asked: string[] = [];
+    const rebase = {
+      currency: EUR,
+      perPivot: (date: string) => {
+        asked.push(date);
+        return { rate: money.unitsPerPivot("0.25"), estimated: false };
+      },
+    };
+    const db = s.ledger.replica.db;
+    readSpendByCategory(db, SEPTEMBER, "mine", { rebase });
+    readIncomeVsExpense(db, [{ ...SEPTEMBER, label: "Sep" }], "mine", { rebase });
+
+    expect(asked).toContain("2026-09-01");
+    expect(asked).not.toContain("2026-09-20");
+  });
+
   it("an ordinary settlement of a person with no existing debt is not stamped", () => {
     s.ledger.replica.db
       .insert(transactions)

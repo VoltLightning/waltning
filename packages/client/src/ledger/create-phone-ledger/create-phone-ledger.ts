@@ -908,6 +908,7 @@ export type PhoneLedgerPort = {
   readIncomeVsExpense: (
     buckets: readonly PhoneIncomeExpenseBucket[],
     scope: money.LedgerScope,
+    options?: Pick<money.SpendByCategoryOptions, "rebase">,
   ) => readonly PhoneIncomeExpenseRow[];
   /** `get_active_layout` — `null` only on an empty, never-migrated database. `DESK4`. */
   readActiveDashboardLayout: () => PhoneDashboardLayout | null;
@@ -1785,6 +1786,7 @@ export type PhoneLedgerController = {
   readIncomeVsExpense: (
     buckets: readonly PhoneIncomeExpenseBucket[],
     scope: money.LedgerScope,
+    options?: Pick<money.SpendByCategoryOptions, "rebase">,
   ) => readonly PhoneIncomeExpenseRow[];
   /** `get_active_layout`, on demand — `S01`'s grid, read but not rearranged (S24 later). `DESK4`. */
   readActiveDashboardLayout: () => PhoneDashboardLayout | null;
@@ -2684,7 +2686,10 @@ export function createPhoneLedger(
       options === undefined
         ? port.readSpendByCategory(period, scope)
         : port.readSpendByCategory(period, scope, options),
-    readIncomeVsExpense: (buckets, scope) => port.readIncomeVsExpense(buckets, scope),
+    readIncomeVsExpense: (buckets, scope, options) =>
+      options === undefined
+        ? port.readIncomeVsExpense(buckets, scope)
+        : port.readIncomeVsExpense(buckets, scope, options),
     readActiveDashboardLayout: () => port.readActiveDashboardLayout(),
     listCounterpartyBalances: (today, options) =>
       options === undefined

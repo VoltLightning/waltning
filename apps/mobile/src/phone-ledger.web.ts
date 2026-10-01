@@ -23,14 +23,14 @@
  */
 
 import "./polyfills.ts";
-import { initializeDisplayCurrencyFromLedger } from "@waltning/client/currencies/initialize-display-currency";
+import { anchorOnce } from "@waltning/client/currencies/anchor-to-region";
 import {
   createPhoneLedger,
   type PhoneLedgerController,
 } from "@waltning/client/ledger/create-phone-ledger";
 import { deviceRuntime } from "@waltning/client/ledger/device-runtime";
 import { createLedgerGate, type LedgerFailureCause } from "@waltning/client/ledger/ledger-gate";
-import { currencies } from "@waltning/core/currencies";
+import { currencies, pivotCurrency } from "@waltning/core/currencies";
 import type { SqliteOpener } from "@waltning/ledger/open";
 import { ledgerSchema } from "@waltning/ledger/schema-map";
 import { createLocalLedgerSession } from "@waltning/ledger/session";
@@ -46,8 +46,10 @@ import {
 import { useSyncExternalStore } from "react";
 import { mobileDiagnostics } from "./diagnostics.ts";
 import {
-  displayCurrency,
+  anchorDecided,
+  deviceRegionCurrency,
   setLedgerHistoryReader,
+  setLiveHeldReader,
   setLivePivotReader,
   setLivePivotSubscriber,
 } from "./platform";
@@ -184,17 +186,16 @@ function openSession(): PhoneLedgerController {
     preJournalStores: "rebuild",
   });
   const controller = createPhoneLedger(session, deviceRuntime(mobileDiagnostics));
+  // §7.0 — a fresh ledger is anchored to the region's currency, before any account exists, once per device.
+  void anchorOnce(controller, deviceRegionCurrency, pivotCurrency.code, anchorDecided);
   // H1 — the header's live fallback, wired before anything reads it.
   setLivePivotReader(() => session.listCurrencySettings().find((row) => row.isPivot)?.code ?? null);
+  // §7.0 — the codes the ledger holds, so a region whose currency it does not hold falls on the pivot.
+  setLiveHeldReader(() => session.listCurrencySettings().map((row) => row.code));
   // M2 — `controller.subscribe` fires after every successful write,
   // `change_pivot` included, so a mounted display-currency consumer follows live.
   setLivePivotSubscriber(controller.subscribe);
   setLedgerHistoryReader(() => session.listAccounts({ includeArchived: true }).length > 0);
-  // §7.0's default (first pinned, else the live pivot), read from this ledger
-  // rather than `platform.ts`'s bootstrap constant — see
-  // `initialize-display-currency.ts`. Guarded on hydration inside; never
-  // awaited here, same as the fire-and-forget `hydrate()` in `_layout.tsx`.
-  void initializeDisplayCurrencyFromLedger(displayCurrency, session.listCurrencySettings);
   return controller;
 }
 

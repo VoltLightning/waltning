@@ -23,6 +23,7 @@ export function readIncomeVsExpense<TRun, TSchema extends typeof ledgerSchema>(
   db: ReplicaDb<TRun, TSchema>,
   buckets: readonly money.IncomeExpenseBucket[],
   scope: money.LedgerScope,
+  options: Pick<money.SpendByCategoryOptions, "rebase"> = {},
 ): readonly money.IncomeExpenseRow[] {
   if (buckets.length === 0) return [];
   // `buckets` is caller-built and never overlaps (`trailingMonthBuckets`
@@ -43,6 +44,7 @@ export function readIncomeVsExpense<TRun, TSchema extends typeof ledgerSchema>(
       decimals: currencies.decimals,
       amountOriginal: transactions.amountOriginal,
       isCapital: transactions.isCapital,
+      fxRate: transactions.fxRate,
     })
     .from(transactions)
     .innerJoin(accounts, eq(transactions.accountId, accounts.id))
@@ -59,5 +61,5 @@ export function readIncomeVsExpense<TRun, TSchema extends typeof ledgerSchema>(
     )
     .all();
 
-  return money.incomeVsExpense(rows, buckets, scope);
+  return money.incomeVsExpense(rows, buckets, scope, options);
 }

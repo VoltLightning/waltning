@@ -5,7 +5,7 @@
  * rather than a `dashboard/` module.
  */
 
-import type { LedgerScope } from "@waltning/core/money";
+import type { LedgerScope, SpendByCategoryOptions } from "@waltning/core/money";
 import { useMemo } from "react";
 import type {
   PhoneIncomeExpenseBucket,
@@ -23,10 +23,15 @@ export function useIncomeVsExpense(
   buckets: readonly PhoneIncomeExpenseBucket[],
   scope: LedgerScope,
   revision: number,
+  /** §7.0 — re-express each row in the display currency, at its own date's rate. */
+  rebase?: SpendByCategoryOptions["rebase"],
 ): readonly PhoneIncomeExpenseRow[] {
   // biome-ignore lint/correctness/useExhaustiveDependencies: revision invalidates this memo by identity, not by being read.
   return useMemo(
-    () => ledger.readIncomeVsExpense(buckets, scope),
-    [ledger, buckets, scope, revision],
+    () =>
+      rebase === undefined
+        ? ledger.readIncomeVsExpense(buckets, scope)
+        : ledger.readIncomeVsExpense(buckets, scope, { rebase }),
+    [ledger, buckets, scope, revision, rebase],
   );
 }

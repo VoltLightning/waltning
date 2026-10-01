@@ -28,6 +28,7 @@
  */
 
 import { useDisplayCurrency } from "@waltning/client/currencies/display-currency";
+import { useDisplayBasis } from "@waltning/client/currencies/use-display-basis";
 import { useDevicePreference } from "@waltning/client/device/use-device-preference";
 import { DEFAULT_DESK_SCOPE, parseDeskScope } from "@waltning/client/ledger/desk-scope";
 import { deviceRuntime } from "@waltning/client/ledger/device-runtime";
@@ -39,7 +40,7 @@ import { useLastUsedAccount } from "@waltning/client/transactions/last-capture";
 import { useCommandBar } from "@waltning/client/transactions/use-command-bar";
 import { mapFieldErrors } from "@waltning/client/transport/field-errors";
 import { type CaptureContext, parseCapture } from "@waltning/core/capture/grammar";
-import { currencyCode } from "@waltning/core/money";
+import { add, currencyCode, toPivotByDivision, ZERO } from "@waltning/core/money";
 import { CurrencyChip } from "@waltning/ui/fx/currency-chip";
 import { KNOWN_PATHS, resolveFieldErrorMessage } from "@waltning/ui/i18n/field-error-messages";
 import { useT } from "@waltning/ui/i18n/provider";
@@ -254,6 +255,45 @@ function DeskHero({ collapsed }: { collapsed: boolean }) {
   const ledger = useLedgerController();
   const display = useDisplayCurrency(displayCurrency);
   const lead = useLeadCurrency(ledger, display.currency);
+  const snapshot = usePhoneLedger(ledger);
+  const today = deviceRuntime().capture().date;
+  const basis = useDisplayBasis(
+    ledger,
+    snapshot.currencies,
+    displayCurrency,
+    today,
+    snapshot.revision,
+  );
+  /**
+   * §7.0 — what you hold, in the display currency: every currency's balance
+   * converted at today's rate and added. `null` when any one has no rate, and
+   * then the lead currency's own balance stands, captioned, as before.
+   */
+  const converted = useMemo(() => {
+    if (basis === null || snapshot.subtotals.length === 0) return null;
+    let total = ZERO;
+    for (const entry of snapshot.subtotals) {
+      if (entry.currency === basis.currency) {
+        total = add(total, entry.balance);
+        continue;
+      }
+      const rate = basis.unitsPerDisplay(entry.currency, today);
+      if (rate === null) return null;
+      total = add(total, toPivotByDivision(entry.balance, rate));
+    }
+    return total;
+  }, [basis, snapshot.subtotals, today]);
+  if (basis !== null && converted !== null) {
+    return (
+      <DualTotal
+        mine={converted}
+        ours={null}
+        currency={basis.currency}
+        decimals={basis.decimals}
+        size={collapsed ? "compact" : "band"}
+      />
+    );
+  }
   if (lead === null) return null;
 
   return (

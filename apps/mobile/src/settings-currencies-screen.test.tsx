@@ -30,6 +30,7 @@ vi.mock("expo-router", () => ({
   },
 }));
 
+import { displayCurrency } from "./platform";
 import SettingsCurrenciesScreen from "./settings-currencies-screen";
 
 const PLN = currencyCode("PLN");
@@ -68,9 +69,13 @@ function fakeController(overrides: {
   updateCurrency?: PhoneLedgerPort["updateCurrency"];
   readCoverage?: PhoneLedgerPort["readCoverage"];
   readCurrencyUsage?: PhoneLedgerPort["readCurrencyUsage"];
+  searchTransactions?: PhoneLedgerPort["searchTransactions"];
+  listCurrencies?: PhoneLedgerPort["listCurrencies"];
 }) {
   const port = basePort({
     listCurrencySettings: overrides.listCurrencySettings ?? (() => [PLN_ROW, USD_ROW]),
+    ...(overrides.listCurrencies ? { listCurrencies: overrides.listCurrencies } : {}),
+    ...(overrides.searchTransactions ? { searchTransactions: overrides.searchTransactions } : {}),
     ...(overrides.readCurrencyUsage ? { readCurrencyUsage: overrides.readCurrencyUsage } : {}),
     readCoverage:
       overrides.readCoverage ??
@@ -136,8 +141,10 @@ it("renders a row per non-pivot currency, and the pivot read-only", () => {
   // (C1) — at least one match is the row's own code.
   expect(screen.getAllByText("PLN").length).toBeGreaterThan(0);
   expect(screen.getByText("Polish Złoty")).toBeDefined();
-  // USD is the pivot — not in the row list, stated in the read-only line instead.
-  expect(screen.queryByText("US Dollar")).toBeNull();
+  // USD is the pivot — not a row; it is named once, by the display card above
+  // (the ledger's display currency is the pivot until a region or a choice says
+  // otherwise) and its own pivot card below says "the pivot".
+  expect(screen.getByText("US Dollar · the anchor")).toBeDefined();
 });
 
 /**
@@ -247,13 +254,13 @@ it("archiving a referenced currency is refused with the executor's reason, on a 
  * the confirmation still follows. Pressed again once open, it is already gone.
  */
 function openPivotChange() {
-  const start = screen.queryByText("Change the pivot…");
+  const start = screen.queryByText("Change the anchor currency…");
   if (start !== null) fireEvent.click(start);
 }
 
 function pressChangePivot() {
   openPivotChange();
-  fireEvent.click(screen.getByText("Change pivot"));
+  fireEvent.click(screen.getByText("Change anchor currency"));
 }
 
 it("adding a currency writes through add_currency and closes the sheet", () => {
@@ -312,7 +319,7 @@ it("M7 — the pivot target select recovers after a successful change", () => {
   // Explicitly choose EUR — the bug is in the state this sets, not the
   // Select's own default.
   openPivotChange();
-  fireEvent.click(screen.getByRole("button", { name: /New pivot/ }));
+  fireEvent.click(screen.getByRole("button", { name: /New anchor currency/ }));
   fireEvent.click(screen.getByRole("radio", { name: "EUR" }));
   pressChangePivot();
   fireEvent.click(screen.getByRole("button", { name: "Yes, change it" }));
@@ -321,7 +328,7 @@ it("M7 — the pivot target select recovers after a successful change", () => {
   // EUR is now the pivot; PLN and USD are the only valid targets. The
   // select must show one of them, and a second press must not resend EUR.
   changePivot.mockClear();
-  expect(screen.queryByRole("button", { name: /New pivot: EUR/ })).toBeNull();
+  expect(screen.queryByRole("button", { name: /New anchor currency: EUR/ })).toBeNull();
   pressChangePivot();
   fireEvent.click(screen.getByRole("button", { name: "Yes, change it" }));
   expect(changePivot).not.toHaveBeenCalledWith({ code: "EUR" }, expect.anything());
@@ -337,7 +344,7 @@ it("M2 — a pivot change that dropped dates says how many, in a toast", () => {
   pressChangePivot();
   fireEvent.click(screen.getByRole("button", { name: "Yes, change it" }));
   expect(
-    screen.getByText("Pivot changed · 27 dates had no rate to rebase and were dropped"),
+    screen.getByText("Anchor currency changed · 27 dates had no rate to rebase and were dropped"),
   ).toBeDefined();
 });
 
@@ -356,7 +363,7 @@ it("maps the executor's two refusals to their own texts, never one fallback (C1)
   withLedger({ changePivot: alreadyPivot });
   pressChangePivot();
   fireEvent.click(screen.getByRole("button", { name: "Yes, change it" }));
-  expect(screen.getByText("That currency is already the pivot.")).toBeDefined();
+  expect(screen.getByText("That currency is already the anchor.")).toBeDefined();
 });
 
 it("states the transaction-count refusal with its own text (C1)", () => {
@@ -369,13 +376,17 @@ it("states the transaction-count refusal with its own text (C1)", () => {
   withLedger({ changePivot: refused });
   pressChangePivot();
   fireEvent.click(screen.getByRole("button", { name: "Yes, change it" }));
-  expect(screen.getByText("The pivot can't change while a transaction exists.")).toBeDefined();
+  expect(
+    screen.getByText(
+      "The anchor currency can't change once a transaction exists: this phone cannot re-rate existing history. It can be changed only while the ledger holds no transactions.",
+    ),
+  ).toBeDefined();
 });
 
 it("the pivot confirmation states the refusal before offering, not after", () => {
   withLedger();
   pressChangePivot();
-  expect(screen.getByText(/Refused once any transaction exists/)).toBeDefined();
+  expect(screen.getByText(/only change while no transaction exists/)).toBeDefined();
 });
 
 /**
@@ -510,16 +521,28 @@ it("R2 L9 — the accessible name drops Pinned once the Toggle below states it",
 });
 
 /**
- * **The pivot first, as its own card, and the rest by where they show**
- * (S17 §3). What the pivot means is said before anything can change it, and
- * the change is not on screen until asked for.
+ * **The display currency first; the pivot last, as a technical card** (S17
+ * §3). What the reader sees their figures in is the first thing said; the
+ * pivot is the hub rates are stored against, says so, and keeps its change
+ * behind a tap.
  */
-it("leads with the pivot's card and keeps its change behind a tap", () => {
+it("leads with the display currency and puts the pivot's card last, its change behind a tap", () => {
   withLedger({});
-  expect(screen.getByText("The one everything is measured in")).toBeDefined();
-  expect(screen.queryByText("Change pivot")).toBeNull();
-  fireEvent.click(screen.getByText("Change the pivot…"));
-  expect(screen.getByText("Change pivot")).toBeDefined();
+  const display = screen.getByText("Show figures in");
+  const pivot = screen.getByText("Anchor currency");
+  expect(screen.queryByText("The one everything is measured in")).toBeNull();
+  expect(
+    display.compareDocumentPosition(pivot) & Node.DOCUMENT_POSITION_FOLLOWING,
+    "the pivot card follows the display card",
+  ).toBeTruthy();
+  expect(
+    screen.getByText("Add currency").compareDocumentPosition(pivot) &
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    "and follows the list and the Add button too",
+  ).toBeTruthy();
+  expect(screen.queryByText("Change anchor currency")).toBeNull();
+  fireEvent.click(screen.getByText("Change the anchor currency…"));
+  expect(screen.getByText("Change anchor currency")).toBeDefined();
 });
 
 /**
@@ -552,4 +575,69 @@ it("never offers the pivot as removable", () => {
     readCurrencyUsage: () => new Map(),
   });
   expect(screen.queryByText(/can be removed without touching anything/)).toBeNull();
+});
+
+/**
+ * **Phones choose the display currency here** (S17 §3): the same device
+ * preference the desk's header toggle writes.
+ */
+it("chooses the display currency in the first card, writing the shared preference", async () => {
+  withLedger({});
+  fireEvent.click(screen.getByRole("button", { name: /Show figures in/ }));
+  fireEvent.click(screen.getByRole("radio", { name: /^PLN/ }));
+  expect(displayCurrency.getSnapshot().currency).toBe(PLN);
+  await displayCurrency.set(USD);
+});
+
+/**
+ * **The anchor can be changed from here, and once a transaction exists the
+ * screen says why it cannot** — rather than failing after a confirmation.
+ */
+it("offers the anchor change as a visible action while the ledger holds no transaction", () => {
+  withLedger({});
+  const start = screen.getByRole("button", { name: "Change the anchor currency…" });
+  expect((start as HTMLButtonElement).disabled).toBe(false);
+  expect(screen.queryByText(/Locked: the ledger already holds transactions/)).toBeNull();
+});
+
+it("states why the anchor cannot change once a transaction exists, and disables the action", () => {
+  withLedger({
+    searchTransactions: () => ({
+      rows: [],
+      nextCursor: undefined,
+      total: { count: 3, currencies: [] },
+    }),
+  });
+  expect(screen.getByText(/Locked: the ledger already holds transactions/)).toBeDefined();
+  const start = screen.getByRole("button", { name: "Change the anchor currency…" });
+  expect(
+    (start as HTMLButtonElement).disabled || start.getAttribute("aria-disabled") === "true",
+  ).toBe(true);
+});
+
+/**
+ * **A choice with no rate today is not silently swapped for the anchor**: the
+ * card says it is not applied and what would apply it.
+ */
+it("says a chosen display currency is not applied while it has no rate", async () => {
+  await displayCurrency.set(PLN);
+  try {
+    // The fixture holds no rate for PLN (the port answers none), and USD is the anchor.
+    withLedger({
+      listCurrencies: () => [
+        { code: USD, name: "US Dollar", symbol: "$", decimals: 2, capturable: true, isPivot: true },
+        {
+          code: PLN,
+          name: "Polish Złoty",
+          symbol: "zł",
+          decimals: 2,
+          capturable: false,
+          isPivot: false,
+        },
+      ],
+    });
+    expect(screen.getByText(/Not applied yet: PLN has no exchange rate/)).toBeDefined();
+  } finally {
+    await displayCurrency.set(USD);
+  }
 });

@@ -34,6 +34,7 @@ import {
   resolveCounterpartyFigures,
   settleResidualDirection,
 } from "@waltning/client/counterparties/counterparty-figures";
+import { useDisplayBasis } from "@waltning/client/currencies/use-display-basis";
 import type { PhoneCapturableAccount } from "@waltning/client/ledger/create-phone-ledger";
 import { crossRateProvenance } from "@waltning/client/ledger/cross-rate-provenance";
 import { deviceRuntime } from "@waltning/client/ledger/device-runtime";
@@ -41,7 +42,9 @@ import { useCounterpartyHistory } from "@waltning/client/ledger/use-counterparty
 import { useLedgerController } from "@waltning/client/ledger/use-ledger-controller";
 import { usePhoneLedger } from "@waltning/client/ledger/use-phone-ledger";
 import { type FieldError, mapFieldErrors } from "@waltning/client/transport/field-errors";
+import type { AccountingDate } from "@waltning/core/date";
 import { id } from "@waltning/core/id";
+import type { CurrencyCode } from "@waltning/core/money";
 import * as money from "@waltning/core/money";
 import { AccountPicker, type AccountPickerAccount } from "@waltning/ui/accounts/account-picker";
 import { BalanceLedger } from "@waltning/ui/counterparties/balance-ledger";
@@ -72,6 +75,7 @@ import { Keypad, type KeypadKey } from "@waltning/ui/transactions/keypad";
 import { router, useLocalSearchParams } from "expo-router";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { Text, View } from "react-native";
+import { displayCurrency } from "./platform";
 import { PushedPage } from "./pushed-page";
 
 /** `settle_debt`'s own field paths (`registry/inputs.ts`) — everything else lands at form level. */
@@ -255,14 +259,30 @@ export default function CounterpartyDetail() {
         .map((row) => ({ currency: row.currency, balance: row.balance })),
     [balances, rawId],
   );
-  const pivot = snapshot.currencies.find((currency) => currency.isPivot)?.code;
+  // §7.0 — figures are stated in the display currency; `readRate` answers in its direction.
+  const basis = useDisplayBasis(
+    ledger,
+    snapshot.currencies,
+    displayCurrency,
+    today,
+    snapshot.revision,
+  );
+  const pivot = basis?.currency;
+  const readRate = useMemo(
+    () =>
+      basis === null
+        ? ledger.readRate
+        : (pair: { quote: CurrencyCode; date: AccountingDate }) =>
+            basis.readFromDisplay(pair.quote, pair.date),
+    [basis, ledger.readRate],
+  );
   const group = useMemo(
     () => groupByCounterparty(balances).find((candidate) => candidate.counterpartyId === rawId),
     [balances, rawId],
   );
   const figures = useMemo(() => {
     if (!pivot) return null;
-    const rateOf = makeRateOf(ledger.readRate, pivot, today);
+    const rateOf = makeRateOf(readRate, pivot, today);
     const settlementCurrency =
       group?.settlementCurrency ?? counterparty?.settlementCurrency ?? null;
     return resolveCounterpartyFigures(
@@ -271,7 +291,7 @@ export default function CounterpartyDetail() {
       rateOf,
       snapshot.currencies,
     );
-  }, [counterparty?.settlementCurrency, group, ledger.readRate, pivot, snapshot.currencies, today]);
+  }, [counterparty?.settlementCurrency, group, readRate, pivot, snapshot.currencies, today]);
 
   // M2 — memoised on `[ledger, counterpartyId, revision]`; previously two
   // unmemoised `searchTransactions` calls in this render body, re-run on

@@ -200,6 +200,7 @@ describe("periodInPivot", () => {
       spend: money.toMoney("108"),
       net: money.toMoney("892"),
       otherCurrencies: 0,
+      estimated: false,
     });
   });
 

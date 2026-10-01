@@ -2,11 +2,15 @@ import { deviceRuntime } from "@waltning/client/ledger/device-runtime";
 import { parseNewAccountRoute } from "@waltning/client/ledger/preview-routes";
 import { useLedgerController } from "@waltning/client/ledger/use-ledger-controller";
 import { usePhoneLedger } from "@waltning/client/ledger/use-phone-ledger";
-import { mapFieldErrors } from "@waltning/client/transport/field-errors";
+import { type FieldError, mapFieldErrors } from "@waltning/client/transport/field-errors";
+import { addDays } from "@waltning/core/date";
+import { errorFromThrown } from "@waltning/core/diagnostics";
 import { id } from "@waltning/core/id";
+import type { CurrencyCode } from "@waltning/core/money";
 import {
   type CreateAccountDraft,
   CreateAccountForm,
+  type CreateAccountRateReference,
 } from "@waltning/ui/accounts/create-account-form";
 import { resolveFieldErrorMessage } from "@waltning/ui/i18n/field-error-messages";
 import { useT } from "@waltning/ui/i18n/provider";
@@ -30,7 +34,11 @@ const KNOWN_PATHS = [
   "openingDate",
   "memo",
   "groupId",
+  "rate",
 ];
+
+/** How far back the rate line looks for the last rate a currency held, to pre-fill it. */
+const RATE_LOOKBACK_DAYS = 366;
 
 export default function NewAccount() {
   const t = useT();
@@ -55,28 +63,75 @@ export default function NewAccount() {
     }
   }, [invalidMessage]);
 
+  const pivot = snapshot.currencies.find((currency) => currency.isPivot)?.code;
+
   /**
-   * §14.6's way out, from the form's own note: S18, opened on the currency
-   * that has no rate and on the day the form is already dated by. `today` is
-   * the same bare `YYYY-MM-DD` string `DateField`'s shortcut row uses — no
-   * `Date` arithmetic, and no second source for what day it is.
+   * What the form's rate line asks of a currency (S16 §4): `null` when today
+   * already has a usable rate, otherwise the last real rate the ledger held —
+   * to pre-fill the line — or nothing, for a currency it never held one for.
+   * Asked of the replica directly: the question is about one day, so it is a
+   * read on demand rather than a field every subscriber recomputes.
    */
-  const handleSetRate = useCallback(
-    (currency: string) => {
-      router.push({ pathname: "/settings/rates", params: { quote: currency, date: today } });
+  const rateNeed = useCallback(
+    (quote: CurrencyCode): { reference: CreateAccountRateReference | null } | null => {
+      if (pivot === undefined) return null;
+      if (ledger.readRate({ base: pivot, quote, date: today }) !== null) return null;
+      let latest: CreateAccountRateReference | null = null;
+      for (const row of ledger.listFxRates({
+        base: pivot,
+        quote,
+        from: addDays(today, -RATE_LOOKBACK_DAYS),
+        to: today,
+      })) {
+        if (row.source === "carried_forward") continue;
+        if (latest === null || row.date > latest.date) {
+          latest = { date: row.date, rate: row.rate, source: row.source };
+        }
+      }
+      return { reference: latest };
     },
-    [today],
+    [ledger, pivot, today],
   );
 
   const handleSave = useCallback(
-    (draft: CreateAccountDraft) => {
-      const result = ledger.createAccount(draft);
-      if (!("id" in result)) {
-        const resolved = result.fieldErrors.map((error) => ({
-          path: error.path,
+    (draft: CreateAccountDraft, rate: string | null) => {
+      const refuse = (errors: readonly FieldError[], path?: string) => {
+        const resolved = errors.map((error) => ({
+          path: path ?? error.path,
           message: resolveFieldErrorMessage(t, error),
         }));
         setFieldErrors(mapFieldErrors(resolved, KNOWN_PATHS));
+      };
+      // The rate first, then the account: a rate written for an account that
+      // then refuses is a true statement about the currency, where an account
+      // in a currency it cannot value is the state this line exists to avoid.
+      // Either refusal leaves the form where it was, with everything typed.
+      if (rate !== null && pivot !== undefined) {
+        const written = ledger.setManualRate({
+          base: pivot,
+          quote: draft.currency,
+          from: today,
+          to: today,
+          rate,
+          today,
+        });
+        if ("fieldErrors" in written) {
+          refuse(written.fieldErrors, "rate");
+          return;
+        }
+      }
+      let result: ReturnType<typeof ledger.createAccount>;
+      try {
+        result = ledger.createAccount(draft);
+      } catch (caught) {
+        // An executor refusal that is not a field's (a constraint, say) is
+        // stated on the form — never an unhandled throw out of a press, and
+        // everything typed stays where it is.
+        refuse([{ path: "", message: errorFromThrown(caught).message }]);
+        return;
+      }
+      if (!("id" in result)) {
+        refuse(result.fieldErrors);
         return;
       }
       setFieldErrors(undefined);
@@ -92,7 +147,7 @@ export default function NewAccount() {
         router.dismissTo("/");
       }
     },
-    [ledger, t, target],
+    [ledger, pivot, t, target, today],
   );
 
   /*
@@ -125,7 +180,8 @@ export default function NewAccount() {
         groups={snapshot.groups}
         onCancel={handleCancel}
         onSave={handleSave}
-        onSetRate={handleSetRate}
+        {...(pivot === undefined ? {} : { pivot })}
+        rateNeed={rateNeed}
       />
     </PushedPage>
   );
