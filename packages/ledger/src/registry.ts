@@ -21,6 +21,7 @@ import { allocateSharesExecutor } from "./counterparties/allocate-shares.executo
 import { createCounterpartyExecutor } from "./counterparties/create-counterparty.executor.ts";
 import { mergeCounterpartiesExecutor } from "./counterparties/merge-counterparties.executor.ts";
 import { recordDistinctCounterpartiesExecutor } from "./counterparties/record-distinct-counterparties.executor.ts";
+import { recordOpeningDebtExecutor } from "./counterparties/record-opening-debt.executor.ts";
 import { settleDebtExecutor } from "./counterparties/settle-debt.executor.ts";
 import { unmergeCounterpartiesExecutor } from "./counterparties/unmerge-counterparties.executor.ts";
 import { updateCounterpartyExecutor } from "./counterparties/update-counterparty.executor.ts";
@@ -74,6 +75,7 @@ export const ledgerRegistry = localRegistry([
   recordDistinctCounterpartiesExecutor,
   allocateSharesExecutor,
   settleDebtExecutor,
+  recordOpeningDebtExecutor,
   // ── end E2 block ───────────────────────────────────────────────────────────
   // ── A2 · transaction operations — the phone half ─────────────────────────
   updateTransactionExecutor,

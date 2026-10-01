@@ -435,6 +435,7 @@ function harness(
     mergeCounterparties: vi.fn(),
     unmergeCounterparties: vi.fn(),
     recordDistinctCounterparties: vi.fn(),
+    recordOpeningDebt: vi.fn(),
     settleDebt: vi.fn(() => ({ residual: money.toMoney("0"), overSettled: false })),
     allocateShares: vi.fn(() => ({ rows: [], remaining: money.toMoney("0") })),
     listCounterpartyBalances: vi.fn(() => []),
@@ -445,6 +446,7 @@ function harness(
     archiveCategory,
     listCounterpartyMerges: vi.fn(() => []),
     listDistinctCounterpartyPairs: vi.fn(() => []),
+    listOpeningDebts: vi.fn(() => []),
     reset,
   };
   const capture = vi.fn(() => ({
@@ -3223,6 +3225,101 @@ describe("phone ledger controller — counterparties and settlement", () => {
         messageKey: "common.couldNotSave",
       },
     ]);
+  });
+});
+
+describe("phone ledger controller — recordOpeningDebt (§6.6)", () => {
+  const NINA = id<"counterparties">("11111111-1111-4111-8111-111111111111");
+
+  function harness(overrides: Partial<PhoneLedgerPort> = {}) {
+    const recordOpeningDebt = vi.fn<PhoneLedgerPort["recordOpeningDebt"]>(() => undefined);
+    const controller = createPhoneLedger(
+      basePort({ recordOpeningDebt, listCurrencies: () => CURRENCIES, ...overrides }),
+      {
+        capture: () => ({
+          date: accountingDate("2026-08-23"),
+          timeZone: "Europe/Warsaw",
+          offsetMinutes: 120,
+          at: new Date("2026-08-23T10:00:00Z"),
+        }),
+        id: <Table extends IdTable>() => id<Table>("00000000-0000-4000-8000-000000000042"),
+      },
+    );
+    return { controller, recordOpeningDebt };
+  }
+
+  const draft = {
+    counterpartyId: NINA,
+    direction: "theyOwe" as const,
+    amount: "200",
+    currency: "PLN",
+    date: "2026-01-01",
+  };
+
+  it("mints the row's id and hands the port the parsed operation", () => {
+    const { controller, recordOpeningDebt } = harness();
+
+    const result = controller.recordOpeningDebt(draft);
+
+    expect(result).toEqual({ id: "00000000-0000-4000-8000-000000000042" });
+    expect(recordOpeningDebt).toHaveBeenCalledWith(
+      {
+        id: "00000000-0000-4000-8000-000000000042",
+        counterpartyId: NINA,
+        direction: "theyOwe",
+        amount: money.toMoney("200"),
+        currency: "PLN",
+        date: "2026-01-01",
+      },
+      expect.objectContaining({ date: "2026-08-23" }),
+    );
+  });
+
+  it("refuses more decimal places than the currency holds, on the amount field, before the port", () => {
+    const { controller, recordOpeningDebt } = harness();
+    controller.refresh();
+
+    const result = controller.recordOpeningDebt({ ...draft, amount: "10.005" });
+
+    expect("fieldErrors" in result && result.fieldErrors).toEqual([
+      expect.objectContaining({
+        path: "amount",
+        messageKey: "transactions.tooManyDecimals",
+        params: { currency: "PLN", decimals: "2" },
+      }),
+    ]);
+    expect(recordOpeningDebt).not.toHaveBeenCalled();
+  });
+
+  it("refuses an amount past the ceiling, zero and a negative, before the port", () => {
+    const { controller, recordOpeningDebt } = harness();
+
+    for (const amount of ["1000000000", "0", "-5"]) {
+      const result = controller.recordOpeningDebt({ ...draft, amount });
+      expect("fieldErrors" in result, amount).toBe(true);
+    }
+    expect(recordOpeningDebt).not.toHaveBeenCalled();
+  });
+
+  it("carries the port's refusal to fieldErrors rather than throwing", () => {
+    const { controller, recordOpeningDebt } = harness();
+    recordOpeningDebt.mockImplementationOnce(() => {
+      throw new Error("record_opening_debt: no counterparty");
+    });
+
+    const result = controller.recordOpeningDebt(draft);
+
+    expect("fieldErrors" in result && result.fieldErrors).toEqual([
+      { path: "", message: "record_opening_debt: no counterparty" },
+    ]);
+  });
+
+  it("reads a person's opening debts through the port", () => {
+    const listOpeningDebts = vi.fn<PhoneLedgerPort["listOpeningDebts"]>(() => []);
+    const { controller } = harness({ listOpeningDebts });
+
+    expect(controller.listOpeningDebts(NINA)).toEqual([]);
+    expect(listOpeningDebts).toHaveBeenCalledWith(NINA);
   });
 });
 

@@ -773,6 +773,79 @@ describe("CounterpartyDetail (S13)", () => {
     expect(screen.getByText("Settling with Nina")).toBeDefined();
   });
 
+  it("adds an existing debt through the sheet — direction, amount, currency and date, then the toast (§6.6)", () => {
+    const recordOpeningDebt = vi.fn<PhoneLedgerPort["recordOpeningDebt"]>(() => undefined);
+    const controller = controllerOf(
+      basePort({
+        listCounterparties: () => [NINA_COUNTERPARTY],
+        listCounterpartyBalances: () => [],
+        recordOpeningDebt,
+      }),
+    );
+    render(
+      <LedgerProvider controller={controller}>
+        <CounterpartyDetail />
+      </LedgerProvider>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Add an existing debt" }));
+
+    const sheet = within(screen.getByLabelText("Existing debt with Nina"));
+    fireEvent.click(sheet.getByText("You owe them"));
+    fireEvent.change(sheet.getByLabelText("Amount"), { target: { value: "200" } });
+    fireEvent.click(sheet.getByRole("button", { name: "Save debt" }));
+
+    expect(recordOpeningDebt).toHaveBeenCalledOnce();
+    expect(recordOpeningDebt.mock.calls[0]?.[0]).toMatchObject({
+      counterpartyId: NINA,
+      direction: "youOwe",
+      amount: toMoney("200"),
+      currency: PLN,
+      // The screen reads the device's own day, never the controller's.
+      date: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
+    });
+    expect(screen.getByText("Existing debt saved")).toBeDefined();
+  });
+
+  it("lists the existing debt under the card, and a tap reopens it prefilled for correction", () => {
+    const recordOpeningDebt = vi.fn<PhoneLedgerPort["recordOpeningDebt"]>(() => undefined);
+    const controller = controllerOf(
+      basePort({
+        listCounterparties: () => [NINA_COUNTERPARTY],
+        listCounterpartyBalances: () => [NINA_ROW],
+        listOpeningDebts: () => [
+          {
+            id: id<"openingDebts">("55555555-5555-4555-8555-555555555555"),
+            counterpartyId: NINA,
+            currency: PLN,
+            direction: "theyOwe",
+            amount: toMoney("200.00000000"),
+            date: accountingDate("2026-01-02"),
+          },
+        ],
+        recordOpeningDebt,
+      }),
+    );
+    render(
+      <LedgerProvider controller={controller}>
+        <CounterpartyDetail />
+      </LedgerProvider>,
+    );
+    expect(screen.getByText("Existing debt")).toBeDefined();
+    expect(screen.getByText("200.00")).toBeDefined();
+
+    fireEvent.click(screen.getByRole("button", { name: /^Existing debt, / }));
+    const sheet = within(screen.getByLabelText("Existing debt with Nina"));
+    expect(sheet.getByText("This replaces the existing debt in PLN.")).toBeDefined();
+    fireEvent.click(sheet.getByRole("button", { name: "Save debt" }));
+
+    expect(recordOpeningDebt.mock.calls[0]?.[0]).toMatchObject({
+      direction: "theyOwe",
+      amount: toMoney("200"),
+      currency: PLN,
+      date: "2026-01-02",
+    });
+  });
+
   /**
    * M — a dust-only counterparty (settled at its own currency's scale, M1)
    * has nothing `handleOpenSettle` can default to: the old unfiltered

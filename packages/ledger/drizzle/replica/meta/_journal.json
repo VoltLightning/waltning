@@ -162,6 +162,13 @@
       "when": 1790821957664,
       "tag": "0022_account_guards",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "6",
+      "when": 1790861863287,
+      "tag": "0023_schema",
+      "breakpoints": true
     }
   ]
 }

@@ -19,6 +19,7 @@ export type SharedTable =
   | "dashboardLayouts"
   | "dashboardWidgets"
   | "fxRates"
+  | "openingDebts"
   | "recurringTransactions"
   | "tags"
   | "transactionLines"

@@ -60,11 +60,13 @@ import {
   type ObligationRole,
   type ReconcileAccountInput,
   type RecordDistinctCounterpartiesInput,
+  type RecordOpeningDebtInput,
   type RenameCategoryInput,
   type ReorderAccountsInput,
   type ReparentCategoryInput,
   reconcileAccountInput,
   recordDistinctCounterpartiesInput,
+  recordOpeningDebtInput,
   renameCategoryInput,
   reorderAccountsInput,
   reparentCategoryInput,
@@ -407,6 +409,20 @@ export type PhoneCounterparty = {
   archived: boolean;
   /** `update_counterparty`'s optimistic-concurrency check (`counterparties.staleVersion`). */
   version: number;
+};
+
+/**
+ * §6.6 — a debt that predates the ledger, as S13 lists it. Structural, like
+ * `PhoneCounterparty` above: the direction is restated rather than imported so
+ * this package stays free of `@waltning/schema`.
+ */
+export type PhoneOpeningDebt = {
+  id: Id<"openingDebts">;
+  counterpartyId: Id<"counterparties">;
+  currency: CurrencyCode;
+  direction: "theyOwe" | "youOwe";
+  amount: Money;
+  date: AccountingDate;
 };
 
 /** What settling with someone actually did — H9, never supplied, only returned. */
@@ -831,6 +847,8 @@ export type PhoneLedgerPort = {
   listCounterpartyMerges: (
     counterpartyId: Id<"counterparties">,
   ) => readonly PhoneCounterpartyMerge[];
+  /** §6.6 — one person's opening debts, on demand: S13's line and the form's prefill. */
+  listOpeningDebts: (counterpartyId: Id<"counterparties">) => readonly PhoneOpeningDebt[];
   /** S15 §9.1's own table — read whole, on every refresh (it is small). */
   listDistinctCounterpartyPairs: () => readonly (readonly [
     Id<"counterparties">,
@@ -981,6 +999,8 @@ export type PhoneLedgerPort = {
     input: RecordDistinctCounterpartiesInput,
     capture: PhoneCapture,
   ) => void;
+  /** §6.6 — a debt that predates the ledger; replaces the one in the same currency. */
+  recordOpeningDebt: (input: RecordOpeningDebtInput, capture: PhoneCapture) => void;
   /**
    * The one port write with a real return value — `residual`/`overSettled`
    * are H9's whole point, computed server-side (or, with none yet, by the
@@ -1571,6 +1591,15 @@ export type RecordDistinctCounterpartiesDraft = {
   bId: string;
 };
 
+/** S13's *Add an existing debt* — what the sheet asks for; the id is minted by the controller. */
+export type RecordOpeningDebtDraft = {
+  counterpartyId: string;
+  direction: "theyOwe" | "youOwe";
+  amount: string;
+  currency: string;
+  date: string;
+};
+
 /** S14 §3 — what the sheet actually asks for. No `residual`, no `rate`: both are derived (H9, §7.5). */
 export type SettleDebtDraft = {
   counterpartyId: string;
@@ -1737,6 +1766,8 @@ export type PhoneLedgerController = {
   listCounterpartyMerges: (
     counterpartyId: Id<"counterparties">,
   ) => readonly PhoneCounterpartyMerge[];
+  /** S13 — the person's opening debts (one per currency), on demand. */
+  listOpeningDebts: (counterpartyId: Id<"counterparties">) => readonly PhoneOpeningDebt[];
   /**
    * S16 §5, on demand — `ReconcileSheet`'s "Computed" figure, refolded every
    * time its own date field moves rather than fixed to the balance the sheet
@@ -1928,6 +1959,13 @@ export type PhoneLedgerController = {
     | { fieldErrors: readonly FieldError[] };
   /** The same lazy toggle as `loadArchived()`, for counterparties. */
   loadArchivedCounterparties: () => void;
+  /**
+   * S13's *Add an existing debt* (§6.6). Sets the person's balance in the
+   * currency and is never income or spending; recording again replaces it.
+   */
+  recordOpeningDebt: (
+    draft: RecordOpeningDebtDraft,
+  ) => { id: Id<"openingDebts"> } | { fieldErrors: readonly FieldError[] };
   settleDebt: (
     draft: SettleDebtDraft,
   ) =>
@@ -2603,6 +2641,7 @@ export function createPhoneLedger(
         ? port.listCounterpartyBalances(today)
         : port.listCounterpartyBalances(today, options),
     listCounterpartyMerges: (counterpartyId) => port.listCounterpartyMerges(counterpartyId),
+    listOpeningDebts: (counterpartyId) => port.listOpeningDebts(counterpartyId),
     balanceAsOf: (accountId, asOf) => port.balanceAsOf(accountId, asOf),
     listEnteredNameHistory: () => port.listEnteredNameHistory(),
     searchTransactions: (filter, cursor, options) =>
@@ -3451,6 +3490,82 @@ export function createPhoneLedger(
     loadArchivedCounterparties: () => {
       archivedCounterpartiesRequested = true;
       refresh();
+    },
+    recordOpeningDebt: (draft) => {
+      emitClientDiagnostic(diagnostics, {
+        scope: "client_action",
+        action: "record_opening_debt",
+        phase: "start",
+      });
+      try {
+        const capture = runtime.capture();
+        // Scale is the currency's own, read from the replica's list: a figure
+        // past it is refused on the amount field, in the person's words,
+        // before anything is queued (`transactions.tooManyDecimals`, as
+        // `settleDebt`'s discharge figure does).
+        const currency = snapshot.currencies.find((candidate) => candidate.code === draft.currency);
+        const parsedAmount = zMoney.safeParse(draft.amount);
+        if (
+          currency !== undefined &&
+          parsedAmount.success &&
+          money.dec(parsedAmount.data).decimalPlaces() > currency.decimals
+        ) {
+          emitClientDiagnostic(diagnostics, {
+            scope: "client_action",
+            action: "record_opening_debt",
+            phase: "failure",
+            error: clientFailure(new Error("transactions.tooManyDecimals")),
+          });
+          return {
+            fieldErrors: [
+              {
+                path: "amount",
+                message: `${currency.code} holds ${currency.decimals} decimal places — this amount has more`,
+                messageKey: "transactions.tooManyDecimals",
+                params: { currency: currency.code, decimals: String(currency.decimals) },
+              },
+            ],
+          };
+        }
+        const parsed = recordOpeningDebtInput.safeParse({
+          id: runtime.id<"openingDebts">(),
+          counterpartyId: draft.counterpartyId,
+          direction: draft.direction,
+          amount: draft.amount,
+          currency: draft.currency,
+          date: draft.date,
+        });
+        if (!parsed.success) {
+          return finish(
+            diagnostics,
+            { scope: "client_action", action: "record_opening_debt" },
+            { fieldErrors: fieldErrorsFromZod(parsed.error) ?? [] },
+          );
+        }
+        try {
+          port.recordOpeningDebt(parsed.data, capture);
+        } catch (writeError) {
+          return finish(
+            diagnostics,
+            { scope: "client_action", action: "record_opening_debt" },
+            { fieldErrors: refusalFromThrow(writeError) },
+          );
+        }
+        refresh();
+        return finish(
+          diagnostics,
+          { scope: "client_action", action: "record_opening_debt" },
+          { id: parsed.data.id },
+        );
+      } catch (error) {
+        emitClientDiagnostic(diagnostics, {
+          scope: "client_action",
+          action: "record_opening_debt",
+          phase: "failure",
+          error: clientFailure(error),
+        });
+        throw error;
+      }
     },
     settleDebt: (draft) => {
       emitClientDiagnostic(diagnostics, {

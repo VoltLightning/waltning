@@ -134,6 +134,7 @@ import { currenciesColumns } from "@waltning/schema/pg/currencies";
 import { dashboardLayoutsColumns } from "@waltning/schema/pg/dashboard-layouts";
 import { dashboardWidgetsColumns } from "@waltning/schema/pg/dashboard-widgets";
 import { fxRatesColumns } from "@waltning/schema/pg/fx-rates";
+import { openingDebtsColumns } from "@waltning/schema/pg/opening-debts";
 import { recurringTransactionsColumns } from "@waltning/schema/pg/recurring-transactions";
 import { tagsColumns } from "@waltning/schema/pg/tags";
 import { transactionLinesColumns } from "@waltning/schema/pg/transaction-lines";
@@ -421,6 +422,26 @@ export const counterpartyMerges = pgTable(
       .where(sql`${t.unmergedAt} is null`),
   ],
 );
+
+/**
+ * `record_opening_debt` — §6.6's debt that predates the ledger. The balance a
+ * person starts with, folded into `counterparty_balances` as a lend or a
+ * borrow; never a transaction, so never income, spending or an account's
+ * figure.
+ *
+ * Every shape guarantee is a constraint, because the executor's own checks are
+ * not the guarantee: an amount above zero and under the ceiling (the direction
+ * carries the sign), a direction that is one of the two, and **one row per
+ * person per currency** — recording again replaces it, never stacks a second.
+ * The scale against the currency's own decimals is the trigger below the table
+ * (`0027`), the same shape `debt_reassignments` has.
+ */
+export const openingDebts = pgTable("opening_debts", openingDebtsColumns(), (t) => [
+  uniqueIndex("opening_debts_counterparty_currency_uq").on(t.counterpartyId, t.currency),
+  check("opening_debts_amount_positive", sql`${t.amount} > 0`),
+  check("opening_debts_amount_ceiling", below(t.amount)),
+  check("opening_debts_direction_known", sql`${t.direction} in ('theyOwe', 'youOwe')`),
+]);
 
 /**
  * `record_distinct_counterparties` — S15 §9.1's *these are different*

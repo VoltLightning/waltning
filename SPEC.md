@@ -1280,6 +1280,7 @@ transaction_lines_amount_ceiling      abs(amount) < 1000000000
 accounts_opening_balance_ceiling      abs(opening_balance) < 1000000000
 recurring_transactions_amount_ceiling abs(amount_original) < 1000000000
 debt_reassignments_amount_ceiling      abs(amount) < 1000000000
+opening_debts_amount_ceiling          abs(amount) < 1000000000
 targets_amount_ceiling                abs(amount) < 1000000000
 receipts_total_ceiling                abs(total) < 1000000000
 ```
@@ -1290,7 +1291,7 @@ keeps the same integer bound (fewer than a billion). A figure a hundred times a
 plausible balance is a typo, and it breaks every layout it reaches. It is one
 bound, `AMOUNT_CEILING_EXCLUSIVE` in `money.ts`, stated at every layer: the
 contract schema (`zAmount`, used by every write input's amount field), each
-executor, the seven CHECKs above on Postgres and a trigger per table on the
+executor, the eight CHECKs above on Postgres and a trigger per table on the
 replica, and every amount input, which refuses a tenth integer digit and says
 *Maximum 999 999 999,99* in the reader's own notation. The CHECKs are added
 `NOT VALID` and validated at once on a database that holds nothing past the
@@ -1604,9 +1605,55 @@ A category a person made and named *Borrowed* carries no seed tag and means
 nothing about debt. The rule is keyed on the four starter categories' seed keys
 (`DEBT_SEED_KEYS`), not on a flag on the category.
 
+**A debt that predates the ledger is an opening debt, entered on the person's
+page.** *Add an existing debt* (S13) takes a direction — they owe you, or you owe
+them — an amount, a currency and the day it dates from, and **sets the person's
+balance in that currency the way an account's opening balance sets an account's:
+it is never income and never spending.** `record_opening_debt` writes one row of
+`opening_debts` per person per currency (`id`, `counterparty_id`, `currency`,
+`direction` — `theyOwe | youOwe`, `amount`, `date`); recording again for the
+same person and currency replaces it, which is how a wrong figure is corrected.
+
+**Why a table of its own, and not an `adjustment` transaction.** A transaction
+carries an account, and an account's balance and every period figure are built
+from transactions, so a debt that was already there before the books began would
+either move an account that never saw the money or count as income or spending
+that never happened — and an adjustment row has to name an account to exist at
+all. A row of its own reaches exactly one figure, the person's balance, where it
+folds in as a lend (`theyOwe`, positive) or a borrow (`youOwe`, negative) —
+§7's own sign rule, with nothing restated. It carries no account and no
+category because the table has no such column; there is nothing for a category
+to be refused on. Net worth meets it only the way it meets any debt: not at all
+(*Receivables sit outside net worth*, below).
+
+`settle_debt` sees it as an open debt and settles against it like any other: an
+opening debt of 200 and a repayment of 50 leave 150, and `overSettled`,
+`nothing to settle` and the archive gate (S15 §6) all read the same fold.
+Every claim below names the layer that enforces it:
+
+- **The shape** — an amount above zero and under the ceiling (the direction
+  carries the sign), a direction that is one of the two, and one row per person
+  and currency — is `opening_debts_amount_positive`,
+  `opening_debts_amount_ceiling`, `opening_debts_direction_known` and
+  `opening_debts_counterparty_currency_uq`, on **Postgres**
+  (`0027_opening_debts.sql`) and on **the replica** (`0023_schema.sql`, the same
+  four, declared in the table so a later rebuild carries them) — *database,
+  both engines*. The executor refuses first, with a message naming the field
+  (*service, the replica's executor*), and the contract schema refuses a figure
+  past the ceiling or not above zero before either (*`recordOpeningDebtInput`*).
+- **The scale** — a figure past its currency's declared decimals — is refused by
+  `record_opening_debt`'s `assertMoneyScale` on the phone and by
+  `opening_debts_amount_scale_matches_currency` on Postgres (`WA016`, the code
+  `debt_reassignments` shares); `currencies_decimals_safe_opening_debts` (`WA018`)
+  keeps a currency from being narrowed past a figure an opening debt holds.
+- **A person the replica does not hold** is refused as a dependency (the same
+  one `settle_debt` names), and the foreign keys hold under it on both engines.
+
 **Debt is derived, never stored.** A counterparty's position is the running sum
-of the `debt`-role transactions referencing them. Nothing is posted twice, so a
-balance cannot drift from its history:
+of the `debt`-role transactions referencing them, plus their opening debts — the
+starting position the history is added to, the way `accounts.opening_balance`
+starts an account. Nothing is posted twice, so a balance cannot drift from its
+history:
 
 ```sql
 CREATE VIEW counterparty_balances AS
@@ -1654,7 +1701,9 @@ CREATE VIEW counterparty_balances AS
 This view is documentation of the rule, not what runs it: the shipped
 implementation is `packages/db/src/figures/counterparty-balance.ts`, a query
 builder over the same fold, and no `counterparty_balances` view exists in the
-migrations.
+migrations. The fold's rows are the debt-role transactions above **and** the
+person's `opening_debts`, each a leg of the same sum: `theyOwe` is `+amount` and
+`youOwe` is `−amount`, grouped by the row's own `currency`.
 
 **The negation is the whole trick.** The ledger signs by *cash flow*; a debt
 balance signs by *obligation*, and they are exact opposites. All four cases fall

@@ -190,6 +190,13 @@
       "when": 1790821952065,
       "tag": "0026_account_delete_guard_and_amount_ceiling",
       "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1790861862398,
+      "tag": "0027_opening_debts",
+      "breakpoints": true
     }
   ]
 }

@@ -846,6 +846,21 @@ export const en = {
     notFound: "This person is no longer here. They may have been merged or removed.",
     /** `SettleSheet`'s title (S14 §3). */
     settlingWith: "Settling with {{name}}",
+    /** S13's *Add an existing debt* (§6.6) — a debt from before the ledger; sets the balance, is neither income nor spending. */
+    existingDebtAdd: "Add an existing debt",
+    existingDebtTitle: "Existing debt with {{name}}",
+    existingDebtHint:
+      "A debt that already existed before this ledger. It sets the starting balance and is neither income nor spending. Recording it again in the same currency replaces it.",
+    existingDebtDirection: "Who owes whom",
+    existingDebtTheyOwe: "They owe you",
+    existingDebtYouOwe: "You owe them",
+    existingDebtCurrency: "Currency",
+    existingDebtDate: "Date of the debt",
+    existingDebtSave: "Save debt",
+    existingDebtSaved: "Existing debt saved",
+    existingDebtRow: "Existing debt",
+    existingDebtRowMeta: "{{direction}} · since {{date}}",
+    existingDebtReplaces: "This replaces the existing debt in {{currency}}.",
     /** The balance picker (S14 §9.1). */
     discharges: "Discharges",
     theyOweYou: "they owe you",

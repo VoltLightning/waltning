@@ -58,6 +58,7 @@ const replicaSchema = {
   dashboardWidgets: schema.dashboardWidgets,
   fxRates: schema.fxRates,
   localMeta: schema.localMeta,
+  openingDebts: schema.openingDebts,
   recurringTransactions: schema.recurringTransactions,
   tags: schema.tags,
   transactionLines: schema.transactionLines,
@@ -365,8 +366,8 @@ describe("a fresh database", () => {
     const names = inspect(join(dir, "fresh-replica.db"), tableNames);
     expect(
       names,
-      "the sixteen shared tables (§14.4b adds brand_aliases), the replica's meta store, and the migrator's own journal",
-    ).toHaveLength(18);
+      "the seventeen shared tables (§14.4b adds brand_aliases; §6.6 opening_debts), the replica's meta store, and the migrator's own journal",
+    ).toHaveLength(19);
     expect(names).toContain("transactions");
     expect(names).toContain("local_meta");
     // Created by the migrator itself, not by any generated step — so it is on
@@ -1635,7 +1636,7 @@ describe("a constraint declared in the schema is present on the device", () => {
           .sort(),
       );
 
-    expect(declared(replicaSchema), "vacuity guard").toHaveLength(17);
+    expect(declared(replicaSchema), "vacuity guard").toHaveLength(18);
     expect(declaredColumns(replicaSchema).length, "vacuity guard").toBeGreaterThan(100);
 
     expect(
@@ -1830,6 +1831,7 @@ describe("a constraint declared in the schema is present on the device", () => {
       "dashboard_layouts_one_active",
       "dashboard_widgets_external_id_uq",
       "fx_rates_pk",
+      "opening_debts_counterparty_currency_uq",
       "transaction_lines_category_idx",
       "transaction_lines_transaction_idx",
       "transactions_category_idx",

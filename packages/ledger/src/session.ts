@@ -36,6 +36,7 @@ import type {
   MergeCounterpartiesInput,
   ReconcileAccountInput,
   RecordDistinctCounterpartiesInput,
+  RecordOpeningDebtInput,
   RenameCategoryInput,
   ReorderAccountsInput,
   ReparentCategoryInput,
@@ -124,10 +125,15 @@ import {
   readCounterpartyMerges,
 } from "./counterparties/read-counterparty-merges.ts";
 import { readDistinctCounterpartyPairs } from "./counterparties/read-distinct-counterparty-pairs.ts";
+import { type LocalOpeningDebt, readOpeningDebts } from "./counterparties/read-opening-debts.ts";
 import {
   type LocalDistinctPairRow,
   recordDistinctCounterpartiesExecutor,
 } from "./counterparties/record-distinct-counterparties.executor.ts";
+import {
+  type LocalOpeningDebtRow,
+  recordOpeningDebtExecutor,
+} from "./counterparties/record-opening-debt.executor.ts";
 import {
   type SettleDebtResult,
   settleDebtExecutor,
@@ -304,6 +310,8 @@ export type LocalLedgerSession = {
   listCounterpartyMerges: (
     counterpartyId: Id<"counterparties">,
   ) => readonly LocalCounterpartyMerge[];
+  /** §6.6 — one person's opening debts, one per currency. See `readOpeningDebts`. */
+  listOpeningDebts: (counterpartyId: Id<"counterparties">) => readonly LocalOpeningDebt[];
   /** S15 §9.1 — every pair `record_distinct_counterparties` has recorded. See `readDistinctCounterpartyPairs`. */
   listDistinctCounterpartyPairs: () => readonly (readonly [
     Id<"counterparties">,
@@ -462,6 +470,8 @@ export type LocalLedgerSession = {
     input: RecordDistinctCounterpartiesInput,
     capture: Capture,
   ) => LocalDistinctPairRow;
+  /** §6.6 — a debt that predates the ledger, on the person's page; replaces one in the same currency. */
+  recordOpeningDebt: (input: RecordOpeningDebtInput, capture: Capture) => LocalOpeningDebtRow;
   /** H9: takes the amount and what it discharges — never a residual. Returns one. */
   settleDebt: (input: SettleDebtInput, capture: Capture) => SettleDebtResult;
   /** J08's split — one write, one row per share (`allocate-shares.executor.ts`). */
@@ -775,6 +785,8 @@ export function createLocalLedgerSession<TRun>(
       readCategoryReferenceCounts(requireOpen().replica.db, categoryId),
     listCounterpartyMerges: (counterpartyId) =>
       readCounterpartyMerges(requireOpen().replica.db, counterpartyId),
+    listOpeningDebts: (counterpartyId) =>
+      readOpeningDebts(requireOpen().replica.db, counterpartyId),
     listDistinctCounterpartyPairs: () => readDistinctCounterpartyPairs(requireOpen().replica.db),
     listNetWorth: () => readNetWorth(requireOpen().replica.db),
     readPeriodSpend: (period) => readPeriodSpend(requireOpen().replica.db, period),
@@ -1062,6 +1074,14 @@ export function createLocalLedgerSession<TRun>(
     recordDistinctCounterparties: (input, capture) =>
       writeLocally(requireOpen(), {
         executor: recordDistinctCounterpartiesExecutor,
+        registry: ledgerRegistry,
+        input,
+        capture,
+        ...(options.diagnostics ? { diagnostics: options.diagnostics } : {}),
+      }).row,
+    recordOpeningDebt: (input, capture) =>
+      writeLocally(requireOpen(), {
+        executor: recordOpeningDebtExecutor,
         registry: ledgerRegistry,
         input,
         capture,

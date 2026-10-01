@@ -47,6 +47,11 @@ import { AccountPicker, type AccountPickerAccount } from "@waltning/ui/accounts/
 import { BalanceLedger } from "@waltning/ui/counterparties/balance-ledger";
 import { CounterpartyCard } from "@waltning/ui/counterparties/counterparty-card";
 import { MergeRow } from "@waltning/ui/counterparties/merge-row";
+import { OpeningDebtRow } from "@waltning/ui/counterparties/opening-debt-row";
+import {
+  type OpeningDebtDraft,
+  OpeningDebtSheet,
+} from "@waltning/ui/counterparties/opening-debt-sheet";
 import { SettleSheet, type SettleSheetField } from "@waltning/ui/counterparties/settle-sheet";
 import { parseAmount } from "@waltning/ui/fx/amount-field";
 import { decimalMark } from "@waltning/ui/i18n/locales";
@@ -81,6 +86,8 @@ const SETTLE_KNOWN_PATHS = [
 ];
 
 /** The replica's account onto `AccountPicker`'s own choice shape — grouped, kind-ordered, S16 §3, `transfer-screen.tsx`'s own `toPickerChoice` matched rather than shared. */
+const OPENING_DEBT_KNOWN_PATHS = ["counterpartyId", "direction", "amount", "currency", "date"];
+
 function toPickerChoice(account: PhoneCapturableAccount): AccountPickerAccount {
   return {
     id: account.id,
@@ -187,6 +194,14 @@ export default function CounterpartyDetail() {
   // already draws for its own keypad-driven sheet.
   const [accountPickerOpen, setAccountPickerOpen] = useState(false);
 
+  // S13's *Add an existing debt* (§6.6). `openingDebtKey` is bumped on every
+  // opening so the sheet remounts with a fresh draft rather than carrying the
+  // last one over.
+  const [openingDebtVisible, setOpeningDebtVisible] = useState(false);
+  const [openingDebtKey, setOpeningDebtKey] = useState(0);
+  const [openingDebtInitial, setOpeningDebtInitial] = useState<Partial<OpeningDebtDraft>>({});
+  const [openingDebtErrors, setOpeningDebtErrors] = useState<ReturnType<typeof mapFieldErrors>>();
+
   const counterparty =
     snapshot.counterparties.find((candidate) => candidate.id === rawId) ??
     snapshot.archivedCounterparties.find((candidate) => candidate.id === rawId);
@@ -200,6 +215,27 @@ export default function CounterpartyDetail() {
   const balances = useMemo(
     () => ledger.listCounterpartyBalances(today),
     [ledger, snapshot.revision, today],
+  );
+  // The person's existing debts, one per currency — S13's lines under the
+  // card, and what a correction prefills. A live read like `balances`, so it
+  // takes `snapshot.revision` for the same reason.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `snapshot.revision` invalidates this memo by identity, not by being read in the body.
+  const openingDebts = useMemo(
+    () => (rawId ? ledger.listOpeningDebts(id<"counterparties">(rawId)) : []),
+    [ledger, rawId, snapshot.revision],
+  );
+  const openingDebtLines = useMemo(
+    () =>
+      openingDebts.map((debt) => ({
+        ...debt,
+        decimals:
+          snapshot.currencies.find((currency) => currency.code === debt.currency)?.decimals ?? 2,
+      })),
+    [openingDebts, snapshot.currencies],
+  );
+  const openingDebtCurrencies = useMemo(
+    () => openingDebts.map((debt) => debt.currency),
+    [openingDebts],
   );
   const pivot = snapshot.currencies.find((currency) => currency.isPivot)?.code;
   const group = useMemo(
@@ -328,6 +364,53 @@ export default function CounterpartyDetail() {
     setSettleVisible(true);
   }, [group, figures]);
   const handleDismissSettle = useCallback(() => setSettleVisible(false), []);
+  const handleAddOpeningDebt = useCallback(() => {
+    // The settlement currency is the likeliest one a person means; the sheet
+    // falls back to the first currency the ledger holds.
+    const settlement = group?.settlementCurrency ?? counterparty?.settlementCurrency ?? undefined;
+    setOpeningDebtInitial(settlement === undefined ? {} : { currency: settlement });
+    setOpeningDebtErrors(undefined);
+    setOpeningDebtKey((current) => current + 1);
+    setOpeningDebtVisible(true);
+  }, [group, counterparty?.settlementCurrency]);
+  const handleEditOpeningDebt = useCallback(
+    (openingDebtId: string) => {
+      const debt = openingDebts.find((candidate) => candidate.id === openingDebtId);
+      if (debt === undefined) return;
+      const decimals =
+        snapshot.currencies.find((currency) => currency.code === debt.currency)?.decimals ?? 2;
+      setOpeningDebtInitial({
+        direction: debt.direction,
+        currency: debt.currency,
+        amount: money.dec(debt.amount).toFixed(decimals),
+        date: debt.date,
+      });
+      setOpeningDebtErrors(undefined);
+      setOpeningDebtKey((current) => current + 1);
+      setOpeningDebtVisible(true);
+    },
+    [openingDebts, snapshot.currencies],
+  );
+  const handleDismissOpeningDebt = useCallback(() => setOpeningDebtVisible(false), []);
+  const handleSaveOpeningDebt = useCallback(
+    (draft: OpeningDebtDraft) => {
+      if (!rawId) return;
+      const result = ledger.recordOpeningDebt({ counterpartyId: rawId, ...draft });
+      if (!("id" in result)) {
+        const resolved = result.fieldErrors.map((error) => ({
+          path: error.path,
+          message: resolveSettleFieldErrorMessage(t, error),
+        }));
+        setOpeningDebtErrors(mapFieldErrors(resolved, OPENING_DEBT_KNOWN_PATHS));
+        return;
+      }
+      setOpeningDebtErrors(undefined);
+      setOpeningDebtVisible(false);
+      settledToastTokenRef.current += 1;
+      setSettledToastMessage(t("counterparties.existingDebtSaved"));
+    },
+    [ledger, rawId, t],
+  );
   const handleOpenAccountPicker = useCallback(() => setAccountPickerOpen(true), []);
   const handleDismissAccountPicker = useCallback(() => setAccountPickerOpen(false), []);
   const handlePickAccount = useCallback((accountId: string) => {
@@ -579,6 +662,19 @@ export default function CounterpartyDetail() {
         <Button label={t("counterparties.settle")} onPress={handleOpenSettle} variant="primary" />
       </View>
 
+      {openingDebtLines.map((debt) => (
+        <OpeningDebtRow
+          key={debt.id}
+          id={debt.id}
+          direction={debt.direction}
+          amount={debt.amount}
+          currency={debt.currency}
+          decimals={debt.decimals}
+          date={debt.date}
+          onPress={handleEditOpeningDebt}
+        />
+      ))}
+
       {merges.map((merge) => (
         <MergeRow
           key={merge.mergeId}
@@ -630,7 +726,25 @@ export default function CounterpartyDetail() {
         </View>
       )}
 
+      <Button
+        label={t("counterparties.existingDebtAdd")}
+        onPress={handleAddOpeningDebt}
+        variant="ghost"
+      />
       <Button label={t("common.edit")} onPress={handleEdit} variant="ghost" />
+
+      <OpeningDebtSheet
+        key={openingDebtKey}
+        visible={openingDebtVisible}
+        counterpartyName={counterparty.name}
+        currencies={snapshot.currencies}
+        existingCurrencies={openingDebtCurrencies}
+        initial={openingDebtInitial}
+        today={today}
+        onDismiss={handleDismissOpeningDebt}
+        onSave={handleSaveOpeningDebt}
+        {...(openingDebtErrors === undefined ? {} : { fieldErrors: openingDebtErrors })}
+      />
 
       <SettleSheet
         visible={settleVisible}

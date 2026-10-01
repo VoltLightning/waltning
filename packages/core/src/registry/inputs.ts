@@ -1582,6 +1582,46 @@ export const settleDebtInput = z
 export type SettleDebtInput = z.output<typeof settleDebtInput>;
 
 /**
+ * `record_opening_debt` — §6.6's debt that predates the ledger, entered on the
+ * person's page (S13): *they owe you* or *you owe them*, an amount, a currency
+ * and the day it dates from.
+ *
+ * It sets the person's balance in that currency the way an opening balance
+ * sets an account's, and is **never income and never spending** — it is not a
+ * transaction, so no category, no account and no period figure can see it.
+ * `settle_debt` then settles against it like any other debt.
+ *
+ * **One per person per currency, and recording again replaces it.** A
+ * correction is the same write with the right figure; a second row would be
+ * a debt entered twice. `id` is the row's own, used when there is none yet.
+ *
+ * **`amount` is positive and the direction carries the sign** — the same rule
+ * `settle_debt` takes for what changed hands: a negative debt is a debt the
+ * other way, and a figure that could say both would let a typo flip it.
+ */
+export const recordOpeningDebtInput = z
+  .object({
+    id: zId<"openingDebts">(),
+    counterpartyId: zId<"counterparties">(),
+    direction: z.enum(["theyOwe", "youOwe"]),
+    amount: zAmount,
+    currency: zCurrencyCode,
+    date: zAccountingDate,
+  })
+  .superRefine((v, ctx) => {
+    // As `settleDebtInput`: a malformed figure already carries `zMoney`'s own
+    // issue and `dec()` would throw on it, so positivity is skipped for it.
+    if (safeDec(v.amount)?.lte(0) === true) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["amount"],
+        message: "an existing debt is a positive amount — the direction says who owes whom",
+      });
+    }
+  });
+export type RecordOpeningDebtInput = z.output<typeof recordOpeningDebtInput>;
+
+/**
  * `allocate_shares` — J08's whole write, and it had none. The journey's path
  * names an ALLOCATE step and no operation performed it.
  *

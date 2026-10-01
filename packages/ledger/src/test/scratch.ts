@@ -33,8 +33,8 @@ import { ledgerSchema as schema } from "../schema-map.ts";
 
 export type Scratch = ReturnType<typeof scratchLedger>;
 
-/** Sixteen shared tables (§14.4b adds `brand_aliases`), `local_meta`, `outbox`, `outbox_seq`. */
-const EXPECTED_TABLES = 19;
+/** Seventeen shared tables (§14.4b adds `brand_aliases`, §6.6 `opening_debts`), `local_meta`, `outbox`, `outbox_seq`. */
+const EXPECTED_TABLES = 20;
 
 export function scratchLedger() {
   const sqlite = new Database(":memory:");
