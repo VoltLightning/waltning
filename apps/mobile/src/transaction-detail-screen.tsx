@@ -110,6 +110,10 @@ function toFields(detail: PhoneTransactionDetail, toDecimals: number): Transacti
     toAccountId: detail.toAccountId,
     toAmount: detail.toAmount === null ? null : money.round(detail.toAmount, toDecimals),
     fee: detail.fee === null ? null : money.round(detail.fee, detail.decimals),
+    // §7.8 — what was paid, at the paid currency's own scale.
+    paidAmount:
+      detail.paidAmount === null ? null : money.round(detail.paidAmount, detail.paidDecimals ?? 2),
+    paidCurrency: detail.paidCurrency,
     categoryId: detail.categoryId,
     counterpartyId: detail.counterpartyId,
     obligationCounterpartyId: detail.obligationCounterpartyId,
@@ -361,6 +365,19 @@ export default function TransactionDetail() {
       const intoCategory = snapshot.categories.find((category) => category.id === patch.categoryId);
       const repaymentIntent = debtIntentOf(intoCategory?.externalId);
       if (repaymentIntent?.settles && patch.categoryId) {
+        // §7.8 — a repayment has no paid side, and the settlement replaces this row:
+        // a paid pair would be dropped without a word, so it is taken off first.
+        const keepsPaid =
+          "paidCurrency" in patch ? patch.paidCurrency != null : detail.paidCurrency !== null;
+        if (keepsPaid) {
+          setFieldsErrors(
+            mapFieldErrors(
+              [{ path: "", message: t("transactions.paidNotForRepaymentDetail") }],
+              [],
+            ),
+          );
+          return;
+        }
         const person = patch.obligationCounterpartyId ?? detail.obligationCounterpartyId;
         if (person === null || person === undefined) return;
         const amount = patch.amountOriginal ?? money.abs(detail.amount);
@@ -570,6 +587,11 @@ export default function TransactionDetail() {
     () => snapshot.groups.map((group) => ({ id: group.id, name: group.name })),
     [snapshot.groups],
   );
+  // §7.8 — every currency an entry could have been paid in.
+  const paidChoices = useMemo(
+    () => snapshot.currencies.map((currency) => ({ code: currency.code, name: currency.name })),
+    [snapshot.currencies],
+  );
 
   if (!detail) {
     return (
@@ -690,6 +712,8 @@ export default function TransactionDetail() {
           obligationCounterpartyId={effectiveObligation.id}
           obligationCounterpartyName={effectiveObligation.name}
           onOpenCounterpartyPicker={handleOpenCounterpartyPicker}
+          paidCurrencies={paidChoices}
+          settlement={detail.isSettlement === true}
           {...(fieldsErrors ? { fieldErrors: fieldsErrors } : {})}
           onSave={handleSaveFields}
         />

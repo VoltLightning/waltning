@@ -143,6 +143,7 @@ function assertDecimalsShrinkSafe(input: UpdateCurrencyInput, tx: ReplicaTx): vo
           eq(transactions.currency, input.code),
           eq(transactions.toCurrency, input.code),
           eq(transactions.debtCurrency, input.code),
+          eq(transactions.paidCurrency, input.code),
         ),
         isNull(transactions.deletedAt),
       ),
@@ -211,6 +212,8 @@ function anyStoredFigureOverScale(
       toAmount: transactions.toAmount,
       debtCurrency: transactions.debtCurrency,
       debtAmount: transactions.debtAmount,
+      paidCurrency: transactions.paidCurrency,
+      paidAmount: transactions.paidAmount,
     })
     .from(transactions)
     .where(
@@ -218,6 +221,7 @@ function anyStoredFigureOverScale(
         eq(transactions.currency, code),
         eq(transactions.toCurrency, code),
         eq(transactions.debtCurrency, code),
+        eq(transactions.paidCurrency, code),
       ),
     )
     .all();
@@ -225,6 +229,7 @@ function anyStoredFigureOverScale(
     if (row.currency === code && (over(row.amountOriginal) || over(row.fee))) return true;
     if (row.toCurrency === code && over(row.toAmount)) return true;
     if (row.debtCurrency === code && over(row.debtAmount)) return true;
+    if (row.paidCurrency === code && over(row.paidAmount)) return true;
   }
 
   const lineRows = tx

@@ -137,6 +137,7 @@ it("leaves every constraint VALID on a fresh install", async () => {
     "targets_amount_ceiling",
     "transaction_lines_amount_ceiling",
     "transactions_amount_ceiling",
+    "transactions_paid_amount_ceiling",
   ]);
   expect(rows.every((r) => r.convalidated)).toBe(true);
 });

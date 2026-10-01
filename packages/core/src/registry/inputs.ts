@@ -259,6 +259,10 @@ export type TransactionShape = {
   toAccountId?: Id<"accounts"> | null | undefined;
   toAmount?: Money | null | undefined;
   toCurrency?: CurrencyCode | null | undefined;
+  /** The account-side currency the paid pair is compared against (§7.8). */
+  currency?: CurrencyCode | undefined;
+  paidAmount?: Money | null | undefined;
+  paidCurrency?: CurrencyCode | null | undefined;
 };
 
 export type TransactionShapeIssue = { field: keyof TransactionShape; message: string };
@@ -316,6 +320,31 @@ export function transactionShapeIssues(row: TransactionShape): TransactionShapeI
     issues.push({
       field: "categoryId",
       message: "only income and expense carry a category (transactions_category_shape)",
+    });
+  }
+
+  // §7.8 — what was paid, when it was not the account's currency. The three
+  // CHECKs `transactions_paid_shape`, `_distinct` and `_type`; the positive
+  // and ceiling rules are about one figure and live beside the fields.
+  const hasPaidAmount = present(row.paidAmount);
+  const hasPaidCurrency = present(row.paidCurrency);
+  if (hasPaidAmount !== hasPaidCurrency) {
+    issues.push({
+      field: hasPaidAmount ? "paidCurrency" : "paidAmount",
+      message: "what was paid is an amount and a currency together (transactions_paid_shape)",
+    });
+  }
+  if (hasPaidCurrency && row.currency !== undefined && row.paidCurrency === row.currency) {
+    issues.push({
+      field: "paidCurrency",
+      message:
+        "what was paid is in a currency other than the account's — in the account's own currency there is nothing to convert (transactions_paid_distinct)",
+    });
+  }
+  if (hasPaidAmount && row.type !== "income" && row.type !== "expense") {
+    issues.push({
+      field: "paidAmount",
+      message: "only an income or an expense has a paid side (transactions_paid_type)",
     });
   }
 
@@ -425,6 +454,17 @@ export const createTransactionInput = z
      * asserted by the caller.
      */
     fxRate: zPivotPerUnit.optional(),
+
+    /**
+     * **What was handed over, when that is not the account's own currency**
+     * (§7.8): `350 CZK` paid with a EUR card is `paidAmount: "350"`,
+     * `paidCurrency: "CZK"` beside `amountOriginal` — the EUR the account was
+     * charged. The two travel together, the currency is never the account's,
+     * and only an income or an expense has them. The realised rate is derived
+     * from the pair, never sent.
+     */
+    paidAmount: zAmount.optional(),
+    paidCurrency: zCurrencyCode.optional(),
 
     /**
      * The **reference** rate for `to_currency`, in the same pivot-per-unit
@@ -550,6 +590,14 @@ export const createTransactionInput = z
     const isTransfer = t.type === "transfer";
     for (const issue of transactionShapeIssues(t)) {
       ctx.addIssue({ code: "custom", path: [issue.field], message: issue.message });
+    }
+
+    if (t.paidAmount !== undefined && safeDec(t.paidAmount)?.lte(0) === true) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["paidAmount"],
+        message: "what was paid is a positive amount (transactions_paid_amount_positive)",
+      });
     }
 
     /** `to_fx_rate` follows the destination leg it values, when it is supplied. */
@@ -943,6 +991,9 @@ const transactionPatch = z
     toCurrency: zCurrencyCode.nullable().optional(),
     fxRate: zPivotPerUnit.optional(),
     toFxRate: zPivotPerUnit.nullable().optional(),
+    /** §7.8 — the paid side; both to a value, or both to `null` to clear it. */
+    paidAmount: zAmount.nullable().optional(),
+    paidCurrency: zCurrencyCode.nullable().optional(),
     fee: zFee.nullable().optional(),
     enteredName: z.string().trim().max(200).optional(),
     note: z.string().trim().max(2000).optional(),
@@ -1001,6 +1052,17 @@ export const updateTransactionInput = z
         code: "custom",
         path: ["patch", "toAmount"],
         message: "the destination amount is positive (transactions_to_amount_positive)",
+      });
+    }
+    if (
+      v.patch.paidAmount !== undefined &&
+      v.patch.paidAmount !== null &&
+      safeDec(v.patch.paidAmount)?.lte(0) === true
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["patch", "paidAmount"],
+        message: "what was paid is a positive amount (transactions_paid_amount_positive)",
       });
     }
     // H3 — same for `fee`: `transactions_fee_positive` binds a patched row

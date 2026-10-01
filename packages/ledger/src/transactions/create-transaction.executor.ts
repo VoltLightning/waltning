@@ -180,6 +180,10 @@ export function insertTransaction(
      */
     ...(input.toFxRate !== undefined ? { toFxRate: input.toFxRate } : {}),
     ...(input.fee !== undefined ? { fee: input.fee } : {}),
+    // §7.8 — what was paid, beside the account-side figure above. Both or
+    // neither: the contract and the replica's triggers hold the pairing.
+    ...(input.paidAmount !== undefined ? { paidAmount: input.paidAmount } : {}),
+    ...(input.paidCurrency !== undefined ? { paidCurrency: input.paidCurrency } : {}),
     ...(input.externalId !== undefined ? { externalId: input.externalId } : {}),
     // H2 — `fx_rate_estimated` is set above, from `provisionalFxRate`'s own
     // answer, whenever step 2 (not carry-forward) had to price the row.
@@ -291,7 +295,7 @@ export function assertCategoryNotArchived(
 /**
  * `SPEC.md` §7.2, the local mirror of `assert_amount_scale`
  * (`0011_transaction_scale_and_category_kind.sql`): `amount_original`,
- * `to_amount` and `fee` each fit their own currency's declared decimals.
+ * `to_amount`, `fee` and `paid_amount` each fit their own currency's declared decimals.
  * `debt_amount`/`debt_currency` are not this executor's — `settle_debt`
  * (`counterparties/settle-debt.executor.ts`) is the only writer of those two
  * columns, and carries the identical check for them.
@@ -313,6 +317,11 @@ export function assertTransactionScale(input: CreateTransactionInput, tx: Replic
   }
   if (input.fee !== undefined) {
     assertMoneyScale(tx, input.fee, input.currency, "create_transaction: fee");
+  }
+  // §7.8 — the paid figure is scaled to *its own* currency, not the account's:
+  // 350 CZK has the decimals CZK has, whatever the card was charged in.
+  if (input.paidAmount !== undefined && input.paidCurrency !== undefined) {
+    assertMoneyScale(tx, input.paidAmount, input.paidCurrency, "create_transaction: paid_amount");
   }
 }
 

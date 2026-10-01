@@ -95,6 +95,14 @@ may use `amount_original` for a destination.
 `adjustment` carries its own sign, so `amount_original` may be negative for that
 type and only that type.
 
+**`amount_original` is always the account side.** An entry paid in another
+currency than its account's (`SPEC.md` §7.8 — 350 CZK on a EUR card) holds what
+the account was charged in `amount_original`/`currency` and what was handed over
+in `paid_amount`/`paid_currency`. Every formula in this file reads the account
+side and none reads the paid pair: it is the other face of a payment already
+counted once, so adding it anywhere would count the payment twice, and in
+another currency.
+
 ---
 
 **`T` is `transactions WHERE deleted_at IS NULL`.** Every formula below reads
@@ -139,7 +147,8 @@ server perfectly.
 
 In the **account's own currency**, always — the currency trigger (§6.5)
 guarantees every contributing row is denominated in it, which is what makes this
-a plain sum.
+a plain sum. An entry paid in another currency (§7.8) contributes what the
+account was charged: `paid_amount` is not a term.
 
 **Not** `SUM(amount_pivot)`: that column exists only on the source leg (§7.4).
 
@@ -301,6 +310,12 @@ amount — which for a cross-currency round trip understates the true cost by th
 spread.
 
 `shared_net` may be negative and is shown that way.
+
+**An entry paid in another currency counts what left the account** (§7.8):
+`amount_pivot` is the account-side `amount_original × fx_rate`, so `spend`,
+`inflow` and `net` are what the cards were charged, and the display-currency
+rebasing (§4) reads the same side. The paid figure is shown on the row and in
+S09; it is in no total.
 
 ---
 
@@ -688,7 +703,10 @@ and Russian. Trigram similarity needs to know none of that: it is
 language-agnostic by construction, which is the property that matters here and
 the reason this choice survives the language mix changing again.
 
-An amount token matches `amount_original` exactly, in any currency. **A query
+An amount token matches `amount_original` exactly, in any currency — and, on an
+entry paid in another currency (`SPEC.md` §7.8), `paid_amount` as well, so *350*
+finds the coffee whether it was typed as what the card was charged or as what
+was paid. A currency filter (S10) likewise matches either currency. **A query
 is an amount token only when the whole of it is one**, by this grammar:
 
 - **Digits, then an optional decimal mark** — comma or point, read alike —

@@ -25,6 +25,6 @@ export function convertAmountRaw(
   rate: money.CrossRate,
   decimals: number,
 ): string {
-  const converted = money.round(money.toMoney(money.dec(amount).times(rate)), decimals);
-  return converted.replace(".", ",");
+  // One implementation of the rounding: `money.chargedFor` (§7.8 uses it too).
+  return money.chargedFor(money.toMoney(amount), rate, decimals).replace(".", ",");
 }

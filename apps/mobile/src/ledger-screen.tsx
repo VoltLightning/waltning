@@ -181,6 +181,13 @@ function toDeskRow(
     amountValue: row.amount,
     currency: row.currency,
     decimals: row.decimals,
+    ...(row.paidAmount !== null && row.paidCurrency !== null
+      ? {
+          paidAmount: row.paidAmount,
+          paidCurrency: row.paidCurrency,
+          paidDecimals: row.paidDecimals ?? 2,
+        }
+      : {}),
     type: row.type,
     isBusiness: row.isBusiness,
     // §14.4b — the same key the phone row already draws its `BrandIcon`

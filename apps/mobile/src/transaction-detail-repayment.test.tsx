@@ -156,6 +156,36 @@ describe("a repayment picked on an existing row is settle_debt", () => {
     expect(router.dismissTo).toHaveBeenCalled();
   });
 
+  it("refuses a row paid in another currency — the paid pair would be dropped (§7.8)", () => {
+    capture("expense", "100", "lent-out", true);
+    const foreign = ok(
+      ledger.controller.createTransaction({
+        type: "income",
+        amount: "100",
+        accountId: account,
+        categoryId: categoryId("salary"),
+        enteredName: "",
+        date: deviceRuntime().capture().date,
+        note: "",
+        isBusiness: false,
+        counterpartyId: null,
+        obligationCounterpartyId: null,
+        obligationRole: null,
+        paidAmount: "25",
+        paidCurrency: "USD",
+      }),
+    ).id;
+    openAndPickRepayment(foreign);
+
+    fireEvent.click(screen.getByRole("button", { name: "Who?" }));
+    fireEvent.click(screen.getByRole("button", { name: "Nina" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(screen.getByText(/take the paid currency off this entry first/)).toBeDefined();
+    expect(ledger.controller.getTransaction(foreign as never)?.paidCurrency).toBe("USD");
+    expect(router.dismissTo).not.toHaveBeenCalled();
+  });
+
   it("refuses it, naming why, when the person owes nothing — and leaves the row alone", () => {
     const plain = capture("income", "100", "salary", false);
     openAndPickRepayment(plain);

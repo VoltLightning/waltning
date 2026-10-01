@@ -40,6 +40,7 @@ const { accounts, categories, counterparties, currencies, transactionLines, tran
  */
 const destinations = alias(accounts, "destination_account");
 const identities = alias(counterparties, "identity_counterparty");
+const paidCurrencies = alias(currencies, "paid_currencies");
 
 export type LocalTransactionLine = {
   id: Id<"transactionLines">;
@@ -72,6 +73,15 @@ export type LocalTransactionDetail = {
   toCurrency: CurrencyCode | null;
   /** A transfer's fee, in the source leg's currency; `null` when there is none. */
   fee: Money | null;
+  /**
+   * §7.8 — what was handed over when that was not the account's currency
+   * (`350` in `CZK` on a EUR card); `null` when the entry was made in its
+   * account's own. `amount` stays the account-side figure — what the account
+   * was charged — so the realised rate is `paidAmount ÷ amount`.
+   */
+  paidAmount: Money | null;
+  paidCurrency: CurrencyCode | null;
+  paidDecimals: number | null;
   categoryId: Id<"categories"> | null;
   categoryName: string | null;
   categoryExternalId: string | null;
@@ -88,6 +98,8 @@ export type LocalTransactionDetail = {
   obligationRole: ObligationRole | null;
   /** §6.8 — a one-off, excluded from every comparison. S09 is its only producer. */
   isCapital: boolean;
+  /** A row `settle_debt` wrote — it carries a discharge, and so takes no paid side (§7.8). */
+  isSettlement: boolean;
   /** `SPEC.md` §14.4b — see `readRecent`'s identical field. */
   brandKey: string | null;
   /** Already signed, `money.signed` on the `"from"` leg — same rule as `readRecent`. */
@@ -134,6 +146,10 @@ export function readTransaction<TRun, TSchema extends typeof ledgerSchema>(
       toAmount: transactions.toAmount,
       toCurrency: transactions.toCurrency,
       fee: transactions.fee,
+      debtAmount: transactions.debtAmount,
+      paidAmount: transactions.paidAmount,
+      paidCurrency: transactions.paidCurrency,
+      paidDecimals: paidCurrencies.decimals,
       currency: transactions.currency,
       decimals: currencies.decimals,
       version: transactions.version,
@@ -145,6 +161,7 @@ export function readTransaction<TRun, TSchema extends typeof ledgerSchema>(
     .leftJoin(counterparties, eq(transactions.obligationCounterpartyId, counterparties.id))
     .leftJoin(destinations, eq(transactions.toAccountId, destinations.id))
     .leftJoin(identities, eq(transactions.counterpartyId, identities.id))
+    .leftJoin(paidCurrencies, eq(transactions.paidCurrency, paidCurrencies.code))
     .where(and(eq(transactions.id, id), isNull(transactions.deletedAt)))
     .get();
 
@@ -166,9 +183,10 @@ export function readTransaction<TRun, TSchema extends typeof ledgerSchema>(
     .orderBy(asc(transactionLines.sort), asc(transactionLines.id))
     .all();
 
-  const { type, amountOriginal, toAmount, ...rest } = row;
+  const { type, amountOriginal, toAmount, debtAmount, ...rest } = row;
   return {
     ...rest,
+    isSettlement: debtAmount !== null,
     type,
     amount: money.signed({ type, amountOriginal, toAmount }, "from"),
     toAmount: type === "transfer" ? toAmount : null,

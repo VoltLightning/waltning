@@ -185,6 +185,10 @@ export type LedgerTableRow = {
   amountValue: money.Money;
   currency: string;
   decimals: number;
+  /** §7.8 — what was handed over when that was not the account's currency; drawn under the figure the account was charged. */
+  paidAmount?: money.Money;
+  paidCurrency?: string;
+  paidDecimals?: number;
   type: TransactionType;
   isBusiness: boolean;
   /**
@@ -759,6 +763,15 @@ function LedgerTableRowView({
             size="small"
             kind={TRANSACTION_AMOUNT_KIND[row.type]}
           />
+          {row.paidAmount === undefined || row.paidCurrency === undefined ? null : (
+            <Amount
+              value={row.paidAmount}
+              currency={row.paidCurrency}
+              decimals={row.paidDecimals ?? 2}
+              size="caption"
+              emphasis="muted"
+            />
+          )}
         </View>
       </PressableScaled>
     </View>

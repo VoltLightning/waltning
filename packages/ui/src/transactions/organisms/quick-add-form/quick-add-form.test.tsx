@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { currencyCode } from "@waltning/core/money";
+import { crossRate, currencyCode } from "@waltning/core/money";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { type QuickAddDraft, QuickAddForm, type QuickAddFormProps } from "./quick-add-form";
 
@@ -447,5 +447,144 @@ describe("a debt category on the desk's form", () => {
     expect(screen.queryByRole("button", { name: "Who?" })).toBeNull();
     view.rerender(<QuickAddForm {...BASE_PROPS} {...debtProps} />);
     expect(screen.getByRole("button", { name: "Who?" })).toBeDefined();
+  });
+});
+
+/** §7.8 — an amount in another currency than the account's: the desk's currency choice and the charged figure. */
+describe("an amount in another currency than the account's", () => {
+  const eurAccounts = [
+    { id: "account-eur", name: "Card · EUR", currency: currencyCode("EUR"), capturable: true },
+  ];
+  const foreign = (rate: string | null): NonNullable<QuickAddFormProps["foreign"]> => ({
+    currencies: [
+      { code: "EUR", name: "Euro" },
+      { code: "CZK", name: "Czech koruna" },
+    ],
+    readCrossRate: () => (rate === null ? null : { rate: crossRate(rate), asOf: TODAY }),
+    decimalsOf: () => 2,
+  });
+  const pickCzk = () => {
+    fireEvent.click(screen.getByRole("button", { name: /^Currency paid in/ }));
+    fireEvent.click(screen.getByRole("radio", { name: "CZK · Czech koruna" }));
+  };
+
+  it("pre-fills what the account was charged at the day's rate, and saves both figures", () => {
+    const onSave = vi.fn();
+    renderForm({
+      accounts: eurAccounts,
+      accountId: "account-eur",
+      foreign: foreign("0.040057"),
+      onSave,
+    });
+    fillAmount();
+    fireEvent.change(screen.getByLabelText("Amount"), { target: { value: "350" } });
+    pickCzk();
+    expect((screen.getByLabelText("Charged to Card · EUR") as HTMLInputElement).value).toBe(
+      "14.02",
+    );
+    expect(screen.getByText("1 CZK = 0.0401 EUR on this day")).toBeDefined();
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(onSave).toHaveBeenCalledWith({
+      ...restingDraft,
+      amount: "14.02",
+      accountId: "account-eur",
+      paidAmount: "350",
+      paidCurrency: "CZK",
+    });
+  });
+
+  it("saves what was typed over the guess — the bank statement is the truth", () => {
+    const onSave = vi.fn();
+    renderForm({
+      accounts: eurAccounts,
+      accountId: "account-eur",
+      foreign: foreign("0.040057"),
+      onSave,
+    });
+    fireEvent.change(screen.getByLabelText("Amount"), { target: { value: "350" } });
+    pickCzk();
+    fireEvent.change(screen.getByLabelText("Charged to Card · EUR"), {
+      target: { value: "14.10" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(onSave).toHaveBeenCalledWith(
+      expect.objectContaining({ amount: "14.10", paidAmount: "350" }),
+    );
+  });
+
+  it("leaves the charged figure empty with no rate, says so, and will not save without it", () => {
+    const onSave = vi.fn();
+    renderForm({ accounts: eurAccounts, accountId: "account-eur", foreign: foreign(null), onSave });
+    fireEvent.change(screen.getByLabelText("Amount"), { target: { value: "350" } });
+    pickCzk();
+    expect((screen.getByLabelText("Charged to Card · EUR") as HTMLInputElement).value).toBe("");
+    expect(
+      screen.getByText("No rate for CZK on this day — enter what the bank charged."),
+    ).toBeDefined();
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(onSave).not.toHaveBeenCalled();
+    expect(screen.getByText("Required")).toBeDefined();
+  });
+
+  it("drops a charged figure typed for one account when the account's currency changes", () => {
+    const pln = {
+      id: "account-pln",
+      name: "Card · PLN",
+      currency: currencyCode("PLN"),
+      capturable: true,
+    };
+    const props = { accounts: [...eurAccounts, pln], foreign: foreign("0.040057") };
+    const view = renderForm({ ...props, accountId: "account-eur" });
+    fireEvent.change(screen.getByLabelText("Amount"), { target: { value: "350" } });
+    pickCzk();
+    fireEvent.change(screen.getByLabelText("Charged to Card · EUR"), {
+      target: { value: "14.10" },
+    });
+    view.rerender(<QuickAddForm {...BASE_PROPS} {...props} accountId="account-pln" />);
+    // Re-priced for the new account — 14.10 EUR is no figure in PLN.
+    expect((screen.getByLabelText("Charged to Card · PLN") as HTMLInputElement).value).toBe(
+      "14.02",
+    );
+  });
+
+  it("says a rate carried from an earlier day is that day's, not this one's", () => {
+    renderForm({
+      accounts: eurAccounts,
+      accountId: "account-eur",
+      foreign: {
+        ...foreign("0.040057"),
+        readCrossRate: () => ({ rate: crossRate("0.040057"), asOf: "2026-08-28" }),
+      },
+    });
+    fireEvent.change(screen.getByLabelText("Amount"), { target: { value: "350" } });
+    pickCzk();
+    expect(screen.queryByText(/on this day/)).toBeNull();
+    expect(screen.getByText(/at the rate of/)).toBeDefined();
+  });
+
+  it("is the account's own currency again with the first option", () => {
+    const onSave = vi.fn();
+    renderForm({
+      accounts: eurAccounts,
+      accountId: "account-eur",
+      foreign: foreign("0.040057"),
+      onSave,
+    });
+    fireEvent.change(screen.getByLabelText("Amount"), { target: { value: "350" } });
+    pickCzk();
+    fireEvent.click(screen.getByRole("button", { name: /^Currency paid in/ }));
+    fireEvent.click(screen.getByRole("radio", { name: "EUR — the account's own" }));
+    expect(screen.queryByLabelText("Charged to Card · EUR")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(onSave).toHaveBeenCalledWith({
+      ...restingDraft,
+      amount: "350",
+      accountId: "account-eur",
+    });
+  });
+
+  it("offers no currency choice without a foreign setting", () => {
+    renderForm({ accounts: eurAccounts, accountId: "account-eur" });
+    expect(screen.queryByRole("button", { name: /^Currency paid in/ })).toBeNull();
   });
 });

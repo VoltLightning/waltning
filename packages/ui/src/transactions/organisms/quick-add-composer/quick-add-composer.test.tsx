@@ -487,3 +487,97 @@ it("keeps the chips in the order the composer opened with when usage changes und
   rerender(tree(income({ "inc-a": 2, "inc-e": 1 })));
   expect(order()).toEqual(before);
 });
+
+/* ── §7.8 — an amount in another currency than the account's ──────────────── */
+
+const FOREIGN_CURRENCIES = [
+  { code: "EUR", name: "Euro" },
+  { code: "CZK", name: "Czech koruna" },
+];
+
+function foreign(
+  overrides: Partial<NonNullable<QuickAddComposerProps["foreign"]>> = {},
+): NonNullable<QuickAddComposerProps["foreign"]> {
+  return {
+    currencies: FOREIGN_CURRENCIES,
+    paidCurrency: null,
+    onPaidCurrencyChange: vi.fn(),
+    paidDecimals: 2,
+    chargedRaw: "",
+    onChargedChange: vi.fn(),
+    ...overrides,
+  };
+}
+
+it("draws no currency chip without a foreign setting — the currency is only said after the figure", () => {
+  draw({ accounts: [EUR_CARD], accountId: "account-eur", raw: "14,02" });
+  expect(screen.queryByRole("button", { name: /Currency of the amount/ })).toBeNull();
+});
+
+it("makes the currency a chip that opens the choice, and the account's own is the first answer (§7.8)", () => {
+  const settings = foreign();
+  draw({ accounts: [EUR_CARD], accountId: "account-eur", raw: "350", foreign: settings });
+  fireEvent.click(screen.getByRole("button", { name: "Currency of the amount: EUR. Change it." }));
+  const options = within(screen.getByRole("radiogroup", { name: "Paid in" }))
+    .getAllByRole("radio")
+    .map((option) => option.getAttribute("aria-label"));
+  expect(options).toEqual(["EUR — the account's own", "CZK · Czech koruna"]);
+  fireEvent.click(screen.getByRole("radio", { name: "CZK · Czech koruna" }));
+  expect(settings.onPaidCurrencyChange).toHaveBeenCalledWith("CZK");
+});
+
+it("takes the entry back to the account's own currency with a null pick", () => {
+  const settings = foreign({ paidCurrency: "CZK" });
+  draw({ accounts: [EUR_CARD], accountId: "account-eur", raw: "350", foreign: settings });
+  fireEvent.click(screen.getByRole("button", { name: "Currency of the amount: CZK. Change it." }));
+  fireEvent.click(screen.getByRole("radio", { name: "EUR — the account's own" }));
+  expect(settings.onPaidCurrencyChange).toHaveBeenCalledWith(null);
+});
+
+it("draws the charged figure only while the amount is in another currency, and lets it be typed over", () => {
+  const settings = foreign({
+    paidCurrency: "CZK",
+    chargedRaw: "14,04",
+    hint: "1 CZK = 0,0401 € on this day",
+  });
+  draw({ accounts: [EUR_CARD], accountId: "account-eur", raw: "350", foreign: settings });
+  const charged = screen.getByLabelText("Charged to Card · EUR");
+  expect((charged as HTMLInputElement).value).toBe("14.04");
+  expect(screen.getByText("1 CZK = 0,0401 € on this day")).toBeDefined();
+  fireEvent.change(charged, { target: { value: "14,02" } });
+  expect(settings.onChargedChange).toHaveBeenCalledWith("14,02");
+});
+
+it("keeps the charged card one figure tall in a short window: no label, the rate on the figure's row", () => {
+  const settings = foreign({
+    paidCurrency: "CZK",
+    chargedRaw: "14,04",
+    hint: "1 CZK = 0,0401 € on this day",
+  });
+  draw({
+    accounts: [EUR_CARD],
+    accountId: "account-eur",
+    raw: "350",
+    foreign: settings,
+    compact: true,
+  });
+  // The label is not drawn (the input keeps it, with the rate sentence, for assistive technology)…
+  expect(screen.queryByText("Charged to Card · EUR")).toBeNull();
+  expect(screen.getByLabelText(/^Charged to Card · EUR/)).toBeDefined();
+  // …and the rate is on the row, not under it.
+  expect(screen.getByText("1 CZK = 0,0401 € on this day")).toBeDefined();
+});
+
+it("draws no charged figure while the amount is in the account's own currency", () => {
+  draw({ accounts: [EUR_CARD], accountId: "account-eur", raw: "14,02", foreign: foreign() });
+  expect(screen.queryByLabelText("Charged to Card · EUR")).toBeNull();
+});
+
+it("offers no chip when there is no other currency to choose", () => {
+  draw({
+    accounts: [EUR_CARD],
+    accountId: "account-eur",
+    foreign: foreign({ currencies: [{ code: "EUR", name: "Euro" }] }),
+  });
+  expect(screen.queryByRole("button", { name: /Currency of the amount/ })).toBeNull();
+});

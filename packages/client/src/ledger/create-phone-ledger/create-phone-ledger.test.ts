@@ -1189,6 +1189,68 @@ describe("phone ledger controller", () => {
   });
 
   /**
+   * §7.8 — an entry paid in another currency than its account's: `amount` is
+   * what the account was charged, and the paid pair rides beside it.
+   */
+  it("writes the paid pair beside the charged figure (§7.8)", () => {
+    const { controller, createTransaction } = harness();
+    const accountId = idOf(controller.createAccount(minimalDraft("Bank A · PLN", PLN)));
+
+    const result = controller.createTransaction({
+      ...expenseDraft(accountId, "14.02"),
+      paidAmount: "350",
+      paidCurrency: BYN,
+    });
+
+    expect("id" in result).toBe(true);
+    const written = createTransaction.mock.calls[0]?.[0];
+    expect(written?.amountOriginal).toBe("14.02000000");
+    expect(written?.currency).toBe(PLN);
+    expect(written?.paidAmount).toBe("350.00000000");
+    expect(written?.paidCurrency).toBe(BYN);
+  });
+
+  it("refuses a paid figure past the paid currency's own scale, named on paidAmount (§7.8)", () => {
+    const { controller, createTransaction } = harness();
+    const accountId = idOf(controller.createAccount(minimalDraft("Bank A · PLN", PLN)));
+
+    const result = controller.createTransaction({
+      ...expenseDraft(accountId, "14.02"),
+      paidAmount: "350.125",
+      paidCurrency: BYN,
+    });
+
+    expect("fieldErrors" in result && result.fieldErrors).toEqual([
+      {
+        path: "paidAmount",
+        message: expect.stringContaining("decimal places"),
+        messageKey: "transactions.tooManyDecimals",
+        params: { currency: BYN, decimals: "2" },
+      },
+    ]);
+    expect(createTransaction).not.toHaveBeenCalled();
+  });
+
+  it("refuses half a pair and the account's own currency as the paid one (§7.8)", () => {
+    const { controller, createTransaction } = harness();
+    const accountId = idOf(controller.createAccount(minimalDraft("Bank A · PLN", PLN)));
+
+    const half = controller.createTransaction({ ...expenseDraft(accountId), paidAmount: "350" });
+    expect("fieldErrors" in half && half.fieldErrors.map((error) => error.path)).toEqual([
+      "paidCurrency",
+    ]);
+    const own = controller.createTransaction({
+      ...expenseDraft(accountId),
+      paidAmount: "10",
+      paidCurrency: PLN,
+    });
+    expect("fieldErrors" in own && own.fieldErrors.map((error) => error.path)).toEqual([
+      "paidCurrency",
+    ]);
+    expect(createTransaction).not.toHaveBeenCalled();
+  });
+
+  /**
    * **The write is refused before the outbox is touched.**
    *
    * `provisionalFxRate` refuses the same capture, but it does so mid-transaction
@@ -1962,6 +2024,9 @@ describe("phone ledger controller — transaction detail writes (C5)", () => {
       toAmount: null,
       toCurrency: null,
       fee: null,
+      paidAmount: null,
+      paidCurrency: null,
+      paidDecimals: null,
       categoryId: null,
       categoryName: null,
       categoryExternalId: null,
@@ -2156,6 +2221,20 @@ describe("phone ledger controller — transaction detail writes (C5)", () => {
       ["amountOriginal", "fee", "toAccountId", "toAmount", "toCurrency"].sort(),
     );
     expect(patch?.fee, "null takes a fee off").toBeNull();
+  });
+
+  it("forwards the paid pair, and takes it off with null for both (§7.8)", () => {
+    const { controller, updateTransaction } = detailHarness();
+    controller.updateTransaction(TXN, 1, { paidAmount: "350", paidCurrency: "CZK" });
+    expect(updateTransaction.mock.calls[0]?.[0].patch).toEqual({
+      paidAmount: "350.00000000",
+      paidCurrency: "CZK",
+    });
+    controller.updateTransaction(TXN, 1, { paidAmount: null, paidCurrency: null });
+    expect(updateTransaction.mock.calls[1]?.[0].patch).toEqual({
+      paidAmount: null,
+      paidCurrency: null,
+    });
   });
 
   /**

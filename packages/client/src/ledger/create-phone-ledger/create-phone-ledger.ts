@@ -595,6 +595,14 @@ export type PhoneSearchTransaction = {
   toFxRate: PivotPerUnit | null;
   toCurrency: CurrencyCode | null;
   toDecimals: number | null;
+  /**
+   * §7.8 — what was handed over when that was not the account's own currency
+   * (`350` in `CZK` on a EUR card); `null` otherwise. `amount` stays what the
+   * account was charged, so every total reads the account side.
+   */
+  paidAmount: Money | null;
+  paidCurrency: CurrencyCode | null;
+  paidDecimals: number | null;
   isBusiness: boolean;
   isCapital: boolean;
   /** `null` off any row with no counterparty at all — the ordinary case. */
@@ -703,6 +711,12 @@ export type PhoneTransactionDetail = {
   toCurrency: CurrencyCode | null;
   /** A transfer's fee, in the source currency; `null` when there is none. */
   fee: Money | null;
+  /** §7.8 — what was handed over, when that was not the account's currency; `amount` is what it was charged. */
+  paidAmount: Money | null;
+  paidCurrency: CurrencyCode | null;
+  paidDecimals: number | null;
+  /** A row `settle_debt` wrote — it carries a discharge and takes no paid side (§7.8). Optional: a fixture need not say. */
+  isSettlement?: boolean;
   categoryId: Id<"categories"> | null;
   categoryName: string | null;
   categoryExternalId: string | null;
@@ -1340,6 +1354,14 @@ export type QuickAddDraft = {
   toCurrency?: string;
   /** The bank's stated fee, distinct from the rate margin (S31 §9.1). */
   fee?: string;
+  /**
+   * §7.8 — **what was handed over, when that is not the account's own
+   * currency.** `amount` is then what the account was *charged*, in the
+   * account's currency, and these two are the other face of the same payment:
+   * `350` in `CZK`. Both or neither; an expense or an income only.
+   */
+  paidAmount?: string;
+  paidCurrency?: string;
 };
 
 /**
@@ -1449,6 +1471,9 @@ export type TransactionFieldPatch = {
   toAmount?: string;
   toCurrency?: string;
   fee?: string | null;
+  /** §7.8 — what was paid, in another currency than the account's; `null` for both takes the pair off. */
+  paidAmount?: string | null;
+  paidCurrency?: string | null;
 };
 
 /**
@@ -2200,6 +2225,7 @@ const AMOUNT_SCALE_COLUMN_PATH: Readonly<Record<string, string>> = {
   amount_original: "amountOriginal",
   to_amount: "toAmount",
   fee: "fee",
+  paid_amount: "paidAmount",
 };
 
 /** The column a local `LocalRefusal` or a server envelope named, if either shape did. */
@@ -4199,6 +4225,40 @@ export function createPhoneLedger(
         }
 
         /**
+         * §7.8 — the paid figure is scaled to its *own* currency (`350 CZK`
+         * has CZK's decimals, whatever the card was charged in), which only
+         * the controller can look up. Refused on `paidAmount` before the write.
+         */
+        if (draft.paidAmount !== undefined && draft.paidCurrency !== undefined) {
+          const paidCurrency = snapshot.currencies.find(
+            (candidate) => candidate.code === draft.paidCurrency,
+          );
+          const parsedPaid = zMoney.safeParse(draft.paidAmount);
+          if (
+            paidCurrency !== undefined &&
+            parsedPaid.success &&
+            money.dec(parsedPaid.data).decimalPlaces() > paidCurrency.decimals
+          ) {
+            emitClientDiagnostic(diagnostics, {
+              scope: "client_action",
+              action: "create_transaction",
+              phase: "failure",
+              error: clientFailure(new Error("transactions.tooManyDecimals")),
+            });
+            return {
+              fieldErrors: [
+                {
+                  path: "paidAmount",
+                  message: `${paidCurrency.code} holds ${paidCurrency.decimals} decimal places — this amount has more`,
+                  messageKey: "transactions.tooManyDecimals",
+                  params: { currency: paidCurrency.code, decimals: String(paidCurrency.decimals) },
+                },
+              ],
+            };
+          }
+        }
+
+        /**
          * H1-b — `createTransactionInput` has no category tree in view and
          * so cannot know a category's own `kind`; the controller does
          * (`snapshot.categories`), the same reason the two checks above live
@@ -4298,6 +4358,10 @@ export function createPhoneLedger(
           // own parse-and-transform, the same reason `toAmount` above is
           // passed raw rather than pre-converted.
           ...(draft.fee === undefined ? {} : { fee: draft.fee }),
+          // §7.8 — passed raw, like `toAmount`: the contract's own shape and
+          // ceiling refusals land as ordinary field errors.
+          ...(draft.paidAmount === undefined ? {} : { paidAmount: draft.paidAmount }),
+          ...(draft.paidCurrency === undefined ? {} : { paidCurrency: draft.paidCurrency }),
         });
         if (!parsed.success) {
           emitClientDiagnostic(diagnostics, {
@@ -4470,6 +4534,8 @@ export function createPhoneLedger(
             ...(patch.toAmount !== undefined ? { toAmount: patch.toAmount } : {}),
             ...(patch.toCurrency !== undefined ? { toCurrency: patch.toCurrency } : {}),
             ...("fee" in patch ? { fee: patch.fee } : {}),
+            ...("paidAmount" in patch ? { paidAmount: patch.paidAmount } : {}),
+            ...("paidCurrency" in patch ? { paidCurrency: patch.paidCurrency } : {}),
           },
         });
         if (!parsed.success) {

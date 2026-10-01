@@ -94,15 +94,15 @@ export function parseSearchAmount(text: string): Money | null {
 
 /**
  * Whether `row` matches the folded `needle` — entered name, note, one of the
- * transaction's own line descriptions, or the source leg's amount
- * **exactly** (§13: "Trigram … over `entered_name`, `note`, `receipts.merchant` and
+ * transaction's own line descriptions, or the source leg's amount — or, on an
+ * entry paid in another currency (§7.8), the paid figure — **exactly** (§13: "Trigram … over `entered_name`, `note`, `receipts.merchant` and
  * `transaction_lines.description`" — the phone has no receipts table to
  * search yet, but the lines it holds are exactly this list's fourth column,
  * and H2 found them missing). The amount is read by `parseSearchAmount`
  * above, and compared as money.
  */
 export function matchesText(
-  row: { enteredName: string; note: string; amountOriginal: Money },
+  row: { enteredName: string; note: string; amountOriginal: Money; paidAmount: Money | null },
   needle: string,
   needleAmount: Money | null,
   lineDescriptions: readonly string[],
@@ -110,6 +110,11 @@ export function matchesText(
   if (fold(row.enteredName).includes(needle)) return true;
   if (fold(row.note).includes(needle)) return true;
   if (needleAmount !== null && money.eq(row.amountOriginal, needleAmount)) return true;
+  // §7.8 — "350" finds the entry whether it was typed as what the card was
+  // charged or as what was paid.
+  if (needleAmount !== null && row.paidAmount !== null && money.eq(row.paidAmount, needleAmount)) {
+    return true;
+  }
   if (lineDescriptions.some((description) => fold(description).includes(needle))) return true;
   return false;
 }

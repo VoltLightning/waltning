@@ -306,6 +306,76 @@ describe("createTransactionInput", () => {
     expect(paths(result)).toContain("date");
   });
 
+  describe("what was paid in another currency (SPEC.md §7.8)", () => {
+    const paid = { paidAmount: "350", paidCurrency: "CZK" };
+
+    it("takes the pair beside the charged figure, branded", () => {
+      const parsed = createTransactionInput.parse({ ...expense, ...paid });
+      expect(parsed.amountOriginal).toBe("18.40000000");
+      expect(parsed.paidAmount).toBe("350.00000000");
+      expect(parsed.paidCurrency).toBe("CZK");
+    });
+
+    it("refuses half a pair, on the half that is missing", () => {
+      const amountOnly = createTransactionInput.safeParse({ ...expense, paidAmount: "350" });
+      expect(paths(amountOnly)).toEqual(["paidCurrency"]);
+      const currencyOnly = createTransactionInput.safeParse({ ...expense, paidCurrency: "CZK" });
+      expect(paths(currencyOnly)).toEqual(["paidAmount"]);
+    });
+
+    it("refuses the account's own currency — there is nothing to convert", () => {
+      const result = createTransactionInput.safeParse({
+        ...expense,
+        paidAmount: "18.40",
+        paidCurrency: "PLN",
+      });
+      expect(paths(result)).toEqual(["paidCurrency"]);
+    });
+
+    it("refuses a transfer and an adjustment — only an income or an expense has one", () => {
+      const adjustment = createTransactionInput.safeParse({
+        ...expense,
+        type: "adjustment",
+        ...paid,
+      });
+      expect(paths(adjustment)).toEqual(["paidAmount"]);
+      const income = createTransactionInput.safeParse({ ...expense, type: "income", ...paid });
+      expect(income.success).toBe(true);
+    });
+
+    it("refuses a zero figure and one at the ceiling", () => {
+      expect(
+        paths(
+          createTransactionInput.safeParse({ ...expense, paidAmount: "0", paidCurrency: "CZK" }),
+        ),
+      ).toEqual(["paidAmount"]);
+      expect(
+        paths(
+          createTransactionInput.safeParse({
+            ...expense,
+            paidAmount: "1000000000",
+            paidCurrency: "CZK",
+          }),
+        ),
+      ).toEqual(["paidAmount"]);
+    });
+
+    it("is judged the same way on a patch: both to a value, or both to null", () => {
+      const ok = updateTransactionInput.safeParse({
+        id: "00000000-0000-4000-8000-000000000001",
+        version: 1,
+        patch: { paidAmount: null, paidCurrency: null },
+      });
+      expect(ok.success).toBe(true);
+      const zero = updateTransactionInput.safeParse({
+        id: "00000000-0000-4000-8000-000000000001",
+        version: 1,
+        patch: { paidAmount: "0", paidCurrency: "CZK" },
+      });
+      expect(paths(zero)).toEqual(["patch.paidAmount"]);
+    });
+  });
+
   it("does not require the capture caller to resolve a rate", () => {
     // §14.6. The phone's cached rate is display only; `fx_rate` is resolved
     // server-side at commit from the row's own date, which is also the only

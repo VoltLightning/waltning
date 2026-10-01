@@ -1268,6 +1268,11 @@ transactions_obligation_pair_shape    (obligation_counterparty_id IS NOT NULL) =
 transactions_occurrence_shape         (recurring_id IS NULL) = (occurrence_date IS NULL)
 transactions_debt_shape               (debt_currency IS NULL) = (debt_amount IS NULL)
 transactions_tax_fx_shape             (tax_fx_rate IS NULL) = (tax_fx_date IS NULL)
+transactions_paid_shape               (paid_amount IS NULL) = (paid_currency IS NULL)
+transactions_paid_distinct            paid_currency IS NULL OR paid_currency <> currency
+transactions_paid_type                paid_amount IS NULL OR type IN ('income','expense')
+transactions_paid_not_settlement      paid_amount IS NULL OR debt_amount IS NULL
+transactions_paid_amount_positive     paid_amount IS NULL OR paid_amount > 0
 categories_no_self_parent             id <> parent_id
 categories_earnings_income_only       kind = 'income' OR is_earnings = false
 accounts_shared_not_business          ownership = 'own' OR is_business = false
@@ -1276,6 +1281,7 @@ fx_rates_rate_positive                rate > 0
 fx_rates_rate_bounds                  rate > 0.000000000001 AND rate < 999999999999
 fx_rates_distinct                     base <> quote
 transactions_amount_ceiling           abs(amount_original), abs(to_amount), abs(fee), abs(debt_amount) each < 1000000000
+transactions_paid_amount_ceiling      abs(paid_amount) < 1000000000
 transaction_lines_amount_ceiling      abs(amount) < 1000000000
 accounts_opening_balance_ceiling      abs(opening_balance) < 1000000000
 recurring_transactions_amount_ceiling abs(amount_original) < 1000000000
@@ -1291,7 +1297,7 @@ keeps the same integer bound (fewer than a billion). A figure a hundred times a
 plausible balance is a typo, and it breaks every layout it reaches. It is one
 bound, `AMOUNT_CEILING_EXCLUSIVE` in `money.ts`, stated at every layer: the
 contract schema (`zAmount`, used by every write input's amount field), each
-executor, the eight CHECKs above on Postgres and a trigger per table on the
+executor, the nine CHECKs above on Postgres and a trigger per table on the
 replica (the one exception is `opening_debts`, a table created whole, which
 carries the same bound as a CHECK on the replica too — there is no existing row
 for a rebuild to copy through it), and every amount input, which refuses a tenth integer digit and says
@@ -2896,6 +2902,64 @@ and a row, not a schema change.
 
 Missing days (weekends, holidays) carry forward the last published rate, marked
 `carried_forward`. This is the standard convention and what NBP itself does.
+
+### 7.8 An entry paid in another currency than its account's
+
+A purchase made in one currency with a card held in another — 350 CZK paid with
+a EUR card — is **one entry with two faces**: what was handed over and what the
+account was charged for it. Both are stored on the one row:
+
+```
+transactions
+  amount_original   14.02      -- what the account was charged, in `Card A · EUR`
+  currency          EUR        -- the account's own, always (§6.5, `WA003`)
+  paid_amount       350.00     -- what was handed over
+  paid_currency     CZK
+  → realized rate   0.04006    -- paid → charged, derived, never stored
+```
+
+**The account side is the entry's own figure.** `amount_original` and `currency`
+are what every balance, every period figure, the pivot value (`fx_rate` is the
+account currency's, §7.4) and the display-currency rebasing (§7.0) read, exactly
+as for an entry in its account's currency. The paid pair is the other face of
+the same payment, shown beside it and counted nowhere: a period's spend is what
+left the account. It is not a second amount to add up, and it is not a transfer
+(§7.5, whose second leg is another *account*) or a debt's discharge
+(`debt_amount`, §6.6, a figure in the *debt's* currency): the three are separate
+pairs on the one row and never stand in for each other.
+
+**The charged figure is pre-filled and editable.** Quick add's currency chip
+beside the amount switches the entry to a foreign currency; the account's figure
+is then filled at the entry day's cross rate (§7.4's triangulation — the
+reference rate, §7.3) and left for the person to correct to the bank statement,
+which is the authority for what was actually charged. Typed over, it stops
+following the amount, the date and the rate. With no rate for the day it is left
+empty and required — it is never priced at `1`. The realized rate the entry
+implies is derived from the pair when it is shown.
+
+**What is refused, on both engines.** Both of the pair or neither
+(`transactions_paid_shape`); a currency other than the account's — in its own
+there is nothing to convert (`transactions_paid_distinct`); an income or an
+expense only (`transactions_paid_type`); positive and under the ceiling
+(`transactions_paid_amount_positive`, `transactions_paid_amount_ceiling`); and
+a figure scaled to **its own** currency's decimals (`WA016`,
+`transactions_paid_scale_matches_currency` — 350 CZK holds CZK's decimals,
+whatever the card was charged in), with the shrink of a currency's decimals
+refused under one (`WA018`). The executors and the contract refuse first, with a
+message naming the field; the CHECKs and triggers hold when they are wrong.
+
+A repayment is `settle_debt` (§6.6) and takes no paid side — and no row holds
+both: a row carrying a discharge (`debt_amount`) cannot carry a paid pair
+(`transactions_paid_not_settlement`), `update_transaction` refuses to patch one
+onto it, and re-filing a foreign-paid row as a repayment (S09) is refused until
+its paid currency is taken off, because the settlement would drop the pair. A payment split
+against an existing debt cannot carry one: a split divides the charged figure
+and the foreign figure is one number on one receipt.
+
+Search matches either figure (§13's exact-amount rule reads `paid_amount` as it
+reads `amount_original`) and a currency filter matches the paid currency; a row
+shows the paid figure under the one the account was charged, and S09 shows and
+edits both.
 
 ---
 

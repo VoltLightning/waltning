@@ -14,6 +14,7 @@ import {
   createPhoneLedger,
   type PhoneAccount,
   type PhoneCategory,
+  type PhoneCurrency,
   type PhoneLedgerPort,
 } from "@waltning/client/ledger/create-phone-ledger";
 import { deviceRuntime } from "@waltning/client/ledger/device-runtime";
@@ -26,7 +27,7 @@ import { currencyCode, toMoney } from "@waltning/core/money";
 import { weekdayLabel } from "@waltning/ui/i18n/locales";
 import { FormAlertHost } from "@waltning/ui/primitives/form-alert-host";
 import { Alert } from "react-native";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const router = {
   push: vi.fn(),
@@ -101,6 +102,9 @@ function fakeController(
     counterparties?: PhoneLedgerPort["listCounterparties"];
     categories?: readonly PhoneCategory[];
     enteredNameHistory?: readonly EnteredNameHistoryRow[];
+    /** §7.8 — currencies beyond the pivot, and the cross rate the ledger holds for them. */
+    otherCurrencies?: readonly PhoneCurrency[];
+    readCrossRate?: PhoneLedgerPort["readCrossRate"];
   } = {},
 ) {
   const port = basePort({
@@ -114,7 +118,9 @@ function fakeController(
         capturable: overrides.capturable ?? true,
         isPivot: true,
       },
+      ...(overrides.otherCurrencies ?? []),
     ],
+    ...(overrides.readCrossRate === undefined ? {} : { readCrossRate: overrides.readCrossRate }),
     listCategories: () => overrides.categories ?? [],
     listCounterparties: overrides.counterparties ?? (() => []),
     listEnteredNameHistory: () => overrides.enteredNameHistory ?? [],
@@ -295,6 +301,123 @@ describe("QuickAdd — the phone path (Dock + QuickAddComposer)", () => {
     expect(screen.getByRole("button", { name: "From: Cash · PLN" })).toBeDefined();
     expect(screen.getByText("JPY holds 0 decimal places — this amount has more.")).toBeDefined();
     expect(screen.getByLabelText(/^How much\?/)).toHaveProperty("value", "48.90");
+  });
+
+  /**
+   * §7.8 — an entry paid in another currency than its account's. The chip
+   * beside the amount switches the figure to a foreign currency; what the
+   * account was charged is pre-filled at the day's rate, editable, and is the
+   * entry's own figure when saved.
+   */
+  describe("an amount in another currency than the account's (§7.8)", () => {
+    const CZK = currencyCode("CZK");
+    const CZK_CURRENCY = {
+      code: CZK,
+      name: "Czech koruna",
+      symbol: "Kč",
+      decimals: 2,
+      capturable: true,
+      isPivot: false,
+    };
+    const day = accountingDate("2026-09-03");
+    const leg = { rate: "0.2" as never, source: "ecb", asOf: day, carriedDays: 0 };
+    const withRate = {
+      otherCurrencies: [CZK_CURRENCY],
+      readCrossRate: () => ({ rate: "0.2" as never, legs: { from: leg, to: leg } }),
+    };
+    // A save stamps the shared last-capture singleton; leave nothing behind for the next test's account picker.
+    afterEach(async () => {
+      await lastCapture.set({ accountId: ACCOUNT.id, at: 1 });
+    });
+    const pickCzk = () => {
+      fireEvent.click(
+        screen.getByRole("button", { name: "Currency of the amount: PLN. Change it." }),
+      );
+      fireEvent.click(screen.getByRole("radio", { name: "CZK · Czech koruna" }));
+    };
+
+    it("saves the charged figure as the entry and the typed one as what was paid", () => {
+      const createTransaction = vi.fn();
+      withLedger({ createTransaction, accounts: [ACCOUNT], ...withRate });
+      typeAmount("350");
+      pickCzk();
+
+      // 350 CZK at 0.2 — pre-filled on the account's own line, in the account's currency.
+      const charged = screen.getByLabelText("Charged to Cash · PLN") as HTMLInputElement;
+      expect(charged.value).toBe("70.00");
+      // The rate is from 3 September and the entry is dated today: it says so, not "this day".
+      expect(screen.getByText(/^1 CZK = 0\.2000 zł at the rate of/)).toBeDefined();
+
+      fireEvent.change(charged, { target: { value: "69,50" } });
+      fireEvent.click(screen.getByRole("button", { name: "Save expense" }));
+
+      expect(createTransaction).toHaveBeenCalledOnce();
+      expect(createTransaction.mock.calls[0]?.[0]).toMatchObject({
+        amountOriginal: "69.50000000",
+        currency: PLN,
+        paidAmount: "350.00000000",
+        paidCurrency: CZK,
+      });
+    });
+
+    it("saves the guess as it is when nothing is typed over it", () => {
+      const createTransaction = vi.fn();
+      withLedger({ createTransaction, accounts: [ACCOUNT], ...withRate });
+      typeAmount("350");
+      pickCzk();
+      fireEvent.click(screen.getByRole("button", { name: "Save expense" }));
+      expect(createTransaction.mock.calls[0]?.[0]).toMatchObject({
+        amountOriginal: "70.00000000",
+        paidAmount: "350.00000000",
+        paidCurrency: CZK,
+      });
+    });
+
+    it("refuses Save with no rate for the day until the charged figure is typed", () => {
+      const createTransaction = vi.fn();
+      withLedger({
+        createTransaction,
+        accounts: [ACCOUNT],
+        otherCurrencies: [CZK_CURRENCY],
+        readCrossRate: () => null,
+      });
+      typeAmount("350");
+      pickCzk();
+      expect((screen.getByLabelText("Charged to Cash · PLN") as HTMLInputElement).value).toBe("");
+      expect(
+        screen.getByText("No rate for CZK on this day — enter what the bank charged."),
+      ).toBeDefined();
+      expectSaveRefused();
+      expect(createTransaction).not.toHaveBeenCalled();
+
+      fireEvent.change(screen.getByLabelText("Charged to Cash · PLN"), {
+        target: { value: "70" },
+      });
+      fireEvent.click(screen.getByRole("button", { name: "Save expense" }));
+      expect(createTransaction).toHaveBeenCalledOnce();
+    });
+
+    it("keeps the instruction on the row in a short window, in fewer words", () => {
+      resizeHeight(600);
+      withLedger({
+        accounts: [ACCOUNT],
+        otherCurrencies: [CZK_CURRENCY],
+        readCrossRate: () => null,
+      });
+      typeAmount("350");
+      pickCzk();
+      expect(screen.getByText("No rate — enter what was charged.")).toBeDefined();
+    });
+
+    it("writes no paid side when the account's own currency is still the one chosen", () => {
+      const createTransaction = vi.fn();
+      withLedger({ createTransaction, accounts: [ACCOUNT], ...withRate });
+      typeAmount("350");
+      fireEvent.click(screen.getByRole("button", { name: "Save expense" }));
+      const written = createTransaction.mock.calls[0]?.[0];
+      expect(written?.paidAmount).toBeUndefined();
+      expect(written?.paidCurrency).toBeUndefined();
+    });
   });
 
   /**
