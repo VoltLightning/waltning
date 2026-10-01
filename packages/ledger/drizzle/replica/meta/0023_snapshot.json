@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "63b4bb59-e615-4eac-baf6-f6fec66d8754",
+  "id": "f75d2fcf-7ffa-48ce-9061-bc4732bafa79",
   "prevId": "bf391472-9bea-4518-9ced-096523cd9842",
   "tables": {
     "account_groups": {
@@ -1707,6 +1707,13 @@
         },
         "settles_opening_debt_id": {
           "name": "settles_opening_debt_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "payment_pair_id": {
+          "name": "payment_pair_id",
           "type": "text",
           "primaryKey": false,
           "notNull": false,

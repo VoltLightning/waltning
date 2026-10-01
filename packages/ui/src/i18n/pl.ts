@@ -496,7 +496,7 @@ export const pl: Messages = {
       "Usunięte zostaną także spłaty dokonane na jego poczet: łącznie {{count}}, z: {{accounts}}. Salda tych kont ulegną zmianie.",
     existingDebtDeleteSubmit: "Usuń",
     existingDebtDeleted: "Istniejący dług usunięty",
-    existingDebtGone: "Ten istniejący dług został już usunięty. Proszę odświeżyć stronę.",
+    existingDebtGone: "Ten istniejący dług został już usunięty.",
     existingDebtRepaid: "Już spłacono",
     existingDebtBalanceAfter: "Saldo po zapisaniu",
     existingDebtFlips: "Spłacono już więcej niż ta kwota, więc zapisanie odwróci kierunek długu.",

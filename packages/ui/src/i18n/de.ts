@@ -480,8 +480,7 @@ export const de: Messages = {
       "Die darauf geleisteten Rückzahlungen werden ebenfalls gelöscht: insgesamt {{count}}, von {{accounts}}. Die Kontostände dieser Konten ändern sich.",
     existingDebtDeleteSubmit: "Löschen",
     existingDebtDeleted: "Bestehende Schuld gelöscht",
-    existingDebtGone:
-      "Diese bestehende Schuld ist bereits gelöscht. Bitte laden Sie die Seite neu.",
+    existingDebtGone: "Diese bestehende Schuld wurde bereits gelöscht.",
     existingDebtRepaid: "Bereits zurückgezahlt",
     existingDebtBalanceAfter: "Saldo nach dem Speichern",
     existingDebtFlips:

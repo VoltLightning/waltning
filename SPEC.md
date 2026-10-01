@@ -1690,10 +1690,22 @@ discharged, the remainder landing on the second row so the account moves by
 exactly what was paid. Splitting, not refusing: paying back "everything" is one
 payment, and refusing would make a person record two by hand against a boundary
 only the ledger can see; the second row's id travels on the input (`spillId`).
-A linked repayment follows its person and role afterwards: `update_transaction`
-and `categorize_batch` clear the link when the person changes or the debt role
-goes (re-deriving it, whole, where the new person has an existing debt it fits
-in); `supersede_transaction` carries it to the replacement. Such a settlement **moves its account** like any
+Where one side of that proportion rounds to nothing at the account currency's
+scale, it takes one smallest unit instead, so no zero-amount row is written and
+the linked discharge stays capped at exactly what is open — a cent of the
+existing debt is neither left open for ever nor over-linked. The two rows share
+a `payment_pair_id` (the first row's id): **they are one payment**, so
+`supersede_transaction` refuses either half (*this payment was split against an
+existing debt — replace both*) rather than let an import replacement count the
+same money twice. A linked repayment follows its person, role **and size**
+afterwards: `update_transaction` and `categorize_batch` clear the link when the
+person changes or the debt role goes, and `update_transaction` re-checks it
+whenever the amount, discharge or account changes — it stays only while the whole
+row still fits in what is open (an edit never splits; 80 raised to 500 against a
+debt of 100 is no longer linked), re-derived where the new person has an
+existing debt it fits in. `supersede_transaction` carries the link to a
+replacement only after re-checking the discharge against what is open. The
+upcast of an older queued capture mints its own `spillId`. Such a settlement **moves its account** like any
 payment and appears in lists and history, but **no period figure** — month,
 months, spend by category, income against expense, the desk's — counts it:
 lending and borrowing are not earning and spending, and what was never counted

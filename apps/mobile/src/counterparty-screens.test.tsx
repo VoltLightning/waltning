@@ -981,7 +981,7 @@ describe("CounterpartyDetail (S13)", () => {
       }),
     );
 
-    expect(screen.getByText("This existing debt is already gone — reload the page.")).toBeDefined();
+    expect(screen.getByText("This existing debt has already been deleted.")).toBeDefined();
     expect(screen.queryByText("Existing debt deleted")).toBeNull();
   });
 

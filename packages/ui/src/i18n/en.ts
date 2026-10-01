@@ -869,7 +869,7 @@ export const en = {
       "Repayments made against it are deleted too: {{count}} in all, from {{accounts}}. The balances of those accounts change.",
     existingDebtDeleteSubmit: "Delete",
     existingDebtDeleted: "Existing debt deleted",
-    existingDebtGone: "This existing debt is already gone — reload the page.",
+    existingDebtGone: "This existing debt has already been deleted.",
     existingDebtRepaid: "Already repaid",
     existingDebtBalanceAfter: "Balance after saving",
     existingDebtFlips:

@@ -180,6 +180,12 @@ Bulk accept states its count and its threshold in the button itself. It is
    | **Skip** | Your existing row is right. The import row is dropped |
    | **Supersede** | The statement is authoritative. The import row commits; your earlier manual entry is **soft-deleted**, with the replacement recorded in its audit trail |
 
+   A manual row that is one half of a payment split against an existing debt
+   (`SPEC.md` §6.6) **cannot be superseded on its own** — the import is told
+   *this payment was split against an existing debt — replace both* — and where a
+   superseded repayment of an existing debt is replaced, its link is carried only
+   if its discharge still fits in what is open on the debt.
+
    Supersede covers the commonest collision: you guessed at the till and the
    bank knows better. The row shows **the difference** between the two amounts,
    because that is the figure the decision turns on.

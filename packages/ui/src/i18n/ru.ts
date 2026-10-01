@@ -473,7 +473,7 @@ export const ru: Messages = {
       "Вместе с ним будут удалены погашения по нему: всего {{count}}, со счетов: {{accounts}}. Остатки на этих счетах изменятся.",
     existingDebtDeleteSubmit: "Удалить",
     existingDebtDeleted: "Существующий долг удалён",
-    existingDebtGone: "Этот существующий долг уже удалён. Пожалуйста, обновите страницу.",
+    existingDebtGone: "Этот существующий долг уже удалён.",
     existingDebtRepaid: "Уже погашено",
     existingDebtBalanceAfter: "Баланс после сохранения",
     existingDebtFlips:

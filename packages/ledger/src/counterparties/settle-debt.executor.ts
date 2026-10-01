@@ -235,18 +235,27 @@ function settleDebt(input: SettleDebtInput, tx: ReplicaTx): SettleDebtResult {
       .where(eq(currencies.code, input.currency))
       .all();
     const accountDecimals = accountCurrency?.decimals ?? 2;
-    const linkedAmount = money.round(
-      money.toMoney(
-        money
-          .dec(input.amount)
-          .times(money.dec(linkedDischarge))
-          .dividedBy(money.dec(input.discharges.amount)),
+    const total = money.dec(input.amount);
+    const unit = money.dec(1).dividedBy(money.dec(10).pow(accountDecimals));
+    let linkedAmount = money.dec(
+      money.round(
+        money.toMoney(
+          total.times(money.dec(linkedDischarge)).dividedBy(money.dec(input.discharges.amount)),
+        ),
+        accountDecimals,
       ),
-      accountDecimals,
     );
-    const spillAmount = money.sub(input.amount, linkedAmount);
-    if (money.cmp(spillAmount, money.ZERO) <= 0) return [{ ...whole, link: link.id }];
-    if (money.cmp(linkedAmount, money.ZERO) <= 0) return [whole];
+    // **Dust.** Where one side of the proportion rounds to nothing at the
+    // account currency's scale (a cent of an existing debt against a payment in
+    // a stronger currency, or a payment that barely crosses its end), it takes
+    // one smallest unit instead: no zero-amount row is written, and the
+    // linked discharge stays capped at exactly what is open, so neither a cent
+    // of the existing debt is left open for ever nor is it over-linked.
+    if (linkedAmount.lte(0)) linkedAmount = unit;
+    if (total.minus(linkedAmount).lte(0)) linkedAmount = total.minus(unit);
+    // A payment of a single smallest unit cannot be two rows: it stays whole.
+    if (linkedAmount.lte(0) || total.minus(linkedAmount).lte(0)) return [whole];
+    const spillAmount = money.toMoney(total.minus(linkedAmount));
     if (input.spillId === undefined) {
       throw new LocalRefusal(
         "settle_debt: this settlement pays down the rest of an existing debt and more — " +
@@ -318,6 +327,8 @@ function settleDebt(input: SettleDebtInput, tx: ReplicaTx): SettleDebtResult {
         debtCurrency: input.discharges.currency,
         debtAmount: part.discharge,
         settlesOpeningDebtId: part.link,
+        // Both halves of a split payment name the same pair (§6.6).
+        paymentPairId: parts.length > 1 ? input.id : null,
       })
       .where(eq(schema.transactions.id, inserted.id))
       .returning()

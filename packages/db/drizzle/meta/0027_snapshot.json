@@ -1,5 +1,5 @@
 {
-  "id": "eb7b18e7-d6cd-43f0-a34d-5cc662fe53c9",
+  "id": "4fe73e57-9bb4-4c02-ad00-e846933de05e",
   "prevId": "7f63a547-c023-4802-9750-f30bd59411c7",
   "version": "7",
   "dialect": "postgresql",
@@ -3957,6 +3957,12 @@
         },
         "settles_opening_debt_id": {
           "name": "settles_opening_debt_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "payment_pair_id": {
+          "name": "payment_pair_id",
           "type": "uuid",
           "primaryKey": false,
           "notNull": false

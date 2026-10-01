@@ -15,6 +15,7 @@ CREATE TABLE "opening_debts" (
 --> statement-breakpoint
 ALTER TABLE "counterparty_merges" ADD COLUMN "moved_opening_debts" jsonb DEFAULT '[]'::jsonb NOT NULL;--> statement-breakpoint
 ALTER TABLE "transactions" ADD COLUMN "settles_opening_debt_id" uuid;--> statement-breakpoint
+ALTER TABLE "transactions" ADD COLUMN "payment_pair_id" uuid;--> statement-breakpoint
 ALTER TABLE "opening_debts" ADD CONSTRAINT "opening_debts_counterparty_id_counterparties_id_fk" FOREIGN KEY ("counterparty_id") REFERENCES "public"."counterparties"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "opening_debts" ADD CONSTRAINT "opening_debts_currency_currencies_code_fk" FOREIGN KEY ("currency") REFERENCES "public"."currencies"("code") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 CREATE UNIQUE INDEX "opening_debts_counterparty_currency_uq" ON "opening_debts" USING btree ("counterparty_id","currency") WHERE "opening_debts"."deleted_at" is null;--> statement-breakpoint

@@ -17,4 +17,5 @@ CREATE TABLE `opening_debts` (
 --> statement-breakpoint
 CREATE UNIQUE INDEX `opening_debts_counterparty_currency_uq` ON `opening_debts` (`counterparty_id`,`currency`) WHERE "opening_debts"."deleted_at" is null;--> statement-breakpoint
 ALTER TABLE `counterparty_merges` ADD `moved_opening_debts` text DEFAULT '[]' NOT NULL;--> statement-breakpoint
-ALTER TABLE `transactions` ADD `settles_opening_debt_id` text REFERENCES opening_debts(id);
+ALTER TABLE `transactions` ADD `settles_opening_debt_id` text REFERENCES opening_debts(id);--> statement-breakpoint
+ALTER TABLE `transactions` ADD `payment_pair_id` text;

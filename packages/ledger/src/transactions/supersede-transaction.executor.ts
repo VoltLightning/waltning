@@ -12,11 +12,13 @@
  * the manual one.
  */
 
+import * as money from "@waltning/core/money";
 import {
   type SupersedeTransactionInput,
   supersedeTransactionInput,
 } from "@waltning/core/registry/inputs";
 import { and, eq, isNull } from "drizzle-orm";
+import { openingLinkFor } from "../counterparties/opening-link.ts";
 import { defineLocalExecutor, LocalRefusal } from "../executor.ts";
 import { type ReplicaTx, ledgerSchema as schema } from "../schema-map.ts";
 import {
@@ -82,6 +84,15 @@ function supersede(input: SupersedeTransactionInput, tx: ReplicaTx): LocalTransa
     );
   }
 
+  // §6.6 — one payment written as two rows (a settlement that crossed the end
+  // of an existing debt) is replaced as one payment or not at all: replacing a
+  // half would leave the other counting the same money.
+  if (old.paymentPairId !== null) {
+    throw new LocalRefusal(
+      "supersede_transaction: this payment was split against an existing debt — replace both",
+    );
+  }
+
   // §6.6 — before the original is touched, so the refusal names this operation.
   assertDebtCategoryShape(
     tx,
@@ -126,11 +137,32 @@ function supersede(input: SupersedeTransactionInput, tx: ReplicaTx): LocalTransa
    * replacement is still a debt-role row with the same person, the case the link
    * describes.
    */
-  if (
-    old.settlesOpeningDebtId !== null &&
-    inserted.obligationRole === "debt" &&
-    inserted.obligationCounterpartyId === old.obligationCounterpartyId
-  ) {
+  // **Re-checked against what is open**, not copied: the replacement may be a
+  // different figure, and the link only holds while the discharge still fits.
+  const stillFits = (() => {
+    if (
+      old.settlesOpeningDebtId === null ||
+      old.debtCurrency === null ||
+      old.debtAmount === null ||
+      inserted.obligationRole !== "debt" ||
+      inserted.obligationCounterpartyId === null ||
+      inserted.obligationCounterpartyId !== old.obligationCounterpartyId ||
+      (inserted.type !== "income" && inserted.type !== "expense")
+    ) {
+      return false;
+    }
+    const link = openingLinkFor(tx, {
+      counterpartyId: inserted.obligationCounterpartyId,
+      currency: old.debtCurrency,
+      type: inserted.type,
+    });
+    return (
+      link !== null &&
+      link.id === old.settlesOpeningDebtId &&
+      money.cmp(old.debtAmount, link.open) <= 0
+    );
+  })();
+  if (stillFits) {
     const [carried] = tx
       .update(transactions)
       .set({

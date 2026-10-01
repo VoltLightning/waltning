@@ -30,6 +30,7 @@ import { updateCurrencyExecutor } from "../currencies/update-currency.executor.t
 import type { LocalExecutor } from "../executor.ts";
 import { ledgerRegistry } from "../registry.ts";
 import { ledgerSchema as schema } from "../schema-map.ts";
+import { categorizeBatchExecutor } from "../transactions/categorize-batch.executor.ts";
 import { readContextRows } from "../transactions/read-context-rows.ts";
 import { readDayFlows } from "../transactions/read-day-flows.ts";
 import { readIncomeVsExpense } from "../transactions/read-income-vs-expense.ts";
@@ -900,5 +901,234 @@ describe("unmerge keeps a correction made after the merge", () => {
     expect(balanceOf(NINA, "PLN")).toBe(money.toMoney("999"));
     // The loser is not handed a debt the winner's figure still includes.
     expect(balanceOf(MAREK, "PLN")).toBeUndefined();
+  });
+});
+
+/* ── size edits, split pairs, dust, categorize ───────────────────────────── */
+
+const EUR_ACCOUNT = id<"accounts">("77777777-7777-4777-8777-777777777777");
+
+function withEuroAccount() {
+  s.ledger.replica.db
+    .insert(schema.accounts)
+    .values({ id: EUR_ACCOUNT, name: "Bank C · EUR", currency: EUR })
+    .run();
+  s.ledger.replica.db.run(
+    sql`insert into "fx_rates" ("base", "quote", "date", "rate", "source") values ('PLN', 'EUR', '2026-09-01', '0.25', 'manual')`,
+  );
+}
+
+const rowOf = (txnId: string) =>
+  s.ledger.replica.db
+    .select()
+    .from(transactions)
+    .where(eq(transactions.id, id<"transactions">(txnId)))
+    .all()[0];
+
+describe("editing the size of a linked repayment re-checks what is open", () => {
+  it("clears the link when 80 against a debt of 100 is raised to 500, so deleting the debt keeps the 500", () => {
+    recordOpening({ amount: "100" });
+    const paid = settle({ amount: "80", discharges: { currency: "PLN", amount: "80" } });
+    expect(linkOf(paid.row.row.id)).not.toBeNull();
+
+    write(updateTransactionExecutor, {
+      id: paid.row.row.id,
+      version: paid.row.row.version,
+      patch: { amountOriginal: "500" },
+    });
+    expect(linkOf(paid.row.row.id)).toBeNull();
+
+    write(deleteOpeningDebtExecutor, { id: readOpeningDebts(s.ledger.replica.db, NINA)[0]?.id });
+    expect(liveTransactions().map((row) => row.id)).toContain(paid.row.row.id);
+  });
+
+  it("keeps the link while the new figure still fits", () => {
+    recordOpening({ amount: "100" });
+    const paid = settle({ amount: "80", discharges: { currency: "PLN", amount: "80" } });
+    write(updateTransactionExecutor, {
+      id: paid.row.row.id,
+      version: paid.row.row.version,
+      patch: { amountOriginal: "90" },
+    });
+    expect(linkOf(paid.row.row.id)).not.toBeNull();
+    expect(rowOf(paid.row.row.id)?.debtAmount).toBe(money.toMoney("90"));
+  });
+
+  it("refuses moving the repayment to an account in another currency, and the link stays", () => {
+    withEuroAccount();
+    recordOpening({ amount: "100" });
+    const paid = settle({ amount: "80", discharges: { currency: "PLN", amount: "80" } });
+    expect(() =>
+      write(updateTransactionExecutor, {
+        id: paid.row.row.id,
+        version: paid.row.row.version,
+        patch: { accountId: EUR_ACCOUNT },
+      }),
+    ).toThrow(/Re-settle/);
+    expect(linkOf(paid.row.row.id)).not.toBeNull();
+  });
+});
+
+describe("a split payment is one payment", () => {
+  it("both halves name the same pair, and replacing either is refused", () => {
+    recordOpening();
+    debtRow({ amountOriginal: money.toMoney("100") });
+    const crossed = settle({
+      amount: "250",
+      discharges: { currency: "PLN", amount: "250" },
+      spillId: nextId(),
+    });
+    const linked = crossed.row.row;
+    const spill = crossed.row.spill;
+    expect(linked.paymentPairId).toBe(linked.id);
+    expect(spill?.paymentPairId).toBe(linked.id);
+
+    const replacement = (replacementId: string) => ({
+      id: replacementId,
+      date: "2026-09-02",
+      type: "income",
+      accountId: ACCOUNT,
+      amountOriginal: "50",
+      currency: "PLN",
+      counterpartyId: NINA,
+      obligationCounterpartyId: NINA,
+      obligationRole: "debt",
+      enteredName: "Nina",
+    });
+    for (const half of [linked, spill]) {
+      expect(() =>
+        write(supersedeTransactionExecutor, {
+          supersedesId: half?.id,
+          supersedesVersion: half?.version,
+          replacement: replacement(nextId()),
+        }),
+      ).toThrow(/this payment was split against an existing debt — replace both/);
+    }
+  });
+
+  it("does not carry a link the replaced row no longer fits under", () => {
+    recordOpening({ amount: "100" });
+    const paid = settle({ amount: "80", discharges: { currency: "PLN", amount: "80" } });
+    // The existing debt is corrected down to 50: 80 no longer fits.
+    recordOpening({ amount: "50" });
+    const replacementId = nextId();
+    write(supersedeTransactionExecutor, {
+      supersedesId: paid.row.row.id,
+      supersedesVersion: paid.row.row.version,
+      replacement: {
+        id: replacementId,
+        date: "2026-09-02",
+        type: "income",
+        accountId: ACCOUNT,
+        amountOriginal: "80",
+        currency: "PLN",
+        counterpartyId: NINA,
+        obligationCounterpartyId: NINA,
+        obligationRole: "debt",
+        enteredName: "Nina",
+      },
+    });
+    expect(linkOf(replacementId)).toBeNull();
+  });
+});
+
+describe("a split at the account currency's scale never writes a zero row or leaves dust open", () => {
+  const cross = (open: string, lend: string, amount: string, discharge: string) => {
+    withEuroAccount();
+    recordOpening({ amount: open });
+    debtRow({ amountOriginal: money.toMoney(lend) });
+    return settle({
+      accountId: EUR_ACCOUNT,
+      currency: "EUR",
+      amount,
+      discharges: { currency: "PLN", amount: discharge },
+      spillId: nextId(),
+    }).row;
+  };
+
+  it("9.99 open: 25 EUR discharging 150 PLN splits 1.67 / 23.33 and the debt is exactly consumed", () => {
+    const done = cross("9.99", "150", "25", "150");
+    expect(done.row.debtAmount).toBe(money.toMoney("9.99"));
+    expect(done.row.amountOriginal).toBe(money.toMoney("1.67"));
+    expect(done.spill?.amountOriginal).toBe(money.toMoney("23.33"));
+    expect(done.spill?.debtAmount).toBe(money.toMoney("140.01"));
+    expect(readOpeningDebts(s.ledger.replica.db, NINA)[0]?.repaid).toBe(money.toMoney("9.99"));
+  });
+
+  it("0.01 open: the linked row takes one cent rather than rounding to zero", () => {
+    const done = cross("0.01", "150", "25", "150");
+    expect(done.row.debtAmount).toBe(money.toMoney("0.01"));
+    expect(done.row.amountOriginal).toBe(money.toMoney("0.01"));
+    expect(done.spill?.amountOriginal).toBe(money.toMoney("24.99"));
+    expect(done.spill?.debtAmount).toBe(money.toMoney("149.99"));
+    expect(readOpeningDebts(s.ledger.replica.db, NINA)[0]?.repaid).toBe(money.toMoney("0.01"));
+  });
+
+  it("a payment that barely crosses: the ordinary part takes one cent, the linked discharge stays at what is open", () => {
+    const done = cross("149.99", "10", "25", "150");
+    expect(done.row.debtAmount).toBe(money.toMoney("149.99"));
+    expect(done.row.amountOriginal).toBe(money.toMoney("24.99"));
+    expect(done.spill?.amountOriginal).toBe(money.toMoney("0.01"));
+    expect(done.spill?.debtAmount).toBe(money.toMoney("0.01"));
+  });
+});
+
+describe("categorize_batch takes a linked repayment's link with its role", () => {
+  it("moving it out of the repayment category clears the role, the discharge and the link", () => {
+    const REPAID = id<"categories">("88888888-8888-4888-8888-888888888881");
+    const OTHER = id<"categories">("88888888-8888-4888-8888-888888888882");
+    s.ledger.replica.db
+      .insert(schema.categories)
+      .values([
+        {
+          id: REPAID,
+          name: "Repayment received",
+          kind: "income",
+          isLeaf: true,
+          externalId: "seed:repayment-received",
+        },
+        { id: OTHER, name: "Other", kind: "income", isLeaf: true },
+      ])
+      .run();
+    recordOpening();
+    const paid = settle({
+      amount: "50",
+      discharges: { currency: "PLN", amount: "50" },
+      categoryId: REPAID,
+    });
+    expect(linkOf(paid.row.row.id)).not.toBeNull();
+
+    write(categorizeBatchExecutor, { transactionIds: [paid.row.row.id], categoryId: OTHER });
+
+    const row = rowOf(paid.row.row.id);
+    expect(row?.settlesOpeningDebtId).toBeNull();
+    expect(row?.obligationRole).toBeNull();
+    expect(row?.debtAmount).toBeNull();
+  });
+});
+
+describe("unmerge of a record written before `after` existed", () => {
+  it("falls back to the old rule: a live combined row is restored", () => {
+    recordOpening({ amount: "200" });
+    recordOpening({ counterpartyId: MAREK, direction: "youOwe", amount: "50" });
+    const merged = write(mergeCounterpartiesExecutor, {
+      mergeId: id<"counterpartyMerges">(nextId()),
+      winnerId: NINA,
+      loserId: MAREK,
+      movedTransactionIds: [],
+    });
+    // Strip `after`, as a record from an earlier build would be.
+    const stripped = merged.row.merge.movedOpeningDebts.map(
+      ({ after: _after, ...rest }: Record<string, unknown>) => rest,
+    );
+    s.ledger.replica.db
+      .update(schema.counterpartyMerges)
+      .set({ movedOpeningDebts: stripped as never })
+      .where(eq(schema.counterpartyMerges.id, merged.row.merge.id))
+      .run();
+
+    write(unmergeCounterpartiesExecutor, { mergeId: merged.row.merge.id });
+    expect(balanceOf(NINA, "PLN")).toBe(money.toMoney("200"));
+    expect(balanceOf(MAREK, "PLN")).toBe(money.toMoney("-50"));
   });
 });

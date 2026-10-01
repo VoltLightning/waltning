@@ -349,7 +349,15 @@ function patchTransaction(input: UpdateTransactionInput, tx: ReplicaTx): LocalTr
    */
   const linkPatch = (() => {
     if (current.settlesOpeningDebtId === null) return {};
-    if (!obligationInPatch && afterLeaving === undefined) return {};
+    // Who it is with, its role, **and how much it is** all decide whether the
+    // row still fits in what is open on the existing debt: an amount raised from
+    // 80 to 500 against a debt of 100 would otherwise stay linked, drop 400 of
+    // income from every period figure, and be deleted with the debt.
+    const sizeChanged =
+      "debtAmount" in restatedDebt ||
+      input.patch.amountOriginal !== undefined ||
+      "accountId" in input.patch;
+    if (!obligationInPatch && afterLeaving === undefined && !sizeChanged) return {};
     const next =
       afterLeaving !== undefined && "obligationRole" in afterLeaving
         ? afterLeaving
@@ -378,7 +386,12 @@ function patchTransaction(input: UpdateTransactionInput, tx: ReplicaTx): LocalTr
       type: current.type,
       excluding: current.id,
     });
-    return link !== null && money.cmp(current.debtAmount, link.open) <= 0
+    const discharge =
+      "debtAmount" in restatedDebt && restatedDebt.debtAmount !== undefined
+        ? restatedDebt.debtAmount
+        : current.debtAmount;
+    // An edit never splits a row: it fits whole, or it is no longer linked.
+    return link !== null && money.cmp(discharge, link.open) <= 0
       ? { settlesOpeningDebtId: link.id }
       : cleared;
   })();

@@ -174,12 +174,20 @@ export function unmergeOpeningDebts(
       .from(openingDebts)
       .where(eq(openingDebts.id, id<"openingDebts">(entry.into)))
       .all();
+    // A record written before `after` existed carries none: it falls back to
+    // what it could always tell, a live row for `combined` and a deleted one
+    // for `cancelled`.
+    const after = (entry as { after?: typeof entry.after }).after;
     const untouched =
       winner !== undefined &&
-      (winner.deletedAt !== null) === entry.after.deleted &&
-      winner.direction === entry.after.direction &&
-      money.eq(winner.amount, entry.after.amount as money.Money) &&
-      winner.date === entry.after.date;
+      (after === undefined
+        ? entry.mode === "combined"
+          ? winner.deletedAt === null
+          : winner.deletedAt !== null
+        : (winner.deletedAt !== null) === after.deleted &&
+          winner.direction === after.direction &&
+          money.eq(winner.amount, after.amount as money.Money) &&
+          winner.date === after.date);
     if (!untouched) {
       kept += 1;
       continue;

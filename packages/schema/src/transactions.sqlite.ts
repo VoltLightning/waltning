@@ -107,6 +107,14 @@ export const transactionsColumns = () => ({
   settlesOpeningDebtId: k
     .uuid<"openingDebts">("settles_opening_debt_id")
     .references(() => openingDebts.id),
+  /**
+   * **One payment that was written as two rows** (§6.6): a settlement that
+   * crossed the end of an existing debt is a linked part and an ordinary part,
+   * and both carry the same id here (the first row's own). The pair is one
+   * payment — replacing one half through an import would count the money twice —
+   * so `supersede_transaction` refuses either half.
+   */
+  paymentPairId: k.uuid<"transactions">("payment_pair_id"),
   amountOriginal: k.money("amount_original").notNull(),
   currency: k
     .currency("currency")

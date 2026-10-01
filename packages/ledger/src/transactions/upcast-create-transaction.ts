@@ -26,6 +26,7 @@
  */
 
 import * as money from "@waltning/core/money";
+import { randomId } from "@waltning/core/random";
 import {
   type CreateTransactionInput,
   createTransactionInput,
@@ -96,6 +97,8 @@ export function upcastCreateTransaction(raw: unknown, fromVersion: number, tx: R
     if (open !== undefined && (input.type === "income" || input.type === "expense")) {
       const settle = settleDebtInput.safeParse({
         id: input.id,
+        // The second row, should this repayment cross the end of an existing debt (§6.6).
+        spillId: randomId(),
         counterpartyId: person,
         accountId: input.accountId,
         date: input.date,

@@ -470,7 +470,7 @@ export const be: Messages = {
       "Разам з ім будуць выдалены пагашэнні па ім: усяго {{count}}, з рахункаў: {{accounts}}. Рэшткі на гэтых рахунках зменяцца.",
     existingDebtDeleteSubmit: "Выдаліць",
     existingDebtDeleted: "Існуючы доўг выдалены",
-    existingDebtGone: "Гэты існуючы доўг ужо выдалены. Калі ласка, абнавіце старонку.",
+    existingDebtGone: "Гэты існуючы доўг ужо выдалены.",
     existingDebtRepaid: "Ужо пагашана",
     existingDebtBalanceAfter: "Баланс пасля захавання",
     existingDebtFlips:
