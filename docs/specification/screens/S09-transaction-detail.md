@@ -56,8 +56,8 @@ something no list row can.
   │ Date          6 Aug 2026            › │
   │ Paid from     Cash · PLN            › │
   │ Amount        48.90                 › │
-  │ Who           Café A                › │
-  │ Payee         Café A                › │
+  │ With whom     Café A                › │
+  │ Paid to       Café A                › │
   │ Note          —                     › │
   └───────────────────────────────────────┘
   [+ Someone owes]  [+ Business]  [+ One-off]

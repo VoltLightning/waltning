@@ -626,7 +626,7 @@ describe("Debt (S12)", () => {
 
     expect(screen.getByText("Nina")).toBeDefined();
     expect(screen.getByText("Shop A")).toBeDefined();
-    expect(screen.getByText("Individuals"), "grouped by legal nature (S37 §3)").toBeDefined();
+    expect(screen.getByText("People"), "grouped by legal nature (S37 §3)").toBeDefined();
     expect(screen.getByText("Companies")).toBeDefined();
   });
 

@@ -77,7 +77,7 @@ it("shows every field's current value as a row — label left, value right", () 
   expect(screen.getByRole("button", { name: "Category: Eating out" })).toBeDefined();
   expect(screen.getByRole("button", { name: "Date: 2026-08-06" })).toBeDefined();
   expect(screen.getByRole("button", { name: "Account: Cash · PLN" })).toBeDefined();
-  expect(screen.getByRole("button", { name: "Payee: Café A" })).toBeDefined();
+  expect(screen.getByRole("button", { name: "Paid to: Café A" })).toBeDefined();
 });
 
 it("opens CategorySheet through the screen's own callback, never inline", () => {
@@ -114,8 +114,8 @@ it("draws no Save until something has changed — at rest there is nothing to co
 it("Save sends only the field that changed", () => {
   const { onSave } = renderCard();
 
-  fireEvent.click(screen.getByRole("button", { name: "Payee: Café A" }));
-  fireEvent.change(screen.getByLabelText("Payee"), { target: { value: "Bakery A" } });
+  fireEvent.click(screen.getByRole("button", { name: "Paid to: Café A" }));
+  fireEvent.change(screen.getByLabelText("Paid to"), { target: { value: "Bakery A" } });
 
   const save = screen.getByRole("button", { name: "Save" });
   expect(save).toHaveProperty("disabled", false);
@@ -257,7 +257,7 @@ describe("a transfer — the same card, with a transfer's own rows", () => {
     expect(screen.getByRole("button", { name: "Amount: 400.00" })).toBeDefined();
     expect(screen.getByRole("button", { name: "Fee" })).toBeDefined();
     expect(screen.queryByRole("button", { name: /^Category/ }), "no category").toBeNull();
-    expect(screen.queryByRole("button", { name: /^Payee/ }), "no entered name").toBeNull();
+    expect(screen.queryByRole("button", { name: /^Paid to/ }), "no entered name").toBeNull();
     // One currency, one figure: no second amount to state.
     expect(screen.queryByRole("button", { name: /^Destination amount/ })).toBeNull();
   });
@@ -486,7 +486,7 @@ describe("what was paid — beside what the account was charged", () => {
       fields: { ...FIELDS, accountId: "account-eur" },
       paidCurrencies: [{ code: "EUR", name: "Euro" }],
     });
-    expect(screen.queryByRole("button", { name: /^Paid/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^Paid:/ })).toBeNull();
   });
 
   it("shows both figures — what was paid, and what the account was charged", () => {
@@ -543,7 +543,7 @@ describe("what was paid — beside what the account was charged", () => {
 
   it("offers no Paid row on a repayment — it has no paid side", () => {
     draw({ fields: { ...FIELDS, accountId: "account-eur" }, settlement: true });
-    expect(screen.queryByRole("button", { name: /^Paid/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^Paid:/ })).toBeNull();
   });
 
   it("offers no Paid row on a transfer", () => {
@@ -552,6 +552,6 @@ describe("what was paid — beside what the account was charged", () => {
       toAccountId: "account-a",
       accounts: [EUR_ACCOUNT, ...ACCOUNTS],
     });
-    expect(screen.queryByRole("button", { name: /^Paid/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^Paid:/ })).toBeNull();
   });
 });

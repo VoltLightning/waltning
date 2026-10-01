@@ -587,9 +587,9 @@ export const en = {
     /** The visible chip a filter arrives with from another screen (S10 §7 shared). */
     accountFilterFrom: "From {{account}}",
     /** S09's `FieldsCard`, and D4b's own chip label — a person types it there, D2 only ever reads it back. */
-    enteredName: "Payee",
+    enteredName: "Paid to",
     /** D4b's chip row, empty — S05 §3: `[+ entered name]`, typed, optional. */
-    addEnteredName: "+ Payee",
+    addEnteredName: "+ Paid to",
     /** S05 §3 — the composer's own words, on the deck's anatomy. */
     addExpenseTitle: "Add an expense",
     addIncomeTitle: "Add income",
@@ -598,7 +598,7 @@ export const en = {
     intoAccount: "Into",
     person: "Person",
     moreDetails: "More details",
-    moreDetailsHint: "Payee, date, time, scope, person",
+    moreDetailsHint: "Paid to, date, time, scope, with whom",
     notePlaceholder: "A note, if you want one",
     savedOnPhone: "Saved on your phone — syncs when you're back online",
     saveExpense: "Save expense",
@@ -944,7 +944,7 @@ export const en = {
     /** `AgeingBar` — O15: *old*, never *overdue* (no `payment_terms_days` field exists). */
     ageingDays: "{{days}} days · old",
     /* ── S12 · the register ─────────────────────────────────────────────── */
-    groupPeople: "Individuals",
+    groupPeople: "People",
     groupCompanies: "Companies",
     segmentOpen: "Open",
     segmentEveryone: "Everyone",
@@ -1541,7 +1541,7 @@ export const en = {
     accounts: "Accounts",
     editAccount: "Edit account",
     ledger: "Ledger",
-    counterparties: "People",
+    counterparties: "Contacts",
     /** S09's nav title — no page heading repeats it (`TransactionHero` already states the amount). */
     transaction: "Transaction",
     settings: "Settings",

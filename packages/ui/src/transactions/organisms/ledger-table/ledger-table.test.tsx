@@ -160,7 +160,7 @@ describe("LedgerTable", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Payee" }));
+    fireEvent.click(screen.getByRole("button", { name: "Paid to" }));
     expect(onSortColumn).toHaveBeenCalledWith("enteredName");
   });
 
@@ -284,7 +284,7 @@ describe("LedgerTable", () => {
       />,
     );
 
-    const header = screen.getByRole("button", { name: "Payee" });
+    const header = screen.getByRole("button", { name: "Paid to" });
     const scroller = screen.getByTestId("ledger-table-scroller");
     expect(header.getAttribute("tabindex")).toBe("0");
     expect(scroller.contains(header)).toBe(false);

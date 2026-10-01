@@ -104,8 +104,9 @@ first is the noun and the second the short label or verb.
 | Income | income | Einnahme | доход | przychód | даход |
 | Transfer (between own accounts) | transfer | Umbuchung | перевод между своими счетами · перевод | przelew własny | перавод паміж сваімі рахункамі · перавод |
 | Category | category | Kategorie | категория | kategoria | катэгорыя |
-| Person or company | person or company · *People* (page) · *Individuals* / *Companies* (its groups) · *With whom* (a transaction's field) | Kontakt · Person oder Firma | контакт · человек или компания | kontakt · osoba lub firma | кантакт · чалавек або кампанія |
-| Contact details (the field on a person's page) | contact details | Kontaktdaten | контактные данные | dane kontaktowe | кантактныя даныя |
+| Person or company | person or company · *Contacts* (the page) · *People* / *Companies* (its groups) · *With whom* (a transaction's field) | Person oder Firma · *Kontakte* · *Personen* / *Firmen* · *Mit wem* | человек или компания · *Контакты* · *Люди* / *Компании* · *С кем* | osoba lub firma · *Kontakty* · *Osoby* / *Firmy* · *Z kim* | чалавек або кампанія · *Кантакты* · *Людзі* / *Кампаніі* · *З кім* |
+| Paid to (the payee as the receipt prints it) | paid to | Empfänger | получатель | odbiorca | атрымальнік |
+| Contact details (the field on a person's page — never the page's own word) | contact details | Kontaktdaten | контактные данные | dane kontaktowe | кантактныя даныя |
 | Debt | debt | Schuld | долг | dług | доўг |
 | Repayment | repayment | Rückzahlung | возврат долга | spłata | вяртанне доўгу |
 | Existing debt (from before the ledger) | existing debt | bestehende Schuld | долг до начала учёта | dług sprzed rozpoczęcia ewidencji | доўг да пачатку ўліку |
@@ -119,7 +120,8 @@ first is the noun and the second the short label or verb.
 | Archive | archive | archivieren | в архив · архивировать | archiwizuj · zarchiwizować | у архіў · архіваваць |
 | Delete | delete | löschen | удалить | usuń · usunąć | выдаліць |
 | Overdrawn | overdrawn | überzogen | в минусе | na debecie · debet | у мінусе |
-| Owed | owed | geschuldet | задолженность | do spłaty | запазычанасць |
+| Owed — on a card or loan account | owed | geschuldet | задолженность | do spłaty | запазычанасць |
+| Owed — between people | owed | geschuldet | долг | do spłaty | доўг |
 | Balance | balance | Kontostand · Saldo | баланс | saldo | баланс |
 | Net worth | net worth | Vermögen | капитал | majątek | капітал |
 | Backup | backup · back up | Sicherung · sichern | резервная копия | kopia zapasowa | рэзервовая копія |
@@ -131,9 +133,11 @@ would read as paying someone: Polish *przelew* and Russian or Belarusian
 *перевод* alone are what a bank calls a payment out. The short form is for a
 tag or a column where the two accounts stand beside it.
 
-**The page and its parts never share a word.** *People* is the page;
-*Individuals* and *Companies* are its groups; a transaction's field asks *With
-whom*, so it does not read as a second title over *Payee*.
+**The page and its parts never share a word.** *Contacts* is the page; *People*
+and *Companies* are its groups; the field on one person's page is *Contact
+details*, never *Contact*. On a transaction, *With whom* names the person or
+company and *Paid to* the payee as the receipt prints it — two rows that can
+name different parties (S09).
 
 **Words the glossary rules out**, because each is the literal or the jargon
 choice a reader stumbles on:

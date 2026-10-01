@@ -246,21 +246,21 @@ describe("TransactionDetail", () => {
       .filter((node) => node.closest('[aria-hidden="true"]') === null);
     expect(spoken).toHaveLength(1);
     expect(screen.getByRole("heading", { name: "August 6, 2026" })).toBeDefined();
-    expect(screen.getByRole("button", { name: "Payee: Café A" })).toBeDefined();
+    expect(screen.getByRole("button", { name: "Paid to: Café A" })).toBeDefined();
   });
 
   it("saves a changed field, and the new value reads back", () => {
     withLedger(<TransactionDetail />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Payee: Café A" }));
-    fireEvent.change(screen.getByLabelText("Payee"), {
+    fireEvent.click(screen.getByRole("button", { name: "Paid to: Café A" }));
+    fireEvent.change(screen.getByLabelText("Paid to"), {
       target: { value: "Café A · Downtown" },
     });
     // The only `Save` on screen: `LinesCard` renders none while it holds no
     // lines and none have been added.
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
-    expect(screen.getByRole("button", { name: "Payee: Café A · Downtown" })).toBeDefined();
+    expect(screen.getByRole("button", { name: "Paid to: Café A · Downtown" })).toBeDefined();
   });
 
   /**
@@ -278,8 +278,8 @@ describe("TransactionDetail", () => {
     });
     withLedger(<TransactionDetail />, controller);
 
-    fireEvent.click(screen.getByRole("button", { name: "Payee: Café A" }));
-    fireEvent.change(screen.getByLabelText("Payee"), { target: { value: "Bakery A" } });
+    fireEvent.click(screen.getByRole("button", { name: "Paid to: Café A" }));
+    fireEvent.change(screen.getByLabelText("Paid to"), { target: { value: "Bakery A" } });
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
     expect(screen.getByRole("alert").textContent).toBe(
@@ -302,8 +302,8 @@ describe("TransactionDetail", () => {
       controller.updateTransaction(id<"transactions">(TXN), 1, { note: "Elsewhere" });
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "Payee: Café A" }));
-    fireEvent.change(screen.getByLabelText("Payee"), { target: { value: "Bakery A" } });
+    fireEvent.click(screen.getByRole("button", { name: "Paid to: Café A" }));
+    fireEvent.change(screen.getByLabelText("Paid to"), { target: { value: "Bakery A" } });
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
     expect(screen.getByRole("alert").textContent).toBe(
