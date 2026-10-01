@@ -1,6 +1,7 @@
 import type { Id } from "@waltning/core/id";
 import { counterparties } from "./counterparties.pg.ts";
 import { pgKit as k } from "./kit.ts";
+import type { MovedOpeningDebt } from "./shared.ts";
 
 /**
  * The record S15 §9.2 says makes unmerge exact — *"the absorbed counterparty
@@ -26,6 +27,11 @@ export const counterpartyMergesColumns = () => ({
   /** JSON array of the transaction ids repointed by this merge. */
   movedTransactionIds: k
     .json<readonly Id<"transactions">[]>("moved_transaction_ids")
+    .notNull()
+    .default([]),
+  /** What happened to the loser's opening debts (§6.6) — see `MovedOpeningDebt`. */
+  movedOpeningDebts: k
+    .json<readonly MovedOpeningDebt[]>("moved_opening_debts")
     .notNull()
     .default([]),
   mergedAt: k.stamp("merged_at"),

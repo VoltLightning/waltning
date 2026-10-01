@@ -74,7 +74,22 @@ it points in words, the day, and the figure through `<Amount>` — because the
 history lists transactions and an existing debt is not one, and every number in
 the ledger must have something under it that explains it. Tapping the line
 reopens the sheet prefilled; there is one per person per currency, so saving
-into a currency that has one **replaces it**, and the sheet says so before *Save*.
+into a currency that has one **replaces it**, and the sheet says so before *Save*
+— with what has **already been repaid** and **the balance the new figure leaves**,
+and a warning when saving would turn the debt around (more repaid than the new
+figure). **The figure is the original debt, not the current balance.** The date
+is today or earlier and an archived person has no *Add an existing debt* at all.
+
+**The sheet offers *Delete this debt*, and deleting it deletes the whole chain** —
+the repayments made against it go too. The confirmation says so in numbers:
+*Repayments made against it are deleted too: 2 in all, 150,00 PLN, from Bank A.
+The balances of those accounts change.* Repaying an existing debt is never
+spending or income (`SPEC.md` §6.6), so the period figures are the same before
+and after; the accounts are not.
+
+**The history's empty state follows the position**: with an existing debt the
+history is not *settled* — the existing-debt line is what explains the figure.
+Only a person with no debt rows and no balance reads *All settled*.
 
 **One card holds `CounterpartyCard` and `BalanceLedger` together** — the person
 and their position are one thing to read, and the card is the group. *Settle*
@@ -102,7 +117,8 @@ Web adds the ageing bar inline for companies and shows history as a table.
 | `BrandIcon` | `TransactionRow`'s own leading mark — same component and catalogue as S04/S10 (§14.4b) |
 | `EmptyState` | All settled — a success state, not a blank |
 | `OpeningDebtRow` | One existing debt — name, direction in words, day, figure through `Amount`; tap to correct it |
-| `OpeningDebtSheet` | *Add an existing debt* — `SegmentControl` for direction, `Select` for currency, `AmountField`, `DateField`; *Save debt* |
+| `OpeningDebtSheet` | *Add an existing debt* — `SegmentControl` for direction, `Select` for currency, `AmountField`, `DateField`; *Save debt*; for a currency that holds one, what was repaid, the balance after, the flip warning and *Delete this debt* |
+| `ConfirmDialog` | The delete confirmation, listing the repayments and accounts that go with the debt |
 
 ## 5. Data
 
@@ -111,7 +127,7 @@ Web adds the ageing bar inline for companies and shows history as a table.
 | `counterparty_balances` for this id, per currency | — |
 | Both derived totals — theirs and display | — |
 | `search_transactions(obligationCounterpartyId)` | — |
-| The person's `opening_debts`, one per currency | `record_opening_debt` |
+| The person's `opening_debts`, one per currency, each with its repayments | `record_opening_debt` · `delete_opening_debt` |
 
 ## 6. States
 

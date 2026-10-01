@@ -131,6 +131,35 @@ describe("opening_debts — the shape the database holds", () => {
   });
 });
 
+describe("opening_debts — soft delete and the repayment link", () => {
+  it("frees the person and currency for a new debt once the old one is soft-deleted", async () => {
+    await insert(ACME, { amount: 5 });
+    expect(await refusal(() => insert(ACME, { amount: 6 }))).toBe(
+      "opening_debts_counterparty_currency_uq",
+    );
+    await s.sql.unsafe(
+      `UPDATE opening_debts SET deleted_at = now() WHERE counterparty_id = '${ACME}' AND currency = 'PLN'`,
+    );
+    await insert(ACME, { amount: 6 });
+    await s.sql.unsafe(`DELETE FROM opening_debts WHERE counterparty_id = '${ACME}'`);
+  });
+
+  it("only a debt-role transaction may name the opening debt it settles (transactions_opening_link_shape)", async () => {
+    const [debt] = await s.sql<{ id: string }[]>`
+      SELECT id FROM opening_debts WHERE counterparty_id = ${NINA} AND currency = 'PLN'`;
+    const row = (role: string) =>
+      s.sql.unsafe(
+        `INSERT INTO transactions (date, type, account_id, amount_original, currency, fx_rate,
+                                   settles_opening_debt_id, obligation_counterparty_id, obligation_role)
+         VALUES ('2026-09-03', 'income', '${ACCOUNT}', 1, 'PLN', 1, '${debt?.id}',
+                 ${role === "debt" ? `'${NINA}'` : "NULL"}, ${role === "debt" ? "'debt'" : "NULL"})`,
+      );
+    expect(await refusal(() => row("none"))).toBe("transactions_opening_link_shape");
+    await row("debt");
+    await s.sql.unsafe(`DELETE FROM transactions WHERE settles_opening_debt_id = '${debt?.id}'`);
+  });
+});
+
 describe("opening_debts — the person's balance, and nothing else", () => {
   it("folds in as a lend or a borrow, beside the debt-role transactions already there", async () => {
     // Nina already owes 200 PLN from the opening row; she repays 50 as a debt-role income.
@@ -161,6 +190,7 @@ describe("opening_debts — the person's balance, and nothing else", () => {
       "created_at",
       "currency",
       "date",
+      "deleted_at",
       "direction",
       "id",
       "updated_at",

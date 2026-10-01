@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "0d301deb-982f-4f3c-b907-e7222ad0f0c6",
+  "id": "63b4bb59-e615-4eac-baf6-f6fec66d8754",
   "prevId": "bf391472-9bea-4518-9ced-096523cd9842",
   "tables": {
     "account_groups": {
@@ -637,6 +637,14 @@
           "autoincrement": false,
           "default": "'[]'"
         },
+        "moved_opening_debts": {
+          "name": "moved_opening_debts",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'[]'"
+        },
         "merged_at": {
           "name": "merged_at",
           "type": "integer",
@@ -1123,6 +1131,13 @@
           "notNull": true,
           "autoincrement": false
         },
+        "deleted_at": {
+          "name": "deleted_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "created_at": {
           "name": "created_at",
           "type": "integer",
@@ -1145,7 +1160,8 @@
             "counterparty_id",
             "currency"
           ],
-          "isUnique": true
+          "isUnique": true,
+          "where": "\"opening_debts\".\"deleted_at\" is null"
         }
       },
       "foreignKeys": {
@@ -1185,7 +1201,7 @@
         },
         "opening_debts_amount_ceiling": {
           "name": "opening_debts_amount_ceiling",
-          "value": "cast(\"opening_debts\".\"amount\" as real) < 1000000000"
+          "value": "length(substr(\"opening_debts\".\"amount\", 1, instr(\"opening_debts\".\"amount\" || '.', '.') - 1)) <= 9"
         },
         "opening_debts_direction_known": {
           "name": "opening_debts_direction_known",
@@ -1689,6 +1705,13 @@
           "notNull": false,
           "autoincrement": false
         },
+        "settles_opening_debt_id": {
+          "name": "settles_opening_debt_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "amount_original": {
           "name": "amount_original",
           "type": "text",
@@ -2012,6 +2035,19 @@
           ],
           "columnsTo": [
             "code"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "transactions_settles_opening_debt_id_opening_debts_id_fk": {
+          "name": "transactions_settles_opening_debt_id_opening_debts_id_fk",
+          "tableFrom": "transactions",
+          "tableTo": "opening_debts",
+          "columnsFrom": [
+            "settles_opening_debt_id"
+          ],
+          "columnsTo": [
+            "id"
           ],
           "onDelete": "no action",
           "onUpdate": "no action"

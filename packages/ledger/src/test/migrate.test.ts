@@ -43,7 +43,7 @@ import {
 import { openLedger } from "../open.ts";
 import { ledgerSchema as schema } from "../schema-map.ts";
 
-const { counterpartyMerges, currencies, outbox, transactions, transactionLines } = schema;
+const { currencies, outbox, transactions, transactionLines } = schema;
 const outboxSchema = { outbox: schema.outbox, outboxSeq: schema.outboxSeq };
 const replicaSchema = {
   accountGroups: schema.accountGroups,
@@ -714,14 +714,13 @@ describe("a populated replica upgrades to current without losing anything", () =
     insertCounterparty(ledger, "cp-diacritics", "Łódź Śliwka");
     insertCounterparty(ledger, "cp-nfd", "Józef".normalize("NFD"));
 
-    ledger.replica.db
-      .insert(counterpartyMerges)
-      .values({
-        id: id<"counterpartyMerges">("merge-1"),
-        winnerId: id<"counterparties">("cp-ascii") as Id<"counterparties">,
-        loserId: id<"counterparties">("cp-diacritics") as Id<"counterparties">,
-      })
-      .run();
+    // Raw, naming only the columns this version of the table has: a later step
+    // adds `moved_opening_debts`, and the point here is that it arrives on a row
+    // that already exists.
+    ledger.replica.db.run(
+      sql`insert into counterparty_merges (id, winner_id, loser_id, moved_transaction_ids, merged_at)
+          values ('merge-1', 'cp-ascii', 'cp-diacritics', '[]', 1700000000)`,
+    );
 
     insertOutboxEntryAtV1(ledger, "e-1");
 
@@ -1781,6 +1780,8 @@ describe("a constraint declared in the schema is present on the device", () => {
       "transactions_debt_category_shape_insert",
       "transactions_debt_category_shape_update",
       "transactions_lines_sum_matches_update",
+      "transactions_opening_link_shape_insert",
+      "transactions_opening_link_shape_update",
     ]);
   });
 

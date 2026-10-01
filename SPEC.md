@@ -1292,7 +1292,9 @@ plausible balance is a typo, and it breaks every layout it reaches. It is one
 bound, `AMOUNT_CEILING_EXCLUSIVE` in `money.ts`, stated at every layer: the
 contract schema (`zAmount`, used by every write input's amount field), each
 executor, the eight CHECKs above on Postgres and a trigger per table on the
-replica, and every amount input, which refuses a tenth integer digit and says
+replica (the one exception is `opening_debts`, a table created whole, which
+carries the same bound as a CHECK on the replica too — there is no existing row
+for a rebuild to copy through it), and every amount input, which refuses a tenth integer digit and says
 *Maximum 999 999 999,99* in the reader's own notation. The CHECKs are added
 `NOT VALID` and validated at once on a database that holds nothing past the
 bound; a database that does keeps those rows until the owner corrects them and
@@ -1613,6 +1615,16 @@ it is never income and never spending.** `record_opening_debt` writes one row of
 `opening_debts` per person per currency (`id`, `counterparty_id`, `currency`,
 `direction` — `theyOwe | youOwe`, `amount`, `date`); recording again for the
 same person and currency replaces it, which is how a wrong figure is corrected.
+**The figure is the original debt, never the current balance.** Repayments are
+made with *Settle* and count against it; replacing the figure leaves them where
+they are, so a smaller figure under a larger repayment turns the debt around.
+The sheet therefore says, before *Save*, what has already been repaid and what
+the balance will be, and warns when a save would flip its sign;
+`record_opening_debt` returns the resulting balance and a `flipped` flag the way
+`settle_debt` returns its residual. The date is the day the debt dates from —
+today or earlier, never later (it is the device's own day, carried on the input
+as `set_manual_rate`'s is) — and the operation is refused for an archived person,
+who is out of every picker and could never be settled with.
 
 **Why a table of its own, and not an `adjustment` transaction.** A transaction
 carries an account, and an account's balance and every period figure are built
@@ -1648,6 +1660,43 @@ Every claim below names the layer that enforces it:
   keeps a currency from being narrowed past a figure an opening debt holds.
 - **A person the replica does not hold** is refused as a dependency (the same
   one `settle_debt` names), and the foreign keys hold under it on both engines.
+- **The replica's ceiling is the digit-count test** the `*_amount_ceiling_*`
+  triggers make — more than nine digits before the point — written as the
+  table's CHECK, so `999999999.99999999` is in bounds; `cast … as real` would
+  round it up to a billion and refuse it.
+- **Currencies.** `update_currency` counts a live opening debt among the live
+  references that refuse a decimals shrink and scans every opening debt's figure
+  (soft-deleted ones included) for the over-scale case, as Postgres's
+  `WA018` does (*service, the replica's executor; database, Postgres*).
+
+**Repaying an opening debt is not spending or income, in either direction.**
+`settle_debt` stamps the settlement with the opening debt it draws on
+(`transactions.settles_opening_debt_id`) when the person has a live opening debt
+in the currency it discharges. Such a settlement **moves its account** like any
+payment and appears in lists and history, but **no period figure** — month,
+months, spend by category, income against expense, the desk's — counts it:
+lending and borrowing are not earning and spending, and what was never counted
+when it was lent must not be counted when it comes back. Only a `debt`-role row
+carries the link (`transactions_opening_link_shape` on Postgres; its two
+triggers on the replica — *database, both engines*).
+
+**An existing debt can be deleted, and deleting it deletes the whole chain.**
+`delete_opening_debt` soft-deletes the opening row and **every repayment linked
+to it** in one write — one replica transaction, one outbox entry, all or nothing
+(*service*) — so the accounts those repayments moved change with it. The
+confirmation names them before it asks: *how many, how much, from which
+accounts, and that those balances change.* A deleted opening debt frees its
+person and currency for a new one (the unique index is on live rows).
+
+**Merging two people merges their existing debts.** `merge_counterparties`
+moves the loser's opening debts with the rest of what it holds: a debt in a
+currency the winner has none in changes owner; in a currency both have, the two
+are **summed by sign** into the winner's row (the larger magnitude's direction,
+the earlier date; the loser's row is soft-deleted and its repayments are pointed
+at the winner's); if they cancel to nothing both rows are dropped. The loser is
+archived only once it holds no live opening debt, and the merge record keeps
+what the winner's row held before, so `unmerge_counterparties` restores exactly
+that — leaving alone anything a person changed since (*service*; S15 §9.2).
 
 **Debt is derived, never stored.** A counterparty's position is the running sum
 of the `debt`-role transactions referencing them, plus their opening debts — the

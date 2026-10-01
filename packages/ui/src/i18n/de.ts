@@ -460,7 +460,7 @@ export const de: Messages = {
     existingDebtAdd: "Bestehende Schuld erfassen",
     existingDebtTitle: "Bestehende Schuld mit {{name}}",
     existingDebtHint:
-      "Eine Schuld, die schon vor diesem Hauptbuch bestand. Sie legt den Anfangssaldo fest und ist weder Einnahme noch Ausgabe. Wird sie in derselben Währung erneut erfasst, ersetzt sie die bisherige.",
+      "Eine Schuld, die schon vor diesem Hauptbuch bestand. Sie legt den Anfangssaldo fest und ist weder Einnahme noch Ausgabe, ebenso wenig wie die darauf geleisteten Rückzahlungen. Erfassen Sie den ursprünglichen Betrag, nicht den Rest. Wird sie in derselben Währung erneut erfasst, ersetzt sie die bisherige.",
     existingDebtDirection: "Wer schuldet wem?",
     existingDebtTheyOwe: "Die Person schuldet Ihnen",
     existingDebtYouOwe: "Sie schulden der Person",
@@ -471,6 +471,18 @@ export const de: Messages = {
     existingDebtRow: "Bestehende Schuld",
     existingDebtRowMeta: "{{direction}} · seit {{date}}",
     existingDebtReplaces: "Dies ersetzt die bestehende Schuld in {{currency}}.",
+    existingDebtDelete: "Diese Schuld löschen",
+    existingDebtDeleteTitle: "Bestehende Schuld löschen?",
+    existingDebtDeleteBody: "Die bestehende Schuld mit {{name}} wird gelöscht.",
+    existingDebtDeleteChain:
+      "Die darauf geleisteten Rückzahlungen werden ebenfalls gelöscht: insgesamt {{count}}, {{amount}} {{currency}}, von {{accounts}}. Die Kontostände dieser Konten ändern sich.",
+    existingDebtDeleteSubmit: "Löschen",
+    existingDebtDeleted: "Bestehende Schuld gelöscht",
+    existingDebtRepaid: "Bereits zurückgezahlt",
+    existingDebtBalanceAfter: "Saldo nach dem Speichern",
+    existingDebtFlips:
+      "Es wurde bereits mehr zurückgezahlt als dieser Betrag; das Speichern kehrt die Schuld daher um.",
+    existingDebtDateFuture: "Eine bestehende Schuld stammt von heute oder früher.",
     discharges: "Begleicht",
     theyOweYou: "schuldet Ihnen",
     youOweThem: "Sie schulden",

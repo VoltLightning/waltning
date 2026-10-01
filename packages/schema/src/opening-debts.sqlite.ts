@@ -1,4 +1,3 @@
-import { AMOUNT_CEILING_EXCLUSIVE } from "@waltning/core/money";
 import { sql } from "drizzle-orm";
 import { check, uniqueIndex } from "drizzle-orm/sqlite-core";
 import { counterparties } from "./counterparties.sqlite.ts";
@@ -43,16 +42,24 @@ export const openingDebtsColumns = () => ({
   direction: k.text("direction", { enum: OPENING_DEBT_DIRECTION }).notNull(),
   amount: k.money("amount").notNull(),
   date: k.date("date").notNull(),
+  /** Deleting an opening debt (and its repayments) is a soft delete, like a transaction's. */
+  deletedAt: k.timestamp("deleted_at"),
   createdAt: k.stamp("created_at"),
   updatedAt: k.stamp("updated_at"),
 });
 
 export const openingDebts = k.table("opening_debts", openingDebtsColumns(), (t) => [
-  uniqueIndex("opening_debts_counterparty_currency_uq").on(t.counterpartyId, t.currency),
+  uniqueIndex("opening_debts_counterparty_currency_uq")
+    .on(t.counterpartyId, t.currency)
+    .where(sql`${t.deletedAt} is null`),
   check("opening_debts_amount_positive", sql`cast(${t.amount} as real) > 0`),
+  // The text test the replica's own `*_amount_ceiling_*` triggers make:
+  // amounts are normalised decimal strings, so "a billion or more" is "more
+  // than nine digits before the point" — exact, where `cast … as real` rounds
+  // 999999999.99999999 up to 1e9 and refuses a figure in bounds.
   check(
     "opening_debts_amount_ceiling",
-    sql`cast(${t.amount} as real) < ${sql.raw(AMOUNT_CEILING_EXCLUSIVE)}`,
+    sql`length(substr(${t.amount}, 1, instr(${t.amount} || '.', '.') - 1)) <= 9`,
   ),
   check("opening_debts_direction_known", sql`${t.direction} in ('theyOwe', 'youOwe')`),
 ]);

@@ -436,6 +436,7 @@ function harness(
     unmergeCounterparties: vi.fn(),
     recordDistinctCounterparties: vi.fn(),
     recordOpeningDebt: vi.fn(),
+    deleteOpeningDebt: vi.fn(),
     settleDebt: vi.fn(() => ({ residual: money.toMoney("0"), overSettled: false })),
     allocateShares: vi.fn(() => ({ rows: [], remaining: money.toMoney("0") })),
     listCounterpartyBalances: vi.fn(() => []),
@@ -3232,7 +3233,11 @@ describe("phone ledger controller — recordOpeningDebt (§6.6)", () => {
   const NINA = id<"counterparties">("11111111-1111-4111-8111-111111111111");
 
   function harness(overrides: Partial<PhoneLedgerPort> = {}) {
-    const recordOpeningDebt = vi.fn<PhoneLedgerPort["recordOpeningDebt"]>(() => undefined);
+    const recordOpeningDebt = vi.fn<PhoneLedgerPort["recordOpeningDebt"]>(() => ({
+      balance: money.toMoney("200"),
+      repaid: money.ZERO,
+      flipped: false,
+    }));
     const controller = createPhoneLedger(
       basePort({ recordOpeningDebt, listCurrencies: () => CURRENCIES, ...overrides }),
       {
@@ -3261,7 +3266,12 @@ describe("phone ledger controller — recordOpeningDebt (§6.6)", () => {
 
     const result = controller.recordOpeningDebt(draft);
 
-    expect(result).toEqual({ id: "00000000-0000-4000-8000-000000000042" });
+    expect(result).toEqual({
+      id: "00000000-0000-4000-8000-000000000042",
+      balance: money.toMoney("200"),
+      repaid: money.ZERO,
+      flipped: false,
+    });
     expect(recordOpeningDebt).toHaveBeenCalledWith(
       {
         id: "00000000-0000-4000-8000-000000000042",
@@ -3270,6 +3280,7 @@ describe("phone ledger controller — recordOpeningDebt (§6.6)", () => {
         amount: money.toMoney("200"),
         currency: "PLN",
         date: "2026-01-01",
+        today: "2026-08-23",
       },
       expect.objectContaining({ date: "2026-08-23" }),
     );
@@ -3311,6 +3322,64 @@ describe("phone ledger controller — recordOpeningDebt (§6.6)", () => {
 
     expect("fieldErrors" in result && result.fieldErrors).toEqual([
       { path: "", message: "record_opening_debt: no counterparty" },
+    ]);
+  });
+
+  it("refuses a date later than the device's own day, before the port", () => {
+    const { controller, recordOpeningDebt } = harness();
+
+    const result = controller.recordOpeningDebt({ ...draft, date: "2026-08-24" });
+
+    expect("fieldErrors" in result && result.fieldErrors[0]?.path).toBe("date");
+    expect(recordOpeningDebt).not.toHaveBeenCalled();
+  });
+
+  it("hands back what the write did to the balance, and whether it turned the debt around", () => {
+    const { controller, recordOpeningDebt } = harness();
+    recordOpeningDebt.mockReturnValueOnce({
+      balance: money.toMoney("-50"),
+      repaid: money.toMoney("150"),
+      flipped: true,
+    });
+
+    const result = controller.recordOpeningDebt({ ...draft, amount: "100" });
+
+    expect(result).toMatchObject({
+      balance: "-50.00000000",
+      repaid: "150.00000000",
+      flipped: true,
+    });
+  });
+
+  it("deletes an existing debt through the port, naming only its id", () => {
+    const deleteOpeningDebt = vi.fn<PhoneLedgerPort["deleteOpeningDebt"]>(() => ({
+      deletedRepayments: 2,
+      repaid: money.toMoney("150"),
+    }));
+    const { controller } = harness({ deleteOpeningDebt });
+
+    const result = controller.deleteOpeningDebt("00000000-0000-4000-8000-000000000042");
+
+    expect(deleteOpeningDebt).toHaveBeenCalledWith(
+      { id: "00000000-0000-4000-8000-000000000042" },
+      expect.objectContaining({ date: "2026-08-23" }),
+    );
+    expect(result).toMatchObject({
+      id: "00000000-0000-4000-8000-000000000042",
+      deletedRepayments: 2,
+    });
+  });
+
+  it("carries a refused delete to fieldErrors rather than throwing", () => {
+    const deleteOpeningDebt = vi.fn<PhoneLedgerPort["deleteOpeningDebt"]>(() => {
+      throw new Error("delete_opening_debt: already deleted");
+    });
+    const { controller } = harness({ deleteOpeningDebt });
+
+    const result = controller.deleteOpeningDebt("00000000-0000-4000-8000-000000000042");
+
+    expect("fieldErrors" in result && result.fieldErrors).toEqual([
+      { path: "", message: "delete_opening_debt: already deleted" },
     ]);
   });
 

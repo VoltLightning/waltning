@@ -37,6 +37,7 @@ import { defineLocalExecutor, LocalRefusal } from "../executor.ts";
 import { type ReplicaTx, ledgerSchema as schema } from "../schema-map.ts";
 import type { LocalCounterpartyRow } from "./create-counterparty.executor.ts";
 import type { LocalCounterpartyMergeRow } from "./merge-counterparties.executor.ts";
+import { unmergeOpeningDebts } from "./merge-opening-debts.ts";
 
 const { counterparties, counterpartyMerges, transactions } = schema;
 
@@ -161,6 +162,9 @@ function unmergeCounterparties(
         });
 
   const skipped = movedIds.length - restored.length;
+
+  // §6.6 — the loser's opening debts, exactly as the merge recorded moving them.
+  unmergeOpeningDebts(tx, merge.loserId, merge.winnerId, merge.movedOpeningDebts);
 
   const [unarchivedLoser] = tx
     .update(counterparties)

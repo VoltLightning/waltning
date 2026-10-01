@@ -1606,7 +1606,10 @@ export const recordOpeningDebtInput = z
     direction: z.enum(["theyOwe", "youOwe"]),
     amount: zAmount,
     currency: zCurrencyCode,
+    /** The day the debt dates from — never later than `today`: the feature is for debts that predate the ledger. */
     date: zAccountingDate,
+    /** The device's own day, as `set_manual_rate`'s is: nothing below the client has a zone. */
+    today: zAccountingDate,
   })
   .superRefine((v, ctx) => {
     // As `settleDebtInput`: a malformed figure already carries `zMoney`'s own
@@ -1618,8 +1621,26 @@ export const recordOpeningDebtInput = z
         message: "an existing debt is a positive amount — the direction says who owes whom",
       });
     }
+    // A bare date compares as text (§7.0a) — no `Date`, no zone.
+    if (v.date > v.today) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["date"],
+        message: "an existing debt dates from today or earlier — it predates the ledger",
+      });
+    }
   });
 export type RecordOpeningDebtInput = z.output<typeof recordOpeningDebtInput>;
+
+/**
+ * `delete_opening_debt` — takes an existing debt out of the ledger **and every
+ * repayment made against it**, in one write (§6.6). The repayments are the
+ * settlements that drew on it (`settles_opening_debt_id`); they are soft-deleted
+ * with it, so their accounts' balances change. The screen says exactly which
+ * before asking. Refused when the row is already gone.
+ */
+export const deleteOpeningDebtInput = z.object({ id: zId<"openingDebts">() });
+export type DeleteOpeningDebtInput = z.output<typeof deleteOpeningDebtInput>;
 
 /**
  * `allocate_shares` — J08's whole write, and it had none. The journey's path

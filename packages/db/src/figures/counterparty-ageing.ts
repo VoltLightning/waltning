@@ -73,6 +73,7 @@ export async function oldestOpenDebt(db: DbHandle): Promise<readonly OldestOpenD
         ${openingDebts.date} AS date,
         ${openingDebtDelta} AS delta
       FROM ${openingDebts}
+      WHERE ${openingDebts.deletedAt} IS NULL
     ),
     balances AS (
       SELECT counterparty_id, currency, sum(delta) AS balance

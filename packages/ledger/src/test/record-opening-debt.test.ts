@@ -14,23 +14,31 @@ import { accountingDate } from "@waltning/core/date";
 import { id } from "@waltning/core/id";
 import * as money from "@waltning/core/money";
 import { currencyCode } from "@waltning/core/money";
-import { eq, getTableColumns } from "drizzle-orm";
+import { eq, getTableColumns, sql } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { z } from "zod";
+import { readBalanceAsOf } from "../accounts/read-balance-as-of.ts";
 import { readNetWorth } from "../accounts/read-net-worth.ts";
+import { deleteOpeningDebtExecutor } from "../counterparties/delete-opening-debt.executor.ts";
+import { mergeCounterpartiesExecutor } from "../counterparties/merge-counterparties.executor.ts";
 import { readCounterpartyBalances } from "../counterparties/read-counterparty-balances.ts";
 import { readOpeningDebts } from "../counterparties/read-opening-debts.ts";
 import { recordOpeningDebtExecutor } from "../counterparties/record-opening-debt.executor.ts";
 import { settleDebtExecutor } from "../counterparties/settle-debt.executor.ts";
+import { unmergeCounterpartiesExecutor } from "../counterparties/unmerge-counterparties.executor.ts";
+import { updateCurrencyExecutor } from "../currencies/update-currency.executor.ts";
 import type { LocalExecutor } from "../executor.ts";
 import { ledgerRegistry } from "../registry.ts";
 import { ledgerSchema as schema } from "../schema-map.ts";
+import { readDayFlows } from "../transactions/read-day-flows.ts";
+import { readIncomeVsExpense } from "../transactions/read-income-vs-expense.ts";
 import { readPeriodSpend } from "../transactions/read-period-spend.ts";
+import { readSpendByCategory } from "../transactions/read-spend-by-category.ts";
 import type { Capture, LocalTx, LocalWriteResult } from "../write.ts";
 import { writeLocally } from "../write.ts";
 import { type ScratchStores, scratchStores } from "./stores.ts";
 
-const { counterparties, openingDebts, transactions } = schema;
+const { counterparties, openingDebts, outbox, transactions } = schema;
 
 const PLN = currencyCode("PLN");
 const EUR = currencyCode("EUR");
@@ -82,9 +90,12 @@ function recordOpening(over: Record<string, unknown> = {}) {
     amount: "200",
     currency: "PLN",
     date: "2026-01-01",
+    today: "2026-09-15",
     ...over,
   });
 }
+
+const entries = () => s.ledger.outbox.db.select().from(outbox).all();
 
 const balanceOf = (counterpartyId: string, currency: string) =>
   readCounterpartyBalances(s.ledger.replica.db, TODAY).find(
@@ -161,8 +172,8 @@ describe("record_opening_debt — the balance", () => {
 
     const rows = readOpeningDebts(s.ledger.replica.db, NINA);
     expect(rows).toHaveLength(1);
-    expect(rows[0]?.id, "the row keeps the id it was first written with").toBe(first.row.id);
-    expect(second.row.id).toBe(first.row.id);
+    expect(rows[0]?.id, "the row keeps the id it was first written with").toBe(first.row.row.id);
+    expect(second.row.row.id).toBe(first.row.row.id);
     expect(rows[0]?.direction).toBe("youOwe");
     expect(balanceOf(NINA, "PLN")).toBe(money.toMoney("-300"));
   });
@@ -175,6 +186,7 @@ describe("record_opening_debt — the balance", () => {
       amount: "200",
       currency: "PLN",
       date: "2026-01-01",
+      today: "2026-09-15",
     };
     write(recordOpeningDebtExecutor, input);
     expect(() => write(recordOpeningDebtExecutor, input)).not.toThrow();
@@ -217,6 +229,7 @@ describe("record_opening_debt — never income or spending", () => {
       "createdAt",
       "currency",
       "date",
+      "deletedAt",
       "direction",
       "id",
       "updatedAt",
@@ -319,5 +332,311 @@ describe("opening_debts — the table's own constraints", () => {
       .where(eq(openingDebts.counterpartyId, NINA))
       .all();
     expect(row?.amount).toBe(money.toMoney("10"));
+  });
+});
+
+/* ── what a repayment, a re-record, a delete and a merge do to it ─────────── */
+
+const SEPTEMBER = { start: accountingDate("2026-09-01"), end: accountingDate("2026-10-01") };
+
+function settle(over: Record<string, unknown> = {}) {
+  return write(settleDebtExecutor, {
+    id: nextId(),
+    counterpartyId: NINA,
+    accountId: ACCOUNT,
+    date: "2026-09-02",
+    amount: "50",
+    currency: "PLN",
+    type: "income",
+    discharges: { currency: "PLN", amount: "50" },
+    ...over,
+  });
+}
+
+const accountBalance = () =>
+  readBalanceAsOf(s.ledger.replica.db, ACCOUNT, accountingDate("2026-12-31"));
+const liveTransactions = () =>
+  s.ledger.replica.db
+    .select()
+    .from(transactions)
+    .all()
+    .filter((row) => row.deletedAt === null);
+
+describe("record_opening_debt — refusals past the shape", () => {
+  it("refuses an archived person", () => {
+    s.ledger.replica.db
+      .update(counterparties)
+      .set({ archived: true })
+      .where(eq(counterparties.id, NINA))
+      .run();
+    expect(() => recordOpening()).toThrow(/is archived/);
+  });
+
+  it("refuses a date later than the device's own day, and takes today", () => {
+    expect(() => recordOpening({ date: "2026-09-16" })).toThrow(/today or earlier/);
+    expect(() => recordOpening({ date: "2026-09-15" })).not.toThrow();
+  });
+
+  it("holds 999999999.99999999 at the table: the ceiling is a digit count, not a rounded real", () => {
+    expect(() =>
+      s.ledger.replica.db
+        .insert(openingDebts)
+        .values({
+          id: id<"openingDebts">(nextId()),
+          counterpartyId: NINA,
+          currency: PLN,
+          direction: "theyOwe",
+          amount: money.toMoney("999999999.99999999"),
+          date: accountingDate("2026-01-01"),
+        })
+        .run(),
+    ).not.toThrow();
+  });
+});
+
+describe("record_opening_debt — a re-record reports what it did to the balance", () => {
+  it("returns the resulting balance, what was repaid, and no flip while the sign holds", () => {
+    recordOpening();
+    settle();
+    const again = recordOpening({ amount: "300" });
+    expect(again.row.balance).toBe(money.toMoney("250"));
+    expect(again.row.repaid).toBe(money.toMoney("50"));
+    expect(again.row.flipped).toBe(false);
+  });
+
+  it("flags a flip when more was repaid than the new figure — and the repayments stay", () => {
+    recordOpening();
+    settle({ amount: "150", discharges: { currency: "PLN", amount: "150" } });
+    const again = recordOpening({ amount: "100" });
+    expect(again.row.balance).toBe(money.toMoney("-50"));
+    expect(again.row.flipped).toBe(true);
+    expect(readOpeningDebts(s.ledger.replica.db, NINA)[0]?.repayments).toHaveLength(1);
+  });
+});
+
+describe("a repayment of an existing debt", () => {
+  it("is stamped with the debt it drew on, and moves the account but no period figure", () => {
+    recordOpening({ counterpartyId: MAREK, direction: "youOwe", amount: "80" });
+    s.ledger.replica.db
+      .insert(transactions)
+      .values({
+        id: id<"transactions">(nextId()),
+        date: accountingDate("2026-09-01"),
+        type: "expense",
+        accountId: ACCOUNT,
+        amountOriginal: money.toMoney("40"),
+        currency: PLN,
+        fxRate: money.pivotPerUnit("1"),
+      })
+      .run();
+    const db = s.ledger.replica.db;
+    const before = {
+      spend: readPeriodSpend(db, SEPTEMBER),
+      flows: readDayFlows(db, SEPTEMBER),
+      byCategory: readSpendByCategory(db, SEPTEMBER, "mine"),
+      incomeVsExpense: readIncomeVsExpense(db, [{ ...SEPTEMBER, label: "Sep" }], "mine"),
+      account: accountBalance(),
+    };
+    // The vacuity guard: the figures above are not empty, so equal means something.
+    expect(before.spend.length).toBeGreaterThan(0);
+
+    const repaid = settle({
+      counterpartyId: MAREK,
+      type: "expense",
+      amount: "30",
+      discharges: { currency: "PLN", amount: "30" },
+    });
+
+    const debt = readOpeningDebts(s.ledger.replica.db, MAREK)[0];
+    expect(repaid.row.row.settlesOpeningDebtId).toBe(debt?.id);
+    // The account moved by the repayment …
+    expect(accountBalance()).toBe(money.sub(before.account, money.toMoney("30")));
+    // … and no period figure saw it: spend, the day flows, spend by category and income vs expense.
+    expect(readPeriodSpend(db, SEPTEMBER)).toEqual(before.spend);
+    expect(readDayFlows(db, SEPTEMBER)).toEqual(before.flows);
+    expect(readSpendByCategory(db, SEPTEMBER, "mine")).toEqual(before.byCategory);
+    expect(readIncomeVsExpense(db, [{ ...SEPTEMBER, label: "Sep" }], "mine")).toEqual(
+      before.incomeVsExpense,
+    );
+  });
+
+  it("an ordinary settlement of a person with no existing debt is not stamped", () => {
+    s.ledger.replica.db
+      .insert(transactions)
+      .values({
+        id: id<"transactions">(nextId()),
+        date: accountingDate("2026-08-01"),
+        type: "expense",
+        accountId: ACCOUNT,
+        amountOriginal: money.toMoney("100"),
+        currency: PLN,
+        fxRate: money.pivotPerUnit("1"),
+        obligationCounterpartyId: NINA,
+        obligationRole: "debt",
+      })
+      .run();
+    expect(settle().row.row.settlesOpeningDebtId).toBeNull();
+  });
+
+  it("is refused at the table unless it is a debt-role row (transactions_opening_link_shape)", () => {
+    recordOpening();
+    const debt = readOpeningDebts(s.ledger.replica.db, NINA)[0];
+    expect(() =>
+      s.ledger.replica.db
+        .insert(transactions)
+        .values({
+          id: id<"transactions">(nextId()),
+          date: accountingDate("2026-09-01"),
+          type: "expense",
+          accountId: ACCOUNT,
+          amountOriginal: money.toMoney("5"),
+          currency: PLN,
+          fxRate: money.pivotPerUnit("1"),
+          settlesOpeningDebtId: debt?.id ?? null,
+        })
+        .run(),
+    ).toThrow(/transactions_opening_link_shape/);
+  });
+});
+
+describe("delete_opening_debt — the whole chain, in one write", () => {
+  it("soft-deletes the debt and its repayments, restoring the balance and the accounts", () => {
+    const accountAtStart = accountBalance();
+    recordOpening();
+    settle();
+    settle({ amount: "100", discharges: { currency: "PLN", amount: "100" } });
+    expect(balanceOf(NINA, "PLN")).toBe(money.toMoney("50"));
+    expect(accountBalance()).toBe(money.add(accountAtStart, money.toMoney("150")));
+
+    const debt = readOpeningDebts(s.ledger.replica.db, NINA)[0];
+    expect(debt?.repayments).toHaveLength(2);
+    expect(debt?.repaid).toBe(money.toMoney("150"));
+
+    const deleted = write(deleteOpeningDebtExecutor, { id: debt?.id });
+
+    expect(deleted.row.deletedRepayments).toBe(2);
+    expect(deleted.row.repaid).toBe(money.toMoney("150"));
+    expect(balanceOf(NINA, "PLN")).toBeUndefined();
+    expect(readOpeningDebts(s.ledger.replica.db, NINA)).toHaveLength(0);
+    expect(liveTransactions()).toHaveLength(0);
+    // The accounts those repayments moved change back.
+    expect(accountBalance()).toBe(accountAtStart);
+    // One outbox entry for the delete, on top of the three writes before it.
+    expect(entries()).toHaveLength(4);
+  });
+
+  it("is atomic: a refusal inside it leaves the debt and every repayment in place", () => {
+    recordOpening();
+    settle();
+    const debt = readOpeningDebts(s.ledger.replica.db, NINA)[0];
+    // A poisoned repayment: the write cannot soft-delete it, so the whole write must roll back.
+    s.ledger.replica.db.run(
+      sql.raw(
+        "create trigger poison before update of deleted_at on transactions begin select raise(abort, 'poisoned'); end",
+      ),
+    );
+    expect(() => write(deleteOpeningDebtExecutor, { id: debt?.id })).toThrow(/poisoned/);
+    s.ledger.replica.db.run(sql.raw("drop trigger poison"));
+
+    expect(readOpeningDebts(s.ledger.replica.db, NINA)).toHaveLength(1);
+    expect(balanceOf(NINA, "PLN")).toBe(money.toMoney("150"));
+    expect(liveTransactions()).toHaveLength(1);
+  });
+
+  it("refuses a debt that is already gone, and frees the currency for a new one", () => {
+    recordOpening();
+    const debt = readOpeningDebts(s.ledger.replica.db, NINA)[0];
+    write(deleteOpeningDebtExecutor, { id: debt?.id });
+    expect(() => write(deleteOpeningDebtExecutor, { id: debt?.id })).toThrow(/already deleted/);
+    expect(() => recordOpening({ amount: "75" })).not.toThrow();
+    expect(balanceOf(NINA, "PLN")).toBe(money.toMoney("75"));
+  });
+});
+
+describe("merge_counterparties — opening debts", () => {
+  const mergeId = () => id<"counterpartyMerges">(nextId());
+  const merge = (movedTransactionIds: string[] = []) =>
+    write(mergeCounterpartiesExecutor, {
+      mergeId: mergeId(),
+      winnerId: NINA,
+      loserId: MAREK,
+      movedTransactionIds,
+    });
+  const unmerge = (mergeRowId: string) =>
+    write(unmergeCounterpartiesExecutor, { mergeId: mergeRowId });
+
+  it("moves a debt the winner has no counterpart for, and unmerge gives it back", () => {
+    recordOpening({ counterpartyId: MAREK, currency: "EUR", amount: "10", direction: "youOwe" });
+    const merged = merge();
+    expect(balanceOf(NINA, "EUR")).toBe(money.toMoney("-10"));
+    expect(balanceOf(MAREK, "EUR")).toBeUndefined();
+
+    unmerge(merged.row.merge.id);
+    expect(balanceOf(MAREK, "EUR")).toBe(money.toMoney("-10"));
+    expect(balanceOf(NINA, "EUR")).toBeUndefined();
+  });
+
+  it("sums same-currency debts into the winner's row by sign, and unmerge restores both", () => {
+    recordOpening({ amount: "200" });
+    recordOpening({ counterpartyId: MAREK, direction: "youOwe", amount: "50", date: "2025-05-05" });
+    const merged = merge();
+
+    const [row] = readOpeningDebts(s.ledger.replica.db, NINA);
+    expect(row?.direction).toBe("theyOwe");
+    expect(row?.amount).toBe(money.toMoney("150"));
+    expect(row?.date).toBe("2025-05-05");
+    expect(readOpeningDebts(s.ledger.replica.db, MAREK)).toHaveLength(0);
+
+    unmerge(merged.row.merge.id);
+    expect(balanceOf(NINA, "PLN")).toBe(money.toMoney("200"));
+    expect(balanceOf(MAREK, "PLN")).toBe(money.toMoney("-50"));
+  });
+
+  it("drops both rows when they cancel, repayments stay on the winner, and unmerge restores", () => {
+    recordOpening({ amount: "50" });
+    recordOpening({ counterpartyId: MAREK, direction: "youOwe", amount: "50" });
+    const merged = merge();
+    expect(readOpeningDebts(s.ledger.replica.db, NINA)).toHaveLength(0);
+    expect(balanceOf(NINA, "PLN")).toBeUndefined();
+
+    unmerge(merged.row.merge.id);
+    expect(balanceOf(NINA, "PLN")).toBe(money.toMoney("50"));
+    expect(balanceOf(MAREK, "PLN")).toBe(money.toMoney("-50"));
+  });
+
+  it("points the loser's repayments at the winner's row, so deleting it takes them along", () => {
+    recordOpening({ amount: "200" });
+    recordOpening({ counterpartyId: MAREK, amount: "100" });
+    const repayment = settle({
+      counterpartyId: MAREK,
+      amount: "30",
+      discharges: { currency: "PLN", amount: "30" },
+    });
+    merge([repayment.row.row.id]);
+
+    const [row] = readOpeningDebts(s.ledger.replica.db, NINA);
+    expect(row?.amount).toBe(money.toMoney("300"));
+    expect(row?.repayments).toHaveLength(1);
+    write(deleteOpeningDebtExecutor, { id: row?.id });
+    expect(liveTransactions()).toHaveLength(0);
+  });
+});
+
+describe("update_currency — an opening debt names its currency", () => {
+  it("refuses lowering a currency's decimals under a live debt of 10.55 (phone and Postgres agree)", () => {
+    recordOpening({ currency: "EUR", amount: "10.55" });
+    expect(() =>
+      write(updateCurrencyExecutor, { code: "EUR", version: 1, patch: { decimals: 0 } }),
+    ).toThrow(/decimals cannot shrink/);
+  });
+
+  it("refuses it under a deleted one too, for the restore's sake — but a live-free currency is not blocked by it", () => {
+    recordOpening({ currency: "EUR", amount: "10.55" });
+    const debt = readOpeningDebts(s.ledger.replica.db, NINA)[0];
+    write(deleteOpeningDebtExecutor, { id: debt?.id });
+    // No live reference now; the stored figure past the narrower scale still refuses.
+    expect(() =>
+      write(updateCurrencyExecutor, { code: "EUR", version: 1, patch: { decimals: 0 } }),
+    ).toThrow(/already stored/);
   });
 });

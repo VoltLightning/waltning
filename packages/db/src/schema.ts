@@ -437,7 +437,9 @@ export const counterpartyMerges = pgTable(
  * (`0027`), the same shape `debt_reassignments` has.
  */
 export const openingDebts = pgTable("opening_debts", openingDebtsColumns(), (t) => [
-  uniqueIndex("opening_debts_counterparty_currency_uq").on(t.counterpartyId, t.currency),
+  uniqueIndex("opening_debts_counterparty_currency_uq")
+    .on(t.counterpartyId, t.currency)
+    .where(sql`${t.deletedAt} is null`),
   check("opening_debts_amount_positive", sql`${t.amount} > 0`),
   check("opening_debts_amount_ceiling", below(t.amount)),
   check("opening_debts_direction_known", sql`${t.direction} in ('theyOwe', 'youOwe')`),
@@ -482,6 +484,9 @@ export const transactions = pgTable("transactions", transactionsColumns(), (t) =
   index("transactions_to_account_idx").on(t.toAccountId),
   index("transactions_counterparty_idx").on(t.counterpartyId),
   index("transactions_obligation_counterparty_idx").on(t.obligationCounterpartyId),
+  index("transactions_opening_debt_idx")
+    .on(t.settlesOpeningDebtId)
+    .where(sql`${t.settlesOpeningDebtId} is not null`),
   index("transactions_entered_name_idx").on(t.enteredName),
   index("transactions_capital_idx").on(t.isCapital).where(sql`${t.isCapital}`),
   // Excludes soft-deleted rows: otherwise deleting an imported row makes its
@@ -571,6 +576,11 @@ export const transactions = pgTable("transactions", transactionsColumns(), (t) =
   check(
     "transactions_obligation_pair_shape",
     sql`(${t.obligationCounterpartyId} is not null) = (${t.obligationRole} is not null)`,
+  ),
+  // §6.6 — only a debt-role row can settle an opening debt.
+  check(
+    "transactions_opening_link_shape",
+    sql`${t.settlesOpeningDebtId} is null or coalesce(${t.obligationRole} = 'debt', false)`,
   ),
   check(
     "transactions_occurrence_shape",

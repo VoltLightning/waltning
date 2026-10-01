@@ -4,6 +4,7 @@ import { counterparties } from "./counterparties.pg.ts";
 import { currencies } from "./currencies.pg.ts";
 import { brandSource, obligationRole, txnSource, txnType } from "./enums.pg.ts";
 import { pgKit as k } from "./kit.ts";
+import { openingDebts } from "./opening-debts.pg.ts";
 import { recurringTransactions } from "./recurring-transactions.pg.ts";
 
 /**
@@ -68,6 +69,17 @@ export const transactionsColumns = () => ({
   obligationRole: obligationRole("obligation_role"),
   debtCurrency: k.currency("debt_currency").references(() => currencies.code),
   debtAmount: k.money("debt_amount"),
+  /**
+   * **Which opening debt this settlement paid down** (§6.6) — set by
+   * `settle_debt` when the person has a live opening debt in the currency the
+   * settlement discharges. A repayment of a debt that predates the ledger is
+   * neither spending nor income, so every period figure leaves these rows out
+   * (they still move the account), and deleting the opening debt deletes them
+   * with it. Only a `debt`-role row carries it.
+   */
+  settlesOpeningDebtId: k
+    .uuid<"openingDebts">("settles_opening_debt_id")
+    .references(() => openingDebts.id),
   amountOriginal: k.money("amount_original").notNull(),
   currency: k
     .currency("currency")

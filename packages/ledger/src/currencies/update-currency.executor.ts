@@ -50,7 +50,14 @@ import { defineLocalExecutor, LocalRefusal } from "../executor.ts";
 import { type ReplicaTx, ledgerSchema as schema } from "../schema-map.ts";
 import type { LocalCurrencyRow } from "./add-currency.executor.ts";
 
-const { accounts, currencies, recurringTransactions, transactionLines, transactions } = schema;
+const {
+  accounts,
+  currencies,
+  openingDebts,
+  recurringTransactions,
+  transactionLines,
+  transactions,
+} = schema;
 
 export const updateCurrencyExecutor = defineLocalExecutor<
   typeof updateCurrencyInput,
@@ -141,7 +148,14 @@ function assertDecimalsShrinkSafe(input: UpdateCurrencyInput, tx: ReplicaTx): vo
       ),
     )
     .all();
-  const live = liveAccounts + liveTransactions;
+  // §6.6 — an existing debt names its currency too; Postgres refuses the
+  // shrink under it (`WA018`), and so does the phone.
+  const [{ n: liveOpeningDebts } = { n: 0 }] = tx
+    .select({ n: sql<number>`count(*)` })
+    .from(openingDebts)
+    .where(and(eq(openingDebts.currency, input.code), isNull(openingDebts.deletedAt)))
+    .all();
+  const live = liveAccounts + liveTransactions + liveOpeningDebts;
   if (live > 0) {
     throw new LocalRefusal(
       `update_currency: refused — decimals cannot shrink from ${current.decimals} to ` +
@@ -229,5 +243,15 @@ function anyStoredFigureOverScale(
     .from(recurringTransactions)
     .where(eq(recurringTransactions.currency, code))
     .all();
-  return recurringRows.some((row) => over(row.amountOriginal));
+  if (recurringRows.some((row) => over(row.amountOriginal))) return true;
+
+  // §6.6 — an opening debt, soft-deleted ones included for the reason the
+  // transactions scan above gives: a restore must not walk a figure past the
+  // guarantee.
+  const openingRows = tx
+    .select({ amount: openingDebts.amount })
+    .from(openingDebts)
+    .where(eq(openingDebts.currency, code))
+    .all();
+  return openingRows.some((row) => over(row.amount));
 }

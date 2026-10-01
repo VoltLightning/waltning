@@ -225,9 +225,30 @@ function settleDebt(input: SettleDebtInput, tx: ReplicaTx): SettleDebtResult {
   // ordinary capture path never sets them — see its own "not here, on
   // purpose" note); `settle_debt` is the one write that does, so it stamps
   // them directly rather than widening that schema for a single caller.
+  //
+  // **And the link to the opening debt it draws on (§6.6).** When the person
+  // has a live opening debt in the currency this discharges, the settlement is
+  // a repayment of a debt that predates the ledger: it is stamped with that
+  // debt, so every period figure leaves it out (it is neither spending nor
+  // income) and deleting the debt deletes it with the rest of the chain.
+  const [opening] = tx
+    .select({ id: schema.openingDebts.id })
+    .from(schema.openingDebts)
+    .where(
+      and(
+        eq(schema.openingDebts.counterpartyId, input.counterpartyId),
+        eq(schema.openingDebts.currency, input.discharges.currency),
+        isNull(schema.openingDebts.deletedAt),
+      ),
+    )
+    .all();
   const [stamped] = tx
     .update(schema.transactions)
-    .set({ debtCurrency: input.discharges.currency, debtAmount: input.discharges.amount })
+    .set({
+      debtCurrency: input.discharges.currency,
+      debtAmount: input.discharges.amount,
+      settlesOpeningDebtId: opening?.id ?? null,
+    })
     .where(eq(schema.transactions.id, row.id))
     .returning()
     .all();

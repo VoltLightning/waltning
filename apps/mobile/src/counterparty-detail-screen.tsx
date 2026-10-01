@@ -58,6 +58,7 @@ import { decimalMark } from "@waltning/ui/i18n/locales";
 import { useLocale, useT } from "@waltning/ui/i18n/provider";
 import { Button } from "@waltning/ui/primitives/button";
 import { Card } from "@waltning/ui/shell/card";
+import { ConfirmDialog } from "@waltning/ui/shell/confirm-dialog";
 import { EmptyState } from "@waltning/ui/states/empty-state";
 import { ErrorState } from "@waltning/ui/states/error-state";
 import { Skeleton } from "@waltning/ui/states/skeleton";
@@ -201,6 +202,9 @@ export default function CounterpartyDetail() {
   const [openingDebtKey, setOpeningDebtKey] = useState(0);
   const [openingDebtInitial, setOpeningDebtInitial] = useState<Partial<OpeningDebtDraft>>({});
   const [openingDebtErrors, setOpeningDebtErrors] = useState<ReturnType<typeof mapFieldErrors>>();
+  // The debt a *Delete this debt* tap is waiting on a confirmation for — its
+  // dialog names the repayments that go with it.
+  const [deletingOpeningDebtId, setDeletingOpeningDebtId] = useState<string | null>(null);
 
   const counterparty =
     snapshot.counterparties.find((candidate) => candidate.id === rawId) ??
@@ -233,9 +237,23 @@ export default function CounterpartyDetail() {
       })),
     [openingDebts, snapshot.currencies],
   );
-  const openingDebtCurrencies = useMemo(
-    () => openingDebts.map((debt) => debt.currency),
+  const openingDebtExisting = useMemo(
+    () =>
+      openingDebts.map((debt) => ({
+        id: debt.id,
+        currency: debt.currency,
+        direction: debt.direction,
+        amount: debt.amount,
+        repaid: debt.repaid,
+      })),
     [openingDebts],
+  );
+  const openingDebtBalances = useMemo(
+    () =>
+      balances
+        .filter((row) => row.counterpartyId === rawId)
+        .map((row) => ({ currency: row.currency, balance: row.balance })),
+    [balances, rawId],
   );
   const pivot = snapshot.currencies.find((currency) => currency.isPivot)?.code;
   const group = useMemo(
@@ -392,6 +410,37 @@ export default function CounterpartyDetail() {
     [openingDebts, snapshot.currencies],
   );
   const handleDismissOpeningDebt = useCallback(() => setOpeningDebtVisible(false), []);
+  const handleAskDeleteOpeningDebt = useCallback(
+    (openingDebtId: string) => setDeletingOpeningDebtId(openingDebtId),
+    [],
+  );
+  const handleCancelDeleteOpeningDebt = useCallback(() => setDeletingOpeningDebtId(null), []);
+  const handleConfirmDeleteOpeningDebt = useCallback(() => {
+    if (deletingOpeningDebtId === null) return;
+    const result = ledger.deleteOpeningDebt(deletingOpeningDebtId);
+    setDeletingOpeningDebtId(null);
+    if (!("id" in result)) return;
+    setOpeningDebtVisible(false);
+    settledToastTokenRef.current += 1;
+    setSettledToastMessage(t("counterparties.existingDebtDeleted"));
+  }, [deletingOpeningDebtId, ledger, t]);
+  // The confirmation says what else goes: the repayments made against the
+  // debt, how much they discharged, and the accounts whose balances change.
+  const deleteConfirmBody = useMemo(() => {
+    const debt = openingDebts.find((candidate) => candidate.id === deletingOpeningDebtId);
+    if (debt === undefined) return "";
+    const first = t("counterparties.existingDebtDeleteBody", { name: counterparty?.name ?? "" });
+    if (debt.repayments.length === 0) return first;
+    const decimals =
+      snapshot.currencies.find((currency) => currency.code === debt.currency)?.decimals ?? 2;
+    const accountNames = [...new Set(debt.repayments.map((repayment) => repayment.accountName))];
+    return `${first} ${t("counterparties.existingDebtDeleteChain", {
+      count: debt.repayments.length,
+      amount: money.forDisplay(debt.repaid, decimals, mark),
+      currency: debt.currency,
+      accounts: accountNames.join(", "),
+    })}`;
+  }, [counterparty?.name, deletingOpeningDebtId, mark, openingDebts, snapshot.currencies, t]);
   const handleSaveOpeningDebt = useCallback(
     (draft: OpeningDebtDraft) => {
       if (!rawId) return;
@@ -698,7 +747,7 @@ export default function CounterpartyDetail() {
         />
       </View>
 
-      {historyRows.length === 0 ? (
+      {historyRows.length === 0 && openingDebts.length > 0 ? null : historyRows.length === 0 ? (
         <EmptyState
           variant="range"
           // L3 — the history section's own key: distinct from
@@ -726,11 +775,13 @@ export default function CounterpartyDetail() {
         </View>
       )}
 
-      <Button
-        label={t("counterparties.existingDebtAdd")}
-        onPress={handleAddOpeningDebt}
-        variant="ghost"
-      />
+      {counterparty.archived ? null : (
+        <Button
+          label={t("counterparties.existingDebtAdd")}
+          onPress={handleAddOpeningDebt}
+          variant="ghost"
+        />
+      )}
       <Button label={t("common.edit")} onPress={handleEdit} variant="ghost" />
 
       <OpeningDebtSheet
@@ -738,11 +789,13 @@ export default function CounterpartyDetail() {
         visible={openingDebtVisible}
         counterpartyName={counterparty.name}
         currencies={snapshot.currencies}
-        existingCurrencies={openingDebtCurrencies}
+        existingDebts={openingDebtExisting}
+        balances={openingDebtBalances}
         initial={openingDebtInitial}
         today={today}
         onDismiss={handleDismissOpeningDebt}
         onSave={handleSaveOpeningDebt}
+        onDelete={handleAskDeleteOpeningDebt}
         {...(openingDebtErrors === undefined ? {} : { fieldErrors: openingDebtErrors })}
       />
 
@@ -767,6 +820,15 @@ export default function CounterpartyDetail() {
         onDismiss={handleDismissSettle}
         onSettle={handleSettleSave}
         {...(settleFieldErrors === undefined ? {} : { fieldErrors: settleFieldErrors })}
+      />
+
+      <ConfirmDialog
+        visible={deletingOpeningDebtId !== null}
+        title={t("counterparties.existingDebtDeleteTitle")}
+        body={deleteConfirmBody}
+        confirmLabel={t("counterparties.existingDebtDeleteSubmit")}
+        onConfirm={handleConfirmDeleteOpeningDebt}
+        onCancel={handleCancelDeleteOpeningDebt}
       />
 
       <AccountPicker

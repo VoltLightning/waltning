@@ -453,7 +453,7 @@ export const ru: Messages = {
     existingDebtAdd: "Добавить существующий долг",
     existingDebtTitle: "Существующий долг: {{name}}",
     existingDebtHint:
-      "Долг, возникший до ведения этой книги. Он задаёт начальный баланс и не является ни доходом, ни расходом. Повторная запись в той же валюте заменяет предыдущую.",
+      "Долг, возникший до ведения этой книги. Он задаёт начальный баланс и не является ни доходом, ни расходом; погашения по нему — тоже. Укажите первоначальную сумму, а не остаток. Повторная запись в той же валюте заменяет предыдущую.",
     existingDebtDirection: "Кто кому должен",
     existingDebtTheyOwe: "Вам должны",
     existingDebtYouOwe: "Вы должны",
@@ -464,6 +464,18 @@ export const ru: Messages = {
     existingDebtRow: "Существующий долг",
     existingDebtRowMeta: "{{direction}} · с {{date}}",
     existingDebtReplaces: "Это заменит существующий долг в валюте {{currency}}.",
+    existingDebtDelete: "Удалить этот долг",
+    existingDebtDeleteTitle: "Удалить существующий долг?",
+    existingDebtDeleteBody: "Существующий долг: {{name}} будет удалён.",
+    existingDebtDeleteChain:
+      "Вместе с ним будут удалены погашения по нему: всего {{count}}, {{amount}} {{currency}}, со счетов: {{accounts}}. Остатки на этих счетах изменятся.",
+    existingDebtDeleteSubmit: "Удалить",
+    existingDebtDeleted: "Существующий долг удалён",
+    existingDebtRepaid: "Уже погашено",
+    existingDebtBalanceAfter: "Баланс после сохранения",
+    existingDebtFlips:
+      "Уже погашено больше этой суммы, поэтому после сохранения долг изменит направление.",
+    existingDebtDateFuture: "Существующий долг датируется сегодняшним днём или более ранним.",
     discharges: "Гасит",
     theyOweYou: "должен вам",
     youOweThem: "вы должны",

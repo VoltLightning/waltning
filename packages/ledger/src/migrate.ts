@@ -820,6 +820,30 @@ export function createAmountCeilingTriggers(tx: SqlRunner): void {
   for (const statement of AMOUNT_CEILING_TRIGGERS) tx.run(sql.raw(statement));
 }
 
+/**
+ * §6.6 — only a `debt`-role transaction settles an opening debt
+ * (`settles_opening_debt_id`). Postgres states it as the CHECK
+ * `transactions_opening_link_shape`; the replica adds the column with `ALTER`,
+ * and a CHECK on an existing table is a rebuild, so it is a trigger — the
+ * shape every guarantee on `transactions` takes here. `0023_schema` rebuilds
+ * nothing, so the pair is created by its hook; **a later step that rebuilds
+ * `transactions` must re-create it**, which `migrate.test.ts` censuses.
+ */
+const OPENING_LINK_TRIGGERS: readonly string[] = [
+  `CREATE TRIGGER IF NOT EXISTS \`transactions_opening_link_shape_insert\`
+BEFORE INSERT ON \`transactions\`
+FOR EACH ROW WHEN NEW.\`settles_opening_debt_id\` IS NOT NULL AND NEW.\`obligation_role\` IS NOT 'debt'
+BEGIN
+	SELECT RAISE(ABORT, 'only a debt-role row can settle an opening debt (transactions_opening_link_shape)');
+END`,
+  `CREATE TRIGGER IF NOT EXISTS \`transactions_opening_link_shape_update\`
+BEFORE UPDATE OF \`settles_opening_debt_id\`, \`obligation_role\` ON \`transactions\`
+FOR EACH ROW WHEN NEW.\`settles_opening_debt_id\` IS NOT NULL AND NEW.\`obligation_role\` IS NOT 'debt'
+BEGIN
+	SELECT RAISE(ABORT, 'only a debt-role row can settle an opening debt (transactions_opening_link_shape)');
+END`,
+];
+
 export const REPLICA_BACKFILLS: Readonly<Record<string, Backfill>> = {
   "0006_schema": {
     check: (db) => {
@@ -983,6 +1007,11 @@ export const REPLICA_BACKFILLS: Readonly<Record<string, Backfill>> = {
           `update "dashboard_widgets" set "external_id" = '${PRESET_KEY}:' || "kind" where "external_id" is null and "layout_id" in (select "id" from "dashboard_layouts" where "is_preset" = 1)`,
         ),
       );
+    },
+  },
+  "0023_schema": {
+    objects: (tx) => {
+      for (const statement of OPENING_LINK_TRIGGERS) tx.run(sql.raw(statement));
     },
   },
   "0021_debt_categories": {

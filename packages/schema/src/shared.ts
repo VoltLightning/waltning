@@ -7,6 +7,29 @@
  * added to one module and not the other fails here, before the row types are
  * even compared.
  */
+/**
+ * What `merge_counterparties` did to one of the loser's opening debts (§6.6),
+ * kept on the merge record so `unmerge_counterparties` can reverse it exactly.
+ * `moved` — the winner had none in that currency, so the row changed owner.
+ * `combined` — it had, so the two were summed into the winner's row (the
+ * loser's row is soft-deleted, `winnerBefore` is what the winner's held, and
+ * `relinked` the repayments that were pointed at the winner's row). `cancelled`
+ * — the two summed to nothing and both rows were soft-deleted.
+ */
+export type MovedOpeningDebt =
+  | { readonly mode: "moved"; readonly id: string }
+  | {
+      readonly mode: "combined" | "cancelled";
+      readonly id: string;
+      readonly into: string;
+      readonly winnerBefore: {
+        readonly direction: "theyOwe" | "youOwe";
+        readonly amount: string;
+        readonly date: string;
+      };
+      readonly relinked: readonly string[];
+    };
+
 export type SharedTable =
   | "accountGroups"
   | "accounts"

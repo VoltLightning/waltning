@@ -103,6 +103,7 @@ export async function counterpartyBalances(db: DbHandle): Promise<CounterpartyBa
         ${openingDebts.currency} AS currency,
         ${openingDebtDelta} AS delta
       FROM ${openingDebts}
+      WHERE ${openingDebts.deletedAt} IS NULL
     )
     SELECT l.counterparty_id AS counterparty_id,
            l.currency AS currency,

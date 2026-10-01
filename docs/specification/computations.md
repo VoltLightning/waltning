@@ -272,6 +272,13 @@ inflow(p, s) = Σ amount_pivot over T where type = 'income'   ∧ in(p) ∧ in(s
 net(p, s)    = inflow − spend
 ```
 
+**A repayment of an opening debt is in none of these** (§6.6): a settlement
+stamped with `settles_opening_debt_id` is excluded from `spend`, `inflow` and
+`net` — and from every figure built on `T` below (§6, the day and month flows,
+income against expense) — in both directions, while still moving the account it
+was paid from or into (§2). Money lent or borrowed before the ledger began is not
+earned or spent when it is repaid.
+
 `net` is **all inflows minus all outflows**, not earnings-only. *Earned* is a
 separate figure using `categories.is_earnings` (§6.7).
 
@@ -461,7 +468,7 @@ S14 (both only ever create single-leg `income`/`expense` debt rows). If a
 transfer-shaped debt with the counterparty on the `from` leg is ever needed,
 this rule — and both implementations of it — changes together.
 
-**An opening debt is a leg of the same fold** (§6.6). A debt that predates the
+**An opening debt is a leg of the same fold** (§6.6), unless it is deleted. A debt that predates the
 ledger is one row in `opening_debts`, not a transaction, and contributes
 `+amount` (`theyOwe`) or `−amount` (`youOwe`) to `balance(c, ccy)` for its own
 currency — the sign a lend (`expense`) and a borrow (`income`) already give, so

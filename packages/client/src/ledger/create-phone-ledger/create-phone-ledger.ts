@@ -50,8 +50,10 @@ import {
   createGroupInput,
   createTransactionInput,
   type DeleteAccountInput,
+  type DeleteOpeningDebtInput,
   type DeleteTransactionInput,
   deleteAccountInput,
+  deleteOpeningDebtInput,
   deleteTransactionInput,
   type MergeCategoriesInput,
   type MergeCounterpartiesInput,
@@ -423,6 +425,34 @@ export type PhoneOpeningDebt = {
   direction: "theyOwe" | "youOwe";
   amount: Money;
   date: AccountingDate;
+  /** What the repayments made against it have discharged, in its own currency. */
+  repaid: Money;
+  /** Those repayments, with the account each moved — what deleting the debt takes with it. */
+  repayments: readonly {
+    id: Id<"transactions">;
+    accountId: Id<"accounts">;
+    accountName: string;
+    amount: Money;
+    accountAmount: Money;
+    accountCurrency: CurrencyCode;
+  }[];
+};
+
+/**
+ * What recording an existing debt did to the person's balance — returned the
+ * way `settle_debt` returns its residual (§6.6): a re-recorded figure re-signs
+ * the repayments already made, and `flipped` says the balance now points the
+ * other way from the direction just recorded.
+ */
+export type PhoneRecordOpeningDebtResult = {
+  balance: Money;
+  repaid: Money;
+  flipped: boolean;
+};
+
+export type PhoneDeleteOpeningDebtResult = {
+  deletedRepayments: number;
+  repaid: Money;
 };
 
 /** What settling with someone actually did — H9, never supplied, only returned. */
@@ -1000,7 +1030,15 @@ export type PhoneLedgerPort = {
     capture: PhoneCapture,
   ) => void;
   /** §6.6 — a debt that predates the ledger; replaces the one in the same currency. */
-  recordOpeningDebt: (input: RecordOpeningDebtInput, capture: PhoneCapture) => void;
+  recordOpeningDebt: (
+    input: RecordOpeningDebtInput,
+    capture: PhoneCapture,
+  ) => PhoneRecordOpeningDebtResult;
+  /** §6.6 — an existing debt and every repayment made against it, in one write. */
+  deleteOpeningDebt: (
+    input: DeleteOpeningDebtInput,
+    capture: PhoneCapture,
+  ) => PhoneDeleteOpeningDebtResult;
   /**
    * The one port write with a real return value — `residual`/`overSettled`
    * are H9's whole point, computed server-side (or, with none yet, by the
@@ -1965,7 +2003,19 @@ export type PhoneLedgerController = {
    */
   recordOpeningDebt: (
     draft: RecordOpeningDebtDraft,
-  ) => { id: Id<"openingDebts"> } | { fieldErrors: readonly FieldError[] };
+  ) =>
+    | ({ id: Id<"openingDebts"> } & PhoneRecordOpeningDebtResult)
+    | { fieldErrors: readonly FieldError[] };
+  /**
+   * §6.6 — deletes an existing debt **and every repayment made against it**,
+   * in one write; the screen lists them first, because the accounts they
+   * moved change.
+   */
+  deleteOpeningDebt: (
+    id: string,
+  ) =>
+    | ({ id: Id<"openingDebts"> } & PhoneDeleteOpeningDebtResult)
+    | { fieldErrors: readonly FieldError[] };
   settleDebt: (
     draft: SettleDebtDraft,
   ) =>
@@ -3534,6 +3584,7 @@ export function createPhoneLedger(
           amount: draft.amount,
           currency: draft.currency,
           date: draft.date,
+          today: capture.date,
         });
         if (!parsed.success) {
           return finish(
@@ -3542,8 +3593,9 @@ export function createPhoneLedger(
             { fieldErrors: fieldErrorsFromZod(parsed.error) ?? [] },
           );
         }
+        let recorded: PhoneRecordOpeningDebtResult;
         try {
-          port.recordOpeningDebt(parsed.data, capture);
+          recorded = port.recordOpeningDebt(parsed.data, capture);
         } catch (writeError) {
           return finish(
             diagnostics,
@@ -3555,12 +3607,54 @@ export function createPhoneLedger(
         return finish(
           diagnostics,
           { scope: "client_action", action: "record_opening_debt" },
-          { id: parsed.data.id },
+          { id: parsed.data.id, ...recorded },
         );
       } catch (error) {
         emitClientDiagnostic(diagnostics, {
           scope: "client_action",
           action: "record_opening_debt",
+          phase: "failure",
+          error: clientFailure(error),
+        });
+        throw error;
+      }
+    },
+    deleteOpeningDebt: (openingDebtId) => {
+      emitClientDiagnostic(diagnostics, {
+        scope: "client_action",
+        action: "delete_opening_debt",
+        phase: "start",
+      });
+      try {
+        const capture = runtime.capture();
+        const parsed = deleteOpeningDebtInput.safeParse({ id: openingDebtId });
+        if (!parsed.success) {
+          return finish(
+            diagnostics,
+            { scope: "client_action", action: "delete_opening_debt" },
+            { fieldErrors: fieldErrorsFromZod(parsed.error) ?? [] },
+          );
+        }
+        let deleted: PhoneDeleteOpeningDebtResult;
+        try {
+          deleted = port.deleteOpeningDebt(parsed.data, capture);
+        } catch (writeError) {
+          return finish(
+            diagnostics,
+            { scope: "client_action", action: "delete_opening_debt" },
+            { fieldErrors: refusalFromThrow(writeError) },
+          );
+        }
+        refresh();
+        return finish(
+          diagnostics,
+          { scope: "client_action", action: "delete_opening_debt" },
+          { id: parsed.data.id, ...deleted },
+        );
+      } catch (error) {
+        emitClientDiagnostic(diagnostics, {
+          scope: "client_action",
+          action: "delete_opening_debt",
           phase: "failure",
           error: clientFailure(error),
         });

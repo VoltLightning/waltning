@@ -127,6 +127,10 @@ warning while someone is still typing *Ann* is noise.
 2. ~~**Should a merge be reversible?**~~ **Decided: yes, indefinitely.** The
    absorbed counterparty is **archived, not deleted**, and the merge records
    exactly which transactions moved. Unmerge restores them and un-archives it.
+   **The absorbed record's existing debts (`SPEC.md` §6.6) go with it**: moved
+   where the winner has none in that currency, summed by sign into the winner's
+   row where both do (both dropped if they cancel), and recorded so unmerge
+   restores exactly them — anything changed since is left as it is.
 
    This follows the system's existing instinct — archive, never delete, because
    history references it (§6.9) — and it is what makes `MatchWarning`'s *same

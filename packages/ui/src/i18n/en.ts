@@ -850,7 +850,7 @@ export const en = {
     existingDebtAdd: "Add an existing debt",
     existingDebtTitle: "Existing debt with {{name}}",
     existingDebtHint:
-      "A debt that already existed before this ledger. It sets the starting balance and is neither income nor spending. Recording it again in the same currency replaces it.",
+      "A debt that already existed before this ledger. It sets the starting balance and is neither income nor spending, and neither are the repayments made against it. Enter the original amount, not what is left. Recording it again in the same currency replaces it.",
     existingDebtDirection: "Who owes whom",
     existingDebtTheyOwe: "They owe you",
     existingDebtYouOwe: "You owe them",
@@ -861,6 +861,18 @@ export const en = {
     existingDebtRow: "Existing debt",
     existingDebtRowMeta: "{{direction}} · since {{date}}",
     existingDebtReplaces: "This replaces the existing debt in {{currency}}.",
+    existingDebtDelete: "Delete this debt",
+    existingDebtDeleteTitle: "Delete the existing debt?",
+    existingDebtDeleteBody: "The existing debt with {{name}} is deleted.",
+    existingDebtDeleteChain:
+      "Repayments made against it are deleted too: {{count}} in all, {{amount}} {{currency}}, from {{accounts}}. The balances of those accounts change.",
+    existingDebtDeleteSubmit: "Delete",
+    existingDebtDeleted: "Existing debt deleted",
+    existingDebtRepaid: "Already repaid",
+    existingDebtBalanceAfter: "Balance after saving",
+    existingDebtFlips:
+      "More has already been repaid than this amount, so saving turns the debt around.",
+    existingDebtDateFuture: "An existing debt dates from today or earlier.",
     /** The balance picker (S14 §9.1). */
     discharges: "Discharges",
     theyOweYou: "they owe you",

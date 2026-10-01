@@ -37,6 +37,8 @@ export const openingDebtsColumns = () => ({
   direction: k.text("direction", { enum: OPENING_DEBT_DIRECTION }).notNull(),
   amount: k.money("amount").notNull(),
   date: k.date("date").notNull(),
+  /** Deleting an opening debt (and its repayments) is a soft delete, like a transaction's. */
+  deletedAt: k.timestamp("deleted_at"),
   createdAt: k.stamp("created_at"),
   updatedAt: k.stamp("updated_at"),
 });

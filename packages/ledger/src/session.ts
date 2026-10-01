@@ -31,6 +31,7 @@ import type {
   CreateGroupInput,
   CreateTransactionInput,
   DeleteAccountInput,
+  DeleteOpeningDebtInput,
   DeleteTransactionInput,
   MergeCategoriesInput,
   MergeCounterpartiesInput,
@@ -108,6 +109,10 @@ import {
   type LocalCounterpartyRow,
 } from "./counterparties/create-counterparty.executor.ts";
 import {
+  type DeleteOpeningDebtResult,
+  deleteOpeningDebtExecutor,
+} from "./counterparties/delete-opening-debt.executor.ts";
+import {
   type MergeCounterpartiesResult,
   mergeCounterpartiesExecutor,
 } from "./counterparties/merge-counterparties.executor.ts";
@@ -131,7 +136,7 @@ import {
   recordDistinctCounterpartiesExecutor,
 } from "./counterparties/record-distinct-counterparties.executor.ts";
 import {
-  type LocalOpeningDebtRow,
+  type RecordOpeningDebtResult,
   recordOpeningDebtExecutor,
 } from "./counterparties/record-opening-debt.executor.ts";
 import {
@@ -471,7 +476,9 @@ export type LocalLedgerSession = {
     capture: Capture,
   ) => LocalDistinctPairRow;
   /** §6.6 — a debt that predates the ledger, on the person's page; replaces one in the same currency. */
-  recordOpeningDebt: (input: RecordOpeningDebtInput, capture: Capture) => LocalOpeningDebtRow;
+  recordOpeningDebt: (input: RecordOpeningDebtInput, capture: Capture) => RecordOpeningDebtResult;
+  /** §6.6 — an existing debt and every repayment made against it, in one write. */
+  deleteOpeningDebt: (input: DeleteOpeningDebtInput, capture: Capture) => DeleteOpeningDebtResult;
   /** H9: takes the amount and what it discharges — never a residual. Returns one. */
   settleDebt: (input: SettleDebtInput, capture: Capture) => SettleDebtResult;
   /** J08's split — one write, one row per share (`allocate-shares.executor.ts`). */
@@ -1082,6 +1089,14 @@ export function createLocalLedgerSession<TRun>(
     recordOpeningDebt: (input, capture) =>
       writeLocally(requireOpen(), {
         executor: recordOpeningDebtExecutor,
+        registry: ledgerRegistry,
+        input,
+        capture,
+        ...(options.diagnostics ? { diagnostics: options.diagnostics } : {}),
+      }).row,
+    deleteOpeningDebt: (input, capture) =>
+      writeLocally(requireOpen(), {
+        executor: deleteOpeningDebtExecutor,
         registry: ledgerRegistry,
         input,
         capture,

@@ -5,6 +5,7 @@ CREATE TABLE "opening_debts" (
 	"direction" text NOT NULL,
 	"amount" numeric(20, 8) NOT NULL,
 	"date" date NOT NULL,
+	"deleted_at" timestamp with time zone,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "opening_debts_amount_positive" CHECK ("opening_debts"."amount" > 0),
@@ -12,17 +13,22 @@ CREATE TABLE "opening_debts" (
 	CONSTRAINT "opening_debts_direction_known" CHECK ("opening_debts"."direction" in ('theyOwe', 'youOwe'))
 );
 --> statement-breakpoint
+ALTER TABLE "counterparty_merges" ADD COLUMN "moved_opening_debts" jsonb DEFAULT '[]'::jsonb NOT NULL;--> statement-breakpoint
+ALTER TABLE "transactions" ADD COLUMN "settles_opening_debt_id" uuid;--> statement-breakpoint
 ALTER TABLE "opening_debts" ADD CONSTRAINT "opening_debts_counterparty_id_counterparties_id_fk" FOREIGN KEY ("counterparty_id") REFERENCES "public"."counterparties"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "opening_debts" ADD CONSTRAINT "opening_debts_currency_currencies_code_fk" FOREIGN KEY ("currency") REFERENCES "public"."currencies"("code") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-CREATE UNIQUE INDEX "opening_debts_counterparty_currency_uq" ON "opening_debts" USING btree ("counterparty_id","currency");
+CREATE UNIQUE INDEX "opening_debts_counterparty_currency_uq" ON "opening_debts" USING btree ("counterparty_id","currency") WHERE "opening_debts"."deleted_at" is null;--> statement-breakpoint
+ALTER TABLE "transactions" ADD CONSTRAINT "transactions_settles_opening_debt_id_opening_debts_id_fk" FOREIGN KEY ("settles_opening_debt_id") REFERENCES "public"."opening_debts"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+CREATE INDEX "transactions_opening_debt_idx" ON "transactions" USING btree ("settles_opening_debt_id") WHERE "transactions"."settles_opening_debt_id" is not null;--> statement-breakpoint
+ALTER TABLE "transactions" ADD CONSTRAINT "transactions_opening_link_shape" CHECK ("transactions"."settles_opening_debt_id" is null or coalesce("transactions"."obligation_role" = 'debt', false));
 --> statement-breakpoint
 -- ═══ The scale guarantee, hand-written because drizzle-kit cannot emit a trigger ═══
 --
 -- `opening_debts.amount` carries its own `currency`, so a figure past that
 -- currency's declared decimals is refused here, the same shape and SQLSTATE
 -- (`WA016`) `debt_reassignments` has — CHECKs bound the number, this bounds
--- the precision against a second table's row. `deleted_at` does not exist on
--- this table: an opening debt is replaced, never soft-deleted.
+-- the precision against a second table's row. A soft-deleted row is checked
+-- like any other: a restore writes the past, and the past must still fit.
 CREATE OR REPLACE FUNCTION assert_opening_debt_amount_scale()
 RETURNS trigger LANGUAGE plpgsql AS $$
 DECLARE

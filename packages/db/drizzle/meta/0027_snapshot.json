@@ -1,5 +1,5 @@
 {
-  "id": "8cc98545-4434-457c-a6f2-9d15b2635249",
+  "id": "eb7b18e7-d6cd-43f0-a34d-5cc662fe53c9",
   "prevId": "7f63a547-c023-4802-9750-f30bd59411c7",
   "version": "7",
   "dialect": "postgresql",
@@ -1459,6 +1459,13 @@
           "notNull": true,
           "default": "'[]'::jsonb"
         },
+        "moved_opening_debts": {
+          "name": "moved_opening_debts",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'[]'::jsonb"
+        },
         "merged_at": {
           "name": "merged_at",
           "type": "timestamp with time zone",
@@ -2497,6 +2504,12 @@
           "primaryKey": false,
           "notNull": true
         },
+        "deleted_at": {
+          "name": "deleted_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp with time zone",
@@ -2530,6 +2543,7 @@
             }
           ],
           "isUnique": true,
+          "where": "\"opening_debts\".\"deleted_at\" is null",
           "concurrently": false,
           "method": "btree",
           "with": {}
@@ -3941,6 +3955,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "settles_opening_debt_id": {
+          "name": "settles_opening_debt_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
         "amount_original": {
           "name": "amount_original",
           "type": "numeric(20, 8)",
@@ -4230,6 +4250,22 @@
           "method": "btree",
           "with": {}
         },
+        "transactions_opening_debt_idx": {
+          "name": "transactions_opening_debt_idx",
+          "columns": [
+            {
+              "expression": "settles_opening_debt_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"transactions\".\"settles_opening_debt_id\" is not null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
         "transactions_entered_name_idx": {
           "name": "transactions_entered_name_idx",
           "columns": [
@@ -4379,6 +4415,19 @@
           "onDelete": "no action",
           "onUpdate": "no action"
         },
+        "transactions_settles_opening_debt_id_opening_debts_id_fk": {
+          "name": "transactions_settles_opening_debt_id_opening_debts_id_fk",
+          "tableFrom": "transactions",
+          "tableTo": "opening_debts",
+          "columnsFrom": [
+            "settles_opening_debt_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
         "transactions_currency_currencies_code_fk": {
           "name": "transactions_currency_currencies_code_fk",
           "tableFrom": "transactions",
@@ -4466,6 +4515,10 @@
         "transactions_obligation_pair_shape": {
           "name": "transactions_obligation_pair_shape",
           "value": "(\"transactions\".\"obligation_counterparty_id\" is not null) = (\"transactions\".\"obligation_role\" is not null)"
+        },
+        "transactions_opening_link_shape": {
+          "name": "transactions_opening_link_shape",
+          "value": "\"transactions\".\"settles_opening_debt_id\" is null or coalesce(\"transactions\".\"obligation_role\" = 'debt', false)"
         },
         "transactions_occurrence_shape": {
           "name": "transactions_occurrence_shape",

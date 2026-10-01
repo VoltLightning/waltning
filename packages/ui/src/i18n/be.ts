@@ -450,7 +450,7 @@ export const be: Messages = {
     existingDebtAdd: "Дадаць існуючы доўг",
     existingDebtTitle: "Існуючы доўг: {{name}}",
     existingDebtHint:
-      "Доўг, які ўзнік да вядзення гэтай кнігі. Ён задае пачатковы баланс і не з’яўляецца ні даходам, ні выдаткам. Паўторны запіс у той самай валюце замяняе папярэдні.",
+      "Доўг, які ўзнік да вядзення гэтай кнігі. Ён задае пачатковы баланс і не з’яўляецца ні даходам, ні выдаткам; пагашэнні па ім — таксама. Пакажыце першапачатковую суму, а не астатак. Паўторны запіс у той самай валюце замяняе папярэдні.",
     existingDebtDirection: "Хто каму вінен",
     existingDebtTheyOwe: "Вам вінны",
     existingDebtYouOwe: "Вы вінны",
@@ -461,6 +461,18 @@ export const be: Messages = {
     existingDebtRow: "Існуючы доўг",
     existingDebtRowMeta: "{{direction}} · з {{date}}",
     existingDebtReplaces: "Гэта заменіць існуючы доўг у валюце {{currency}}.",
+    existingDebtDelete: "Выдаліць гэты доўг",
+    existingDebtDeleteTitle: "Выдаліць існуючы доўг?",
+    existingDebtDeleteBody: "Існуючы доўг: {{name}} будзе выдалены.",
+    existingDebtDeleteChain:
+      "Разам з ім будуць выдалены пагашэнні па ім: усяго {{count}}, {{amount}} {{currency}}, з рахункаў: {{accounts}}. Рэшткі на гэтых рахунках зменяцца.",
+    existingDebtDeleteSubmit: "Выдаліць",
+    existingDebtDeleted: "Існуючы доўг выдалены",
+    existingDebtRepaid: "Ужо пагашана",
+    existingDebtBalanceAfter: "Баланс пасля захавання",
+    existingDebtFlips:
+      "Ужо пагашана больш за гэтую суму, таму пасля захавання доўг змяніць кірунак.",
+    existingDebtDateFuture: "Існуючы доўг датуецца сённяшнім днём або больш раннім.",
     discharges: "Пагашае",
     theyOweYou: "вінен вам",
     youOweThem: "вы вінны",

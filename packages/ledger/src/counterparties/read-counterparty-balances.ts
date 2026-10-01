@@ -226,6 +226,7 @@ export function readCounterpartyBalances<TRun, TSchema extends typeof ledgerSche
     })
     .from(openingDebts)
     .innerJoin(counterparties, eq(openingDebts.counterpartyId, counterparties.id))
+    .where(isNull(openingDebts.deletedAt))
     .orderBy(openingDebts.counterpartyId, openingDebts.currency)
     .all();
   for (const row of openingRows) {
@@ -330,7 +331,7 @@ export function balancesForCounterparty(
       currency: openingDebts.currency,
     })
     .from(openingDebts)
-    .where(eq(openingDebts.counterpartyId, counterpartyId))
+    .where(and(eq(openingDebts.counterpartyId, counterpartyId), isNull(openingDebts.deletedAt)))
     .all();
 
   return money.counterpartyBalance([
