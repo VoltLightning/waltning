@@ -1077,6 +1077,14 @@ export const supersedeTransactionInput = z
     supersedesId: zId<"transactions">(),
     supersedesVersion: z.number().int().positive(),
     replacement: createTransactionInput,
+    /**
+     * The id of a second row, for a replacement of a payment that was split
+     * against an existing debt (§6.6) and still crosses the end of it: the same
+     * boundary `settle_debt` writes two rows for. Minted by the caller whether
+     * or not it turns out to be needed; without it a crossing replacement is
+     * written whole and ordinary.
+     */
+    spillId: zId<"transactions">().optional(),
   })
   /**
    * The replacement is a new row. Allowing `replacement.id === supersedesId`

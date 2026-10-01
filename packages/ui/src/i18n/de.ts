@@ -377,6 +377,8 @@ export const de: Messages = {
       "Für {{currency}} liegt kein Wechselkurs vor. Bitte begleichen Sie die Schuld auf der Seite der Person.",
     openingLinkShape:
       "Eine Rückzahlung kann nur mit einer bestehenden Schuld verknüpft bleiben, solange sie eine Schuld bei derselben Person ist.",
+    splitPayment:
+      "Diese Zahlung wurde auf eine bestehende Schuld aufgeteilt. Bitte ändern Sie sie als Ganzes, indem Sie sie löschen und erneut erfassen.",
     reSettle:
       "Diese Rückzahlung begleicht einen anderen Betrag als den gezahlten (andere Währung oder ein erlassener Teil), daher lässt sich aus dem neuen Betrag nicht ableiten, welcher Teil der Schuld damit beglichen wird. Bitte löschen Sie sie und erfassen Sie die Rückzahlung erneut.",
     splitDebtCategory:

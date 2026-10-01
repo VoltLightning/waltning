@@ -31,6 +31,7 @@ import type { LocalExecutor } from "../executor.ts";
 import { ledgerRegistry } from "../registry.ts";
 import { ledgerSchema as schema } from "../schema-map.ts";
 import { categorizeBatchExecutor } from "../transactions/categorize-batch.executor.ts";
+import { deleteTransactionExecutor } from "../transactions/delete-transaction.executor.ts";
 import { readContextRows } from "../transactions/read-context-rows.ts";
 import { readDayFlows } from "../transactions/read-day-flows.ts";
 import { readIncomeVsExpense } from "../transactions/read-income-vs-expense.ts";
@@ -970,39 +971,131 @@ describe("editing the size of a linked repayment re-checks what is open", () => 
 });
 
 describe("a split payment is one payment", () => {
-  it("both halves name the same pair, and replacing either is refused", () => {
-    recordOpening();
+  const importLine = (replacementId: string, amount: string) => ({
+    id: replacementId,
+    date: "2026-09-02",
+    type: "income",
+    accountId: ACCOUNT,
+    amountOriginal: amount,
+    currency: "PLN",
+    counterpartyId: NINA,
+    obligationCounterpartyId: NINA,
+    obligationRole: "debt",
+    enteredName: "Nina",
+  });
+
+  const splitHundred = () => {
+    recordOpening({ amount: "50" });
     debtRow({ amountOriginal: money.toMoney("100") });
     const crossed = settle({
-      amount: "250",
-      discharges: { currency: "PLN", amount: "250" },
+      amount: "100",
+      discharges: { currency: "PLN", amount: "100" },
       spillId: nextId(),
     });
-    const linked = crossed.row.row;
-    const spill = crossed.row.spill;
+    return { linked: crossed.row.row, spill: crossed.row.spill };
+  };
+
+  it("both halves name the same pair", () => {
+    const { linked, spill } = splitHundred();
     expect(linked.paymentPairId).toBe(linked.id);
     expect(spill?.paymentPairId).toBe(linked.id);
+    expect(linked.amountOriginal).toBe(money.toMoney("50"));
+    expect(spill?.amountOriginal).toBe(money.toMoney("50"));
+  });
 
-    const replacement = (replacementId: string) => ({
-      id: replacementId,
-      date: "2026-09-02",
-      type: "income",
-      accountId: ACCOUNT,
-      amountOriginal: "50",
-      currency: "PLN",
-      counterpartyId: NINA,
-      obligationCounterpartyId: NINA,
-      obligationRole: "debt",
-      enteredName: "Nina",
+  it("superseding either half supersedes the pair: the account moves once, and the link is re-derived", () => {
+    for (const which of ["linked", "spill"] as const) {
+      s.close();
+      s = scratchStores();
+      const db = s.ledger.replica.db;
+      db.insert(schema.currencies)
+        .values([
+          { code: PLN, name: "Placeholder", decimals: 2, isPivot: true },
+          { code: EUR, name: "Placeholder", decimals: 2 },
+        ])
+        .run();
+      db.insert(schema.accounts).values({ id: ACCOUNT, name: "Bank A · PLN", currency: PLN }).run();
+      db.insert(counterparties)
+        .values([
+          { id: NINA, name: "Nina", nameFolded: "nina" },
+          { id: MAREK, name: "Marek", nameFolded: "marek" },
+        ])
+        .run();
+
+      const accountAtStart = accountBalance();
+      const { linked, spill } = splitHundred();
+      const half = which === "linked" ? linked : spill;
+      // The lend took 100 out and the payment put 100 back.
+      expect(accountBalance()).toBe(accountAtStart);
+      const beforeImport = accountBalance();
+
+      const replacementId = nextId();
+      const spillId = nextId();
+      write(supersedeTransactionExecutor, {
+        supersedesId: half?.id,
+        supersedesVersion: half?.version,
+        replacement: importLine(replacementId, "100"),
+        spillId,
+      });
+
+      // Both old halves are gone, the account moved by 100 once, and the
+      // import is written against the debt the same way a settlement would be.
+      const live = liveTransactions().filter((row) => row.obligationRole === "debt");
+      const ids = live.map((row) => row.id);
+      expect(ids).not.toContain(linked.id);
+      expect(ids).not.toContain(spill?.id);
+      expect(ids).toContain(replacementId);
+      expect(ids).toContain(spillId);
+      const parts = live.filter((row) => row.paymentPairId === replacementId);
+      expect(parts).toHaveLength(2);
+      expect(parts.reduce((sum, row) => money.add(sum, row.amountOriginal), money.ZERO)).toBe(
+        money.toMoney("100"),
+      );
+      expect(accountBalance()).toBe(beforeImport);
+      expect(linkOf(replacementId)).not.toBeNull();
+      expect(linkOf(spillId)).toBeNull();
+    }
+  });
+
+  it("writes a crossing import whole and ordinary when no spillId is given", () => {
+    const { linked } = splitHundred();
+    const replacementId = nextId();
+    write(supersedeTransactionExecutor, {
+      supersedesId: linked.id,
+      supersedesVersion: linked.version,
+      replacement: importLine(replacementId, "100"),
+    });
+    expect(rowOf(replacementId)?.amountOriginal).toBe(money.toMoney("100"));
+    expect(linkOf(replacementId)).toBeNull();
+  });
+
+  it("deleting either half deletes both", () => {
+    const { linked, spill } = splitHundred();
+    write(deleteTransactionExecutor, { id: spill?.id, version: spill?.version });
+    expect(liveTransactions().map((row) => row.id)).not.toContain(linked.id);
+    expect(liveTransactions().map((row) => row.id)).not.toContain(spill?.id);
+  });
+
+  it("refuses an amount, account or person edit on a half, and applies a note or date edit to both", () => {
+    const { linked, spill } = splitHundred();
+    for (const patch of [
+      { amountOriginal: "60" },
+      { accountId: ACCOUNT },
+      { obligationCounterpartyId: MAREK },
+    ]) {
+      expect(() =>
+        write(updateTransactionExecutor, { id: linked.id, version: linked.version, patch }),
+      ).toThrow(/split against an existing debt — change it as a whole/);
+    }
+
+    write(updateTransactionExecutor, {
+      id: linked.id,
+      version: linked.version,
+      patch: { note: "paid back", date: "2026-09-04" },
     });
     for (const half of [linked, spill]) {
-      expect(() =>
-        write(supersedeTransactionExecutor, {
-          supersedesId: half?.id,
-          supersedesVersion: half?.version,
-          replacement: replacement(nextId()),
-        }),
-      ).toThrow(/this payment was split against an existing debt — replace both/);
+      expect(rowOf(half?.id ?? "")?.note).toBe("paid back");
+      expect(rowOf(half?.id ?? "")?.date).toBe("2026-09-04");
     }
   });
 

@@ -2065,6 +2065,10 @@ function refusalFromThrow<Caught>(error: Caught): readonly FieldError[] {
     return [{ path: "", message, messageKey: "transactions.unSplitFirst" }];
   }
   // §6.6 — a link to an existing debt the table refuses: a person or role changed under it.
+  // §6.6 — one payment written as two rows is changed as a whole.
+  if (message.includes("split against an existing debt")) {
+    return [{ path: "", message, messageKey: "transactions.splitPayment" }];
+  }
   if (message.includes("transactions_opening_link_shape")) {
     return [{ path: "", message, messageKey: "transactions.openingLinkShape" }];
   }

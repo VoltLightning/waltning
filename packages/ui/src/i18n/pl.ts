@@ -386,6 +386,8 @@ export const pl: Messages = {
     settleNeedsRate: "Brak kursu dla {{currency}}. Proszę rozliczyć dług na stronie osoby.",
     openingLinkShape:
       "Spłata może być powiązana z istniejącym długiem tylko dopóki pozostaje długiem wobec tej samej osoby.",
+    splitPayment:
+      "Ta płatność została podzielona na istniejący dług. Należy zmienić ją jako całość: usunąć i zapisać ponownie.",
     reSettle:
       "Ta spłata rozlicza inną kwotę niż wpłacona (inna waluta albo umorzona część), więc nowa kwota nie określa, jaka część długu zostaje rozliczona. Proszę ją usunąć i zapisać spłatę ponownie.",
     splitDebtCategory:

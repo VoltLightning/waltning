@@ -49,7 +49,7 @@ import {
   insertTransaction,
   type LocalTransactionRow,
 } from "../transactions/create-transaction.executor.ts";
-import { openingLinkFor } from "./opening-link.ts";
+import { openingLinkFor, planOpeningSplit } from "./opening-link.ts";
 import { balancesForCounterparty } from "./read-counterparty-balances.ts";
 
 const { accounts, counterparties, currencies } = schema;
@@ -217,66 +217,23 @@ function settleDebt(input: SettleDebtInput, tx: ReplicaTx): SettleDebtResult {
     discharge: money.Money;
     link: Id<"openingDebts"> | null;
   };
-  const whole: Part = {
-    id: input.id,
+  const plan = planOpeningSplit(tx, {
+    link,
     amount: input.amount,
+    accountCurrency: input.currency,
     discharge: input.discharges.amount,
-    link: null,
-  };
-  const parts: Part[] = (() => {
-    if (link === null) return [whole];
-    const linkedDischarge = money.toMoney(money.round(link.open, decimals));
-    if (money.cmp(linkedDischarge, money.ZERO) <= 0) return [whole];
-    if (money.cmp(input.discharges.amount, linkedDischarge) <= 0)
-      return [{ ...whole, link: link.id }];
-    const [accountCurrency] = tx
-      .select({ decimals: currencies.decimals })
-      .from(currencies)
-      .where(eq(currencies.code, input.currency))
-      .all();
-    const accountDecimals = accountCurrency?.decimals ?? 2;
-    const total = money.dec(input.amount);
-    const unit = money.dec(1).dividedBy(money.dec(10).pow(accountDecimals));
-    let linkedAmount = money.dec(
-      money.round(
-        money.toMoney(
-          total.times(money.dec(linkedDischarge)).dividedBy(money.dec(input.discharges.amount)),
-        ),
-        accountDecimals,
-      ),
+    dischargeDecimals: decimals,
+  });
+  if (plan.length > 1 && input.spillId === undefined) {
+    throw new LocalRefusal(
+      "settle_debt: this settlement pays down the rest of an existing debt and more — " +
+        "it is written as two rows, and the write carries no id for the second (spillId)",
     );
-    // **Dust.** Where one side of the proportion rounds to nothing at the
-    // account currency's scale (a cent of an existing debt against a payment in
-    // a stronger currency, or a payment that barely crosses its end), it takes
-    // one smallest unit instead: no zero-amount row is written, and the
-    // linked discharge stays capped at exactly what is open, so neither a cent
-    // of the existing debt is left open for ever nor is it over-linked.
-    if (linkedAmount.lte(0)) linkedAmount = unit;
-    if (total.minus(linkedAmount).lte(0)) linkedAmount = total.minus(unit);
-    // A payment of a single smallest unit cannot be two rows: it stays whole.
-    if (linkedAmount.lte(0) || total.minus(linkedAmount).lte(0)) return [whole];
-    const spillAmount = money.toMoney(total.minus(linkedAmount));
-    if (input.spillId === undefined) {
-      throw new LocalRefusal(
-        "settle_debt: this settlement pays down the rest of an existing debt and more — " +
-          "it is written as two rows, and the write carries no id for the second (spillId)",
-      );
-    }
-    return [
-      {
-        id: input.id,
-        amount: money.toMoney(linkedAmount),
-        discharge: linkedDischarge,
-        link: link.id,
-      },
-      {
-        id: input.spillId,
-        amount: money.toMoney(spillAmount),
-        discharge: money.toMoney(money.sub(input.discharges.amount, linkedDischarge)),
-        link: null,
-      },
-    ];
-  })();
+  }
+  const parts: Part[] = plan.map((part, index) => ({
+    ...part,
+    id: index === 0 || input.spillId === undefined ? input.id : input.spillId,
+  }));
 
   // `debt_currency`/`debt_amount` are not on `createTransactionInput` (the
   // ordinary capture path never sets them — see its own "not here, on

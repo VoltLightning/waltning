@@ -16,7 +16,7 @@ import {
   type UpdateTransactionInput,
   updateTransactionInput,
 } from "@waltning/core/registry/inputs";
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, eq, isNull, ne, sql } from "drizzle-orm";
 import { assertAmountPositive } from "../amount-sign.ts";
 import { openingLinkFor } from "../counterparties/opening-link.ts";
 import { defineLocalExecutor, LocalRefusal } from "../executor.ts";
@@ -33,6 +33,17 @@ import {
 } from "./debt-categories.ts";
 
 const { transactionLines, transactions } = schema;
+
+/** The edits that are true of both halves of a split payment (§6.6). */
+const PAIR_EDITABLE: ReadonlySet<string> = new Set([
+  "date",
+  "timeOfDay",
+  "enteredName",
+  "note",
+  "brandKey",
+  "isBusiness",
+  "isCapital",
+]);
 
 export const updateTransactionExecutor = defineLocalExecutor<
   typeof updateTransactionInput,
@@ -139,6 +150,28 @@ function patchTransaction(input: UpdateTransactionInput, tx: ReplicaTx): LocalTr
     throw new LocalRefusal(
       `update_transaction: stale version — read ${input.version}, row is at ${current.version}`,
     );
+  }
+
+  /**
+   * **One payment written as two rows (§6.6).** A half of a payment that was
+   * split against an existing debt takes only the edits that are true of both
+   * halves — when, what it is called, the note — and they are applied to the
+   * other half as well. Anything that would move one half's share of the money
+   * (the amount, the account, the person, the category) would silently
+   * disagree with the other, so it is refused: the payment is changed as a
+   * whole, by deleting it and recording it again.
+   */
+  if (current.paymentPairId !== null) {
+    const changed = Object.entries(input.patch)
+      .filter(([, value]) => value !== undefined)
+      .map(([key]) => key)
+      .filter((key) => !PAIR_EDITABLE.has(key));
+    if (changed.length > 0) {
+      throw new LocalRefusal(
+        "update_transaction: this payment was split against an existing debt — change it as a " +
+          "whole by deleting and recording it again",
+      );
+    }
   }
 
   /**
@@ -422,6 +455,23 @@ function patchTransaction(input: UpdateTransactionInput, tx: ReplicaTx): LocalTr
     // a throw here rolls the replica half back and leaves the outbox entry
     // standing, which `recover.ts` replays at the next launch.
     throw new Error("update_transaction: the row changed between read and write");
+  }
+  if (current.paymentPairId !== null) {
+    tx.update(transactions)
+      .set({
+        ...input.patch,
+        ...brandFields,
+        version: sql`${transactions.version} + 1`,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(transactions.paymentPairId, current.paymentPairId),
+          ne(transactions.id, current.id),
+          isNull(transactions.deletedAt),
+        ),
+      )
+      .run();
   }
   return updated;
 }

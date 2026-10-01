@@ -687,6 +687,8 @@ export const en = {
     settleNeedsRate: "No exchange rate for {{currency}}. Please settle from the person's page.",
     openingLinkShape:
       "A repayment can be linked to an existing debt only while it is still a debt with that person.",
+    splitPayment:
+      "This payment was split against an existing debt — change it as a whole by deleting it and recording it again.",
     reSettle:
       "This repayment settles a different figure than its amount (another currency, or a part forgiven), so a new amount does not say how much of the debt it settles. Please delete it and record the repayment again.",
     splitDebtCategory:

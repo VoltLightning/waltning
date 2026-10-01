@@ -1693,11 +1693,22 @@ only the ledger can see; the second row's id travels on the input (`spillId`).
 Where one side of that proportion rounds to nothing at the account currency's
 scale, it takes one smallest unit instead, so no zero-amount row is written and
 the linked discharge stays capped at exactly what is open — a cent of the
-existing debt is neither left open for ever nor over-linked. The two rows share
-a `payment_pair_id` (the first row's id): **they are one payment**, so
-`supersede_transaction` refuses either half (*this payment was split against an
-existing debt — replace both*) rather than let an import replacement count the
-same money twice. A linked repayment follows its person, role **and size**
+existing debt is neither left open for ever nor over-linked. That unit is **not
+a rate**: the dust row's implied rate is whatever one smallest unit divided by
+the cent it discharges happens to be, and nothing reads it as one. A crossing
+payment that is itself a single smallest unit cannot be two rows, so it **stays
+whole and unlinked** — an ordinary repayment. The two rows share a
+`payment_pair_id` (the first row's id): **they are one payment everywhere.**
+`supersede_transaction` of either half supersedes the pair — both halves are
+soft-deleted and the import row inserted in one write, then written against the
+debt again exactly as `settle_debt` would write it (linked whole where it fits,
+split again under a minted `spillId` where it still crosses, ordinary where
+nothing is open); `delete_transaction` of either half deletes both;
+`update_transaction` of a half applies the edits that are true of both (date,
+time, name, note, scope) to both halves and **refuses** the ones that would move
+one half's share — amount, account, person, category — with *this payment was
+split against an existing debt — change it as a whole by deleting and recording
+it again*. A linked repayment follows its person, role **and size**
 afterwards: `update_transaction` and `categorize_batch` clear the link when the
 person changes or the debt role goes, and `update_transaction` re-checks it
 whenever the amount, discharge or account changes — it stays only while the whole
