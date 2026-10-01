@@ -6,6 +6,7 @@ import { counterparties } from "./counterparties.sqlite.ts";
 import { currencies } from "./currencies.sqlite.ts";
 import { BRAND_SOURCE, OBLIGATION_ROLE, TXN_SOURCE, TXN_TYPE } from "./enums.ts";
 import { sqliteKit as k } from "./kit.ts";
+import { openingDebts } from "./opening-debts.sqlite.ts";
 import { recurringTransactions } from "./recurring-transactions.sqlite.ts";
 
 /**
@@ -95,6 +96,25 @@ export const transactionsColumns = () => ({
   obligationRole: k.text("obligation_role", { enum: OBLIGATION_ROLE }),
   debtCurrency: k.currency("debt_currency").references(() => currencies.code),
   debtAmount: k.money("debt_amount"),
+  /**
+   * **Which opening debt this settlement paid down** (§6.6) — set by
+   * `settle_debt` when the person has a live opening debt in the currency the
+   * settlement discharges. A repayment of a debt that predates the ledger is
+   * neither spending nor income, so every period figure leaves these rows out
+   * (they still move the account), and deleting the opening debt deletes them
+   * with it. Only a `debt`-role row carries it.
+   */
+  settlesOpeningDebtId: k
+    .uuid<"openingDebts">("settles_opening_debt_id")
+    .references(() => openingDebts.id),
+  /**
+   * **One payment that was written as two rows** (§6.6): a settlement that
+   * crossed the end of an existing debt is a linked part and an ordinary part,
+   * and both carry the same id here (the first row's own). The pair is one
+   * payment — replacing one half through an import would count the money twice —
+   * so `supersede_transaction` refuses either half.
+   */
+  paymentPairId: k.uuid<"transactions">("payment_pair_id"),
   amountOriginal: k.money("amount_original").notNull(),
   currency: k
     .currency("currency")

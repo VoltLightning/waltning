@@ -11,7 +11,7 @@
  * methods it is actually about.
  */
 
-import { toMoney } from "@waltning/core/money";
+import { toMoney, ZERO } from "@waltning/core/money";
 import type {
   PhoneLedgerPort,
   PhoneSearchPage,
@@ -52,6 +52,7 @@ export function basePort(overrides: Partial<PhoneLedgerPort> = {}): PhoneLedgerP
     readCategoryReferenceCounts: () => ({ transactions: 0, lines: 0, rules: 0 }),
     listCounterpartyMerges: () => [],
     listDistinctCounterpartyPairs: () => [],
+    listOpeningDebts: () => [],
     listNetWorth: () => [],
     readPeriodSpend: () => [],
     readDayFlows: () => [],
@@ -103,6 +104,8 @@ export function basePort(overrides: Partial<PhoneLedgerPort> = {}): PhoneLedgerP
     mergeCounterparties: () => undefined,
     unmergeCounterparties: () => undefined,
     recordDistinctCounterparties: () => undefined,
+    recordOpeningDebt: () => ({ balance: ZERO, repaid: ZERO, flipped: false }),
+    deleteOpeningDebt: () => ({ deletedRepayments: 0, repaid: ZERO }),
     settleDebt: () => ({ residual: toMoney("0"), overSettled: false }),
     allocateShares: () => ({ rows: [], remaining: toMoney("0") }),
     renameCategory: () => undefined,

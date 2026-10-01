@@ -16,8 +16,9 @@ import {
   type UpdateTransactionInput,
   updateTransactionInput,
 } from "@waltning/core/registry/inputs";
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, eq, isNull, ne, sql } from "drizzle-orm";
 import { assertAmountPositive } from "../amount-sign.ts";
+import { openingLinkFor } from "../counterparties/opening-link.ts";
 import { defineLocalExecutor, LocalRefusal } from "../executor.ts";
 import { assertAmountCeiling } from "../scale.ts";
 import { type ReplicaTx, ledgerSchema as schema } from "../schema-map.ts";
@@ -32,6 +33,17 @@ import {
 } from "./debt-categories.ts";
 
 const { transactionLines, transactions } = schema;
+
+/** The edits that are true of both halves of a split payment (§6.6). */
+const PAIR_EDITABLE: ReadonlySet<string> = new Set([
+  "date",
+  "timeOfDay",
+  "enteredName",
+  "note",
+  "brandKey",
+  "isBusiness",
+  "isCapital",
+]);
 
 export const updateTransactionExecutor = defineLocalExecutor<
   typeof updateTransactionInput,
@@ -138,6 +150,28 @@ function patchTransaction(input: UpdateTransactionInput, tx: ReplicaTx): LocalTr
     throw new LocalRefusal(
       `update_transaction: stale version — read ${input.version}, row is at ${current.version}`,
     );
+  }
+
+  /**
+   * **One payment written as two rows (§6.6).** A half of a payment that was
+   * split against an existing debt takes only the edits that are true of both
+   * halves — when, what it is called, the note — and they are applied to the
+   * other half as well. Anything that would move one half's share of the money
+   * (the amount, the account, the person, the category) would silently
+   * disagree with the other, so it is refused: the payment is changed as a
+   * whole, by deleting it and recording it again.
+   */
+  if (current.paymentPairId !== null) {
+    const changed = Object.entries(input.patch)
+      .filter(([, value]) => value !== undefined)
+      .map(([key]) => key)
+      .filter((key) => !PAIR_EDITABLE.has(key));
+    if (changed.length > 0) {
+      throw new LocalRefusal(
+        "update_transaction: this payment was split against an existing debt — change it as a " +
+          "whole by deleting and recording it again",
+      );
+    }
   }
 
   /**
@@ -335,6 +369,72 @@ function patchTransaction(input: UpdateTransactionInput, tx: ReplicaTx): LocalTr
         ) ?? {})
       : {};
 
+  /**
+   * **A linked repayment's link follows its person and its role (§6.6).**
+   * `settles_opening_debt_id` says *this paid down that person's existing
+   * debt*; change who the row is with, or take its debt role away, and the link
+   * is stale — left in place it would keep the row out of every period figure
+   * and let the wrong person's debt delete it, and with the role gone the table
+   * refuses it outright (`transactions_opening_link_shape`). So the link is
+   * cleared, and re-derived through the same rule `settle_debt` uses where the
+   * row still is a repayment of someone's existing debt — all of it, since an
+   * edit never splits a row.
+   */
+  const linkPatch = (() => {
+    if (current.settlesOpeningDebtId === null) return {};
+    // Who it is with, its role, **and how much it is** all decide whether the
+    // row still fits in what is open on the existing debt: an amount raised from
+    // 80 to 500 against a debt of 100 would otherwise stay linked, drop 400 of
+    // income from every period figure, and be deleted with the debt.
+    const sizeChanged =
+      "debtAmount" in restatedDebt ||
+      input.patch.amountOriginal !== undefined ||
+      "accountId" in input.patch;
+    if (!obligationInPatch && afterLeaving === undefined && !sizeChanged) return {};
+    const next =
+      afterLeaving !== undefined && "obligationRole" in afterLeaving
+        ? afterLeaving
+        : {
+            obligationCounterpartyId:
+              "obligationCounterpartyId" in input.patch
+                ? input.patch.obligationCounterpartyId
+                : current.obligationCounterpartyId,
+            obligationRole:
+              "obligationRole" in input.patch ? input.patch.obligationRole : current.obligationRole,
+          };
+    const cleared = { settlesOpeningDebtId: null };
+    if (
+      next.obligationRole !== "debt" ||
+      next.obligationCounterpartyId === null ||
+      next.obligationCounterpartyId === undefined ||
+      current.debtCurrency === null ||
+      current.debtAmount === null ||
+      (current.type !== "income" && current.type !== "expense")
+    ) {
+      return cleared;
+    }
+    const link = openingLinkFor(tx, {
+      counterpartyId: next.obligationCounterpartyId,
+      currency: current.debtCurrency,
+      type: current.type,
+      excluding: current.id,
+    });
+    const discharge =
+      "debtAmount" in restatedDebt && restatedDebt.debtAmount !== undefined
+        ? restatedDebt.debtAmount
+        : current.debtAmount;
+    // An edit never splits a row: it fits whole, or it is no longer linked.
+    // The row may move to a debt only if it was written after that debt was
+    // (a row staying with the debt it is linked to always was).
+    const predates =
+      link !== null && link.id !== current.settlesOpeningDebtId
+        ? current.createdAt > link.createdAt
+        : true;
+    return link !== null && predates && money.cmp(discharge, link.open) <= 0
+      ? { settlesOpeningDebtId: link.id }
+      : cleared;
+  })();
+
   const updated = tx
     .update(transactions)
     .set({
@@ -342,6 +442,7 @@ function patchTransaction(input: UpdateTransactionInput, tx: ReplicaTx): LocalTr
       ...brandFields,
       ...(afterLeaving ?? {}),
       ...restatedDebt,
+      ...linkPatch,
       version: sql`${transactions.version} + 1`,
       updatedAt: new Date(),
     })
@@ -360,6 +461,23 @@ function patchTransaction(input: UpdateTransactionInput, tx: ReplicaTx): LocalTr
     // a throw here rolls the replica half back and leaves the outbox entry
     // standing, which `recover.ts` replays at the next launch.
     throw new Error("update_transaction: the row changed between read and write");
+  }
+  if (current.paymentPairId !== null) {
+    tx.update(transactions)
+      .set({
+        ...input.patch,
+        ...brandFields,
+        version: sql`${transactions.version} + 1`,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(transactions.paymentPairId, current.paymentPairId),
+          ne(transactions.id, current.id),
+          isNull(transactions.deletedAt),
+        ),
+      )
+      .run();
   }
   return updated;
 }

@@ -272,6 +272,13 @@ inflow(p, s) = Σ amount_pivot over T where type = 'income'   ∧ in(p) ∧ in(s
 net(p, s)    = inflow − spend
 ```
 
+**A repayment of an opening debt is in none of these** (§6.6): a settlement
+stamped with `settles_opening_debt_id` is excluded from `spend`, `inflow` and
+`net` — and from every figure built on `T` below (§6, the day and month flows,
+income against expense) — in both directions, while still moving the account it
+was paid from or into (§2). Money lent or borrowed before the ledger began is not
+earned or spent when it is repaid.
+
 `net` is **all inflows minus all outflows**, not earnings-only. *Earned* is a
 separate figure using `categories.is_earnings` (§6.7).
 
@@ -360,6 +367,10 @@ This SQL stays the authoritative, server-side definition; `E9` differentials
 ---
 
 ## 6a · Transaction context
+
+*A repayment of an existing debt is left out here too* (§5, `SPEC.md` §6.6): the
+Who card's comparison rows skip a settlement stamped with
+`settles_opening_debt_id`.
 
 S09's context cards. Three figures, each about one transaction `x` and the
 six calendar months ending with **`x`'s own month** — `m₀ = month(x.date)`
@@ -461,12 +472,22 @@ S14 (both only ever create single-leg `income`/`expense` debt rows). If a
 transfer-shaped debt with the counterparty on the `from` leg is ever needed,
 this rule — and both implementations of it — changes together.
 
+**An opening debt is a leg of the same fold** (§6.6), unless it is deleted. A debt that predates the
+ledger is one row in `opening_debts`, not a transaction, and contributes
+`+amount` (`theyOwe`) or `−amount` (`youOwe`) to `balance(c, ccy)` for its own
+currency — the sign a lend (`expense`) and a borrow (`income`) already give, so
+nothing in the rule above is restated. It is **never** in an account's balance
+(§2), in spend or income (§5) or in net worth, because none of those read
+`opening_debts`; it appears in the person's balance and, for a company, in
+ageing (below) as a leg dated by its own `date`.
+
 `debt_currency` and `debt_amount` exist so a settlement can discharge a balance
 in a currency other than the one that changed hands (S14). Where null, the
 transaction's own currency and amount apply.
 
 Ageing, **companies only** (O15): FIFO — settlements consume the oldest open
-`debt` row first; the age is the date of the oldest still-unconsumed row.
+`debt` row first, an opening debt being a row like any other, dated by its own
+`date`; the age is the date of the oldest still-unconsumed row.
 Buckets 0–30 / 31–60 / 61–90 / 90+. Without a `payment_terms_days` field this
 means *old*, never *overdue*, and the label must say so.
 

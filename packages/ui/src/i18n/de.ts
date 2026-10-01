@@ -375,6 +375,10 @@ export const de: Messages = {
     nothingToSettle: "Bei {{name}} ist in dieser Richtung keine Schuld offen.",
     settleNeedsRate:
       "Für {{currency}} liegt kein Wechselkurs vor. Bitte begleichen Sie die Schuld auf der Seite der Person.",
+    openingLinkShape:
+      "Eine Rückzahlung kann nur mit einer bestehenden Schuld verknüpft bleiben, solange sie eine Schuld bei derselben Person ist.",
+    splitPayment:
+      "Diese Zahlung wurde auf eine bestehende Schuld aufgeteilt. Bitte ändern Sie sie als Ganzes, indem Sie sie löschen und erneut erfassen.",
     reSettle:
       "Diese Rückzahlung begleicht einen anderen Betrag als den gezahlten (andere Währung oder ein erlassener Teil), daher lässt sich aus dem neuen Betrag nicht ableiten, welcher Teil der Schuld damit beglichen wird. Bitte löschen Sie sie und erfassen Sie die Rückzahlung erneut.",
     splitDebtCategory:
@@ -457,6 +461,33 @@ export const de: Messages = {
     notFound:
       "Diese Person gibt es hier nicht mehr. Sie wurde vielleicht zusammengeführt oder entfernt.",
     settlingWith: "Ausgleich mit {{name}}",
+    existingDebtAdd: "Bestehende Schuld erfassen",
+    existingDebtTitle: "Bestehende Schuld mit {{name}}",
+    existingDebtHint:
+      "Eine Schuld, die schon vor diesem Hauptbuch bestand. Sie legt den Anfangssaldo fest und ist weder Einnahme noch Ausgabe, ebenso wenig wie die darauf geleisteten Rückzahlungen. Erfassen Sie den ursprünglichen Betrag, nicht den Rest. Wird sie in derselben Währung erneut erfasst, ersetzt sie die bisherige.",
+    existingDebtDirection: "Wer schuldet wem?",
+    existingDebtTheyOwe: "Die Person schuldet Ihnen",
+    existingDebtYouOwe: "Sie schulden der Person",
+    existingDebtCurrency: "Währung",
+    existingDebtDate: "Datum der Schuld",
+    existingDebtSave: "Schuld speichern",
+    existingDebtSaved: "Bestehende Schuld gespeichert",
+    existingDebtRow: "Bestehende Schuld",
+    existingDebtRowMeta: "{{direction}} · seit {{date}}",
+    existingDebtReplaces: "Dies ersetzt die bestehende Schuld in {{currency}}.",
+    existingDebtDelete: "Diese Schuld löschen",
+    existingDebtDeleteTitle: "Bestehende Schuld löschen?",
+    existingDebtDeleteBody: "Die bestehende Schuld mit {{name}} wird gelöscht.",
+    existingDebtDeleteChain:
+      "Die darauf geleisteten Rückzahlungen werden ebenfalls gelöscht: insgesamt {{count}}, von {{accounts}}. Die Kontostände dieser Konten ändern sich.",
+    existingDebtDeleteSubmit: "Löschen",
+    existingDebtDeleted: "Bestehende Schuld gelöscht",
+    existingDebtGone: "Diese bestehende Schuld wurde bereits gelöscht.",
+    existingDebtRepaid: "Bereits zurückgezahlt",
+    existingDebtBalanceAfter: "Saldo nach dem Speichern",
+    existingDebtFlips:
+      "Es wurde bereits mehr zurückgezahlt als dieser Betrag; das Speichern kehrt die Schuld daher um.",
+    existingDebtDateFuture: "Eine bestehende Schuld stammt von heute oder früher.",
     discharges: "Begleicht",
     theyOweYou: "schuldet Ihnen",
     youOweThem: "Sie schulden",

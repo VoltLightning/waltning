@@ -367,6 +367,10 @@ export const be: Messages = {
     settlesOwe: "{{name}}: пагашэнне вашага доўгу, {{currency}}.",
     nothingToSettle: "{{name}}: адкрытага доўгу ў гэтым кірунку няма.",
     settleNeedsRate: "Няма курсу для {{currency}}. Калі ласка, пагасіце доўг на старонцы чалавека.",
+    openingLinkShape:
+      "Пагашэнне можа заставацца звязаным з існуючым доўгам, толькі пакуль яно адносіцца да доўгу перад тым жа чалавекам.",
+    splitPayment:
+      "Гэты плацёж быў падзелены па існуючым доўгу. Змяніце яго цалкам: выдаліце і запішыце нанова.",
     reSettle:
       "Гэта пагашэнне закрывае суму, адрозную ад унесенай (іншая валюта або дараваная частка), таму па новай суме нельга зразумець, якую частку доўгу яно закрывае. Выдаліце яго і запішыце пагашэнне нанава.",
     splitDebtCategory:
@@ -447,6 +451,33 @@ export const be: Messages = {
   counterparties: {
     notFound: "Гэтага чалавека тут больш няма. Магчыма, запіс аб’ядналі або выдалілі.",
     settlingWith: "Разлік з {{name}}",
+    existingDebtAdd: "Дадаць існуючы доўг",
+    existingDebtTitle: "Існуючы доўг: {{name}}",
+    existingDebtHint:
+      "Доўг, які ўзнік да вядзення гэтай кнігі. Ён задае пачатковы баланс і не з’яўляецца ні даходам, ні выдаткам; пагашэнні па ім — таксама. Пакажыце першапачатковую суму, а не астатак. Паўторны запіс у той самай валюце замяняе папярэдні.",
+    existingDebtDirection: "Хто каму вінен",
+    existingDebtTheyOwe: "Вам вінны",
+    existingDebtYouOwe: "Вы вінны",
+    existingDebtCurrency: "Валюта",
+    existingDebtDate: "Дата ўзнікнення доўгу",
+    existingDebtSave: "Захаваць доўг",
+    existingDebtSaved: "Існуючы доўг захаваны",
+    existingDebtRow: "Існуючы доўг",
+    existingDebtRowMeta: "{{direction}} · з {{date}}",
+    existingDebtReplaces: "Гэта заменіць існуючы доўг у валюце {{currency}}.",
+    existingDebtDelete: "Выдаліць гэты доўг",
+    existingDebtDeleteTitle: "Выдаліць існуючы доўг?",
+    existingDebtDeleteBody: "Існуючы доўг: {{name}} будзе выдалены.",
+    existingDebtDeleteChain:
+      "Разам з ім будуць выдалены пагашэнні па ім: усяго {{count}}, з рахункаў: {{accounts}}. Рэшткі на гэтых рахунках зменяцца.",
+    existingDebtDeleteSubmit: "Выдаліць",
+    existingDebtDeleted: "Існуючы доўг выдалены",
+    existingDebtGone: "Гэты існуючы доўг ужо выдалены.",
+    existingDebtRepaid: "Ужо пагашана",
+    existingDebtBalanceAfter: "Баланс пасля захавання",
+    existingDebtFlips:
+      "Ужо пагашана больш за гэтую суму, таму пасля захавання доўг змяніць кірунак.",
+    existingDebtDateFuture: "Існуючы доўг датуецца сённяшнім днём або больш раннім.",
     discharges: "Пагашае",
     theyOweYou: "вінен вам",
     youOweThem: "вы вінны",

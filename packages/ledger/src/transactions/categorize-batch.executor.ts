@@ -170,9 +170,12 @@ function categorize(input: CategorizeBatchInput, tx: ReplicaTx): LocalTransactio
       .set({
         obligationCounterpartyId: null,
         obligationRole: null,
-        // The discharge a settlement stamped goes with its role.
+        // The discharge a settlement stamped goes with its role — and the
+        // link to the opening debt it paid down (§6.6), which only a
+        // debt-role row may carry.
         debtAmount: null,
         debtCurrency: null,
+        settlesOpeningDebtId: null,
       })
       .where(inArray(transactions.id, leaving))
       .run();

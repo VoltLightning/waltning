@@ -384,6 +384,10 @@ export const pl: Messages = {
     settlesOwe: "{{name}}: rozliczenie zobowiązania w {{currency}}.",
     nothingToSettle: "{{name}}: brak otwartego zadłużenia w tym kierunku.",
     settleNeedsRate: "Brak kursu dla {{currency}}. Proszę rozliczyć dług na stronie osoby.",
+    openingLinkShape:
+      "Spłata może być powiązana z istniejącym długiem tylko dopóki pozostaje długiem wobec tej samej osoby.",
+    splitPayment:
+      "Ta płatność została podzielona na istniejący dług. Należy zmienić ją jako całość: usunąć i zapisać ponownie.",
     reSettle:
       "Ta spłata rozlicza inną kwotę niż wpłacona (inna waluta albo umorzona część), więc nowa kwota nie określa, jaka część długu zostaje rozliczona. Proszę ją usunąć i zapisać spłatę ponownie.",
     splitDebtCategory:
@@ -473,6 +477,32 @@ export const pl: Messages = {
   counterparties: {
     notFound: "Tej osoby już tu nie ma. Mogła zostać scalona lub usunięta.",
     settlingWith: "Rozliczenie z {{name}}",
+    existingDebtAdd: "Dodaj istniejący dług",
+    existingDebtTitle: "Istniejący dług: {{name}}",
+    existingDebtHint:
+      "Dług, który istniał jeszcze przed prowadzeniem tego rejestru. Ustala saldo początkowe i nie jest ani przychodem, ani wydatkiem, podobnie jak spłaty dokonane na jego poczet. Należy wpisać pierwotną kwotę, a nie to, co zostało. Ponowne zapisanie w tej samej walucie zastępuje poprzedni.",
+    existingDebtDirection: "Kto jest komu winien",
+    existingDebtTheyOwe: "Ta osoba jest dłużnikiem",
+    existingDebtYouOwe: "Ta osoba jest wierzycielem",
+    existingDebtCurrency: "Waluta",
+    existingDebtDate: "Data powstania długu",
+    existingDebtSave: "Zapisz dług",
+    existingDebtSaved: "Istniejący dług zapisany",
+    existingDebtRow: "Istniejący dług",
+    existingDebtRowMeta: "{{direction}} · od {{date}}",
+    existingDebtReplaces: "Zastąpi to istniejący dług w walucie {{currency}}.",
+    existingDebtDelete: "Usuń ten dług",
+    existingDebtDeleteTitle: "Usunąć istniejący dług?",
+    existingDebtDeleteBody: "Istniejący dług: {{name}} zostanie usunięty.",
+    existingDebtDeleteChain:
+      "Usunięte zostaną także spłaty dokonane na jego poczet: łącznie {{count}}, z: {{accounts}}. Salda tych kont ulegną zmianie.",
+    existingDebtDeleteSubmit: "Usuń",
+    existingDebtDeleted: "Istniejący dług usunięty",
+    existingDebtGone: "Ten istniejący dług został już usunięty.",
+    existingDebtRepaid: "Już spłacono",
+    existingDebtBalanceAfter: "Saldo po zapisaniu",
+    existingDebtFlips: "Spłacono już więcej niż ta kwota, więc zapisanie odwróci kierunek długu.",
+    existingDebtDateFuture: "Istniejący dług pochodzi z dzisiaj lub z wcześniejszego dnia.",
     discharges: "Rozlicza",
     theyOweYou: "winni Ci",
     youOweThem: "jesteś winien/winna",

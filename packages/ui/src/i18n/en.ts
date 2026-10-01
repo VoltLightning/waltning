@@ -685,6 +685,10 @@ export const en = {
     settlesOwe: "Settles what you owe {{name}}, in {{currency}}.",
     nothingToSettle: "Nothing to settle with {{name}}: no open debt in this direction.",
     settleNeedsRate: "No exchange rate for {{currency}}. Please settle from the person's page.",
+    openingLinkShape:
+      "A repayment can be linked to an existing debt only while it is still a debt with that person.",
+    splitPayment:
+      "This payment was split against an existing debt — change it as a whole by deleting it and recording it again.",
     reSettle:
       "This repayment settles a different figure than its amount (another currency, or a part forgiven), so a new amount does not say how much of the debt it settles. Please delete it and record the repayment again.",
     splitDebtCategory:
@@ -845,6 +849,34 @@ export const en = {
     notFound: "This person is no longer here. They may have been merged or removed.",
     /** `SettleSheet`'s title (S14 §3). */
     settlingWith: "Settling with {{name}}",
+    /** S13's *Add an existing debt* (§6.6) — a debt from before the ledger; sets the balance, is neither income nor spending. */
+    existingDebtAdd: "Add an existing debt",
+    existingDebtTitle: "Existing debt with {{name}}",
+    existingDebtHint:
+      "A debt that already existed before this ledger. It sets the starting balance and is neither income nor spending, and neither are the repayments made against it. Enter the original amount, not what is left. Recording it again in the same currency replaces it.",
+    existingDebtDirection: "Who owes whom",
+    existingDebtTheyOwe: "They owe you",
+    existingDebtYouOwe: "You owe them",
+    existingDebtCurrency: "Currency",
+    existingDebtDate: "Date of the debt",
+    existingDebtSave: "Save debt",
+    existingDebtSaved: "Existing debt saved",
+    existingDebtRow: "Existing debt",
+    existingDebtRowMeta: "{{direction}} · since {{date}}",
+    existingDebtReplaces: "This replaces the existing debt in {{currency}}.",
+    existingDebtDelete: "Delete this debt",
+    existingDebtDeleteTitle: "Delete the existing debt?",
+    existingDebtDeleteBody: "The existing debt with {{name}} is deleted.",
+    existingDebtDeleteChain:
+      "Repayments made against it are deleted too: {{count}} in all, from {{accounts}}. The balances of those accounts change.",
+    existingDebtDeleteSubmit: "Delete",
+    existingDebtDeleted: "Existing debt deleted",
+    existingDebtGone: "This existing debt has already been deleted.",
+    existingDebtRepaid: "Already repaid",
+    existingDebtBalanceAfter: "Balance after saving",
+    existingDebtFlips:
+      "More has already been repaid than this amount, so saving turns the debt around.",
+    existingDebtDateFuture: "An existing debt dates from today or earlier.",
     /** The balance picker (S14 §9.1). */
     discharges: "Discharges",
     theyOweYou: "they owe you",

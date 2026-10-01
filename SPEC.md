@@ -1280,6 +1280,7 @@ transaction_lines_amount_ceiling      abs(amount) < 1000000000
 accounts_opening_balance_ceiling      abs(opening_balance) < 1000000000
 recurring_transactions_amount_ceiling abs(amount_original) < 1000000000
 debt_reassignments_amount_ceiling      abs(amount) < 1000000000
+opening_debts_amount_ceiling          abs(amount) < 1000000000
 targets_amount_ceiling                abs(amount) < 1000000000
 receipts_total_ceiling                abs(total) < 1000000000
 ```
@@ -1290,8 +1291,10 @@ keeps the same integer bound (fewer than a billion). A figure a hundred times a
 plausible balance is a typo, and it breaks every layout it reaches. It is one
 bound, `AMOUNT_CEILING_EXCLUSIVE` in `money.ts`, stated at every layer: the
 contract schema (`zAmount`, used by every write input's amount field), each
-executor, the seven CHECKs above on Postgres and a trigger per table on the
-replica, and every amount input, which refuses a tenth integer digit and says
+executor, the eight CHECKs above on Postgres and a trigger per table on the
+replica (the one exception is `opening_debts`, a table created whole, which
+carries the same bound as a CHECK on the replica too — there is no existing row
+for a rebuild to copy through it), and every amount input, which refuses a tenth integer digit and says
 *Maximum 999 999 999,99* in the reader's own notation. The CHECKs are added
 `NOT VALID` and validated at once on a database that holds nothing past the
 bound; a database that does keeps those rows until the owner corrects them and
@@ -1604,9 +1607,174 @@ A category a person made and named *Borrowed* carries no seed tag and means
 nothing about debt. The rule is keyed on the four starter categories' seed keys
 (`DEBT_SEED_KEYS`), not on a flag on the category.
 
+**A debt that predates the ledger is an opening debt, entered on the person's
+page.** *Add an existing debt* (S13) takes a direction — they owe you, or you owe
+them — an amount, a currency and the day it dates from, and **sets the person's
+balance in that currency the way an account's opening balance sets an account's:
+it is never income and never spending.** `record_opening_debt` writes one row of
+`opening_debts` per person per currency (`id`, `counterparty_id`, `currency`,
+`direction` — `theyOwe | youOwe`, `amount`, `date`); recording again for the
+same person and currency replaces it, which is how a wrong figure is corrected.
+**The figure is the original debt, never the current balance.** Repayments are
+made with *Settle* and count against it; replacing the figure leaves them where
+they are, so a smaller figure under a larger repayment turns the debt around.
+The sheet therefore says, before *Save*, what has already been repaid and what
+the balance will be, and warns when a save would flip its sign;
+`record_opening_debt` returns the resulting balance and a `flipped` flag the way
+`settle_debt` returns its residual. The date is the day the debt dates from —
+today or earlier, never later. That rule is enforced **only by the contract**
+(`recordOpeningDebtInput` refuses a date after the `today` it carries — the
+device's own day, as `set_manual_rate`'s is) and by the sheet; there is no
+database constraint, because "today" has no stable form in a database. The
+operation is also refused for an archived person, who is out of every picker and
+could never be settled with.
+
+**Why a table of its own, and not an `adjustment` transaction.** A transaction
+carries an account, and an account's balance and every period figure are built
+from transactions, so a debt that was already there before the books began would
+either move an account that never saw the money or count as income or spending
+that never happened — and an adjustment row has to name an account to exist at
+all. A row of its own reaches exactly one figure, the person's balance, where it
+folds in as a lend (`theyOwe`, positive) or a borrow (`youOwe`, negative) —
+§7's own sign rule, with nothing restated. It carries no account and no
+category because the table has no such column; there is nothing for a category
+to be refused on. Net worth meets it only the way it meets any debt: not at all
+(*Receivables sit outside net worth*, below).
+
+`settle_debt` sees it as an open debt and settles against it like any other: an
+opening debt of 200 and a repayment of 50 leave 150, and `overSettled`,
+`nothing to settle` and the archive gate (S15 §6) all read the same fold.
+Every claim below names the layer that enforces it:
+
+- **The shape** — an amount above zero and under the ceiling (the direction
+  carries the sign), a direction that is one of the two, and one row per person
+  and currency — is `opening_debts_amount_positive`,
+  `opening_debts_amount_ceiling`, `opening_debts_direction_known` and
+  `opening_debts_counterparty_currency_uq`, on **Postgres**
+  (`0027_opening_debts.sql`) and on **the replica** (`0023_schema.sql`, the same
+  four, declared in the table so a later rebuild carries them) — *database,
+  both engines*. The executor refuses first, with a message naming the field
+  (*service, the replica's executor*), and the contract schema refuses a figure
+  past the ceiling or not above zero before either (*`recordOpeningDebtInput`*).
+- **The scale** — a figure past its currency's declared decimals — is refused by
+  `record_opening_debt`'s `assertMoneyScale` on the phone and by
+  `opening_debts_amount_scale_matches_currency` on Postgres (`WA016`, the code
+  `debt_reassignments` shares); `currencies_decimals_safe_opening_debts` (`WA018`)
+  keeps a currency from being narrowed past a figure an opening debt holds.
+- **A person the replica does not hold** is refused as a dependency (the same
+  one `settle_debt` names), and the foreign keys hold under it on both engines.
+- **The replica's ceiling is the digit-count test** the `*_amount_ceiling_*`
+  triggers make — more than nine digits before the point — written as the
+  table's CHECK, so `999999999.99999999` is in bounds; `cast … as real` would
+  round it up to a billion and refuse it.
+- **Currencies.** `update_currency` counts a live opening debt among the live
+  references that refuse a decimals shrink and scans every opening debt's figure
+  (soft-deleted ones included) for the over-scale case, as Postgres's
+  `WA018` does (*service, the replica's executor; database, Postgres*).
+
+**Repaying an opening debt is not spending or income, in either direction.**
+`settle_debt` stamps a settlement with the opening debt it pays down
+(`transactions.settles_opening_debt_id`) — **only up to what is still open on
+it, and only when it points the opening debt's own way**: money coming in pays
+down *they owe you*, money going out pays down *you owe them*. The opening debt
+is the oldest the person has (it predates the ledger), so FIFO — the order
+ageing uses — consumes it first; what the linked repayments have discharged is
+taken off its figure, and a repayment past that, or one the other way (paying
+back a loan after being owed an existing debt), is an ordinary repayment of an
+ordinary debt: deleting the opening debt must never delete a real one.
+
+**A settlement that crosses the end of the existing debt is split in the same
+write** into two rows — the part that pays it down (linked) and the rest
+(ordinary), in the same proportion of what changed hands as of what was
+discharged, the remainder landing on the second row so the account moves by
+exactly what was paid. Splitting, not refusing: paying back "everything" is one
+payment, and refusing would make a person record two by hand against a boundary
+only the ledger can see; the second row's id travels on the input (`spillId`).
+Where one side of that proportion rounds to nothing at the account currency's
+scale, it takes one smallest unit instead, so no zero-amount row is written and
+the linked discharge stays capped at exactly what is open — a cent of the
+existing debt is neither left open for ever nor over-linked. That unit is **not
+a rate**: the dust row's implied rate is whatever one smallest unit divided by
+the cent it discharges happens to be, and nothing reads it as one. A crossing
+payment that is itself a single smallest unit cannot be two rows, so it **stays
+whole and unlinked** — an ordinary repayment. The two rows share a
+`payment_pair_id` (the first row's id): **they are one payment everywhere.**
+`supersede_transaction` of either half supersedes the pair — both halves are
+soft-deleted and the import row inserted in one write, then written against the
+debt again exactly as `settle_debt` would write it (linked whole where it fits,
+split again under a minted `spillId` where it still crosses, ordinary where
+nothing is open); `delete_transaction` of either half deletes both;
+`update_transaction` of a half applies the edits that are true of both (date,
+time, name, note, scope) to both halves and **refuses** the ones that would move
+one half's share — amount, account, person, category — with *this payment was
+split against an existing debt — change it as a whole by deleting and recording
+it again*. A linked repayment follows its person, role **and size**
+afterwards: `update_transaction` and `categorize_batch` clear the link when the
+person changes or the debt role goes, and `update_transaction` re-checks it
+whenever the amount, discharge or account changes — it stays only while the whole
+row still fits in what is open (an edit never splits; 80 raised to 500 against a
+debt of 100 is no longer linked), re-derived where the new person has an
+existing debt it fits in. `supersede_transaction` carries the link to a
+replacement only after re-checking the discharge against what is open. The
+upcast of an older queued capture mints its own `spillId`. Such a settlement **moves its account** like any
+payment and appears in lists and history, but **no period figure** — month,
+months, spend by category, income against expense, the desk's — counts it:
+lending and borrowing are not earning and spending, and what was never counted
+when it was lent must not be counted when it comes back. Only a `debt`-role row
+carries the link (`transactions_opening_link_shape` on Postgres; its two
+triggers on the replica — *database, both engines*).
+
+**An existing debt can be deleted, and deleting it deletes the whole chain.**
+`delete_opening_debt` soft-deletes the opening row and **every repayment linked
+to it** in one write — one replica transaction, one outbox entry, all or nothing
+(*service*) — so the accounts those repayments moved change with it. The
+confirmation names them before it asks: *how many, how much, from which
+accounts, and that those balances change.* A deleted opening debt frees its
+person and currency for a new one (the unique index is on live rows).
+
+**Merging two people merges their existing debts.** `merge_counterparties`
+moves the loser's opening debts with the rest of what it holds: a debt in a
+currency the winner has none in changes owner; in a currency both have, the two
+are **summed by sign** into the winner's row (the larger magnitude's direction,
+the earlier date; the loser's row is soft-deleted); if they cancel to nothing
+both rows are dropped. **The repayments linked to either row are then
+re-planned, not re-pointed**: through the rule a new settlement meets — oldest
+first, only a repayment that reduces the combined debt's own direction, only up
+to what is open — and whatever does not fit is unlinked (a re-plan never splits:
+one that would cross the end is unlinked whole). So an outgoing payment to the
+loser does not stay "paying down" a debt the winner is owed, later repayments
+link correctly, and deleting the combined debt cannot delete a payment to
+somebody else. The merge record keeps every link it changed, with the link it
+had, and unmerge puts each back where nobody has changed it since. **Recording
+an existing debt again re-plans its repayments the same way** — a smaller
+figure unlinks those past its end, the other direction unlinks those that no
+longer reduce it, and a larger figure — or a merge that leaves more open —
+links the repayments that now fit, oldest first, whole (a re-plan considers every
+live repayment of that person and currency that reduces the debt's direction,
+linked or not, and never splits one). **An unlinked repayment is an ordinary
+repayment: it counts as income or spending in the period figures like any
+other.** **A repayment can be drawn into an existing debt only if it was written
+after that debt was**: the debt's `created_at` (set at its first write, kept
+across re-records) is the line, a repayment already linked stays a candidate
+whenever it was linked, and for a merge the line is the earlier of the two debts'
+creation. Without it the same data would give different period figures depending
+on history — record 50 and later 60, or 60 directly — recording a debt would
+reach back into months it had no part in, and deleting it would remove cash
+recorded before the debt was known. (`created_at` is the order the two rows
+share; the outbox sequence is on neither row.) A repayment that is itself written
+now is, by definition, after: `settle_debt` needs no such check. The loser is
+archived only once it holds no live opening debt, and the merge record keeps
+what the winner's row held before **and what the merge left it**, so
+`unmerge_counterparties` restores exactly that — and only while the winner's row
+still holds what the merge left it: a figure corrected since is kept, the loser's
+debt is not handed back on top of it, and the result says how many were left
+(`existingDebtsKept`) (*service*; S15 §9.2).
+
 **Debt is derived, never stored.** A counterparty's position is the running sum
-of the `debt`-role transactions referencing them. Nothing is posted twice, so a
-balance cannot drift from its history:
+of the `debt`-role transactions referencing them, plus their opening debts — the
+starting position the history is added to, the way `accounts.opening_balance`
+starts an account. Nothing is posted twice, so a balance cannot drift from its
+history:
 
 ```sql
 CREATE VIEW counterparty_balances AS
@@ -1654,7 +1822,9 @@ CREATE VIEW counterparty_balances AS
 This view is documentation of the rule, not what runs it: the shipped
 implementation is `packages/db/src/figures/counterparty-balance.ts`, a query
 builder over the same fold, and no `counterparty_balances` view exists in the
-migrations.
+migrations. The fold's rows are the debt-role transactions above **and** the
+person's `opening_debts`, each a leg of the same sum: `theyOwe` is `+amount` and
+`youOwe` is `−amount`, grouped by the row's own `currency`.
 
 **The negation is the whole trick.** The ledger signs by *cash flow*; a debt
 balance signs by *obligation*, and they are exact opposites. All four cases fall

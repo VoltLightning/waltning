@@ -1077,6 +1077,14 @@ export const supersedeTransactionInput = z
     supersedesId: zId<"transactions">(),
     supersedesVersion: z.number().int().positive(),
     replacement: createTransactionInput,
+    /**
+     * The id of a second row, for a replacement of a payment that was split
+     * against an existing debt (§6.6) and still crosses the end of it: the same
+     * boundary `settle_debt` writes two rows for. Minted by the caller whether
+     * or not it turns out to be needed; without it a crossing replacement is
+     * written whole and ordinary.
+     */
+    spillId: zId<"transactions">().optional(),
   })
   /**
    * The replacement is a new row. Allowing `replacement.id === supersedesId`
@@ -1535,6 +1543,13 @@ export const settleDebtInput = z
      */
     supersedesId: zId<"transactions">().optional(),
     supersedesVersion: z.number().int().positive().optional(),
+    /**
+     * **The id of the second row, for a settlement that crosses the end of an
+     * existing debt** (§6.6): part of it pays down the opening debt, the rest is
+     * an ordinary repayment, and the write is those two rows. Minted by the
+     * caller like every id, whether or not this settlement turns out to cross.
+     */
+    spillId: zId<"transactions">().optional(),
     // Not here, on purpose:
     //   `residual`  — derived from the live balance, never supplied (H9, above).
     //   `rate`      — §7.5: `discharges.amount ÷ amount` is derived by the
@@ -1580,6 +1595,67 @@ export const settleDebtInput = z
     }
   });
 export type SettleDebtInput = z.output<typeof settleDebtInput>;
+
+/**
+ * `record_opening_debt` — §6.6's debt that predates the ledger, entered on the
+ * person's page (S13): *they owe you* or *you owe them*, an amount, a currency
+ * and the day it dates from.
+ *
+ * It sets the person's balance in that currency the way an opening balance
+ * sets an account's, and is **never income and never spending** — it is not a
+ * transaction, so no category, no account and no period figure can see it.
+ * `settle_debt` then settles against it like any other debt.
+ *
+ * **One per person per currency, and recording again replaces it.** A
+ * correction is the same write with the right figure; a second row would be
+ * a debt entered twice. `id` is the row's own, used when there is none yet.
+ *
+ * **`amount` is positive and the direction carries the sign** — the same rule
+ * `settle_debt` takes for what changed hands: a negative debt is a debt the
+ * other way, and a figure that could say both would let a typo flip it.
+ */
+export const recordOpeningDebtInput = z
+  .object({
+    id: zId<"openingDebts">(),
+    counterpartyId: zId<"counterparties">(),
+    direction: z.enum(["theyOwe", "youOwe"]),
+    amount: zAmount,
+    currency: zCurrencyCode,
+    /** The day the debt dates from — never later than `today`: the feature is for debts that predate the ledger. */
+    date: zAccountingDate,
+    /** The device's own day, as `set_manual_rate`'s is: nothing below the client has a zone. */
+    today: zAccountingDate,
+  })
+  .superRefine((v, ctx) => {
+    // As `settleDebtInput`: a malformed figure already carries `zMoney`'s own
+    // issue and `dec()` would throw on it, so positivity is skipped for it.
+    if (safeDec(v.amount)?.lte(0) === true) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["amount"],
+        message: "an existing debt is a positive amount — the direction says who owes whom",
+      });
+    }
+    // A bare date compares as text (§7.0a) — no `Date`, no zone.
+    if (v.date > v.today) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["date"],
+        message: "an existing debt dates from today or earlier — it predates the ledger",
+      });
+    }
+  });
+export type RecordOpeningDebtInput = z.output<typeof recordOpeningDebtInput>;
+
+/**
+ * `delete_opening_debt` — takes an existing debt out of the ledger **and every
+ * repayment made against it**, in one write (§6.6). The repayments are the
+ * settlements that drew on it (`settles_opening_debt_id`); they are soft-deleted
+ * with it, so their accounts' balances change. The screen says exactly which
+ * before asking. Refused when the row is already gone.
+ */
+export const deleteOpeningDebtInput = z.object({ id: zId<"openingDebts">() });
+export type DeleteOpeningDebtInput = z.output<typeof deleteOpeningDebtInput>;
 
 /**
  * `allocate_shares` — J08's whole write, and it had none. The journey's path

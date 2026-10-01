@@ -446,7 +446,7 @@ describe.each(PAIRS)("upgrading from replica-v$version / outbox-v$version", (pai
         // it in its own "before" set — appending it there too would assert
         // the same key twice, which is a correct set with a misleading diff
         // rather than a real duplicate-table bug.
-        const KNOWN_NEW_TABLES = ["brand_aliases"].filter(
+        const KNOWN_NEW_TABLES = ["brand_aliases", "opening_debts"].filter(
           (table) => !(table in fixture.replicaCountsBefore),
         );
         for (const table of KNOWN_NEW_TABLES) {

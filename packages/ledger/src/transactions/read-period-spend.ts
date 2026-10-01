@@ -32,6 +32,8 @@ export function readPeriodSpend<TRun, TSchema extends typeof ledgerSchema>(
     .where(
       and(
         isNull(transactions.deletedAt),
+        // §6.6 — repaying a debt that predates the ledger is neither spending nor income.
+        isNull(transactions.settlesOpeningDebtId),
         inArray(transactions.type, ["income", "expense"]),
         gte(transactions.date, period.start),
         lt(transactions.date, period.end),

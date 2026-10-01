@@ -46,6 +46,7 @@ not a fictitious zero repayment action. `SPEC.md` §6.6.1 defines identity histo
 
         [ Add transaction ]   [ Settle ]
 
+  Existing debt · since 1 Jan 2026      +200,00 zł
   HISTORY                    [ debts only · 3 other rows ]
    6 Aug   dinner, split four ways      +210,00 zł
    2 Aug   repaid                       −150,00 zł
@@ -58,6 +59,37 @@ name this counterparty (the identity link, no obligation), are one tap away — 
 the toggle **states the count it is hiding**, because a default filter that
 silently omits real data is the failure mode, and naming the count is the
 cheapest guard against it (`design-system/08` §8.1).
+
+**An existing debt is entered here, and only here.** *Add an existing debt*, under
+history beside *Edit*, opens a sheet for a debt that predates the ledger: a
+direction (*they owe you* / *you owe them*), a currency (the person's settlement
+currency preselected), an amount and the day it dates from. It sets the
+person's balance in that currency the way an account's opening balance sets an
+account's — **never income, never spending**, so the sheet has no account and no
+category to ask for (`SPEC.md` §6.6). A repayment then goes through *Settle* as
+for any debt: an existing debt of 200 and a repayment of 50 leave 150.
+
+Each existing debt shows as a line under the card — *Existing debt*, which way
+it points in words, the day, and the figure through `<Amount>` — because the
+history lists transactions and an existing debt is not one, and every number in
+the ledger must have something under it that explains it. Tapping the line
+reopens the sheet prefilled; there is one per person per currency, so saving
+into a currency that has one **replaces it**, and the sheet says so before *Save*
+— with what has **already been repaid** and **the balance the new figure leaves**,
+and a warning when saving would turn the debt around (more repaid than the new
+figure). **The figure is the original debt, not the current balance.** The date
+is today or earlier and an archived person has no *Add an existing debt* at all.
+
+**The sheet offers *Delete this debt*, and deleting it deletes the whole chain** —
+the repayments made against it go too. The confirmation says so in numbers:
+*Repayments made against it are deleted too: 2 in all, 150,00 PLN, from Bank A.
+The balances of those accounts change.* Repaying an existing debt is never
+spending or income (`SPEC.md` §6.6), so the period figures are the same before
+and after; the accounts are not.
+
+**The history's empty state follows the position**: with an existing debt the
+history is not *settled* — the existing-debt line is what explains the figure.
+Only a person with no debt rows and no balance reads *All settled*.
 
 **One card holds `CounterpartyCard` and `BalanceLedger` together** — the person
 and their position are one thing to read, and the card is the group. *Settle*
@@ -84,6 +116,9 @@ Web adds the ageing bar inline for companies and shows history as a table.
 | `TransactionRow` | History, with role markers |
 | `BrandIcon` | `TransactionRow`'s own leading mark — same component and catalogue as S04/S10 (§14.4b) |
 | `EmptyState` | All settled — a success state, not a blank |
+| `OpeningDebtRow` | One existing debt — name, direction in words, day, figure through `Amount`; tap to correct it |
+| `OpeningDebtSheet` | *Add an existing debt* — `SegmentControl` for direction, `Select` for currency, `AmountField`, `DateField`; *Save debt*; for a currency that holds one, what was repaid, the balance after, the flip warning and *Delete this debt* |
+| `ConfirmDialog` | The delete confirmation, listing the repayments and accounts that go with the debt |
 
 ## 5. Data
 
@@ -92,6 +127,7 @@ Web adds the ageing bar inline for companies and shows history as a table.
 | `counterparty_balances` for this id, per currency | — |
 | Both derived totals — theirs and display | — |
 | `search_transactions(obligationCounterpartyId)` | — |
+| The person's `opening_debts`, one per currency, each with its repayments | `record_opening_debt` · `delete_opening_debt` |
 
 ## 6. States
 
@@ -115,7 +151,9 @@ Same, with history as a sortable table and both actions in a fixed header.
 ## 8. Rules this screen must obey
 
 - **§6.6** — one counterparty holds one balance per currency plus two derived
-  totals. Neither total is stored.
+  totals. Neither total is stored. An existing debt is the one starting figure
+  that is: a row of its own, never a transaction, so never in spending, income
+  or an account.
 - **P5** — direction in words on every row.
 - **P1** — the derived totals carry the rate and its date.
 - **O15** — ageing for companies only.

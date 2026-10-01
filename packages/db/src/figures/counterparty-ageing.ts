@@ -30,12 +30,13 @@
 import type { AccountingDate } from "@waltning/core/date";
 import { sql } from "drizzle-orm";
 import type { DbHandle } from "../client.ts";
-import { transactions } from "../schema.ts";
-import { debtCurrency, debtDeltaOnCarryingLeg } from "./counterparty-balance.ts";
+import { openingDebts, transactions } from "../schema.ts";
+import { debtCurrency, debtDeltaOnCarryingLeg, openingDebtDelta } from "./counterparty-balance.ts";
 
 export type OldestOpenDebtRow = {
   counterpartyId: string;
   currency: string;
+  /** A transaction's id — or, when the oldest open leg is a debt that predates the ledger (§6.6), that opening debt's. */
   oldestUnconsumedTransactionId: string;
   oldestDate: AccountingDate;
 };
@@ -62,6 +63,17 @@ export async function oldestOpenDebt(db: DbHandle): Promise<readonly OldestOpenD
       WHERE ${transactions.obligationCounterpartyId} IS NOT NULL
         AND ${transactions.obligationRole} = 'debt'
         AND ${live}
+      -- §6.6 — a debt that predates the ledger is the oldest kind of leg:
+      -- dated by its own day, identified by its own row.
+      UNION ALL
+      SELECT
+        ${openingDebts.counterpartyId} AS counterparty_id,
+        ${openingDebts.currency} AS currency,
+        ${openingDebts.id} AS transaction_id,
+        ${openingDebts.date} AS date,
+        ${openingDebtDelta} AS delta
+      FROM ${openingDebts}
+      WHERE ${openingDebts.deletedAt} IS NULL
     ),
     balances AS (
       SELECT counterparty_id, currency, sum(delta) AS balance

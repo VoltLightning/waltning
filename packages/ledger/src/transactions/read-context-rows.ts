@@ -69,6 +69,8 @@ export function readContextRows<TRun, TSchema extends typeof ledgerSchema>(
     .where(
       and(
         isNull(transactions.deletedAt),
+        // §6.6 — repaying a debt that predates the ledger is neither spending nor income.
+        isNull(transactions.settlesOpeningDebtId),
         eq(transactions.currency, query.currency),
         gte(transactions.date, query.from),
         lte(transactions.date, query.to),

@@ -16,6 +16,7 @@ import {
   type PhoneLedgerController,
   type PhoneLedgerPort,
 } from "@waltning/client/ledger/create-phone-ledger";
+import { deviceRuntime } from "@waltning/client/ledger/device-runtime";
 import { LedgerProvider } from "@waltning/client/ledger/ledger-provider";
 import { basePort as sharedBasePort } from "@waltning/client/ledger/test-port";
 import { accountingDate } from "@waltning/core/date";
@@ -676,6 +677,37 @@ describe("Debt (S12)", () => {
   });
 });
 
+const RECORDED = { balance: toMoney("200"), repaid: toMoney("0"), flipped: false };
+
+const OPENING_ID = id<"openingDebts">("55555555-5555-4555-8555-555555555555");
+const NINA_OPENING_DEBT = {
+  id: OPENING_ID,
+  counterpartyId: NINA,
+  currency: PLN,
+  direction: "theyOwe" as const,
+  amount: toMoney("200.00000000"),
+  date: accountingDate("2026-01-02"),
+  repaid: toMoney("150.00000000"),
+  repayments: [
+    {
+      id: id<"transactions">("66666666-6666-4666-8666-666666666661"),
+      accountId: CASH_PLN.id,
+      accountName: "Cash · PLN",
+      amount: toMoney("100.00000000"),
+      accountAmount: toMoney("100.00000000"),
+      accountCurrency: PLN,
+    },
+    {
+      id: id<"transactions">("66666666-6666-4666-8666-666666666662"),
+      accountId: CASH_PLN.id,
+      accountName: "Cash · PLN",
+      amount: toMoney("50.00000000"),
+      accountAmount: toMoney("50.00000000"),
+      accountCurrency: PLN,
+    },
+  ],
+};
+
 describe("CounterpartyDetail (S13)", () => {
   beforeEach(() => useLocalSearchParams.mockReturnValue({ id: NINA }));
 
@@ -771,6 +803,186 @@ describe("CounterpartyDetail (S13)", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: "Settle" }));
     expect(screen.getByText("Settling with Nina")).toBeDefined();
+  });
+
+  it("adds an existing debt through the sheet — direction, amount, currency and date, then the toast (§6.6)", () => {
+    const recordOpeningDebt = vi.fn<PhoneLedgerPort["recordOpeningDebt"]>(() => RECORDED);
+    const controller = createPhoneLedger(
+      basePort({
+        listCounterparties: () => [NINA_COUNTERPARTY],
+        listCounterpartyBalances: () => [],
+        recordOpeningDebt,
+      }),
+      {
+        // The sheet defaults the date to the device's own day, so the controller must agree on it.
+        capture: () => ({ ...deviceRuntime().capture() }),
+        id: () => id("99999999-9999-4999-8999-999999999999"),
+      },
+    );
+    render(
+      <LedgerProvider controller={controller}>
+        <CounterpartyDetail />
+      </LedgerProvider>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Add an existing debt" }));
+
+    const sheet = within(screen.getByLabelText("Existing debt with Nina"));
+    fireEvent.click(sheet.getByText("You owe them"));
+    fireEvent.change(sheet.getByLabelText("Amount"), { target: { value: "200" } });
+    fireEvent.click(sheet.getByRole("button", { name: "Save debt" }));
+
+    expect(recordOpeningDebt).toHaveBeenCalledOnce();
+    expect(recordOpeningDebt.mock.calls[0]?.[0]).toMatchObject({
+      counterpartyId: NINA,
+      direction: "youOwe",
+      amount: toMoney("200"),
+      currency: PLN,
+      // The screen reads the device's own day, never the controller's.
+      date: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
+    });
+    expect(screen.getByText("Existing debt saved")).toBeDefined();
+  });
+
+  it("lists the existing debt under the card, and a tap reopens it prefilled for correction", () => {
+    const recordOpeningDebt = vi.fn<PhoneLedgerPort["recordOpeningDebt"]>(() => RECORDED);
+    const controller = controllerOf(
+      basePort({
+        listCounterparties: () => [NINA_COUNTERPARTY],
+        listCounterpartyBalances: () => [NINA_ROW],
+        listOpeningDebts: () => [NINA_OPENING_DEBT],
+        recordOpeningDebt,
+      }),
+    );
+    render(
+      <LedgerProvider controller={controller}>
+        <CounterpartyDetail />
+      </LedgerProvider>,
+    );
+    expect(screen.getByText("Existing debt")).toBeDefined();
+    expect(screen.getByText("200.00")).toBeDefined();
+
+    fireEvent.click(screen.getByRole("button", { name: /^Existing debt, / }));
+    const sheet = within(screen.getByLabelText("Existing debt with Nina"));
+    expect(sheet.getByText("This replaces the existing debt in PLN.")).toBeDefined();
+    fireEvent.click(sheet.getByRole("button", { name: "Save debt" }));
+
+    expect(recordOpeningDebt.mock.calls[0]?.[0]).toMatchObject({
+      direction: "theyOwe",
+      amount: toMoney("200"),
+      currency: PLN,
+      date: "2026-01-02",
+    });
+  });
+
+  it("hides Add an existing debt for an archived person", () => {
+    const controller = controllerOf(
+      basePort({
+        listCounterparties: (options) =>
+          options?.includeArchived ? [{ ...NINA_COUNTERPARTY, archived: true }] : [],
+        listCounterpartyBalances: () => [],
+      }),
+    );
+    controller.loadArchivedCounterparties();
+    render(
+      <LedgerProvider controller={controller}>
+        <CounterpartyDetail />
+      </LedgerProvider>,
+    );
+    expect(screen.queryByRole("button", { name: "Add an existing debt" })).toBeNull();
+  });
+
+  it("says nothing is settled only when nothing is: an existing debt under a balance is not 'All settled'", () => {
+    const controller = controllerOf(
+      basePort({
+        listCounterparties: () => [NINA_COUNTERPARTY],
+        listCounterpartyBalances: () => [NINA_ROW],
+        listOpeningDebts: () => [NINA_OPENING_DEBT],
+      }),
+    );
+    render(
+      <LedgerProvider controller={controller}>
+        <CounterpartyDetail />
+      </LedgerProvider>,
+    );
+    expect(screen.getByText("Existing debt")).toBeDefined();
+    expect(screen.queryByText(/settled/i)).toBeNull();
+  });
+
+  it("confirms a delete by listing the repayments that go with it, then deletes the chain", () => {
+    const deleteOpeningDebt = vi.fn<PhoneLedgerPort["deleteOpeningDebt"]>(() => ({
+      deletedRepayments: 2,
+      repaid: toMoney("150"),
+    }));
+    const controller = controllerOf(
+      basePort({
+        listCounterparties: () => [NINA_COUNTERPARTY],
+        listCounterpartyBalances: () => [NINA_ROW],
+        listOpeningDebts: () => [NINA_OPENING_DEBT],
+        deleteOpeningDebt,
+      }),
+    );
+    render(
+      <LedgerProvider controller={controller}>
+        <CounterpartyDetail />
+      </LedgerProvider>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /^Existing debt, / }));
+    fireEvent.click(
+      within(screen.getByLabelText("Existing debt with Nina")).getByRole("button", {
+        name: "Delete this debt",
+      }),
+    );
+
+    const dialog = within(screen.getByLabelText("Delete the existing debt?"));
+    expect(
+      dialog.getByText(
+        /Repayments made against it are deleted too: 2 in all, from Cash · PLN\. The balances of those accounts change\./,
+      ),
+    ).toBeDefined();
+    expect(deleteOpeningDebt).not.toHaveBeenCalled();
+    // The repaid figure is drawn through `<Amount>`, beside its label — not in the sentence.
+    expect(dialog.getByText("Already repaid")).toBeDefined();
+    expect(dialog.getByText("150.00")).toBeDefined();
+
+    fireEvent.click(dialog.getByRole("button", { name: "Delete" }));
+    expect(deleteOpeningDebt).toHaveBeenCalledWith(
+      { id: OPENING_ID },
+      expect.objectContaining({ timeZone: "Europe/Warsaw" }),
+    );
+    expect(screen.getByText("Existing debt deleted")).toBeDefined();
+  });
+
+  it("says so when a delete is refused, instead of closing silently", () => {
+    const deleteOpeningDebt = vi.fn<PhoneLedgerPort["deleteOpeningDebt"]>(() => {
+      throw new Error("delete_opening_debt: abc is already deleted");
+    });
+    const controller = controllerOf(
+      basePort({
+        listCounterparties: () => [NINA_COUNTERPARTY],
+        listCounterpartyBalances: () => [NINA_ROW],
+        listOpeningDebts: () => [NINA_OPENING_DEBT],
+        deleteOpeningDebt,
+      }),
+    );
+    render(
+      <LedgerProvider controller={controller}>
+        <CounterpartyDetail />
+      </LedgerProvider>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /^Existing debt, / }));
+    fireEvent.click(
+      within(screen.getByLabelText("Existing debt with Nina")).getByRole("button", {
+        name: "Delete this debt",
+      }),
+    );
+    fireEvent.click(
+      within(screen.getByLabelText("Delete the existing debt?")).getByRole("button", {
+        name: "Delete",
+      }),
+    );
+
+    expect(screen.getByText("This existing debt has already been deleted.")).toBeDefined();
+    expect(screen.queryByText("Existing debt deleted")).toBeNull();
   });
 
   /**

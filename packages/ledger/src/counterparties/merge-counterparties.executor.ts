@@ -42,11 +42,13 @@ import { chunkIds } from "../chunk-ids.ts";
 import { defineLocalExecutor, LocalRefusal } from "../executor.ts";
 import { type ReplicaTx, ledgerSchema as schema } from "../schema-map.ts";
 import type { LocalCounterpartyRow } from "./create-counterparty.executor.ts";
+import { mergeOpeningDebts } from "./merge-opening-debts.ts";
 
 const {
   counterparties,
   counterpartyDistinctPairs,
   counterpartyMerges,
+  openingDebts,
   recurringTransactions,
   transactions,
 } = schema;
@@ -239,6 +241,23 @@ function mergeCounterparties(
   // Every caller, fixtures included, now names the ids it moved.
   const movedRows = namedMovedRows(tx, input.loserId, input.winnerId, input.movedTransactionIds);
 
+  // §6.6 — the loser's opening debts go with it: moved where the winner has
+  // none in that currency, otherwise summed into the winner's row. Recorded on
+  // the merge so unmerge restores exactly them.
+  const movedOpeningDebts = mergeOpeningDebts(tx, input.loserId, input.winnerId);
+  const [stillHoldsDebt] = tx
+    .select({ id: openingDebts.id })
+    .from(openingDebts)
+    .where(and(eq(openingDebts.counterpartyId, input.loserId), isNull(openingDebts.deletedAt)))
+    .limit(1)
+    .all();
+  if (stillHoldsDebt) {
+    throw new LocalRefusal(
+      `merge_counterparties: ${input.loserId} still holds an existing debt ` +
+        `(${stillHoldsDebt.id}) after the move — refusing to archive it`,
+    );
+  }
+
   // R2 L3 — the named path's stale check only catches a *named* id
   // reassigned away from the loser; it says nothing about a live transaction
   // the controller never named at all. Asserted straight after the move
@@ -297,6 +316,7 @@ function mergeCounterparties(
       winnerId: input.winnerId,
       loserId: input.loserId,
       movedTransactionIds: movedRows.map((row) => row.id),
+      movedOpeningDebts: [...movedOpeningDebts],
     })
     .returning()
     .all();

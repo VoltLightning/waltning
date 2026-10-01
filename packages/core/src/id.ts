@@ -41,6 +41,7 @@ export type IdTable =
   | "dashboardLayouts"
   | "dashboardWidgets"
   | "importBatches"
+  | "openingDebts"
   | "receipts"
   | "recurringTransactions"
   | "tags"

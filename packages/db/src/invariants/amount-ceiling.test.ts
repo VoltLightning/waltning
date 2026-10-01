@@ -131,6 +131,7 @@ it("leaves every constraint VALID on a fresh install", async () => {
   expect(rows.map((r) => r.conname).sort()).toEqual([
     "accounts_opening_balance_ceiling",
     "debt_reassignments_amount_ceiling",
+    "opening_debts_amount_ceiling",
     "receipts_total_ceiling",
     "recurring_transactions_amount_ceiling",
     "targets_amount_ceiling",
