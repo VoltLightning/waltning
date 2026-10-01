@@ -409,13 +409,14 @@ describe("record_opening_debt — a re-record reports what it did to the balance
     expect(again.row.flipped).toBe(false);
   });
 
-  it("flags a flip when more was repaid than the new figure — and the repayments stay", () => {
+  it("flags a flip when more was repaid than the new figure — and the repayment that no longer fits is unlinked", () => {
     recordOpening();
     settle({ amount: "150", discharges: { currency: "PLN", amount: "150" } });
     const again = recordOpening({ amount: "100" });
     expect(again.row.balance).toBe(money.toMoney("-50"));
     expect(again.row.flipped).toBe(true);
-    expect(readOpeningDebts(s.ledger.replica.db, NINA)[0]?.repayments).toHaveLength(1);
+    // 150 repaid no longer fits a debt of 100, and a re-plan never splits: it is unlinked.
+    expect(readOpeningDebts(s.ledger.replica.db, NINA)[0]?.repayments).toHaveLength(0);
   });
 });
 
@@ -1281,5 +1282,97 @@ describe("unmerge of a record written before `after` existed", () => {
     write(unmergeCounterpartiesExecutor, { mergeId: merged.row.merge.id });
     expect(balanceOf(NINA, "PLN")).toBe(money.toMoney("200"));
     expect(balanceOf(MAREK, "PLN")).toBe(money.toMoney("-50"));
+  });
+});
+
+/* ── a changed opening debt re-plans the repayments linked to it ──────────── */
+
+describe("re-planning links when the existing debt changes under them", () => {
+  it("merge: an outgoing repayment to the loser does not stay linked to a debt the winner is owed", () => {
+    recordOpening({ amount: "100" });
+    recordOpening({ counterpartyId: MAREK, direction: "youOwe", amount: "50" });
+    // You owe Marek 50 and paid him 20: linked to Marek's existing debt.
+    const paidMarek = settle({
+      counterpartyId: MAREK,
+      type: "expense",
+      amount: "20",
+      discharges: { currency: "PLN", amount: "20" },
+    });
+    expect(linkOf(paidMarek.row.row.id)).not.toBeNull();
+
+    const merged = write(mergeCounterpartiesExecutor, {
+      mergeId: id<"counterpartyMerges">(nextId()),
+      winnerId: NINA,
+      loserId: MAREK,
+      movedTransactionIds: [paidMarek.row.row.id],
+    });
+
+    // Combined: they owe you 50. Your outgoing 20 reduces nothing of that.
+    const [combined] = readOpeningDebts(s.ledger.replica.db, NINA);
+    expect(combined?.direction).toBe("theyOwe");
+    expect(combined?.amount).toBe(money.toMoney("50"));
+    expect(linkOf(paidMarek.row.row.id)).toBeNull();
+
+    // A repayment from Nina now links in full: the whole 50 is still open.
+    debtRow({ amountOriginal: money.toMoney("5") });
+    const paidByNina = settle({ amount: "50", discharges: { currency: "PLN", amount: "50" } });
+    expect(linkOf(paidByNina.row.row.id)).not.toBeNull();
+
+    // Deleting the combined debt must not delete what you paid Marek.
+    write(deleteOpeningDebtExecutor, { id: combined?.id });
+    expect(liveTransactions().map((row) => row.id)).toContain(paidMarek.row.row.id);
+
+    expect(merged.row.merge.movedOpeningDebts).toHaveLength(1);
+  });
+
+  it("unmerge puts a re-planned repayment's link back where the merge found it", () => {
+    recordOpening({ amount: "100" });
+    recordOpening({ counterpartyId: MAREK, direction: "youOwe", amount: "50" });
+    const paidMarek = settle({
+      counterpartyId: MAREK,
+      type: "expense",
+      amount: "20",
+      discharges: { currency: "PLN", amount: "20" },
+    });
+    const merged = write(mergeCounterpartiesExecutor, {
+      mergeId: id<"counterpartyMerges">(nextId()),
+      winnerId: NINA,
+      loserId: MAREK,
+      movedTransactionIds: [paidMarek.row.row.id],
+    });
+    expect(linkOf(paidMarek.row.row.id)).toBeNull();
+
+    write(unmergeCounterpartiesExecutor, { mergeId: merged.row.merge.id });
+    expect(linkOf(paidMarek.row.row.id)).toBe(readOpeningDebts(s.ledger.replica.db, MAREK)[0]?.id);
+  });
+
+  it("re-record: a smaller figure unlinks what no longer fits, oldest first", () => {
+    recordOpening({ amount: "200" });
+    const first = settle({
+      date: "2026-09-01",
+      amount: "30",
+      discharges: { currency: "PLN", amount: "30" },
+    });
+    const second = settle({
+      date: "2026-09-02",
+      amount: "40",
+      discharges: { currency: "PLN", amount: "40" },
+    });
+
+    recordOpening({ amount: "50" });
+
+    expect(linkOf(first.row.row.id)).not.toBeNull();
+    expect(linkOf(second.row.row.id)).toBeNull();
+  });
+
+  it("re-record: flipping the direction unlinks repayments that no longer reduce it", () => {
+    recordOpening({ amount: "200" });
+    const paid = settle({ amount: "50", discharges: { currency: "PLN", amount: "50" } });
+    expect(linkOf(paid.row.row.id)).not.toBeNull();
+
+    recordOpening({ direction: "youOwe", amount: "100" });
+
+    expect(linkOf(paid.row.row.id)).toBeNull();
+    expect(readOpeningDebts(s.ledger.replica.db, NINA)[0]?.repayments).toHaveLength(0);
   });
 });

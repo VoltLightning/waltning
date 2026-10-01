@@ -22,7 +22,7 @@
  */
 
 import * as money from "@waltning/core/money";
-import { and, eq, isNull, ne } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, ne } from "drizzle-orm";
 import { type ReplicaTx, ledgerSchema as schema } from "../schema-map.ts";
 
 const { currencies, openingDebts, transactions } = schema;
@@ -141,4 +141,77 @@ export function planOpeningSplit(
       link: null,
     },
   ];
+}
+
+/** What a re-plan did to one repayment: the link it had, and the one it has now. */
+export type LinkChange = { id: string; was: string | null; now: string | null };
+
+/**
+ * **Re-plans every repayment linked to any of `fromIds` against `target`**
+ * (§6.6) — what must happen whenever the opening debt itself changes under its
+ * repayments: two people's debts are combined by a merge, or a debt is recorded
+ * again (a smaller figure, the other way round). The links are not copied, they
+ * are re-decided by the rule a new settlement meets: oldest first, only a
+ * repayment that reduces the opening debt's own direction, only up to what is
+ * open. Whatever does not fit is unlinked, and a repayment that would cross the
+ * end is unlinked whole rather than split (a re-plan never writes new rows).
+ * `target: null` unlinks them all — the debt is gone.
+ *
+ * Returns every row whose link changed, with the link it had, so a merge can
+ * record them and unmerge can put them back.
+ */
+export function replanOpeningLinks(
+  tx: ReplicaTx,
+  fromIds: readonly OpeningLink["id"][],
+  target: OpeningLink["id"] | null,
+): readonly LinkChange[] {
+  const rows = tx
+    .select()
+    .from(transactions)
+    .where(
+      and(inArray(transactions.settlesOpeningDebtId, [...fromIds]), isNull(transactions.deletedAt)),
+    )
+    .orderBy(asc(transactions.date), asc(transactions.id))
+    .all();
+  if (rows.length === 0) return [];
+
+  tx.update(transactions)
+    .set({ settlesOpeningDebtId: null })
+    .where(
+      inArray(
+        transactions.id,
+        rows.map((row) => row.id),
+      ),
+    )
+    .run();
+
+  const changes: LinkChange[] = [];
+  for (const row of rows) {
+    let now: string | null = null;
+    if (
+      target !== null &&
+      row.obligationRole === "debt" &&
+      row.obligationCounterpartyId !== null &&
+      row.debtCurrency !== null &&
+      row.debtAmount !== null &&
+      (row.type === "income" || row.type === "expense")
+    ) {
+      const link = openingLinkFor(tx, {
+        counterpartyId: row.obligationCounterpartyId,
+        currency: row.debtCurrency,
+        type: row.type,
+      });
+      if (link !== null && link.id === target && money.cmp(row.debtAmount, link.open) <= 0) {
+        tx.update(transactions)
+          .set({ settlesOpeningDebtId: link.id })
+          .where(eq(transactions.id, row.id))
+          .run();
+        now = link.id;
+      }
+    }
+    if (now !== row.settlesOpeningDebtId) {
+      changes.push({ id: row.id, was: row.settlesOpeningDebtId, now });
+    }
+  }
+  return changes;
 }

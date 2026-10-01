@@ -26,6 +26,7 @@ import * as money from "@waltning/core/money";
 import { and, eq, isNull } from "drizzle-orm";
 import { LocalRefusal } from "../executor.ts";
 import { type ReplicaTx, ledgerSchema as schema } from "../schema-map.ts";
+import { replanOpeningLinks } from "./opening-link.ts";
 
 const { openingDebts, transactions } = schema;
 
@@ -78,15 +79,6 @@ export function mergeOpeningDebts(
       );
     }
 
-    // The loser's repayments now draw on the winner's row.
-    const relinked = tx
-      .update(transactions)
-      .set({ settlesOpeningDebtId: winner.id })
-      .where(and(eq(transactions.settlesOpeningDebtId, loser.id), isNull(transactions.deletedAt)))
-      .returning({ id: transactions.id })
-      .all()
-      .map((row) => row.id as string);
-
     const winnerBefore = {
       direction: winner.direction,
       amount: winner.amount as string,
@@ -104,12 +96,14 @@ export function mergeOpeningDebts(
         .set({ deletedAt: now, updatedAt: now })
         .where(eq(openingDebts.id, winner.id))
         .run();
+      // Nothing is left for the repayments to pay down.
+      const links = replanOpeningLinks(tx, [winner.id, loser.id], null);
       moved.push({
         mode: "cancelled",
         id: loser.id,
         into: winner.id,
         winnerBefore,
-        relinked,
+        links,
         after: { ...winnerBefore, deleted: true },
       });
       continue;
@@ -130,7 +124,13 @@ export function mergeOpeningDebts(
       date: (loser.date < winner.date ? loser.date : winner.date) as string,
       deleted: false,
     };
-    moved.push({ mode: "combined", id: loser.id, into: winner.id, winnerBefore, relinked, after });
+    // **Re-planned, not re-pointed.** The combined row may point the other way
+    // from one of the two it replaces: a repayment is linked to it only if it
+    // reduces the combined debt's own direction, oldest first, up to what is
+    // open — an outgoing payment to the loser must not stay "paying down" a
+    // debt the winner is owed.
+    const links = replanOpeningLinks(tx, [winner.id, loser.id], winner.id);
+    moved.push({ mode: "combined", id: loser.id, into: winner.id, winnerBefore, links, after });
   }
   return moved;
 }
@@ -207,13 +207,16 @@ export function unmergeOpeningDebts(
       .set({ deletedAt: null, updatedAt: now })
       .where(eq(openingDebts.id, id<"openingDebts">(entry.id)))
       .run();
-    for (const repaymentId of entry.relinked) {
+    // Each repayment goes back to the link it had, only where nobody changed it since.
+    for (const change of entry.links) {
       tx.update(transactions)
-        .set({ settlesOpeningDebtId: id<"openingDebts">(entry.id) })
+        .set({ settlesOpeningDebtId: change.was === null ? null : id<"openingDebts">(change.was) })
         .where(
           and(
-            eq(transactions.id, id<"transactions">(repaymentId)),
-            eq(transactions.settlesOpeningDebtId, id<"openingDebts">(entry.into)),
+            eq(transactions.id, id<"transactions">(change.id)),
+            change.now === null
+              ? isNull(transactions.settlesOpeningDebtId)
+              : eq(transactions.settlesOpeningDebtId, id<"openingDebts">(change.now)),
           ),
         )
         .run();

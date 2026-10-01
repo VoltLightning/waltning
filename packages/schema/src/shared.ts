@@ -29,7 +29,12 @@ export type MovedOpeningDebt =
         readonly amount: string;
         readonly date: string;
       };
-      readonly relinked: readonly string[];
+      /** Every repayment whose link the merge changed, with the link it had and the one it was given. */
+      readonly links: readonly {
+        readonly id: string;
+        readonly was: string | null;
+        readonly now: string | null;
+      }[];
       readonly after: {
         readonly direction: "theyOwe" | "youOwe";
         readonly amount: string;

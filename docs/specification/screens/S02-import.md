@@ -184,7 +184,9 @@ Bulk accept states its count and its threshold in the button itself. It is
    (`SPEC.md` §6.6) is superseded **together with its other half**: both are
    soft-deleted, the import row lands once, and it is written against the debt
    again as a settlement would be — linked where it fits, split again where it
-   still crosses the end, ordinary where nothing is open — so the account moves
+   still crosses the end (the server-side import mints the `spillId` for the
+   second row, so a crossing import is split rather than written whole),
+   ordinary where nothing is open — so the account moves
    by the statement's figure exactly once. Where a single linked repayment is
    replaced, its link is carried only if its discharge still fits in what is
    open on the debt.

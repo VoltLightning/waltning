@@ -1736,8 +1736,19 @@ person and currency for a new one (the unique index is on live rows).
 moves the loser's opening debts with the rest of what it holds: a debt in a
 currency the winner has none in changes owner; in a currency both have, the two
 are **summed by sign** into the winner's row (the larger magnitude's direction,
-the earlier date; the loser's row is soft-deleted and its repayments are pointed
-at the winner's); if they cancel to nothing both rows are dropped. The loser is
+the earlier date; the loser's row is soft-deleted); if they cancel to nothing
+both rows are dropped. **The repayments linked to either row are then
+re-planned, not re-pointed**: through the rule a new settlement meets — oldest
+first, only a repayment that reduces the combined debt's own direction, only up
+to what is open — and whatever does not fit is unlinked (a re-plan never splits:
+one that would cross the end is unlinked whole). So an outgoing payment to the
+loser does not stay "paying down" a debt the winner is owed, later repayments
+link correctly, and deleting the combined debt cannot delete a payment to
+somebody else. The merge record keeps every link it changed, with the link it
+had, and unmerge puts each back where nobody has changed it since. **Recording
+an existing debt again re-plans its repayments the same way** — a smaller
+figure unlinks those past its end, the other direction unlinks those that no
+longer reduce it. The loser is
 archived only once it holds no live opening debt, and the merge record keeps
 what the winner's row held before **and what the merge left it**, so
 `unmerge_counterparties` restores exactly that — and only while the winner's row

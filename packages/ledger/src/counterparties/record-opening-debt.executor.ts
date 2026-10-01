@@ -33,6 +33,7 @@ import { and, eq, isNull } from "drizzle-orm";
 import { defineLocalExecutor, LocalRefusal } from "../executor.ts";
 import { assertMoneyScale } from "../scale.ts";
 import { type ReplicaTx, ledgerSchema as schema } from "../schema-map.ts";
+import { replanOpeningLinks } from "./opening-link.ts";
 import { balancesForCounterparty } from "./read-counterparty-balances.ts";
 import { readOpeningRepayments } from "./read-opening-debts.ts";
 
@@ -138,6 +139,11 @@ export const recordOpeningDebtExecutor = defineLocalExecutor<
     if (!row) {
       throw new Error("record_opening_debt: the replica write returned no row");
     }
+    // **A re-recorded debt re-plans the repayments linked to it** (§6.6): a
+    // smaller figure leaves some of them past its end, and the other direction
+    // means they no longer reduce it. They are re-decided by the rule a new
+    // settlement meets, and whatever no longer fits is unlinked.
+    if (existing !== undefined) replanOpeningLinks(tx, [row.id], row.id);
 
     // What this did to the balance (and to the repayments already made against
     // the row it replaced): read back, never derived from the input.
