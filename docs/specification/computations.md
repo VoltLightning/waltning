@@ -182,7 +182,20 @@ held(a)   = balance_display(a, today)            -- §4, the replica's rate for 
 counted   = own accounts, not hidden, in_total, not a loan, with a rate for today
 mine      = Σ held(a)  over counted
 ours      = mine + Σ held(a) over shared accounts, same rules   -- only where one exists
+
+positive  = Σ held(a)  where held(a) > 0                       -- "held"
+overdrawn = Σ |held(a)| where held(a) < 0 and kind is bank, cash or deposit
+owed      = Σ |held(a)| where held(a) < 0 and kind is anything else
+mine      = positive − overdrawn − owed
 ```
+
+**Below zero says what it is.** A bank, cash or deposit account under nothing is
+**overdrawn**; every other kind under nothing — a card above all, a real debt to
+a lender, but also clearing, investment and other accounts — is **owed**. Both
+are the old *owed* figure split by the account's kind — the sum of the two is
+what one word used to say — so `mine` and every total are the figures they were
+and only the words and the split's labelling change (`isOverdrawn` in
+`@waltning/core/registry/inputs`).
 
 **An account with no rate is left out, and the figure says so** — `counted` of
 the own non-loan accounts that are visible. S16's register made the same

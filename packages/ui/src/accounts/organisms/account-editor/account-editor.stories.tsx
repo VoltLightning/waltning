@@ -25,6 +25,7 @@ const ACCOUNT: AccountEditorAccount = {
   version: 3,
   expectedBalance: null,
   color: null,
+  hasEntries: true,
 };
 
 const GROUPS = [{ id: "group-bank-a", name: "Bank A" }];
@@ -39,6 +40,7 @@ const meta = {
     onCancel: noop,
     onSave: noop,
     onArchive: noop,
+    onDelete: noop,
     onReconcile: noop,
     onCreateGroup: () => null,
   },
@@ -49,6 +51,14 @@ type Story = StoryObj<typeof meta>;
 
 /** Every field of an account that already exists — currency shown, not editable. */
 export const Editor: Story = {};
+
+/**
+ * **An account nothing references** — *Delete account* beside *Archive*. With
+ * entries (every story above) only *Archive* is there (§6.9).
+ */
+export const Empty: Story = {
+  args: { account: { ...ACCOUNT, hasEntries: false, openingBalance: money.toMoney("0") } },
+};
 
 /** S16 §5's last observation, shown beside currency. */
 export const WithLastObserved: Story = {

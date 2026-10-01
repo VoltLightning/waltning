@@ -19,10 +19,16 @@
  * accounts need. Nobody opens an existing account's editor for the minimal
  * path; every field is already true of the row, so every field is shown.
  *
- * **Reconcile and Archive are not fields.** Both are separate registry
- * operations (`reconcile_account`, `archive_account`, S16 §5, §8) with their
- * own confirmation shape — a sheet, a plain danger action — so they surface
- * as their own callbacks rather than as more state this component tracks.
+ * **Reconcile, Archive and Delete are not fields.** Each is a separate
+ * registry operation (`reconcile_account`, `archive_account`,
+ * `delete_account`; S16 §5, §8) with its own confirmation shape — a sheet, a
+ * plain action, a `ConfirmDialog` — so they surface as their own callbacks
+ * rather than as more state this component tracks.
+ *
+ * **Delete is offered only where it can work.** An account no row references
+ * (`hasEntries` false) may be removed outright, behind a `ConfirmDialog`;
+ * once anything has touched it, *Archive* is the only way out (§6.9) and
+ * there is no Delete to press.
  */
 
 import { isAccountingDate } from "@waltning/core/date";
@@ -49,6 +55,7 @@ import { Toggle } from "../../../primitives/atoms/toggle/toggle";
 import { FieldAnchor } from "../../../primitives/field-anchor";
 import type { FieldErrorMap } from "../../../primitives/field-errors.ts";
 import { useSubmitCheck } from "../../../primitives/use-submit-check.ts";
+import { ConfirmDialog } from "../../../shell/organisms/confirm-dialog/confirm-dialog";
 import { text } from "../../../theme/fonts.ts";
 import { makeStyles } from "../../../theme/styles.ts";
 import { space } from "../../../tokens.ts";
@@ -81,6 +88,12 @@ export type AccountEditorAccount = {
   expectedBalance: money.Money | null;
   /** A colour picked by hand, or `null` for the kind's own (`02-tokens` §2.1b). */
   color: AccountColor | null;
+  /**
+   * Whether anything references this account — a transaction on either leg, a
+   * recurring rule, or a non-zero opening balance. False is the one state in
+   * which *Delete* is offered (§6.9).
+   */
+  hasEntries: boolean;
 };
 
 /** Only the fields that changed — `update_account`'s executor refuses an empty patch. */
@@ -105,6 +118,8 @@ export type AccountEditorProps = {
   onCancel: () => void;
   onSave: (patch: AccountPatch) => void;
   onArchive: () => void;
+  /** `delete_account`, after the confirmation — called only for an account with no entries. */
+  onDelete: () => void;
   onReconcile: () => void;
   /** Returns the new group's id, or `null` when the write was refused. */
   onCreateGroup: (name: string) => string | null;
@@ -131,6 +146,7 @@ export function AccountEditor({
   onCancel,
   onSave,
   onArchive,
+  onDelete,
   onReconcile,
   onCreateGroup,
 }: AccountEditorProps) {
@@ -149,6 +165,7 @@ export function AccountEditor({
   const [color, setColor] = useState<AccountColor | null>(account.color);
   const [creatingGroup, setCreatingGroup] = useState(false);
   const [newGroupName, setNewGroupName] = useState("");
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   const trimmed = name.trim();
   const dateInvalid = openingDateText !== "" && !isAccountingDate(openingDateText);
@@ -253,6 +270,12 @@ export function AccountEditor({
     (value: string | null) => setOpeningBalance(value ?? "0"),
     [],
   );
+  const handleAskDelete = useCallback(() => setConfirmingDelete(true), []);
+  const handleCancelDelete = useCallback(() => setConfirmingDelete(false), []);
+  const handleConfirmDelete = useCallback(() => {
+    setConfirmingDelete(false);
+    onDelete();
+  }, [onDelete]);
   const handleStartCreatingGroup = useCallback(() => setCreatingGroup(true), []);
   const groupCheck = useSubmitCheck({
     groupName: newGroupName.trim() === "" && t("common.required"),
@@ -433,7 +456,19 @@ export function AccountEditor({
       <View style={styles.secondaryActions}>
         <Button label={t("accounts.reconcile")} onPress={onReconcile} variant="secondary" />
         <Button label={t("accounts.archive")} onPress={onArchive} variant="secondary" />
+        {account.hasEntries ? null : (
+          <Button label={t("accounts.delete")} onPress={handleAskDelete} variant="secondary" />
+        )}
       </View>
+
+      <ConfirmDialog
+        visible={confirmingDelete}
+        title={t("accounts.deleteConfirmTitle")}
+        body={t("accounts.deleteConfirmBody", { name: account.name })}
+        confirmLabel={t("accounts.deleteConfirmSubmit")}
+        onConfirm={handleConfirmDelete}
+        onCancel={handleCancelDelete}
+      />
     </View>
   );
 }
@@ -454,6 +489,7 @@ const useStyles = makeStyles((theme) => ({
   actions: { flexDirection: "row", justifyContent: "flex-end", gap: space.xl },
   secondaryActions: {
     flexDirection: "row",
+    flexWrap: "wrap",
     justifyContent: "space-between",
     gap: space.xl,
     paddingTop: space.xl,

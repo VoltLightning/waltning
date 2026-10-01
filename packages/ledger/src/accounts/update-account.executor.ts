@@ -20,6 +20,7 @@
 import { type UpdateAccountInput, updateAccountInput } from "@waltning/core/registry/inputs";
 import { and, eq, sql } from "drizzle-orm";
 import { defineLocalExecutor, LocalRefusal } from "../executor.ts";
+import { assertAmountCeiling } from "../scale.ts";
 import { type ReplicaTx, ledgerSchema as schema } from "../schema-map.ts";
 import type { LocalAccountRow } from "./create-account.executor.ts";
 
@@ -34,6 +35,11 @@ export const updateAccountExecutor = defineLocalExecutor<
   opVersion: 1,
   input: updateAccountInput,
   mints: () => [],
+  validate: (input) => {
+    if (input.patch.openingBalance !== undefined) {
+      assertAmountCeiling(input.patch.openingBalance, "update_account: opening_balance");
+    }
+  },
   apply: (input, tx) => patchAccount(input, tx),
 });
 

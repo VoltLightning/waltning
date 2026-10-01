@@ -47,6 +47,14 @@ describe("applyKey — one keypad tap folded onto the raw string", () => {
     expect(applyKey("1", ",", 0)).toBe("1,");
   });
 
+  it("refuses a tenth integer digit — the amount ceiling, 999 999 999,99", () => {
+    expect(applyKey("99999999", "9")).toBe("999999999");
+    expect(applyKey("999999999", "9")).toBe("999999999");
+    // The comma is still allowed after nine digits, and the fraction after it.
+    expect(applyKey("999999999", ",")).toBe("999999999,");
+    expect(applyKey("999999999,9", "9")).toBe("999999999,99");
+  });
+
   it("builds a whole capture the way a person types it", () => {
     let raw = "";
     for (const key of ["4", "8", ",", "9", "0"] as const) raw = applyKey(raw, key);

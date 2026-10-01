@@ -28,6 +28,8 @@ export const pl: Messages = {
     close: "Zamknij",
     name: "Nazwa",
     loading: "Wczytywanie…",
+    /** The amount ceiling (`money.ts`) — the figure is written the way this language writes it. */
+    amountCeiling: "Maksymalnie 999 999 999,99",
     search: "Szukaj…",
     noMatches: "Brak wyników.",
     dismissSheet: "Zamknij: {{title}}",
@@ -150,6 +152,14 @@ export const pl: Messages = {
     moveUp: "Przesuń {{name}} w górę",
     moveDown: "Przesuń {{name}} w dół",
     archivedToast: "Konto zarchiwizowane.",
+    delete: "Usuń konto",
+    deleteConfirmTitle: "Usunąć to konto?",
+    deleteConfirmBody:
+      "Konto „{{name}}” nie ma żadnych wpisów, więc zostanie usunięte całkowicie. Tej operacji nie można cofnąć.",
+    deleteConfirmSubmit: "Usuń",
+    deletedToast: "Konto usunięte.",
+    deleteHasEntries: "To konto ma już wpisy, dlatego można je tylko zarchiwizować.",
+    overdrawn: "debet",
     reconcile: "Uzgodnij…",
     reconcileTitle: "Uzgodnienie",
     computed: "Wyliczone",

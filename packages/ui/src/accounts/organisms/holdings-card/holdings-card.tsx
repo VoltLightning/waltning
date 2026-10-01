@@ -78,6 +78,13 @@ export type HoldingsCardProps = {
   /** Drawn under the figure, and the title becomes *Mine* — or `null`, and neither. */
   ours: money.Money | null;
   held: money.Money;
+  /**
+   * What asset accounts (bank, cash, deposit…) are below zero by — said as
+   * *overdrawn*, because there is no lender behind it. A magnitude, like
+   * `owed`.
+   */
+  overdrawn: money.Money;
+  /** What liability accounts (a card) are below zero by — a real debt, said as *owed*. */
   owed: money.Money;
   counted: number;
   of: number;
@@ -113,6 +120,7 @@ export function HoldingsCard({
   mine,
   ours,
   held,
+  overdrawn,
   owed,
   counted,
   of,
@@ -259,9 +267,22 @@ export function HoldingsCard({
               decimals={decimals}
               lineWidth={lineWidth}
               label={t("accounts.held")}
-              dot={money.isPositive(owed)}
+              dot={money.isPositive(overdrawn) || money.isPositive(owed)}
             />
           </View>
+          {money.isPositive(overdrawn) ? (
+            <View style={styles.part}>
+              <FittedPart
+                value={overdrawn}
+                currency={currency}
+                decimals={decimals}
+                lineWidth={lineWidth}
+                label={t("accounts.overdrawn")}
+                kind="spend"
+                dot={money.isPositive(owed)}
+              />
+            </View>
+          ) : null}
           {money.isPositive(owed) ? (
             <View style={styles.part}>
               <FittedPart

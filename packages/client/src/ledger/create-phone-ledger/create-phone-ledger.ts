@@ -49,7 +49,9 @@ import {
   createCounterpartyInput,
   createGroupInput,
   createTransactionInput,
+  type DeleteAccountInput,
   type DeleteTransactionInput,
+  deleteAccountInput,
   deleteTransactionInput,
   type MergeCategoriesInput,
   type MergeCounterpartiesInput,
@@ -181,6 +183,13 @@ export type PhoneAccount = {
   color: AccountColor | null;
   /** The last balance a reconciliation recorded (S16 §5) — `null` before the first one. */
   expectedBalance: Money | null;
+  /**
+   * Whether anything references this account — a transaction on either leg
+   * (soft-deleted ones too), a recurring rule, or a non-zero opening balance.
+   * False is what lets the editor offer *Delete*; true leaves it *Archive*
+   * (§6.9).
+   */
+  hasEntries: boolean;
   /** `AccountEditor`'s own fields — shown and, `version` apart, edited. */
   openingBalance: Money;
   openingDate: AccountingDate | null;
@@ -913,6 +922,7 @@ export type PhoneLedgerPort = {
   setTransactionLines: (input: SetTransactionLinesInput, capture: PhoneCapture) => void;
   updateAccount: (input: UpdateAccountInput, capture: PhoneCapture) => void;
   archiveAccount: (input: ArchiveAccountInput, capture: PhoneCapture) => void;
+  deleteAccount: (input: DeleteAccountInput, capture: PhoneCapture) => void;
   setAccountVisibility: (input: SetAccountVisibilityInput, capture: PhoneCapture) => void;
   /** S16 §3 — the whole ordered list, `sort` becoming each id's position. */
   reorderAccounts: (input: ReorderAccountsInput, capture: PhoneCapture) => void;
@@ -1443,6 +1453,12 @@ export type ArchiveAccountDraft = {
   version: number;
 };
 
+/** `delete_account`'s draft — the same two fields `archive_account` takes. */
+export type DeleteAccountDraft = {
+  id: string;
+  version: number;
+};
+
 /**
  * S16 §3's two pills — what the register shows, and what its total counts.
  *
@@ -1814,6 +1830,15 @@ export type PhoneLedgerController = {
   archiveAccount: (
     draft: ArchiveAccountDraft,
   ) => { id: Id<"accounts"> } | { fieldErrors: readonly FieldError[] };
+  /**
+   * Removes an account nothing references (§6.9). Refused with
+   * `accounts.deleteHasEntries` when something does — the screen offers
+   * *Delete* only where `hasEntries` is false, so this is the race (an entry
+   * written between the render and the tap), not the ordinary path.
+   */
+  deleteAccount: (
+    draft: DeleteAccountDraft,
+  ) => { id: Id<"accounts"> } | { fieldErrors: readonly FieldError[] };
   setAccountVisibility: (
     draft: SetAccountVisibilityDraft,
   ) => { id: Id<"accounts"> } | { fieldErrors: readonly FieldError[] };
@@ -1999,6 +2024,11 @@ function accountWriteRefusal(error: Error): FieldError | null {
       message: error.message,
       messageKey: "accounts.sharedNotBusiness",
     };
+  }
+  // `delete_account`'s own refusal — an entry arrived between the editor
+  // rendering *Delete* and the tap. Form-level: there is no field it belongs to.
+  if (error.message.includes("has entries")) {
+    return { path: "", message: error.message, messageKey: "accounts.deleteHasEntries" };
   }
   return null;
 }
@@ -2880,6 +2910,52 @@ export function createPhoneLedger(
         emitClientDiagnostic(diagnostics, {
           scope: "client_action",
           action: "archive_account",
+          phase: "failure",
+          error: clientFailure(error),
+        });
+        throw error;
+      }
+    },
+    deleteAccount: (draft) => {
+      emitClientDiagnostic(diagnostics, {
+        scope: "client_action",
+        action: "delete_account",
+        phase: "start",
+      });
+      try {
+        const capture = runtime.capture();
+        const parsed = deleteAccountInput.safeParse({ id: draft.id, version: draft.version });
+        if (!parsed.success) {
+          return finish(
+            diagnostics,
+            { scope: "client_action", action: "delete_account" },
+            { fieldErrors: fieldErrorsFromZod(parsed.error) ?? [] },
+          );
+        }
+        try {
+          port.deleteAccount(parsed.data, capture);
+        } catch (refusal) {
+          // A thrown refusal is the only thing these mappers read; anything
+          // else is a fault and is rethrown untouched.
+          if (!(refusal instanceof Error)) throw refusal;
+          const fieldError = accountWriteRefusal(refusal);
+          if (!fieldError) throw refusal;
+          return finish(
+            diagnostics,
+            { scope: "client_action", action: "delete_account" },
+            { fieldErrors: [fieldError] },
+          );
+        }
+        refresh();
+        return finish(
+          diagnostics,
+          { scope: "client_action", action: "delete_account" },
+          { id: parsed.data.id },
+        );
+      } catch (error) {
+        emitClientDiagnostic(diagnostics, {
+          scope: "client_action",
+          action: "delete_account",
           phase: "failure",
           error: clientFailure(error),
         });

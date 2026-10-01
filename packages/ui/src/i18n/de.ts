@@ -19,6 +19,8 @@ export const de: Messages = {
     close: "Schließen",
     name: "Name",
     loading: "Wird geladen…",
+    /** The amount ceiling (`money.ts`) — the figure is written the way this language writes it. */
+    amountCeiling: "Höchstens 999.999.999,99",
     search: "Suchen…",
     noMatches: "Keine Treffer.",
     dismissSheet: "{{title}} schließen",
@@ -142,6 +144,14 @@ export const de: Messages = {
     moveUp: "{{name}} nach oben",
     moveDown: "{{name}} nach unten",
     archivedToast: "Konto archiviert.",
+    delete: "Konto löschen",
+    deleteConfirmTitle: "Dieses Konto löschen?",
+    deleteConfirmBody:
+      "„{{name}}“ enthält keine Buchungen und wird daher vollständig entfernt. Das lässt sich nicht rückgängig machen.",
+    deleteConfirmSubmit: "Löschen",
+    deletedToast: "Konto gelöscht.",
+    deleteHasEntries: "Dieses Konto enthält jetzt Buchungen und kann nur noch archiviert werden.",
+    overdrawn: "überzogen",
     reconcile: "Abgleichen…",
     reconcileTitle: "Abgleichen",
     computed: "Berechnet",

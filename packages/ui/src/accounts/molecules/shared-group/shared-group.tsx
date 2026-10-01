@@ -41,6 +41,8 @@ export type SharedGroupAccount = {
   isBusiness?: boolean;
   /** A clearing account whose balance is not zero (§6.4). */
   unsettled?: boolean;
+  /** An asset account below zero — the row says *overdrawn* (`BalanceRow`). */
+  overdrawn?: boolean;
   /** The last balance a reconciliation recorded (S16 §5) — `null`/absent before the first one. */
   expectedBalance?: money.Money | null;
 };
@@ -118,6 +120,7 @@ function SharedAccountRow({ account, first, onSelect }: SharedAccountRowProps) {
       {...(account.decimals === undefined ? {} : { decimals: account.decimals })}
       isBusiness={account.isBusiness ?? false}
       unsettled={account.unsettled ?? false}
+      overdrawn={account.overdrawn ?? false}
       expectedBalance={account.expectedBalance ?? null}
       onPress={handlePress}
       first={first}

@@ -70,6 +70,7 @@ export const reconcileAccountExecutor = defineLocalExecutor<
       input.observedBalance,
       account.currency,
       "reconcile_account: expected_balance",
+      false,
     );
     const computed = computedBalance(input.accountId, account.openingBalance, input.asOf, tx);
     const difference = money.sub(input.observedBalance, computed);
@@ -101,6 +102,7 @@ function reconcileAccount(input: ReconcileAccountInput, tx: ReplicaTx): LocalTra
     input.observedBalance,
     account.currency,
     "reconcile_account: expected_balance",
+    false,
   );
 
   const computed = computedBalance(account.id, account.openingBalance, input.asOf, tx);

@@ -42,6 +42,7 @@ import {
   createCounterpartyInput,
   createGroupInput,
   createTransactionInput,
+  deleteAccountInput,
   deleteTransactionInput,
   mergeCategoriesInput,
   mergeCounterpartiesInput,
@@ -586,6 +587,50 @@ describe("archiveAccountInput", () => {
 
     expect(result.success).toBe(false);
     expect(paths(result)).toContain("version");
+  });
+});
+
+describe("deleteAccountInput", () => {
+  it("requires a version — the compare-and-swap token, as archive_account does", () => {
+    const result = deleteAccountInput.safeParse({ id: ACCOUNT_ID });
+
+    expect(result.success).toBe(false);
+    expect(paths(result)).toContain("version");
+  });
+
+  it("takes an id and a version", () => {
+    expect(deleteAccountInput.parse({ id: ACCOUNT_ID, version: 2 })).toEqual({
+      id: ACCOUNT_ID,
+      version: 2,
+    });
+  });
+});
+
+describe("the amount ceiling (999 999 999.99)", () => {
+  it("accepts 999999999.99 on a transaction and refuses 1000000000.00", () => {
+    expect(
+      createTransactionInput.safeParse({ ...expense, amountOriginal: "999999999.99" }).success,
+    ).toBe(true);
+    const result = createTransactionInput.safeParse({
+      ...expense,
+      amountOriginal: "1000000000.00",
+    });
+    expect(result.success).toBe(false);
+    expect(paths(result)).toContain("amountOriginal");
+  });
+
+  it("refuses the destination leg, the fee and an opening balance past it", () => {
+    const over = createTransactionInput.safeParse({
+      ...expense,
+      fee: "1000000000",
+    });
+    expect(paths(over)).toContain("fee");
+    expect(createAccountInput.safeParse({ ...account, openingBalance: "1000000000" }).success).toBe(
+      false,
+    );
+    expect(
+      createAccountInput.safeParse({ ...account, openingBalance: "-999999999.99" }).success,
+    ).toBe(true);
   });
 });
 

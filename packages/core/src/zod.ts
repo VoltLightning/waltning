@@ -26,6 +26,8 @@ import {
 } from "./date.ts";
 import type { Id, IdTable } from "./id.ts";
 import {
+  AMOUNT_CEILING_DISPLAY,
+  amountWithinCeiling,
   type CurrencyCode,
   currencyCode,
   dec,
@@ -45,11 +47,31 @@ import {
  * storage scale — a request sending `"18"` and one sending `"18.00000000"`
  * produce the same value, and neither produces a `number`.
  */
+const DECIMAL_AMOUNT = /^-?\d+(\.\d+)?$/;
+
 export const zMoney = z
   .string()
-  .regex(/^-?\d+(\.\d+)?$/, "expected a decimal amount as a string")
+  .regex(DECIMAL_AMOUNT, "expected a decimal amount as a string")
   .transform((v): Money => toMoney(v))
   .refine((v) => dec(v).abs().lt("1000000000000"), "amount exceeds numeric(20,8)");
+
+/**
+ * An amount a row holds — `zMoney` under the amount ceiling
+ * (`AMOUNT_CEILING_EXCLUSIVE`, `999 999 999.99`). Every write input's amount
+ * field is this; `zMoney` alone is for a figure that is a *balance you
+ * observed*, which no ceiling on entries bounds.
+ */
+export const zAmount = z
+  .string()
+  .regex(DECIMAL_AMOUNT, "expected a decimal amount as a string")
+  .transform((v): Money => toMoney(v))
+  // One refinement, and it is the ceiling: it is stricter than `zMoney`'s own
+  // `numeric(20,8)` bound, so a figure past both reports the one message a
+  // person can act on rather than two.
+  .refine(
+    amountWithinCeiling,
+    `an amount is at most ${AMOUNT_CEILING_DISPLAY} (amounts_below_ceiling)`,
+  );
 
 /**
  * `fee` (S31 §9.1) — the institution's own stated-fee line, reported
@@ -75,7 +97,7 @@ export const zMoney = z
 export const zFee = z
   .string()
   .refine((v) => !/^-?\d+(\.\d+)?$/.test(v) || dec(v).gt(0), "a fee must be greater than zero")
-  .pipe(zMoney)
+  .pipe(zAmount)
   .refine(
     (v) => dec(v).gt(0),
     "a fee must be greater than zero — a value that rounds to zero at storage scale is not a fee",

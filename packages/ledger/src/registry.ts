@@ -2,6 +2,7 @@ import { archiveAccountExecutor } from "./accounts/archive-account.executor.ts";
 import { archiveGroupExecutor } from "./accounts/archive-group.executor.ts";
 import { createAccountExecutor } from "./accounts/create-account.executor.ts";
 import { createGroupExecutor } from "./accounts/create-group.executor.ts";
+import { deleteAccountExecutor } from "./accounts/delete-account.executor.ts";
 import { reconcileAccountExecutor } from "./accounts/reconcile-account.executor.ts";
 import { reorderAccountsExecutor } from "./accounts/reorder-accounts.executor.ts";
 import { reorderGroupsExecutor } from "./accounts/reorder-groups.executor.ts";
@@ -51,6 +52,7 @@ export const ledgerRegistry = localRegistry([
   // rebase against A2's own append (update/delete transaction, etc). ══
   updateAccountExecutor,
   archiveAccountExecutor,
+  deleteAccountExecutor,
   reorderAccountsExecutor,
   setAccountVisibilityExecutor,
   createGroupExecutor,

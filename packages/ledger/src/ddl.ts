@@ -645,6 +645,10 @@ WHERE \`deleted_at\` IS NULL
   )`,
     ],
   },
+  {
+    tag: "0022_account_guards",
+    statements: [],
+  },
 ];
 
 /** One step per file in `drizzle/outbox`, filename order — the queue, its index, and the counter `claimSeq` allocates from. */

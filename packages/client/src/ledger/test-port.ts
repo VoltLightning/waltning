@@ -80,6 +80,7 @@ export function basePort(overrides: Partial<PhoneLedgerPort> = {}): PhoneLedgerP
     setTransactionLines: () => undefined,
     updateAccount: () => undefined,
     archiveAccount: () => undefined,
+    deleteAccount: () => undefined,
     setAccountVisibility: () => undefined,
     reconcileAccount: () => undefined,
     createGroup: () => undefined,

@@ -41,6 +41,7 @@ import {
 } from "../money.ts";
 import {
   zAccountingDate,
+  zAmount,
   zCurrencyCode,
   zFee,
   zId,
@@ -89,6 +90,24 @@ export const ACCOUNT_KIND = [
 export const RETIRED_ACCOUNT_KIND: ReadonlySet<(typeof ACCOUNT_KIND)[number]> = new Set([
   "loan_receivable",
 ]);
+
+/**
+ * The kinds that can be **overdrawn**: bank, cash and deposit accounts, where
+ * a balance below zero is an account gone under nothing and no lender stands
+ * behind it. Every other kind below zero keeps the label it always had — *owed*
+ * — whether that is a card or a loan (a real debt) or a clearing, investment
+ * or other account (`computations.md` §3.1; S04, S16).
+ */
+export const OVERDRAWABLE_ACCOUNT_KIND: ReadonlySet<(typeof ACCOUNT_KIND)[number]> = new Set([
+  "bank",
+  "cash",
+  "deposit",
+]);
+
+/** A bank, cash or deposit account whose balance is below zero. */
+export function isOverdrawn(kind: (typeof ACCOUNT_KIND)[number], balance: Money): boolean {
+  return OVERDRAWABLE_ACCOUNT_KIND.has(kind) && dec(balance).lt(0);
+}
 
 /** The kinds a new account can be given — `ACCOUNT_KIND` less the retired ones. */
 export const NEW_ACCOUNT_KIND = ACCOUNT_KIND.filter((kind) => !RETIRED_ACCOUNT_KIND.has(kind));
@@ -184,7 +203,7 @@ export const createAccountInput = z
      * scale, from the same field. `.prefault` feeds the default *through*
      * `zMoney`, so the absent case and the present case are the same value.
      */
-    openingBalance: zMoney.prefault("0"),
+    openingBalance: zAmount.prefault("0"),
 
     /** §8.0 — the migration carries balances and their as-of date, not history. */
     openingDate: zAccountingDate.optional(),
@@ -353,7 +372,7 @@ export const createTransactionInput = z
      * own sign, because reconciling an account *downward* is the ordinary use.
      * Refused below rather than here, so the message can name the type.
      */
-    amountOriginal: zMoney,
+    amountOriginal: zAmount,
 
     /** §7.1 — this *is* the account's currency; the §6.5 trigger enforces it. */
     currency: zCurrencyCode,
@@ -384,7 +403,7 @@ export const createTransactionInput = z
 
     /* The destination leg — a transfer, and only a transfer (§7.5). */
     toAccountId: zId<"accounts">().optional(),
-    toAmount: zMoney.optional(),
+    toAmount: zAmount.optional(),
     toCurrency: zCurrencyCode.optional(),
 
     /**
@@ -638,7 +657,7 @@ const accountPatch = z
     ownership: z.enum(OWNERSHIP).optional(),
     memo: z.string().trim().max(2000).optional(),
     isBusiness: z.boolean().optional(),
-    openingBalance: zMoney.optional(),
+    openingBalance: zAmount.optional(),
     openingDate: zAccountingDate.nullable().optional(),
     /**
      * A colour of the account's own, or `null` for its kind's (`02-tokens`
@@ -661,12 +680,31 @@ export const updateAccountInput = z
   });
 export type UpdateAccountInput = z.output<typeof updateAccountInput>;
 
-/** `archive_account` — structural, `operations.md` *Accounts*. Never deletes (§6.9). */
+/** `archive_account` — structural, `operations.md` *Accounts*. Flips a flag and deletes nothing: an account anything has referenced is archived, never removed (§6.9). */
 export const archiveAccountInput = z.object({
   id: zId<"accounts">(),
   version: z.number().int().positive(),
 });
 export type ArchiveAccountInput = z.output<typeof archiveAccountInput>;
+
+/**
+ * `delete_account` — structural, `operations.md` *Accounts*. Removes an account
+ * **no row has ever referenced** (§6.9): no transaction on either leg —
+ * soft-deleted ones included, they are still rows — no recurring rule, no
+ * import batch, and no opening balance. Anything referenced is archived, never
+ * deleted.
+ *
+ * `version` is the compare-and-swap token, same as `archive_account`: a delete
+ * decided on a stale read of the account is refused rather than applied to a
+ * row that has since changed. That the account is *empty* is not an input — it
+ * is a fact the executor reads and the database enforces
+ * (`accounts_delete_guard`, WA023).
+ */
+export const deleteAccountInput = z.object({
+  id: zId<"accounts">(),
+  version: z.number().int().positive(),
+});
+export type DeleteAccountInput = z.output<typeof deleteAccountInput>;
 
 /**
  * `set_account_visibility` — S16 §3's two pills. What the register shows, and
@@ -895,13 +933,13 @@ const transactionPatch = z
      */
     timeOfDay: zTimeOfDay.nullable().optional(),
     accountId: zId<"accounts">().optional(),
-    amountOriginal: zMoney.optional(),
+    amountOriginal: zAmount.optional(),
     categoryId: zId<"categories">().nullable().optional(),
     counterpartyId: zId<"counterparties">().nullable().optional(),
     obligationCounterpartyId: zId<"counterparties">().nullable().optional(),
     obligationRole: z.enum(OBLIGATION_ROLE).nullable().optional(),
     toAccountId: zId<"accounts">().nullable().optional(),
-    toAmount: zMoney.nullable().optional(),
+    toAmount: zAmount.nullable().optional(),
     toCurrency: zCurrencyCode.nullable().optional(),
     fxRate: zPivotPerUnit.optional(),
     toFxRate: zPivotPerUnit.nullable().optional(),
@@ -991,7 +1029,7 @@ export type DeleteTransactionInput = z.output<typeof deleteTransactionInput>;
 const transactionLine = z.object({
   id: zId<"transactionLines">(),
   description: z.string().trim().min(1).max(200),
-  amount: zMoney,
+  amount: zAmount,
   quantity: z
     .string()
     .regex(/^\d+(\.\d{1,3})?$/)
@@ -1022,7 +1060,7 @@ export const setTransactionLinesInput = z.object({
   transactionId: zId<"transactions">(),
   version: z.number().int().positive(),
   lines: z.array(transactionLine).max(200),
-  amountOriginal: zMoney.optional(),
+  amountOriginal: zAmount.optional(),
 });
 export type SetTransactionLinesInput = z.output<typeof setTransactionLinesInput>;
 
@@ -1474,14 +1512,14 @@ export const settleDebtInput = z
     accountId: zId<"accounts">(),
     date: zAccountingDate,
     /** What actually changed hands. Positive — direction is derived, not entered. */
-    amount: zMoney,
+    amount: zAmount,
     currency: zCurrencyCode,
     /** They owe you (`income`) or you owe them (`expense`) — see above. */
     type: z.enum(["income", "expense"]),
     /** Which balance this discharges, and how much of it — §6.6's settlement table. */
     discharges: z.object({
       currency: zCurrencyCode,
-      amount: zMoney,
+      amount: zAmount,
     }),
     note: z.string().trim().max(2000).default(""),
     categoryId: zId<"categories">().optional(),
@@ -1591,7 +1629,7 @@ export const allocateSharesInput = z
           /** `null` is your own share — a category, no debt (J08 §4). */
           counterpartyId: zId<"counterparties">().nullable(),
           /** Positive. Direction is what the row is, never what the figure says. */
-          amount: zMoney,
+          amount: zAmount,
         }),
       )
       .min(1),

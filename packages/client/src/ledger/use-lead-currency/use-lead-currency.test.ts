@@ -50,6 +50,7 @@ function account(overrides: Partial<PhoneAccount>): PhoneAccount {
     isBusiness: false,
     archived: false,
     hidden: false,
+    hasEntries: false,
     inTotal: true,
     color: null,
     expectedBalance: null,
