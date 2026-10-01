@@ -202,6 +202,7 @@ export const de: Messages = {
     chargedRate: "1 {{paid}} = {{rate}} {{charged}} an diesem Tag",
     chargedNoRate:
       "Für {{paid}} liegt an diesem Tag kein Kurs vor – tragen Sie ein, was die Bank belastet hat.",
+    chargedNoRateShort: "Kein Kurs – bitte den Betrag eintragen.",
     paid: "Bezahlt",
     paidAnother: "In anderer Währung bezahlt",
     paidInCurrency: "Währung der Zahlung",

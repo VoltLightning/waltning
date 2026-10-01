@@ -374,6 +374,85 @@ describe("a repayment has no paid side (§7.8)", () => {
     expect(readRow()?.deletedAt, "the original is intact").toBeNull();
   });
 
+  const supersedeWithPaid = () =>
+    writeLocally(stores.ledger, {
+      executor: supersedeTransactionExecutor,
+      registry: ledgerRegistry,
+      capture,
+      input: {
+        supersedesId: TXN,
+        supersedesVersion: readRow()?.version ?? 0,
+        replacement: {
+          id: TXN_2,
+          date: "2026-09-01",
+          type: "expense",
+          accountId: ACCOUNT,
+          amountOriginal: "14.02",
+          currency: EUR,
+          source: "import",
+          obligationCounterpartyId: NINA,
+          obligationRole: "debt",
+          ...paid,
+        },
+      },
+    });
+
+  it("refuses to supersede a linked repayment with a paid replacement — its discharge and link would be lost", () => {
+    writeLocally(stores.ledger, {
+      executor: createCounterpartyExecutor,
+      registry: ledgerRegistry,
+      capture,
+      input: { id: NINA, name: "Nina", kind: "person" },
+    });
+    create({});
+    const db = stores.ledger.replica.db;
+    const OPENING = id<"openingDebts">("00000000-0000-4000-8000-0000000000d1");
+    db.insert(ledgerSchema.openingDebts)
+      .values({
+        id: OPENING,
+        counterpartyId: NINA,
+        currency: EUR,
+        direction: "theyOwe",
+        amount: money.toMoney("20"),
+        date: accountingDate("2026-01-01"),
+      })
+      .run();
+    db.update(transactions)
+      .set({
+        obligationCounterpartyId: NINA,
+        obligationRole: "debt",
+        debtCurrency: EUR,
+        debtAmount: money.toMoney("14.02"),
+        settlesOpeningDebtId: OPENING,
+      })
+      .where(eq(transactions.id, TXN))
+      .run();
+    expect(supersedeWithPaid).toThrow(/a repayment cannot carry a paid currency/);
+    expect(readRow()?.deletedAt, "the original is intact").toBeNull();
+  });
+
+  it("refuses to supersede one half of a split repayment with a paid replacement, saying why", () => {
+    writeLocally(stores.ledger, {
+      executor: createCounterpartyExecutor,
+      registry: ledgerRegistry,
+      capture,
+      input: { id: NINA, name: "Nina", kind: "person" },
+    });
+    create({});
+    stores.ledger.replica.db
+      .update(transactions)
+      .set({
+        obligationCounterpartyId: NINA,
+        obligationRole: "debt",
+        debtCurrency: EUR,
+        debtAmount: money.toMoney("14.02"),
+        paymentPairId: TXN,
+      })
+      .where(eq(transactions.id, TXN))
+      .run();
+    expect(supersedeWithPaid).toThrow(/a repayment cannot carry a paid currency/);
+  });
+
   it("refuses update_transaction putting a paid pair on a settlement", () => {
     create({});
     // A row settle_debt wrote carries its discharge; written directly here to isolate update_transaction.

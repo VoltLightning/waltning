@@ -202,6 +202,7 @@ export const ru: Messages = {
     chargedTo: "Списано со счёта {{account}}",
     chargedRate: "1 {{paid}} = {{rate}} {{charged}} по курсу на этот день",
     chargedNoRate: "Курса {{paid}} на этот день нет — укажите сумму, которую списал банк.",
+    chargedNoRateShort: "Нет курса — укажите сумму.",
     paid: "Оплачено",
     paidAnother: "Оплачено в другой валюте",
     paidInCurrency: "Валюта платежа",

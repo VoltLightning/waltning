@@ -210,6 +210,7 @@ export const pl: Messages = {
     chargedTo: "Obciążenie konta {{account}}",
     chargedRate: "1 {{paid}} = {{rate}} {{charged}} według kursu z tego dnia",
     chargedNoRate: "Brak kursu {{paid}} z tego dnia — proszę wpisać kwotę obciążenia z banku.",
+    chargedNoRateShort: "Brak kursu — proszę wpisać kwotę.",
     paid: "Zapłacono",
     paidAnother: "Zapłacono w innej walucie",
     paidInCurrency: "Waluta płatności",

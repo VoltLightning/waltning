@@ -199,6 +199,7 @@ export const be: Messages = {
     chargedTo: "Спісана з рахунку {{account}}",
     chargedRate: "1 {{paid}} = {{rate}} {{charged}} паводле курсу на гэты дзень",
     chargedNoRate: "Курсу {{paid}} на гэты дзень няма — пакажыце суму, якую спісаў банк.",
+    chargedNoRateShort: "Няма курсу — пакажыце суму.",
     paid: "Аплачана",
     paidAnother: "Аплачана ў іншай валюце",
     paidInCurrency: "Валюта плацяжу",

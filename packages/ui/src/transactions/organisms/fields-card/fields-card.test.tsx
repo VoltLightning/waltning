@@ -541,6 +541,11 @@ describe("what was paid — beside what the account was charged", () => {
     expect(onSave).toHaveBeenCalledWith({ paidAmount: null, paidCurrency: null });
   });
 
+  it("offers no Paid row on a repayment — it has no paid side", () => {
+    draw({ fields: { ...FIELDS, accountId: "account-eur" }, settlement: true });
+    expect(screen.queryByRole("button", { name: /^Paid/ })).toBeNull();
+  });
+
   it("offers no Paid row on a transfer", () => {
     draw({
       fields: { ...FIELDS, type: "transfer", toAccountId: "account-a", toAmount: "48.90" },

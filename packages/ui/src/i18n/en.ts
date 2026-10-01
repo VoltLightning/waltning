@@ -348,6 +348,7 @@ export const en = {
     chargedTo: "Charged to {{account}}",
     chargedRate: "1 {{paid}} = {{rate}} {{charged}} on this day",
     chargedNoRate: "No rate for {{paid}} on this day — enter what the bank charged.",
+    chargedNoRateShort: "No rate — enter what was charged.",
     paid: "Paid",
     paidAnother: "Paid in another currency",
     paidInCurrency: "Currency paid in",

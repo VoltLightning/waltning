@@ -433,6 +433,8 @@ export default function QuickAdd() {
    * own currency and carries no paid side, so a foreign amount there would be
    * dropped without a word.
    */
+  const window = useWindowDimensions();
+  const compact = isCompactWindow(window.height, window.fontScale);
   const foreignSpend = useForeignSpend({
     readCrossRate: ledger.readCrossRate,
     revision: snapshot.revision,
@@ -459,7 +461,10 @@ export default function QuickAdd() {
     paidCurrency === null || selectedComposerAccount === undefined
       ? undefined
       : foreignSpend.rate === null
-        ? t("transactions.chargedNoRate", { paid: paidCurrency })
+        ? // Short in a short window: the instruction must stay on the row, not be cut off.
+          t(compact ? "transactions.chargedNoRateShort" : "transactions.chargedNoRate", {
+            paid: paidCurrency,
+          })
         : t(
             // A leg carried forward from an earlier day says so, rather than "this day".
             foreignSpend.rate.asOf === composerDate
@@ -482,27 +487,29 @@ export default function QuickAdd() {
     onChargedChange: foreignSpend.setChargedRaw,
     hint: foreignHint,
   };
+  // The refusal alone: a settle plan read from a foreign figure would say things about the wrong amount.
+  const repaymentShown = repaymentInForeign ? null : repayment;
   const repaymentProblem =
-    repayment?.kind === "no-debt" && pickedPerson !== undefined
+    repaymentShown?.kind === "no-debt" && pickedPerson !== undefined
       ? t("transactions.nothingToSettle", { name: pickedPerson.name })
-      : repayment?.kind === "no-rate"
-        ? t("transactions.settleNeedsRate", { currency: repayment.currency })
+      : repaymentShown?.kind === "no-rate"
+        ? t("transactions.settleNeedsRate", { currency: repaymentShown.currency })
         : undefined;
   const debtHint =
-    repayment === null || pickedPerson === undefined
+    repaymentShown === null || pickedPerson === undefined
       ? undefined
-      : repayment.kind === "settle"
+      : repaymentShown.kind === "settle"
         ? [
             t(
               intent?.direction === "owed" ? "transactions.settlesOwed" : "transactions.settlesOwe",
               {
                 name: pickedPerson.name,
-                currency: repayment.currency,
+                currency: repaymentShown.currency,
               },
             ),
-            repayment.over
+            repaymentShown.over
               ? t("counterparties.overSettled", {
-                  amount: `${money.forDisplay(money.abs(repayment.residual), repayment.decimals, mark)}\u00a0${repayment.currency}`,
+                  amount: `${money.forDisplay(money.abs(repaymentShown.residual), repaymentShown.decimals, mark)}\u00a0${repaymentShown.currency}`,
                 })
               : null,
           ]
@@ -924,8 +931,6 @@ export default function QuickAdd() {
    * under the thumb on every open (and a mobile browser's viewport shrinks
    * instead, reporting no keyboard at all). S05 §3.
    */
-  const window = useWindowDimensions();
-  const compact = isCompactWindow(window.height, window.fontScale);
   const clearBottom = {
     paddingBottom: keyboardUp ? space.md + keyboardHeight : gutter + insets.bottom,
   };

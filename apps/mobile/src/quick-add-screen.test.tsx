@@ -397,6 +397,18 @@ describe("QuickAdd — the phone path (Dock + QuickAddComposer)", () => {
       expect(createTransaction).toHaveBeenCalledOnce();
     });
 
+    it("keeps the instruction on the row in a short window, in fewer words", () => {
+      resizeHeight(600);
+      withLedger({
+        accounts: [ACCOUNT],
+        otherCurrencies: [CZK_CURRENCY],
+        readCrossRate: () => null,
+      });
+      typeAmount("350");
+      pickCzk();
+      expect(screen.getByText("No rate — enter what was charged.")).toBeDefined();
+    });
+
     it("writes no paid side when the account's own currency is still the one chosen", () => {
       const createTransaction = vi.fn();
       withLedger({ createTransaction, accounts: [ACCOUNT], ...withRate });

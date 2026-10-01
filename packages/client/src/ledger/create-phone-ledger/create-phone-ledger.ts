@@ -715,6 +715,8 @@ export type PhoneTransactionDetail = {
   paidAmount: Money | null;
   paidCurrency: CurrencyCode | null;
   paidDecimals: number | null;
+  /** A row `settle_debt` wrote — it carries a discharge and takes no paid side (§7.8). Optional: a fixture need not say. */
+  isSettlement?: boolean;
   categoryId: Id<"categories"> | null;
   categoryName: string | null;
   categoryExternalId: string | null;

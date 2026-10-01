@@ -98,6 +98,8 @@ export type LocalTransactionDetail = {
   obligationRole: ObligationRole | null;
   /** §6.8 — a one-off, excluded from every comparison. S09 is its only producer. */
   isCapital: boolean;
+  /** A row `settle_debt` wrote — it carries a discharge, and so takes no paid side (§7.8). */
+  isSettlement: boolean;
   /** `SPEC.md` §14.4b — see `readRecent`'s identical field. */
   brandKey: string | null;
   /** Already signed, `money.signed` on the `"from"` leg — same rule as `readRecent`. */
@@ -144,6 +146,7 @@ export function readTransaction<TRun, TSchema extends typeof ledgerSchema>(
       toAmount: transactions.toAmount,
       toCurrency: transactions.toCurrency,
       fee: transactions.fee,
+      debtAmount: transactions.debtAmount,
       paidAmount: transactions.paidAmount,
       paidCurrency: transactions.paidCurrency,
       paidDecimals: paidCurrencies.decimals,
@@ -180,9 +183,10 @@ export function readTransaction<TRun, TSchema extends typeof ledgerSchema>(
     .orderBy(asc(transactionLines.sort), asc(transactionLines.id))
     .all();
 
-  const { type, amountOriginal, toAmount, ...rest } = row;
+  const { type, amountOriginal, toAmount, debtAmount, ...rest } = row;
   return {
     ...rest,
+    isSettlement: debtAmount !== null,
     type,
     amount: money.signed({ type, amountOriginal, toAmount }, "from"),
     toAmount: type === "transfer" ? toAmount : null,

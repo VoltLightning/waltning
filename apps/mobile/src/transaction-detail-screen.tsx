@@ -713,6 +713,7 @@ export default function TransactionDetail() {
           obligationCounterpartyName={effectiveObligation.name}
           onOpenCounterpartyPicker={handleOpenCounterpartyPicker}
           paidCurrencies={paidChoices}
+          settlement={detail.isSettlement === true}
           {...(fieldsErrors ? { fieldErrors: fieldsErrors } : {})}
           onSave={handleSaveFields}
         />

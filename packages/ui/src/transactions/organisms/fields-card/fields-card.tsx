@@ -182,6 +182,8 @@ export type FieldsCardProps = {
    * none to offer the row is drawn only when the entry already has a paid side.
    */
   paidCurrencies?: readonly { code: string; name: string }[];
+  /** The row is a repayment `settle_debt` wrote: it has no paid side, so no *Paid* row is drawn (§7.8). */
+  settlement?: boolean;
   fieldErrors?: FieldErrorMap;
   saving?: boolean;
   onSave: (patch: TransactionFieldsPatch) => void;
@@ -207,6 +209,7 @@ export function FieldsCard({
   obligationCounterpartyName,
   onOpenCounterpartyPicker,
   paidCurrencies = [],
+  settlement = false,
   fieldErrors,
   saving = false,
   onSave,
@@ -354,7 +357,7 @@ export function FieldsCard({
     ],
     [fromAccount?.currency, paidCurrencies, fields.paidCurrency, t],
   );
-  const paidApplies = fields.type === "income" || fields.type === "expense";
+  const paidApplies = (fields.type === "income" || fields.type === "expense") && !settlement;
   const paidShown = paidApplies && (fields.paidCurrency !== null || paidOptions.length > 1);
   // Both or neither: a currency with no figure, or the reverse, is not a paid side.
   const paidValid = paidCurrency === null || parsedPaid !== null;

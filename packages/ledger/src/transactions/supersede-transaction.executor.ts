@@ -146,6 +146,14 @@ function supersede(input: SupersedeTransactionInput, tx: ReplicaTx): LocalTransa
     return replacePair(input, tx, [old, ...(otherHalf === undefined ? [] : [otherHalf])]);
   }
 
+  // §7.8 — a linked repayment's discharge and link would be lost to a replacement with a
+  // paid side (a row holds one or the other): refused rather than dropped.
+  if (old.settlesOpeningDebtId !== null && input.replacement.paidAmount !== undefined) {
+    throw new LocalRefusal(
+      "supersede_transaction: a repayment cannot carry a paid currency — record it without the paid amount",
+    );
+  }
+
   const inserted = insertTransaction(input.replacement, tx);
 
   /**
@@ -262,7 +270,9 @@ function replacePair(
   // written onto both halves or dropped.
   if ((plan.length > 1 || eligible) && replacement.paidAmount !== undefined) {
     throw new LocalRefusal(
-      "supersede_transaction: a payment made in another currency cannot be split against an existing debt — record it without the paid amount",
+      plan.length > 1
+        ? "supersede_transaction: a payment made in another currency cannot be split against an existing debt — record it without the paid amount"
+        : "supersede_transaction: a repayment cannot carry a paid currency — record it without the paid amount",
     );
   }
 
