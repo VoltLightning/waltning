@@ -31,6 +31,43 @@ export type SeedGroup = {
   leaves: { key: string; name: string; isEarnings?: boolean; note?: string }[];
 };
 
+/**
+ * The four starter categories that are debts (`SPEC.md` §6.6): a row filed under
+ * one carries the `debt` obligation role and a person on the other side.
+ *
+ * **Keyed on the seed key, which is the category's identity on both engines**
+ * (`external_id = 'seed:<key>'`) — never its name, which is the person's to
+ * rename and the language's to translate, and never a flag on the category.
+ * Every layer that states the rule reads this list: the client's `debtIntent`,
+ * the replica's executors and trigger, and Postgres's trigger, whose SQL
+ * spells the same four keys out (`0025_debt_categories.sql`) and is held to
+ * this list by a test.
+ */
+export const DEBT_SEED_KEYS = [
+  "borrowed",
+  "lent-out",
+  "repayment-received",
+  "repayment-made",
+] as const;
+
+export type DebtSeedKey = (typeof DEBT_SEED_KEYS)[number];
+
+/**
+ * The two of the four that are **repayments**: written only by `settle_debt`
+ * (S14), never by `create_transaction` or `update_transaction`, because only a
+ * settlement stamps the discharge in the debt's own currency, checks the
+ * direction against the live balance and states over-settlement.
+ */
+export const REPAYMENT_SEED_KEYS = ["repayment-received", "repayment-made"] as const;
+
+/** `REPAYMENT_SEED_KEYS` as stored. */
+export const REPAYMENT_SEED_EXTERNAL_IDS: readonly string[] = REPAYMENT_SEED_KEYS.map(
+  (key) => `seed:${key}`,
+);
+
+/** `DEBT_SEED_KEYS` as stored: `seed:borrowed`, … */
+export const DEBT_SEED_EXTERNAL_IDS: readonly string[] = DEBT_SEED_KEYS.map((key) => `seed:${key}`);
+
 /** Income — earnings is a flag, not a level. */
 export const incomeTree: SeedGroup[] = [
   {

@@ -1485,6 +1485,18 @@ export const settleDebtInput = z
     }),
     note: z.string().trim().max(2000).default(""),
     categoryId: zId<"categories">().optional(),
+    /**
+     * **Re-filing an existing row as a repayment** (S09, §6.6): the settlement
+     * *replaces* this row in the same write — one operation, one outbox entry —
+     * instead of a settlement beside a delete that could fail or be interrupted
+     * between the two. The original is soft-deleted, its identity fields (entered
+     * name, scope, time, brand, source, external id) and its tags carry across,
+     * and it is excluded from the balance the settlement is checked against, so
+     * a row that already counts toward the debt is not counted twice. Both or
+     * neither; refused when the original has split lines.
+     */
+    supersedesId: zId<"transactions">().optional(),
+    supersedesVersion: z.number().int().positive().optional(),
     // Not here, on purpose:
     //   `residual`  — derived from the live balance, never supplied (H9, above).
     //   `rate`      — §7.5: `discharges.amount ÷ amount` is derived by the
@@ -1512,6 +1524,20 @@ export const settleDebtInput = z
         code: "custom",
         path: ["discharges", "amount"],
         message: "the discharged amount is positive",
+      });
+    }
+    if ((v.supersedesId === undefined) !== (v.supersedesVersion === undefined)) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["supersedesId"],
+        message: "supersedesId and supersedesVersion travel together",
+      });
+    }
+    if (v.supersedesId !== undefined && v.supersedesId === v.id) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["supersedesId"],
+        message: "the settlement is a new row; it cannot replace itself",
       });
     }
   });

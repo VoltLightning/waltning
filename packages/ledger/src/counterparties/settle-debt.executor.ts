@@ -34,13 +34,14 @@
  * `supersede_transaction` do.
  */
 
+import type { Id } from "@waltning/core/id";
 import * as money from "@waltning/core/money";
 import {
   createTransactionInput,
   type SettleDebtInput,
   settleDebtInput,
 } from "@waltning/core/registry/inputs";
-import { eq } from "drizzle-orm";
+import { and, count, eq, isNull } from "drizzle-orm";
 import { defineLocalExecutor, LocalRefusal } from "../executor.ts";
 import { assertMoneyScale } from "../scale.ts";
 import { type ReplicaTx, ledgerSchema as schema } from "../schema-map.ts";
@@ -99,6 +100,14 @@ function settleDebt(input: SettleDebtInput, tx: ReplicaTx): SettleDebtResult {
       dependency: true,
     });
   }
+
+  // S09 — re-filing an existing row: it is soft-deleted first, in this same
+  // replica transaction, so every check below reads the debt *without* it and
+  // any refusal rolls the whole write back with the original intact.
+  const replaced =
+    input.supersedesId === undefined || input.supersedesVersion === undefined
+      ? undefined
+      : replaceOriginal(input.supersedesId, input.supersedesVersion, tx);
 
   // R2 H3 — §6.5: a transaction's currency is its account's currency.
   // Postgres has a trigger for this; the phone has none, so `settle_debt`
@@ -169,14 +178,33 @@ function settleDebt(input: SettleDebtInput, tx: ReplicaTx): SettleDebtResult {
       accountId: input.accountId,
       amountOriginal: input.amount,
       currency: input.currency,
+      // Who it was with, and who it owes — the same person, as a captured debt carries both.
+      counterpartyId: input.counterpartyId,
       obligationCounterpartyId: input.counterpartyId,
       obligationRole: "debt",
-      enteredName: counterparty.name,
+      // A re-filed row keeps what it was called, when it was, whose scope it is
+      // and where it came from; a fresh settlement is named for the person.
+      enteredName:
+        replaced !== undefined && replaced.enteredName !== ""
+          ? replaced.enteredName
+          : counterparty.name,
       note: input.note,
-      source: "manual",
+      source: replaced?.source ?? "manual",
+      ...(replaced === undefined
+        ? {}
+        : {
+            isBusiness: replaced.isBusiness,
+            isCapital: replaced.isCapital,
+            ...(replaced.timeOfDay === null ? {} : { timeOfDay: replaced.timeOfDay }),
+            ...(replaced.externalId === null ? {} : { externalId: replaced.externalId }),
+            ...(replaced.brandKey !== null && replaced.brandSource === "manual"
+              ? { brandKey: replaced.brandKey }
+              : {}),
+          }),
       ...(input.categoryId !== undefined ? { categoryId: input.categoryId } : {}),
     }),
     tx,
+    { settlement: true },
   );
 
   // `SPEC.md` §7.2 — `debt_amount` fits `debt_currency`'s own declared
@@ -207,6 +235,14 @@ function settleDebt(input: SettleDebtInput, tx: ReplicaTx): SettleDebtResult {
     throw new Error("settle_debt: the row changed between insert and the debt-fields update");
   }
 
+  // The original's tags follow it to the row that replaces it.
+  if (replaced !== undefined) {
+    tx.update(schema.transactionTags)
+      .set({ transactionId: row.id })
+      .where(eq(schema.transactionTags.transactionId, replaced.id))
+      .run();
+  }
+
   const after = balancesForCounterparty(tx, input.counterpartyId).find(
     (r) => r.currency === input.discharges.currency,
   );
@@ -215,4 +251,57 @@ function settleDebt(input: SettleDebtInput, tx: ReplicaTx): SettleDebtResult {
   const overSettled = residualSign !== 0 && residualSign !== sign;
 
   return { row: stamped, residual, overSettled };
+}
+
+/**
+ * Soft-delete the row a settlement replaces, and hand back what the replacement
+ * carries across. Refuses what cannot be carried honestly: a stale row, a row
+ * that is gone, one with split lines (the settlement has none — un-split it
+ * first), and one that is already a settlement (its discharge is the debt's own
+ * business, not an identity to move).
+ */
+function replaceOriginal(id: Id<"transactions">, version: number, tx: ReplicaTx) {
+  const old = tx.select().from(schema.transactions).where(eq(schema.transactions.id, id)).get();
+  if (!old) {
+    throw new LocalRefusal(`settle_debt: no transaction ${id} to replace`, { dependency: true });
+  }
+  if (old.deletedAt !== null) {
+    throw new LocalRefusal(`settle_debt: ${id} is already deleted`);
+  }
+  if (old.version !== version) {
+    throw new LocalRefusal(
+      `settle_debt: stale version — read ${version}, row is at ${old.version}`,
+    );
+  }
+  const [{ value: lines } = { value: 0 }] = tx
+    .select({ value: count() })
+    .from(schema.transactionLines)
+    .where(eq(schema.transactionLines.transactionId, id))
+    .all();
+  if (lines > 0) {
+    throw new LocalRefusal(
+      `settle_debt: ${id} is split into ${lines} line(s) and a settlement has none — un-split it first`,
+    );
+  }
+  if (old.debtAmount !== null) {
+    throw new LocalRefusal(
+      `settle_debt: ${id} is already a settlement — it cannot be replaced by one`,
+    );
+  }
+  const [deleted] = tx
+    .update(schema.transactions)
+    .set({ deletedAt: new Date(), version: old.version + 1, updatedAt: new Date() })
+    .where(
+      and(
+        eq(schema.transactions.id, id),
+        eq(schema.transactions.version, version),
+        isNull(schema.transactions.deletedAt),
+      ),
+    )
+    .returning()
+    .all();
+  if (!deleted) {
+    throw new Error("settle_debt: the replaced row changed between read and write");
+  }
+  return old;
 }

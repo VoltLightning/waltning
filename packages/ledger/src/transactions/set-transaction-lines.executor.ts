@@ -40,6 +40,7 @@ import {
   assertCategoryNotArchived,
   type LocalTransactionRow,
 } from "./create-transaction.executor.ts";
+import { assertLineNotDebtCategory } from "./debt-categories.ts";
 
 const { transactionLines, transactions } = schema;
 
@@ -207,6 +208,11 @@ function replaceLines(input: SetTransactionLinesInput, tx: ReplicaTx): LocalTran
       `set_transaction_lines: transaction_lines[${line.id}].amount`,
     );
     assertCategoryNotArchived(
+      tx,
+      line.categoryId ?? null,
+      `set_transaction_lines: transaction_lines[${line.id}].category_id`,
+    );
+    assertLineNotDebtCategory(
       tx,
       line.categoryId ?? null,
       `set_transaction_lines: transaction_lines[${line.id}].category_id`,

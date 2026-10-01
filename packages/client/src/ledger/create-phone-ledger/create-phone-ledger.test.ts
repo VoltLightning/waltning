@@ -1574,6 +1574,21 @@ describe("phone ledger controller — FX (E3)", () => {
     expect(listener).toHaveBeenCalledTimes(1);
   });
 
+  it.each([
+    ["update_transaction: amount_original — Re-settle: delete it", "transactions.reSettle"],
+    ["set_transaction_lines: a split line has no person to owe", "transactions.splitDebtCategory"],
+    ["settle_debt: x is split into 2 line(s) — un-split it first", "transactions.unSplitFirst"],
+  ])("§6.6 refusal %j is named onto a catalogue key", (message, messageKey) => {
+    const { controller, port } = harness();
+    (port.setPinned as ReturnType<typeof vi.fn>).mockImplementationOnce(() => {
+      throw new Error(message);
+    });
+    const refused = controller.setPinned({ code: "PLN", version: 1, pinned: true });
+    expect("fieldErrors" in refused && refused.fieldErrors).toEqual([
+      { path: "", message: expect.any(String), messageKey },
+    ]);
+  });
+
   it("setPinned: a throwing port maps to fieldErrors, a success calls refresh and returns the code", () => {
     const { controller, port } = harness();
     const listener = vi.fn();

@@ -363,6 +363,23 @@ export const pl: Messages = {
     sameAccountRefused: "Przelew wymaga dwóch różnych kont.",
 
     newCounterparty: "+ Nowa osoba lub firma",
+    /** §6.6 — a debt category asks who the other side is, and cannot be saved without. */
+    who: "Kto?",
+    whoPlaceholder: "Proszę wybrać osobę",
+    whoRequired: "Proszę wybrać osobę.",
+    /** S09 — a legacy row under a debt category that names nobody. */
+    notCountedAsDebt: "Jeszcze nie liczy się jako dług. Po wskazaniu osoby zostanie policzony.",
+    /** Under Who?, when the person has an open debt this entry pays down. */
+    settlesOwed: "{{name}}: rozliczenie należności w {{currency}}.",
+    settlesOwe: "{{name}}: rozliczenie zobowiązania w {{currency}}.",
+    nothingToSettle: "{{name}}: brak otwartego zadłużenia w tym kierunku.",
+    settleNeedsRate: "Brak kursu dla {{currency}}. Proszę rozliczyć dług na stronie osoby.",
+    reSettle:
+      "Ta spłata rozlicza inną kwotę niż wpłacona (inna waluta albo umorzona część), więc nowa kwota nie określa, jaka część długu zostaje rozliczona. Proszę ją usunąć i zapisać spłatę ponownie.",
+    splitDebtCategory:
+      "Pozycji podziału nie można przypisać do kategorii „Pożyczone”, „Pożyczone komuś” ani do spłaty: dług ma osobę, a pozycja jej nie ma. Proszę przypisać do niej całą transakcję.",
+    unSplitFirst:
+      "Ta transakcja jest podzielona na pozycje, a spłata ich nie ma. Proszę najpierw usunąć podział.",
 
     // L2 — "cash" (unchanged), not "gotówka": nothing populates an account's
     // Polish alias today (`en.ts`'s own comment on this same key), and a
@@ -613,6 +630,8 @@ export const pl: Messages = {
     noBalances: "Brak jeszcze kont",
     noRecent: "Nic jeszcze nie zapisano",
     noDebt: "Nikt nikomu nie jest winien",
+    /** The overview's list of who owes whom. */
+    openDebts: "Otwarte długi",
     noSpend: "Brak wydatków w tym okresie",
     noLayout: "Brak układu panelu",
     noLayoutBody: "Ta baza nie ma aktywnego układu. Ponowna instalacja przywraca domyślny.",

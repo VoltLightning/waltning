@@ -808,7 +808,10 @@ export type PhoneLedgerPort = {
   /** D2's reader, on demand — D4b's proposal recomputes it only when the typed entered name changes. */
   listEnteredNameHistory: () => readonly PhoneEnteredNameHistoryRow[];
   /** §7 — S12's list. `today` is the caller's own accounting date, the same one `capture()` computes. */
-  listCounterpartyBalances: (today: AccountingDate) => readonly PhoneCounterpartyBalance[];
+  listCounterpartyBalances: (
+    today: AccountingDate,
+    options?: { excluding?: string },
+  ) => readonly PhoneCounterpartyBalance[];
   /** The whole tree, archived rows included — S19's editor. See `PhoneFullCategoryNode`. */
   listFullCategoryTree: () => readonly PhoneFullCategoryNode[];
   /** How many live rows touch each category — see `readCategoryUsage`. */
@@ -1563,6 +1566,8 @@ export type SettleDebtDraft = {
   dischargesAmount: string;
   note: string;
   categoryId: string | null;
+  /** S09 — the row this settlement replaces, in the same write. */
+  supersedes?: { id: string; version: number };
 };
 
 /**
@@ -1708,7 +1713,10 @@ export type PhoneLedgerController = {
    * `money.directionTotals(balances)` folds S12's two direction totals from
    * this call's own result — a pure function, not a second round trip.
    */
-  listCounterpartyBalances: (today: AccountingDate) => readonly PhoneCounterpartyBalance[];
+  listCounterpartyBalances: (
+    today: AccountingDate,
+    options?: { excluding?: string },
+  ) => readonly PhoneCounterpartyBalance[];
   /** S13's overflow, on demand — merges into one counterparty, still live. */
   listCounterpartyMerges: (
     counterpartyId: Id<"counterparties">,
@@ -1927,9 +1935,21 @@ export type PhoneLedgerController = {
 function refusalFromThrow<Caught>(error: Caught): readonly FieldError[] {
   // Rendered at form level, so `errorFromThrown` rather than `String`.
   const message = errorFromThrown(error).message;
-  return message.includes("stale version")
-    ? [{ path: "", message, messageKey: "transactions.changedElsewhere" }]
-    : [{ path: "", message }];
+  if (message.includes("stale version")) {
+    return [{ path: "", message, messageKey: "transactions.changedElsewhere" }];
+  }
+  // §6.6 — refusals a person can act on, in their own language rather than the
+  // executor's developer text.
+  if (message.includes("Re-settle")) {
+    return [{ path: "", message, messageKey: "transactions.reSettle" }];
+  }
+  if (message.includes("a split line has no person")) {
+    return [{ path: "", message, messageKey: "transactions.splitDebtCategory" }];
+  }
+  if (message.includes("un-split it first")) {
+    return [{ path: "", message, messageKey: "transactions.unSplitFirst" }];
+  }
+  return [{ path: "", message }];
 }
 
 /**
@@ -2548,7 +2568,10 @@ export function createPhoneLedger(
         : port.readSpendByCategory(period, scope, options),
     readIncomeVsExpense: (buckets, scope) => port.readIncomeVsExpense(buckets, scope),
     readActiveDashboardLayout: () => port.readActiveDashboardLayout(),
-    listCounterpartyBalances: (today) => port.listCounterpartyBalances(today),
+    listCounterpartyBalances: (today, options) =>
+      options === undefined
+        ? port.listCounterpartyBalances(today)
+        : port.listCounterpartyBalances(today, options),
     listCounterpartyMerges: (counterpartyId) => port.listCounterpartyMerges(counterpartyId),
     balanceAsOf: (accountId, asOf) => port.balanceAsOf(accountId, asOf),
     listEnteredNameHistory: () => port.listEnteredNameHistory(),
@@ -3524,7 +3547,10 @@ export function createPhoneLedger(
         // write would then meet H4's "the balance moved, reload" refusal for
         // a balance that, in every unit either side renders, never moved.
         const balance = port
-          .listCounterpartyBalances(capture.date)
+          .listCounterpartyBalances(
+            capture.date,
+            draft.supersedes === undefined ? undefined : { excluding: draft.supersedes.id },
+          )
           .find(
             (row) =>
               row.counterpartyId === draft.counterpartyId &&
@@ -3553,6 +3579,9 @@ export function createPhoneLedger(
           discharges: { currency: draft.dischargesCurrency, amount: draft.dischargesAmount },
           note: draft.note,
           categoryId: draft.categoryId ?? undefined,
+          ...(draft.supersedes === undefined
+            ? {}
+            : { supersedesId: draft.supersedes.id, supersedesVersion: draft.supersedes.version }),
         });
         if (!parsed.success) {
           emitClientDiagnostic(diagnostics, {
