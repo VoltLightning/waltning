@@ -936,10 +936,13 @@ describe("CounterpartyDetail (S13)", () => {
     const dialog = within(screen.getByLabelText("Delete the existing debt?"));
     expect(
       dialog.getByText(
-        /Repayments made against it are deleted too: 2 in all, 150.00 PLN, from Cash · PLN\. The balances of those accounts change\./,
+        /Repayments made against it are deleted too: 2 in all, from Cash · PLN\. The balances of those accounts change\./,
       ),
     ).toBeDefined();
     expect(deleteOpeningDebt).not.toHaveBeenCalled();
+    // The repaid figure is drawn through `<Amount>`, beside its label — not in the sentence.
+    expect(dialog.getByText("Already repaid")).toBeDefined();
+    expect(dialog.getByText("150.00")).toBeDefined();
 
     fireEvent.click(dialog.getByRole("button", { name: "Delete" }));
     expect(deleteOpeningDebt).toHaveBeenCalledWith(
@@ -947,6 +950,39 @@ describe("CounterpartyDetail (S13)", () => {
       expect.objectContaining({ timeZone: "Europe/Warsaw" }),
     );
     expect(screen.getByText("Existing debt deleted")).toBeDefined();
+  });
+
+  it("says so when a delete is refused, instead of closing silently", () => {
+    const deleteOpeningDebt = vi.fn<PhoneLedgerPort["deleteOpeningDebt"]>(() => {
+      throw new Error("delete_opening_debt: abc is already deleted");
+    });
+    const controller = controllerOf(
+      basePort({
+        listCounterparties: () => [NINA_COUNTERPARTY],
+        listCounterpartyBalances: () => [NINA_ROW],
+        listOpeningDebts: () => [NINA_OPENING_DEBT],
+        deleteOpeningDebt,
+      }),
+    );
+    render(
+      <LedgerProvider controller={controller}>
+        <CounterpartyDetail />
+      </LedgerProvider>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /^Existing debt, / }));
+    fireEvent.click(
+      within(screen.getByLabelText("Existing debt with Nina")).getByRole("button", {
+        name: "Delete this debt",
+      }),
+    );
+    fireEvent.click(
+      within(screen.getByLabelText("Delete the existing debt?")).getByRole("button", {
+        name: "Delete",
+      }),
+    );
+
+    expect(screen.getByText("This existing debt is already gone — reload the page.")).toBeDefined();
+    expect(screen.queryByText("Existing debt deleted")).toBeNull();
   });
 
   /**

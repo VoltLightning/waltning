@@ -1622,9 +1622,12 @@ The sheet therefore says, before *Save*, what has already been repaid and what
 the balance will be, and warns when a save would flip its sign;
 `record_opening_debt` returns the resulting balance and a `flipped` flag the way
 `settle_debt` returns its residual. The date is the day the debt dates from —
-today or earlier, never later (it is the device's own day, carried on the input
-as `set_manual_rate`'s is) — and the operation is refused for an archived person,
-who is out of every picker and could never be settled with.
+today or earlier, never later. That rule is enforced **only by the contract**
+(`recordOpeningDebtInput` refuses a date after the `today` it carries — the
+device's own day, as `set_manual_rate`'s is) and by the sheet; there is no
+database constraint, because "today" has no stable form in a database. The
+operation is also refused for an archived person, who is out of every picker and
+could never be settled with.
 
 **Why a table of its own, and not an `adjustment` transaction.** A transaction
 carries an account, and an account's balance and every period figure are built
@@ -1670,9 +1673,27 @@ Every claim below names the layer that enforces it:
   `WA018` does (*service, the replica's executor; database, Postgres*).
 
 **Repaying an opening debt is not spending or income, in either direction.**
-`settle_debt` stamps the settlement with the opening debt it draws on
-(`transactions.settles_opening_debt_id`) when the person has a live opening debt
-in the currency it discharges. Such a settlement **moves its account** like any
+`settle_debt` stamps a settlement with the opening debt it pays down
+(`transactions.settles_opening_debt_id`) — **only up to what is still open on
+it, and only when it points the opening debt's own way**: money coming in pays
+down *they owe you*, money going out pays down *you owe them*. The opening debt
+is the oldest the person has (it predates the ledger), so FIFO — the order
+ageing uses — consumes it first; what the linked repayments have discharged is
+taken off its figure, and a repayment past that, or one the other way (paying
+back a loan after being owed an existing debt), is an ordinary repayment of an
+ordinary debt: deleting the opening debt must never delete a real one.
+
+**A settlement that crosses the end of the existing debt is split in the same
+write** into two rows — the part that pays it down (linked) and the rest
+(ordinary), in the same proportion of what changed hands as of what was
+discharged, the remainder landing on the second row so the account moves by
+exactly what was paid. Splitting, not refusing: paying back "everything" is one
+payment, and refusing would make a person record two by hand against a boundary
+only the ledger can see; the second row's id travels on the input (`spillId`).
+A linked repayment follows its person and role afterwards: `update_transaction`
+and `categorize_batch` clear the link when the person changes or the debt role
+goes (re-deriving it, whole, where the new person has an existing debt it fits
+in); `supersede_transaction` carries it to the replacement. Such a settlement **moves its account** like any
 payment and appears in lists and history, but **no period figure** — month,
 months, spend by category, income against expense, the desk's — counts it:
 lending and borrowing are not earning and spending, and what was never counted
@@ -1695,8 +1716,11 @@ are **summed by sign** into the winner's row (the larger magnitude's direction,
 the earlier date; the loser's row is soft-deleted and its repayments are pointed
 at the winner's); if they cancel to nothing both rows are dropped. The loser is
 archived only once it holds no live opening debt, and the merge record keeps
-what the winner's row held before, so `unmerge_counterparties` restores exactly
-that — leaving alone anything a person changed since (*service*; S15 §9.2).
+what the winner's row held before **and what the merge left it**, so
+`unmerge_counterparties` restores exactly that — and only while the winner's row
+still holds what the merge left it: a figure corrected since is kept, the loser's
+debt is not handed back on top of it, and the result says how many were left
+(`existingDebtsKept`) (*service*; S15 §9.2).
 
 **Debt is derived, never stored.** A counterparty's position is the running sum
 of the `debt`-role transactions referencing them, plus their opening debts — the

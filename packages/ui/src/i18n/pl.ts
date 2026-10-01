@@ -383,6 +383,8 @@ export const pl: Messages = {
     settlesOwe: "{{name}}: rozliczenie zobowiązania w {{currency}}.",
     nothingToSettle: "{{name}}: brak otwartego zadłużenia w tym kierunku.",
     settleNeedsRate: "Brak kursu dla {{currency}}. Proszę rozliczyć dług na stronie osoby.",
+    openingLinkShape:
+      "Spłata może być powiązana z istniejącym długiem tylko dopóki pozostaje długiem wobec tej samej osoby.",
     reSettle:
       "Ta spłata rozlicza inną kwotę niż wpłacona (inna waluta albo umorzona część), więc nowa kwota nie określa, jaka część długu zostaje rozliczona. Proszę ją usunąć i zapisać spłatę ponownie.",
     splitDebtCategory:
@@ -490,9 +492,10 @@ export const pl: Messages = {
     existingDebtDeleteTitle: "Usunąć istniejący dług?",
     existingDebtDeleteBody: "Istniejący dług: {{name}} zostanie usunięty.",
     existingDebtDeleteChain:
-      "Usunięte zostaną także spłaty dokonane na jego poczet: łącznie {{count}}, {{amount}} {{currency}}, z: {{accounts}}. Salda tych kont ulegną zmianie.",
+      "Usunięte zostaną także spłaty dokonane na jego poczet: łącznie {{count}}, z: {{accounts}}. Salda tych kont ulegną zmianie.",
     existingDebtDeleteSubmit: "Usuń",
     existingDebtDeleted: "Istniejący dług usunięty",
+    existingDebtGone: "Ten istniejący dług został już usunięty. Proszę odświeżyć stronę.",
     existingDebtRepaid: "Już spłacono",
     existingDebtBalanceAfter: "Saldo po zapisaniu",
     existingDebtFlips: "Spłacono już więcej niż ta kwota, więc zapisanie odwróci kierunek długu.",

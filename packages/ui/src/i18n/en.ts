@@ -684,6 +684,8 @@ export const en = {
     settlesOwe: "Settles what you owe {{name}}, in {{currency}}.",
     nothingToSettle: "Nothing to settle with {{name}}: no open debt in this direction.",
     settleNeedsRate: "No exchange rate for {{currency}}. Please settle from the person's page.",
+    openingLinkShape:
+      "A repayment can be linked to an existing debt only while it is still a debt with that person.",
     reSettle:
       "This repayment settles a different figure than its amount (another currency, or a part forgiven), so a new amount does not say how much of the debt it settles. Please delete it and record the repayment again.",
     splitDebtCategory:
@@ -863,9 +865,10 @@ export const en = {
     existingDebtDeleteTitle: "Delete the existing debt?",
     existingDebtDeleteBody: "The existing debt with {{name}} is deleted.",
     existingDebtDeleteChain:
-      "Repayments made against it are deleted too: {{count}} in all, {{amount}} {{currency}}, from {{accounts}}. The balances of those accounts change.",
+      "Repayments made against it are deleted too: {{count}} in all, from {{accounts}}. The balances of those accounts change.",
     existingDebtDeleteSubmit: "Delete",
     existingDebtDeleted: "Existing debt deleted",
+    existingDebtGone: "This existing debt is already gone — reload the page.",
     existingDebtRepaid: "Already repaid",
     existingDebtBalanceAfter: "Balance after saving",
     existingDebtFlips:

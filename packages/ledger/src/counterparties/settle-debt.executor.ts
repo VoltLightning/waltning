@@ -49,12 +49,15 @@ import {
   insertTransaction,
   type LocalTransactionRow,
 } from "../transactions/create-transaction.executor.ts";
+import { openingLinkFor } from "./opening-link.ts";
 import { balancesForCounterparty } from "./read-counterparty-balances.ts";
 
 const { accounts, counterparties, currencies } = schema;
 
 export type SettleDebtResult = {
   row: LocalTransactionRow;
+  /** The ordinary part of a settlement that crossed the end of an existing debt (§6.6) — see `openingLinkFor`. */
+  spill?: LocalTransactionRow;
   /** What remains outstanding, in `discharges.currency`, after this write. */
   residual: money.Money;
   /** The balance's sign flipped — paid more than was owed (S14 §9.2). */
@@ -70,7 +73,7 @@ export const settleDebtExecutor = defineLocalExecutor<
   opVersion: 1,
   input: settleDebtInput,
   /** One id: the settlement transaction's own — never the counterparty's. */
-  mints: (input) => [input.id],
+  mints: (input) => (input.spillId === undefined ? [input.id] : [input.id, input.spillId]),
   // R4 — read-only, run before the outbox commits (`LocalExecutor.validate`'s
   // own doc): both figures — `amount` (what changed hands, in `currency`)
   // and `discharges.amount` (S14's coalesce, in `discharges.currency`) — are
@@ -170,43 +173,6 @@ function settleDebt(input: SettleDebtInput, tx: ReplicaTx): SettleDebtResult {
     );
   }
 
-  const row = insertTransaction(
-    createTransactionInput.parse({
-      id: input.id,
-      date: input.date,
-      type: liveType,
-      accountId: input.accountId,
-      amountOriginal: input.amount,
-      currency: input.currency,
-      // Who it was with, and who it owes — the same person, as a captured debt carries both.
-      counterpartyId: input.counterpartyId,
-      obligationCounterpartyId: input.counterpartyId,
-      obligationRole: "debt",
-      // A re-filed row keeps what it was called, when it was, whose scope it is
-      // and where it came from; a fresh settlement is named for the person.
-      enteredName:
-        replaced !== undefined && replaced.enteredName !== ""
-          ? replaced.enteredName
-          : counterparty.name,
-      note: input.note,
-      source: replaced?.source ?? "manual",
-      ...(replaced === undefined
-        ? {}
-        : {
-            isBusiness: replaced.isBusiness,
-            isCapital: replaced.isCapital,
-            ...(replaced.timeOfDay === null ? {} : { timeOfDay: replaced.timeOfDay }),
-            ...(replaced.externalId === null ? {} : { externalId: replaced.externalId }),
-            ...(replaced.brandKey !== null && replaced.brandSource === "manual"
-              ? { brandKey: replaced.brandKey }
-              : {}),
-          }),
-      ...(input.categoryId !== undefined ? { categoryId: input.categoryId } : {}),
-    }),
-    tx,
-    { settlement: true },
-  );
-
   // `SPEC.md` §7.2 — `debt_amount` fits `debt_currency`'s own declared
   // decimals, the same guarantee this executor's own `validate` already gave
   // `amount`/`currency` above (L10 — `insertTransaction` no longer repeats
@@ -221,40 +187,149 @@ function settleDebt(input: SettleDebtInput, tx: ReplicaTx): SettleDebtResult {
     );
   }
 
+  /**
+   * **Which opening debt this pays down, and how much of it (§6.6).** Only what
+   * is still open on it, and only when it points the opening debt's own way
+   * (`openingLinkFor`). A settlement that **crosses the boundary** — more than
+   * is left open — is **split in the same write** into two rows: the part that
+   * pays down the opening debt (linked, so no period figure counts it and
+   * deleting the debt takes it) and the rest, an ordinary repayment of an
+   * ordinary debt. The two amounts are the same proportion of what changed
+   * hands as of what was discharged, the remainder landing on the second row so
+   * the account moves by exactly what was paid.
+   *
+   * **Why split and not refuse.** A person paying back "everything" is one
+   * payment, and refusing it would make them record two by hand against a
+   * boundary only this ledger can see; linking it whole would let deleting the
+   * opening debt delete a real repayment, and leaving it unlinked would count
+   * the old debt's repayment as income. Splitting is sound because every
+   * figure involved is a straight proportion in the two currencies' own
+   * decimals and the pair always adds back to the original.
+   */
+  const link = openingLinkFor(tx, {
+    counterpartyId: input.counterpartyId,
+    currency: input.discharges.currency,
+    type: liveType,
+  });
+  type Part = {
+    id: Id<"transactions">;
+    amount: money.Money;
+    discharge: money.Money;
+    link: Id<"openingDebts"> | null;
+  };
+  const whole: Part = {
+    id: input.id,
+    amount: input.amount,
+    discharge: input.discharges.amount,
+    link: null,
+  };
+  const parts: Part[] = (() => {
+    if (link === null) return [whole];
+    const linkedDischarge = money.toMoney(money.round(link.open, decimals));
+    if (money.cmp(linkedDischarge, money.ZERO) <= 0) return [whole];
+    if (money.cmp(input.discharges.amount, linkedDischarge) <= 0)
+      return [{ ...whole, link: link.id }];
+    const [accountCurrency] = tx
+      .select({ decimals: currencies.decimals })
+      .from(currencies)
+      .where(eq(currencies.code, input.currency))
+      .all();
+    const accountDecimals = accountCurrency?.decimals ?? 2;
+    const linkedAmount = money.round(
+      money.toMoney(
+        money
+          .dec(input.amount)
+          .times(money.dec(linkedDischarge))
+          .dividedBy(money.dec(input.discharges.amount)),
+      ),
+      accountDecimals,
+    );
+    const spillAmount = money.sub(input.amount, linkedAmount);
+    if (money.cmp(spillAmount, money.ZERO) <= 0) return [{ ...whole, link: link.id }];
+    if (money.cmp(linkedAmount, money.ZERO) <= 0) return [whole];
+    if (input.spillId === undefined) {
+      throw new LocalRefusal(
+        "settle_debt: this settlement pays down the rest of an existing debt and more — " +
+          "it is written as two rows, and the write carries no id for the second (spillId)",
+      );
+    }
+    return [
+      {
+        id: input.id,
+        amount: money.toMoney(linkedAmount),
+        discharge: linkedDischarge,
+        link: link.id,
+      },
+      {
+        id: input.spillId,
+        amount: money.toMoney(spillAmount),
+        discharge: money.toMoney(money.sub(input.discharges.amount, linkedDischarge)),
+        link: null,
+      },
+    ];
+  })();
+
   // `debt_currency`/`debt_amount` are not on `createTransactionInput` (the
   // ordinary capture path never sets them — see its own "not here, on
   // purpose" note); `settle_debt` is the one write that does, so it stamps
   // them directly rather than widening that schema for a single caller.
-  //
-  // **And the link to the opening debt it draws on (§6.6).** When the person
-  // has a live opening debt in the currency this discharges, the settlement is
-  // a repayment of a debt that predates the ledger: it is stamped with that
-  // debt, so every period figure leaves it out (it is neither spending nor
-  // income) and deleting the debt deletes it with the rest of the chain.
-  const [opening] = tx
-    .select({ id: schema.openingDebts.id })
-    .from(schema.openingDebts)
-    .where(
-      and(
-        eq(schema.openingDebts.counterpartyId, input.counterpartyId),
-        eq(schema.openingDebts.currency, input.discharges.currency),
-        isNull(schema.openingDebts.deletedAt),
-      ),
-    )
-    .all();
-  const [stamped] = tx
-    .update(schema.transactions)
-    .set({
-      debtCurrency: input.discharges.currency,
-      debtAmount: input.discharges.amount,
-      settlesOpeningDebtId: opening?.id ?? null,
-    })
-    .where(eq(schema.transactions.id, row.id))
-    .returning()
-    .all();
-  if (!stamped) {
-    throw new Error("settle_debt: the row changed between insert and the debt-fields update");
-  }
+  const written = parts.map((part) => {
+    const partId = part.id;
+    const partAmount = part.amount;
+    const inserted = insertTransaction(
+      createTransactionInput.parse({
+        id: partId,
+        date: input.date,
+        type: liveType,
+        accountId: input.accountId,
+        amountOriginal: partAmount,
+        currency: input.currency,
+        // Who it was with, and who it owes — the same person, as a captured debt carries both.
+        counterpartyId: input.counterpartyId,
+        obligationCounterpartyId: input.counterpartyId,
+        obligationRole: "debt",
+        // A re-filed row keeps what it was called, when it was, whose scope it is
+        // and where it came from; a fresh settlement is named for the person.
+        enteredName:
+          replaced !== undefined && replaced.enteredName !== ""
+            ? replaced.enteredName
+            : counterparty.name,
+        note: input.note,
+        source: replaced?.source ?? "manual",
+        ...(replaced === undefined
+          ? {}
+          : {
+              isBusiness: replaced.isBusiness,
+              isCapital: replaced.isCapital,
+              ...(replaced.timeOfDay === null ? {} : { timeOfDay: replaced.timeOfDay }),
+              ...(replaced.externalId === null ? {} : { externalId: replaced.externalId }),
+              ...(replaced.brandKey !== null && replaced.brandSource === "manual"
+                ? { brandKey: replaced.brandKey }
+                : {}),
+            }),
+        ...(input.categoryId !== undefined ? { categoryId: input.categoryId } : {}),
+      }),
+      tx,
+      { settlement: true },
+    );
+    const [stamped] = tx
+      .update(schema.transactions)
+      .set({
+        debtCurrency: input.discharges.currency,
+        debtAmount: part.discharge,
+        settlesOpeningDebtId: part.link,
+      })
+      .where(eq(schema.transactions.id, inserted.id))
+      .returning()
+      .all();
+    if (!stamped) {
+      throw new Error("settle_debt: the row changed between insert and the debt-fields update");
+    }
+    return stamped;
+  });
+  const [stamped, spill] = written;
+  if (!stamped) throw new Error("settle_debt: no settlement row was written");
+  const row = stamped;
 
   // The original's tags follow it to the row that replaces it.
   if (replaced !== undefined) {
@@ -271,7 +346,7 @@ function settleDebt(input: SettleDebtInput, tx: ReplicaTx): SettleDebtResult {
   const residualSign = money.cmp(money.round(residual, decimals), money.ZERO);
   const overSettled = residualSign !== 0 && residualSign !== sign;
 
-  return { row: stamped, residual, overSettled };
+  return { row: stamped, ...(spill === undefined ? {} : { spill }), residual, overSettled };
 }
 
 /**

@@ -18,6 +18,7 @@ import {
 } from "@waltning/core/registry/inputs";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { assertAmountPositive } from "../amount-sign.ts";
+import { openingLinkFor } from "../counterparties/opening-link.ts";
 import { defineLocalExecutor, LocalRefusal } from "../executor.ts";
 import { assertAmountCeiling } from "../scale.ts";
 import { type ReplicaTx, ledgerSchema as schema } from "../schema-map.ts";
@@ -335,6 +336,53 @@ function patchTransaction(input: UpdateTransactionInput, tx: ReplicaTx): LocalTr
         ) ?? {})
       : {};
 
+  /**
+   * **A linked repayment's link follows its person and its role (§6.6).**
+   * `settles_opening_debt_id` says *this paid down that person's existing
+   * debt*; change who the row is with, or take its debt role away, and the link
+   * is stale — left in place it would keep the row out of every period figure
+   * and let the wrong person's debt delete it, and with the role gone the table
+   * refuses it outright (`transactions_opening_link_shape`). So the link is
+   * cleared, and re-derived through the same rule `settle_debt` uses where the
+   * row still is a repayment of someone's existing debt — all of it, since an
+   * edit never splits a row.
+   */
+  const linkPatch = (() => {
+    if (current.settlesOpeningDebtId === null) return {};
+    if (!obligationInPatch && afterLeaving === undefined) return {};
+    const next =
+      afterLeaving !== undefined && "obligationRole" in afterLeaving
+        ? afterLeaving
+        : {
+            obligationCounterpartyId:
+              "obligationCounterpartyId" in input.patch
+                ? input.patch.obligationCounterpartyId
+                : current.obligationCounterpartyId,
+            obligationRole:
+              "obligationRole" in input.patch ? input.patch.obligationRole : current.obligationRole,
+          };
+    const cleared = { settlesOpeningDebtId: null };
+    if (
+      next.obligationRole !== "debt" ||
+      next.obligationCounterpartyId === null ||
+      next.obligationCounterpartyId === undefined ||
+      current.debtCurrency === null ||
+      current.debtAmount === null ||
+      (current.type !== "income" && current.type !== "expense")
+    ) {
+      return cleared;
+    }
+    const link = openingLinkFor(tx, {
+      counterpartyId: next.obligationCounterpartyId,
+      currency: current.debtCurrency,
+      type: current.type,
+      excluding: current.id,
+    });
+    return link !== null && money.cmp(current.debtAmount, link.open) <= 0
+      ? { settlesOpeningDebtId: link.id }
+      : cleared;
+  })();
+
   const updated = tx
     .update(transactions)
     .set({
@@ -342,6 +390,7 @@ function patchTransaction(input: UpdateTransactionInput, tx: ReplicaTx): LocalTr
       ...brandFields,
       ...(afterLeaving ?? {}),
       ...restatedDebt,
+      ...linkPatch,
       version: sql`${transactions.version} + 1`,
       updatedAt: new Date(),
     })

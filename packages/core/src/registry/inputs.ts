@@ -1535,6 +1535,13 @@ export const settleDebtInput = z
      */
     supersedesId: zId<"transactions">().optional(),
     supersedesVersion: z.number().int().positive().optional(),
+    /**
+     * **The id of the second row, for a settlement that crosses the end of an
+     * existing debt** (§6.6): part of it pays down the opening debt, the rest is
+     * an ordinary repayment, and the write is those two rows. Minted by the
+     * caller like every id, whether or not this settlement turns out to cross.
+     */
+    spillId: zId<"transactions">().optional(),
     // Not here, on purpose:
     //   `residual`  — derived from the live balance, never supplied (H9, above).
     //   `rate`      — §7.5: `discharges.amount ÷ amount` is derived by the

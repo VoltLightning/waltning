@@ -46,6 +46,8 @@ export type UnmergeCounterpartiesResult = {
   loser: LocalCounterpartyRow;
   restoredTransactions: number;
   skipped: number;
+  /** Existing debts (§6.6) left as they are because the winner's row was changed after the merge. */
+  existingDebtsKept: number;
 };
 
 export const unmergeCounterpartiesExecutor = defineLocalExecutor<
@@ -164,7 +166,12 @@ function unmergeCounterparties(
   const skipped = movedIds.length - restored.length;
 
   // §6.6 — the loser's opening debts, exactly as the merge recorded moving them.
-  unmergeOpeningDebts(tx, merge.loserId, merge.winnerId, merge.movedOpeningDebts);
+  const existingDebtsKept = unmergeOpeningDebts(
+    tx,
+    merge.loserId,
+    merge.winnerId,
+    merge.movedOpeningDebts,
+  );
 
   const [unarchivedLoser] = tx
     .update(counterparties)
@@ -191,5 +198,6 @@ function unmergeCounterparties(
     loser: unarchivedLoser,
     restoredTransactions: restored.length,
     skipped,
+    existingDebtsKept,
   };
 }

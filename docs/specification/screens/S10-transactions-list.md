@@ -84,7 +84,7 @@ act on, and that is what keeps the filter drainable to zero.
 | Reads | Writes |
 |---|---|
 | `search_transactions(filter, page)` | `update_transaction` — via swipe-categorize |
-| Running total for the active filter | `categorize_batch` — web multi-select |
+| Running total for the active filter | `categorize_batch` — web multi-select. **The total is a sum of the filtered rows, not a period figure**, so it includes a repayment of an existing debt (`SPEC.md` §6.6) when the filter shows it; the period figures elsewhere leave those out |
 
 ## 6. States
 

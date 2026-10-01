@@ -374,6 +374,8 @@ export const de: Messages = {
     nothingToSettle: "Bei {{name}} ist in dieser Richtung keine Schuld offen.",
     settleNeedsRate:
       "Für {{currency}} liegt kein Wechselkurs vor. Bitte begleichen Sie die Schuld auf der Seite der Person.",
+    openingLinkShape:
+      "Eine Rückzahlung kann nur mit einer bestehenden Schuld verknüpft bleiben, solange sie eine Schuld bei derselben Person ist.",
     reSettle:
       "Diese Rückzahlung begleicht einen anderen Betrag als den gezahlten (andere Währung oder ein erlassener Teil), daher lässt sich aus dem neuen Betrag nicht ableiten, welcher Teil der Schuld damit beglichen wird. Bitte löschen Sie sie und erfassen Sie die Rückzahlung erneut.",
     splitDebtCategory:
@@ -474,9 +476,11 @@ export const de: Messages = {
     existingDebtDeleteTitle: "Bestehende Schuld löschen?",
     existingDebtDeleteBody: "Die bestehende Schuld mit {{name}} wird gelöscht.",
     existingDebtDeleteChain:
-      "Die darauf geleisteten Rückzahlungen werden ebenfalls gelöscht: insgesamt {{count}}, {{amount}} {{currency}}, von {{accounts}}. Die Kontostände dieser Konten ändern sich.",
+      "Die darauf geleisteten Rückzahlungen werden ebenfalls gelöscht: insgesamt {{count}}, von {{accounts}}. Die Kontostände dieser Konten ändern sich.",
     existingDebtDeleteSubmit: "Löschen",
     existingDebtDeleted: "Bestehende Schuld gelöscht",
+    existingDebtGone:
+      "Diese bestehende Schuld ist bereits gelöscht. Bitte laden Sie die Seite neu.",
     existingDebtRepaid: "Bereits zurückgezahlt",
     existingDebtBalanceAfter: "Saldo nach dem Speichern",
     existingDebtFlips:

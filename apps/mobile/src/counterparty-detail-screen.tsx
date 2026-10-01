@@ -56,6 +56,7 @@ import {
   OpeningDebtSheet,
 } from "@waltning/ui/counterparties/opening-debt-sheet";
 import { SettleSheet, type SettleSheetField } from "@waltning/ui/counterparties/settle-sheet";
+import { Amount } from "@waltning/ui/fx/amount";
 import { parseAmount } from "@waltning/ui/fx/amount-field";
 import { decimalMark } from "@waltning/ui/i18n/locales";
 import { useLocale, useT } from "@waltning/ui/i18n/provider";
@@ -164,6 +165,13 @@ function resolveSettleFieldErrorMessage(t: ReturnType<typeof useT>, error: Field
   // through to the raw English `refusalFromThrow` would otherwise print.
   if (error.messageKey === "common.couldNotSave") {
     return t("common.couldNotSave");
+  }
+  // §6.6 — the existing-debt writes' own refusals.
+  if (error.messageKey === "counterparties.existingDebtGone") {
+    return t("counterparties.existingDebtGone");
+  }
+  if (error.messageKey === "transactions.openingLinkShape") {
+    return t("transactions.openingLinkShape");
   }
   return error.message;
 }
@@ -439,9 +447,18 @@ export default function CounterpartyDetail() {
     if (deletingOpeningDebtId === null) return;
     const result = ledger.deleteOpeningDebt(deletingOpeningDebtId);
     setDeletingOpeningDebtId(null);
-    if (!("id" in result)) return;
-    setOpeningDebtVisible(false);
     settledToastTokenRef.current += 1;
+    if (!("id" in result)) {
+      // A refused delete says so — it is never a silent close.
+      const [refusal] = result.fieldErrors;
+      setSettledToastMessage(
+        refusal === undefined
+          ? t("common.couldNotSave")
+          : resolveSettleFieldErrorMessage(t, refusal),
+      );
+      return;
+    }
+    setOpeningDebtVisible(false);
     setSettledToastMessage(t("counterparties.existingDebtDeleted"));
   }, [deletingOpeningDebtId, ledger, t]);
   // The confirmation says what else goes: the repayments made against the
@@ -451,16 +468,17 @@ export default function CounterpartyDetail() {
     if (debt === undefined) return "";
     const first = t("counterparties.existingDebtDeleteBody", { name: counterparty?.name ?? "" });
     if (debt.repayments.length === 0) return first;
-    const decimals =
-      snapshot.currencies.find((currency) => currency.code === debt.currency)?.decimals ?? 2;
     const accountNames = [...new Set(debt.repayments.map((repayment) => repayment.accountName))];
     return `${first} ${t("counterparties.existingDebtDeleteChain", {
       count: debt.repayments.length,
-      amount: money.forDisplay(debt.repaid, decimals, mark),
-      currency: debt.currency,
       accounts: accountNames.join(", "),
     })}`;
-  }, [counterparty?.name, deletingOpeningDebtId, mark, openingDebts, snapshot.currencies, t]);
+  }, [counterparty?.name, deletingOpeningDebtId, openingDebts, t]);
+  // What the repayments discharged, through `<Amount>` — a figure is never
+  // formatted into a sentence.
+  const deletingDebt = openingDebts.find((candidate) => candidate.id === deletingOpeningDebtId);
+  const deletingDecimals =
+    snapshot.currencies.find((currency) => currency.code === deletingDebt?.currency)?.decimals ?? 2;
   const handleSaveOpeningDebt = useCallback(
     (draft: OpeningDebtDraft) => {
       if (!rawId) return;
@@ -849,7 +867,19 @@ export default function CounterpartyDetail() {
         confirmLabel={t("counterparties.existingDebtDeleteSubmit")}
         onConfirm={handleConfirmDeleteOpeningDebt}
         onCancel={handleCancelDeleteOpeningDebt}
-      />
+      >
+        {deletingDebt === undefined || deletingDebt.repayments.length === 0 ? null : (
+          <View style={styles.deleteFigure}>
+            <Text style={styles.historyTitle}>{t("counterparties.existingDebtRepaid")}</Text>
+            <Amount
+              value={deletingDebt.repaid}
+              currency={deletingDebt.currency}
+              decimals={deletingDecimals}
+              size="small"
+            />
+          </View>
+        )}
+      </ConfirmDialog>
 
       <AccountPicker
         visible={accountPickerOpen}
@@ -891,4 +921,5 @@ const useStyles = makeStyles((theme) => ({
   historyTitle: { color: theme.textMuted, ...text.ui("kicker") },
   // No `gap` — rows abut, the same as the plain `ScrollView` this replaced.
   historyRows: {},
+  deleteFigure: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
 }));

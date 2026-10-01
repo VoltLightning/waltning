@@ -2064,6 +2064,10 @@ function refusalFromThrow<Caught>(error: Caught): readonly FieldError[] {
   if (message.includes("un-split it first")) {
     return [{ path: "", message, messageKey: "transactions.unSplitFirst" }];
   }
+  // §6.6 — a link to an existing debt the table refuses: a person or role changed under it.
+  if (message.includes("transactions_opening_link_shape")) {
+    return [{ path: "", message, messageKey: "transactions.openingLinkShape" }];
+  }
   return [{ path: "", message }];
 }
 
@@ -3644,10 +3648,19 @@ export function createPhoneLedger(
         try {
           deleted = port.deleteOpeningDebt(parsed.data, capture);
         } catch (writeError) {
+          // Gone already (a second tap, another device) says so; anything else
+          // is the plain could-not-save — never a silent close.
+          const message = errorFromThrown(writeError).message;
           return finish(
             diagnostics,
             { scope: "client_action", action: "delete_opening_debt" },
-            { fieldErrors: refusalFromThrow(writeError) },
+            {
+              fieldErrors: [
+                message.includes("already deleted") || message.includes("no existing debt")
+                  ? { path: "", message, messageKey: "counterparties.existingDebtGone" }
+                  : { path: "", message, messageKey: "common.couldNotSave" },
+              ],
+            },
           );
         }
         refresh();
@@ -3860,6 +3873,9 @@ export function createPhoneLedger(
 
         const parsed = settleDebtInput.safeParse({
           id: runtime.id<"transactions">(),
+          // The second row, if this settlement turns out to cross the end of an
+          // existing debt (§6.6) — minted whether or not it does.
+          spillId: runtime.id<"transactions">(),
           counterpartyId: draft.counterpartyId,
           accountId: draft.accountId,
           date: draft.date,

@@ -104,7 +104,14 @@ export function mergeOpeningDebts(
         .set({ deletedAt: now, updatedAt: now })
         .where(eq(openingDebts.id, winner.id))
         .run();
-      moved.push({ mode: "cancelled", id: loser.id, into: winner.id, winnerBefore, relinked });
+      moved.push({
+        mode: "cancelled",
+        id: loser.id,
+        into: winner.id,
+        winnerBefore,
+        relinked,
+        after: { ...winnerBefore, deleted: true },
+      });
       continue;
     }
 
@@ -117,22 +124,37 @@ export function mergeOpeningDebts(
       })
       .where(eq(openingDebts.id, winner.id))
       .run();
-    moved.push({ mode: "combined", id: loser.id, into: winner.id, winnerBefore, relinked });
+    const after = {
+      direction: money.cmp(sum, money.ZERO) > 0 ? ("theyOwe" as const) : ("youOwe" as const),
+      amount: money.abs(sum) as string,
+      date: (loser.date < winner.date ? loser.date : winner.date) as string,
+      deleted: false,
+    };
+    moved.push({ mode: "combined", id: loser.id, into: winner.id, winnerBefore, relinked, after });
   }
   return moved;
 }
 
+/**
+ * Reverses `mergeOpeningDebts` from the record it left. Returns how many
+ * entries were **left alone** because the winner's row no longer holds what the
+ * merge left it — a correction made since is somebody's decision, and unmerge
+ * undoes its own move, never a later one (the loser's debt is then not handed
+ * back either, since the winner's figure already includes it).
+ */
 export function unmergeOpeningDebts(
   tx: ReplicaTx,
   loserId: Id<"counterparties">,
   winnerId: Id<"counterparties">,
   recorded: readonly MovedOpeningDebt[],
-): void {
+): number {
   const now = new Date();
+  let kept = 0;
   for (const entry of recorded) {
     if (entry.mode === "moved") {
       // Back to the loser — only if it is still the winner's and still live.
-      tx.update(openingDebts)
+      const [back] = tx
+        .update(openingDebts)
         .set({ counterpartyId: loserId, updatedAt: now })
         .where(
           and(
@@ -141,35 +163,38 @@ export function unmergeOpeningDebts(
             isNull(openingDebts.deletedAt),
           ),
         )
-        .run();
+        .returning({ id: openingDebts.id })
+        .all();
+      if (!back) kept += 1;
       continue;
     }
 
-    // Combined or cancelled: the winner's row goes back to what it held, but
-    // only if nobody touched it since — a live row for `combined`, a deleted
-    // one for `cancelled`. A change made after the merge is somebody's
-    // decision, and unmerge undoes its own move rather than every move since.
     const [winner] = tx
       .select()
       .from(openingDebts)
       .where(eq(openingDebts.id, id<"openingDebts">(entry.into)))
       .all();
-    if (winner) {
-      const untouched =
-        entry.mode === "combined" ? winner.deletedAt === null : winner.deletedAt !== null;
-      if (untouched) {
-        tx.update(openingDebts)
-          .set({
-            direction: entry.winnerBefore.direction,
-            amount: entry.winnerBefore.amount as money.Money,
-            date: entry.winnerBefore.date as typeof winner.date,
-            deletedAt: null,
-            updatedAt: now,
-          })
-          .where(eq(openingDebts.id, id<"openingDebts">(entry.into)))
-          .run();
-      }
+    const untouched =
+      winner !== undefined &&
+      (winner.deletedAt !== null) === entry.after.deleted &&
+      winner.direction === entry.after.direction &&
+      money.eq(winner.amount, entry.after.amount as money.Money) &&
+      winner.date === entry.after.date;
+    if (!untouched) {
+      kept += 1;
+      continue;
     }
+
+    tx.update(openingDebts)
+      .set({
+        direction: entry.winnerBefore.direction,
+        amount: entry.winnerBefore.amount as money.Money,
+        date: entry.winnerBefore.date as typeof winner.date,
+        deletedAt: null,
+        updatedAt: now,
+      })
+      .where(eq(openingDebts.id, id<"openingDebts">(entry.into)))
+      .run();
     tx.update(openingDebts)
       .set({ deletedAt: null, updatedAt: now })
       .where(eq(openingDebts.id, id<"openingDebts">(entry.id)))
@@ -186,4 +211,5 @@ export function unmergeOpeningDebts(
         .run();
     }
   }
+  return kept;
 }

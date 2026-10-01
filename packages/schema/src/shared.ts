@@ -14,7 +14,9 @@
  * `combined` — it had, so the two were summed into the winner's row (the
  * loser's row is soft-deleted, `winnerBefore` is what the winner's held, and
  * `relinked` the repayments that were pointed at the winner's row). `cancelled`
- * — the two summed to nothing and both rows were soft-deleted.
+ * — the two summed to nothing and both rows were soft-deleted. `after` is the
+ * winner's row right after the merge: unmerge restores only a row that still
+ * holds it, so a correction made since is never overwritten.
  */
 export type MovedOpeningDebt =
   | { readonly mode: "moved"; readonly id: string }
@@ -28,6 +30,12 @@ export type MovedOpeningDebt =
         readonly date: string;
       };
       readonly relinked: readonly string[];
+      readonly after: {
+        readonly direction: "theyOwe" | "youOwe";
+        readonly amount: string;
+        readonly date: string;
+        readonly deleted: boolean;
+      };
     };
 
 export type SharedTable =

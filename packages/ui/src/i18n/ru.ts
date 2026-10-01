@@ -369,6 +369,8 @@ export const ru: Messages = {
     settlesOwe: "{{name}}: погашение вашего долга, {{currency}}.",
     nothingToSettle: "{{name}}: открытого долга в этом направлении нет.",
     settleNeedsRate: "Нет курса для {{currency}}. Пожалуйста, погасите долг на странице человека.",
+    openingLinkShape:
+      "Погашение может оставаться связанным с существующим долгом, только пока оно относится к долгу перед тем же человеком.",
     reSettle:
       "Это погашение закрывает сумму, отличную от внесённой (другая валюта или прощённая часть), поэтому по новой сумме нельзя понять, какую часть долга оно закрывает. Удалите его и запишите погашение заново.",
     splitDebtCategory:
@@ -467,9 +469,10 @@ export const ru: Messages = {
     existingDebtDeleteTitle: "Удалить существующий долг?",
     existingDebtDeleteBody: "Существующий долг: {{name}} будет удалён.",
     existingDebtDeleteChain:
-      "Вместе с ним будут удалены погашения по нему: всего {{count}}, {{amount}} {{currency}}, со счетов: {{accounts}}. Остатки на этих счетах изменятся.",
+      "Вместе с ним будут удалены погашения по нему: всего {{count}}, со счетов: {{accounts}}. Остатки на этих счетах изменятся.",
     existingDebtDeleteSubmit: "Удалить",
     existingDebtDeleted: "Существующий долг удалён",
+    existingDebtGone: "Этот существующий долг уже удалён. Пожалуйста, обновите страницу.",
     existingDebtRepaid: "Уже погашено",
     existingDebtBalanceAfter: "Баланс после сохранения",
     existingDebtFlips:

@@ -368,6 +368,10 @@ This SQL stays the authoritative, server-side definition; `E9` differentials
 
 ## 6a · Transaction context
 
+*A repayment of an existing debt is left out here too* (§5, `SPEC.md` §6.6): the
+Who card's comparison rows skip a settlement stamped with
+`settles_opening_debt_id`.
+
 S09's context cards. Three figures, each about one transaction `x` and the
 six calendar months ending with **`x`'s own month** — `m₀ = month(x.date)`
 and `m₋₁ … m₋₅` before it, never the current month. Each is in `x`'s own

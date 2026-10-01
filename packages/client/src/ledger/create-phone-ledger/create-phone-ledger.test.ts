@@ -3379,7 +3379,11 @@ describe("phone ledger controller — recordOpeningDebt (§6.6)", () => {
     const result = controller.deleteOpeningDebt("00000000-0000-4000-8000-000000000042");
 
     expect("fieldErrors" in result && result.fieldErrors).toEqual([
-      { path: "", message: "delete_opening_debt: already deleted" },
+      {
+        path: "",
+        message: "delete_opening_debt: already deleted",
+        messageKey: "counterparties.existingDebtGone",
+      },
     ]);
   });
 

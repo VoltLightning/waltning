@@ -115,5 +115,33 @@ function supersede(input: SupersedeTransactionInput, tx: ReplicaTx): LocalTransa
   // layers away.
   assertTransactionScale(input.replacement, tx);
 
-  return insertTransaction(input.replacement, tx);
+  const inserted = insertTransaction(input.replacement, tx);
+
+  /**
+   * **A linked repayment stays linked when it is replaced (§6.6).** The
+   * replacement is built from `createTransactionInput`, which carries no
+   * discharge or link, so without this the row would come back as an ordinary
+   * debt entry: counted in the period figures and no longer taken with its
+   * opening debt. Carried — with the discharge it is a part of — only while the
+   * replacement is still a debt-role row with the same person, the case the link
+   * describes.
+   */
+  if (
+    old.settlesOpeningDebtId !== null &&
+    inserted.obligationRole === "debt" &&
+    inserted.obligationCounterpartyId === old.obligationCounterpartyId
+  ) {
+    const [carried] = tx
+      .update(transactions)
+      .set({
+        settlesOpeningDebtId: old.settlesOpeningDebtId,
+        debtCurrency: old.debtCurrency,
+        debtAmount: old.debtAmount,
+      })
+      .where(eq(transactions.id, inserted.id))
+      .returning()
+      .all();
+    if (carried) return carried;
+  }
+  return inserted;
 }
