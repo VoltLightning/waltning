@@ -20,6 +20,7 @@
     "./counterparties/near-matches": "./src/counterparties/near-matches/near-matches.ts",
     "./currencies/display-currency": "./src/currencies/display-currency/display-currency.ts",
     "./currencies/initialize-display-currency": "./src/currencies/initialize-display-currency/initialize-display-currency.ts",
+    "./currencies/region-currency": "./src/currencies/region-currency/region-currency.ts",
     "./currencies/use-currencies": "./src/currencies/use-currencies.ts",
     "./device/create-device-preference": "./src/device/create-device-preference/create-device-preference.ts",
     "./device/use-device-preference": "./src/device/use-device-preference.ts",

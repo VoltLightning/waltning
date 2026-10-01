@@ -38,6 +38,7 @@ import { useT } from "../../../i18n/provider";
 import { Button } from "../../../primitives/atoms/button/button";
 import { DateField } from "../../../primitives/atoms/date-field/date-field";
 import { RadioGroup } from "../../../primitives/atoms/radio/radio";
+import { RateField } from "../../../primitives/atoms/rate-field/rate-field";
 import { Select } from "../../../primitives/atoms/select/select";
 import { TextField } from "../../../primitives/atoms/text-field/text-field";
 import { Toggle } from "../../../primitives/atoms/toggle/toggle";
@@ -100,14 +101,25 @@ export type CreateAccountFormProps = {
   /** Every group the ledger holds, in its own order. Empty is ordinary. */
   groups: readonly CreateAccountGroup[];
   onCancel: () => void;
-  onSave: (draft: CreateAccountDraft) => void;
   /**
-   * S18, opened on this currency and today's date — the way out of the note
-   * a non-capturable currency draws under the grid. **Optional**: a surface
-   * with no rate screen to send anyone to states the fact and offers nothing,
-   * rather than offering a dead link.
+   * `rate` is the units of the chosen currency per one pivot (`fx_rates`'
+   * own direction) the person typed on the rate line, or `null` when the
+   * form drew none — the screen writes it, then the account.
    */
-  onSetRate?: (currency: CurrencyCode) => void;
+  onSave: (draft: CreateAccountDraft, rate: string | null) => void;
+  /**
+   * The pivot — the base of the rate line a rateless currency draws. Absent,
+   * no line is drawn and a rateless currency only carries the note.
+   */
+  pivot?: CurrencyCode;
+  /**
+   * Whether a currency needs a rate *typed here* — `null` when today already
+   * has a usable one, else the last rate the ledger has held for it (or
+   * `null` inside the object when it has never held one), to pre-fill the
+   * line. Absent, a currency whose `capturable` is `false` needs one with
+   * nothing to pre-fill.
+   */
+  rateNeed?: (currency: CurrencyCode) => { suggestion: string | null } | null;
   /**
    * Start with *More details* disclosed. `Select`'s own `defaultOpen` for the
    * same reason: a screenshot suite cannot click, so the expanded state a
@@ -141,7 +153,8 @@ export function CreateAccountForm({
   fieldErrors,
   onCancel,
   onSave,
-  onSetRate,
+  pivot,
+  rateNeed,
   defaultExpanded = false,
 }: CreateAccountFormProps) {
   const t = useT();
@@ -168,6 +181,30 @@ export function CreateAccountForm({
     currencies.find((candidate) => candidate.capturable !== false)?.code ??
       currencies[0]?.code ??
       null,
+  );
+  /**
+   * What the rate line asks of a currency: `null` when today already has a
+   * usable rate (or this is the pivot, or no pivot is known), else the rate
+   * to pre-fill it with — `null` inside when the ledger has never held one.
+   */
+  const needOf = useCallback(
+    (code: CurrencyCode): { suggestion: string | null } | null => {
+      if (pivot === undefined || code === pivot) return null;
+      if (rateNeed !== undefined) return rateNeed(code);
+      return currencies.find((row) => row.code === code)?.capturable === false
+        ? { suggestion: null }
+        : null;
+    },
+    [currencies, pivot, rateNeed],
+  );
+  /**
+   * The rate line's own text, held here so it **survives every refusal**: the
+   * screen re-renders this form with errors and nothing typed is lost. Seeded
+   * from the suggestion when a currency is chosen, `null` while what is typed
+   * is not a positive decimal.
+   */
+  const [rate, setRate] = useState<string | null>(() =>
+    currency === null ? null : (needOf(currency)?.suggestion ?? null),
   );
   const [expanded, setExpanded] = useState(defaultExpanded);
 
@@ -217,12 +254,16 @@ export function CreateAccountForm({
     () => currencies.find((row) => row.code === currency),
     [currencies, currency],
   );
-  const needsRate = chosen !== undefined && chosen.capturable === false;
+  const need = useMemo(() => (chosen === undefined ? null : needOf(chosen.code)), [chosen, needOf]);
 
   const handleToggleExpanded = useCallback(() => setExpanded((prior) => !prior), []);
-  const handleSetRate = useCallback(() => {
-    if (currency !== null) onSetRate?.(currency);
-  }, [currency, onSetRate]);
+  const handleSelectCurrency = useCallback(
+    (code: CurrencyCode) => {
+      setCurrency(code);
+      setRate(needOf(code)?.suggestion ?? null);
+    },
+    [needOf],
+  );
   const handleKindChange = useCallback((value: string) => setKind(value as AccountKind), []);
   const handleOwnershipChange = useCallback(
     (value: string) => setOwnership(value as Ownership),
@@ -233,22 +274,27 @@ export function CreateAccountForm({
   const check = useSubmitCheck({
     name: trimmed === "" && t("common.required"),
     currency: currency === null && t("common.chooseOne"),
+    rate: need !== null && rate === null && t("common.required"),
     openingDate: dateInvalid && t("accounts.openingDateInvalid"),
   });
 
   const save = useCallback(() => {
     if (!currency || dateInvalid) return;
-    onSave({
-      name: trimmed,
-      currency,
-      kind,
-      ownership,
-      isBusiness: businessValue,
-      openingBalance: openingBalance ?? "0",
-      openingDate: openingDateText === "" ? null : openingDateText,
-      memo,
-      groupId,
-    });
+    if (need !== null && rate === null) return;
+    onSave(
+      {
+        name: trimmed,
+        currency,
+        kind,
+        ownership,
+        isBusiness: businessValue,
+        openingBalance: openingBalance ?? "0",
+        openingDate: openingDateText === "" ? null : openingDateText,
+        memo,
+        groupId,
+      },
+      need === null ? null : rate,
+    );
   }, [
     businessValue,
     currency,
@@ -256,10 +302,12 @@ export function CreateAccountForm({
     groupId,
     kind,
     memo,
+    need,
     openingBalance,
     openingDateText,
     onSave,
     ownership,
+    rate,
     trimmed,
   ]);
   const handleSave = useCallback(() => {
@@ -270,6 +318,7 @@ export function CreateAccountForm({
   }, [check, dateInvalid, save]);
   const nameError = check.errorFor("name") ?? fieldErrors?.byField["name"]?.[0];
   const currencyError = check.errorFor("currency") ?? fieldErrors?.byField["currency"]?.[0];
+  const rateError = check.errorFor("rate") ?? fieldErrors?.byField["rate"]?.[0];
   /** `create_account`'s scale refusal is about this field — see `account-editor.tsx`. */
   const openingBalanceError = fieldErrors?.byField["openingBalance"]?.[0];
 
@@ -300,7 +349,7 @@ export function CreateAccountForm({
         <CurrencyGrid
           currencies={currencies}
           selected={currency}
-          onSelect={setCurrency}
+          onSelect={handleSelectCurrency}
           label={t("accounts.currency")}
         />
         {currencyError === undefined ? null : (
@@ -308,21 +357,20 @@ export function CreateAccountForm({
         )}
       </FieldAnchor>
 
-      {needsRate && chosen !== undefined ? (
-        <View style={styles.gate} accessibilityRole="alert">
+      {need !== null && chosen !== undefined && pivot !== undefined ? (
+        <FieldAnchor check={check} field="rate" style={styles.gate}>
           <Text style={styles.gateNote}>
             {t("accounts.currencyNotCapturable", { currency: chosen.code })}
           </Text>
-          {onSetRate === undefined ? null : (
-            <View style={styles.inline}>
-              <Button
-                label={t("accounts.setRate", { currency: chosen.code })}
-                onPress={handleSetRate}
-                variant="secondary"
-              />
-            </View>
-          )}
-        </View>
+          <RateField
+            key={chosen.code}
+            label={t("fx.rateEditorRateLabel", { quote: chosen.code, base: pivot })}
+            value={need.suggestion ?? ""}
+            editable
+            onChange={setRate}
+            {...(rateError === undefined ? {} : { error: rateError })}
+          />
+        </FieldAnchor>
       ) : null}
 
       {/*

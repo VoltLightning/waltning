@@ -14,7 +14,12 @@ import { drizzle } from "drizzle-orm/expo-sqlite";
 import { Directory, File, Paths } from "expo-file-system";
 import { deleteDatabaseSync, openDatabaseSync, type SQLiteRunResult } from "expo-sqlite";
 import { mobileDiagnostics } from "./diagnostics.ts";
-import { displayCurrency, setLivePivotReader, setLivePivotSubscriber } from "./platform";
+import {
+  displayCurrency,
+  setLiveHeldReader,
+  setLivePivotReader,
+  setLivePivotSubscriber,
+} from "./platform";
 
 const LEDGER_PATHS = {
   replica: "waltning-replica.db",
@@ -119,6 +124,8 @@ export function startPhoneLedger(): PhoneLedgerStartup {
     setLivePivotReader(
       () => session.listCurrencySettings().find((row) => row.isPivot)?.code ?? null,
     );
+    // §7.0 — the codes the ledger holds, so a region whose currency it does not hold falls on the pivot.
+    setLiveHeldReader(() => session.listCurrencySettings().map((row) => row.code));
     // M2 — `controller.subscribe` fires after every successful write, `change_
     // pivot` included, so a mounted display-currency consumer follows live.
     setLivePivotSubscriber(controller.subscribe);

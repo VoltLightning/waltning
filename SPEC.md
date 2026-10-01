@@ -2110,6 +2110,14 @@ it appears in no screen and no export.
 re-express every figure on screen. No backfill, no confirmation, no audit
 entry — nothing in the database moves.
 
+**With nothing chosen, the display currency is the currency of the device's
+region** — `de-DE` opens in EUR — provided the ledger holds it, and the pivot
+otherwise (an unknown region, a currency the ledger has never heard of). That
+default is **derived on every read and never stored**: a stored copy would
+freeze on whatever the region or the pivot was at first launch. A choice made
+in the toggle is stored, and beats the region from then on. The pivot is not a
+default and is never presented as the currency figures are measured in.
+
 #### Why this works
 
 `amount_pivot` was only ever a materialization for query speed. The facts are

@@ -136,8 +136,11 @@ it("renders a row per non-pivot currency, and the pivot read-only", () => {
   // (C1) — at least one match is the row's own code.
   expect(screen.getAllByText("PLN").length).toBeGreaterThan(0);
   expect(screen.getByText("Polish Złoty")).toBeDefined();
-  // USD is the pivot — not in the row list, stated in the read-only line instead.
-  expect(screen.queryByText("US Dollar")).toBeNull();
+  // USD is the pivot — not a row; it is named once, by the display card above
+  // (the ledger's display currency is the pivot until a region or a choice says
+  // otherwise) and its own pivot card below says "the pivot".
+  expect(screen.getAllByText("US Dollar")).toHaveLength(1);
+  expect(screen.getByText("US Dollar · the pivot")).toBeDefined();
 });
 
 /**
@@ -510,13 +513,25 @@ it("R2 L9 — the accessible name drops Pinned once the Toggle below states it",
 });
 
 /**
- * **The pivot first, as its own card, and the rest by where they show**
- * (S17 §3). What the pivot means is said before anything can change it, and
- * the change is not on screen until asked for.
+ * **The display currency first; the pivot last, as a technical card** (S17
+ * §3). What the reader sees their figures in is the first thing said; the
+ * pivot is the hub rates are stored against, says so, and keeps its change
+ * behind a tap.
  */
-it("leads with the pivot's card and keeps its change behind a tap", () => {
+it("leads with the display currency and puts the pivot's card last, its change behind a tap", () => {
   withLedger({});
-  expect(screen.getByText("The one everything is measured in")).toBeDefined();
+  const display = screen.getByText("Figures are shown in");
+  const pivot = screen.getByText("Rate reference");
+  expect(screen.queryByText("The one everything is measured in")).toBeNull();
+  expect(
+    display.compareDocumentPosition(pivot) & Node.DOCUMENT_POSITION_FOLLOWING,
+    "the pivot card follows the display card",
+  ).toBeTruthy();
+  expect(
+    screen.getByText("Add currency").compareDocumentPosition(pivot) &
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    "and follows the list and the Add button too",
+  ).toBeTruthy();
   expect(screen.queryByText("Change pivot")).toBeNull();
   fireEvent.click(screen.getByText("Change the pivot…"));
   expect(screen.getByText("Change pivot")).toBeDefined();

@@ -45,7 +45,12 @@ import {
 } from "expo-sqlite";
 import { useSyncExternalStore } from "react";
 import { mobileDiagnostics } from "./diagnostics.ts";
-import { displayCurrency, setLivePivotReader, setLivePivotSubscriber } from "./platform";
+import {
+  displayCurrency,
+  setLiveHeldReader,
+  setLivePivotReader,
+  setLivePivotSubscriber,
+} from "./platform";
 
 /**
  * The two stores, and — through the pre-migration copies and journals they
@@ -181,6 +186,8 @@ function openSession(): PhoneLedgerController {
   const controller = createPhoneLedger(session, deviceRuntime(mobileDiagnostics));
   // H1 — the header's live fallback, wired before anything reads it.
   setLivePivotReader(() => session.listCurrencySettings().find((row) => row.isPivot)?.code ?? null);
+  // §7.0 — the codes the ledger holds, so a region whose currency it does not hold falls on the pivot.
+  setLiveHeldReader(() => session.listCurrencySettings().map((row) => row.code));
   // M2 — `controller.subscribe` fires after every successful write,
   // `change_pivot` included, so a mounted display-currency consumer follows live.
   setLivePivotSubscriber(controller.subscribe);

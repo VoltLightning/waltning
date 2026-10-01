@@ -83,8 +83,7 @@ export const pl: Messages = {
     archivedNone: "Brak zarchiwizowanych kont.",
     archivedNoMatches: "Brak pasujących zarchiwizowanych kont.",
     currencyNotCapturable:
-      "Waluta {{currency}} nie ma jeszcze kursu wymiany. Konto założysz bez przeszkód; transakcji w tej walucie nie zapiszesz, dopóki kurs nie zostanie ustawiony.",
-    setRate: "Ustaw kurs waluty {{currency}}",
+      "Dla waluty {{currency}} nie ma dziś kursu wymiany. Proszę wpisać go poniżej; zostanie zapisany razem z kontem, dzięki czemu będzie można zapisywać w tej walucie transakcje.",
     moreDetails: "Więcej szczegółów",
     fewerDetails: "Mniej szczegółów",
     kind: "Rodzaj",
@@ -946,10 +945,13 @@ export const pl: Messages = {
     symbolAfter: "Po kwocie",
     decimals: "Miejsca dziesiętne",
     pivotLabel: "Waluta bazowa: {{code}}",
-    pivotKicker: "Waluta, w której liczone jest wszystko",
+    pivotKicker: "Baza kursów",
     pivotName: "{{name}} · waluta bazowa",
     pivotExplained:
-      "Każda kwota w aplikacji jest liczona w tej walucie. Zmiana przelicza cały rejestr, więc ustawia się ją raz.",
+      "Kursy wymiany są zapisywane względem tej waluty, aby dało się wyliczyć każdą parę. Nie wpływa ona na to, co widać na ekranie, i ustawia się ją raz.",
+    displayKicker: "Kwoty są pokazywane w",
+    displayExplained:
+      "Domyślnie wynika to z regionu telefonu, dopóki nie zostanie wybrana inna waluta. Można ją w każdej chwili zmienić przełącznikiem walut u góry; zapisane transakcje się przy tym nie zmieniają.",
     changePivotStart: "Zmień walutę bazową…",
     groupShown: "W przełączniku nagłówka",
     groupHeld: "Posiadane, poza przełącznikiem",

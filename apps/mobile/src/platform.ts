@@ -20,6 +20,7 @@ import { createAppearance } from "@waltning/client/appearance/create-appearance"
 import { previewResetEnabled } from "@waltning/client/appearance/preview-reset";
 import type { BackupPort } from "@waltning/client/backup/backup-port";
 import { createDisplayCurrencyPreference } from "@waltning/client/currencies/display-currency";
+import { currencyOfTags } from "@waltning/client/currencies/region-currency";
 import { createDevicePreference } from "@waltning/client/device/create-device-preference";
 import { createDeskScopePreference } from "@waltning/client/ledger/desk-scope";
 import { createAppLock } from "@waltning/client/security/app-lock";
@@ -147,6 +148,14 @@ export function setLivePivotReader(reader: () => CurrencyCode | null): void {
   livePivotReader = reader;
 }
 
+/** The codes the ledger holds — wired beside `livePivotReader`, for the same ordering reason. */
+let liveHeldReader: () => readonly CurrencyCode[] | null = () => null;
+
+/** Called once by the phone's ledger session: every currency code its replica holds. */
+export function setLiveHeldReader(reader: () => readonly CurrencyCode[] | null): void {
+  liveHeldReader = reader;
+}
+
 /**
  * M2 — the same indirection as `livePivotReader`, for the ledger's write
  * notifications. `displayCurrency`'s own `subscribe` calls through this on
@@ -159,6 +168,17 @@ let livePivotSubscribe: (listener: () => void) => () => void = () => () => {};
 /** Called once by the phone's ledger session: its own controller's `subscribe`, so `change_pivot` reaches a mounted display-currency consumer live. */
 export function setLivePivotSubscriber(subscribe: (listener: () => void) => () => void): void {
   livePivotSubscribe = subscribe;
+}
+
+/**
+ * The currency of the device's region — what the display currency opens in
+ * when nothing has been chosen (§7.0). A browser reports a language tag and
+ * no currency, so the tag's region is resolved by the pure table; a tag with
+ * no region, or a region with no known currency, answers `null` and the pivot
+ * stands in.
+ */
+function readRegionCurrency(): CurrencyCode | null {
+  return currencyOfTags(typeof navigator === "undefined" ? [] : [...(navigator.languages ?? [])]);
 }
 
 /**
@@ -179,6 +199,8 @@ export const displayCurrency = createDisplayCurrencyPreference(
   {
     subscribeToLedger: (listener) => livePivotSubscribe(listener),
     diagnostics: mobileDiagnostics,
+    regionCurrency: readRegionCurrency(),
+    readHeld: () => liveHeldReader(),
   },
 );
 

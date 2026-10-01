@@ -73,3 +73,35 @@ describe("initializeDisplayCurrencyFromLedger", () => {
     expect(pref.getSnapshot()).toEqual({ currency: PLN, hydrated: true });
   });
 });
+
+describe("initializeDisplayCurrencyFromLedger — the device's region (§7.0)", () => {
+  const rows = [
+    { code: USD, pinned: true, isPivot: true },
+    { code: PLN, pinned: true, isPivot: false },
+    { code: EUR, pinned: true, isPivot: false },
+  ];
+
+  // The bug: a seeded ledger pins USD first, so "the first pinned currency"
+  // persisted USD on every fresh install whatever the phone's region said.
+  it("persists nothing when the region already answers, so the default stays live", async () => {
+    const set = vi.fn(async () => undefined);
+    const pref = createDisplayCurrencyPreference({ get: async () => null, set }, () => USD, USD, {
+      regionCurrency: EUR,
+      readHeld: () => [USD, PLN, EUR],
+    });
+    await initializeDisplayCurrencyFromLedger(pref, () => rows);
+    expect(set).not.toHaveBeenCalled();
+    expect(pref.getSnapshot().currency).toBe(EUR);
+  });
+
+  it("with no known region, still defaults to the first pinned currency", async () => {
+    const pref = createDisplayCurrencyPreference(
+      { get: async () => null, set: async () => undefined },
+      () => USD,
+      USD,
+      { regionCurrency: null, readHeld: () => [USD, PLN, EUR] },
+    );
+    await initializeDisplayCurrencyFromLedger(pref, () => rows);
+    expect(pref.getSnapshot().currency).toBe(USD);
+  });
+});

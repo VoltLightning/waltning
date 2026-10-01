@@ -75,8 +75,7 @@ export const de: Messages = {
     archivedNone: "Keine archivierten Konten.",
     archivedNoMatches: "Keine archivierten Konten passen.",
     currencyNotCapturable:
-      "Für {{currency}} gibt es noch keinen Wechselkurs. Das Konto lässt sich anlegen; Buchungen darin sind erst möglich, wenn einer gesetzt ist.",
-    setRate: "Kurs für {{currency}} setzen",
+      "Für {{currency}} gibt es heute noch keinen Wechselkurs. Tragen Sie unten einen ein; er wird zusammen mit dem Konto gespeichert, damit Buchungen in dieser Währung möglich sind.",
     moreDetails: "Mehr Details",
     fewerDetails: "Weniger Details",
     kind: "Art",
@@ -910,10 +909,13 @@ export const de: Messages = {
     symbolAfter: "Nach dem Betrag",
     decimals: "Nachkommastellen",
     pivotLabel: "Bezugswährung: {{code}}",
-    pivotKicker: "Die, in der alles gemessen wird",
+    pivotKicker: "Kursbasis",
     pivotName: "{{name}} · Bezugswährung",
     pivotExplained:
-      "Jeder Betrag in der App steht darunter in dieser Währung. Eine Änderung rechnet das ganze Buch um, deshalb wird sie einmal festgelegt.",
+      "Wechselkurse werden gegenüber dieser Währung gespeichert, damit sich jedes Paar berechnen lässt. Sie bestimmt nichts von dem, was Sie sehen, und wird einmal festgelegt.",
+    displayKicker: "Beträge werden angezeigt in",
+    displayExplained:
+      "Das richtet sich nach der Region Ihres Telefons, bis Sie eine andere Währung wählen. Sie können sie jederzeit mit dem Währungsschalter oben umstellen; an Ihren Buchungen ändert sich dadurch nichts.",
     changePivotStart: "Bezugswährung ändern…",
     groupShown: "Im Umschalter der Kopfzeile",
     groupHeld: "Gehalten, nicht im Umschalter",

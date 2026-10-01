@@ -16,6 +16,12 @@
  * ledger pivot differs from the seed must render its own pivot, not the
  * seed frozen at build time).
  *
+ * **The region comes between the choice and the pivot.** With nothing chosen,
+ * the currency of the device's region is the display currency when the ledger
+ * holds it (`regionCurrency`, `readHeld`) — derived on every read like the
+ * pivot fallback, never stored, and standing in for `initializeFromPinned`'s
+ * first-pinned write, which on a seeded ledger was the pivot frozen.
+ *
  * **`getSnapshot` returns a cached object, not a fresh one every call.**
  * `useSyncExternalStore` compares what it returns by reference — a snapshot
  * that is a new `{ currency, hydrated }` literal on every call reads as
@@ -70,6 +76,16 @@ export type DisplayCurrencyPreferenceOptions = {
    */
   subscribeToLedger?: (listener: () => void) => () => void;
   diagnostics?: ClientDiagnostics;
+  /**
+   * The currency of the device's region, when the platform knows one (§7.0).
+   * It is the default a ledger opens in — *after* a stored choice and
+   * *before* the pivot — and only when the ledger holds it (`readHeld`), so a
+   * region whose currency the ledger has never heard of falls on the pivot
+   * exactly as an unknown region does.
+   */
+  regionCurrency?: CurrencyCode | null;
+  /** A live read of the codes the ledger holds. `null` before the ledger is ready. */
+  readHeld?: () => readonly CurrencyCode[] | null;
 };
 
 export function createDisplayCurrencyPreference(
@@ -82,6 +98,13 @@ export function createDisplayCurrencyPreference(
 ): DisplayCurrencyController {
   const inner = createDevicePreference<CurrencyCode>(store, codec, options?.diagnostics);
 
+  /** The region's currency, derived live and never stored — a later pivot change or a real choice must not meet a frozen default. */
+  const readRegionDefault = (): CurrencyCode | null => {
+    const region = options?.regionCurrency ?? null;
+    if (region === null) return null;
+    return options?.readHeld?.()?.includes(region) === true ? region : null;
+  };
+
   // See the file doc: cached so `useSyncExternalStore` sees the same
   // reference across renders where nothing actually changed. Rebuilt when
   // either the stored snapshot changes, or — while nothing is stored — the
@@ -93,7 +116,7 @@ export function createDisplayCurrencyPreference(
   return {
     getSnapshot: () => {
       const snapshot = inner.getSnapshot();
-      const currency = snapshot.value ?? readPivot() ?? seed;
+      const currency = snapshot.value ?? readRegionDefault() ?? readPivot() ?? seed;
       if (cached !== undefined && cachedInner === snapshot && cached.currency === currency) {
         return cached;
       }
@@ -117,6 +140,9 @@ export function createDisplayCurrencyPreference(
     set: inner.set,
     initializeFromPinned: (pinned) => {
       if (inner.getSnapshot().value !== null) return;
+      // The region's currency already answers "nothing chosen", derived live;
+      // persisting the first pinned one here would freeze the default on it.
+      if (readRegionDefault() !== null) return;
       const first = pinned[0];
       if (first !== undefined) void inner.set(first);
     },

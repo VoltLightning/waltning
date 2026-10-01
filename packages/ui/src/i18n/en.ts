@@ -147,9 +147,7 @@ export const en = {
      * the sentence states the consequence rather than refusing.
      */
     currencyNotCapturable:
-      "{{currency}} has no exchange rate yet. The account opens fine; transactions in it cannot be recorded until one is set.",
-    /** The way out of the sentence above — S18, opened on that currency and today's date. */
-    setRate: "Set a {{currency}} rate",
+      "{{currency}} has no exchange rate for today. Enter one below; it is saved together with the account, so transactions in it can be recorded.",
     moreDetails: "More details",
     fewerDetails: "Fewer details",
     kind: "Kind",
@@ -1625,10 +1623,13 @@ export const en = {
     symbolAfter: "After the figure",
     decimals: "Decimal places",
     pivotLabel: "Pivot: {{code}}",
-    pivotKicker: "The one everything is measured in",
+    pivotKicker: "Rate reference",
     pivotName: "{{name}} · the pivot",
     pivotExplained:
-      "Every figure in the app is this currency underneath. Changing it restates the whole ledger, so it is set once.",
+      "Exchange rates are stored against this currency so any pair can be worked out. It decides nothing you see, and it is set once.",
+    displayKicker: "Figures are shown in",
+    displayExplained:
+      "This follows your phone's region until you choose another currency. Switch it at any time with the currency toggle at the top; nothing you have recorded changes.",
     changePivotStart: "Change the pivot…",
     groupShown: "In the header toggle",
     groupHeld: "Held, not in the toggle",

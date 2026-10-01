@@ -11,12 +11,13 @@
  * (S17 §9.2, `update_currency`) — §9.2's "editable, but not prominent".
  *
  * **The card is the rows, and nothing else.** The list of rows is the one
- * grouped-rows card; *Add currency*, the pivot block and the screen's own
+ * grouped-rows card; *Add currency*, the display and pivot blocks and the screen's own
  * title sit on the ground (`design-system/05` §5.1). The card carries no
  * title of its own — the navigation header already says *Currencies*, and
  * saying it twice, 40 px apart, is chrome.
  *
- * Pivot shown read-only at the bottom, its one write (`change_pivot`) behind
+ * The display currency is stated first — read-only here, changed by the
+ * header's toggle. The pivot is shown last, its one write (`change_pivot`) behind
  * `ConfirmDialog` — E3's executor refuses it once any transaction exists, and
  * the dialog now says so before offering (S17 §7).
  *
@@ -32,6 +33,7 @@
  * pressable inside a pressable is one gesture with two meanings.
  */
 
+import { useDisplayCurrency } from "@waltning/client/currencies/display-currency";
 import type { CurrencyPatch } from "@waltning/client/ledger/create-phone-ledger";
 import { deviceRuntime } from "@waltning/client/ledger/device-runtime";
 import { useLedgerController } from "@waltning/client/ledger/use-ledger-controller";
@@ -57,6 +59,7 @@ import { space } from "@waltning/ui/tokens";
 import { router } from "expo-router";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { Text, View } from "react-native";
+import { displayCurrency } from "./platform";
 import { PushedPage } from "./pushed-page";
 
 type Draft = { code: string; name: string; symbol: string };
@@ -154,6 +157,8 @@ export default function SettingsCurrenciesScreen() {
   );
 
   const pivotRow = rows.find((row) => row.isPivot);
+  const display = useDisplayCurrency(displayCurrency);
+  const displayName = rows.find((row) => row.code === display.currency)?.name;
   const otherRows = rows.filter((row) => !row.isPivot);
   // S17 §3: what the header's toggle shows, and what is only held.
   const shownRows = otherRows.filter((row) => row.pinned);
@@ -321,47 +326,20 @@ export default function SettingsCurrenciesScreen() {
   return (
     <PushedPage title={t("routes.currencies")} subtitle={t("pages.currencies")}>
       {/*
-        **The pivot first, as its own card** (S17 §3) — every figure in the app
-        is this currency underneath, so it is the first thing the screen says,
-        and changing it is an action inside that card, behind its own tap and a
-        confirmation, rather than a form at the bottom of a list.
+        **The display currency first** (S17 §3) — what the screen's reader sees
+        their figures in is the one currency fact they bring here. It is stated,
+        not set: the header's toggle is where it changes (§8, §7.0).
       */}
-      {pivotRow ? (
-        <Card>
-          <View style={styles.pivot}>
-            <Text style={styles.kicker}>{t("fx.pivotKicker")}</Text>
-            <View style={styles.pivotHead}>
-              <Text style={styles.pivotCode}>{pivotRow.code}</Text>
-              <Text style={styles.pivotName}>{t("fx.pivotName", { name: pivotRow.name })}</Text>
-            </View>
-            <Text style={styles.pivotBody}>{t("fx.pivotExplained")}</Text>
-            {otherRows.length === 0 ? null : changingPivot ? (
-              <View style={styles.pivotChange}>
-                <Select
-                  label={t("fx.pivotTarget")}
-                  placeholder={t("fx.pivotTargetPlaceholder")}
-                  options={pivotTargetOptions}
-                  value={selectedPivotTarget}
-                  onChange={handleChangePivotTarget}
-                />
-                <Button
-                  label={t("fx.changePivot")}
-                  onPress={handleOpenPivotConfirm}
-                  variant="secondary"
-                  size="sm"
-                />
-              </View>
-            ) : (
-              <Button
-                label={t("fx.changePivotStart")}
-                onPress={handleStartPivotChange}
-                variant="ghost"
-                size="sm"
-              />
-            )}
+      <Card>
+        <View style={styles.pivot}>
+          <Text style={styles.kicker}>{t("fx.displayKicker")}</Text>
+          <View style={styles.pivotHead}>
+            <Text style={styles.pivotCode}>{display.currency}</Text>
+            {displayName === undefined ? null : <Text style={styles.pivotName}>{displayName}</Text>}
           </View>
-        </Card>
-      ) : null}
+          <Text style={styles.pivotBody}>{t("fx.displayExplained")}</Text>
+        </View>
+      </Card>
 
       {/*
         The two groups a held currency is in: shown in the header's toggle
@@ -429,6 +407,49 @@ export default function SettingsCurrenciesScreen() {
       )}
 
       <Button label={t("fx.addCurrency")} onPress={handleOpenAdd} variant="secondary" size="sm" />
+
+      {/*
+        **The pivot last, as its own card** (S17 §3) — the technical hub every
+        rate is stored against. It decides nothing a reader sees, so it comes
+        after everything they can act on; changing it is an action inside that
+        card, behind its own tap and a confirmation.
+      */}
+      {pivotRow ? (
+        <Card>
+          <View style={styles.pivot}>
+            <Text style={styles.kicker}>{t("fx.pivotKicker")}</Text>
+            <View style={styles.pivotHead}>
+              <Text style={styles.pivotCode}>{pivotRow.code}</Text>
+              <Text style={styles.pivotName}>{t("fx.pivotName", { name: pivotRow.name })}</Text>
+            </View>
+            <Text style={styles.pivotBody}>{t("fx.pivotExplained")}</Text>
+            {otherRows.length === 0 ? null : changingPivot ? (
+              <View style={styles.pivotChange}>
+                <Select
+                  label={t("fx.pivotTarget")}
+                  placeholder={t("fx.pivotTargetPlaceholder")}
+                  options={pivotTargetOptions}
+                  value={selectedPivotTarget}
+                  onChange={handleChangePivotTarget}
+                />
+                <Button
+                  label={t("fx.changePivot")}
+                  onPress={handleOpenPivotConfirm}
+                  variant="secondary"
+                  size="sm"
+                />
+              </View>
+            ) : (
+              <Button
+                label={t("fx.changePivotStart")}
+                onPress={handleStartPivotChange}
+                variant="ghost"
+                size="sm"
+              />
+            )}
+          </View>
+        </Card>
+      ) : null}
 
       <BottomSheet visible={addOpen} title={t("fx.addCurrency")} onDismiss={handleCloseAdd}>
         <TextField

@@ -148,3 +148,51 @@ describe("createDisplayCurrencyPreference", () => {
     });
   });
 });
+
+describe("createDisplayCurrencyPreference — the device's region (§7.0)", () => {
+  const held = () => [USD, PLN, EUR];
+
+  it("a fresh ledger in a euro region opens in EUR, not the pivot", () => {
+    const pref = createDisplayCurrencyPreference(memoryStore(null), () => USD, USD, {
+      regionCurrency: EUR,
+      readHeld: held,
+    });
+    expect(pref.getSnapshot().currency).toBe(EUR);
+  });
+
+  it("an unknown region falls on the pivot", () => {
+    const pref = createDisplayCurrencyPreference(memoryStore(null), () => USD, USD, {
+      regionCurrency: null,
+      readHeld: held,
+    });
+    expect(pref.getSnapshot().currency).toBe(USD);
+  });
+
+  it("a region currency the ledger does not hold falls on the pivot", () => {
+    const pref = createDisplayCurrencyPreference(memoryStore(null), () => USD, USD, {
+      regionCurrency: currencyCode("CHF"),
+      readHeld: held,
+    });
+    expect(pref.getSnapshot().currency).toBe(USD);
+  });
+
+  it("a ledger not ready to say what it holds falls on the pivot, then follows once it can", () => {
+    let codes: CurrencyCode[] | null = null;
+    const pref = createDisplayCurrencyPreference(memoryStore(null), () => USD, USD, {
+      regionCurrency: EUR,
+      readHeld: () => codes,
+    });
+    expect(pref.getSnapshot().currency).toBe(USD);
+    codes = [USD, EUR];
+    expect(pref.getSnapshot().currency).toBe(EUR);
+  });
+
+  it("an explicit choice beats the region", async () => {
+    const pref = createDisplayCurrencyPreference(memoryStore("PLN"), () => USD, USD, {
+      regionCurrency: EUR,
+      readHeld: held,
+    });
+    await pref.hydrate();
+    expect(pref.getSnapshot().currency).toBe(PLN);
+  });
+});

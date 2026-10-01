@@ -50,13 +50,21 @@ screen's own name sit on the ground — and the card carries **no
 title**: the navigation header already says *Currencies*, and saying it twice,
 40 px apart, is chrome.
 
-**The pivot first, as its own card**: *The one everything is measured in*, its
-code and name, and one line on what it means — every figure is this currency
-underneath, and changing it restates the ledger. The change is inside that card,
-behind its own *Change the pivot…* and then the confirmation, never a form left
-open at the bottom of a list. The other currencies follow in two titled cards:
-**In the header toggle** (pinned) and **Held, not in the toggle** — which is the
-one question a reader brings to this screen about any of them.
+**The display currency first, as its own card**: *Figures are shown in*, its
+code and name, and one line saying it follows the phone's region until another
+is chosen and that the header's toggle is where it changes (§8 — it is stated
+here, never set here). It is the one currency fact a reader brings to this
+screen. The other currencies follow in two titled cards: **In the header
+toggle** (pinned) and **Held, not in the toggle** — which is the one question a
+reader brings to this screen about any of them.
+
+**The pivot last, as its own card**, after the list and *Add currency*: *Rate
+reference*, its code and name, and one line on what it is — the currency every
+exchange rate is stored against, so any pair can be worked out; it decides
+nothing a reader sees, and it is set once. It is technical, so it does not lead
+and is never worded as the currency things are measured in. Changing it is
+inside that card, behind its own *Change the pivot…* and then the confirmation,
+never a form left open at the bottom of a list.
 
 Web adds columns rather than regions; the list is short and does not need two.
 
@@ -106,7 +114,9 @@ abroad requires.
 ## 8. Rules this screen must obey
 
 - **§7.0** — the **display** currency is not set here. It is the header
-  `CurrencyChip`, free and instant. This screen sets what is *available*.
+  `CurrencyChip`, free and instant; with nothing chosen it is the currency of the
+  device's region when the ledger holds it, else the pivot, derived on every
+  read and never stored. This screen states it and sets what is *available*.
 - **§7.7** — prefer the central bank of the jurisdiction you report in.
 - Coverage is stated per currency, with its source and last quote date.
   Reporting a currency as present when it holds 0.5% of its range is how GEL

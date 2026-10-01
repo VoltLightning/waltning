@@ -7,6 +7,7 @@
  * own file covers), so every branch here is reachable today.
  */
 
+import { currencyCode } from "@waltning/core/money";
 import { describe, expect, it, vi } from "vitest";
 import { subscribeCommandBarHotkey } from "./platform";
 
@@ -181,5 +182,24 @@ describe("subscribeCommandBarHotkey", () => {
     keydown({ key: "n" });
     expect(onTrigger).toHaveBeenCalledOnce();
     unsubscribe();
+  });
+});
+
+describe("the display currency's region default, on the web build", () => {
+  async function displayIn(languages: readonly string[]) {
+    vi.resetModules();
+    Object.defineProperty(navigator, "languages", { value: languages, configurable: true });
+    const platform = await import("./platform");
+    platform.setLiveHeldReader(() => ["USD", "PLN", "EUR"].map(currencyCode));
+    platform.setLivePivotReader(() => currencyCode("USD"));
+    return platform.displayCurrency.getSnapshot().currency;
+  }
+
+  it("a German browser on a fresh ledger shows EUR", async () => {
+    expect(await displayIn(["de-DE", "en-US"])).toBe("EUR");
+  });
+
+  it("a browser with no region shows the pivot", async () => {
+    expect(await displayIn(["de"])).toBe("USD");
   });
 });

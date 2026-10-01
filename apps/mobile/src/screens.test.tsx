@@ -1321,39 +1321,6 @@ describe("NewAccount", () => {
     expect(screen.getByText(/PLN/)).toBeDefined();
     expect(screen.getByRole("button", { name: "Save" })).toBeDefined();
   });
-
-  /**
-   * §14.6 — the account still opens in a currency with no rate; what it
-   * cannot do is carry transactions. The way out is S18, on that currency
-   * and on the day the form is already dated by.
-   */
-  it("names a currency with no rate and opens S18 on it", () => {
-    liveParams = { returnTo: "today" };
-    withLedger(
-      <NewAccount />,
-      fakeController({
-        currencies: [
-          {
-            code: currencyCode("BYN"),
-            name: "Belarusian Ruble",
-            symbol: "Br",
-            decimals: 2,
-            capturable: false,
-            isPivot: false,
-          },
-        ],
-      }),
-    );
-
-    expect(screen.getByText(/BYN has no exchange rate yet/)).toBeDefined();
-    fireEvent.click(screen.getByRole("button", { name: "Set a BYN rate" }));
-    expect(router.push).toHaveBeenCalledWith({
-      pathname: "/settings/rates",
-      // The device's own calendar (§7.0a) — the same read the form's
-      // "Opening date" shortcut row makes, not the fixture's frozen clock.
-      params: { quote: "BYN", date: deviceRuntime().capture().date },
-    });
-  });
 });
 
 describe("Settings", () => {
