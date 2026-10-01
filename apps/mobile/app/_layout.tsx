@@ -51,6 +51,7 @@ import {
   language,
   restartApp,
 } from "../src/platform";
+import { screenLayout } from "../src/screen-fade";
 
 export default function RootLayout() {
   const [loaded, error] = useFonts(FONT_ASSETS);
@@ -272,6 +273,7 @@ function AppStack() {
 
   return (
     <Stack
+      screenLayout={screenLayout}
       screenOptions={{
         contentStyle: { backgroundColor: theme.ground },
         // **Every pushed screen fades in** (~150 ms), or arrives instantly

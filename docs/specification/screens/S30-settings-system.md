@@ -72,7 +72,9 @@ for the same reason.
   the device preference the first-run question writes (`SPEC.md` §5.7): the
   app asks once, *Lock the app with your fingerprint?* — the noun follows what
   the device offers — with *Yes* and *Not now*, and this row flips the answer
-  afterwards. The value line says *On* or *Off*.
+  afterwards. The value line says *On* or *Off*, and the hint under *On* names
+  only what this device would ask for. **Switching it off asks the device
+  first**; switching it on asks nothing.
 - **Language** — *Match the phone*, then every shipped language **named in
   itself**: *English*, *Polski*, *Deutsch*, *Русский*, *Беларуская*. A phone
   left in a language the reader cannot read is put back by finding their own

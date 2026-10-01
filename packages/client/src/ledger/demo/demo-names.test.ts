@@ -68,7 +68,6 @@ describe("the demo is named in the app's language", () => {
 
   it("names every person in the language's own table, never the plan's fallback by accident", () => {
     for (const locale of LOCALES) {
-      if (locale === "en") continue;
       for (const person of DEMO_COUNTERPARTIES.filter((c) => c.kind === "person")) {
         expect(
           DEMO_NAMES[locale].counterparties[person.ref],
@@ -92,6 +91,42 @@ describe("the demo is named in the app's language", () => {
           `${debt.enteredName} in ${locale}`,
         ).toBeDefined();
       }
+    }
+  });
+});
+
+/** Public repo: no real brand is named anywhere in the demo, in any language. */
+describe("the demo names no real brand", () => {
+  const BRANDS = [
+    "netflix",
+    "spotify",
+    "youtube",
+    "uber",
+    "ikea",
+    "anthropic",
+    "lidl",
+    "żabka",
+    "orlen",
+    "allegro",
+  ];
+
+  it("in the plan, or in any language's table", () => {
+    const words: string[] = [
+      ...DEMO_ACCOUNTS.map((a) => a.name),
+      ...DEMO_COUNTERPARTIES.map((c) => c.name),
+      ...DEMO_DEBTS.map((d) => d.enteredName),
+      ...demoTransactions(TODAY, 3).map((r) => r.enteredName),
+    ];
+    for (const locale of LOCALES) {
+      const names = DEMO_NAMES[locale];
+      words.push(
+        ...Object.values(names.accounts),
+        ...Object.values(names.counterparties),
+        ...Object.values(names.text),
+      );
+    }
+    for (const word of words) {
+      for (const brand of BRANDS) expect(word.toLowerCase(), word).not.toContain(brand);
     }
   });
 });

@@ -1,7 +1,6 @@
 /** @vitest-environment jsdom */
 
 import { act, cleanup, render, screen } from "@testing-library/react";
-import { createDevicePreference } from "@waltning/client/device/create-device-preference";
 import {
   type AppActivity,
   type AppLockAttempt,
@@ -164,20 +163,10 @@ it("draws the lock over a sheet the app had open, not under it", async () => {
  * answered there is no biometric prompt at all — the tester's first surprise
  * was a fingerprint request with no word of why.
  */
+const PROMPT = { message: "Unlock", cancel: "Cancel" };
+
 function askingDevice(stored: string | null) {
   let disk: string | null = stored;
-  const preference = createDevicePreference<boolean>(
-    {
-      get: async () => disk,
-      set: async (value) => {
-        disk = value;
-      },
-    },
-    {
-      parse: (raw) => (raw === "on" ? true : raw === "off" ? false : null),
-      serialize: (value) => (value ? "on" : "off"),
-    },
-  );
   const authenticate = vi.fn(async (): Promise<AppLockAttempt> => ({ ok: true }));
   const lock = createAppLock({
     authenticator: {
@@ -187,7 +176,13 @@ function askingDevice(stored: string | null) {
     },
     subscribeAppState: () => () => {},
     now: () => 0,
-    preference,
+    choice: {
+      read: async () => disk,
+      write: async (enabled) => {
+        disk = enabled ? "on" : "off";
+      },
+      hasHistory: async () => false,
+    },
   });
   return { lock, authenticate, disk: () => disk };
 }
@@ -244,11 +239,11 @@ it("does not remount the screen when Settings switches the lock on or off", asyn
   await settle();
   const before = screen.getByText("the ledger");
   await act(async () => {
-    await lock.answer(true);
+    await lock.answer(true, PROMPT);
   });
   expect(screen.getByText("the ledger"), "same node: the screen kept its place").toBe(before);
   await act(async () => {
-    await lock.answer(false);
+    await lock.answer(false, PROMPT);
   });
   expect(screen.getByText("the ledger")).toBe(before);
 });

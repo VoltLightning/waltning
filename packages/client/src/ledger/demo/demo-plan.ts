@@ -14,14 +14,12 @@
  * executors make — and would therefore produce data that behaves differently
  * from data you entered, which is the one thing a test fixture must not do.
  *
- * **Every account, employer, client and person is invented; the international
- * services are real.** Those are two different rules. The placeholder rule
- * protects *this* ledger's private data — which bank, which employer, which
- * client — and none of that appears here. A streaming subscription is not
- * private data, and naming real ones is the only way §14.4b's offline matcher
- * has anything to recognise. **The words are the app's language**
- * (`demo-names.ts`): this file is the structure and the English keys, and a
- * German demo reads German.
+ * **Every account, employer, client, person and shop is invented.** The
+ * placeholder rule protects *this* ledger's private data, and a public repo has
+ * no business naming real brands either, so a streaming service is "Streaming
+ * service" and a supermarket is "Supermarket". **The words are the app's
+ * language** (`demo-names.ts`): this file is the structure and the English
+ * keys, and a German demo reads German.
  *
  * Deliberately separate from `packages/db`'s Postgres fixture, which serves
  * the API-backed dev flow and cannot be imported from a phone bundle. The two
@@ -243,7 +241,7 @@ export const DEMO_PATTERNS: readonly DemoPattern[] = [
   },
 
   {
-    enteredName: "Netflix",
+    enteredName: "Streaming service",
     category: "Media & streaming",
     type: "expense",
     account: "card-a",
@@ -251,7 +249,7 @@ export const DEMO_PATTERNS: readonly DemoPattern[] = [
     days: [3],
   },
   {
-    enteredName: "Spotify",
+    enteredName: "Music service",
     category: "Media & streaming",
     type: "expense",
     account: "card-a",
@@ -259,7 +257,7 @@ export const DEMO_PATTERNS: readonly DemoPattern[] = [
     days: [3],
   },
   {
-    enteredName: "YouTube Premium",
+    enteredName: "Video service",
     category: "Media & streaming",
     type: "expense",
     account: "card-a",
@@ -267,7 +265,7 @@ export const DEMO_PATTERNS: readonly DemoPattern[] = [
     days: [8],
   },
   {
-    enteredName: "Anthropic",
+    enteredName: "AI assistant",
     category: "Software & tools",
     type: "expense",
     account: "card-a",
@@ -293,7 +291,7 @@ export const DEMO_PATTERNS: readonly DemoPattern[] = [
   },
 
   {
-    enteredName: "Lidl",
+    enteredName: "Supermarket",
     category: "Groceries",
     type: "expense",
     account: "bank-a",
@@ -301,7 +299,7 @@ export const DEMO_PATTERNS: readonly DemoPattern[] = [
     days: [2, 16, 29],
   },
   {
-    enteredName: "Żabka",
+    enteredName: "Corner shop",
     category: "Groceries",
     type: "expense",
     account: "cash",
@@ -309,7 +307,7 @@ export const DEMO_PATTERNS: readonly DemoPattern[] = [
     days: [9, 23],
   },
   {
-    enteredName: "ORLEN",
+    enteredName: "Fuel station",
     category: "Fuel & parking",
     type: "expense",
     account: "bank-a",
@@ -317,15 +315,14 @@ export const DEMO_PATTERNS: readonly DemoPattern[] = [
     days: [7, 21],
   },
   {
-    enteredName: "Uber",
+    enteredName: "Ride app",
     category: "Taxi",
     type: "expense",
     account: "card-a",
     amount: "24.00",
     days: [6, 20],
   },
-  // Deliberately not in the catalogue — an unmatched entered name has to fall back to
-  // a monogram, and a ledger where everything matched would never show that.
+  // A generic name, so nothing here is a real shop.
   {
     enteredName: "Corner Cafe",
     category: "Eating out",
@@ -335,7 +332,7 @@ export const DEMO_PATTERNS: readonly DemoPattern[] = [
     days: [4, 11, 18, 25],
   },
   {
-    enteredName: "Allegro",
+    enteredName: "Online shop",
     category: "Household supplies",
     type: "expense",
     account: "bank-a",
@@ -344,7 +341,7 @@ export const DEMO_PATTERNS: readonly DemoPattern[] = [
     every: 2,
   },
   {
-    enteredName: "IKEA",
+    enteredName: "Furniture store",
     category: "Furniture & appliances",
     type: "expense",
     account: "bank-a",
@@ -487,8 +484,7 @@ export const DEMO_PATTERNS: readonly DemoPattern[] = [
  * unreachable, so the whole debt half of the app could not be looked at —
  * which is how it stayed uncompared against its own drawing for months.
  *
- * Invented, like every account and employer here (the merchants are the only
- * real names, and `demo-plan`'s header says why).
+ * Invented, like every account, employer and shop here.
  */
 export type DemoCounterparty = {
   /** Referenced by `DEMO_DEBTS`, never shown. */
@@ -511,7 +507,7 @@ export const DEMO_COUNTERPARTIES: readonly DemoCounterparty[] = [
   { ref: "de-owing", name: "Jürgen", kind: "person", settlementCurrency: "EUR" },
   { ref: "by-owed", name: "Alex", kind: "person", settlementCurrency: null },
   // And a dollar debt, so S12's totals carry a third currency.
-  { ref: "us-owing", name: "John Henry", kind: "person", settlementCurrency: "USD" },
+  { ref: "us-owing", name: "Michael", kind: "person", settlementCurrency: "USD" },
   // A real loan to a friend, paid back monthly — lending as a debt on a
   // person, which is how the app records it (§6.6), not an account.
   { ref: "lent", name: "Tomasz", kind: "person", settlementCurrency: null },

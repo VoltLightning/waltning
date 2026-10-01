@@ -11,12 +11,9 @@
  * app.
  *
  * **Every name here is invented and generic** — a first name, a generic shop
- * ("Kiosk am Eck"), a descriptive account. Nothing is a real person. The only
- * real names left in the plan are the international services every locale
- * shares (a streaming subscription, a ride-hailing app), which are not
- * localisable and which §14.4b's matcher needs in order to show a logo beside
- * a monogram; the Polish demo also keeps the Polish shops it was written
- * around.
+ * ("Kiosk am Eck"), a descriptive account. Nothing is a real person or a real
+ * brand: the shops and services are descriptions ("Streaming service"), not
+ * names.
  *
  * **Keyed three ways, all stable.** Accounts and counterparties by their
  * `ref`; everything else (an entered name, a note) by the English text the
@@ -37,21 +34,30 @@ export type DemoNames = {
   text: Readonly<Record<string, string>>;
 };
 
-/** English: the plan's own words, except the local shops, which are neutral here. */
+/** English: the plan's own words, with the people named. */
 const en: DemoNames = {
-  accounts: {},
+  accounts: {
+    "bank-a": "Bank A",
+    "bank-b": "Bank B",
+    "card-a": "Card A",
+    cash: "Cash",
+    clearing: "Clearing",
+    "loan-in": "Car loan",
+    investment: "Brokerage",
+    other: "Travel card",
+    "bank-c": "Studio account",
+    "card-b": "Card B",
+  },
   counterparties: {
     owing: "Emma",
     owed: "Oliver",
-    "de-owing": "Henry",
+    settled: "Studio B",
+    "de-owing": "Daniel",
     "by-owed": "Alex",
+    "us-owing": "Michael",
     lent: "Thomas",
   },
   text: {
-    Lidl: "Fresh Market",
-    Żabka: "Corner Shop",
-    ORLEN: "Fuel Stop",
-    Allegro: "Online Shop",
     "Loan to Tomasz": "Loan to Thomas",
     "Tomasz · repayment": "Thomas · repayment",
   },
@@ -80,6 +86,16 @@ const pl: DemoNames = {
     lent: "Tomasz",
   },
   text: {
+    "Streaming service": "Serwis streamingowy",
+    "Music service": "Serwis muzyczny",
+    "Video service": "Serwis wideo",
+    "AI assistant": "Asystent AI",
+    Supermarket: "Supermarket Lipowy",
+    "Corner shop": "Sklep na rogu",
+    "Fuel station": "Stacja paliw",
+    "Ride app": "Aplikacja do przejazdów",
+    "Online shop": "Sklep internetowy Delta",
+    "Furniture store": "Sklep meblowy",
     Employer: "Pracodawca",
     Landlord: "Wynajmujący",
     "Utility Co": "Dostawca mediów",
@@ -131,13 +147,19 @@ const de: DemoNames = {
     lent: "Stefan",
   },
   text: {
+    "Streaming service": "Streamingdienst",
+    "Music service": "Musikdienst",
+    "Video service": "Videodienst",
+    "AI assistant": "KI-Assistent",
+    Supermarket: "Supermarkt Lindenhof",
+    "Corner shop": "Kiosk am Eck",
+    "Fuel station": "Tankstelle Nord",
+    "Ride app": "Fahrdienst-App",
+    "Online shop": "Onlineshop Delta",
+    "Furniture store": "Möbelhaus",
     Employer: "Arbeitgeber",
     Landlord: "Vermieter",
     "Utility Co": "Energieversorger",
-    Lidl: "Supermarkt Lindenhof",
-    Żabka: "Kiosk am Eck",
-    ORLEN: "Tankstelle Nord",
-    Allegro: "Onlineshop Delta",
     "Corner Cafe": "Eckcafé",
     Transit: "Nahverkehr",
     Client: "Kunde",
@@ -186,13 +208,19 @@ const ru: DemoNames = {
     lent: "Сергей",
   },
   text: {
+    "Streaming service": "Стриминговый сервис",
+    "Music service": "Музыкальный сервис",
+    "Video service": "Видеосервис",
+    "AI assistant": "ИИ-ассистент",
+    Supermarket: "Супермаркет Липа",
+    "Corner shop": "Магазин у дома",
+    "Fuel station": "АЗС Север",
+    "Ride app": "Приложение для поездок",
+    "Online shop": "Интернет-магазин Дельта",
+    "Furniture store": "Мебельный магазин",
     Employer: "Работодатель",
     Landlord: "Арендодатель",
     "Utility Co": "Коммунальные услуги",
-    Lidl: "Супермаркет Липа",
-    Żabka: "Магазин у дома",
-    ORLEN: "АЗС Север",
-    Allegro: "Интернет-магазин Дельта",
     "Corner Cafe": "Кафе на углу",
     Transit: "Транспорт",
     Client: "Клиент",
@@ -241,13 +269,19 @@ const be: DemoNames = {
     lent: "Сяргей",
   },
   text: {
+    "Streaming service": "Стрымінгавы сэрвіс",
+    "Music service": "Музычны сэрвіс",
+    "Video service": "Відэасэрвіс",
+    "AI assistant": "ШІ-асістэнт",
+    Supermarket: "Супермаркет Ліпа",
+    "Corner shop": "Крама каля дому",
+    "Fuel station": "АЗС Поўнач",
+    "Ride app": "Праграма для паездак",
+    "Online shop": "Інтэрнэт-крама Дэльта",
+    "Furniture store": "Мэблевая крама",
     Employer: "Працадаўца",
-    Landlord: "Арандадавец",
+    Landlord: "Арандадаўца",
     "Utility Co": "Камунальныя паслугі",
-    Lidl: "Супермаркет Ліпа",
-    Żabka: "Крама каля дому",
-    ORLEN: "АЗС Поўнач",
-    Allegro: "Інтэрнэт-крама Дэльта",
     "Corner Cafe": "Кафэ на рагу",
     Transit: "Транспарт",
     Client: "Кліент",

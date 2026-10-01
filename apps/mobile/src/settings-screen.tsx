@@ -52,7 +52,6 @@ import { Text, useColorScheme, View } from "react-native";
 import {
   appearance,
   appLock,
-  appLockPreference,
   DEVICE_LOCALES,
   language,
   lastBackup,
@@ -81,6 +80,14 @@ type Destination = keyof typeof ROUTES;
 type Choice = "appearance" | "language" | "lock";
 
 type Row = Destination | Choice;
+
+/** The hint names only what this device would ask for. */
+const LOCK_HINT = {
+  fingerprint: "settings.lockHintFingerprint",
+  face: "settings.lockHintFace",
+  either: "settings.lockHintEither",
+  passcode: "settings.lockHintPasscode",
+} as const;
 
 const SHEET_TITLE = {
   appearance: "settings.appearance",
@@ -166,8 +173,9 @@ export default function Settings() {
   // Subscribed so the row appears once the gate has read the device, and its
   // value follows the answer.
   useAppLock(appLock);
-  const lockAvailable = appLock.method() !== null;
-  const lockOn = useDevicePreference(appLockPreference).value === true;
+  const lockMethod = appLock.method();
+  const lockAvailable = lockMethod !== null;
+  const lockOn = appLock.enabled();
   const [sheet, setSheet] = useState<Choice | null>(null);
   const [appearanceFailed, setAppearanceFailed] = useState(false);
 
@@ -317,14 +325,23 @@ export default function Settings() {
   }, []);
   const lockOptions = useMemo(
     (): readonly [RadioOption, RadioOption, ...RadioOption[]] => [
-      { value: "on", label: t("settings.lockOn"), hint: t("settings.lockHint") },
+      { value: "on", label: t("settings.lockOn"), hint: t(LOCK_HINT[lockMethod ?? "either"]) },
       { value: "off", label: t("settings.lockOff") },
     ],
+    [t, lockMethod],
+  );
+  const handleLock = useCallback(
+    (next: string) => {
+      // Turning it off asks the device first (`SPEC.md` §5.7); a refusal leaves the row as it was.
+      if (next === "on" || next === "off") {
+        void appLock.answer(next === "on", {
+          message: t("lock.prompt"),
+          cancel: t("common.cancel"),
+        });
+      }
+    },
     [t],
   );
-  const handleLock = useCallback((next: string) => {
-    if (next === "on" || next === "off") void appLock.answer(next === "on");
-  }, []);
   const handleLanguage = useCallback((next: string) => {
     const preference: LanguagePreference | null = next === "system" || isLocale(next) ? next : null;
     if (preference !== null) void language.set(preference);

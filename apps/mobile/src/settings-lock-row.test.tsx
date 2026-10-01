@@ -30,21 +30,6 @@ const device = vi.hoisted(() => ({ disk: null as string | null }));
 vi.mock("./platform", async (importOriginal) => {
   const original = await importOriginal<typeof import("./platform")>();
   const { createAppLock } = await import("@waltning/client/security/app-lock");
-  const { createDevicePreference } = await import(
-    "@waltning/client/device/create-device-preference"
-  );
-  const appLockPreference = createDevicePreference<boolean>(
-    {
-      get: async () => device.disk,
-      set: async (value) => {
-        device.disk = value;
-      },
-    },
-    {
-      parse: (raw) => (raw === "on" ? true : raw === "off" ? false : null),
-      serialize: (value) => (value ? "on" : "off"),
-    },
-  );
   const appLock = createAppLock({
     authenticator: {
       enrolment: async () => "biometric",
@@ -53,9 +38,15 @@ vi.mock("./platform", async (importOriginal) => {
     },
     subscribeAppState: () => () => {},
     now: () => 0,
-    preference: appLockPreference,
+    choice: {
+      read: async () => device.disk,
+      write: async (enabled) => {
+        device.disk = enabled ? "on" : "off";
+      },
+      hasHistory: async () => false,
+    },
   });
-  return { ...original, appLock, appLockPreference };
+  return { ...original, appLock };
 });
 
 import { appLock } from "./platform";

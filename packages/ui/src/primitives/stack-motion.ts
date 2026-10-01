@@ -7,6 +7,10 @@
  * for it. Under the OS's Reduce motion setting the answer is no transition
  * at all: `animation: "none"`, the same end state produced immediately.
  *
+ * **The web build does not honour these options** — its stack mounts the next
+ * screen with no transition — so `apps/mobile/src/screen-fade.tsx` gives the
+ * web the same fade, from the same constant.
+ *
  * Returned as a plain object so the two branches are testable without a
  * navigator. Sheets and modals keep their own motion — they are not routes of
  * this stack.

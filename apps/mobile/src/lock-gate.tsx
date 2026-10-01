@@ -41,7 +41,7 @@ import { useAppLock } from "@waltning/client/security/use-app-lock";
 import { useT } from "@waltning/ui/i18n/provider";
 import { LockedScreen } from "@waltning/ui/states/locked-screen";
 import { makeStyles } from "@waltning/ui/theme/styles";
-import { type ReactNode, useCallback, useEffect, useRef } from "react";
+import { type ReactNode, useCallback, useEffect, useMemo, useRef } from "react";
 import { Modal, View } from "react-native";
 
 export type LockGateProps = { lock: AppLockController; children: ReactNode };
@@ -74,8 +74,9 @@ export function LockGate({ lock, children }: LockGateProps) {
     unlock();
   }, [state, unlock]);
 
-  const yes = useCallback(() => void lock.answer(true), [lock]);
-  const notNow = useCallback(() => void lock.answer(false), [lock]);
+  const prompt = useMemo(() => ({ message: t("lock.prompt"), cancel: t("common.cancel") }), [t]);
+  const yes = useCallback(() => void lock.answer(true, prompt), [lock, prompt]);
+  const notNow = useCallback(() => void lock.answer(false, prompt), [lock, prompt]);
 
   if (state.status === "checking") return <View style={styles.blank} />;
   if (state.status === "asking") {
