@@ -22,7 +22,7 @@
  */
 
 import * as money from "@waltning/core/money";
-import { and, asc, eq, inArray, isNull, ne } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull, ne } from "drizzle-orm";
 import { type ReplicaTx, ledgerSchema as schema } from "../schema-map.ts";
 
 const { currencies, openingDebts, transactions } = schema;
@@ -147,14 +147,18 @@ export function planOpeningSplit(
 export type LinkChange = { id: string; was: string | null; now: string | null };
 
 /**
- * **Re-plans every repayment linked to any of `fromIds` against `target`**
- * (§6.6) — what must happen whenever the opening debt itself changes under its
- * repayments: two people's debts are combined by a merge, or a debt is recorded
- * again (a smaller figure, the other way round). The links are not copied, they
- * are re-decided by the rule a new settlement meets: oldest first, only a
- * repayment that reduces the opening debt's own direction, only up to what is
- * open. Whatever does not fit is unlinked, and a repayment that would cross the
- * end is unlinked whole rather than split (a re-plan never writes new rows).
+ * **Re-plans the repayments of an existing debt against `target`** (§6.6) —
+ * what must happen whenever the opening debt itself changes under them: two
+ * people's debts are combined by a merge, or a debt is recorded again (a
+ * smaller figure, a larger one, the other way round). The links are not copied,
+ * they are re-decided by the rule a new settlement meets, **over every
+ * candidate, linked or not**: the rows linked to any of `fromIds`, and every
+ * live settlement (a debt-role row stamped with the discharge it made) of the
+ * target's person and currency that reduces its direction. Oldest first, a
+ * repayment is linked whole if it fits in what is open; whatever does not fit
+ * is unlinked, and a repayment that would cross the end stays whole rather than
+ * being split (a re-plan never writes new rows). So raising a debt links the
+ * repayments that now fit, and lowering it unlinks those past its end.
  * `target: null` unlinks them all — the debt is gone.
  *
  * Returns every row whose link changed, with the link it had, so a merge can
@@ -165,14 +169,39 @@ export function replanOpeningLinks(
   fromIds: readonly OpeningLink["id"][],
   target: OpeningLink["id"] | null,
 ): readonly LinkChange[] {
-  const rows = tx
+  const debt =
+    target === null
+      ? undefined
+      : tx.select().from(openingDebts).where(eq(openingDebts.id, target)).get();
+
+  const linked = tx
     .select()
     .from(transactions)
     .where(
       and(inArray(transactions.settlesOpeningDebtId, [...fromIds]), isNull(transactions.deletedAt)),
     )
-    .orderBy(asc(transactions.date), asc(transactions.id))
     .all();
+  const scoped =
+    debt === undefined
+      ? []
+      : tx
+          .select()
+          .from(transactions)
+          .where(
+            and(
+              isNull(transactions.deletedAt),
+              eq(transactions.obligationRole, "debt"),
+              eq(transactions.obligationCounterpartyId, debt.counterpartyId),
+              eq(transactions.debtCurrency, debt.currency),
+              eq(transactions.type, debt.direction === "theyOwe" ? "income" : "expense"),
+              isNotNull(transactions.debtAmount),
+            ),
+          )
+          .all();
+  const byId = new Map([...linked, ...scoped].map((row) => [row.id, row] as const));
+  const rows = [...byId.values()].sort(
+    (a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id),
+  );
   if (rows.length === 0) return [];
 
   tx.update(transactions)

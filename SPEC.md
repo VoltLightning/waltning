@@ -1748,7 +1748,12 @@ somebody else. The merge record keeps every link it changed, with the link it
 had, and unmerge puts each back where nobody has changed it since. **Recording
 an existing debt again re-plans its repayments the same way** — a smaller
 figure unlinks those past its end, the other direction unlinks those that no
-longer reduce it. The loser is
+longer reduce it, and a larger figure — or a merge that leaves more open —
+links the repayments that now fit, oldest first, whole (a re-plan considers every
+live repayment of that person and currency that reduces the debt's direction,
+linked or not, and never splits one). **An unlinked repayment is an ordinary
+repayment: it counts as income or spending in the period figures like any
+other.** The loser is
 archived only once it holds no live opening debt, and the merge record keeps
 what the winner's row held before **and what the merge left it**, so
 `unmerge_counterparties` restores exactly that — and only while the winner's row

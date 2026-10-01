@@ -1376,3 +1376,87 @@ describe("re-planning links when the existing debt changes under them", () => {
     expect(readOpeningDebts(s.ledger.replica.db, NINA)[0]?.repayments).toHaveLength(0);
   });
 });
+
+describe("raising an existing debt links the repayments that now fit", () => {
+  const crossedHundredFifty = () => {
+    recordOpening({ amount: "100" });
+    debtRow({ amountOriginal: money.toMoney("50") });
+    return settle({
+      amount: "150",
+      discharges: { currency: "PLN", amount: "150" },
+      spillId: nextId(),
+    }).row;
+  };
+  const inflow = () =>
+    readIncomeVsExpense(s.ledger.replica.db, [{ ...SEPTEMBER, label: "Sep" }], "mine").reduce(
+      (sum, row) => sum + Number(row.income),
+      0,
+    );
+
+  it("re-record 100 to 200 after a crossing: the ordinary half links and the period inflow drops to 0", () => {
+    const crossed = crossedHundredFifty();
+    const spill = crossed.spill;
+    expect(linkOf(spill?.id ?? "")).toBeNull();
+    expect(inflow()).toBe(50);
+
+    recordOpening({ amount: "200" });
+
+    expect(linkOf(spill?.id ?? "")).not.toBeNull();
+    expect(inflow()).toBe(0);
+  });
+
+  it("a merge that leaves more open links them too", () => {
+    const crossed = crossedHundredFifty();
+    recordOpening({ counterpartyId: MAREK, amount: "100" });
+
+    write(mergeCounterpartiesExecutor, {
+      mergeId: id<"counterpartyMerges">(nextId()),
+      winnerId: NINA,
+      loserId: MAREK,
+      movedTransactionIds: [],
+    });
+
+    expect(linkOf(crossed.spill?.id ?? "")).not.toBeNull();
+  });
+});
+
+describe("unmerge of a record in the previous format", () => {
+  it("treats a missing `links` as the old `relinked`: the loser's repayments go back to its row", () => {
+    recordOpening({ amount: "100" });
+    recordOpening({ counterpartyId: MAREK, amount: "100" });
+    const paidMarek = settle({
+      counterpartyId: MAREK,
+      amount: "30",
+      discharges: { currency: "PLN", amount: "30" },
+    });
+    const merged = write(mergeCounterpartiesExecutor, {
+      mergeId: id<"counterpartyMerges">(nextId()),
+      winnerId: NINA,
+      loserId: MAREK,
+      movedTransactionIds: [paidMarek.row.row.id],
+    });
+    // Rewrite the record as the earlier build wrote it: `relinked`, no `links`.
+    const old = merged.row.merge.movedOpeningDebts.map(
+      ({ links: _links, ...rest }: Record<string, unknown>) => ({
+        ...rest,
+        relinked: [paidMarek.row.row.id],
+      }),
+    );
+    s.ledger.replica.db
+      .update(schema.counterpartyMerges)
+      .set({ movedOpeningDebts: old as never })
+      .where(eq(schema.counterpartyMerges.id, merged.row.merge.id))
+      .run();
+    // The earlier build had pointed the repayment at the winner's row.
+    s.ledger.replica.db
+      .update(transactions)
+      .set({ settlesOpeningDebtId: readOpeningDebts(s.ledger.replica.db, NINA)[0]?.id ?? null })
+      .where(eq(transactions.id, paidMarek.row.row.id))
+      .run();
+
+    expect(() =>
+      write(unmergeCounterpartiesExecutor, { mergeId: merged.row.merge.id }),
+    ).not.toThrow();
+    expect(linkOf(paidMarek.row.row.id)).toBe(readOpeningDebts(s.ledger.replica.db, MAREK)[0]?.id);
+  });
+});

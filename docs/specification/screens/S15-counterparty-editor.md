@@ -133,7 +133,9 @@ warning while someone is still typing *Ann* is noise.
    restores exactly them — anything changed since is left as it is. The
    repayments linked to either debt are **re-planned** against the combined one
    (oldest first, only in its direction, only up to what is open; the rest are
-   unlinked), and unmerge puts their links back.
+   unlinked, and a merge that leaves more open links those that now fit), and
+   unmerge puts their links back. An unlinked repayment counts as income or
+   spending like any other.
 
    This follows the system's existing instinct — archive, never delete, because
    history references it (§6.9) — and it is what makes `MatchWarning`'s *same

@@ -207,8 +207,19 @@ export function unmergeOpeningDebts(
       .set({ deletedAt: null, updatedAt: now })
       .where(eq(openingDebts.id, id<"openingDebts">(entry.id)))
       .run();
+    // A record from an earlier build has `relinked` (the loser's repayments,
+    // pointed at the winner's row) and no `links`: it is undone the way it was
+    // made, each of those repayments back to the loser's row.
+    const legacy = (entry as { relinked?: readonly string[] }).relinked;
+    const changes =
+      (entry as { links?: typeof entry.links }).links ??
+      (legacy ?? []).map((repaymentId) => ({
+        id: repaymentId,
+        was: entry.id as string | null,
+        now: entry.into as string | null,
+      }));
     // Each repayment goes back to the link it had, only where nobody changed it since.
-    for (const change of entry.links) {
+    for (const change of changes) {
       tx.update(transactions)
         .set({ settlesOpeningDebtId: change.was === null ? null : id<"openingDebts">(change.was) })
         .where(
