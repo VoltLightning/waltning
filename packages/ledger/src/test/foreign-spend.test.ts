@@ -27,6 +27,8 @@ import { readAccounts } from "../accounts/read-accounts.ts";
 import { BACKUP_FORMAT, parseBackup } from "../backup/document.ts";
 import { exportLedger } from "../backup/export.ts";
 import { restoreBackup } from "../backup/restore.ts";
+import { createCounterpartyExecutor } from "../counterparties/create-counterparty.executor.ts";
+import { settleDebtExecutor } from "../counterparties/settle-debt.executor.ts";
 import { archiveCurrencyExecutor } from "../currencies/archive-currency.executor.ts";
 import { updateCurrencyExecutor } from "../currencies/update-currency.executor.ts";
 import { ledgerRegistry } from "../registry.ts";
@@ -336,6 +338,85 @@ describe("supersede_transaction", () => {
       .get();
     expect(replaced?.paidAmount).toBe("351.00000000");
     expect(replaced?.paidCurrency).toBe(CZK);
+  });
+});
+
+describe("a repayment has no paid side (§7.8)", () => {
+  const NINA = id<"counterparties">("00000000-0000-4000-8000-0000000000c1");
+  const settle = (supersedes: boolean) => {
+    writeLocally(stores.ledger, {
+      executor: createCounterpartyExecutor,
+      registry: ledgerRegistry,
+      capture,
+      input: { id: NINA, name: "Nina", kind: "person" },
+    });
+    return writeLocally(stores.ledger, {
+      executor: settleDebtExecutor,
+      registry: ledgerRegistry,
+      capture,
+      input: {
+        id: TXN_2,
+        counterpartyId: NINA,
+        accountId: ACCOUNT,
+        date: "2026-09-02",
+        amount: "14.02",
+        currency: EUR,
+        type: "expense",
+        discharges: { currency: EUR, amount: "14.02" },
+        ...(supersedes ? { supersedesId: TXN, supersedesVersion: readRow()?.version ?? 0 } : {}),
+      },
+    });
+  };
+
+  it("refuses to re-file a foreign-paid row as a repayment — the pair would be dropped", () => {
+    create(paid);
+    expect(() => settle(true)).toThrow(/take the paid currency off first/);
+    expect(readRow()?.deletedAt, "the original is intact").toBeNull();
+  });
+
+  it("refuses update_transaction putting a paid pair on a settlement", () => {
+    create({});
+    // A row settle_debt wrote carries its discharge; written directly here to isolate update_transaction.
+    stores.ledger.replica.db
+      .update(transactions)
+      .set({ debtCurrency: EUR, debtAmount: money.toMoney("14.02") })
+      .where(eq(transactions.id, TXN))
+      .run();
+    expect(() => update({ paidAmount: "350", paidCurrency: CZK })).toThrow(
+      /update_transaction: a repayment has no paid side/,
+    );
+  });
+
+  it("is held by the replica's trigger when the executor is bypassed", () => {
+    create({});
+    const db = stores.ledger.replica.db;
+    db.update(transactions)
+      .set({ debtCurrency: EUR, debtAmount: money.toMoney("14.02") })
+      .where(eq(transactions.id, TXN))
+      .run();
+    expect(() =>
+      db
+        .update(transactions)
+        .set({ paidAmount: money.toMoney("350"), paidCurrency: CZK })
+        .where(eq(transactions.id, TXN))
+        .run(),
+    ).toThrow(/transactions_paid_not_settlement/);
+    // …and from the other side: a discharge onto a row that has a paid pair.
+    db.update(transactions)
+      .set({ debtCurrency: null, debtAmount: null })
+      .where(eq(transactions.id, TXN))
+      .run();
+    db.update(transactions)
+      .set({ paidAmount: money.toMoney("350"), paidCurrency: CZK })
+      .where(eq(transactions.id, TXN))
+      .run();
+    expect(() =>
+      db
+        .update(transactions)
+        .set({ debtCurrency: EUR, debtAmount: money.toMoney("14.02") })
+        .where(eq(transactions.id, TXN))
+        .run(),
+    ).toThrow(/transactions_paid_not_settlement/);
   });
 });
 

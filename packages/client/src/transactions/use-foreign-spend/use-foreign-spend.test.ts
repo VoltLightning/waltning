@@ -80,6 +80,20 @@ it("stops following once it has been typed over — the bank statement is the tr
   expect(result.current.chargedRaw).toBe("14,02");
 });
 
+it("drops what was typed when the account's currency changes — 14,02 EUR is no figure in PLN", () => {
+  const read = ledger(answer("0.2", accountingDate("2026-09-01")));
+  const { result, rerender } = draw(read, { amount: "350", date: "2026-09-01" });
+  act(() => result.current.setPaidCurrency("CZK"));
+  act(() => result.current.setChargedRaw("14,02"));
+  rerender({
+    amount: "350",
+    date: "2026-09-01",
+    account: { currency: currencyCode("PLN"), decimals: 2 },
+  });
+  expect(result.current.chargedEdited).toBe(false);
+  expect(result.current.chargedRaw, "re-priced for the new account").toBe("70,00");
+});
+
 it("drops the edit when another currency is chosen — that is a new question", () => {
   const read = ledger(answer("0.04", accountingDate("2026-09-01")));
   const { result } = draw(read, { amount: "350", date: "2026-09-01" });

@@ -32,7 +32,7 @@ import { parseAmount } from "@waltning/ui/fx/amount-field";
 import { formatRate } from "@waltning/ui/fx/format-rate";
 import { drawnNamesOf } from "@waltning/ui/i18n/category-label";
 import { KNOWN_PATHS, resolveFieldErrorMessage } from "@waltning/ui/i18n/field-error-messages";
-import { decimalMark, weekdayLabel } from "@waltning/ui/i18n/locales";
+import { dayLabel, decimalMark, weekdayLabel } from "@waltning/ui/i18n/locales";
 import { useLocale, useT } from "@waltning/ui/i18n/provider";
 import { useCategoryLabel } from "@waltning/ui/i18n/use-category-label";
 import { Button } from "@waltning/ui/primitives/button";
@@ -446,7 +446,10 @@ export default function QuickAdd() {
     amount: enteredAmount,
     date: composerDate,
   });
-  const paidCurrency = intent?.settles === true ? null : foreignSpend.paidCurrency;
+  const paidCurrency = foreignSpend.paidCurrency;
+  // A repayment is `settle_debt`, which has no paid side: the amount would be read in the
+  // account's currency. Refused at Save, with the chip still there to go back to the account's own.
+  const repaymentInForeign = intent?.settles === true && paidCurrency !== null;
   const chargedAmount = paidCurrency === null ? null : parseAmount(foreignSpend.chargedRaw);
   const paidChoices = useMemo(
     () => snapshot.currencies.map((currency) => ({ code: currency.code, name: currency.name })),
@@ -457,24 +460,28 @@ export default function QuickAdd() {
       ? undefined
       : foreignSpend.rate === null
         ? t("transactions.chargedNoRate", { paid: paidCurrency })
-        : t("transactions.chargedRate", {
-            paid: paidCurrency,
-            rate: formatRate(foreignSpend.rate.rate, locale),
-            charged: selectedComposerAccount.symbol ?? selectedComposerAccount.currency,
-          });
-  const foreign: QuickAddComposerForeign | undefined =
-    intent?.settles === true
-      ? undefined
-      : {
-          currencies: paidChoices,
-          paidCurrency,
-          onPaidCurrencyChange: foreignSpend.setPaidCurrency,
-          paidDecimals:
-            snapshot.currencies.find((currency) => currency.code === paidCurrency)?.decimals ?? 2,
-          chargedRaw: foreignSpend.chargedRaw,
-          onChargedChange: foreignSpend.setChargedRaw,
-          hint: foreignHint,
-        };
+        : t(
+            // A leg carried forward from an earlier day says so, rather than "this day".
+            foreignSpend.rate.asOf === composerDate
+              ? "transactions.chargedRate"
+              : "transactions.chargedRateCarried",
+            {
+              paid: paidCurrency,
+              rate: formatRate(foreignSpend.rate.rate, locale),
+              charged: selectedComposerAccount.symbol ?? selectedComposerAccount.currency,
+              date: dayLabel(foreignSpend.rate.asOf, locale),
+            },
+          );
+  const foreign: QuickAddComposerForeign = {
+    currencies: paidChoices,
+    paidCurrency,
+    onPaidCurrencyChange: foreignSpend.setPaidCurrency,
+    paidDecimals:
+      snapshot.currencies.find((currency) => currency.code === paidCurrency)?.decimals ?? 2,
+    chargedRaw: foreignSpend.chargedRaw,
+    onChargedChange: foreignSpend.setChargedRaw,
+    hint: foreignHint,
+  };
   const repaymentProblem =
     repayment?.kind === "no-debt" && pickedPerson !== undefined
       ? t("transactions.nothingToSettle", { name: pickedPerson.name })
@@ -740,7 +747,9 @@ export default function QuickAdd() {
   // Drawn order. Each is what used to keep Save disabled, now said on the
   // field it is about when Save is pressed.
   const composerCheck = useSubmitCheck<QuickAddCheckField>({
-    amount: parseAmount(composerAmountRaw) === null && t("common.required"),
+    amount:
+      (parseAmount(composerAmountRaw) === null && t("common.required")) ||
+      (repaymentInForeign && t("transactions.paidNotForRepayment")),
     // §7.8 — what the account was charged is every balance's figure, so it is
     // required whenever the amount is in another currency.
     charged: paidCurrency !== null && chargedAmount === null && t("common.required"),
@@ -967,14 +976,18 @@ export default function QuickAdd() {
   const deskForeign = useMemo<QuickAddFormForeign>(
     () => ({
       currencies: paidChoices,
-      readCrossRate: ({ from, to, date }) =>
-        isAccountingDate(date)
-          ? (ledger.readCrossRate({
-              from: money.currencyCode(from),
-              to: money.currencyCode(to),
-              date: accountingDate(date),
-            })?.rate ?? null)
-          : null,
+      readCrossRate: ({ from, to, date }) => {
+        if (!isAccountingDate(date)) return null;
+        const found = ledger.readCrossRate({
+          from: money.currencyCode(from),
+          to: money.currencyCode(to),
+          date: accountingDate(date),
+        });
+        if (found === null) return null;
+        // The staler leg is the one the figure is only as good as.
+        const { from: a, to: b } = found.legs;
+        return { rate: found.rate, asOf: a.asOf < b.asOf ? a.asOf : b.asOf };
+      },
       decimalsOf: (currency) =>
         snapshot.currencies.find((candidate) => candidate.code === currency)?.decimals ?? 2,
     }),
@@ -1229,7 +1242,7 @@ export default function QuickAdd() {
             debtHint={debtHint}
             {...(fieldErrors === undefined ? {} : { fieldErrors })}
             check={composerCheck}
-            {...(foreign === undefined ? {} : { foreign })}
+            foreign={foreign}
           />
         </View>
       </GroundPanel>

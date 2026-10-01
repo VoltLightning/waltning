@@ -170,6 +170,14 @@ const CHECKS: Record<string, () => Promise<unknown>> = {
   // …on an income or an expense only (an adjustment is a balance correction).
   transactions_paid_type: () =>
     insertRow({ type: "adjustment", paid_amount: "350.00", paid_currency: OTHER_CURRENCY.code }),
+  // …never on a settlement — a repayment's discharge is in the debt's currency.
+  transactions_paid_not_settlement: () =>
+    insertRow({
+      paid_amount: "350.00",
+      paid_currency: OTHER_CURRENCY.code,
+      debt_currency: CURRENCY.code,
+      debt_amount: "10.00",
+    }),
   // …a positive figure…
   transactions_paid_amount_positive: () =>
     insertRow({ paid_amount: "0.00", paid_currency: OTHER_CURRENCY.code }),

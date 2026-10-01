@@ -607,6 +607,12 @@ export const transactions = pgTable("transactions", transactionsColumns(), (t) =
     "transactions_paid_type",
     sql`${t.paidAmount} is null or ${t.type} in ('income', 'expense')`,
   ),
+  // …and never on a settlement: a repayment's discharge (`debt_amount`) is in the debt's
+  // currency, and a paid side beside it would be a third figure for one payment.
+  check(
+    "transactions_paid_not_settlement",
+    sql`${t.paidAmount} is null or ${t.debtAmount} is null`,
+  ),
   check("transactions_paid_amount_positive", sql`${t.paidAmount} is null or ${t.paidAmount} > 0`),
   check("transactions_paid_amount_ceiling", below(t.paidAmount)),
   // No amount a transaction holds reaches the ceiling — the four columns

@@ -200,6 +200,13 @@ function patchTransaction(input: UpdateTransactionInput, tx: ReplicaTx): LocalTr
     paidAmount: "paidAmount" in input.patch ? input.patch.paidAmount : current.paidAmount,
     paidCurrency: "paidCurrency" in input.patch ? input.patch.paidCurrency : current.paidCurrency,
   };
+  // §7.8 — a repayment (a row `settle_debt` wrote, carrying its discharge) has no paid
+  // side: the discharge is in the debt's currency and the pair would be a third figure.
+  if (current.debtAmount !== null && merged.paidAmount != null) {
+    throw new LocalRefusal(
+      "update_transaction: a repayment has no paid side — it is recorded in the account's currency (transactions_paid_not_settlement)",
+    );
+  }
   const shapeIssues = transactionShapeIssues(merged);
   if (shapeIssues.length > 0) {
     throw new LocalRefusal(

@@ -211,6 +211,9 @@ export const de: Messages = {
     paidMissingAmount: "Bitte geben Sie auch den Betrag an.",
     paidNotForRepayment:
       "Eine Rückzahlung wird in der Währung des Kontos erfasst – wählen Sie die Währung des Kontos.",
+    chargedRateCarried: "1 {{paid}} = {{rate}} {{charged}} nach dem Kurs vom {{date}}",
+    paidNotForRepaymentDetail:
+      "Eine Rückzahlung wird in der Währung des Kontos erfasst – entfernen Sie zuerst die Zahlungswährung dieses Eintrags.",
     chooseCategory: "Wofür war es?",
     needsRate: "{{currency}} braucht einen Wechselkurs, bevor darin gebucht werden kann.",
     needsRateAction: "Kurs für {{currency}} setzen",

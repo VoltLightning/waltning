@@ -345,7 +345,8 @@ describe("QuickAdd — the phone path (Dock + QuickAddComposer)", () => {
       // 350 CZK at 0.2 — pre-filled on the account's own line, in the account's currency.
       const charged = screen.getByLabelText("Charged to Cash · PLN") as HTMLInputElement;
       expect(charged.value).toBe("70.00");
-      expect(screen.getByText("1 CZK = 0.2000 zł on this day")).toBeDefined();
+      // The rate is from 3 September and the entry is dated today: it says so, not "this day".
+      expect(screen.getByText(/^1 CZK = 0\.2000 zł at the rate of/)).toBeDefined();
 
       fireEvent.change(charged, { target: { value: "69,50" } });
       fireEvent.click(screen.getByRole("button", { name: "Save expense" }));

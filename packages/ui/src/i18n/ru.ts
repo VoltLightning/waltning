@@ -210,6 +210,9 @@ export const ru: Messages = {
     paidMissingCurrency: "Укажите также валюту.",
     paidMissingAmount: "Укажите также сумму.",
     paidNotForRepayment: "Возврат долга записывается в валюте счёта — выберите валюту счёта.",
+    chargedRateCarried: "1 {{paid}} = {{rate}} {{charged}} по курсу на {{date}}",
+    paidNotForRepaymentDetail:
+      "Возврат долга записывается в валюте счёта — сначала уберите валюту платежа у этой записи.",
     chooseCategory: "На что?",
     needsRate: "Для {{currency}} нужен курс, прежде чем записывать в неё операции.",
     needsRateAction: "Задать курс {{currency}}",

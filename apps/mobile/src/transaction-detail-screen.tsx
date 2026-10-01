@@ -365,6 +365,19 @@ export default function TransactionDetail() {
       const intoCategory = snapshot.categories.find((category) => category.id === patch.categoryId);
       const repaymentIntent = debtIntentOf(intoCategory?.externalId);
       if (repaymentIntent?.settles && patch.categoryId) {
+        // §7.8 — a repayment has no paid side, and the settlement replaces this row:
+        // a paid pair would be dropped without a word, so it is taken off first.
+        const keepsPaid =
+          "paidCurrency" in patch ? patch.paidCurrency != null : detail.paidCurrency !== null;
+        if (keepsPaid) {
+          setFieldsErrors(
+            mapFieldErrors(
+              [{ path: "", message: t("transactions.paidNotForRepaymentDetail") }],
+              [],
+            ),
+          );
+          return;
+        }
         const person = patch.obligationCounterpartyId ?? detail.obligationCounterpartyId;
         if (person === null || person === undefined) return;
         const amount = patch.amountOriginal ?? money.abs(detail.amount);

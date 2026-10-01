@@ -4,6 +4,7 @@ ALTER TABLE "transactions" ADD CONSTRAINT "transactions_paid_currency_currencies
 ALTER TABLE "transactions" ADD CONSTRAINT "transactions_paid_shape" CHECK (("transactions"."paid_amount" is null) = ("transactions"."paid_currency" is null));--> statement-breakpoint
 ALTER TABLE "transactions" ADD CONSTRAINT "transactions_paid_distinct" CHECK ("transactions"."paid_currency" is null or "transactions"."paid_currency" <> "transactions"."currency");--> statement-breakpoint
 ALTER TABLE "transactions" ADD CONSTRAINT "transactions_paid_type" CHECK ("transactions"."paid_amount" is null or "transactions"."type" in ('income', 'expense'));--> statement-breakpoint
+ALTER TABLE "transactions" ADD CONSTRAINT "transactions_paid_not_settlement" CHECK ("transactions"."paid_amount" is null or "transactions"."debt_amount" is null);--> statement-breakpoint
 ALTER TABLE "transactions" ADD CONSTRAINT "transactions_paid_amount_positive" CHECK ("transactions"."paid_amount" is null or "transactions"."paid_amount" > 0);--> statement-breakpoint
 ALTER TABLE "transactions" ADD CONSTRAINT "transactions_paid_amount_ceiling" CHECK (("transactions"."paid_amount" is null or abs("transactions"."paid_amount") < 1000000000));
 --> statement-breakpoint

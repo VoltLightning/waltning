@@ -895,7 +895,7 @@ BEGIN
 	SELECT RAISE(ABORT, '${message} (transactions_${rule})');
 END`,
   `CREATE TRIGGER IF NOT EXISTS \`transactions_${rule}_update\`
-BEFORE UPDATE OF \`paid_amount\`, \`paid_currency\`, \`currency\`, \`type\` ON \`transactions\`
+BEFORE UPDATE OF \`paid_amount\`, \`paid_currency\`, \`currency\`, \`type\`, \`debt_amount\` ON \`transactions\`
 FOR EACH ROW WHEN ${when}
 BEGIN
 	SELECT RAISE(ABORT, '${message} (transactions_${rule})');
@@ -917,6 +917,11 @@ const PAID_TRIGGERS: readonly string[] = [
     "paid_type",
     "NEW.`paid_amount` IS NOT NULL AND NEW.`type` NOT IN ('income', 'expense')",
     "only an income or an expense has a paid side",
+  ),
+  ...paidTriggers(
+    "paid_not_settlement",
+    "NEW.`paid_amount` IS NOT NULL AND NEW.`debt_amount` IS NOT NULL",
+    "a repayment has no paid side",
   ),
   ...paidTriggers(
     "paid_amount_positive",

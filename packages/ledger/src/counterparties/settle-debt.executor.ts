@@ -352,6 +352,13 @@ function replaceOriginal(id: Id<"transactions">, version: number, tx: ReplicaTx)
       `settle_debt: ${id} is already a settlement — it cannot be replaced by one`,
     );
   }
+  // §7.8 — a repayment has no paid side, and the replacement does not carry one:
+  // taking the row's paid pair across would drop it silently.
+  if (old.paidAmount !== null) {
+    throw new LocalRefusal(
+      `settle_debt: ${id} was paid in another currency — take the paid currency off first (a repayment has no paid side)`,
+    );
+  }
   const [deleted] = tx
     .update(schema.transactions)
     .set({ deletedAt: new Date(), version: old.version + 1, updatedAt: new Date() })

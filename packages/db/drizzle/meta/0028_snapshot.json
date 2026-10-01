@@ -1,5 +1,5 @@
 {
-  "id": "37b45f5a-20e4-4096-9f6d-13050090335b",
+  "id": "52b5bdbe-b4ed-4142-84ff-d596d23cbb5e",
   "prevId": "4fe73e57-9bb4-4c02-ad00-e846933de05e",
   "version": "7",
   "dialect": "postgresql",
@@ -4570,6 +4570,10 @@
         "transactions_paid_type": {
           "name": "transactions_paid_type",
           "value": "\"transactions\".\"paid_amount\" is null or \"transactions\".\"type\" in ('income', 'expense')"
+        },
+        "transactions_paid_not_settlement": {
+          "name": "transactions_paid_not_settlement",
+          "value": "\"transactions\".\"paid_amount\" is null or \"transactions\".\"debt_amount\" is null"
         },
         "transactions_paid_amount_positive": {
           "name": "transactions_paid_amount_positive",

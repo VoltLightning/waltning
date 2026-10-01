@@ -108,7 +108,10 @@ paid side offers the row empty when there is another currency to choose, and the
 row's first option, the account's own currency, takes the pair off (both to
 `null`: one of the two is a half pair the contract refuses). The pair is edited
 as one — a currency with no figure is not a change and Save is not offered — and
-a transfer or an adjustment has no *Paid* row at all. Editing the charged figure
+a transfer or an adjustment has no *Paid* row at all. Filing an entry that has a paid side
+as a repayment is refused — *take the paid currency off this entry first* — because a
+repayment (`settle_debt`) has no paid side and the settlement replacing the row would drop
+it; and a repayment row has no *Paid* row to put one on. Editing the charged figure
 leaves what was paid alone, and the reverse.
 
 **The header is the category's own colour.** The band is `categoryTintFor`'s

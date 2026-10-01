@@ -460,7 +460,7 @@ describe("an amount in another currency than the account's", () => {
       { code: "EUR", name: "Euro" },
       { code: "CZK", name: "Czech koruna" },
     ],
-    readCrossRate: () => (rate === null ? null : crossRate(rate)),
+    readCrossRate: () => (rate === null ? null : { rate: crossRate(rate), asOf: TODAY }),
     decimalsOf: () => 2,
   });
   const pickCzk = () => {
@@ -524,6 +524,42 @@ describe("an amount in another currency than the account's", () => {
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
     expect(onSave).not.toHaveBeenCalled();
     expect(screen.getByText("Required")).toBeDefined();
+  });
+
+  it("drops a charged figure typed for one account when the account's currency changes", () => {
+    const pln = {
+      id: "account-pln",
+      name: "Card · PLN",
+      currency: currencyCode("PLN"),
+      capturable: true,
+    };
+    const props = { accounts: [...eurAccounts, pln], foreign: foreign("0.040057") };
+    const view = renderForm({ ...props, accountId: "account-eur" });
+    fireEvent.change(screen.getByLabelText("Amount"), { target: { value: "350" } });
+    pickCzk();
+    fireEvent.change(screen.getByLabelText("Charged to Card · EUR"), {
+      target: { value: "14.10" },
+    });
+    view.rerender(<QuickAddForm {...BASE_PROPS} {...props} accountId="account-pln" />);
+    // Re-priced for the new account — 14.10 EUR is no figure in PLN.
+    expect((screen.getByLabelText("Charged to Card · PLN") as HTMLInputElement).value).toBe(
+      "14.02",
+    );
+  });
+
+  it("says a rate carried from an earlier day is that day's, not this one's", () => {
+    renderForm({
+      accounts: eurAccounts,
+      accountId: "account-eur",
+      foreign: {
+        ...foreign("0.040057"),
+        readCrossRate: () => ({ rate: crossRate("0.040057"), asOf: "2026-08-28" }),
+      },
+    });
+    fireEvent.change(screen.getByLabelText("Amount"), { target: { value: "350" } });
+    pickCzk();
+    expect(screen.queryByText(/on this day/)).toBeNull();
+    expect(screen.getByText(/at the rate of/)).toBeDefined();
   });
 
   it("is the account's own currency again with the first option", () => {

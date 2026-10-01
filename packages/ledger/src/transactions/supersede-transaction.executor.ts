@@ -164,6 +164,8 @@ function supersede(input: SupersedeTransactionInput, tx: ReplicaTx): LocalTransa
       old.settlesOpeningDebtId === null ||
       old.debtCurrency === null ||
       old.debtAmount === null ||
+      // §7.8 — a row with a paid side cannot also carry a discharge.
+      inserted.paidAmount !== null ||
       inserted.obligationRole !== "debt" ||
       inserted.obligationCounterpartyId === null ||
       inserted.obligationCounterpartyId !== old.obligationCounterpartyId ||
@@ -258,7 +260,7 @@ function replacePair(
   // not divisible the same way: the figure the card was charged is what splits,
   // the foreign figure is one number on one receipt. Refused rather than
   // written onto both halves or dropped.
-  if (plan.length > 1 && replacement.paidAmount !== undefined) {
+  if ((plan.length > 1 || eligible) && replacement.paidAmount !== undefined) {
     throw new LocalRefusal(
       "supersede_transaction: a payment made in another currency cannot be split against an existing debt — record it without the paid amount",
     );

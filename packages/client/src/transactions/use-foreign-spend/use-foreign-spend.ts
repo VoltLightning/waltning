@@ -5,7 +5,7 @@
  * and left editable** — the bank statement is the truth, and the rate is only
  * the first guess at it.
  *
- * **State here, arithmetic in `convertAmountRaw`, the rate from the ledger.**
+ * **State here, arithmetic in `money.chargedFor`, the rate from the ledger.**
  * The screen owns what the person typed; this owns the two things that follow
  * from it — which currency the amount is in, and what the account was charged:
  *
@@ -82,11 +82,16 @@ export function useForeignSpend({
   date,
 }: ForeignSpendInput): ForeignSpend {
   const [chosen, setChosen] = useState<CurrencyCode | null>(null);
-  const [typed, setTyped] = useState<string | null>(null);
+  // What was typed over the guess, and the account currency it was a figure in:
+  // 14,02 € is not a figure in zł, so it dies with a change of account currency.
+  const [typedIn, setTypedIn] = useState<{ raw: string; account: CurrencyCode | null } | null>(
+    null,
+  );
 
   const accountCurrency = account?.currency ?? null;
   const paidCurrency = chosen !== null && chosen !== accountCurrency ? chosen : null;
   const decimals = account?.decimals ?? 2;
+  const typed = typedIn !== null && typedIn.account === accountCurrency ? typedIn.raw : null;
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: `revision` says the ledger's rates may have moved; it is not read.
   const found = useMemo(() => {
@@ -114,9 +119,12 @@ export function useForeignSpend({
 
   const setPaidCurrency = useCallback((code: string | null) => {
     setChosen(code === null ? null : currencyCode(code));
-    setTyped(null);
+    setTypedIn(null);
   }, []);
-  const setChargedRaw = useCallback((raw: string) => setTyped(raw), []);
+  const setChargedRaw = useCallback(
+    (raw: string) => setTypedIn({ raw, account: accountCurrency }),
+    [accountCurrency],
+  );
 
   return {
     paidCurrency,

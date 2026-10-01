@@ -197,6 +197,33 @@ describe("a repayment is settle_debt, over the real ledger", () => {
     expect(balances().some((row) => row.currency === EUR)).toBe(false);
   });
 
+  it("refuses a repayment typed in a foreign currency rather than reading it in the account's (§7.8)", () => {
+    lend100();
+    fillRepayment("25");
+    fireEvent.click(
+      screen.getByRole("button", { name: "Currency of the amount: EUR. Change it." }),
+    );
+    fireEvent.click(screen.getByRole("radio", { name: /^PLN/ }));
+
+    fireEvent.click(screen.getByRole("button", { name: "Save income" }));
+
+    expect(router.dismissTo).not.toHaveBeenCalled();
+    expect(
+      screen.getAllByText(/A repayment is recorded in the account's currency/).length,
+    ).toBeGreaterThan(0);
+    expect(
+      balances().find((row) => row.counterpartyId === nina && row.currency === PLN)?.balance,
+    ).toBe("100.00000000");
+
+    // Back to the account's own currency, and it settles.
+    fireEvent.click(
+      screen.getByRole("button", { name: "Currency of the amount: PLN. Change it." }),
+    );
+    fireEvent.click(screen.getByRole("radio", { name: /^EUR/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Save income" }));
+    expect(router.dismissTo).toHaveBeenCalled();
+  });
+
   it("refuses a repayment from somebody who owes nothing, naming why, and writes nothing", () => {
     fillRepayment("25");
     expect(screen.getByText(/Nothing to settle with Nina/)).toBeDefined();

@@ -357,6 +357,9 @@ export const en = {
     paidMissingAmount: "Enter the amount as well.",
     paidNotForRepayment:
       "A repayment is recorded in the account's currency — choose the account's own currency.",
+    chargedRateCarried: "1 {{paid}} = {{rate}} {{charged}} at the rate of {{date}}",
+    paidNotForRepaymentDetail:
+      "A repayment is recorded in the account's currency — take the paid currency off this entry first.",
     chooseCategory: "What was it for?",
     /**
      * §14.6: holding a currency and capturing in it are separate capabilities.

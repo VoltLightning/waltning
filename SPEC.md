@@ -1271,6 +1271,7 @@ transactions_tax_fx_shape             (tax_fx_rate IS NULL) = (tax_fx_date IS NU
 transactions_paid_shape               (paid_amount IS NULL) = (paid_currency IS NULL)
 transactions_paid_distinct            paid_currency IS NULL OR paid_currency <> currency
 transactions_paid_type                paid_amount IS NULL OR type IN ('income','expense')
+transactions_paid_not_settlement      paid_amount IS NULL OR debt_amount IS NULL
 transactions_paid_amount_positive     paid_amount IS NULL OR paid_amount > 0
 categories_no_self_parent             id <> parent_id
 categories_earnings_income_only       kind = 'income' OR is_earnings = false
@@ -2947,7 +2948,11 @@ whatever the card was charged in), with the shrink of a currency's decimals
 refused under one (`WA018`). The executors and the contract refuse first, with a
 message naming the field; the CHECKs and triggers hold when they are wrong.
 
-A repayment is `settle_debt` (§6.6) and takes no paid side. A payment split
+A repayment is `settle_debt` (§6.6) and takes no paid side — and no row holds
+both: a row carrying a discharge (`debt_amount`) cannot carry a paid pair
+(`transactions_paid_not_settlement`), `update_transaction` refuses to patch one
+onto it, and re-filing a foreign-paid row as a repayment (S09) is refused until
+its paid currency is taken off, because the settlement would drop the pair. A payment split
 against an existing debt cannot carry one: a split divides the charged figure
 and the foreign figure is one number on one receipt.
 

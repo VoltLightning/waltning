@@ -1,11 +1,11 @@
-import { isAccountingDate } from "@waltning/core/date";
+import { accountingDate, isAccountingDate } from "@waltning/core/date";
 import type { CurrencyCode } from "@waltning/core/money";
 import * as money from "@waltning/core/money";
 import { useCallback, useMemo, useState } from "react";
 import { Text, View } from "react-native";
 import { formatRate } from "../../../fx/format-rate.ts";
 import { AmountField, parseAmount } from "../../../fx/molecules/amount-field/amount-field";
-import { decimalMark } from "../../../i18n/locales.ts";
+import { dayLabel, decimalMark } from "../../../i18n/locales.ts";
 import { useLocale, useT } from "../../../i18n/provider";
 import { Button } from "../../../primitives/atoms/button/button";
 import { Chip } from "../../../primitives/atoms/chip/chip";
@@ -91,7 +91,11 @@ export type QuickAddFormForeign = {
   /** Every currency the amount could be paid in. */
   currencies: readonly { code: string; name: string }[];
   /** The cross rate for one pair on one day, or `null` when none is held — nothing is priced at `1`. */
-  readCrossRate: (pair: { from: string; to: string; date: string }) => money.CrossRate | null;
+  readCrossRate: (pair: {
+    from: string;
+    to: string;
+    date: string;
+  }) => { rate: money.CrossRate; asOf: string } | null;
   /** An account currency's own fraction digits — the charged figure's rounding. */
   decimalsOf: (currency: string) => number;
 };
@@ -198,7 +202,8 @@ export function QuickAddForm({
   const [obligationRole, setObligationRole] = useState<ObligationRole | null>(null);
   // §7.8 — the chosen foreign currency, and the charged figure once typed over.
   const [paidChoice, setPaidChoice] = useState<string | null>(null);
-  const [chargedTyped, setChargedTyped] = useState<string | null>(null);
+  // …and the account currency it was a figure in: it dies with a change of that currency.
+  const [typedIn, setTypedIn] = useState<{ raw: string; account: string | undefined } | null>(null);
 
   const styles = useStyles();
   const selected = accounts.find((account) => account.id === accountId);
@@ -229,23 +234,28 @@ export function QuickAddForm({
   const paidCurrency = paidChoice !== null && paidChoice !== accountCurrency ? paidChoice : null;
   const paidSelectable = foreign !== undefined && accountCurrency !== undefined;
   // The account's figure: the rate's guess until the person types over it.
-  const rate =
+  const found =
     paidCurrency === null || accountCurrency === undefined || !dateValid
       ? null
       : (foreign?.readCrossRate({ from: paidCurrency, to: accountCurrency, date }) ?? null);
+  const rate = found?.rate ?? null;
   const derivedCharged =
     rate === null || !positive || accountCurrency === undefined
       ? ""
       : money.chargedFor(money.toMoney(amount), rate, foreign?.decimalsOf(accountCurrency) ?? 2);
+  const chargedTyped = typedIn !== null && typedIn.account === accountCurrency ? typedIn.raw : null;
   const charged = chargedTyped ?? derivedCharged.replace(".", mark);
   const chargedAmount = paidCurrency === null ? null : parseAmount(charged);
   const chargedKey = `${paidCurrency}:${derivedCharged}:${chargedTyped === null ? "d" : "t"}`;
   const handleAmountChange = useCallback((next: string | null) => setAmount(next ?? ""), []);
-  const handleChargedChange = useCallback((typed: string) => setChargedTyped(typed), []);
+  const handleChargedChange = useCallback(
+    (typed: string) => setTypedIn({ raw: typed, account: accountCurrency }),
+    [accountCurrency],
+  );
   const handlePaidChange = useCallback(
     (next: string) => {
       setPaidChoice(next === accountCurrency ? null : next);
-      setChargedTyped(null);
+      setTypedIn(null);
     },
     [accountCurrency],
   );
@@ -447,13 +457,21 @@ export function QuickAddForm({
             error={chargedError}
           />
           <Text style={styles.waits}>
-            {rate === null
+            {found === null || rate === null
               ? t("transactions.chargedNoRate", { paid: paidCurrency })
-              : t("transactions.chargedRate", {
-                  paid: paidCurrency,
-                  rate: formatRate(rate, locale),
-                  charged: selected.currency,
-                })}
+              : t(
+                  found.asOf === date
+                    ? "transactions.chargedRate"
+                    : "transactions.chargedRateCarried",
+                  {
+                    paid: paidCurrency,
+                    rate: formatRate(rate, locale),
+                    charged: selected.currency,
+                    date: isAccountingDate(found.asOf)
+                      ? dayLabel(accountingDate(found.asOf), locale)
+                      : found.asOf,
+                  },
+                )}
           </Text>
         </FieldAnchor>
       ) : null}

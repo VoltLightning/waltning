@@ -548,6 +548,26 @@ it("draws the charged figure only while the amount is in another currency, and l
   expect(settings.onChargedChange).toHaveBeenCalledWith("14,02");
 });
 
+it("keeps the charged card one figure tall in a short window: no label, the rate on the figure's row", () => {
+  const settings = foreign({
+    paidCurrency: "CZK",
+    chargedRaw: "14,04",
+    hint: "1 CZK = 0,0401 € on this day",
+  });
+  draw({
+    accounts: [EUR_CARD],
+    accountId: "account-eur",
+    raw: "350",
+    foreign: settings,
+    compact: true,
+  });
+  // The label is not drawn (the input keeps it, with the rate sentence, for assistive technology)…
+  expect(screen.queryByText("Charged to Card · EUR")).toBeNull();
+  expect(screen.getByLabelText(/^Charged to Card · EUR/)).toBeDefined();
+  // …and the rate is on the row, not under it.
+  expect(screen.getByText("1 CZK = 0,0401 € on this day")).toBeDefined();
+});
+
 it("draws no charged figure while the amount is in the account's own currency", () => {
   draw({ accounts: [EUR_CARD], accountId: "account-eur", raw: "14,02", foreign: foreign() });
   expect(screen.queryByLabelText("Charged to Card · EUR")).toBeNull();

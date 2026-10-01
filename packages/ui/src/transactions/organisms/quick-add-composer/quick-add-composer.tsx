@@ -604,6 +604,7 @@ export function QuickAddComposer({
             decimals={selectedAccount.decimals}
             hint={foreign.hint}
             error={chargedError}
+            compact={compact}
           />
         </Anchored>
       ) : null}

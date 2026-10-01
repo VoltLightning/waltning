@@ -207,6 +207,9 @@ export const be: Messages = {
     paidMissingCurrency: "Пакажыце таксама валюту.",
     paidMissingAmount: "Пакажыце таксама суму.",
     paidNotForRepayment: "Вяртанне доўгу запісваецца ў валюце рахунку — выберыце валюту рахунку.",
+    chargedRateCarried: "1 {{paid}} = {{rate}} {{charged}} паводле курсу на {{date}}",
+    paidNotForRepaymentDetail:
+      "Вяртанне доўгу запісваецца ў валюце рахунку — спачатку прыбярыце валюту плацяжу ў гэтым запісе.",
     chooseCategory: "На што?",
     needsRate: "Для {{currency}} патрэбны курс, перш чым запісваць у ёй аперацыі.",
     needsRateAction: "Задаць курс {{currency}}",

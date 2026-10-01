@@ -218,6 +218,9 @@ export const pl: Messages = {
     paidMissingCurrency: "Proszę podać także walutę.",
     paidMissingAmount: "Proszę podać także kwotę.",
     paidNotForRepayment: "Spłata jest rejestrowana w walucie konta — proszę wybrać walutę konta.",
+    chargedRateCarried: "1 {{paid}} = {{rate}} {{charged}} według kursu z {{date}}",
+    paidNotForRepaymentDetail:
+      "Spłata jest rejestrowana w walucie konta — proszę najpierw usunąć walutę płatności z tego wpisu.",
     chooseCategory: "Na co poszło?",
     needsRate: "Waluta {{currency}} wymaga kursu wymiany, zanim zapiszesz w niej transakcję.",
     needsRateAction: "Ustaw kurs {{currency}}",

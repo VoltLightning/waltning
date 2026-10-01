@@ -45,6 +45,12 @@ export type ChargedCardProps = {
   hint?: string | undefined;
   /** The refusal of this figure, under the field it names. */
   error?: string | undefined;
+  /**
+   * Short window (S05 §3): the label is dropped (the input keeps it for assistive
+   * technology), the padding comes in and the hint shares the figure's row, shrunk and
+   * ellipsized before the figure is — so the card is one figure tall, not three lines.
+   */
+  compact?: boolean;
 };
 
 export function ChargedCard({
@@ -55,6 +61,7 @@ export function ChargedCard({
   decimals,
   hint,
   error,
+  compact = false,
 }: ChargedCardProps) {
   const t = useT();
   const styles = useStyles();
@@ -69,26 +76,49 @@ export function ChargedCard({
   const handleFocus = useCallback(() => setFocused(true), []);
   const handleBlur = useCallback(() => setFocused(false), []);
 
+  const figure = (
+    <FigureInput
+      label={
+        compact && hint !== undefined
+          ? t("common.fieldValue", { field: label, value: hint })
+          : label
+      }
+      value={display}
+      onChangeText={handleChange}
+      step="displayTwo"
+      maxLength={AMOUNT_INTEGER_DIGITS + 1 + decimals}
+      affix={
+        <Text maxFontSizeMultiplier={textCap("displayTwo")} style={styles.affix}>
+          <CurrencyMark code={currency} />
+        </Text>
+      }
+      focused={focused}
+      onFocus={handleFocus}
+      onBlur={handleBlur}
+    />
+  );
+
   return (
-    <View style={[styles.card, focused ? styles.focused : null]}>
-      <Text style={styles.label}>{label}</Text>
-      <FigureInput
-        label={label}
-        value={display}
-        onChangeText={handleChange}
-        step="displayTwo"
-        maxLength={AMOUNT_INTEGER_DIGITS + 1 + decimals}
-        affix={
-          <Text maxFontSizeMultiplier={textCap("displayTwo")} style={styles.affix}>
-            <CurrencyMark code={currency} />
+    <View
+      style={[
+        styles.card,
+        compact ? styles.cardCompact : null,
+        focused ? (compact ? styles.focusedCompact : styles.focused) : null,
+      ]}
+    >
+      {compact ? null : <Text style={styles.label}>{label}</Text>}
+      {compact && hint !== undefined ? (
+        <View style={styles.inlineRow}>
+          <View style={styles.inlineFigure}>{figure}</View>
+          <Text numberOfLines={1} style={styles.inlineHint}>
+            {hint}
           </Text>
-        }
-        focused={focused}
-        onFocus={handleFocus}
-        onBlur={handleBlur}
-      />
+        </View>
+      ) : (
+        figure
+      )}
       {shownError === undefined ? null : <Text style={styles.error}>{shownError}</Text>}
-      {hint === undefined ? null : <Text style={styles.hint}>{hint}</Text>}
+      {compact || hint === undefined ? null : <Text style={styles.hint}>{hint}</Text>}
     </View>
   );
 }
@@ -103,7 +133,19 @@ const useStyles = makeStyles((theme) => ({
     paddingHorizontal: space.x3b,
     gap: space.sm,
   },
+  cardCompact: { paddingVertical: space.xs },
   focused: focusBorder(theme.focusRing, { horizontal: space.x3b, vertical: space.lg }),
+  focusedCompact: focusBorder(theme.focusRing, { horizontal: space.x3b, vertical: space.xs }),
+  inlineRow: { flexDirection: "row", alignItems: "center", gap: space.md },
+  inlineFigure: { flexShrink: 0 },
+  // The hint gives way to the figure: it shrinks and ellipsizes, the digits never do.
+  inlineHint: {
+    flex: 1,
+    minWidth: 0,
+    textAlign: "right",
+    color: theme.textMuted,
+    ...text.ui("caption"),
+  },
   label: { color: theme.textMuted, ...text.ui("label") },
   affix: { color: theme.accentText, ...text.ui("displayTwo") },
   // `textMuted`, never `textFaint`: the rate is read.

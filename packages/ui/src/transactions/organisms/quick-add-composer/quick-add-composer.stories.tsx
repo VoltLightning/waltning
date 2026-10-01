@@ -151,6 +151,26 @@ export const PaidInAnotherCurrency: Story = {
   },
 };
 
+/**
+ * §7.8 on a short phone: the charged card is one figure tall — no label, the rate on the
+ * figure's row — so the account, the amount and the charged figure share the first view.
+ */
+export const PaidInAnotherCurrencyPhone: Story = {
+  decorators: [withPhoneWidth],
+  args: {
+    raw: "350",
+    compact: true,
+    accounts: [EUR_CARD],
+    accountId: "account-eur",
+    foreign: {
+      ...FOREIGN,
+      paidCurrency: "CZK",
+      chargedRaw: "14,02",
+      hint: "1 CZK = 0,0401 € on this day",
+    },
+  },
+};
+
 /** §7.8 — no rate held for the day: the charged figure is empty, and says what to do. */
 export const PaidInAnotherCurrencyNoRate: Story = {
   args: {
