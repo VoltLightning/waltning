@@ -584,4 +584,35 @@ describe("Dashboard — figures in the display currency", () => {
       await displayCurrency.set(PLN);
     }
   });
+
+  /** A date with no quote of its own is stated at today's rate — and the widgets say so. */
+  it("marks both widgets as estimated when a row's date had no rate of its own", async () => {
+    const noQuoteOnTheExpenseDay: PhoneLedgerPort["readRate"] = ({ quote, date }) =>
+      quote === EUR && date !== expense.date
+        ? { rate: unitsPerPivot("0.25"), source: "nbp", asOf: date, carriedDays: 0 }
+        : null;
+    await displayCurrency.set(EUR);
+    try {
+      withLedger(
+        fakeController({
+          currencies: CURRENCIES,
+          readRate: noQuoteOnTheExpenseDay,
+          spendByCategory: (_period, scope, options) =>
+            spendByCategory(
+              [expense],
+              [],
+              { start: accountingDate("2026-09-01"), end: accountingDate("2026-10-01") },
+              scope,
+              options,
+            ),
+          incomeVsExpense: (buckets, scope, options) =>
+            incomeVsExpense([expense], buckets, scope, options),
+        }),
+      );
+      // Once on each widget's caption, not merely a converted amount.
+      expect(screen.getAllByText(/≈ some days at today's rate/)).toHaveLength(2);
+    } finally {
+      await displayCurrency.set(PLN);
+    }
+  });
 });

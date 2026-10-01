@@ -368,7 +368,12 @@ export default function Dashboard() {
       <SpendByCategoryWidget
         title={t("dashboard.spendByCategory")}
         currency={leadCurrency}
-        period={`${periodLabel} · ${t("dashboard.byLeafCategory")}`}
+        period={[
+          `${periodLabel} · ${t("dashboard.byLeafCategory")}`,
+          spendRows.some((row) => row.estimated === true) ? t("shell.estimatedAtToday") : null,
+        ]
+          .filter((part) => part !== null)
+          .join(" · ")}
         scope={scopeLabel}
         segments={spendSegments}
         others={spendOthers}
@@ -380,7 +385,11 @@ export default function Dashboard() {
       <IncomeVsExpenseWidget
         title={t("dashboard.incomeVsExpense")}
         currency={leadCurrency}
-        period={flowRangeLabel}
+        period={
+          flowRows.some((row) => row.estimated === true)
+            ? `${flowRangeLabel} · ${t("shell.estimatedAtToday")}`
+            : flowRangeLabel
+        }
         scope={scopeLabel}
         bars={flowBars}
         others={flowOthers}

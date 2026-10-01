@@ -2295,9 +2295,8 @@ anchor, and so does one whose anchor was already moved off the seed. The anchor
 is shown once, in Settings > Currencies, last and named *anchor currency*; it
 decides nothing a reader sees, and it is never described as the currency
 figures are measured in. The first-start change is an ordinary `change_pivot`,
-recorded in the outbox like any write; a phone paired with a backend that
-already holds data takes the backend's anchor — its own ledger is still empty,
-so adopting it loses nothing — before anything replays.
+recorded in the outbox like any write; `architecture/14` states what pairing
+must do with it.
 
 **The anchor changes only while the ledger holds no transaction**, because the
 phone cannot re-rate existing history. After the first transaction Settings
