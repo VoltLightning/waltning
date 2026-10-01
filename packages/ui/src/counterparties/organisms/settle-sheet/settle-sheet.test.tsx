@@ -82,7 +82,7 @@ it("states the residual before commit — the S14 worked example", () => {
 
 it("names the counterparty in the sheet's own title", () => {
   renderSheet();
-  expect(screen.getByText("Settling with Nina")).toBeDefined();
+  expect(screen.getByText("Settle up: Nina")).toBeDefined();
 });
 
 it("renders one balance as a plain fact, not a radio group of one", () => {
@@ -198,7 +198,7 @@ it("calls onSettle on the primary action", () => {
 it("routes a tap on either hero amount through onActiveFieldChange", () => {
   const onActiveFieldChange = vi.fn();
   renderSheet({ onActiveFieldChange });
-  fireEvent.click(screen.getByRole("button", { name: "Pays off: 50" }));
+  fireEvent.click(screen.getByRole("button", { name: "Towards: 50" }));
   expect(onActiveFieldChange).toHaveBeenCalledWith("discharges");
 });
 

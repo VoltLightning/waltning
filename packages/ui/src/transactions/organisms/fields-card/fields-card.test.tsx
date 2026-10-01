@@ -143,7 +143,7 @@ it("shows a form-level refusal — a stale version names no single field", () =>
 /** §6.6 — the counterparty escapes to the screen's picker, like category and account. */
 it("opens the counterparty picker through the screen's own callback", () => {
   const { onOpenCounterpartyPicker } = renderCard();
-  fireEvent.click(screen.getByRole("button", { name: "Person or company" }));
+  fireEvent.click(screen.getByRole("button", { name: "With whom" }));
   expect(onOpenCounterpartyPicker).toHaveBeenCalledTimes(1);
 });
 
@@ -264,7 +264,7 @@ describe("a transfer — the same card, with a transfer's own rows", () => {
 
   it("keeps who it was with and who owes — a repayment can land in an account", () => {
     renderTransfer();
-    expect(screen.getByRole("button", { name: "Person or company" })).toBeDefined();
+    expect(screen.getByRole("button", { name: "With whom" })).toBeDefined();
     expect(screen.getByRole("button", { name: "Someone owes" })).toBeDefined();
   });
 

@@ -159,7 +159,7 @@ export const en = {
     kindCard: "Card",
     kindLoanReceivable: "Owed to you",
     kindLoanPayable: "You owe",
-    kindClearing: "Clearing",
+    kindClearing: "In transit",
     kindInvestment: "Investment",
     byKind: "By kind",
     byCurrency: "By currency",
@@ -468,7 +468,7 @@ export const en = {
     capital: "One-off",
     capitalHint: "Exclude from comparisons — a move, a car, a deposit returned.",
     chooseRole: "Which?",
-    counterparty: "Person or company",
+    counterparty: "With whom",
     noCounterparty: "No one",
     obligationParty: "Owes",
     noObligation: "Nobody",
@@ -614,8 +614,8 @@ export const en = {
     rateProvenance: "{{source}} · {{date}}",
     rateProvenanceCarried: "{{source}} · carried {{count}} d from {{date}}",
     transferSpreadNote:
-      "What the bank's rate cost against the reference rate — shown now, not found in a report months later.",
-    transferLinkedNote: "Recorded on both accounts and linked — neither side is income or spending",
+      "The difference from the reference rate — shown now, not found in a report months later.",
+    transferLinkedNote: "Recorded on both accounts and linked — neither is income",
     moreDetailsTransferHint: "Fee, date, note",
     /** The one line under the figure — a pace against the previous months, never a bare amount (§1). */
     categoryPace: "{{category}} this month: {{percent}}% of usual",
@@ -706,7 +706,7 @@ export const en = {
     /** Under Who?, when the person has an open debt this entry pays down. */
     settlesOwed: "Settles what {{name}} owes you, in {{currency}}.",
     settlesOwe: "Settles what you owe {{name}}, in {{currency}}.",
-    nothingToSettle: "Nothing to settle with {{name}}: no open debt in this direction.",
+    nothingToSettle: "Nothing to settle: {{name}} has no open debt in this direction.",
     settleNeedsRate: "No exchange rate for {{currency}}. Please settle from the person's page.",
     openingLinkShape:
       "A repayment can be linked to an existing debt only while it is still a debt with that person.",
@@ -856,14 +856,13 @@ export const en = {
     /** J08 §4 — the split may be committed incomplete; the banner is what says so. */
     incomplete: "{{amount}}\u00a0{{currency}} will stay on the pot",
     over: "That is more than the pot holds",
-    editShare: "{{name}}'s share",
-    shareOf: "{{name}}'s share",
+    editShare: "Share: {{name}}",
+    shareOf: "Share: {{name}}",
     removeShare: "Remove {{name}}",
-    fewerShares: "Fewer shares for {{name}}",
-    moreShares: "More shares for {{name}}",
+    fewerShares: "Fewer shares: {{name}}",
+    moreShares: "More shares: {{name}}",
     /** `allocate_shares`' own refusals, resolved the way `settleDebt`'s are. */
-    notClearing:
-      "Shares come out of a clearing account — the one that holds money on other people's behalf.",
+    notClearing: "Shares come out of an in-transit account — money waiting to be split.",
     exceedsPot: "That is more than this pot holds.",
     currencyMismatch: "A share is in the pot's own currency.",
     noCounterparty: "One of these people is no longer in your ledger.",
@@ -871,10 +870,10 @@ export const en = {
   counterparties: {
     notFound: "This person is no longer here. They may have been merged or removed.",
     /** `SettleSheet`'s title (S14 §3). */
-    settlingWith: "Settling with {{name}}",
+    settlingWith: "Settle up: {{name}}",
     /** S13's *Add an existing debt* (§6.6) — a debt from before the ledger; sets the balance, is neither income nor spending. */
     existingDebtAdd: "Add an existing debt",
-    existingDebtTitle: "Existing debt with {{name}}",
+    existingDebtTitle: "Existing debt: {{name}}",
     existingDebtHint:
       "A debt that already existed before this ledger. It sets the starting balance and is neither income nor spending, and neither are the repayments made against it. Enter the original amount, not what is left. Recording it again in the same currency replaces it.",
     existingDebtDirection: "Who owes whom",
@@ -889,7 +888,7 @@ export const en = {
     existingDebtReplaces: "This replaces the existing debt in {{currency}}.",
     existingDebtDelete: "Delete this debt",
     existingDebtDeleteTitle: "Delete the existing debt?",
-    existingDebtDeleteBody: "The existing debt with {{name}} is deleted.",
+    existingDebtDeleteBody: "Existing debt: {{name}}. It is deleted completely.",
     existingDebtDeleteChain:
       "Repayments made against it are deleted too: {{count}} in all, from {{accounts}}. The balances of those accounts change.",
     existingDebtDeleteSubmit: "Delete",
@@ -901,7 +900,7 @@ export const en = {
       "More has already been repaid than this amount, so saving turns the debt around.",
     existingDebtDateFuture: "An existing debt dates from today or earlier.",
     /** The balance picker (S14 §9.1). */
-    discharges: "Pays off",
+    discharges: "Towards",
     theyOweYou: "they owe you",
     youOweThem: "you owe them",
     /** A balance row's offline stamp (S14 §6) — the phone's own last write, never today's date. */
@@ -911,7 +910,7 @@ export const en = {
     /** The primary action — full-width, S14 §7. */
     settle: "Settle",
     /** The result card, before commit, always (S14 §5). Lower case, matching `shell.spent`/`shell.net`. */
-    resultDischarges: "pays off",
+    resultDischarges: "towards",
     resultRemaining: "remaining",
     resultRemainingEstimated: "remaining (estimated)",
     /** The amber line under a stale result (S14 §6) — the phone's own ledger, not the counterparty's. */
@@ -945,7 +944,7 @@ export const en = {
     /** `AgeingBar` — O15: *old*, never *overdue* (no `payment_terms_days` field exists). */
     ageingDays: "{{days}} days · old",
     /* ── S12 · the register ─────────────────────────────────────────────── */
-    groupPeople: "People",
+    groupPeople: "Individuals",
     groupCompanies: "Companies",
     segmentOpen: "Open",
     segmentEveryone: "Everyone",
@@ -1009,7 +1008,7 @@ export const en = {
     unmerge: "Unmerge",
     unmergeToast: "Merge undone — the record is restored.",
     /* ── S15 · create and edit ───────────────────────────────────────────── */
-    contact: "Contact",
+    contact: "Contact details",
     archive: "Archive",
     archivedToast: "Archived.",
     create: "Create",
@@ -1710,7 +1709,7 @@ export const en = {
     currencyHolds_other: "{{count}} rows",
     removableTitle: "Not used yet",
     removableBody:
-      "Nothing is recorded in {{codes}}, and no rates are held. A currency like that can be removed without affecting anything; one with transactions can only be hidden.",
+      "No account or transaction uses {{codes}}, and no rates are held. A currency like that can be removed without affecting anything; one that an account or a transaction uses can only be hidden.",
     editCurrency: "Edit {{code}}",
     symbolPosition: "Symbol position",
     symbolBefore: "Before the figure",

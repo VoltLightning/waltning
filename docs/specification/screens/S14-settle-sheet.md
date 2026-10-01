@@ -31,11 +31,11 @@ under `SPEC.md` §6.6.1 rather than silently replacing the merchant with the deb
 ### Both surfaces — sheet on mobile, modal on web
 
 ```
-  Settling with Nina
+  Settle up: Nina
 
   Amount        [ 50,00 ]  [ EUR ▾ ]
 
-  Pays off                             every balance, one preselected
+  Towards                              every balance, one preselected
    (•) EUR   −120,00   you owe         ← their settlement currency
    ( ) PLN   +840,00   owes you
    ( ) GBP    +60,00   owes you
@@ -110,7 +110,7 @@ screen presented without qualification.
 
 So, offline and whenever the checkpoint is older than the session:
 
-- **Every row in the *Pays off* picker carries its own stamp:**
+- **Every row in the *Towards* picker carries its own stamp:**
   `(•) EUR  −120,00  you owe · as of Tue 11 Aug`.
 - Past ~24 h the result card relabels to `remaining (estimated)` with
   *from a balance as of Tue 11 Aug* beneath it, amber — P4's *not fully

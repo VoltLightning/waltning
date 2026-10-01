@@ -386,7 +386,11 @@ it("states the transaction-count refusal with its own text (C1)", () => {
 it("the pivot confirmation states the refusal before offering, not after", () => {
   withLedger();
   pressChangePivot();
-  expect(screen.getByText(/only before the first transaction/)).toBeDefined();
+  expect(
+    screen.getByText(
+      "Exchange rates are stored against the anchor currency. It does not change which currency figures are shown in. It can be changed only before the first transaction, and the change is logged.",
+    ),
+  ).toBeDefined();
 });
 
 /**

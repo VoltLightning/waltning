@@ -27,14 +27,19 @@ asking in either language, and that dialog was correct, word by word.
   |---|---|
   | pivot | anchor currency (§14.3) |
   | node, leaf | category, group, subcategory |
-  | operation, executor | what it did: *saved*, *deleted*, *settled* |
+  | operation (a write the app performs), executor | what it did: *saved*, *deleted*, *settled* |
   | replica, outbox, snapshot | *on this phone*, *not sent yet* |
   | capture | transaction, *record* (the verb) |
   | quote | rate |
   | rebase, re-rate | *recalculate the rates* |
   | counterparty | person or company (§14.3) |
+  | clearing (account) | in transit — *money waiting to be split* (§14.3) |
   | anything with an underscore (`settle_debt`) | the action in words |
 
+- **The ban is on the engineering sense, not the word.** Russian *операция* and
+  Belarusian *аперацыя* are §14.3's word for a transaction — what every bank in
+  those languages calls one — and stay; *operation* meaning a write the app
+  performs never reaches a screen in any language.
 - **Developer-only screens are exempt.** Settings · Developer exists in a
   development build only; nobody keeping a ledger reads it.
 
@@ -97,13 +102,15 @@ first is the noun and the second the short label or verb.
 | Transaction (one entry in the ledger) | transaction | Buchung | операция | transakcja | аперацыя |
 | Expense | expense | Ausgabe | расход | wydatek | выдатак |
 | Income | income | Einnahme | доход | przychód | даход |
-| Transfer (between own accounts) | transfer | Umbuchung | перевод | przelew własny · przelew | перавод |
+| Transfer (between own accounts) | transfer | Umbuchung | перевод между своими счетами · перевод | przelew własny | перавод паміж сваімі рахункамі · перавод |
 | Category | category | Kategorie | категория | kategoria | катэгорыя |
-| Person or company | person or company · *People* (tab) | Kontakt · Person oder Firma | контакт · человек или компания | kontakt · osoba lub firma | кантакт · чалавек або кампанія |
+| Person or company | person or company · *People* (page) · *Individuals* / *Companies* (its groups) · *With whom* (a transaction's field) | Kontakt · Person oder Firma | контакт · человек или компания | kontakt · osoba lub firma | кантакт · чалавек або кампанія |
+| Contact details (the field on a person's page) | contact details | Kontaktdaten | контактные данные | dane kontaktowe | кантактныя даныя |
 | Debt | debt | Schuld | долг | dług | доўг |
 | Repayment | repayment | Rückzahlung | возврат долга | spłata | вяртанне доўгу |
-| Existing debt (from before the ledger) | existing debt | bestehende Schuld | прежний долг | wcześniejszy dług | ранейшы доўг |
+| Existing debt (from before the ledger) | existing debt | bestehende Schuld | долг до начала учёта | dług sprzed rozpoczęcia ewidencji | доўг да пачатку ўліку |
 | Anchor currency | anchor currency | Bezugswährung | опорная валюта | waluta odniesienia | апорная валюта |
+| In-transit account (an account kind: money waiting to be split) | in transit | Zwischenkonto | транзитный счёт | konto przejściowe | транзітны рахунак |
 | Display currency | *Show figures in* | *Beträge anzeigen in* | *Показывать суммы в* | *Pokazuj kwoty w* | *Паказваць сумы ў* |
 | Exchange rate | exchange rate · rate | Wechselkurs · Kurs | курс | kurs | курс |
 | Charged (to the account) | charged | abgebucht | списано | pobrano | спісана |
@@ -112,12 +119,21 @@ first is the noun and the second the short label or verb.
 | Archive | archive | archivieren | в архив · архивировать | archiwizuj · zarchiwizować | у архіў · архіваваць |
 | Delete | delete | löschen | удалить | usuń · usunąć | выдаліць |
 | Overdrawn | overdrawn | überzogen | в минусе | na debecie · debet | у мінусе |
-| Owed | owed | geschuldet | долг | do spłaty | доўг |
+| Owed | owed | geschuldet | задолженность | do spłaty | запазычанасць |
 | Balance | balance | Kontostand · Saldo | баланс | saldo | баланс |
 | Net worth | net worth | Vermögen | капитал | majątek | капітал |
 | Backup | backup · back up | Sicherung · sichern | резервная копия | kopia zapasowa | рэзервовая копія |
 | Restore | restore | wiederherstellen | восстановить | przywróć · przywrócić | аднавіць |
 | Lock | app lock · lock | App-Sperre · sperren | блокировка · заблокировать | blokada · zablokować | блакаванне · заблакаваць |
+
+**A transfer between one's own accounts is said as one** where the short word
+would read as paying someone: Polish *przelew* and Russian or Belarusian
+*перевод* alone are what a bank calls a payment out. The short form is for a
+tag or a column where the two accounts stand beside it.
+
+**The page and its parts never share a word.** *People* is the page;
+*Individuals* and *Companies* are its groups; a transaction's field asks *With
+whom*, so it does not read as a second title over *Payee*.
 
 **Words the glossary rules out**, because each is the literal or the jargon
 choice a reader stumbles on:
@@ -136,6 +152,7 @@ choice a reader stumbles on:
 | Net worth | de *Nettowert* · ru *чистая стоимость* · pl *wartość netto* |
 | Repayment | de *Tilgung* (a bank loan's instalment) |
 | Account | be *счёт* (Russian) |
+| In transit | en *clearing* · de *Verrechnungskonto*, *Clearing* · ru *клиринговый* · pl *rozliczeniowe* · be *клірынгавы* (a bank's back office, not a person's account) |
 
 **The anchor currency keeps its English name** because `SPEC.md` §7.0 names it
 so in the app; the other languages use their *reference currency* word, which
@@ -157,9 +174,10 @@ that is the display currency, and the anchor *decides nothing a reader sees*.
   placeholders; word order belongs to the language. Two keys joined by a space
   put the English order on every language.
 - **Names are interpolated where no declension is needed** — after a colon, as
-  a heading, or as the subject: *Existing debt: Nina*, not *Debt with {{name}}*,
-  which Russian, Polish and Belarusian would need in the instrumental and the
-  catalogue cannot decline.
+  a heading, or as the subject: *Existing debt: Nina*, not *Existing debt with
+  {{name}}*, which Russian, Polish and Belarusian would need in the instrumental
+  and the catalogue cannot decline. The same goes for a possessive (*{{name}}'s
+  share* → *Share: {{name}}*).
 - **Dates come from `Intl`**, through `locales.ts`. A date is never spelled in a
   catalogue, and a month name is never a translation.
 - **Keys never change for a wording change.** Only values move; a key renamed
@@ -168,8 +186,13 @@ that is the display currency, and the anchor *decides nothing a reader sees*.
 ## 14.5 Enforcement
 
 `packages/ui/src/i18n/copy-guide.test.ts` holds §14.1's banned vocabulary,
-§14.2's register and §14.3's ruled-out words as patterns, run over every
-user-facing value of every catalogue with placeholders removed. Each pattern
+§14.2's register (pronouns, second-person verbs, informal imperatives, a
+capitalised *Вы* mid-sentence) and §14.3's ruled-out words as patterns, run
+over every user-facing value of every catalogue with placeholders removed;
+§14.4's name rule runs on the value with its placeholders, looking for a
+preposition (or an English possessive) against `{{name}}`. A pattern may
+exempt a key where the word is used in another sense, and says why — the
+person's *record* in a merge is not a transaction. Each pattern
 carries an example it must catch and one it must spare, so a pattern that has
 stopped matching anything fails rather than passing everything.
 

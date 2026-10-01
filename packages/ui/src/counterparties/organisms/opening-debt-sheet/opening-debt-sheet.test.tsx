@@ -35,12 +35,12 @@ function sheet(over: Partial<OpeningDebtSheetProps> = {}) {
 
 it("renders nothing while not visible", () => {
   render(sheet({ visible: false }));
-  expect(screen.queryByText("Existing debt with Nina")).toBeNull();
+  expect(screen.queryByText("Existing debt: Nina")).toBeNull();
 });
 
 it("asks for direction, currency, amount and date — and no account, no category", () => {
   render(sheet());
-  expect(screen.getByText("Existing debt with Nina")).toBeDefined();
+  expect(screen.getByText("Existing debt: Nina")).toBeDefined();
   expect(screen.getByText("Who owes whom")).toBeDefined();
   expect(screen.getByText("They owe you")).toBeDefined();
   expect(screen.getByText("You owe them")).toBeDefined();

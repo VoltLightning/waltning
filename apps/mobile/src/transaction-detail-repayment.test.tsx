@@ -194,7 +194,7 @@ describe("a repayment picked on an existing row is settle_debt", () => {
     fireEvent.click(screen.getByRole("button", { name: "Nina" }));
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
-    expect(screen.getByText(/Nothing to settle with Nina/)).toBeDefined();
+    expect(screen.getByText(/Nothing to settle: Nina has/)).toBeDefined();
     expect(ledger.controller.getTransaction(plain as never)).not.toBeNull();
     expect(balances()).toEqual([]);
   });

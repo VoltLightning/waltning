@@ -626,7 +626,7 @@ describe("Debt (S12)", () => {
 
     expect(screen.getByText("Nina")).toBeDefined();
     expect(screen.getByText("Shop A")).toBeDefined();
-    expect(screen.getByText("People"), "grouped by legal nature (S37 §3)").toBeDefined();
+    expect(screen.getByText("Individuals"), "grouped by legal nature (S37 §3)").toBeDefined();
     expect(screen.getByText("Companies")).toBeDefined();
   });
 
@@ -802,7 +802,7 @@ describe("CounterpartyDetail (S13)", () => {
       </LedgerProvider>,
     );
     fireEvent.click(screen.getByRole("button", { name: "Settle" }));
-    expect(screen.getByText("Settling with Nina")).toBeDefined();
+    expect(screen.getByText("Settle up: Nina")).toBeDefined();
   });
 
   it("adds an existing debt through the sheet — direction, amount, currency and date, then the toast (§6.6)", () => {
@@ -826,7 +826,7 @@ describe("CounterpartyDetail (S13)", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: "Add an existing debt" }));
 
-    const sheet = within(screen.getByLabelText("Existing debt with Nina"));
+    const sheet = within(screen.getByLabelText("Existing debt: Nina"));
     fireEvent.click(sheet.getByText("You owe them"));
     fireEvent.change(sheet.getByLabelText("Amount"), { target: { value: "200" } });
     fireEvent.click(sheet.getByRole("button", { name: "Save debt" }));
@@ -862,7 +862,7 @@ describe("CounterpartyDetail (S13)", () => {
     expect(screen.getByText("200.00")).toBeDefined();
 
     fireEvent.click(screen.getByRole("button", { name: /^Existing debt, / }));
-    const sheet = within(screen.getByLabelText("Existing debt with Nina"));
+    const sheet = within(screen.getByLabelText("Existing debt: Nina"));
     expect(sheet.getByText("This replaces the existing debt in PLN.")).toBeDefined();
     fireEvent.click(sheet.getByRole("button", { name: "Save debt" }));
 
@@ -928,7 +928,7 @@ describe("CounterpartyDetail (S13)", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: /^Existing debt, / }));
     fireEvent.click(
-      within(screen.getByLabelText("Existing debt with Nina")).getByRole("button", {
+      within(screen.getByLabelText("Existing debt: Nina")).getByRole("button", {
         name: "Delete this debt",
       }),
     );
@@ -971,7 +971,7 @@ describe("CounterpartyDetail (S13)", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: /^Existing debt, / }));
     fireEvent.click(
-      within(screen.getByLabelText("Existing debt with Nina")).getByRole("button", {
+      within(screen.getByLabelText("Existing debt: Nina")).getByRole("button", {
         name: "Delete this debt",
       }),
     );
@@ -1008,7 +1008,7 @@ describe("CounterpartyDetail (S13)", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: "Settle" }));
 
-    const sheet = within(screen.getByLabelText("Settling with Nina"));
+    const sheet = within(screen.getByLabelText("Settle up: Nina"));
     expect(sheet.getByText("Nothing to settle.")).toBeDefined();
     // Pressable; pressed, it refuses and says so rather than settling.
     fireEvent.click(sheet.getByRole("button", { name: "Settle" }));
@@ -1053,7 +1053,7 @@ describe("CounterpartyDetail (S13)", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: "Settle" }));
 
-    const sheet = within(screen.getByLabelText("Settling with Nina"));
+    const sheet = within(screen.getByLabelText("Settle up: Nina"));
     // One open balance among three — a plain fact, never a radio group —
     // and it is GBP even though the settled PLN row sorts first.
     expect(sheet.queryByRole("radiogroup")).toBeNull();
@@ -1066,7 +1066,7 @@ describe("CounterpartyDetail (S13)", () => {
     fireEvent.click(sheet.getByRole("button", { name: "Amount: 0" }));
     fireEvent.click(sheet.getByRole("button", { name: "5" }));
     fireEvent.click(sheet.getByRole("button", { name: "0" }));
-    fireEvent.click(sheet.getByRole("button", { name: "Pays off: 0" }));
+    fireEvent.click(sheet.getByRole("button", { name: "Towards: 0" }));
     fireEvent.click(sheet.getByRole("button", { name: "5" }));
     fireEvent.click(sheet.getByRole("button", { name: "0" }));
     fireEvent.click(sheet.getByRole("button", { name: "Settle" }));
@@ -1105,7 +1105,7 @@ describe("CounterpartyDetail (S13)", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: "Settle" }));
 
-    const sheet = within(screen.getByLabelText("Settling with Nina"));
+    const sheet = within(screen.getByLabelText("Settle up: Nina"));
     fireEvent.click(sheet.getByRole("button", { name: "Into" }));
     fireEvent.click(screen.getByRole("radio", { name: "Cash · PLN" }));
 
@@ -1159,7 +1159,7 @@ describe("CounterpartyDetail (S13)", () => {
 
       fireEvent.click(screen.getByRole("button", { name: locale === "pl" ? "Rozlicz" : "Settle" }));
       const sheet = within(
-        screen.getByLabelText(locale === "pl" ? "Rozliczenie z Nina" : "Settling with Nina"),
+        screen.getByLabelText(locale === "pl" ? "Rozliczenie z Nina" : "Settle up: Nina"),
       );
       fireEvent.click(sheet.getByRole("button", { name: locale === "pl" ? "Na konto" : "Into" }));
       fireEvent.click(screen.getByRole("radio", { name: "Cash · PLN" }));
@@ -1169,7 +1169,7 @@ describe("CounterpartyDetail (S13)", () => {
       fireEvent.click(sheet.getByRole("button", { name: "5" }));
       fireEvent.click(sheet.getByRole("button", { name: "0" }));
       fireEvent.click(
-        sheet.getByRole("button", { name: locale === "pl" ? "Rozlicza: 0" : "Pays off: 0" }),
+        sheet.getByRole("button", { name: locale === "pl" ? "Rozlicza: 0" : "Towards: 0" }),
       );
       fireEvent.click(sheet.getByRole("button", { name: "5" }));
       fireEvent.click(sheet.getByRole("button", { name: "0" }));
@@ -1216,7 +1216,7 @@ describe("CounterpartyDetail (S13)", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: "Settle" }));
 
-    const sheet = within(screen.getByLabelText("Settling with Nina"));
+    const sheet = within(screen.getByLabelText("Settle up: Nina"));
     // `AccountPicker` (`accounts/`) is a sibling domain — the screen composes
     // it, so its tile lives outside the sheet's own labelled region, the same
     // way `transfer-screen.test.tsx`'s own `pickFrom` drives it.
@@ -1227,7 +1227,7 @@ describe("CounterpartyDetail (S13)", () => {
     fireEvent.click(sheet.getByRole("button", { name: "5" }));
     fireEvent.click(sheet.getByRole("button", { name: "0" }));
 
-    fireEvent.click(sheet.getByRole("button", { name: "Pays off: 0" }));
+    fireEvent.click(sheet.getByRole("button", { name: "Towards: 0" }));
     fireEvent.click(sheet.getByRole("button", { name: "5" }));
     fireEvent.click(sheet.getByRole("button", { name: "0" }));
 
@@ -1274,7 +1274,7 @@ describe("CounterpartyDetail (S13)", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: "Settle" }));
 
-    const sheet = within(screen.getByLabelText("Settling with Nina"));
+    const sheet = within(screen.getByLabelText("Settle up: Nina"));
     fireEvent.click(sheet.getByRole("button", { name: "Into" }));
     fireEvent.click(screen.getByRole("radio", { name: "Cash · PLN" }));
 
@@ -1283,7 +1283,7 @@ describe("CounterpartyDetail (S13)", () => {
     fireEvent.click(sheet.getByRole("button", { name: "4" }));
     fireEvent.click(sheet.getByRole("button", { name: "0" }));
 
-    fireEvent.click(sheet.getByRole("button", { name: "Pays off: 0" }));
+    fireEvent.click(sheet.getByRole("button", { name: "Towards: 0" }));
     fireEvent.click(sheet.getByRole("button", { name: "8" }));
     fireEvent.click(sheet.getByRole("button", { name: "4" }));
     fireEvent.click(sheet.getByRole("button", { name: "0" }));
@@ -1336,7 +1336,7 @@ describe("CounterpartyDetail (S13)", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: "Settle" }));
 
-    const sheet = within(screen.getByLabelText("Settling with Nina"));
+    const sheet = within(screen.getByLabelText("Settle up: Nina"));
     fireEvent.click(sheet.getByRole("button", { name: "Into" }));
     fireEvent.click(screen.getByRole("radio", { name: "Cash · PLN" }));
 
@@ -1344,7 +1344,7 @@ describe("CounterpartyDetail (S13)", () => {
     fireEvent.click(sheet.getByRole("button", { name: "5" }));
     fireEvent.click(sheet.getByRole("button", { name: "0" }));
 
-    fireEvent.click(sheet.getByRole("button", { name: "Pays off: 0" }));
+    fireEvent.click(sheet.getByRole("button", { name: "Towards: 0" }));
     fireEvent.click(sheet.getByRole("button", { name: "5" }));
     fireEvent.click(sheet.getByRole("button", { name: "0" }));
 
@@ -1401,12 +1401,12 @@ describe("CounterpartyDetail (S13)", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: "Settle" }));
 
-    const sheet = within(screen.getByLabelText("Settling with Nina"));
+    const sheet = within(screen.getByLabelText("Settle up: Nina"));
     // Two open balances — a real choice, defaulting to PLN (the
     // counterparty's own settlement currency, S14 §9.1).
     expect(sheet.getByRole("radio", { name: /PLN/ })).toBeDefined();
 
-    fireEvent.click(sheet.getByRole("button", { name: "Pays off: 0" }));
+    fireEvent.click(sheet.getByRole("button", { name: "Towards: 0" }));
     fireEvent.click(sheet.getByRole("button", { name: "1" }));
     // `Keypad`'s decimal key emits the canonical `,`, but its own *label*
     // follows the locale — English shows `.` (`keypad.tsx`).
@@ -1421,13 +1421,13 @@ describe("CounterpartyDetail (S13)", () => {
     expect(sheet.getByText("JPY holds 0 decimal places — this amount has more.")).toBeDefined();
     // `AmountField` displays the raw "1,23" through the locale's own mark
     // (English: ".") — the same `display` a caption or a hero value reads.
-    expect(sheet.getByRole("button", { name: "Pays off: 1.23" })).toBeDefined();
+    expect(sheet.getByRole("button", { name: "Towards: 1.23" })).toBeDefined();
 
     // L6 — a keystroke clears the stale refusal rather than leaving it
     // stand against a figure that has since changed. The next digit typed
     // (into either field) is what a person does next after reading the
     // caption, and it used to leave the caption exactly where it was.
-    fireEvent.click(sheet.getByRole("button", { name: "Pays off: 1.23" }));
+    fireEvent.click(sheet.getByRole("button", { name: "Towards: 1.23" }));
     fireEvent.click(sheet.getByRole("button", { name: "4" }));
     expect(screen.queryByText("JPY holds 0 decimal places — this amount has more.")).toBeNull();
   });

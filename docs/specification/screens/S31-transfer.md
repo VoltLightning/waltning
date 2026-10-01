@@ -57,14 +57,14 @@ exists rather than in the middle of one.
 │  │ │ 4,3120    │  │ −8,40 zł  │                ││  ← updates as you type
 │  │ └───────────┘  └───────────┘                ││
 │  │ reference 4,3120 · NBP · 3 September        ││  ← once the realized rate exists
-│  │ The spread against the reference rate…      ││
+│  │ The difference from the reference rate…     ││
 │  └─────────────────────────────────────────────┘│
 │                                                 │
 │  ┌─────────────────────────────────────────────┐│
 │  │                 Move money                  ││  ← full width, primary, at the bottom edge
 │  └─────────────────────────────────────────────┘│
-│   One entry on each side, linked — neither is   │
-│                    income                       │
+│   Recorded on both accounts and linked —        │
+│                neither is income                │
 └─────────────────────────────────────────────────┘
 ```
 
@@ -133,7 +133,7 @@ form, and a wider version of it is not a better one.
 | `Amount` | Every balance and the cost. Tabular, comma decimal |
 | The tiles | *Rate used* and *Costs you*, on the inset fill — the one figure each that the screen exists to make visible |
 | `Banner` | `neutral`, under the rows, when the source currency has no rate (§6) |
-| The footer | A full-width primary *Move money* over *One entry on each side, linked — neither is income* |
+| The footer | A full-width primary *Move money* over *Recorded on both accounts and linked — neither is income* |
 
 ## 5. Data
 
