@@ -164,7 +164,7 @@ function fillRepayment(amount: string) {
   fireEvent.change(screen.getByLabelText("Search…"), { target: { value: "repayment rec" } });
   fireEvent.click(screen.getByRole("radio", { name: "Repayment received" }));
   fireEvent.click(screen.getByRole("button", { name: /^Who\?/ }));
-  fireEvent.click(screen.getByRole("button", { name: /^Counterparty/ }));
+  fireEvent.click(screen.getByRole("button", { name: /^Person or company/ }));
   fireEvent.click(screen.getByText("Nina"));
 }
 

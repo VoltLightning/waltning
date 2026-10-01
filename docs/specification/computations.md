@@ -356,7 +356,7 @@ categories, must sum to its own total exactly once), the same way A1's
 class-F figures are written. It answers `S01`'s donut at leaf granularity —
 `S01`'s "5 segments + other" reads leaf categories directly, so the rollup
 rule above is not yet exercised by that widget, and the widget's own header
-says *by leaf category* rather than leaving the reader to assume a rollup.
+says *by subcategory* rather than leaving the reader to assume a rollup.
 This SQL stays the authoritative, server-side definition; `E9` differentials
 `readSpendByCategory` against it.
 

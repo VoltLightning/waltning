@@ -344,7 +344,7 @@ it("M2 — a pivot change that dropped dates says how many, in a toast", () => {
   pressChangePivot();
   fireEvent.click(screen.getByRole("button", { name: "Yes, change it" }));
   expect(
-    screen.getByText("Anchor currency changed · 27 dates had no rate to rebase and were dropped"),
+    screen.getByText("Anchor currency changed · 27 dates had no rate against it and were removed"),
   ).toBeDefined();
 });
 
@@ -378,7 +378,7 @@ it("states the transaction-count refusal with its own text (C1)", () => {
   fireEvent.click(screen.getByRole("button", { name: "Yes, change it" }));
   expect(
     screen.getByText(
-      "The anchor currency can't change once a transaction exists: this phone cannot re-rate existing history. It can be changed only while the ledger holds no transactions.",
+      "This ledger already has transactions, and this phone cannot recalculate their rates against a new anchor currency. It can be changed only before the first transaction.",
     ),
   ).toBeDefined();
 });
@@ -386,7 +386,7 @@ it("states the transaction-count refusal with its own text (C1)", () => {
 it("the pivot confirmation states the refusal before offering, not after", () => {
   withLedger();
   pressChangePivot();
-  expect(screen.getByText(/only change while no transaction exists/)).toBeDefined();
+  expect(screen.getByText(/only before the first transaction/)).toBeDefined();
 });
 
 /**
@@ -484,7 +484,7 @@ it("R1 M5 — the row's accessible name carries everything the row shows", () =>
   const name = row.getAttribute("aria-label") ?? "";
   expect(name).toContain("Polish Złoty");
   expect(name).toContain("0 rows");
-  expect(name).toContain("23% · last quote 2022-03-11");
+  expect(name).toContain("23% · last rate 2022-03-11");
   // PLN_ROW is pinned.
   expect(name).toContain("Pinned");
 });
@@ -561,7 +561,7 @@ it("names the currencies nothing points at, and says what that makes possible", 
     readCoverage: () => [],
     readCurrencyUsage: () => new Map([[PLN, { transactions: 12, accounts: 1 }]]),
   });
-  const banner = screen.getByText(/can be removed without touching anything/);
+  const banner = screen.getByText(/can be removed without affecting anything/);
   expect(banner.textContent).toContain("SEK");
   // PLN holds rows, so it is hideable and never named here.
   expect(banner.textContent).not.toContain("PLN");
@@ -574,7 +574,7 @@ it("never offers the pivot as removable", () => {
     readCoverage: () => [],
     readCurrencyUsage: () => new Map(),
   });
-  expect(screen.queryByText(/can be removed without touching anything/)).toBeNull();
+  expect(screen.queryByText(/can be removed without affecting anything/)).toBeNull();
 });
 
 /**
@@ -597,7 +597,7 @@ it("offers the anchor change as a visible action while the ledger holds no trans
   withLedger({});
   const start = screen.getByRole("button", { name: "Change the anchor currency…" });
   expect((start as HTMLButtonElement).disabled).toBe(false);
-  expect(screen.queryByText(/Locked: the ledger already holds transactions/)).toBeNull();
+  expect(screen.queryByText(/Locked: this ledger already has transactions/)).toBeNull();
 });
 
 it("states why the anchor cannot change once a transaction exists, and disables the action", () => {
@@ -608,7 +608,7 @@ it("states why the anchor cannot change once a transaction exists, and disables 
       total: { count: 3, currencies: [] },
     }),
   });
-  expect(screen.getByText(/Locked: the ledger already holds transactions/)).toBeDefined();
+  expect(screen.getByText(/Locked: this ledger already has transactions/)).toBeDefined();
   const start = screen.getByRole("button", { name: "Change the anchor currency…" });
   expect(
     (start as HTMLButtonElement).disabled || start.getAttribute("aria-disabled") === "true",

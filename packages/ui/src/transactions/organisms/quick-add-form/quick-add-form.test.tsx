@@ -107,7 +107,7 @@ it("reveals date, note, business and counterparty only after More", () => {
   expect(screen.getByLabelText("Date")).toBeDefined();
   expect(screen.getByLabelText("Note")).toBeDefined();
   expect(screen.getByRole("switch", { name: "Business" })).toBeDefined();
-  expect(screen.getByText("Counterparty")).toBeDefined();
+  expect(screen.getByText("Person or company")).toBeDefined();
 });
 
 it("asks for the kind, then the account, then the amount, and says the amount waits for an account", () => {
@@ -284,17 +284,17 @@ it("blocks Save on a malformed date", () => {
 it("offers no counterparty field when the ledger holds none", () => {
   renderForm();
   fireEvent.click(screen.getByRole("button", { name: "More" }));
-  expect(screen.queryByText("Counterparty")).toBeNull();
+  expect(screen.queryByText("Person or company")).toBeNull();
 });
 
 /** §6.6 — a counterparty is offered, and its role stays hidden until one is chosen. */
 it("offers a counterparty once the ledger holds one, and its role once it is picked", () => {
   renderForm({ counterparties: [{ id: "cp-a", name: "Counterparty A" }] });
   fireEvent.click(screen.getByRole("button", { name: "More" }));
-  expect(screen.getByText("Counterparty")).toBeDefined();
+  expect(screen.getByText("Person or company")).toBeDefined();
   expect(screen.queryByRole("radiogroup", { name: "Role" })).toBeNull();
 
-  fireEvent.click(screen.getByRole("button", { name: "Counterparty" }));
+  fireEvent.click(screen.getByRole("button", { name: "Person or company" }));
   fireEvent.click(screen.getByRole("radio", { name: "Counterparty A" }));
 
   expect(screen.getByRole("radiogroup", { name: "Role" })).toBeDefined();

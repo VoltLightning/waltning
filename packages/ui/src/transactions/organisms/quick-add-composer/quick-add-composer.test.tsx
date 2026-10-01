@@ -251,7 +251,7 @@ it("offers a person once the ledger holds one, and never defaults the role (§6.
   const props = draw({ counterparties: [{ id: "cp-a", name: "Corner Café" }] });
   openMore();
   fireEvent.click(screen.getByRole("button", { name: "Person" }));
-  fireEvent.click(screen.getByRole("button", { name: "Counterparty" }));
+  fireEvent.click(screen.getByRole("button", { name: "Person or company" }));
   fireEvent.click(screen.getByRole("radio", { name: "Corner Café" }));
   expect(props.onCounterpartyChange).toHaveBeenCalledWith("cp-a");
 });

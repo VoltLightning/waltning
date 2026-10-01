@@ -198,7 +198,7 @@ it("calls onSettle on the primary action", () => {
 it("routes a tap on either hero amount through onActiveFieldChange", () => {
   const onActiveFieldChange = vi.fn();
   renderSheet({ onActiveFieldChange });
-  fireEvent.click(screen.getByRole("button", { name: "Discharges: 50" }));
+  fireEvent.click(screen.getByRole("button", { name: "Pays off: 50" }));
   expect(onActiveFieldChange).toHaveBeenCalledWith("discharges");
 });
 

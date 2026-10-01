@@ -325,7 +325,7 @@ states the percentage of the full range actually held:
 
 ```
   PLN  EUR  GBP  BYN   100%
-  RUB                   23%   last quote 2022-03-11
+  RUB                   23%   last rate 2022-03-11
   GEL                  0.5%   rate-limited · 11 of 2 080 days
 ```
 

@@ -364,7 +364,7 @@ describe("Dashboard (S01)", () => {
     );
 
     expect(
-      screen.getByText("PLN · September 2026 · by leaf category · All"),
+      screen.getByText("PLN · September 2026 · by subcategory · All"),
       "the spend widget names its own currency, period and scope",
     ).toBeTruthy();
     expect(screen.getByText("620.00"), "the PLN figure is charted").toBeTruthy();
@@ -387,7 +387,7 @@ describe("Dashboard (S01)", () => {
 
     const asOf = "As of September 4, 2026 · All";
     expect(screen.getAllByText(asOf), "balances, recent and debt").toHaveLength(3);
-    expect(screen.getByText("PLN · September 2026 · by leaf category · All")).toBeTruthy();
+    expect(screen.getByText("PLN · September 2026 · by subcategory · All")).toBeTruthy();
     expect(screen.getByText("PLN · 5 months + this month to date · All")).toBeTruthy();
     expect(screen.queryByText(/Waltning/)).toBeNull();
   });
@@ -416,7 +416,7 @@ describe("Dashboard (S01)", () => {
     expect(screen.getByText("Savings · CHF")).toBeTruthy();
     expect(screen.getAllByText("CHF").length).toBeGreaterThan(0);
     // And the two fold widgets, which chart one scale, still name it.
-    expect(screen.getByText("PLN · September 2026 · by leaf category · All")).toBeTruthy();
+    expect(screen.getByText("PLN · September 2026 · by subcategory · All")).toBeTruthy();
   });
 
   /**
@@ -462,7 +462,7 @@ describe("Dashboard (S01)", () => {
     withLedger(fakeController({ spendByCategory }));
 
     expect(spendByCategory).toHaveBeenCalledWith(expect.anything(), "business");
-    expect(screen.getByText("PLN · September 2026 · by leaf category · Business")).toBeTruthy();
+    expect(screen.getByText("PLN · September 2026 · by subcategory · Business")).toBeTruthy();
   });
 
   /**

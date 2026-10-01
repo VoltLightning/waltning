@@ -335,7 +335,7 @@ it("shows Last observed on a row that has been reconciled", () => {
       onCreateAccount={vi.fn()}
     />,
   );
-  expect(screen.getByText("Last observed:")).toBeDefined();
+  expect(screen.getByText("Last checked:")).toBeDefined();
   expect(screen.getByText("1 198.30")).toBeDefined();
 });
 

@@ -68,7 +68,7 @@ it("hides Move and Merge for a group, and offers Convert to leaf", () => {
 
   expect(screen.queryByRole("button", { name: "Move" })).toBeNull();
   expect(screen.queryByRole("button", { name: "Merge" })).toBeNull();
-  expect(screen.getByRole("button", { name: "Convert to leaf" })).toBeDefined();
+  expect(screen.getByRole("button", { name: "Convert to category" })).toBeDefined();
 });
 
 it("shows a direct action's refusal inline", () => {

@@ -99,7 +99,7 @@ export const en = {
     /** S05 §7 — the ✕ confirm, shown only over a machine-filled draft. */
     discard: "Discard",
     discardTitle: "Discard this transaction?",
-    discardBody: "It carries an auto-filled account — discarding it is cheap to redo.",
+    discardBody: "Its account was filled in automatically, so starting again is quick.",
 
     edit: "Edit",
     /** `05` §5.3's own pair — the desk table's batch-categorise confirm reuses them (DESK3). */
@@ -116,7 +116,7 @@ export const en = {
      * search" and was rendering as the latter with empty quotes.
      */
     noneTitle: "No accounts yet",
-    noneBody: "Create one, and captures have somewhere to come from.",
+    noneBody: "Create one to start recording transactions.",
     /** A row, an account or a return target that is no longer there. */
     notFound: "This account is no longer here. It may have been archived on another device.",
     badReturnTarget: "That link did not say where to come back to.",
@@ -244,16 +244,16 @@ export const en = {
     delete: "Delete account",
     deleteConfirmTitle: "Delete this account?",
     deleteConfirmBody:
-      "“{{name}}” has no entries, so it is removed completely. This cannot be undone.",
+      "“{{name}}” has no transactions, so it is removed completely. This cannot be undone.",
     deleteConfirmSubmit: "Delete",
     deletedToast: "Account deleted.",
-    deleteHasEntries: "This account now has entries and can only be archived.",
+    deleteHasEntries: "This account now has transactions and can only be archived.",
     /** A bank, cash or deposit account below zero — not a debt to a lender, so not *owed* (S04, S16). */
     overdrawn: "overdrawn",
     reconcile: "Reconcile…",
     reconcileTitle: "Reconcile",
-    computed: "Computed",
-    observed: "You observed",
+    computed: "Recorded",
+    observed: "Actual",
     difference: "Difference",
     asOf: "As of",
     newGroup: "+ New group",
@@ -265,7 +265,7 @@ export const en = {
     sharedNotBusiness: "A shared account is never business.",
     nothingToReconcile: "The ledger already shows this balance.",
     /** S16 §5's last observation — `accounts.expected_balance`, no date column to pair it with yet. */
-    lastObserved: "Last observed:",
+    lastObserved: "Last checked:",
     /** `AccountPicker`'s own strings — the grid the owner asked for over the 20-account list. */
     search: "Search {{count}} accounts",
     noMatchTitle: "No matching account",
@@ -285,8 +285,8 @@ export const en = {
      * bare numbers says nothing about which month, which year, or whether the
      * day held anything (S04 §7).
      */
-    ribbonDayOne: "{{date}}, {{count}} entry",
-    ribbonDayMany: "{{date}}, {{count}} entries",
+    ribbonDayOne: "{{date}}, {{count}} transaction",
+    ribbonDayMany: "{{date}}, {{count}} transactions",
     /** The same cell on a day with nothing on it. */
     ribbonDayEmpty: "{{date}}, nothing",
     /**
@@ -468,8 +468,8 @@ export const en = {
     capital: "One-off",
     capitalHint: "Exclude from comparisons — a move, a car, a deposit returned.",
     chooseRole: "Which?",
-    counterparty: "Counterparty",
-    noCounterparty: "No counterparty",
+    counterparty: "Person or company",
+    noCounterparty: "No one",
     obligationParty: "Owes",
     noObligation: "Nobody",
     role: "Role",
@@ -483,7 +483,7 @@ export const en = {
     modeKeypad: "Keypad",
     modeVoice: "Voice",
     modeReceipt: "Receipt",
-    modeConverse: "Converse",
+    modeConverse: "Chat",
     /* ── S10 · the ledger list (C4) ─────────────────────────────────────── */
     /** `SearchField`'s placeholder — S10 §3 mobile. */
     searchPlaceholder: "Search payee, note, amount",
@@ -541,7 +541,7 @@ export const en = {
     /** `Skeleton`'s accessible label while a page loads. */
     loadingTransactions: "Loading transactions",
     emptyFirstRunTitle: "No transactions yet",
-    emptyFirstRunBody: "Capture your first expense or income to start your ledger.",
+    emptyFirstRunBody: "Record your first expense or income to start your ledger.",
     emptyFilteredTitle: "No matching transactions",
     /** Names the excluding filter and its hidden count (S10 §6) — `count` renders via `states.filteredHidden`. */
     emptyFilteredBody: "This filter is excluding every row.",
@@ -559,10 +559,14 @@ export const en = {
      */
     calendarDrawsNothing:
       "The calendar draws income and expenses on your own accounts. This ledger has none yet.",
-    calendarRangeBody_one: "{{nearest}} is the nearest month with anything — {{count}} entry.",
-    calendarRangeBody_few: "{{nearest}} is the nearest month with anything — {{count}} entries.",
-    calendarRangeBody_many: "{{nearest}} is the nearest month with anything — {{count}} entries.",
-    calendarRangeBody_other: "{{nearest}} is the nearest month with anything — {{count}} entries.",
+    calendarRangeBody_one:
+      "{{nearest}} is the nearest month with anything — {{count}} transaction.",
+    calendarRangeBody_few:
+      "{{nearest}} is the nearest month with anything — {{count}} transactions.",
+    calendarRangeBody_many:
+      "{{nearest}} is the nearest month with anything — {{count}} transactions.",
+    calendarRangeBody_other:
+      "{{nearest}} is the nearest month with anything — {{count}} transactions.",
     /** The jump the `range` state offers, naming where it goes. */
     calendarGoToMonth: "Go to {{month}}",
     /**
@@ -570,7 +574,7 @@ export const en = {
      * *state* — the page is full of marks — so it is one quiet line under the
      * day's own header rather than a title, a body and a button.
      */
-    calendarNearestDay: "Nearest entries: {{date}}",
+    calendarNearestDay: "Nearest transactions: {{date}}",
     /**
      * A search that this month has no answer for. `filtered` and not `range`:
      * the ledger may well hold rows here, and what excludes them is the query.
@@ -610,8 +614,8 @@ export const en = {
     rateProvenance: "{{source}} · {{date}}",
     rateProvenanceCarried: "{{source}} · carried {{count}} d from {{date}}",
     transferSpreadNote:
-      "The spread against the reference rate, shown now rather than found in a report months later.",
-    transferLinkedNote: "One entry on each side, linked — neither is income",
+      "What the bank's rate cost against the reference rate — shown now, not found in a report months later.",
+    transferLinkedNote: "Recorded on both accounts and linked — neither side is income or spending",
     moreDetailsTransferHint: "Fee, date, note",
     /** The one line under the figure — a pace against the previous months, never a bare amount (§1). */
     categoryPace: "{{category}} this month: {{percent}}% of usual",
@@ -627,7 +631,7 @@ export const en = {
     /** The scope sheet's own `SegmentControl` — why *Business* is unreachable for a shared account (§6.7). */
     sharedNeverBusiness: "A shared account is never business.",
     /** D4b's account sheet, machine-filled only — `useLastUsedAccount`'s own window (S05 §9.2). */
-    lastCapture: "From your last capture, {{time}}",
+    lastCapture: "As in your last transaction, {{time}}",
     /**
      * S09: `update_transaction`, `delete_transaction` and
      * `set_transaction_lines` all refuse a stale version the same way — the
@@ -669,7 +673,7 @@ export const en = {
     /** `FloatingAdd`'s long-press picker (S05 §9.1), S16's row action, and the transfer route's own title. */
     transfer: "Transfer",
     /** `RateField`'s label on both S14 and S31 — the figure two typed amounts imply. */
-    realized: "Realized",
+    realized: "Your rate",
     /** `RateField`'s reference line, one sentence rather than three words joined — word order is not the same in every language. */
     referenceRate: "reference {{rate}} · {{source}} · {{date}}",
     /** H2 — the reference line when the shown leg is carried forward: "reference 3.8100 · manual · carried 7 d from 2026-08-05" states the carry honestly rather than folding it silently into `{{date}}` alone. */
@@ -755,7 +759,7 @@ export const en = {
      */
     commandBarHint: "Spaces group thousands; comma or point is the decimal mark.",
     /** The resolved chips' own group — a `listbox` the bar's `combobox` controls, named because a bare group announces nothing. */
-    commandBarChipsLabel: "Resolved fields",
+    commandBarChipsLabel: "Recognised details",
 
     /* ── S10 §3 web (DESK3) — the desk table ──────────────────────────── */
     /** `<LedgerTable>`'s own accessible name — a table with no visible title needs one. */
@@ -824,7 +828,7 @@ export const en = {
      * about the filter would fix this one, so the advice is different.
      */
     searchIncomplete:
-      "The list stopped short at {{count}} rows — a page of results came back empty. Reload to try again.",
+      "The list stopped at {{count}} rows because the next part did not load. Reload to try again.",
   },
   /* ── E5 · counterparties — S14's settle sheet ─────────────────────────── */
   /** S36 · Allocate — J08's split, and the only screen that spends a pot down. */
@@ -897,7 +901,7 @@ export const en = {
       "More has already been repaid than this amount, so saving turns the debt around.",
     existingDebtDateFuture: "An existing debt dates from today or earlier.",
     /** The balance picker (S14 §9.1). */
-    discharges: "Discharges",
+    discharges: "Pays off",
     theyOweYou: "they owe you",
     youOweThem: "you owe them",
     /** A balance row's offline stamp (S14 §6) — the phone's own last write, never today's date. */
@@ -907,7 +911,7 @@ export const en = {
     /** The primary action — full-width, S14 §7. */
     settle: "Settle",
     /** The result card, before commit, always (S14 §5). Lower case, matching `shell.spent`/`shell.net`. */
-    resultDischarges: "discharges",
+    resultDischarges: "pays off",
     resultRemaining: "remaining",
     resultRemainingEstimated: "remaining (estimated)",
     /** The amber line under a stale result (S14 §6) — the phone's own ledger, not the counterparty's. */
@@ -961,12 +965,12 @@ export const en = {
     /** Distinct from `first-run` — a success, not a blank (S12 §6). */
     emptySettledTitle: "All settled",
     emptySettledBody: "Nobody owes anything right now.",
-    loadFailedTitle: "Couldn't load your counterparties",
+    loadFailedTitle: "Couldn't load people and companies",
     loadFailedWhy: "Something went wrong reading the debt ledger.",
     /** M1 — the loading state (S12 §6, S13 §6, S15), never the no-pivot error, while `snapshot.revision` is still `0` and the first `refresh()` has not landed. */
     loadingDebts: "Loading debts",
-    loadingLedger: "Loading counterparty ledger",
-    loadingEditor: "Loading counterparty editor",
+    loadingLedger: "Loading their history",
+    loadingEditor: "Loading details",
     /**
      * H — a pivot-less replica after a completed refresh (`snapshot.revision
      * > 0`) is an invariant violation (`architecture/09`'s bootstrap
@@ -977,7 +981,7 @@ export const en = {
      * reference currency held.
      */
     noPivotTitle: "Couldn't read your currencies",
-    noPivotWhy: "No currency in this ledger is marked as the reference one.",
+    noPivotWhy: "This ledger has no anchor currency set.",
     /** M — `directionTotals` throwing on a genuine invariant violation (S12 counterparties-screen.tsx); the executor's own message is diagnostics-only. */
     totalsInconsistentWhy: "Something went wrong totalling what's owed.",
     /* ── S13 · one person's whole position ──────────────────────────────── */
@@ -1007,19 +1011,19 @@ export const en = {
     /* ── S15 · create and edit ───────────────────────────────────────────── */
     contact: "Contact",
     archive: "Archive",
-    archivedToast: "Counterparty archived.",
+    archivedToast: "Archived.",
     create: "Create",
-    pickerTitle: "Counterparty",
+    pickerTitle: "Person or company",
     pickerSearchPlaceholder: "Search people and companies",
     pickerRecent: "Recent",
     pickerNew: "+ New",
     pickerNoMatches: "No one matches.",
     /** The six writes' refusal `messageKey`s (`create-phone-ledger.ts`) — `architecture/12`. */
-    nameCollision: "A counterparty with this name already exists.",
-    staleVersion: "This counterparty changed elsewhere — reload and try again.",
+    nameCollision: "A person or company with this name already exists.",
+    staleVersion: "These details changed elsewhere — reload and try again.",
     openBalance: "Archiving is for settled relationships — this still has an open balance.",
-    mergeNoCounterparty: "One of these counterparties could not be found.",
-    mergeArchived: "One of these counterparties is already archived.",
+    mergeNoCounterparty: "One of these people or companies could not be found.",
+    mergeArchived: "One of these people or companies is already archived.",
     mergeNotFound: "That merge could not be found, or was already undone.",
   },
   categories: {
@@ -1108,12 +1112,12 @@ export const en = {
     noGroupsYet: "No groups yet — this will be a top-level category.",
     /** S19 §6 — a ledger whose taxonomy has not been seeded yet. */
     emptyTitle: "No categories yet",
-    emptyBody: "Create the first one, and every capture can be filed under it.",
+    emptyBody: "Create the first one, and every transaction can be filed under it.",
     /** `Tag` variants over a leaf — usage count, archived, unused. */
     archived: "Archived",
     subtitle: "{{inUse}} in use · {{archived}} archived",
     spentIn: "Where money went in {{month}}",
-    archivedWhat: "Kept on old entries, never offered again",
+    archivedWhat: "Kept on old transactions, never offered again",
     unused: "Unused",
     usageOne: "{{count}} transaction",
     usageMany: "{{count}} transactions",
@@ -1123,7 +1127,7 @@ export const en = {
     rename: "Rename",
     move: "Move",
     convertToGroup: "Convert to group",
-    convertToLeaf: "Convert to leaf",
+    convertToLeaf: "Convert to category",
     merge: "Merge",
     archive: "Archive",
     /** The move sheet's target picker. */
@@ -1172,7 +1176,7 @@ export const en = {
     /** Balances, recent and debt answer as of a day rather than over a span. */
     asOf: "As of {{date}}",
     /** `S01`'s spend chart reads leaf categories directly, never a rollup (`computations.md` §6, R1). */
-    byLeafCategory: "by leaf category",
+    byLeafCategory: "by subcategory",
     /** The chart's own top-N fold — the sixth-and-on category, summed (§7.2). */
     other: "Other",
     /** A line or transaction carrying no category — the null-`categoryId` row §6's split-lines fold can produce. */
@@ -1193,7 +1197,7 @@ export const en = {
     /** M4 — a database with no active layout row at all, which the seed migration is supposed to make impossible. */
     noLayout: "No dashboard layout",
     noLayoutBody:
-      "This database has no active layout to draw. Reinstalling restores the default one.",
+      "The dashboard has no layout to show. Reinstalling the app restores the default one.",
     noActivity: "Nothing to show for this range",
     /**
      * The income-vs-expense chart's own header meta. `count` is the number of
@@ -1207,7 +1211,7 @@ export const en = {
     /** The bar's first tab. S04, which is *Today* inside it and *Home* on the bar. */
     home: "Home",
     /** The line under each tab root's name — what the screen is for. */
-    ledgerSubtitle: "Every entry, in order",
+    ledgerSubtitle: "Every transaction, in order",
     counterpartiesSubtitle: "Who you deal with, and what is outstanding",
     settingsSubtitle: "Everything about how this behaves",
     /** Summary's gateway grid — a kicker over the cards. */
@@ -1322,8 +1326,8 @@ export const en = {
     accounts: "Accounts",
     recent: "Recent",
     ownCurrency: "Each balance is in its own account's currency — not a total.",
-    morePages: "More transactions exist — paging is not built yet.",
-    thisOrigin: "this origin",
+    morePages: "More transactions exist than this list shows.",
+    thisOrigin: "this browser",
     /**
      * `DeskBand`'s command-bar slot (`02-tokens` §2.10) — `tabs-shell.tsx`'s
      * own `DeskCommandBar` fallback while no capturable account exists to
@@ -1424,15 +1428,15 @@ export const en = {
     whereUnconfirmed: "Check",
     file: "File",
     entries: "Holds",
-    entriesValue_one: "{{count}} entry · {{size}}",
-    entriesValue_few: "{{count}} entries · {{size}}",
-    entriesValue_many: "{{count}} entries · {{size}}",
-    entriesValue_other: "{{count}} entries · {{size}}",
+    entriesValue_one: "{{count}} transaction · {{size}}",
+    entriesValue_few: "{{count}} transactions · {{size}}",
+    entriesValue_many: "{{count}} transactions · {{size}}",
+    entriesValue_other: "{{count}} transactions · {{size}}",
     unsent: "Not yet sent",
-    unsentValue_one: "{{count}} capture",
-    unsentValue_few: "{{count}} captures",
-    unsentValue_many: "{{count}} captures",
-    unsentValue_other: "{{count}} captures",
+    unsentValue_one: "{{count}} change",
+    unsentValue_few: "{{count}} changes",
+    unsentValue_many: "{{count}} changes",
+    unsentValue_other: "{{count}} changes",
     where: "Kept in",
   },
   /**
@@ -1452,7 +1456,7 @@ export const en = {
     counterparty: "What is owed, and since when",
     newCounterparty: "Someone money moves between",
     editCounterparty: "Their name, and how they are counted",
-    transaction: "One entry, and everything behind it",
+    transaction: "One transaction, and everything behind it",
   },
   /** `S30`'s value lines — the one fact behind each destination. */
   settings: {
@@ -1468,15 +1472,14 @@ export const en = {
     categoriesValue_few: "{{count}} in use",
     categoriesValue_many: "{{count}} in use",
     categoriesValue_other: "{{count}} in use",
-    ratesCurrent: "Every quote is today's",
+    ratesCurrent: "Every rate is today's",
     backupTaken: "Last taken {{date}}",
-    ratesOldest_one: "Oldest quote {{count}} day old",
-    ratesOldest_few: "Oldest quote {{count}} days old",
-    ratesOldest_many: "Oldest quote {{count}} days old",
-    ratesOldest_other: "Oldest quote {{count}} days old",
+    ratesOldest_one: "Oldest rate {{count}} day old",
+    ratesOldest_few: "Oldest rate {{count}} days old",
+    ratesOldest_many: "Oldest rate {{count}} days old",
+    ratesOldest_other: "Oldest rate {{count}} days old",
     onThisPhoneTitle: "Everything is on this phone",
-    onThisPhoneBody:
-      "Nothing has left it. When you add a machine, this is where you will pair them.",
+    onThisPhoneBody: "Nothing has left it. When you add a computer, you will connect it here.",
     appearance: "Appearance",
     language: "Language",
     followPhone: "Match the phone",
@@ -1498,15 +1501,15 @@ export const en = {
     title: "Restore",
     lede: "Put a backup back. This fills an empty ledger — it does not merge with one you already have.",
     keyLabel: "Your key",
-    keyHint: "The AGE-SECRET-KEY the backup was taken with",
+    keyHint: "The key shown when the backup was made — it starts with AGE-SECRET-KEY",
     choose: "Choose a file",
     readySubtitle: "Check this before you replace anything",
     found: "In this file",
     taken: "Taken",
-    entriesValue_one: "{{count}} entry",
-    entriesValue_few: "{{count}} entries",
-    entriesValue_many: "{{count}} entries",
-    entriesValue_other: "{{count}} entries",
+    entriesValue_one: "{{count}} transaction",
+    entriesValue_few: "{{count}} transactions",
+    entriesValue_many: "{{count}} transactions",
+    entriesValue_other: "{{count}} transactions",
     apply: "Restore this",
     cancel: "Not this one",
     working: "Restoring…",
@@ -1539,7 +1542,7 @@ export const en = {
     accounts: "Accounts",
     editAccount: "Edit account",
     ledger: "Ledger",
-    counterparties: "Counterparties",
+    counterparties: "People",
     /** S09's nav title — no page heading repeats it (`TransactionHero` already states the amount). */
     transaction: "Transaction",
     settings: "Settings",
@@ -1551,9 +1554,9 @@ export const en = {
     rates: "Exchange rates",
 
     /** S13's nav title — the person's own name is the page's own heading, drawn by `CounterpartyCard`. */
-    counterparty: "Counterparty",
-    newCounterparty: "New counterparty",
-    editCounterparty: "Edit counterparty",
+    counterparty: "Person or company",
+    newCounterparty: "New person or company",
+    editCounterparty: "Edit person or company",
   },
   /**
    * `settle_debt`'s refusals (H9), resolved through `useT()` the same way
@@ -1562,7 +1565,7 @@ export const en = {
    * `create-phone-ledger.ts`'s own `settleDebtRefusal` exactly.
    */
   settleDebt: {
-    noCounterparty: "This counterparty no longer exists.",
+    noCounterparty: "This person or company no longer exists.",
     nothingToSettle: "There is nothing open in this currency to settle.",
     /**
      * #116 review, M3 — SPEC.md §6.5: a transaction's currency is its
@@ -1576,9 +1579,9 @@ export const en = {
     rates: "Exchange rates",
 
     /** S13's nav title — the person's own name is the page's own heading, drawn by `CounterpartyCard`. */
-    counterparty: "Counterparty",
-    newCounterparty: "New counterparty",
-    editCounterparty: "Edit counterparty",
+    counterparty: "Person or company",
+    newCounterparty: "New person or company",
+    editCounterparty: "Edit person or company",
   },
   /** `packages/ui/src/fx/` and the two screens it feeds — S17, S18. */
   fx: {
@@ -1590,7 +1593,7 @@ export const en = {
      * has to act on, and `Tag` upper-cases everything it is handed.
      */
     coveragePct: "{{pct}}%",
-    coverageBelow: "{{pct}}% · last quote {{date}}",
+    coverageBelow: "{{pct}}% · last rate {{date}}",
     coverageTitle: "Coverage",
     /** 0% — nothing held yet, S17 §2's own words, not a bare "0%". */
     noRatesYet: "No rates yet · set one by hand",
@@ -1611,7 +1614,7 @@ export const en = {
     noRatesYetFuture_many: "No rates yet · {{count}} set for later",
     noRatesYetFuture_other: "No rates yet · {{count}} set for later",
     /** H2 — rows held, but none a real quote (every one `carried_forward`): no date exists to state. */
-    noQuoteYet: "No quote yet",
+    noQuoteYet: "No published rate yet",
     /** `RateField` — `03` §3.7. */
     rateFieldSynced: "Synced: {{rate}}",
     /** `parseRate`'s own refusal — 0, negative, or anything not a positive decimal. */
@@ -1700,14 +1703,14 @@ export const en = {
     currencyArchiveRefused: "Couldn't archive this currency.",
     currencyWriteFailed: "That didn't save.",
     /** S17 §9.2 — a row's own symbol and decimals, and the sheet that edits them. */
-    currencyDetail: "{{symbol}} · {{decimals}}dp",
+    currencyDetail: "{{symbol}} · {{decimals}} decimals",
     currencyHolds_one: "{{count}} row",
     currencyHolds_few: "{{count}} rows",
     currencyHolds_many: "{{count}} rows",
     currencyHolds_other: "{{count}} rows",
-    removableTitle: "Nothing points at these yet",
+    removableTitle: "Not used yet",
     removableBody:
-      "{{codes}} hold no rows and no rates. A currency with neither can be removed without touching anything; one with rows can only be hidden.",
+      "Nothing is recorded in {{codes}}, and no rates are held. A currency like that can be removed without affecting anything; one with transactions can only be hidden.",
     editCurrency: "Edit {{code}}",
     symbolPosition: "Symbol position",
     symbolBefore: "Before the figure",
@@ -1717,7 +1720,7 @@ export const en = {
     pivotKicker: "Anchor currency",
     pivotName: "{{name}} · the anchor",
     pivotExplained:
-      "Exchange rates are stored against this currency so any pair can be worked out. It decides nothing you see; figures are shown in the currency above.",
+      "Exchange rates are stored against this currency, so any two currencies can be converted. It changes nothing you see: figures are shown in the currency above.",
     displayExplained:
       "Until you choose, this follows your phone's region. Switching changes only how figures are shown; nothing you have recorded changes.",
     displayNeedsRate:
@@ -1728,10 +1731,10 @@ export const en = {
     changePivot: "Change anchor currency",
     pivotConfirmTitle: "Change the anchor currency?",
     pivotConfirmBody:
-      "The anchor currency is the technical hub every rate is stored against. It can only change while no transaction exists, because this phone cannot re-rate existing history. Changing it is rare and recorded in the audit log.",
+      "Exchange rates are stored against the anchor currency. It does not change which currency figures are shown in. It can be changed only before the first transaction, and the change is logged.",
     pivotConfirmSubmit: "Yes, change it",
     pivotChangeRefused:
-      "The anchor currency can't change once a transaction exists: this phone cannot re-rate existing history. It can be changed only while the ledger holds no transactions.",
+      "This ledger already has transactions, and this phone cannot recalculate their rates against a new anchor currency. It can be changed only before the first transaction.",
     /**
      * M2 — §7.0's *"dropped rather than left mis-quoted"*, said out loud. The
      * rewrite keeps only the dates that hold a real published rate against
@@ -1744,13 +1747,13 @@ export const en = {
      * grammar than English needs the same key set present here.
      */
     pivotChangeDroppedDates_one:
-      "Anchor currency changed · {{count}} date had no rate to rebase and was dropped",
+      "Anchor currency changed · {{count}} date had no rate against it and was removed",
     pivotChangeDroppedDates_few:
-      "Anchor currency changed · {{count}} dates had no rate to rebase and were dropped",
+      "Anchor currency changed · {{count}} dates had no rate against it and were removed",
     pivotChangeDroppedDates_many:
-      "Anchor currency changed · {{count}} dates had no rate to rebase and were dropped",
+      "Anchor currency changed · {{count}} dates had no rate against it and were removed",
     pivotChangeDroppedDates_other:
-      "Anchor currency changed · {{count}} dates had no rate to rebase and were dropped",
+      "Anchor currency changed · {{count}} dates had no rate against it and were removed",
     /** C1 — the executor's other refusal: the chosen code is already the pivot. */
     pivotAlreadyPivot: "That currency is already the anchor.",
     /** C1 — the target `Select` in the pivot-change flow, ahead of the confirm dialog. */
@@ -1758,9 +1761,9 @@ export const en = {
     pivotTargetPlaceholder: "Choose a currency",
     displayShowIn: "Show figures in",
     anchorBlocked:
-      "Locked: the ledger already holds transactions, and this phone cannot re-rate them. The anchor currency can be changed only while there are none.",
+      "Locked: this ledger already has transactions, and this phone cannot recalculate their rates. The anchor currency can be changed only before the first transaction.",
     /** S18. */
-    pairLabel: "Quote, against {{base}}",
+    pairLabel: "Currency, against {{base}}",
     sourceStopped: "{{source}} has not answered since {{date}}.",
     sourceStoppedWhy:
       "Rates carry forward for ten days, then a figure that needs one says so rather than quietly using a stale number.",
@@ -1805,7 +1808,7 @@ export const en = {
     /** Its own sentence — "Cleared 0 manual rates" reads as a failure. */
     clearManualNone: "No rates set by hand in that range.",
     rateWriteFailed: "That didn't save.",
-    rerateNotOffered: "Re-rate from the desk once a server exists.",
+    rerateNotOffered: "Recalculating past figures at new rates is not available on this phone.",
   },
   states: {
     /**
@@ -1895,7 +1898,7 @@ export const en = {
      * missing. None of those has a sentence worth showing (a timeout, or a
      * `CompileError`), and reloading is the one thing that helps.
      */
-    ledgerUnavailableBody: "The ledger engine did not start. Reloading usually fixes it.",
+    ledgerUnavailableBody: "Your ledger could not be opened. Reloading usually fixes it.",
   },
   /**
    * The starter categories' display names, keyed by their seed key

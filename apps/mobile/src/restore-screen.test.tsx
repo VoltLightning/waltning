@@ -119,8 +119,8 @@ it("opens a real backup and shows what is in it, writing nothing yet", async () 
 
   await waitFor(() => expect(screen.getByText("In this file")).toBeDefined());
   expect(screen.getByText("waltning-2026-09-14-abc123.age")).toBeDefined();
-  expect(screen.getByText("1180 entries")).toBeDefined();
-  expect(screen.getByText("3 captures")).toBeDefined();
+  expect(screen.getByText("1180 transactions")).toBeDefined();
+  expect(screen.getByText("3 changes")).toBeDefined();
   // Nothing written until the second step.
   expect(restored).toHaveLength(0);
 });

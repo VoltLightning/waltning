@@ -222,7 +222,7 @@ describe("AccountEditorScreen", () => {
 
     const sheet = within(screen.getByLabelText("Reconcile"));
     expect(sheet.getByText("Bank A · PLN")).toBeDefined();
-    fireEvent.change(sheet.getByLabelText("You observed"), { target: { value: "1198.30" } });
+    fireEvent.change(sheet.getByLabelText("Actual"), { target: { value: "1198.30" } });
     fireEvent.click(sheet.getByRole("button", { name: "Save" }));
 
     await waitFor(() => expect(reconcileAccount).toHaveBeenCalledTimes(1));
@@ -258,7 +258,7 @@ describe("AccountEditorScreen", () => {
     withLedger({ reconcileAccount });
     fireEvent.click(screen.getByRole("button", { name: "Reconcile…" }));
     const sheet = within(screen.getByLabelText("Reconcile"));
-    fireEvent.change(sheet.getByLabelText("You observed"), { target: { value: "1240.50" } });
+    fireEvent.change(sheet.getByLabelText("Actual"), { target: { value: "1240.50" } });
     fireEvent.click(sheet.getByRole("button", { name: "Save" }));
 
     expect(screen.getByText("The ledger already shows this balance.")).toBeDefined();

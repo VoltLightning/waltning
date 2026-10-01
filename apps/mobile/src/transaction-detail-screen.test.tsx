@@ -359,9 +359,9 @@ describe("TransactionDetail", () => {
     // it. S09 is the one surface where the two can name different parties —
     // paying a shop for a friend — which is why the rows are separate rather
     // than one field with a role hanging off it.
-    fireEvent.click(screen.getByRole("button", { name: "Counterparty" }));
+    fireEvent.click(screen.getByRole("button", { name: "Person or company" }));
     fireEvent.click(screen.getByRole("button", { name: "Nina" }));
-    expect(screen.getByRole("button", { name: "Counterparty: Nina" })).toBeDefined();
+    expect(screen.getByRole("button", { name: "Person or company: Nina" })).toBeDefined();
     expect(
       screen.queryByRole("button", { name: "Role" }),
       "naming somebody owes them nothing",
@@ -405,7 +405,7 @@ describe("TransactionDetail", () => {
 
     expect(screen.getByText("Who was this with?")).toBeDefined();
 
-    fireEvent.click(screen.getByRole("button", { name: "Counterparty" }));
+    fireEvent.click(screen.getByRole("button", { name: "Person or company" }));
     fireEvent.click(screen.getByRole("button", { name: "Nina" }));
 
     expect(screen.queryByText("Who was this with?")).toBeNull();

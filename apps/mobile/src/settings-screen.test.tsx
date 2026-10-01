@@ -193,7 +193,7 @@ it("states the categories in use and the oldest quote's age", () => {
     ],
   });
   expect(screen.getByText("2 in use")).toBeDefined();
-  expect(screen.getByText("Oldest quote 5 days old")).toBeDefined();
+  expect(screen.getByText("Oldest rate 5 days old")).toBeDefined();
 });
 
 /**

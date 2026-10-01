@@ -75,7 +75,7 @@ it("omits Last observed until an account has been reconciled", () => {
       onCreateGroup={noopCreateGroup}
     />,
   );
-  expect(screen.queryByText("Last observed:")).toBeNull();
+  expect(screen.queryByText("Last checked:")).toBeNull();
 });
 
 it("shows Last observed once reconcile_account has recorded one", () => {
@@ -92,7 +92,7 @@ it("shows Last observed once reconcile_account has recorded one", () => {
       onCreateGroup={noopCreateGroup}
     />,
   );
-  expect(screen.getByText("Last observed:")).toBeDefined();
+  expect(screen.getByText("Last checked:")).toBeDefined();
   expect(screen.getByText("1 198.30")).toBeDefined();
 });
 

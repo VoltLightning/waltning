@@ -8,7 +8,7 @@ system it is built from, every user journey, and every screen.
 | | |
 |---|---|
 | 1 | [`principles.md`](principles.md) — the five rules every screen inherits |
-| 2 | [`design-system/`](design-system/) — tokens, components, states, build order |
+| 2 | [`design-system/`](design-system/) — tokens, components, states, build order, copy |
 | 3 | [`flows/`](flows/) — 17 journeys, ordered by how often they run |
 | 4 | [`screens/`](screens/) — 32 screens, specified individually |
 | 5 | [`operations.md`](operations.md) — the registry the UI and the agent are both generated from |
@@ -232,6 +232,7 @@ Each says so in its own §3 rather than leaving the absence to be inferred.
 | [Platform notes](design-system/11-platform-notes.md) |
 | [Build order](design-system/12-build-order.md) |
 | [Open questions](design-system/13-open-questions.md) |
+| [Copy and localization](design-system/14-copy-and-localization.md) |
 
 ---
 

@@ -385,7 +385,7 @@ describe("Debt (S12)", () => {
         <Debt />
       </LedgerProvider>,
     );
-    expect(screen.getByText("Couldn't load your counterparties")).toBeDefined();
+    expect(screen.getByText("Couldn't load people and companies")).toBeDefined();
     // M — the executor's own English (`/disagree on decimals/`) is
     // diagnostics-only now; a person sees the fixed, translated `why`.
     expect(screen.getByText("Something went wrong totalling what's owed.")).toBeDefined();
@@ -419,7 +419,7 @@ describe("Debt (S12)", () => {
         <Debt />
       </LedgerProvider>,
     );
-    expect(screen.getByText("Couldn't load your counterparties")).toBeDefined();
+    expect(screen.getByText("Couldn't load people and companies")).toBeDefined();
 
     const totalsCalls = () =>
       emitClientDiagnosticSpy.mock.calls.filter(
@@ -430,7 +430,7 @@ describe("Debt (S12)", () => {
     // A second refresh, still failing the same way — never a second emission
     // for a reason already reported.
     act(() => controller.refresh());
-    expect(screen.getByText("Couldn't load your counterparties")).toBeDefined();
+    expect(screen.getByText("Couldn't load people and companies")).toBeDefined();
     expect(totalsCalls()).toHaveLength(1);
   });
 
@@ -1066,7 +1066,7 @@ describe("CounterpartyDetail (S13)", () => {
     fireEvent.click(sheet.getByRole("button", { name: "Amount: 0" }));
     fireEvent.click(sheet.getByRole("button", { name: "5" }));
     fireEvent.click(sheet.getByRole("button", { name: "0" }));
-    fireEvent.click(sheet.getByRole("button", { name: "Discharges: 0" }));
+    fireEvent.click(sheet.getByRole("button", { name: "Pays off: 0" }));
     fireEvent.click(sheet.getByRole("button", { name: "5" }));
     fireEvent.click(sheet.getByRole("button", { name: "0" }));
     fireEvent.click(sheet.getByRole("button", { name: "Settle" }));
@@ -1169,7 +1169,7 @@ describe("CounterpartyDetail (S13)", () => {
       fireEvent.click(sheet.getByRole("button", { name: "5" }));
       fireEvent.click(sheet.getByRole("button", { name: "0" }));
       fireEvent.click(
-        sheet.getByRole("button", { name: locale === "pl" ? "Rozlicza: 0" : "Discharges: 0" }),
+        sheet.getByRole("button", { name: locale === "pl" ? "Rozlicza: 0" : "Pays off: 0" }),
       );
       fireEvent.click(sheet.getByRole("button", { name: "5" }));
       fireEvent.click(sheet.getByRole("button", { name: "0" }));
@@ -1227,7 +1227,7 @@ describe("CounterpartyDetail (S13)", () => {
     fireEvent.click(sheet.getByRole("button", { name: "5" }));
     fireEvent.click(sheet.getByRole("button", { name: "0" }));
 
-    fireEvent.click(sheet.getByRole("button", { name: "Discharges: 0" }));
+    fireEvent.click(sheet.getByRole("button", { name: "Pays off: 0" }));
     fireEvent.click(sheet.getByRole("button", { name: "5" }));
     fireEvent.click(sheet.getByRole("button", { name: "0" }));
 
@@ -1283,7 +1283,7 @@ describe("CounterpartyDetail (S13)", () => {
     fireEvent.click(sheet.getByRole("button", { name: "4" }));
     fireEvent.click(sheet.getByRole("button", { name: "0" }));
 
-    fireEvent.click(sheet.getByRole("button", { name: "Discharges: 0" }));
+    fireEvent.click(sheet.getByRole("button", { name: "Pays off: 0" }));
     fireEvent.click(sheet.getByRole("button", { name: "8" }));
     fireEvent.click(sheet.getByRole("button", { name: "4" }));
     fireEvent.click(sheet.getByRole("button", { name: "0" }));
@@ -1344,7 +1344,7 @@ describe("CounterpartyDetail (S13)", () => {
     fireEvent.click(sheet.getByRole("button", { name: "5" }));
     fireEvent.click(sheet.getByRole("button", { name: "0" }));
 
-    fireEvent.click(sheet.getByRole("button", { name: "Discharges: 0" }));
+    fireEvent.click(sheet.getByRole("button", { name: "Pays off: 0" }));
     fireEvent.click(sheet.getByRole("button", { name: "5" }));
     fireEvent.click(sheet.getByRole("button", { name: "0" }));
 
@@ -1406,7 +1406,7 @@ describe("CounterpartyDetail (S13)", () => {
     // counterparty's own settlement currency, S14 §9.1).
     expect(sheet.getByRole("radio", { name: /PLN/ })).toBeDefined();
 
-    fireEvent.click(sheet.getByRole("button", { name: "Discharges: 0" }));
+    fireEvent.click(sheet.getByRole("button", { name: "Pays off: 0" }));
     fireEvent.click(sheet.getByRole("button", { name: "1" }));
     // `Keypad`'s decimal key emits the canonical `,`, but its own *label*
     // follows the locale — English shows `.` (`keypad.tsx`).
@@ -1421,13 +1421,13 @@ describe("CounterpartyDetail (S13)", () => {
     expect(sheet.getByText("JPY holds 0 decimal places — this amount has more.")).toBeDefined();
     // `AmountField` displays the raw "1,23" through the locale's own mark
     // (English: ".") — the same `display` a caption or a hero value reads.
-    expect(sheet.getByRole("button", { name: "Discharges: 1.23" })).toBeDefined();
+    expect(sheet.getByRole("button", { name: "Pays off: 1.23" })).toBeDefined();
 
     // L6 — a keystroke clears the stale refusal rather than leaving it
     // stand against a figure that has since changed. The next digit typed
     // (into either field) is what a person does next after reading the
     // caption, and it used to leave the caption exactly where it was.
-    fireEvent.click(sheet.getByRole("button", { name: "Discharges: 1.23" }));
+    fireEvent.click(sheet.getByRole("button", { name: "Pays off: 1.23" }));
     fireEvent.click(sheet.getByRole("button", { name: "4" }));
     expect(screen.queryByText("JPY holds 0 decimal places — this amount has more.")).toBeNull();
   });
@@ -1580,7 +1580,7 @@ describe("CounterpartyEditor (S15)", () => {
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
     const alert = screen.getByRole("alert");
-    expect(alert.textContent).toContain("This counterparty changed elsewhere");
+    expect(alert.textContent).toContain("These details changed elsewhere");
   });
 
   /** Finding 2 — an open-balance refusal on archive shows the executor's own message on a Toast. */

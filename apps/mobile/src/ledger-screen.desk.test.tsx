@@ -544,7 +544,7 @@ describe("Ledger at desk width", () => {
     withLedger(<Ledger />, fakeController(searchTransactions));
 
     const alerts = screen.getAllByRole("alert").map((node) => node.textContent ?? "");
-    expect(alerts.some((message) => /came back empty/.test(message))).toBe(true);
+    expect(alerts.some((message) => /next part did not load/.test(message))).toBe(true);
     expect(alerts.some((message) => /Narrow the filter/.test(message))).toBe(false);
   });
 

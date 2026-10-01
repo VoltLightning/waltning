@@ -90,7 +90,7 @@ export const WithCounterparty: Story = {
     // the owner document rather than `canvasElement`.
     const canvas = within(canvasElement.ownerDocument.body);
     await userEvent.click(await canvas.findByRole("button", { name: "More" }));
-    await userEvent.click(await canvas.findByRole("button", { name: "Counterparty" }));
+    await userEvent.click(await canvas.findByRole("button", { name: "Person or company" }));
     await userEvent.click(await canvas.findByRole("radio", { name: "Counterparty A" }));
     await expect(canvas.findByRole("radiogroup", { name: "Role" })).resolves.toBeDefined();
   },
