@@ -21,6 +21,7 @@ import type {
   MoveCategoryDraft,
   RenameCategoryDraft,
 } from "@waltning/client/ledger/create-phone-ledger";
+import { collisionsOf } from "@waltning/client/ledger/create-phone-ledger";
 import { useCategoryReferenceCounts } from "@waltning/client/ledger/use-category-reference-counts";
 import { useLedgerController } from "@waltning/client/ledger/use-ledger-controller";
 import { usePhoneLedger } from "@waltning/client/ledger/use-phone-ledger";
@@ -36,6 +37,7 @@ import { CreateCategorySheet } from "@waltning/ui/categories/create-category-she
 import { MergeCategorySheet } from "@waltning/ui/categories/merge-category-sheet";
 import { MoveCategorySheet } from "@waltning/ui/categories/move-category-sheet";
 import { RenameCategorySheet } from "@waltning/ui/categories/rename-category-sheet";
+import { categorySearchFold, drawnNamesOf } from "@waltning/ui/i18n/category-label";
 import { monthLabel } from "@waltning/ui/i18n/locales";
 import { useLocale, useT } from "@waltning/ui/i18n/provider";
 import { useCategoryLabel } from "@waltning/ui/i18n/use-category-label";
@@ -148,7 +150,7 @@ function visibleTree(
   const eligible = nodes.filter(
     (node) => !isUncategorized(node) && (options.showArchived || !node.archived),
   );
-  const query = options.search.trim().toLowerCase();
+  const query = categorySearchFold(options.search.trim());
   if (query === "") return eligible;
 
   const matchingLeafIds = new Set(
@@ -156,8 +158,8 @@ function visibleTree(
       .filter(
         (node) =>
           node.isLeaf &&
-          (node.name.toLowerCase().includes(query) ||
-            (options.storedNames.get(node.id) ?? "").toLowerCase().includes(query)),
+          (categorySearchFold(node.name).includes(query) ||
+            categorySearchFold(options.storedNames.get(node.id) ?? "").includes(query)),
       )
       .map((n) => n.id),
   );
@@ -242,6 +244,10 @@ export default function CategoriesScreen() {
     () => new Map(snapshot.fullCategoryTree.map((node) => [node.id as string, node.name])),
     [snapshot.fullCategoryTree],
   );
+  const drawnNames = useMemo(
+    () => drawnNamesOf(labelOf, snapshot.fullCategoryTree),
+    [snapshot.fullCategoryTree, labelOf],
+  );
   const nodes: readonly CategoryTreeNode[] = useMemo(
     () =>
       usedFirst(
@@ -274,21 +280,31 @@ export default function CategoriesScreen() {
     [snapshot.fullCategoryTree, snapshot.categoryUsage, spend, pivot, labelOf],
   );
 
-  const collisions = useMemo(
-    () =>
-      snapshot.categoryCollisions.map((collision) => ({
-        ...collision,
-        a: {
-          ...collision.a,
-          name: nodes.find((n) => n.id === collision.a.id)?.name ?? collision.a.name,
-        },
-        b: {
-          ...collision.b,
-          name: nodes.find((n) => n.id === collision.b.id)?.name ?? collision.b.name,
-        },
+  // Near-duplicates on the stored names, plus on the names as drawn — a
+  // translated starter can sit beside a person's own category it resembles.
+  const collisions = useMemo(() => {
+    const drawn = collisionsOf(
+      snapshot.fullCategoryTree.map((node) => ({
+        ...node,
+        name: drawnNames[node.id] ?? node.name,
       })),
-    [snapshot.categoryCollisions, nodes],
-  );
+      snapshot.categoryUsage,
+    );
+    const seen = new Set<string>();
+    const merged = [...snapshot.categoryCollisions, ...drawn].filter((collision) => {
+      const key = [collision.a.id, collision.b.id].sort().join("|");
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+    return merged
+      .sort((x, y) => y.score - x.score)
+      .map((collision) => ({
+        ...collision,
+        a: { ...collision.a, name: drawnNames[collision.a.id] ?? collision.a.name },
+        b: { ...collision.b, name: drawnNames[collision.b.id] ?? collision.b.name },
+      }));
+  }, [snapshot.categoryCollisions, snapshot.fullCategoryTree, snapshot.categoryUsage, drawnNames]);
   const uncategorized = nodes.find(isUncategorized) ?? null;
   const rows = useMemo(
     () => visibleTree(nodes, { search, showArchived, storedNames }),
@@ -375,7 +391,13 @@ export default function CategoriesScreen() {
       // Undo puts back what was *stored*, which for a starter still carrying
       // its canonical name is the name that keeps translating.
       const oldName = storedNames.get(sheet.category.id) ?? sheet.category.name;
-      const draft: RenameCategoryDraft = { id: sheet.category.id, name };
+      // Saving the text it was opened with changes nothing, and writing it
+      // would freeze a starter at its translation.
+      if (name.trim() === sheet.category.name) {
+        setSheet(null);
+        return;
+      }
+      const draft: RenameCategoryDraft = { id: sheet.category.id, name, drawnNames };
       const result = ledger.renameCategory(draft);
       if ("fieldErrors" in result) {
         setSheet({ ...sheet, error: messageOf(result.fieldErrors) });
@@ -389,7 +411,7 @@ export default function CategoriesScreen() {
         },
       });
     },
-    [sheet, ledger, t, messageOf, showToast, storedNames],
+    [sheet, ledger, t, messageOf, showToast, storedNames, drawnNames],
   );
 
   const handleSaveMove = useCallback(
@@ -420,7 +442,7 @@ export default function CategoriesScreen() {
   const handleOpenCreate = useCallback(() => setSheet({ type: "create" }), []);
   const handleSaveCreate = useCallback(
     (draft: CreateCategoryDraft) => {
-      const result = ledger.createCategory(draft);
+      const result = ledger.createCategory({ ...draft, drawnNames });
       if ("fieldErrors" in result) {
         setSheet({ type: "create", error: messageOf(result.fieldErrors) });
         return;
@@ -428,7 +450,7 @@ export default function CategoriesScreen() {
       setSheet(null);
       showToast({ message: t("categories.newCategory") });
     },
-    [ledger, t, messageOf, showToast],
+    [ledger, t, messageOf, showToast, drawnNames],
   );
 
   const handleConfirmMerge = useCallback(

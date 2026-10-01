@@ -268,7 +268,7 @@ export type PhoneRecentTransaction = {
   date: AccountingDate;
   enteredName: string;
   categoryName: string | null;
-  categoryExternalId?: string | null | undefined;
+  categoryExternalId: string | null;
   accountName: string;
   amount: Money;
   currency: CurrencyCode;
@@ -298,7 +298,7 @@ export type PhoneCategory = {
   name: string;
   kind: "income" | "expense";
   /** The seed's own tag — the display rule's other input (`@waltning/core/seed-label`). */
-  externalId?: string | null | undefined;
+  externalId: string | null;
 };
 
 /**
@@ -515,7 +515,7 @@ export type PhoneSearchTransaction = {
   enteredName: string;
   note: string;
   categoryName: string | null;
-  categoryExternalId?: string | null | undefined;
+  categoryExternalId: string | null;
   /** `SPEC.md` §14.4b — mirrors `@waltning/ledger`'s `LocalSearchTransaction.brandKey` field-for-field. */
   brandKey: string | null;
   accountId: Id<"accounts">;
@@ -612,7 +612,7 @@ export type PhoneTransactionLine = {
   amount: Money;
   categoryId: Id<"categories"> | null;
   categoryName: string | null;
-  categoryExternalId?: string | null | undefined;
+  categoryExternalId: string | null;
 };
 
 /**
@@ -650,7 +650,7 @@ export type PhoneTransactionDetail = {
   fee: Money | null;
   categoryId: Id<"categories"> | null;
   categoryName: string | null;
-  categoryExternalId?: string | null | undefined;
+  categoryExternalId: string | null;
   /** §6.6.1 — who the transaction was *with*, and the name to draw for it. */
   counterpartyId: Id<"counterparties"> | null;
   /** `counterpartyId`'s own name, archived or not; `counterpartyName` is the obligation's. */
@@ -1308,6 +1308,12 @@ export type CreateCategoryDraft = {
   name: string;
   kind: "income" | "expense";
   parentId: string | null;
+  /**
+   * Category id → the name the screen draws for it (`categoryLabel`). A
+   * starter is drawn in the app's language, so a sibling collides with what
+   * the person *sees* as well as with what is stored (`SPEC.md` §6.3).
+   */
+  drawnNames?: Readonly<Record<string, string>>;
 };
 
 /**
@@ -1386,7 +1392,12 @@ export type TransactionLineDraft = {
   categoryId?: string | null;
 };
 /** What S19's rename sheet can save. */
-export type RenameCategoryDraft = { id: string; name: string };
+export type RenameCategoryDraft = {
+  id: string;
+  name: string;
+  /** As on `CreateCategoryDraft`. */
+  drawnNames?: Readonly<Record<string, string>>;
+};
 
 /** What S19's move sheet can save — `parentId: null` moves to the root. */
 export type MoveCategoryDraft = { id: string; parentId: string | null };
@@ -2292,7 +2303,7 @@ function sharedTrigramCount(a: ReadonlySet<string>, b: ReadonlySet<string>): num
  * `merge_categories` refuses a group on either side, so a candidate outside
  * that scope is one the merge sheet could never act on.
  */
-function collisionsOf(
+export function collisionsOf(
   tree: readonly PhoneFullCategoryNode[],
   usage: ReadonlyMap<Id<"categories">, number>,
 ): readonly PhoneCategoryCollision[] {
@@ -2320,6 +2331,17 @@ function collisionsOf(
   }
 
   return collisions.sort((x, y) => y.score - x.score);
+}
+
+/** A sibling collides on the stored name and on the name the screen draws for it. */
+function namesCollide(
+  node: { id: string; name: string },
+  foldedTarget: string,
+  drawnNames: Readonly<Record<string, string>> | undefined,
+): boolean {
+  if (fold(node.name) === foldedTarget) return true;
+  const drawn = drawnNames?.[node.id];
+  return drawn !== undefined && fold(drawn) === foldedTarget;
 }
 
 /** The category a draft names, or `undefined` — every write below refuses on a miss. */
@@ -4034,14 +4056,19 @@ export function createPhoneLedger(
           (node) =>
             node.parentId === (draft.parentId ?? null) &&
             node.kind === draft.kind &&
-            fold(node.name) === target,
+            namesCollide(node, target, draft.drawnNames),
         );
         if (collision) {
           return finish(
             diagnostics,
             { scope: "client_action", action: "create_category" },
             {
-              fieldErrors: [{ path: "name", message: `"${collision.name}" already exists here` }],
+              fieldErrors: [
+                {
+                  path: "name",
+                  message: `"${draft.drawnNames?.[collision.id] ?? collision.name}" already exists here`,
+                },
+              ],
             },
           );
         }
@@ -4652,11 +4679,16 @@ export function createPhoneLedger(
             node.id !== current.id &&
             node.parentId === current.parentId &&
             node.kind === current.kind &&
-            fold(node.name) === target,
+            namesCollide(node, target, draft.drawnNames),
         );
         if (collision) {
           return {
-            fieldErrors: [{ path: "name", message: `"${collision.name}" already exists here` }],
+            fieldErrors: [
+              {
+                path: "name",
+                message: `"${draft.drawnNames?.[collision.id] ?? collision.name}" already exists here`,
+              },
+            ],
           };
         }
 

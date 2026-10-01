@@ -1204,9 +1204,19 @@ freeze. Renaming a row to exactly its canonical English name makes it a
 starter again, and it translates — the stored text is identical either way.
 The rule is one pure function (`@waltning/core/seed-label`) over `name` and
 `external_id`, and every surface that draws a category name goes through it.
-The stored name stays the canonical one everywhere else: sibling uniqueness,
-the agent, exports and sync all read it, and search matches both the drawn
-name and the stored one.
+The stored name stays the canonical one everywhere else: the database's
+sibling-uniqueness index, the agent, exports and sync all read it. Search
+matches both the drawn name and the stored one, with accents dropped
+(*offentlicher* finds *Öffentlicher Nahverkehr*), and so does the sibling check a
+create or a rename makes before it writes: in a German app, creating *Gehalt*
+beside the drawn *Gehalt* is refused, and so is *Salary*, and a refusal names
+the sibling as drawn. A colour is hashed from the seed tag for a starter and
+from the name otherwise, so a language change never repaints a category.
+
+Re-running the server's seed (`packages/db`) upserts the seed's definitions, so
+it resets a starter's stored `name` to the canonical one and a renamed starter
+reads as the catalogue's text again. The phone's bootstrap seeds a ledger once
+and never touches a row afterwards.
 
 ### 6.4 The clearing accounts
 

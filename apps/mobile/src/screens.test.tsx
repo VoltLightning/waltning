@@ -623,6 +623,7 @@ const RECENT_ROW: PhoneRecentTransaction = {
   date: accountingDate("2026-09-03"),
   enteredName: "Shop A",
   categoryName: "Food",
+  categoryExternalId: null,
   accountName: PLN_ACCOUNT.name,
   amount: toMoney("-48.90"),
   currency: currencyCode("PLN"),
@@ -791,6 +792,7 @@ describe("Today", () => {
       enteredName: "Placeholder",
       note: "",
       categoryName: "Groceries",
+      categoryExternalId: null,
       brandKey: null,
       accountId: PLN_ACCOUNT.id,
       accountName: PLN_ACCOUNT.name,
@@ -895,6 +897,41 @@ describe("Today", () => {
 
     expect(screen.getByText("Groceries")).toBeDefined();
     expect(screen.queryByText("Uncategorized")).toBeNull();
+  });
+
+  it("draws a starter category in the app's language in Where it went", () => {
+    render(
+      <I18nProvider locale="de">
+        <LedgerProvider
+          controller={fakeController({
+            accounts: [PLN_ACCOUNT],
+            categories: [
+              fakeCategory({
+                id: GROCERIES,
+                name: "Groceries",
+                kind: "expense",
+                externalId: "seed:groceries",
+              }),
+            ],
+            periodSpend: [
+              {
+                currency: currencyCode("PLN"),
+                decimals: 2,
+                spend: toMoney("120.50"),
+                inflow: toMoney("0"),
+                net: toMoney("-120.50"),
+              },
+            ],
+            spendByCategory: () => [spendBucket(GROCERIES, "120.50")],
+          })}
+        >
+          <Today />
+        </LedgerProvider>
+      </I18nProvider>,
+    );
+
+    expect(screen.getByText("Lebensmittel")).toBeDefined();
+    expect(screen.queryByText("Groceries")).toBeNull();
   });
 
   it("shows the unsettled banner and opens the pot to allocate", () => {
@@ -1703,6 +1740,14 @@ describe("CategoriesScreen", () => {
         depth: 1,
         externalId: "seed:alcohol",
       }),
+      fakeCategory({
+        id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa6",
+        name: "Furniture & appliances",
+        parentId: FOOD,
+        kind: "expense",
+        depth: 1,
+        externalId: "seed:furniture-appliances",
+      }),
       // Their own, carrying a starter's English name and no seed tag.
       fakeCategory({ id: OWN, name: "Taxi", parentId: FOOD, kind: "expense", depth: 1 }),
     ];
@@ -1722,7 +1767,7 @@ describe("CategoriesScreen", () => {
 
     it("shows a starter in German, a renamed one and their own as stored", () => {
       renderIn("de");
-      expect(screen.getByText("Ernährung")).toBeDefined();
+      expect(screen.getByText("Essen & Trinken")).toBeDefined();
       expect(screen.getByText("Lebensmittel")).toBeDefined();
       expect(screen.getByText("Lieferdienst")).toBeDefined();
       expect(screen.getByText("Snacks")).toBeDefined();
@@ -1738,8 +1783,8 @@ describe("CategoriesScreen", () => {
 
     it("lists the category with entries before the unused ones inside its group", () => {
       renderIn("de");
-      const order = ["Ernährung", "Lebensmittel", "Lieferdienst", "Snacks", "Taxi"].map((label) =>
-        screen.getByText(label),
+      const order = ["Essen & Trinken", "Lebensmittel", "Lieferdienst", "Snacks", "Taxi"].map(
+        (label) => screen.getByText(label),
       );
       for (let i = 1; i < order.length; i += 1) {
         const before = order[i - 1] as HTMLElement;
@@ -1760,6 +1805,36 @@ describe("CategoriesScreen", () => {
       fireEvent.click(screen.getByRole("button", { name: "Speichern" }));
       expect(screen.getByText("Einkauf")).toBeDefined();
       expect(screen.queryByText("Lebensmittel")).toBeNull();
+    });
+
+    it("saving a rename without editing writes nothing, so the starter keeps translating", () => {
+      const renameCategory = vi.fn();
+      const controller = fakeController({ categories: starters, categoryUsage: used });
+      const original = controller.renameCategory;
+      controller.renameCategory = (draft) => {
+        renameCategory(draft);
+        return original(draft);
+      };
+      render(
+        <I18nProvider locale="de">
+          <LedgerProvider controller={controller}>
+            <CategoriesScreen />
+          </LedgerProvider>
+        </I18nProvider>,
+      );
+      fireEvent.click(screen.getByRole("button", { name: "Aktionen für Lebensmittel" }));
+      fireEvent.click(screen.getByRole("button", { name: "Umbenennen" }));
+      fireEvent.click(screen.getByRole("button", { name: "Speichern" }));
+      expect(renameCategory).not.toHaveBeenCalled();
+      expect(screen.getByText("Lebensmittel")).toBeDefined();
+    });
+
+    it("finds a starter whatever the diacritics typed", () => {
+      renderIn("de");
+      const search = screen.getByPlaceholderText(/^\d+ Kategorien durchsuchen$/);
+      fireEvent.change(search, { target: { value: "mobel" } });
+      expect(screen.getByText("Möbel & Geräte")).toBeDefined();
+      expect(screen.queryByText("Lieferdienst")).toBeNull();
     });
 
     it("finds a starter by its German name and by its stored one", () => {
@@ -1805,6 +1880,7 @@ describe("Today — the pager, with a month in it", () => {
       enteredName,
       note: "",
       categoryName: "Groceries",
+      categoryExternalId: null,
       brandKey: null,
       accountId: PLN_ACCOUNT.id,
       accountName: PLN_ACCOUNT.name,

@@ -52,6 +52,7 @@ import {
   type CategorySheetCreateDraft,
 } from "@waltning/ui/categories/category-sheet";
 import { CounterpartyPicker } from "@waltning/ui/counterparties/counterparty-picker";
+import { categoryTintKey, drawnNamesOf } from "@waltning/ui/i18n/category-label";
 import { resolveFieldErrorMessage } from "@waltning/ui/i18n/field-error-messages";
 import { dayLabel } from "@waltning/ui/i18n/locales";
 import { useLocale, useT } from "@waltning/ui/i18n/provider";
@@ -160,7 +161,7 @@ function toStripCards(
     counterparty: string | null;
     fromAccount: string;
     toAccount: string | null;
-    categoryName: (id: string) => string | null;
+    categoryName: (id: string) => { name: string; tintKey: string } | null;
   },
   actions: { onOpenCounterparty: () => void; onLink: () => void; counterpartyUnsaved: boolean },
 ): ContextStripCard[] {
@@ -184,9 +185,9 @@ function toStripCards(
         });
         break;
       case "category": {
-        const name = names.categoryName(card.categoryId);
-        if (name === null) break;
-        cards.push({ ...card, name });
+        const named = names.categoryName(card.categoryId);
+        if (named === null) break;
+        cards.push({ ...card, name: named.name, tintKey: named.tintKey });
         break;
       }
       case "link":
@@ -313,11 +314,14 @@ export default function TransactionDetail() {
 
   const handleCreateCategory = useCallback(
     (draft: CategorySheetCreateDraft) => {
-      const result = ledger.createCategory(draft);
+      const result = ledger.createCategory({
+        ...draft,
+        drawnNames: drawnNamesOf(labelOf, snapshot.categoryTree),
+      });
       if ("id" in result) return { id: result.id };
       return { error: result.fieldErrors[0]?.message ?? t("common.couldNotSave") };
     },
-    [ledger, t],
+    [ledger, t, labelOf, snapshot.categoryTree],
   );
 
   const handleSaveFields = useCallback(
@@ -413,9 +417,9 @@ export default function TransactionDetail() {
               categoryName: (id) => {
                 const named =
                   id === live.categoryId ? live : live.lines.find((line) => line.categoryId === id);
-                return named?.categoryName == null
-                  ? null
-                  : labelOf({ name: named.categoryName, externalId: named.categoryExternalId });
+                if (named?.categoryName == null) return null;
+                const row = { name: named.categoryName, externalId: named.categoryExternalId };
+                return { name: labelOf(row), tintKey: categoryTintKey(row) };
               },
             },
             {
@@ -470,6 +474,10 @@ export default function TransactionDetail() {
     shown.categoryName === null
       ? null
       : labelOf({ name: shown.categoryName, externalId: shown.categoryExternalId });
+  const shownTintKey =
+    shown.categoryName === null
+      ? null
+      : categoryTintKey({ name: shown.categoryName, externalId: shown.categoryExternalId });
   const detailCategory =
     detail.categoryName === null
       ? null
@@ -494,8 +502,8 @@ export default function TransactionDetail() {
   return (
     <PushedPage
       title={dayLabel(shown.date, locale)}
-      tint={heroTint(shownCategory, theme).fill}
-      topWash={heroTint(shownCategory, theme).fill}
+      tint={heroTint(shownCategory, theme, shownTintKey).fill}
+      topWash={heroTint(shownCategory, theme, shownTintKey).fill}
       titleNode={
         <HeroHeaderTitle
           scrollY={heroScroll.scrollY}
@@ -517,6 +525,7 @@ export default function TransactionDetail() {
         accountName={shown.accountName}
         toAccountName={shown.toAccountName}
         categoryName={shownCategory}
+        categoryTintKey={shownTintKey}
         enteredName={shown.enteredName}
         brandKey={shown.brandKey}
         scrollY={heroScroll.scrollY}

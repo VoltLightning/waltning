@@ -36,6 +36,7 @@ import { accountingDate, isAccountingDate, type TimeOfDay } from "@waltning/core
 import type { CurrencyCode } from "@waltning/core/money";
 import { type ReactNode, useCallback, useMemo, useState } from "react";
 import { Text, View } from "react-native";
+import { categoryTintKey } from "../../../i18n/category-label.ts";
 import { dayLabel } from "../../../i18n/locales";
 import { useLocale, useT } from "../../../i18n/provider";
 import { useCategoryLabel } from "../../../i18n/use-category-label.ts";
@@ -300,12 +301,9 @@ export function QuickAddComposer({
     categoryProposal !== undefined &&
     categoryProposal !== null &&
     categoryProposal.confidence < PROPOSAL_DISPLAY_THRESHOLD;
-  const categoryValue =
-    pickedCategory !== undefined
-      ? labelOf(pickedCategory)
-      : proposedBelowThreshold || proposedCategory === undefined
-        ? undefined
-        : labelOf(proposedCategory);
+  const shownCategoryRow =
+    pickedCategory ?? (proposedBelowThreshold ? undefined : proposedCategory);
+  const categoryValue = shownCategoryRow === undefined ? undefined : labelOf(shownCategoryRow);
   /**
    * Machine-filled (P2) either while an at-or-above-threshold proposal is
    * shown but not applied, or (H1) while `categoryId` itself is the applied
@@ -448,7 +446,7 @@ export function QuickAddComposer({
   const categoryTint =
     categoryValue === undefined
       ? { fill: theme.subtleFill, ink: theme.textMuted }
-      : categoryTintFor(categoryValue, theme);
+      : categoryTintFor(categoryTintKey(shownCategoryRow ?? { name: categoryValue }), theme);
   const categoryGlyph = categoryValue === undefined ? "?" : categoryValue.slice(0, 1).toUpperCase();
 
   return (

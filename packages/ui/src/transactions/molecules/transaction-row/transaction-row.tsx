@@ -62,6 +62,8 @@ export type TransactionRowProps = {
   withDate?: boolean;
   enteredName: string;
   category?: string | null;
+  /** What the category's colour is hashed from, when not `category` itself — language-independent. */
+  categoryTintKey?: string | null;
   account?: string | null;
   /** **Already signed** per §1. */
   amount: money.Money;
@@ -111,6 +113,7 @@ export function TransactionRow({
   withDate = true,
   enteredName,
   category,
+  categoryTintKey,
   account,
   amount,
   currency,
@@ -141,7 +144,12 @@ export function TransactionRow({
       {/* `SPEC.md` §14.4b — absent entirely, not a fallback monogram, for a
           caller that has not passed `brandKey` yet (see the prop's own doc). */}
       {brandKey === undefined ? null : (
-        <BrandIcon brandKey={brandKey} enteredName={named.title} category={category} size={24} />
+        <BrandIcon
+          brandKey={brandKey}
+          enteredName={named.title}
+          category={categoryTintKey ?? category}
+          size={24}
+        />
       )}
       <View style={styles.identity}>
         <View style={styles.enteredNameLine}>

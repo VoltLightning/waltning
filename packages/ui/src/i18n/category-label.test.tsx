@@ -3,6 +3,7 @@
 import { render, screen } from "@testing-library/react";
 import { seedNames } from "@waltning/core/seed-label";
 import { expect, it } from "vitest";
+import { categoryTintKey } from "./category-label.ts";
 import type { Locale } from "./locales.ts";
 import { catalogues, LOCALES } from "./locales.ts";
 import { I18nProvider } from "./provider";
@@ -29,7 +30,7 @@ function shown(locale: Locale, row: Row): string {
 it("a starter category with its canonical name reads in the app's language", () => {
   expect(shown("de", { name: "Salary", externalId: "seed:salary" })).toBe("Gehalt");
   expect(shown("pl", { name: "Salary", externalId: "seed:salary" })).toBe("Wynagrodzenie");
-  expect(shown("ru", { name: "Salary", externalId: "seed:salary" })).toBe("Зарплата");
+  expect(shown("ru", { name: "Salary", externalId: "seed:salary" })).toBe("Заработная плата");
   expect(shown("be", { name: "Salary", externalId: "seed:salary" })).toBe("Заработная плата");
   expect(shown("en", { name: "Salary", externalId: "seed:salary" })).toBe("Salary");
 });
@@ -38,7 +39,9 @@ it("Uncategorized and the groups translate too", () => {
   expect(shown("de", { name: "Uncategorized", externalId: "seed:uncategorized" })).toBe(
     "Nicht kategorisiert",
   );
-  expect(shown("de", { name: "Employment", externalId: "seed:employment" })).toBe("Anstellung");
+  expect(shown("de", { name: "Employment", externalId: "seed:employment" })).toBe(
+    "Nichtselbständige Arbeit",
+  );
 });
 
 it("a renamed starter is the person's own text and does not translate", () => {
@@ -66,4 +69,9 @@ it("every group, leaf and Uncategorized has a native name in every catalogue", (
     }
     expect(Object.keys(block).sort()).toEqual([...seedNames.keys()].sort());
   }
+});
+
+it("a starter's colour is hashed from its seed tag, so a language change never repaints it", () => {
+  expect(categoryTintKey({ name: "Gehalt", externalId: "seed:salary" })).toBe("seed:salary");
+  expect(categoryTintKey({ name: "Padel", externalId: null })).toBe("Padel");
 });

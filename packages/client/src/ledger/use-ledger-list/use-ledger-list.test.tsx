@@ -22,6 +22,7 @@ function row(date: string, n: number): PhoneSearchTransaction {
     enteredName: `Row ${n}`,
     note: "",
     categoryName: null,
+    categoryExternalId: null,
     brandKey: null,
     accountId: id<"accounts">("00000000-0000-4000-8000-00000000000a"),
     accountName: "Bank A",

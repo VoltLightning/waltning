@@ -21,6 +21,7 @@
  */
 
 import { useCallback } from "react";
+import { categoryTintKey } from "../../../i18n/category-label.ts";
 import { useT } from "../../../i18n/provider";
 import { useCategoryLabel } from "../../../i18n/use-category-label";
 import { TransactionRow } from "../transaction-row/transaction-row";
@@ -77,6 +78,11 @@ export function EntryRow({ row, onPress, withAccount, withDate }: EntryRowProps)
     <TransactionRow
       date={row.date}
       enteredName={row.enteredName}
+      categoryTintKey={
+        row.categoryName === null
+          ? null
+          : categoryTintKey({ name: row.categoryName, externalId: row.categoryExternalId })
+      }
       category={
         row.categoryName === null
           ? null

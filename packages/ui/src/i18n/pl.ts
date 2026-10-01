@@ -1090,7 +1090,7 @@ export const pl: Messages = {
     home: "Dom",
     "property-purchase": "Zakup nieruchomości",
     rent: "Czynsz",
-    utilities: "Media",
+    utilities: "Opłaty za media",
     "furniture-appliances": "Meble i sprzęt AGD",
     "household-supplies": "Artykuły domowe",
     renovation: "Remont i budowa",

@@ -16,6 +16,7 @@
 
 import { useCallback } from "react";
 import { Text, View } from "react-native";
+import { categoryTintKey } from "../../../i18n/category-label.ts";
 import { useCategoryLabel } from "../../../i18n/use-category-label.ts";
 import { PressableScaled } from "../../../primitives/atoms/pressable-scaled/pressable-scaled";
 import { useInteraction } from "../../../primitives/interaction.ts";
@@ -65,7 +66,7 @@ function CategoryChip({ category, selected, onPick }: CategoryChipProps) {
   const styles = useStyles();
   const { hovered, focused, handlers } = useInteraction();
   const label = useCategoryLabel()(category);
-  const tint = categoryTintFor(label, theme);
+  const tint = categoryTintFor(categoryTintKey(category), theme);
   const fill = { backgroundColor: tint.fill };
   const ink = { color: tint.ink };
   const handlePress = useCallback(() => onPick(category.id), [onPick, category.id]);

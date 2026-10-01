@@ -25,6 +25,7 @@ import * as money from "@waltning/core/money";
 import { AccountPicker, type AccountPickerAccount } from "@waltning/ui/accounts/account-picker";
 import { CategorySheet } from "@waltning/ui/categories/category-sheet";
 import { parseAmount } from "@waltning/ui/fx/amount-field";
+import { drawnNamesOf } from "@waltning/ui/i18n/category-label";
 import { KNOWN_PATHS, resolveFieldErrorMessage } from "@waltning/ui/i18n/field-error-messages";
 import { weekdayLabel } from "@waltning/ui/i18n/locales";
 import { useLocale, useT } from "@waltning/ui/i18n/provider";
@@ -185,11 +186,14 @@ export default function QuickAdd() {
   }, []);
   const handleCreateCategory = useCallback(
     (categoryDraft: CreateCategoryDraft) => {
-      const result = ledger.createCategory(categoryDraft);
+      const result = ledger.createCategory({
+        ...categoryDraft,
+        drawnNames: drawnNamesOf(labelOf, snapshot.categoryTree),
+      });
       if ("id" in result) return { id: result.id };
       return { error: result.fieldErrors[0]?.message ?? t("common.couldNotSave") };
     },
-    [ledger, t],
+    [ledger, t, labelOf, snapshot.categoryTree],
   );
 
   /**

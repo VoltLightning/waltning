@@ -173,6 +173,11 @@ export default function Dashboard() {
   const categoryNameOf = new Map<string, string>(
     snapshot.categoryTree.map((category) => [category.id, labelOf(category)]),
   );
+  const tintKeyOf = new Map<string, string>(
+    snapshot.categoryTree.flatMap((category) =>
+      category.externalId == null ? [] : [[category.id, category.externalId]],
+    ),
+  );
   const spendForLead = spendRows.filter((row) => row.currency === leadCurrency);
   const { top: topSpend, restTotal: otherTotal } = money.topByAmount(spendForLead, TOP_CATEGORIES);
   const spendSegments = [
@@ -181,6 +186,9 @@ export default function Dashboard() {
       label: row.categoryId
         ? (categoryNameOf.get(row.categoryId) ?? t("dashboard.uncategorized"))
         : t("dashboard.uncategorized"),
+      ...(row.categoryId !== null && tintKeyOf.has(row.categoryId)
+        ? { tintKey: tintKeyOf.get(row.categoryId) as string }
+        : {}),
       amount: row.amount,
       currency: row.currency,
       decimals: row.decimals,

@@ -11,6 +11,7 @@
  * which binds the current translator), so the rule has one implementation.
  */
 
+import { fold } from "@waltning/core/capture/names";
 import { translatableSeedKey } from "@waltning/core/seed-label";
 import type { TFunction } from "i18next";
 import { en } from "./en.ts";
@@ -27,8 +28,34 @@ export type CategoryNamed = {
   externalId?: string | null | undefined;
 };
 
+/**
+ * What a category's colour is hashed from — the seed tag for a starter, so a
+ * language switch never repaints it, and the name otherwise (a name that is not
+ * a starter's is never translated, so what is drawn is what is stored).
+ */
+export function categoryTintKey(category: CategoryNamed): string {
+  return category.externalId ?? category.name;
+}
+
+/**
+ * What a category search compares: `fold`, plus every other accent dropped, so
+ * *offentlicher* finds *Öffentlicher Nahverkehr* and *zywnosc* finds *żywność*.
+ * Search-only — `fold` itself backs uniqueness indexes and is not widened.
+ */
+export function categorySearchFold(s: string): string {
+  return fold(s).normalize("NFD").replace(/\p{M}/gu, "").replace(/ß/g, "ss");
+}
+
 export function categoryLabel(t: TFunction, category: CategoryNamed): string {
   const key = translatableSeedKey(category);
   if (key === null || !isCatalogued(key)) return category.name;
   return t(`taxonomy.${key}`);
+}
+
+/** Category id → the name drawn for it — what a write checks a new name against (`SPEC.md` §6.3). */
+export function drawnNamesOf(
+  labelOf: (category: CategoryNamed & { id: string }) => string,
+  nodes: readonly (CategoryNamed & { id: string })[],
+): Record<string, string> {
+  return Object.fromEntries(nodes.map((node) => [node.id, labelOf(node)]));
 }
