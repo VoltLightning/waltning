@@ -1,7 +1,8 @@
 /**
- * `<QuickAddComposer>` — `screens/S05-quick-add.md` §3: the amount in its
- * card, the choices under it as rows, a few categories within reach, and a
- * note. The deck's anatomy for *Add an expense*, on the deck's density.
+ * `<QuickAddComposer>` — `screens/S05-quick-add.md` §3: the account row, with
+ * the currency it fixes, then the amount in its card, then the category and
+ * the rest as rows, a few categories within reach, and a note. The account is
+ * asked first because a figure with no currency under it asks *of what?*.
  *
  * **The header is not here.** `ComposerHeader` is a fixed band the screen
  * composes above `GroundPanel`, because this component renders inside the page
@@ -61,7 +62,7 @@ import { SheetAwareTextInput } from "../../../primitives/sheet-input";
 import { useBreakpoint } from "../../../primitives/use-breakpoint.ts";
 import { useFrozenOrder } from "../../../primitives/use-frozen-order.ts";
 import type { SubmitCheck } from "../../../primitives/use-submit-check.ts";
-import { HouseIcon } from "../../../shell/phosphor";
+import { CaretRightIcon, HouseIcon } from "../../../shell/phosphor";
 import { Banner } from "../../../states/molecules/banner/banner";
 import { focusBorder } from "../../../theme/focus.ts";
 import { inputStep, text } from "../../../theme/fonts.ts";
@@ -121,8 +122,9 @@ export type QuickAddComposerProps = {
   /** The account row fills machine, carrying the trail — `useLastUsedAccount`'s own result. */
   accountMachineFilled: boolean;
   /**
-   * The window is short: the amount card gives up its label and some air so the account row sits in the first view, under the amount,
-   * instead of under the fold. Decided from the window's height by the screen,
+   * The window is short: the amount card gives up its label and some air so
+   * the account row, the amount and the start of the category row sit in the
+   * first view instead of under the fold (S05 §3 gives the measured fit). Decided from the window's height by the screen,
    * never from the keyboard's events.
    */
   compact?: boolean;
@@ -485,6 +487,34 @@ export function QuickAddComposer({
           ))}
         </View>
       ) : null}
+      <ComposerRows>
+        <Anchored check={check} field="account">
+          <ComposerRow
+            first
+            label={t(type === "income" ? "transactions.intoAccount" : "transactions.fromAccount")}
+            value={selectedAccount?.name}
+            spokenValue={
+              selectedAccount === undefined
+                ? undefined
+                : selectedAccount.name.includes(selectedAccount.currency)
+                  ? selectedAccount.name
+                  : `${selectedAccount.name}, ${selectedAccount.currency}`
+            }
+            trailing={
+              selectedAccount === undefined ? undefined : (
+                <AccountCurrency code={selectedAccount.currency} />
+              )
+            }
+            placeholder={t("transactions.chooseAccount")}
+            tile={<HouseIcon size={15} color={theme.accentText} />}
+            tileFill={theme.accentFill}
+            onPress={onOpenAccountPicker}
+            machineFilled={accountMachineFilled && selectedAccount !== undefined}
+            error={accountError}
+          />
+        </Anchored>
+      </ComposerRows>
+
       <Anchored check={check} field="amount">
         <AmountCard
           label={t("transactions.howMuch")}
@@ -495,6 +525,7 @@ export function QuickAddComposer({
           currency={selectedAccount?.currency}
           kind={type}
           context={pace}
+          waiting={t("transactions.amountWaitsForAccount")}
           error={amountError}
           autoFocus
           compact={compact}
@@ -502,20 +533,8 @@ export function QuickAddComposer({
       </Anchored>
 
       <ComposerRows>
-        <Anchored check={check} field="account">
-          <ComposerRow
-            first
-            label={t(type === "income" ? "transactions.intoAccount" : "transactions.fromAccount")}
-            value={selectedAccount?.name}
-            placeholder={t("transactions.chooseAccount")}
-            tile={<HouseIcon size={15} color={theme.accentText} />}
-            tileFill={theme.accentFill}
-            onPress={onOpenAccountPicker}
-            machineFilled={accountMachineFilled && selectedAccount !== undefined}
-            error={accountError}
-          />
-        </Anchored>
         <ComposerRow
+          first
           label={t("transactions.category")}
           value={categoryValue}
           placeholder={categoryPlaceholder}
@@ -772,6 +791,20 @@ function Anchored({
   );
 }
 
+type AccountCurrencyProps = { code: string };
+
+/** The account row's right edge: the currency the entry will be in, then the caret. */
+function AccountCurrency({ code }: AccountCurrencyProps) {
+  const styles = useStyles();
+  const theme = useTheme();
+  return (
+    <View style={styles.accountCurrency}>
+      <Text style={styles.accountCurrencyCode}>{code}</Text>
+      <CaretRightIcon size={15} color={theme.textFaint} />
+    </View>
+  );
+}
+
 function scopeLabel(
   t: ReturnType<typeof useT>,
   account: QuickAddComposerAccount | undefined,
@@ -921,6 +954,8 @@ const useStyles = makeStyles((theme) => ({
     gap: space.sm,
     paddingHorizontal: space.xs,
   },
+  accountCurrency: { flexDirection: "row", alignItems: "center", gap: space.sm },
+  accountCurrencyCode: { color: theme.accentText, ...text.ui("label", 700) },
   trailCaption: { color: theme.textMuted, ...text.ui("caption") },
   // The deck's note: one line in its own card, 14 above and below, 16 at the sides.
   noteCard: {

@@ -192,6 +192,7 @@ export const be: Messages = {
     amount: "Сума",
     account: "Рахунак",
     chooseAccount: "Які?",
+    amountWaitsForAccount: "Спачатку выберыце рахунак",
     chooseCategory: "На што?",
     needsRate: "Для {{currency}} патрэбны курс, перш чым запісваць у ёй аперацыі.",
     needsRateAction: "Задаць курс {{currency}}",

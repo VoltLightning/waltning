@@ -194,6 +194,7 @@ export const de: Messages = {
     amount: "Betrag",
     account: "Konto",
     chooseAccount: "Welches?",
+    amountWaitsForAccount: "Bitte zuerst ein Konto wählen",
     chooseCategory: "Wofür war es?",
     needsRate: "{{currency}} braucht einen Wechselkurs, bevor darin gebucht werden kann.",
     needsRateAction: "Kurs für {{currency}} setzen",

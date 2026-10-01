@@ -39,10 +39,12 @@ exists rather than in the middle of one.
 │                                                 │
 │  ┌─────────────────────────────────────────────┐│
 │  │ LEAVES                                   ⇅  ││  ← swap, one control
-│  │ 500,00  zł                                  ││  ← you type this
 │  │ ┌─────────────────────────────────────────┐ ││
-│  │ │ From                          12 480,20 │ ││  ← the leg, and what it holds
+│  │ │ From                          12 480,20 │ ││  ← the leg first, and what it holds
 │  │ │ Bank A · PLN                            │ ││
+│  │ └─────────────────────────────────────────┘ ││
+│  │ 500,00  zł                                  ││  ← you type this, in the From account's currency
+│  │ ┌─────────────────────────────────────────┐ ││
 │  │ │ To                             1 240,00 │ ││
 │  │ │ Bank B · EUR                            │ ││
 │  │ │ More details                          › │ ││  ← fee · date · note, folded
@@ -66,7 +68,7 @@ exists rather than in the middle of one.
 └─────────────────────────────────────────────────┘
 ```
 
-**Two cards, one per leg.** *Leaves* holds the amount you type and the two
+**Two cards, one per leg.** *Leaves* holds the *From* row first, the amount you type under it (a figure waits for its currency), and the two
 accounts as rows — each with what it holds, because which account has the
 money is half of why you are here. *Arrives* holds the destination amount, the
 rate used and what it costs, and is drawn only across currencies.

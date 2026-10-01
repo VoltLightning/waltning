@@ -195,6 +195,7 @@ export const ru: Messages = {
     amount: "Сумма",
     account: "Счёт",
     chooseAccount: "Какой?",
+    amountWaitsForAccount: "Сначала выберите счёт",
     chooseCategory: "На что?",
     needsRate: "Для {{currency}} нужен курс, прежде чем записывать в неё операции.",
     needsRateAction: "Задать курс {{currency}}",

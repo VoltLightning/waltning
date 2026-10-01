@@ -40,14 +40,15 @@ the phone is typed on.
 │  ┌ Expense ┐   Income      Transfer             │  ← segment control, the kind
 │                                                 │
 │  ┌─────────────────────────────────────────────┐│
+│  │ ▣  From                              PLN  › ││  ← the account first, and the currency it fixes
+│  │    Bank A · PLN                             ││
+│  └─────────────────────────────────────────────┘│
+│  ┌─────────────────────────────────────────────┐│
 │  │ How much?                                   ││
 │  │ −1 240,50  zł                               ││  ← display-hero, tabular; the sign is the kind's colour
 │  │ [Groceries this month: 61% of usual]        ││  ← one line, only when there is a habit to measure against
 │  └─────────────────────────────────────────────┘│
 │  ┌─────────────────────────────────────────────┐│
-│  │ ▣  From                                   › ││
-│  │    Bank A · PLN                             ││
-│  │ ─────────────────────────────────────────── ││
 │  │ G  Category                               › ││
 │  │    Groceries                                ││
 │  │ ─────────────────────────────────────────── ││
@@ -65,6 +66,21 @@ the phone is typed on.
 │  └─────────────────────────────────────────────┘│
 └─────────────────────────────────────────────────┘
 ```
+
+**The account comes first, then the amount.** A figure with no currency under
+it asks *of what?*, so the order is the segment, then the *From* row (*Into* on
+income) with the account and the currency it fixes, then the amount, then the
+category and the rest. The row is pre-filled — the only account, else the last
+used within the window, else empty — and while it is empty the amount card says
+*Choose an account first* in the place the currency will take, on the figure's own
+line, so the card is as tall without an account as with one. The hint is the
+part that gives way: it is one line that shrinks and ellipsizes, and it is not drawn
+at all once a digit is typed, so it never costs the figure width. It is spoken
+with the amount field's label throughout.
+The row is above the figure, so the keyboard never covers it, and changing the
+account is one tap on it. An entry's currency is its account's: the data model
+holds a transaction in its account's currency alone, so there is no currency
+chip, and a foreign purchase is captured in the account that was charged.
 
 **The amount is the largest thing on the screen** because it is the only field
 that is always required and always typed. It is a `TextInput` in its own card
@@ -109,13 +125,20 @@ steps the figure from `display-hero` to `display-one`, takes
 the padding in, sets the blocks 6 apart instead of 20, leaves out the *Saved on
 your phone* line, and leaves out the day under the name while the draft's day is
 today (a different day is always drawn). So *From* (*Into* on income) is on
-screen directly under the amount, before *Category*, un-errored, saying what to
-pick or what it was filled with. The currency mark beside the figure appears the
+screen directly above the amount, un-errored, saying what to
+pick or what it was filled with. The account row is a card of its own, so the
+order costs one card's border and gap (about 7 pt) against the amount-first
+layout. On a 360 × 740 pt phone at text scale 1.0 with a 300 pt keyboard, the
+Save footer clears the last visible line by about 8 pt (14 pt before the
+order changed); at 1.15 with a 330 pt keyboard, with no pace line, *Category* shows about 26 pt of
+its row, and with a pace line the line ends about 6 pt under the footer and
+*Category* is fully under the fold. *Who?* on a
+Borrowed or Lent draft is under the fold at both, as it was. The currency — on the account row and beside the figure — appears the
 moment an account is known, whether chosen or filled; with none it shows
 nothing.
 
 **Two rows at rest, and the rest behind one.** *From* and *Category* are the
-two choices a capture always needs, and they are drawn as rows in one card: a
+two choices a capture always needs, and they are drawn as rows — *From* in a card of its own above the amount, *Category* first in the card under it: a
 32 tile in the account's or the category's own tint, the field's name over its
 value, a caret saying it opens something. Who, date, time, scope and money owed
 wait behind *More details*, a row in the same card that unfolds them — the chip row
@@ -345,9 +368,9 @@ and dependent transaction intents retain their ordering through sync.
 |---|---|
 | `ComposerHeader` | The fixed band: the name, the day, the ✕. Clears the top inset itself |
 | `SegmentControl` | The kind — Expense · Income · Transfer. Transfer opens S31 |
-| `AmountCard` | *How much?* over a `TextInput` at `display-hero`, tabular lining numerals, the kind's sign in the kind's colour, the currency affix in the accent; the pace line under it. On a compact window (§3) the label is not drawn and the figure is `display-one`; the pace line stays, because it is the one thing that says what the typed figure is being weighed against |
+| `AmountCard` | *How much?* over a `TextInput` at `display-hero`, tabular lining numerals, the kind's sign in the kind's colour, the currency affix in the accent, or *Choose an account first* in its place, muted, while there is no account; the pace line under it. On a compact window (§3) the label is not drawn and the figure is `display-one`; the pace line stays, because it is the one thing that says what the typed figure is being weighed against |
 | `FigureInput` | The figure inside `AmountCard`, and *Leaves* and *Arrives* on S31. **Drawn as text, with a transparent input over it**: the sign, the digits and the currency are three `Text`s in one row, so they share a baseline on every platform, and the input lying over them only takes the typing. Done the other way round it failed three times on a device — a sign mounted on the first keystroke pushed every later digit sideways; an input whose width was *estimated* per character re-laid its content under each key, which is the figure jumping as it is typed; and a `Text` sign baseline-aligned to a `TextInput` sat on the baseline like an underscore on Android. The caret is drawn after the last digit — standing on the digits' baseline and as tall as they are, never centred in the row, whose box on iOS includes the line's space under the glyphs — and typing is at the end. **The input is unseen, never absent**: opacity `0.02` and a nearly clear ink, because iOS delivers no touch to a view at `0.01` or under — a figure at `0` takes its first focus from `autoFocus` and can never be tapped back into — and Android draws the default ink for a fully transparent one |
-| `ComposerRows` · `ComposerRow` | The card of choices: a 32 tinted tile, label over value, caret. *From* on an expense and *Into* on an income — the account the money leaves or lands in, named for the direction it moves — then *Category* · *More details*, which unfolds *Who* · *Date* · *Scope* · *Track money owed*. **≥44px** (Q3). The account row fills from last-used **only within a short window**, or — when that names nothing — from the one live account there is; with two or more it is empty, Save refusing until one is chosen — a stale default reads as an answer rather than a question (§9) |
+| `ComposerRows` · `ComposerRow` | The card of choices: a 32 tinted tile, label over value, caret. *From* on an expense and *Into* on an income — the account the money leaves or lands in, named for the direction it moves, with its currency at the right and spoken with the name (*From: Card, EUR*) — in a card of its own above the amount; then, under the amount, *Category* · *More details*, which unfolds *Who* · *Date* · *Scope* · *Track money owed*. **≥44px** (Q3). The account row fills from last-used **only within a short window**, or — when that names nothing — from the one live account there is; with two or more it is empty, Save refusing until one is chosen — a stale default reads as an answer rather than a question (§9) |
 | `WhoPicker` | Grouped saved entries and recent names; Use text, Add via S15, and clear. Defined in `design-system/05` |
 | `CategoryChips` | This kind's four most-used categories, tinted by name, the picked one always among them |
 | `Banner` | `neutral`, under the rows, when the chosen account's currency has no rate — the refusal, and its one action, *Set a ‹CUR› rate* → S18 |

@@ -13,6 +13,7 @@ import { currencyCode } from "@waltning/core/money";
 import { useCallback, useState } from "react";
 import { View } from "react-native";
 import { expect, userEvent, within } from "storybook/test";
+import { I18nProvider } from "../../../i18n/provider";
 import { QuickAddComposer, type QuickAddComposerProps } from "./quick-add-composer";
 
 function noop() {}
@@ -264,6 +265,29 @@ function withPhoneWidth(Story: React.ComponentType) {
     </View>
   );
 }
+
+/**
+ * **No account, a long figure, German, on a 360pt phone** — the hint shares the
+ * figure's line while it is empty and is not drawn once a digit is typed, so a
+ * long figure comes out whole.
+ */
+export const WaitingForAccountLongFigurePhone: Story = {
+  decorators: [withNarrowPhoneDe],
+  args: { raw: "12345,67", accountId: null, compact: true },
+};
+
+function withNarrowPhoneDe(Story: React.ComponentType) {
+  return (
+    <I18nProvider locale="de">
+      <View style={NARROW_COLUMN}>
+        <Story />
+      </View>
+    </I18nProvider>
+  );
+}
+
+/** 360pt, minus the panel's padding. */
+const NARROW_COLUMN = { width: 360 - 44 };
 
 /** `create_transaction`'s own refusals, rendered under the chip they name. */
 export const FieldErrors: Story = {

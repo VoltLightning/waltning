@@ -154,7 +154,7 @@ function withLedger(overrides: Parameters<typeof fakeController>[0] = {}) {
 /** Keypad's own glyphs — `.` is English's decimal mark, mapped to the canonical `,` key. */
 /** The amount is a `TextInput` on the deck's composer — typed, not tapped (S05 §3). */
 function typeAmount(value: string) {
-  fireEvent.change(screen.getByLabelText("How much?"), { target: { value } });
+  fireEvent.change(screen.getByLabelText(/^How much\?/), { target: { value } });
 }
 
 /** The rarer rows — entered name, date, scope, person — wait behind one row (S05 §3). */
@@ -203,7 +203,8 @@ describe("QuickAdd — the phone path (Dock + QuickAddComposer)", () => {
     expect(
       screen.getByRole("button", { name: "From: Cash · PLN, filled automatically" }),
     ).toBeDefined();
-    expect(screen.getByText("PLN")).toBeDefined();
+    // On the account row and beside the figure.
+    expect(screen.getAllByText("PLN")).toHaveLength(2);
     expect(screen.getByRole("button", { name: "Save expense" })).toHaveProperty("disabled", false);
   });
 
@@ -293,7 +294,7 @@ describe("QuickAdd — the phone path (Dock + QuickAddComposer)", () => {
 
     expect(screen.getByRole("button", { name: "From: Cash · PLN" })).toBeDefined();
     expect(screen.getByText("JPY holds 0 decimal places — this amount has more.")).toBeDefined();
-    expect(screen.getByLabelText("How much?")).toHaveProperty("value", "48.90");
+    expect(screen.getByLabelText(/^How much\?/)).toHaveProperty("value", "48.90");
   });
 
   /**
@@ -363,7 +364,7 @@ describe("QuickAdd — the phone path (Dock + QuickAddComposer)", () => {
     ).toBeDefined();
     expectSaveRefused();
     // The typed amount stays put — nothing here empties the draft.
-    expect(screen.getByLabelText("How much?")).toHaveProperty("value", "48.90");
+    expect(screen.getByLabelText(/^How much\?/)).toHaveProperty("value", "48.90");
     expect(createTransaction).not.toHaveBeenCalled();
   });
 
@@ -498,7 +499,7 @@ describe("QuickAdd — the kind (S05 §3)", () => {
     withLedger();
     typeAmount("48.90");
     fireEvent.click(screen.getByRole("tab", { name: "Income" }));
-    expect(screen.getByLabelText("How much?")).toHaveProperty("value", "48.90");
+    expect(screen.getByLabelText(/^How much\?/)).toHaveProperty("value", "48.90");
   });
 
   /**

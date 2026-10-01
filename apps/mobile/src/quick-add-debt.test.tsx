@@ -136,7 +136,7 @@ function withLedger(
 }
 
 function typeAmount(value: string) {
-  fireEvent.change(screen.getByLabelText("How much?"), { target: { value } });
+  fireEvent.change(screen.getByLabelText(/^How much\?/), { target: { value } });
 }
 
 function pickCategory(name: string) {

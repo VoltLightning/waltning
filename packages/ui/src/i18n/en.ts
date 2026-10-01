@@ -341,6 +341,7 @@ export const en = {
      * itself in with its own name.
      */
     chooseAccount: "Which one?",
+    amountWaitsForAccount: "Choose an account first",
     chooseCategory: "What was it for?",
     /**
      * §14.6: holding a currency and capturing in it are separate capabilities.
