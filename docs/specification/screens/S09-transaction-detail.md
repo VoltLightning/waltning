@@ -54,7 +54,7 @@ something no list row can.
   ┌ details ──────────────────────────────┐
   │ Category      [Eating out]          › │
   │ Date          6 Aug 2026            › │
-  │ Paid from     Cash · PLN            › │
+  │ Account       Cash · PLN            › │
   │ Amount        48.90                 › │
   │ With whom     Café A                › │
   │ Shop / payee  Café A                › │
@@ -66,7 +66,7 @@ something no list row can.
   ┌ details · a debt category (Lent out) ─┐   ← one row for the person
   │ Category      [Lent out]            › │
   │ Date          6 Aug 2026            › │
-  │ Paid from     Cash · PLN            › │
+  │ Account       Cash · PLN            › │
   │ Amount        48.90                 › │
   │ Who?          Nina                  › │   ← both links, no With whom
   │ Note          —                     › │
@@ -191,7 +191,7 @@ between two of your own accounts would be picking a side; its line names both
 accounts instead.
 
 **With whom and Owes are two rows, and this screen is the only place they
-can name different parties.** `SPEC.md` §6.6.1 defines the pair: *With whom*
+can name different parties, except on a debt category, where they are one row.** `SPEC.md` §6.6.1 defines the pair: *With whom*
 (the counterparty) is the identity link — who the transaction was with — and naming somebody there
 owes them nothing, so no role appears. *Owes* is the obligation, and only it
 brings a role with it. Paying a shop for a friend names the shop on the first

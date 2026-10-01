@@ -29,6 +29,7 @@ import {
 import {
   assertDebtCategoryShape,
   assertNotRepaymentEntry,
+  assertObligationPair,
   leavingDebtCategory,
 } from "./debt-categories.ts";
 
@@ -251,20 +252,29 @@ function patchTransaction(input: UpdateTransactionInput, tx: ReplicaTx): LocalTr
   if ("categoryId" in input.patch && input.patch.categoryId !== current.categoryId) {
     assertNotRepaymentEntry(tx, merged.categoryId, "update_transaction: category_id");
   }
+  // The obligation the row would hold: leaving a debt category clears the pair
+  // when the patch says nothing about it; otherwise each half is the patch's or
+  // the current row's.
+  const nextObligation =
+    afterLeaving && "obligationRole" in afterLeaving
+      ? afterLeaving
+      : {
+          obligationCounterpartyId:
+            "obligationCounterpartyId" in input.patch
+              ? input.patch.obligationCounterpartyId
+              : current.obligationCounterpartyId,
+          obligationRole:
+            "obligationRole" in input.patch ? input.patch.obligationRole : current.obligationRole,
+        };
+  if (obligationInPatch || afterLeaving !== undefined) {
+    // `transactions_obligation_pair_shape`: the person and the role travel together.
+    assertObligationPair(nextObligation, "update_transaction: obligation_counterparty_id");
+  }
   if ("categoryId" in input.patch || obligationInPatch) {
     assertDebtCategoryShape(
       tx,
       merged.categoryId,
-      afterLeaving && "obligationRole" in afterLeaving
-        ? afterLeaving
-        : {
-            obligationCounterpartyId:
-              "obligationCounterpartyId" in input.patch
-                ? input.patch.obligationCounterpartyId
-                : current.obligationCounterpartyId,
-            obligationRole:
-              "obligationRole" in input.patch ? input.patch.obligationRole : current.obligationRole,
-          },
+      nextObligation,
       "update_transaction: category_id",
     );
   }

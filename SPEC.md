@@ -2010,7 +2010,8 @@ link and an empty obligation pair say — so keeping it would leave a value
 inside `obligation_role` whose meaning is "not one". Its rows moved onto
 `counterparty_id` in the same migration that dropped it.
 
-The two links may equal one another; they do not have to. Debt calculations
+The two links may equal one another; they do not have to — except on a debt
+category, where they are one row and name the one person. Debt calculations
 read only the `debt`-role obligation. A named merchant must not receive a
 receivable merely because another person owes the payment back.
 

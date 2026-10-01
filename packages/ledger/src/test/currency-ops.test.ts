@@ -200,7 +200,6 @@ describe("archive_currency", () => {
         amountOriginal: money.toMoney("10.00"),
         currency: USD,
         fxRate: money.pivotPerUnit("1"),
-        obligationRole: "debt",
         debtCurrency: EUR,
         debtAmount: money.toMoney("10.00"),
       })
