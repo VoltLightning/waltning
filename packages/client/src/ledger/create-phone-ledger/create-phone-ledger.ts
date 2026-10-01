@@ -781,8 +781,7 @@ export type PhoneRate = {
  * E5 — a reference rate between two arbitrary currencies, as of a date —
  * `readCrossRate`'s answer. The pivot (§7.0) never reaches this type: `rate`
  * is already triangulated for this specific pair, the same direction
- * `TransferAmount`'s own `referenceRate` prop and `margin`'s
- * `fxRate`/`toFxRate` take.
+ * `margin`'s `fxRate`/`toFxRate` take.
  *
  * H2 — `legs`, not a flattened `source`/`asOf`/`carriedDays`: those three
  * used to be assembled from whichever leg was "worse" and whichever was
@@ -946,7 +945,7 @@ export type PhoneLedgerPort = {
   createAccount: (input: CreateAccountInput, capture: PhoneCapture) => void;
   createTransaction: (input: CreateTransactionInput, capture: PhoneCapture) => void;
   createCategory: (input: CreateCategoryInput, capture: PhoneCapture) => void;
-  /** C4 — S10's swipe-categorize. One category over N ids, refused as a whole or not at all. */
+  /** C4 — S10's desk batch categorise. One category over N ids, refused as a whole or not at all. */
   categorizeBatch: (input: CategorizeBatchInput, capture: PhoneCapture) => void;
   getTransaction: (id: Id<"transactions">) => PhoneTransactionDetail | null;
   /** S09's audit history — always `unavailable_on_device`; see `PhoneAuditLogResult`'s own doc. */
@@ -1413,7 +1412,7 @@ export type TransactionFilterDraft = {
 export type TransactionSearchCursorDraft = { date: string; id: string };
 
 /**
- * What a swipe-categorize gesture saves — `categorize_batch`'s own input,
+ * What a desk batch categorise saves — `categorize_batch`'s own input,
  * plain strings. No `id` to mint (every named row already exists), so the
  * controller's success shape is `{ count }` — how many rows the batch
  * touched — rather than B1's usual `{ id }`.

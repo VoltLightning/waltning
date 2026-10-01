@@ -71,7 +71,7 @@ One rule set, chosen per sheet by what the sheet holds. *Sized* is the sheet as 
 
 | Component | Notes |
 |---|---|
-| `TransactionList` | **The column.** Owns the separators and the keys; rows are given as data, not as children |
+| `DayGroup` | **The column.** Owns the separators and the keys of one day's rows; rows are given as data, not as children |
 | `TransactionRow` | Date · entered name · category · `Amount`. Empty entered name falls back to category, then Expense/Income/Transfer; a linked current name can be secondary when the saved text differs. `BIZ` tag when business. Entered name at weight 500, so the identity reads before its metadata. Leads with `BrandIcon` once a screen passes `brandKey` (§14.4b) |
 | `BrandIcon` | A transaction's own recognised-merchant mark — ORLEN, YouTube, or another the bundled catalogue carries (§14.4b), resolved offline at write time, never from a network fetch. Unknown or absent key → the same deterministic monogram `CounterpartyRow`'s own fallback gives an unmatched name, never blank. Sizes: row (24) and widget (20) — the same two `ServiceIcon` below already uses, and the seam S34 reuses to add a real vector mark without another transaction-facing change |
 | `CategorySheet` option | **A white tile wearing its category's mark** — the hue's `solid` square (`02-tokens` §2.1) with the category's letter, the same square a ledger row wears for that category, then the name on up to two lines and its count. Ten outlined tiles with only a name were ten of one thing, and a reader found *Groceries* by reading all of them. **The chosen option is said in its own colour**: the hue's wash for a fill and its solid for a two-pixel edge, never the accent. Group chips above wear their group's hue as a wash; the chosen one takes the solid as its edge. The mark is decorative — the name is already there |
@@ -87,7 +87,7 @@ One rule set, chosen per sheet by what the sheet holds. *Sized* is the sheet as 
 **A ledger is read as a column, and a separator belongs to the gap between two
 rows.** `<TransactionRow>` drew its own bottom hairline, so every list ended
 with a rule under nothing — dangling in the card's bottom padding. The row is
-now separator-free and `<TransactionList>` draws the line on the top of every
+now separator-free and `<DayGroup>` draws the line on the top of every
 row after the first, which is the structure React Native has instead of
 `:not(:first-child)`.
 
@@ -217,7 +217,8 @@ accident, and one that removes a financial record removes it with no moment to
 see what is going; deletion is a control on the detail screen. **And no list
 row takes a gesture nothing on screen names** — a reader cannot discover it,
 so it fires by accident — which is why ledger rows answer a tap and nothing
-else.
+else. Every action is a visible control on the row or its sheet; none is
+swipe-only or long-press-only.
 
 | Component | Notes |
 |---|---|

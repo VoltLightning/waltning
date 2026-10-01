@@ -405,7 +405,7 @@ export type LocalLedgerSession = {
   createAccount: (input: CreateAccountInput, capture: Capture) => LocalAccountRow;
   createTransaction: (input: CreateTransactionInput, capture: Capture) => LocalTransactionRow;
   createCategory: (input: CreateCategoryInput, capture: Capture) => LocalCategoryRow;
-  /** C4 — S10's swipe-categorize. One category over N ids, refused as a whole or not at all. */
+  /** C4 — S10's desk batch categorise. One category over N ids, refused as a whole or not at all. */
   categorizeBatch: (
     input: CategorizeBatchInput,
     capture: Capture,

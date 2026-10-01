@@ -119,7 +119,7 @@ composition within one bounded thing:
 features/transactions/ui/
   atoms/       only if this feature owns a primitive nothing else needs
   molecules/   TransactionRow, AmountField
-  organisms/   TransactionList, CaptureSheet
+  organisms/   DayGroup, CaptureSheet
 ```
 
 A common module that touches UI has them too — that is what `packages/ui` is,

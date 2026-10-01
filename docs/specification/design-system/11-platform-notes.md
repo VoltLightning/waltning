@@ -9,7 +9,7 @@ One codebase via Expo + React Native Web (`SPEC.md` §14.6).
 | Icons | Phosphor **duotone path data, vendored** (`packages/ui/src/shell/phosphor.tsx`), drawn through `react-native-svg` — one file for both targets. Not `phosphor-react-native`: its entry re-exports 1,512 icons from 63 MB of source, Metro does not tree-shake across that, and it took the iOS bundle from 6.3 MB to 13 MB. Adding a glyph is a copy, not an install |
 | Charts | ⚠️ The known RN Web friction point. `victory-native` renders both, but treemap and dense tables may need a web-only path |
 | Tables | Import review and Reports are dense and keyboard-driven — most likely to force `apps/web` |
-| Keyboard | J/K/A/R/S/T on import review is web-only; mobile uses swipe |
+| Keyboard | J/K/A/R/S/T on import review is web-only; mobile has the same actions as visible buttons on the row |
 | Haptics | Approve, Save, Undo on native; no-op on web |
 | Safe area | The app reads the device once and provides four numbers; `packages/ui` renders numbers and imports no safe-area library |
 | Soft keyboard | **Everything stays reachable with it up** — see below. One module (`primitives/keyboard.ts`, `keyboard-room.ts`); iOS keeps the platform's own scroll-view inset, Android is given the same thing by measurement, the web's window really does shrink and needs neither |

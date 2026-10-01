@@ -51,4 +51,5 @@ it("draws a transfer as one row naming both accounts", () => {
     toDecimals: 2,
   });
   expect(screen.getAllByText(/Bank B/).length).toBeGreaterThan(0);
+  expect(screen.getAllByRole("button")).toHaveLength(1);
 });

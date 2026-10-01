@@ -3295,8 +3295,8 @@ them rather than fetched (§7.5).
 ### 9.4 Review
 
 Today this is editing CSVs in Excel. It becomes a screen: proposed rows with
-confidence and reason, swipe to accept, tap to recategorize, long-press to
-split, bulk-accept above a confidence threshold. `import_rows.raw` is never
+confidence and reason, a visible *Accept* button on each row, tap to recategorize, a visible
+*Split* button, bulk-accept above a confidence threshold. `import_rows.raw` is never
 mutated, so a reparse after a prompt change is always possible.
 
 ---
