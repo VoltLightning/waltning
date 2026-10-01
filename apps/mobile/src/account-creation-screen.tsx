@@ -4,11 +4,13 @@ import { useLedgerController } from "@waltning/client/ledger/use-ledger-controll
 import { usePhoneLedger } from "@waltning/client/ledger/use-phone-ledger";
 import { type FieldError, mapFieldErrors } from "@waltning/client/transport/field-errors";
 import { addDays } from "@waltning/core/date";
+import { errorFromThrown } from "@waltning/core/diagnostics";
 import { id } from "@waltning/core/id";
 import type { CurrencyCode } from "@waltning/core/money";
 import {
   type CreateAccountDraft,
   CreateAccountForm,
+  type CreateAccountRateReference,
 } from "@waltning/ui/accounts/create-account-form";
 import { resolveFieldErrorMessage } from "@waltning/ui/i18n/field-error-messages";
 import { useT } from "@waltning/ui/i18n/provider";
@@ -71,10 +73,10 @@ export default function NewAccount() {
    * read on demand rather than a field every subscriber recomputes.
    */
   const rateNeed = useCallback(
-    (quote: CurrencyCode): { suggestion: string | null } | null => {
+    (quote: CurrencyCode): { reference: CreateAccountRateReference | null } | null => {
       if (pivot === undefined) return null;
       if (ledger.readRate({ base: pivot, quote, date: today }) !== null) return null;
-      let latest: { date: string; rate: string } | null = null;
+      let latest: CreateAccountRateReference | null = null;
       for (const row of ledger.listFxRates({
         base: pivot,
         quote,
@@ -82,9 +84,11 @@ export default function NewAccount() {
         to: today,
       })) {
         if (row.source === "carried_forward") continue;
-        if (latest === null || row.date > latest.date) latest = { date: row.date, rate: row.rate };
+        if (latest === null || row.date > latest.date) {
+          latest = { date: row.date, rate: row.rate, source: row.source };
+        }
       }
-      return { suggestion: latest?.rate ?? null };
+      return { reference: latest };
     },
     [ledger, pivot, today],
   );
@@ -116,7 +120,16 @@ export default function NewAccount() {
           return;
         }
       }
-      const result = ledger.createAccount(draft);
+      let result: ReturnType<typeof ledger.createAccount>;
+      try {
+        result = ledger.createAccount(draft);
+      } catch (caught) {
+        // An executor refusal that is not a field's (a constraint, say) is
+        // stated on the form — never an unhandled throw out of a press, and
+        // everything typed stays where it is.
+        refuse([{ path: "", message: errorFromThrown(caught).message }]);
+        return;
+      }
       if (!("id" in result)) {
         refuse(result.fieldErrors);
         return;

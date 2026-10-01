@@ -845,7 +845,18 @@ export type SpendByCategoryTransactionRow = {
  * is a record of where the money went and passes nothing; S09's *usual month*
  * is a comparison and passes `excludeCapital`.
  */
-export type SpendByCategoryOptions = { excludeCapital?: boolean };
+export type SpendByCategoryOptions = {
+  excludeCapital?: boolean;
+  /**
+   * Re-express `amountPivot` in another currency — the **display** currency
+   * (§7.0) — each transaction at **its own date's** rate, never one rate
+   * looked up now. `perPivot` is that date's units of `currency` per one
+   * pivot, or `null` when it has none, which voids the bucket exactly as a
+   * row stored without a rate does. A row already in `currency` is its own
+   * figure, never a round trip through the pivot.
+   */
+  rebase?: { currency: CurrencyCode; perPivot: (date: AccountingDate) => UnitsPerPivot | null };
+};
 
 export type SpendByCategoryLineRow = {
   transactionId: string;
@@ -917,6 +928,15 @@ export const spendByCategory = (
     amountPivot: Decimal | null;
   };
   const totals = new Map<string, Bucket>();
+  /** The row's rate into the reported currency: its own, or its own re-expressed at its date's rate. */
+  const rateOf = (row: SpendByCategoryTransactionRow): PivotPerUnit | undefined => {
+    const { rebase } = options;
+    if (rebase === undefined) return row.fxRate;
+    if (row.currency === rebase.currency) return pivotPerUnit("1");
+    const perPivot = rebase.perPivot(row.date);
+    if (row.fxRate === undefined || perPivot === null) return undefined;
+    return pivotPerUnit(dec(row.fxRate).times(perPivot));
+  };
   const bucketOf = (
     currency: CurrencyCode,
     decimals: number,
@@ -938,7 +958,7 @@ export const spendByCategory = (
     linedIds.add(line.transactionId);
     const bucket = bucketOf(parent.currency, parent.decimals, line.categoryId);
     bucket.amount = bucket.amount.plus(dec(line.amount));
-    bucket.amountPivot = plusPivot(bucket.amountPivot, dec(line.amount), parent.fxRate);
+    bucket.amountPivot = plusPivot(bucket.amountPivot, dec(line.amount), rateOf(parent));
   }
 
   // Branch B — a row WITHOUT a breakdown: attribute to its own category.
@@ -946,7 +966,7 @@ export const spendByCategory = (
     if (linedIds.has(row.id)) continue;
     const bucket = bucketOf(row.currency, row.decimals, row.categoryId);
     bucket.amount = bucket.amount.plus(dec(row.amountOriginal));
-    bucket.amountPivot = plusPivot(bucket.amountPivot, dec(row.amountOriginal), row.fxRate);
+    bucket.amountPivot = plusPivot(bucket.amountPivot, dec(row.amountOriginal), rateOf(row));
   }
 
   return [...totals.values()]

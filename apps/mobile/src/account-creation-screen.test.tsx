@@ -75,6 +75,7 @@ function render_(options: {
     source: string;
   }[];
   currencies?: typeof CURRENCIES;
+  createAccount?: () => void;
 }) {
   const { calls } = options;
   const port = basePort({
@@ -87,9 +88,11 @@ function render_(options: {
         calls.push(`rate ${input.quote} ${input.rate} ${input.from}`);
         return { written: 1, replacedManual: 0 };
       }),
-    createAccount: (input) => {
-      calls.push(`account ${input.name} ${input.currency}`);
-    },
+    createAccount:
+      options.createAccount ??
+      ((input) => {
+        calls.push(`account ${input.name} ${input.currency}`);
+      }),
   });
   const controller = createPhoneLedger(port, {
     capture: () => ({
@@ -162,7 +165,7 @@ it("keeps the form, the name and the rate when the rate write is refused, and wr
   expect(router.dismissTo).not.toHaveBeenCalled();
 });
 
-it("pre-fills the last rate the ledger held, and saving it writes it for today", () => {
+it("shows the last rate the ledger held as a reference, and writes only what is typed", () => {
   const calls: Calls = [];
   render_({
     calls,
@@ -192,11 +195,14 @@ it("pre-fills the last rate the ledger held, and saving it writes it for today",
   });
 
   fireEvent.click(screen.getByRole("radio", { name: /^EUR/ }));
-  expect(screen.getByLabelText("Rate · EUR per USD")).toHaveProperty("value", "0.920000000000");
+  // The newest real row (not the carried copy after it), at four places.
+  expect(screen.getByText("reference 0.9200 · ecb · 2026-06-10")).toBeDefined();
+  expect(screen.getByLabelText("Rate · EUR per USD")).toHaveProperty("value", "");
   fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Bank A" } });
+  fireEvent.change(screen.getByLabelText("Rate · EUR per USD"), { target: { value: "0.93" } });
   fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
-  expect(calls).toEqual([`rate EUR 0.920000000000 ${TODAY}`, "account Bank A EUR"]);
+  expect(calls).toEqual([`rate EUR 0.93 ${TODAY}`, "account Bank A EUR"]);
 });
 
 it("draws no rate line when today already has a usable rate", () => {
@@ -217,4 +223,24 @@ it("draws no rate line when today already has a usable rate", () => {
   fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Bank A" } });
   fireEvent.click(screen.getByRole("button", { name: "Save" }));
   expect(calls).toEqual(["account Bank A EUR"]);
+});
+
+it("states an account refusal that is not a field's on the form, with everything typed kept", () => {
+  const calls: Calls = [];
+  render_({
+    calls,
+    createAccount: () => {
+      throw new Error("accounts: refused by a constraint");
+    },
+  });
+
+  fireEvent.click(screen.getByRole("radio", { name: /^EUR/ }));
+  fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Bank A" } });
+  fireEvent.change(screen.getByLabelText("Rate · EUR per USD"), { target: { value: "0.92" } });
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+  expect(screen.getByText("accounts: refused by a constraint")).toBeDefined();
+  expect(screen.getByLabelText("Name")).toHaveProperty("value", "Bank A");
+  expect(screen.getByLabelText("Rate · EUR per USD")).toHaveProperty("value", "0.92");
+  expect(router.dismissTo).not.toHaveBeenCalled();
 });

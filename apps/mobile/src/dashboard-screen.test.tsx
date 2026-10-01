@@ -230,8 +230,7 @@ function withLedger(controller: ReturnType<typeof fakeController>) {
 beforeEach(() => {
   router.push.mockClear();
   emitClientDiagnosticSpy.mockClear();
-  // §7.0's own toggle, set the way a real install's `initializeFromPinned`
-  // sets it. Without this the screen would lead with the build-time pivot
+  // §7.0's own toggle, chosen the way a person's pick in the header toggle is. Without this the screen would lead with the build-time pivot
   // seed, which is exactly the point: the lead currency is a preference now,
   // not whatever `netWorth` happened to sort first.
   void displayCurrency.set(PLN);

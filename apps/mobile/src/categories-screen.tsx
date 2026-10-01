@@ -12,6 +12,7 @@
  * as a plain number rather than the mocked trend line.
  */
 
+import { useDisplayBasis } from "@waltning/client/currencies/use-display-basis";
 import type {
   ArchiveCategoryDraft,
   ConvertCategoryDraft,
@@ -49,6 +50,7 @@ import { makeStyles } from "@waltning/ui/theme/styles";
 import { space, touchTarget } from "@waltning/ui/tokens";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { Text, View } from "react-native";
+import { displayCurrency } from "./platform";
 import { PushedPage } from "./pushed-page";
 
 type ActionsState = {
@@ -221,9 +223,37 @@ export default function CategoriesScreen() {
       end: accountingDate(`${shiftMonth(first, 1)}-01`),
     };
   }, []);
-  const leadCode = snapshot.netWorth[0]?.currency;
+  // §7.0 — the figures are stated in the display currency, each row at its own
+  // date's rate; with no basis yet, the lead currency's own rows as before.
+  const basis = useDisplayBasis(
+    ledger,
+    snapshot.currencies,
+    displayCurrency,
+    todayIn(Intl.DateTimeFormat().resolvedOptions().timeZone),
+    snapshot.revision,
+  );
+  const leadCode = basis?.currency ?? snapshot.netWorth[0]?.currency;
   const pivot = snapshot.currencies.find((currency) => currency.code === leadCode);
-  const monthSpend = useSpendByCategory(ledger, month, "mine", snapshot.revision);
+  const rawMonthSpend = useSpendByCategory(
+    ledger,
+    month,
+    "mine",
+    snapshot.revision,
+    basis?.spendRebase,
+  );
+  const monthSpend = useMemo(
+    () =>
+      basis === null
+        ? rawMonthSpend
+        : rawMonthSpend.flatMap((row) =>
+            row.currency === basis.currency
+              ? [row]
+              : row.amountPivot === null || row.amountPivot === undefined
+                ? []
+                : [{ ...row, currency: basis.currency, amount: row.amountPivot }],
+          ),
+    [basis, rawMonthSpend],
+  );
   const spend = useMemo(
     () => categorySpend(monthSpend, snapshot.fullCategoryTree, leadCode),
     [monthSpend, snapshot.fullCategoryTree, leadCode],

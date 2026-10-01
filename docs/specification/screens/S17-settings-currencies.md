@@ -50,21 +50,24 @@ screen's own name sit on the ground — and the card carries **no
 title**: the navigation header already says *Currencies*, and saying it twice,
 40 px apart, is chrome.
 
-**The display currency first, as its own card**: *Figures are shown in*, its
-code and name, and one line saying it follows the phone's region until another
-is chosen and that the header's toggle is where it changes (§8 — it is stated
-here, never set here). It is the one currency fact a reader brings to this
-screen. The other currencies follow in two titled cards: **In the header
+**The display currency first, as its own card**: *Show figures in*, a choice
+among the held currencies — the same device preference the header toggle writes
+(§7.0), reachable here because a phone has no toggle in reach of this screen —
+and one line saying it follows the phone's region until another is chosen. It
+is the one currency fact a reader brings to this screen. The other currencies follow in two titled cards: **In the header
 toggle** (pinned) and **Held, not in the toggle** — which is the one question a
 reader brings to this screen about any of them.
 
-**The pivot last, as its own card**, after the list and *Add currency*: *Rate
-reference*, its code and name, and one line on what it is — the currency every
-exchange rate is stored against, so any pair can be worked out; it decides
-nothing a reader sees, and it is set once. It is technical, so it does not lead
-and is never worded as the currency things are measured in. Changing it is
-inside that card, behind its own *Change the pivot…* and then the confirmation,
-never a form left open at the bottom of a list.
+**The anchor currency last, as its own card**, after the list and *Add
+currency*: *Anchor currency* (the pivot), its code and name, and one line on what
+it is — the currency every exchange rate is stored against, so any pair can be
+worked out; it decides nothing a reader sees. It is technical, so it does not
+lead and is never worded as the currency things are measured in. **Changing it
+is a visible action in that card**, *Change the anchor currency…*, then the
+confirmation, never a form left open at the bottom of a list. **Once any
+transaction exists the action is disabled and the card says why**: the phone
+cannot re-rate existing history, so the anchor can change only while there is no
+transaction. Nothing here rewrites history.
 
 Web adds columns rather than regions; the list is short and does not need two.
 
@@ -84,7 +87,7 @@ Web adds columns rather than regions; the list is short and does not need two.
 | Reads | Writes |
 |---|---|
 | `get_currencies` with coverage | `add_currency` · `archive_currency` · `set_rate_source` · `set_pinned` |
-| Pivot | `change_pivot` — audited, confirmed |
+`change_pivot` | audited, confirmed, and refused (stated before the press) once a transaction exists |
 
 ## 6. States
 

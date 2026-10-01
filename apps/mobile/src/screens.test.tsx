@@ -16,6 +16,7 @@ import {
   createPhoneLedger,
   type PhoneClearingAccount,
   type PhoneCurrency,
+  type PhoneLedgerPort,
   type PhoneNetWorth,
   type PhoneRecentTransaction,
   type PhoneSearchTransaction,
@@ -87,7 +88,7 @@ vi.mock("expo-router", () => ({
 
 import NewAccount from "./account-creation-screen";
 import CategoriesScreen from "./categories-screen";
-import { floatPosition } from "./platform";
+import { displayCurrency, floatPosition, setLiveHeldReader, setLivePivotReader } from "./platform";
 import QuickAdd from "./quick-add-screen";
 import SettingsScreen from "./settings-screen";
 import Today from "./today-screen";
@@ -239,7 +240,12 @@ type FakeControllerOptions = {
    * S04 asking for `"all"` while the figure above the chart came from a read
    * that keeps own accounts only.
    */
-  spendByCategory?: (scope: LedgerScope) => readonly PhoneSpendByCategory[];
+  spendByCategory?: (
+    scope: LedgerScope,
+    options?: money.SpendByCategoryOptions,
+  ) => readonly PhoneSpendByCategory[];
+  /** §4's rate for a pair — absent, none is held. */
+  readRate?: PhoneLedgerPort["readRate"];
   categories?: readonly FakeCategory[];
   categoryUsage?: ReadonlyMap<Id<"categories">, number>;
   /** H2 — a caller testing the opening-balance banner hands its own rows rather than `unsettledOf`'s generic ones. */
@@ -319,7 +325,8 @@ function dayFlowsOf(
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([date, flow]) => ({
       date: accountingDate(date),
-      currency: currencyCode("PLN"),
+      // The currency the day's rows are in — one per fixture ledger.
+      currency: rows.find((row) => row.date === date)?.currency ?? currencyCode("PLN"),
       decimals: 2,
       spend: flow.spend,
       inflow: flow.inflow,
@@ -451,7 +458,8 @@ function fakeController(options: FakeControllerOptions = {}) {
         .sort(([a], [b]) => a.localeCompare(b))
         .map(([date, count]) => ({ date: accountingDate(date), count }));
     },
-    readSpendByCategory: (_period, scope) => spendByCategory(scope),
+    readSpendByCategory: (_period, scope, options) => spendByCategory(scope, options),
+    ...(options.readRate === undefined ? {} : { readRate: options.readRate }),
     listUnsettledClearing: () => unsettledOverride ?? unsettledOf(accounts),
     // No screen under test here drives S10 yet (`ledger-screen.test.tsx`
     // does) — an empty page and a no-op are enough to satisfy the port. The
@@ -2111,5 +2119,140 @@ describe("Today — the pager, with a month in it", () => {
       .filter((node) => /Came in/.test(node.getAttribute("aria-label") ?? ""));
     expect(rows).toHaveLength(12);
     expect(rows.filter((node) => node.getAttribute("aria-selected") === "true")).toHaveLength(1);
+  });
+});
+
+/**
+ * **Every figure follows the display currency** (§7.0): a ledger anchored to
+ * EUR — what a German phone's fresh ledger is — states its month card, its
+ * months chart and its spend rows in EUR with nothing chosen, and choosing PLN
+ * in Settings converts them, each row at its own date's rate.
+ */
+describe("Today — figures in the display currency", () => {
+  const MONTH = deviceRuntime().capture().date.slice(0, 7);
+  const EUR = currencyCode("EUR");
+  const PLN = currencyCode("PLN");
+  const CURRENCIES: readonly PhoneCurrency[] = [
+    { code: EUR, name: "Euro", symbol: "€", decimals: 2, capturable: true, isPivot: true },
+    {
+      code: PLN,
+      name: "Polish Złoty",
+      symbol: "zł",
+      decimals: 2,
+      capturable: true,
+      isPivot: false,
+    },
+  ];
+  const EUR_ACCOUNT: FakeAccount = { ...PLN_ACCOUNT, name: "Bank A · EUR", currency: EUR };
+
+  const EXPENSE: PhoneSearchTransaction = {
+    id: id<"transactions">("33333333-3333-4333-8333-3320260501"),
+    date: accountingDate(`${MONTH}-02`),
+    type: "expense",
+    enteredName: "Market B",
+    note: "",
+    categoryName: "Groceries",
+    brandKey: null,
+    accountId: EUR_ACCOUNT.id,
+    accountName: EUR_ACCOUNT.name,
+    toAccountId: null,
+    toAccountName: null,
+    amount: toMoney("-50.00"),
+    currency: EUR,
+    decimals: 2,
+    fxRate: money.pivotPerUnit("1"),
+    fxRateEstimated: false,
+    toAmount: null,
+    toFxRate: null,
+    toCurrency: null,
+    toDecimals: null,
+    isBusiness: false,
+    isCapital: false,
+    obligationRole: null,
+  };
+
+  /** The real fold, over the one expense, so `rebase` is exercised rather than assumed. */
+  const spendByCategory = (scope: LedgerScope, options?: money.SpendByCategoryOptions) =>
+    money.spendByCategory(
+      [
+        {
+          id: EXPENSE.id,
+          type: "expense",
+          date: EXPENSE.date,
+          ownership: "own",
+          isBusiness: false,
+          currency: EUR,
+          decimals: 2,
+          categoryId: GROCERIES,
+          amountOriginal: toMoney("50.00"),
+          isCapital: false,
+          fxRate: EXPENSE.fxRate,
+        },
+      ],
+      [],
+      { start: accountingDate(`${MONTH}-01`), end: accountingDate("9999-12-31") },
+      scope,
+      options,
+    );
+
+  /** 4 PLN to the euro, on every date. */
+  const readRate: PhoneLedgerPort["readRate"] = ({ quote, date }) =>
+    quote === PLN
+      ? { rate: money.unitsPerPivot("4"), source: "nbp", asOf: date, carriedDays: 0 }
+      : null;
+
+  function open(view: "summary" | "months") {
+    liveParams = { view, date: `${MONTH}-09` };
+    setLivePivotReader(() => EUR);
+    setLiveHeldReader(() => [EUR, PLN]);
+    withLedger(
+      <Today />,
+      fakeController({
+        accounts: [EUR_ACCOUNT],
+        currencies: CURRENCIES,
+        categories: [fakeCategory({ id: GROCERIES, name: "Groceries", kind: "expense" })],
+        ledger: [EXPENSE],
+        transactionCount: 1,
+        readRate,
+        spendByCategory,
+      }),
+    );
+    return within(screen.getByRole("tabpanel"));
+  }
+
+  it("states the month card, the months chart and the spend rows in EUR with nothing chosen", () => {
+    const summary = open("summary");
+    const figureBeside = (label: string) =>
+      summary.getByText(label).parentElement?.textContent ?? "";
+    expect(figureBeside("Went out")).toMatch(/50[.,]00/);
+    expect(figureBeside("Went out")).toMatch(/€|EUR/);
+    expect(figureBeside("Went out")).not.toMatch(/zł|PLN/);
+    cleanup();
+    const months = open("months");
+    expect(months.queryAllByText(/zł|PLN/)).toHaveLength(0);
+    expect(months.getAllByText(/50[.,]00/).length).toBeGreaterThan(0);
+  });
+
+  it("converts every one of them when PLN is chosen, at the rate for each row's date", async () => {
+    await act(async () => {
+      await displayCurrency.set(PLN);
+    });
+    try {
+      const summary = open("summary");
+      const figureBeside = (label: string) =>
+        summary.getByText(label).parentElement?.textContent ?? "";
+      expect(figureBeside("Went out")).toMatch(/200[.,]00/);
+      expect(figureBeside("Went out")).not.toMatch(/50[.,]00/);
+      // The spend rows break down the same figure, converted by the same rule.
+      expect(summary.getByText("Groceries").closest("[role]")?.textContent ?? "").toBeDefined();
+      expect((document.body.textContent ?? "").match(/200[.,]00/g)?.length ?? 0).toBeGreaterThan(1);
+      cleanup();
+      const months = open("months");
+      expect(months.getAllByText(/200[.,]00/).length).toBeGreaterThan(0);
+    } finally {
+      await act(async () => {
+        await displayCurrency.set(EUR);
+      });
+    }
   });
 });

@@ -308,7 +308,8 @@ it("renders nothing extra with no fieldErrors prop", () => {
 });
 
 const USD = currencyCode("USD");
-const suggestBynRate = (code: string) => (code === "BYN" ? { suggestion: "3.2500" } : null);
+const referenceBynRate = (code: string) =>
+  code === "BYN" ? { reference: { rate: "3.25", source: "nbp", date: "2026-06-10" } } : null;
 const needNoRate = () => null;
 const rated: readonly CreateAccountCurrency[] = [
   { code: currencyCode("BYN"), name: "Belarusian Ruble", symbol: "Br", capturable: false },
@@ -370,7 +371,7 @@ it("refuses Save with a field error on the rate line, and keeps the name", () =>
   expect(screen.getByLabelText("Name")).toHaveProperty("value", "Bank A");
 });
 
-it("shows the last known rate pre-filled, and saving accepts it", () => {
+it("shows the last known rate as a reference, never as the value", () => {
   const onSave = vi.fn();
   render(
     <CreateAccountForm
@@ -380,14 +381,19 @@ it("shows the last known rate pre-filled, and saving accepts it", () => {
       onCancel={vi.fn()}
       onSave={onSave}
       pivot={USD}
-      rateNeed={suggestBynRate}
+      rateNeed={referenceBynRate}
     />,
   );
   fireEvent.click(screen.getByRole("radio", { name: /^BYN/ }));
-  expect(screen.getByLabelText("Rate · BYN per USD")).toHaveProperty("value", "3.2500");
+  expect(screen.getByLabelText("Rate · BYN per USD")).toHaveProperty("value", "");
+  expect(screen.getByText("reference 3.2500 · nbp · 2026-06-10")).toBeDefined();
   fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Bank A" } });
+  // A rate nobody typed is not one anybody asserted: Save refuses.
   fireEvent.click(screen.getByRole("button", { name: "Save" }));
-  expect(onSave).toHaveBeenCalledWith({ ...minimal, name: "Bank A", currency: "BYN" }, "3.2500");
+  expect(onSave).not.toHaveBeenCalled();
+  fireEvent.change(screen.getByLabelText("Rate · BYN per USD"), { target: { value: "3.3" } });
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
+  expect(onSave).toHaveBeenCalledWith({ ...minimal, name: "Bank A", currency: "BYN" }, "3.3");
 });
 
 it("draws no line for a currency that already has a usable rate", () => {

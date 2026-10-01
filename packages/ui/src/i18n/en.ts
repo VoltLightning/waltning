@@ -1629,23 +1629,23 @@ export const en = {
     symbolBefore: "Before the figure",
     symbolAfter: "After the figure",
     decimals: "Decimal places",
-    pivotLabel: "Pivot: {{code}}",
-    pivotKicker: "Rate reference",
-    pivotName: "{{name}} · the pivot",
+    pivotLabel: "Anchor currency: {{code}}",
+    pivotKicker: "Anchor currency",
+    pivotName: "{{name}} · the anchor",
     pivotExplained:
-      "Exchange rates are stored against this currency so any pair can be worked out. It decides nothing you see, and it is set once.",
-    displayKicker: "Figures are shown in",
+      "Exchange rates are stored against this currency so any pair can be worked out. It decides nothing you see; figures are shown in the currency above.",
     displayExplained:
       "This follows your phone's region until you choose another currency. Switch it at any time with the currency toggle at the top; nothing you have recorded changes.",
-    changePivotStart: "Change the pivot…",
+    changePivotStart: "Change the anchor currency…",
     groupShown: "In the header toggle",
     groupHeld: "Held, not in the toggle",
-    changePivot: "Change pivot",
-    pivotConfirmTitle: "Change the pivot currency?",
+    changePivot: "Change anchor currency",
+    pivotConfirmTitle: "Change the anchor currency?",
     pivotConfirmBody:
-      "The pivot is the technical hub every rate is stored against. Refused once any transaction exists — a phone alone has no way to re-rate the history that would leave behind. Changing it is rare, audited, and never something moving abroad requires.",
+      "The anchor currency is the technical hub every rate is stored against. It can only change while no transaction exists, because this phone cannot re-rate existing history. Changing it is rare and recorded in the audit log.",
     pivotConfirmSubmit: "Yes, change it",
-    pivotChangeRefused: "The pivot can't change while a transaction exists.",
+    pivotChangeRefused:
+      "The anchor currency can't change once a transaction exists: this phone cannot re-rate existing history. It can be changed only while the ledger holds no transactions.",
     /**
      * M2 — §7.0's *"dropped rather than left mis-quoted"*, said out loud. The
      * rewrite keeps only the dates that hold a real published rate against
@@ -1658,18 +1658,21 @@ export const en = {
      * grammar than English needs the same key set present here.
      */
     pivotChangeDroppedDates_one:
-      "Pivot changed · {{count}} date had no rate to rebase and was dropped",
+      "Anchor currency changed · {{count}} date had no rate to rebase and was dropped",
     pivotChangeDroppedDates_few:
-      "Pivot changed · {{count}} dates had no rate to rebase and were dropped",
+      "Anchor currency changed · {{count}} dates had no rate to rebase and were dropped",
     pivotChangeDroppedDates_many:
-      "Pivot changed · {{count}} dates had no rate to rebase and were dropped",
+      "Anchor currency changed · {{count}} dates had no rate to rebase and were dropped",
     pivotChangeDroppedDates_other:
-      "Pivot changed · {{count}} dates had no rate to rebase and were dropped",
+      "Anchor currency changed · {{count}} dates had no rate to rebase and were dropped",
     /** C1 — the executor's other refusal: the chosen code is already the pivot. */
-    pivotAlreadyPivot: "That currency is already the pivot.",
+    pivotAlreadyPivot: "That currency is already the anchor.",
     /** C1 — the target `Select` in the pivot-change flow, ahead of the confirm dialog. */
-    pivotTarget: "New pivot",
+    pivotTarget: "New anchor currency",
     pivotTargetPlaceholder: "Choose a currency",
+    displayShowIn: "Show figures in",
+    anchorBlocked:
+      "Locked: the ledger already holds transactions, and this phone cannot re-rate them. The anchor currency can be changed only while there are none.",
     /** S18. */
     pairLabel: "Quote, against {{base}}",
     sourceStopped: "{{source}} has not answered since {{date}}.",
@@ -1684,7 +1687,7 @@ export const en = {
     tileDays_other: "{{count}} days",
     pairChip: "{{quote}}/{{base}}",
     pairPlaceholder: "Choose a currency",
-    noQuoteCurrency: "No currency to compare against the pivot yet.",
+    noQuoteCurrency: "No currency to compare against the anchor currency yet.",
     range30d: "30 d",
     range90d: "90 d",
     rangeYear: "Year",

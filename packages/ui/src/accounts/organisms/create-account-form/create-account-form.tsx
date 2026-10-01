@@ -24,6 +24,7 @@
 
 import { isAccountingDate } from "@waltning/core/date";
 import type { CurrencyCode } from "@waltning/core/money";
+import * as money from "@waltning/core/money";
 import {
   type AccountKind,
   type CreateAccountInput,
@@ -68,6 +69,9 @@ export type CreateAccountGroup = { id: string; name: string };
 
 type Ownership = CreateAccountInput["ownership"];
 
+/** The last real rate the ledger held for a pair — shown beside the field, never put in it. */
+export type CreateAccountRateReference = { rate: string; source: string; date: string };
+
 export type CreateAccountDraft = {
   name: string;
   currency: CurrencyCode;
@@ -108,8 +112,8 @@ export type CreateAccountFormProps = {
    */
   onSave: (draft: CreateAccountDraft, rate: string | null) => void;
   /**
-   * The pivot — the base of the rate line a rateless currency draws. Absent,
-   * no line is drawn and a rateless currency only carries the note.
+   * The anchor currency — the base of the rate line a rateless currency draws.
+   * Absent, no line is drawn.
    */
   pivot?: CurrencyCode;
   /**
@@ -119,7 +123,7 @@ export type CreateAccountFormProps = {
    * line. Absent, a currency whose `capturable` is `false` needs one with
    * nothing to pre-fill.
    */
-  rateNeed?: (currency: CurrencyCode) => { suggestion: string | null } | null;
+  rateNeed?: (currency: CurrencyCode) => { reference: CreateAccountRateReference | null } | null;
   /**
    * Start with *More details* disclosed. `Select`'s own `defaultOpen` for the
    * same reason: a screenshot suite cannot click, so the expanded state a
@@ -188,24 +192,23 @@ export function CreateAccountForm({
    * to pre-fill it with — `null` inside when the ledger has never held one.
    */
   const needOf = useCallback(
-    (code: CurrencyCode): { suggestion: string | null } | null => {
+    (code: CurrencyCode): { reference: CreateAccountRateReference | null } | null => {
       if (pivot === undefined || code === pivot) return null;
       if (rateNeed !== undefined) return rateNeed(code);
       return currencies.find((row) => row.code === code)?.capturable === false
-        ? { suggestion: null }
+        ? { reference: null }
         : null;
     },
     [currencies, pivot, rateNeed],
   );
   /**
    * The rate line's own text, held here so it **survives every refusal**: the
-   * screen re-renders this form with errors and nothing typed is lost. Seeded
-   * from the suggestion when a currency is chosen, `null` while what is typed
-   * is not a positive decimal.
+   * screen re-renders this form with errors and nothing typed is lost. `null`
+   * while what is typed is not a positive decimal — **the last known rate is a
+   * reference beside the field, never its value**: a rate nobody typed is not
+   * one anybody asserted.
    */
-  const [rate, setRate] = useState<string | null>(() =>
-    currency === null ? null : (needOf(currency)?.suggestion ?? null),
-  );
+  const [rate, setRate] = useState<string | null>(null);
   const [expanded, setExpanded] = useState(defaultExpanded);
 
   const [kind, setKind] = useState<AccountKind>("other");
@@ -257,13 +260,10 @@ export function CreateAccountForm({
   const need = useMemo(() => (chosen === undefined ? null : needOf(chosen.code)), [chosen, needOf]);
 
   const handleToggleExpanded = useCallback(() => setExpanded((prior) => !prior), []);
-  const handleSelectCurrency = useCallback(
-    (code: CurrencyCode) => {
-      setCurrency(code);
-      setRate(needOf(code)?.suggestion ?? null);
-    },
-    [needOf],
-  );
+  const handleSelectCurrency = useCallback((code: CurrencyCode) => {
+    setCurrency(code);
+    setRate(null);
+  }, []);
   const handleKindChange = useCallback((value: string) => setKind(value as AccountKind), []);
   const handleOwnershipChange = useCallback(
     (value: string) => setOwnership(value as Ownership),
@@ -365,7 +365,16 @@ export function CreateAccountForm({
           <RateField
             key={chosen.code}
             label={t("fx.rateEditorRateLabel", { quote: chosen.code, base: pivot })}
-            value={need.suggestion ?? ""}
+            value=""
+            {...(need.reference === null
+              ? {}
+              : {
+                  reference: {
+                    rate: money.unitsPerPivot(need.reference.rate),
+                    source: need.reference.source,
+                    date: need.reference.date,
+                  },
+                })}
             editable
             onChange={setRate}
             {...(rateError === undefined ? {} : { error: rateError })}

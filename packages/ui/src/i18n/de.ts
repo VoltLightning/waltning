@@ -915,35 +915,37 @@ export const de: Messages = {
     symbolBefore: "Vor dem Betrag",
     symbolAfter: "Nach dem Betrag",
     decimals: "Nachkommastellen",
-    pivotLabel: "Bezugswährung: {{code}}",
-    pivotKicker: "Kursbasis",
-    pivotName: "{{name}} · Bezugswährung",
+    pivotLabel: "Ankerwährung: {{code}}",
+    pivotKicker: "Ankerwährung",
+    pivotName: "{{name}} · Anker",
     pivotExplained:
-      "Wechselkurse werden gegenüber dieser Währung gespeichert, damit sich jedes Paar berechnen lässt. Sie bestimmt nichts von dem, was Sie sehen, und wird einmal festgelegt.",
-    displayKicker: "Beträge werden angezeigt in",
+      "Wechselkurse werden gegenüber dieser Währung gespeichert, damit sich jedes Paar berechnen lässt. Sie bestimmt nichts von dem, was Sie sehen; Beträge erscheinen in der oben gewählten Währung.",
     displayExplained:
       "Das richtet sich nach der Region Ihres Telefons, bis Sie eine andere Währung wählen. Sie können sie jederzeit mit dem Währungsschalter oben umstellen; an Ihren Buchungen ändert sich dadurch nichts.",
-    changePivotStart: "Bezugswährung ändern…",
+    changePivotStart: "Ankerwährung ändern…",
     groupShown: "Im Umschalter der Kopfzeile",
     groupHeld: "Gehalten, nicht im Umschalter",
-    changePivot: "Bezugswährung ändern",
-    pivotConfirmTitle: "Bezugswährung ändern?",
+    changePivot: "Ankerwährung ändern",
+    pivotConfirmTitle: "Ankerwährung ändern?",
     pivotConfirmBody:
-      "Die Bezugswährung ist der technische Knoten, gegen den jeder Kurs gespeichert wird. Abgelehnt, sobald eine Buchung existiert — ein Telefon allein kann die Historie, die dabei zurückbliebe, nicht neu bewerten. Eine Änderung ist selten, wird protokolliert und ist für einen Umzug ins Ausland nie nötig.",
+      "Die Ankerwährung ist der technische Bezugspunkt, gegen den jeder Kurs gespeichert wird. Sie lässt sich nur ändern, solange keine Buchung existiert, weil dieses Telefon bestehende Buchungen nicht neu bewerten kann. Eine Änderung ist selten und wird protokolliert.",
     pivotConfirmSubmit: "Ja, ändern",
     pivotChangeRefused:
-      "Die Bezugswährung kann nicht geändert werden, solange eine Buchung existiert.",
+      "Die Ankerwährung kann nicht mehr geändert werden, sobald eine Buchung existiert: Dieses Telefon kann bestehende Buchungen nicht neu bewerten. Änderbar ist sie nur, solange das Buch keine Buchungen enthält.",
     pivotChangeDroppedDates_one:
-      "Bezugswährung geändert · {{count}} Datum hatte keinen Kurs zum Umrechnen und wurde verworfen",
+      "Ankerwährung geändert · {{count}} Datum hatte keinen Kurs zum Umrechnen und wurde verworfen",
     pivotChangeDroppedDates_few:
-      "Bezugswährung geändert · {{count}} Daten hatten keinen Kurs zum Umrechnen und wurden verworfen",
+      "Ankerwährung geändert · {{count}} Daten hatten keinen Kurs zum Umrechnen und wurden verworfen",
     pivotChangeDroppedDates_many:
-      "Bezugswährung geändert · {{count}} Daten hatten keinen Kurs zum Umrechnen und wurden verworfen",
+      "Ankerwährung geändert · {{count}} Daten hatten keinen Kurs zum Umrechnen und wurden verworfen",
     pivotChangeDroppedDates_other:
-      "Bezugswährung geändert · {{count}} Daten hatten keinen Kurs zum Umrechnen und wurden verworfen",
-    pivotAlreadyPivot: "Diese Währung ist bereits die Bezugswährung.",
-    pivotTarget: "Neue Bezugswährung",
+      "Ankerwährung geändert · {{count}} Daten hatten keinen Kurs zum Umrechnen und wurden verworfen",
+    pivotAlreadyPivot: "Diese Währung ist bereits die Ankerwährung.",
+    pivotTarget: "Neue Ankerwährung",
     pivotTargetPlaceholder: "Währung wählen",
+    displayShowIn: "Beträge anzeigen in",
+    anchorBlocked:
+      "Gesperrt: Das Buch enthält bereits Buchungen, und dieses Telefon kann sie nicht neu bewerten. Die Ankerwährung lässt sich nur ändern, solange keine existieren.",
     pairLabel: "Kurs, gegen {{base}}",
     sourceStopped: "{{source}} antwortet seit {{date}} nicht mehr.",
     sourceStoppedWhy:
@@ -957,7 +959,7 @@ export const de: Messages = {
     tileDays_other: "{{count}} Tage",
     pairChip: "{{quote}}/{{base}}",
     pairPlaceholder: "Währung wählen",
-    noQuoteCurrency: "Noch keine Währung zum Vergleich mit der Bezugswährung.",
+    noQuoteCurrency: "Noch keine Währung zum Vergleich mit der Ankerwährung.",
     range30d: "30 T.",
     range90d: "90 T.",
     rangeYear: "Jahr",

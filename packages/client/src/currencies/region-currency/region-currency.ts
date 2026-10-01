@@ -16,6 +16,7 @@ const EURO_REGIONS = [
   "AD",
   "AT",
   "BE",
+  "BG",
   "CY",
   "DE",
   "EE",
@@ -38,6 +39,7 @@ const EURO_REGIONS = [
   "SK",
   "SM",
   "VA",
+  "XK",
 ] as const;
 
 const OTHER_REGIONS: Readonly<Record<string, string>> = {
@@ -54,10 +56,20 @@ const BY_REGION: ReadonlyMap<string, string> = new Map([
   ...Object.entries(OTHER_REGIONS),
 ]);
 
-/** The region of a BCP-47 tag — `de-DE` → `DE` — or `null` when the tag names none. */
+/**
+ * The region of a BCP-47 tag — `de-DE` → `DE`. A tag naming none (`de`) takes
+ * the language's likely region (`Intl.Locale.maximize`: `de` → `DE`), where the
+ * engine has it; `null` otherwise.
+ */
 export function regionOfTag(tag: string): string | null {
-  const region = /^[a-z]{2,3}(?:[-_][A-Za-z]{4})?[-_]([A-Za-z]{2}|\d{3})(?:[-_]|$)/.exec(tag)?.[1];
-  return region === undefined ? null : region.toUpperCase();
+  const named = /^[a-z]{2,3}(?:[-_][A-Za-z]{4})?[-_]([A-Za-z]{2}|\d{3})(?:[-_]|$)/.exec(tag)?.[1];
+  if (named !== undefined) return named.toUpperCase();
+  try {
+    return new Intl.Locale(tag).maximize().region ?? null;
+  } catch {
+    // `Intl.Locale` is absent in some engines and throws on a malformed tag.
+    return null;
+  }
 }
 
 /** The currency a region uses, or `null` for a region this table does not know. */
@@ -67,11 +79,12 @@ export function currencyOfRegion(region: string | null): CurrencyCode | null {
   return code === undefined ? null : currencyCode(code);
 }
 
-/** `de-DE` → EUR. The first tag that names a region with a known currency wins. */
+/**
+ * `de-DE` → EUR. **The first tag only** — the person's own first language is
+ * the one whose region answers; a later tag is a fallback language, and its
+ * region is not where they are.
+ */
 export function currencyOfTags(tags: readonly string[]): CurrencyCode | null {
-  for (const tag of tags) {
-    const currency = currencyOfRegion(regionOfTag(tag));
-    if (currency !== null) return currency;
-  }
-  return null;
+  const first = tags[0];
+  return first === undefined ? null : currencyOfRegion(regionOfTag(first));
 }

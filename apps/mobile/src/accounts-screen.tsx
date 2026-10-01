@@ -3,6 +3,8 @@
  * `TabBar`). Also reached from Today's net-worth line and from Settings.
  */
 
+import type { DisplayBasis } from "@waltning/client/currencies/display-basis";
+import { useDisplayBasis } from "@waltning/client/currencies/use-display-basis";
 import type {
   PhoneAccount,
   PhoneCurrency,
@@ -21,6 +23,7 @@ import { GroundPanel } from "@waltning/ui/shell/card";
 import { Toast } from "@waltning/ui/states/toast";
 import { router, useLocalSearchParams } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
+import { displayCurrency } from "./platform";
 
 function handleCreateAccount() {
   router.push({ pathname: "/account/new", params: { returnTo: "accounts" } });
@@ -41,21 +44,31 @@ function conversionOf(
   ledger: PhoneLedgerController,
   account: PhoneAccount,
   pivot: PhoneCurrency | undefined,
+  display: PhoneCurrency | undefined,
+  basis: DisplayBasis | null,
   today: AccountingDate,
 ): AccountRegisterAccount["conversion"] {
-  if (pivot === undefined || account.currency === pivot.code) return undefined;
-  const held = ledger.readRate({ base: pivot.code, quote: account.currency, date: today });
-  if (held === null) return undefined;
+  if (pivot === undefined || display === undefined || basis === null) return undefined;
+  if (account.currency === display.code) return undefined;
+  const perDisplay = basis.unitsPerDisplay(account.currency, today);
+  if (perDisplay === null) return undefined;
+  // Provenance is the account currency's own leg — what the figure rests on.
+  const held =
+    account.currency === pivot.code
+      ? null
+      : ledger.readRate({ base: pivot.code, quote: account.currency, date: today });
   return {
-    rate: money.reciprocal(held.rate),
-    displayCurrency: pivot.symbol ?? pivot.code,
-    displayDecimals: pivot.decimals,
+    rate: money.reciprocal(perDisplay),
+    displayCurrency: display.symbol ?? display.code,
+    displayDecimals: display.decimals,
     provenance:
-      held.source === "manual"
-        ? { kind: "override" }
-        : held.carriedDays > 0
-          ? { kind: "estimated" }
-          : { kind: "synced" },
+      held === null
+        ? { kind: "synced" }
+        : held.source === "manual"
+          ? { kind: "override" }
+          : held.carriedDays > 0
+            ? { kind: "estimated" }
+            : { kind: "synced" },
   };
 }
 
@@ -107,13 +120,25 @@ export default function Accounts() {
   const snapshot = usePhoneLedger(ledger);
   const pivot = snapshot.currencies.find((currency) => currency.isPivot);
   const today = todayIn(Intl.DateTimeFormat().resolvedOptions().timeZone);
+  // §7.0 — the register states and totals its figures in the display currency.
+  const basis = useDisplayBasis(
+    ledger,
+    snapshot.currencies,
+    displayCurrency,
+    today,
+    snapshot.revision,
+  );
+  const display = useMemo(
+    () => snapshot.currencies.find((currency) => currency.code === basis?.currency),
+    [snapshot.currencies, basis],
+  );
   const accounts = useMemo(
     () =>
       snapshot.accounts.map((account) => {
-        const conversion = conversionOf(ledger, account, pivot, today);
-        return toRegisterAccount(account, conversion, pivotBalanceOf(account, pivot, conversion));
+        const conversion = conversionOf(ledger, account, pivot, display, basis, today);
+        return toRegisterAccount(account, conversion, pivotBalanceOf(account, display, conversion));
       }),
-    [snapshot.accounts, ledger, pivot, today],
+    [snapshot.accounts, ledger, pivot, display, basis, today],
   );
   const archivedAccounts = useMemo(
     () =>
@@ -123,8 +148,9 @@ export default function Accounts() {
   // The register's own total is stated in the pivot or not at all — a sum over
   // figures in three currencies is not a number.
   const registerPivot = useMemo(
-    () => (pivot === undefined ? undefined : { currency: pivot.code, decimals: pivot.decimals }),
-    [pivot],
+    () =>
+      display === undefined ? undefined : { currency: display.code, decimals: display.decimals },
+    [display],
   );
   // `archive_account` has no undo (the shared wave-3 plan says why — no
   // `restore_*` operation exists), so this is a plain `Toast`, not `UndoToast`.

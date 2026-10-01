@@ -32,6 +32,7 @@ vi.mock("expo-router", () => ({
 }));
 
 import Accounts from "./accounts-screen";
+import { displayCurrency } from "./platform";
 
 const PLN = currencyCode("PLN");
 const USD = currencyCode("USD");
@@ -116,6 +117,8 @@ function withLedger(rows: readonly Row[]) {
 }
 
 beforeEach(() => {
+  // §7.0 — the figures are stated in the display currency; this ledger's is its pivot.
+  void displayCurrency.set(PLN);
   router.push.mockClear();
   router.dismissTo.mockClear();
   useLocalSearchParams.mockReturnValue({});

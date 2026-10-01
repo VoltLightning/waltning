@@ -199,7 +199,11 @@ describe("the display currency's region default, on the web build", () => {
     expect(await displayIn(["de-DE", "en-US"])).toBe("EUR");
   });
 
-  it("a browser with no region shows the pivot", async () => {
-    expect(await displayIn(["de"])).toBe("USD");
+  it("a language with no region in the tag still resolves it (`de` is Germany)", async () => {
+    expect(await displayIn(["de"])).toBe("EUR");
+  });
+
+  it("a region the table does not know shows the pivot", async () => {
+    expect(await displayIn(["ja-JP"])).toBe("USD");
   });
 });

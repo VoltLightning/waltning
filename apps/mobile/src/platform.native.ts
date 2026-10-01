@@ -181,10 +181,13 @@ function readRegionCurrency(): CurrencyCode | null {
   return currencyOfTags(locales.map((locale) => locale.languageTag));
 }
 
+/** The device region's currency, read once — the display default and the first-start anchor. */
+export const deviceRegionCurrency: CurrencyCode | null = readRegionCurrency();
+
 /**
  * `SPEC.md` §7.0's header toggle — a device preference, never a registry
- * write. The live pivot (`livePivotReader`) is the fallback until something
- * is chosen or `initializeFromPinned` runs; `pivotCurrency.code`
+ * write. With nothing chosen it is the device region's currency when the
+ * ledger holds it, else the live pivot (`livePivotReader`); `pivotCurrency.code`
  * (`@waltning/core/currencies` — USD) is only the seed used before the
  * ledger session is ready to answer at all (H1 — a fresh install whose
  * ledger pivot is PLN must render PLN, not this build-time seed).
@@ -199,7 +202,7 @@ export const displayCurrency = createDisplayCurrencyPreference(
   {
     subscribeToLedger: (listener) => livePivotSubscribe(listener),
     diagnostics: mobileDiagnostics,
-    regionCurrency: readRegionCurrency(),
+    regionCurrency: deviceRegionCurrency,
     readHeld: () => liveHeldReader(),
   },
 );

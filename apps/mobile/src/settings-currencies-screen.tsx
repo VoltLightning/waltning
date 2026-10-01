@@ -16,8 +16,8 @@
  * title of its own — the navigation header already says *Currencies*, and
  * saying it twice, 40 px apart, is chrome.
  *
- * The display currency is stated first — read-only here, changed by the
- * header's toggle. The pivot is shown last, its one write (`change_pivot`) behind
+ * The display currency is chosen first — the same device preference the
+ * header's toggle writes. The anchor (the pivot) is shown last, its one write (`change_pivot`) behind
  * `ConfirmDialog` — E3's executor refuses it once any transaction exists, and
  * the dialog now says so before offering (S17 §7).
  *
@@ -38,6 +38,7 @@ import type { CurrencyPatch } from "@waltning/client/ledger/create-phone-ledger"
 import { deviceRuntime } from "@waltning/client/ledger/device-runtime";
 import { useLedgerController } from "@waltning/client/ledger/use-ledger-controller";
 import { usePhoneLedger } from "@waltning/client/ledger/use-phone-ledger";
+import { currencyCode } from "@waltning/core/money";
 import {
   CurrencyRow,
   type CurrencyRowCoverage,
@@ -81,7 +82,7 @@ export default function SettingsCurrenciesScreen() {
   const t = useT();
   const styles = useStyles();
   const ledger = useLedgerController();
-  usePhoneLedger(ledger);
+  const snapshot = usePhoneLedger(ledger);
 
   const today = deviceRuntime().capture().date;
   const rows = ledger.listCurrencySettings();
@@ -158,7 +159,23 @@ export default function SettingsCurrenciesScreen() {
 
   const pivotRow = rows.find((row) => row.isPivot);
   const display = useDisplayCurrency(displayCurrency);
-  const displayName = rows.find((row) => row.code === display.currency)?.name;
+  const displayOptions: SelectOption[] = useMemo(
+    () => rows.map((row) => ({ value: row.code, label: `${row.code} · ${row.name}` })),
+    [rows],
+  );
+  const handleChangeDisplay = useCallback((value: string) => {
+    void displayCurrency.set(currencyCode(value));
+  }, []);
+  /**
+   * §7: the anchor can change only while the ledger holds no transaction — the
+   * phone cannot re-rate history. Asked on demand, so the card says why *before*
+   * the press rather than refusing after a confirmation.
+   */
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `revision` invalidates the on-demand read by identity, not by being read.
+  const hasTransactions = useMemo(
+    () => ledger.searchTransactions({}).total.count > 0,
+    [ledger, snapshot.revision],
+  );
   const otherRows = rows.filter((row) => !row.isPivot);
   // S17 §3: what the header's toggle shows, and what is only held.
   const shownRows = otherRows.filter((row) => row.pinned);
@@ -327,16 +344,20 @@ export default function SettingsCurrenciesScreen() {
     <PushedPage title={t("routes.currencies")} subtitle={t("pages.currencies")}>
       {/*
         **The display currency first** (S17 §3) — what the screen's reader sees
-        their figures in is the one currency fact they bring here. It is stated,
-        not set: the header's toggle is where it changes (§8, §7.0).
+        their figures in is the one currency fact they bring here. It is chosen
+        here as well as in the header's toggle: one device preference, two ways
+        to reach it (§8, §7.0), which is what a phone — with no header toggle
+        in reach of this screen — needs.
       */}
       <Card>
         <View style={styles.pivot}>
-          <Text style={styles.kicker}>{t("fx.displayKicker")}</Text>
-          <View style={styles.pivotHead}>
-            <Text style={styles.pivotCode}>{display.currency}</Text>
-            {displayName === undefined ? null : <Text style={styles.pivotName}>{displayName}</Text>}
-          </View>
+          <Select
+            label={t("fx.displayShowIn")}
+            placeholder=""
+            options={displayOptions}
+            value={display.currency}
+            onChange={handleChangeDisplay}
+          />
           <Text style={styles.pivotBody}>{t("fx.displayExplained")}</Text>
         </View>
       </Card>
@@ -409,10 +430,11 @@ export default function SettingsCurrenciesScreen() {
       <Button label={t("fx.addCurrency")} onPress={handleOpenAdd} variant="secondary" size="sm" />
 
       {/*
-        **The pivot last, as its own card** (S17 §3) — the technical hub every
-        rate is stored against. It decides nothing a reader sees, so it comes
-        after everything they can act on; changing it is an action inside that
-        card, behind its own tap and a confirmation.
+        **The anchor currency last, as its own card** (S17 §3) — the technical
+        hub every rate is stored against. It decides nothing a reader sees, so it
+        comes after everything they can act on; changing it is a visible action
+        inside that card, behind a confirmation, and — once a transaction exists —
+        a stated reason instead.
       */}
       {pivotRow ? (
         <Card>
@@ -423,7 +445,18 @@ export default function SettingsCurrenciesScreen() {
               <Text style={styles.pivotName}>{t("fx.pivotName", { name: pivotRow.name })}</Text>
             </View>
             <Text style={styles.pivotBody}>{t("fx.pivotExplained")}</Text>
-            {otherRows.length === 0 ? null : changingPivot ? (
+            {otherRows.length === 0 ? null : hasTransactions ? (
+              <>
+                <Text style={styles.pivotBody}>{t("fx.anchorBlocked")}</Text>
+                <Button
+                  label={t("fx.changePivotStart")}
+                  onPress={handleStartPivotChange}
+                  variant="secondary"
+                  size="sm"
+                  disabled
+                />
+              </>
+            ) : changingPivot ? (
               <View style={styles.pivotChange}>
                 <Select
                   label={t("fx.pivotTarget")}
@@ -443,7 +476,7 @@ export default function SettingsCurrenciesScreen() {
               <Button
                 label={t("fx.changePivotStart")}
                 onPress={handleStartPivotChange}
-                variant="ghost"
+                variant="secondary"
                 size="sm"
               />
             )}

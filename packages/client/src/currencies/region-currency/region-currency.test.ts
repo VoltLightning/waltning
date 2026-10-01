@@ -11,8 +11,14 @@ describe("regionOfTag", () => {
   });
 
   it("answers null for a tag that names no region", () => {
-    expect(regionOfTag("de")).toBeNull();
     expect(regionOfTag("")).toBeNull();
+  });
+});
+
+describe("regionOfTag, from the language alone", () => {
+  it("takes the language's likely region where the tag names none", () => {
+    expect(regionOfTag("de")).toBe("DE");
+    expect(regionOfTag("pl")).toBe("PL");
   });
 });
 
@@ -31,8 +37,14 @@ describe("currencyOfRegion", () => {
 });
 
 describe("currencyOfTags", () => {
-  it("takes the first tag that names a region with a known currency", () => {
-    expect(currencyOfTags(["de", "pl-PL", "en-US"])).toBe(currencyCode("PLN"));
+  it("reads the first tag only — a later language is not where the person is", () => {
+    expect(currencyOfTags(["de", "pl-PL", "en-US"])).toBe(currencyCode("EUR"));
+    expect(currencyOfTags(["ja-JP", "pl-PL"])).toBeNull();
+  });
+
+  it("knows Bulgaria and Kosovo as euro regions", () => {
+    expect(currencyOfRegion("BG")).toBe(currencyCode("EUR"));
+    expect(currencyOfRegion("XK")).toBe(currencyCode("EUR"));
   });
 
   it("answers null for no tags", () => {

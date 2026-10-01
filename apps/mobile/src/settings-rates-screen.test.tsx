@@ -428,7 +428,7 @@ it("R4 L3 — a deep-linked range states its own day count before deleting", () 
 it("renders neither card when the pivot is the only currency", () => {
   withLedger({ listCurrencySettings: () => [USD_ROW] });
 
-  expect(screen.getByText("No currency to compare against the pivot yet.")).toBeDefined();
+  expect(screen.getByText("No currency to compare against the anchor currency yet.")).toBeDefined();
   expect(screen.queryByText("Coverage")).toBeNull();
   expect(screen.queryByText("100%")).toBeNull();
 });
@@ -448,14 +448,14 @@ it("renders neither card when the pivot is the only currency", () => {
  * **Broken once** — the guarded branch is `noQuoteCurrency ? hint : (nulls ?
  * null : card)`. Flatten it to `quote === null || range === null || pivot ===
  * undefined ? hint : card` — the shape round 3 replaced — and both cases
- * below render *No currency to compare against the pivot yet.* while holding
+ * below render *No currency to compare against the anchor currency yet.* while holding
  * two currencies.
  */
 it("draws neither the table card nor the hint when the ledger names no pivot", () => {
   // Two currencies, and neither of them the pivot.
   withLedger({ listCurrencySettings: () => [PLN_ROW, { ...USD_ROW, isPivot: false }] });
 
-  expect(screen.queryByText("No currency to compare against the pivot yet.")).toBeNull();
+  expect(screen.queryByText("No currency to compare against the anchor currency yet.")).toBeNull();
   expect(screen.queryByText("Date")).toBeNull();
   // Coverage is per currency, so it is still true and still drawn.
   expect(screen.getByText("Coverage")).toBeDefined();
@@ -471,7 +471,7 @@ it("draws neither the table card nor the hint when the custom range does not par
 
   fireEvent.change(screen.getByLabelText("From"), { target: { value: "2026-09-3x" } });
 
-  expect(screen.queryByText("No currency to compare against the pivot yet.")).toBeNull();
+  expect(screen.queryByText("No currency to compare against the anchor currency yet.")).toBeNull();
   expect(screen.queryByText("Date")).toBeNull();
   expect(screen.getByText("Coverage")).toBeDefined();
 });
