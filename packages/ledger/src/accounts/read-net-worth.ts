@@ -1,7 +1,7 @@
 /**
  * §3 net worth, per currency. No display currency exists on the phone yet and
  * no rate to sum across, so this is one `{mine, ours}` pair per currency held —
- * the same call `CurrencyTotals` makes on the Today screen, and for the same
+ * the same call every per-currency total makes, and for the same
  * reason: inventing a rate here is H21 with nothing to check it against.
  */
 
