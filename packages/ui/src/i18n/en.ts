@@ -149,9 +149,7 @@ export const en = {
      * the sentence states the consequence rather than refusing.
      */
     currencyNotCapturable:
-      "{{currency}} has no exchange rate yet. The account opens fine; transactions in it cannot be recorded until one is set.",
-    /** The way out of the sentence above — S18, opened on that currency and today's date. */
-    setRate: "Set a {{currency}} rate",
+      "{{currency}} has no exchange rate for today. Enter one below; it is saved together with the account, so transactions in it can be recorded.",
     moreDetails: "More details",
     fewerDetails: "Fewer details",
     kind: "Kind",
@@ -1234,6 +1232,7 @@ export const en = {
     plusOtherCurrencies_few: "+ {{count}} other currencies",
     plusOtherCurrencies_many: "+ {{count}} other currencies",
     plusOtherCurrencies_other: "+ {{count}} other currencies",
+    estimatedAtToday: "≈ some days at today's rate",
     /**
      * The *Go to* cards' figures (S04 §3). **Every card carries one**, which is
      * what makes the grid a status board rather than a menu — *Between us* as a
@@ -1663,20 +1662,25 @@ export const en = {
     symbolBefore: "Before the figure",
     symbolAfter: "After the figure",
     decimals: "Decimal places",
-    pivotLabel: "Pivot: {{code}}",
-    pivotKicker: "The one everything is measured in",
-    pivotName: "{{name}} · the pivot",
+    pivotLabel: "Anchor currency: {{code}}",
+    pivotKicker: "Anchor currency",
+    pivotName: "{{name}} · the anchor",
     pivotExplained:
-      "Every figure in the app is this currency underneath. Changing it restates the whole ledger, so it is set once.",
-    changePivotStart: "Change the pivot…",
+      "Exchange rates are stored against this currency so any pair can be worked out. It decides nothing you see; figures are shown in the currency above.",
+    displayExplained:
+      "Until you choose, this follows your phone's region. Switching changes only how figures are shown; nothing you have recorded changes.",
+    displayNeedsRate:
+      "Not applied yet: {{currency}} has no exchange rate, so figures stay in {{shown}}. Set a {{currency}} rate to use it.",
+    changePivotStart: "Change the anchor currency…",
     groupShown: "In the header toggle",
     groupHeld: "Held, not in the toggle",
-    changePivot: "Change pivot",
-    pivotConfirmTitle: "Change the pivot currency?",
+    changePivot: "Change anchor currency",
+    pivotConfirmTitle: "Change the anchor currency?",
     pivotConfirmBody:
-      "The pivot is the technical hub every rate is stored against. Refused once any transaction exists — a phone alone has no way to re-rate the history that would leave behind. Changing it is rare, audited, and never something moving abroad requires.",
+      "The anchor currency is the technical hub every rate is stored against. It can only change while no transaction exists, because this phone cannot re-rate existing history. Changing it is rare and recorded in the audit log.",
     pivotConfirmSubmit: "Yes, change it",
-    pivotChangeRefused: "The pivot can't change while a transaction exists.",
+    pivotChangeRefused:
+      "The anchor currency can't change once a transaction exists: this phone cannot re-rate existing history. It can be changed only while the ledger holds no transactions.",
     /**
      * M2 — §7.0's *"dropped rather than left mis-quoted"*, said out loud. The
      * rewrite keeps only the dates that hold a real published rate against
@@ -1689,18 +1693,21 @@ export const en = {
      * grammar than English needs the same key set present here.
      */
     pivotChangeDroppedDates_one:
-      "Pivot changed · {{count}} date had no rate to rebase and was dropped",
+      "Anchor currency changed · {{count}} date had no rate to rebase and was dropped",
     pivotChangeDroppedDates_few:
-      "Pivot changed · {{count}} dates had no rate to rebase and were dropped",
+      "Anchor currency changed · {{count}} dates had no rate to rebase and were dropped",
     pivotChangeDroppedDates_many:
-      "Pivot changed · {{count}} dates had no rate to rebase and were dropped",
+      "Anchor currency changed · {{count}} dates had no rate to rebase and were dropped",
     pivotChangeDroppedDates_other:
-      "Pivot changed · {{count}} dates had no rate to rebase and were dropped",
+      "Anchor currency changed · {{count}} dates had no rate to rebase and were dropped",
     /** C1 — the executor's other refusal: the chosen code is already the pivot. */
-    pivotAlreadyPivot: "That currency is already the pivot.",
+    pivotAlreadyPivot: "That currency is already the anchor.",
     /** C1 — the target `Select` in the pivot-change flow, ahead of the confirm dialog. */
-    pivotTarget: "New pivot",
+    pivotTarget: "New anchor currency",
     pivotTargetPlaceholder: "Choose a currency",
+    displayShowIn: "Show figures in",
+    anchorBlocked:
+      "Locked: the ledger already holds transactions, and this phone cannot re-rate them. The anchor currency can be changed only while there are none.",
     /** S18. */
     pairLabel: "Quote, against {{base}}",
     sourceStopped: "{{source}} has not answered since {{date}}.",
@@ -1715,7 +1722,7 @@ export const en = {
     tileDays_other: "{{count}} days",
     pairChip: "{{quote}}/{{base}}",
     pairPlaceholder: "Choose a currency",
-    noQuoteCurrency: "No currency to compare against the pivot yet.",
+    noQuoteCurrency: "No currency to compare against the anchor currency yet.",
     range30d: "30 d",
     range90d: "90 d",
     rangeYear: "Year",

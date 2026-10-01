@@ -15,6 +15,7 @@
  * What can is that the right platform primitive is what gets called.
  */
 
+import { currencyCode } from "@waltning/core/money";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const haptics = {
@@ -41,7 +42,8 @@ vi.mock("expo-crypto", () => ({ getRandomBytes: vi.fn() }));
 vi.mock("expo-document-picker", () => ({ getDocumentAsync: vi.fn() }));
 vi.mock("expo-file-system", () => ({ Directory: class {}, File: class {}, Paths: {} }));
 vi.mock("expo-local-authentication", () => ({}));
-vi.mock("expo-localization", () => ({ getLocales: () => [] }));
+const deviceLocales: { languageTag: string; currencyCode: string | null }[] = [];
+vi.mock("expo-localization", () => ({ getLocales: () => deviceLocales }));
 vi.mock("expo-sharing", () => ({ isAvailableAsync: vi.fn(), shareAsync: vi.fn() }));
 vi.mock("./diagnostics.ts", () => ({ mobileDiagnostics: {} }));
 
@@ -74,5 +76,32 @@ describe("the day strip's tick, on a device", () => {
     expect(() => dayTickHaptic()).not.toThrow();
     // Let the rejection be handled rather than surface as unhandled.
     await Promise.resolve();
+  });
+});
+
+describe("the display currency's region default, on a device", () => {
+  async function displayOn(locales: typeof deviceLocales) {
+    vi.resetModules();
+    deviceLocales.splice(0, deviceLocales.length, ...locales);
+    const native = await import("./platform.native.ts");
+    native.setLiveHeldReader(() => ["USD", "PLN", "EUR"].map(currencyCode));
+    native.setLivePivotReader(() => currencyCode("USD"));
+    return native.displayCurrency.getSnapshot().currency;
+  }
+
+  it("takes the region's own currency from the platform", async () => {
+    expect(await displayOn([{ languageTag: "de-DE", currencyCode: "EUR" }])).toBe("EUR");
+  });
+
+  it("falls back to the tag's region when the platform reports no currency", async () => {
+    expect(await displayOn([{ languageTag: "pl-PL", currencyCode: null }])).toBe("PLN");
+  });
+
+  it("no known region shows the pivot", async () => {
+    expect(await displayOn([])).toBe("USD");
+  });
+
+  it("a region currency the ledger does not hold shows the pivot", async () => {
+    expect(await displayOn([{ languageTag: "ja-JP", currencyCode: "JPY" }])).toBe("USD");
   });
 });

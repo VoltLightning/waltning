@@ -1,3 +1,4 @@
+import type { DisplayBasis } from "@waltning/client/currencies/display-basis";
 import type { PhoneLedgerController } from "@waltning/client/ledger/create-phone-ledger";
 import type { ListStartGate } from "@waltning/client/ledger/list-start-gate";
 import { listStartGate } from "@waltning/client/ledger/list-start-gate";
@@ -112,6 +113,12 @@ export type HomeListPageProps = {
   revision: number;
   pivotCurrency: CurrencyCode;
   pivotDecimals: number;
+  /**
+   * §7.0 — the display currency's basis. The rows' day totals and the strip's
+   * figures are re-expressed in it, each row at its own date's rate; absent or
+   * the pivot's own, nothing converts.
+   */
+  basis?: DisplayBasis | null;
   onPickDay: (date: string) => void;
   onOpenTransaction: (id: string) => void;
   /**
@@ -205,6 +212,7 @@ function HomeListPageView({
   revision,
   pivotCurrency,
   pivotDecimals,
+  basis = null,
   onPickDay,
   onOpenTransaction,
   onReturnToToday,
@@ -282,14 +290,14 @@ function HomeListPageView({
           // entry as a fresh object, which failed every cell's `memo` — the
           // render probe counted ~2,000 re-renders per settle, every cell in
           // the list about five times over.
-          toLedgerItems(rows, pivotCurrency, {
+          toLedgerItems(basis === null ? rows : basis.rebaseRows(rows), pivotCurrency, {
             filtered: query !== null || accountId !== null,
             anchor: centred,
             // The line between *nothing recorded* and *not yet* (S04 §6).
             today,
           })
         : [],
-    [rows, settled, pivotCurrency, query, centred, today, accountId],
+    [rows, settled, pivotCurrency, basis, query, centred, today, accountId],
   );
 
   /**

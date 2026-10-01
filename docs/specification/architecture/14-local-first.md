@@ -305,6 +305,18 @@ purpose, or a merge produces a plausible wrong number that neither device held.
   age-encrypted, offsite, with a restore drill. This is the existing design and
   it is unchanged.
 
+### The first-start anchor, at pairing
+
+A fresh phone-alone ledger is anchored to its region's currency at first start
+with an ordinary `change_pivot` (SPEC §7.0), which — like every write — waits in
+the outbox. **Pairing must not replay it against a backend that already holds
+data**: the backend's anchor is the ledger's, and a queued `change_pivot` would
+either be refused or rewrite what every other device quotes against. So pairing
+**adopts the backend's anchor and discards a still-queued first-start
+`change_pivot` before any replay**. Nothing is lost by it: that change was made
+on an empty ledger, and a phone with entries of its own is not a first-start
+ledger.
+
 ## 14.4 What this document changes elsewhere
 
 Alignment work, so no surface still describes the collapsed design:

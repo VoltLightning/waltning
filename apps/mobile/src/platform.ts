@@ -20,6 +20,7 @@ import { createAppearance } from "@waltning/client/appearance/create-appearance"
 import { previewResetEnabled } from "@waltning/client/appearance/preview-reset";
 import type { BackupPort } from "@waltning/client/backup/backup-port";
 import { createDisplayCurrencyPreference } from "@waltning/client/currencies/display-currency";
+import { currencyOfTags } from "@waltning/client/currencies/region-currency";
 import { createDevicePreference } from "@waltning/client/device/create-device-preference";
 import { createDeskScopePreference } from "@waltning/client/ledger/desk-scope";
 import { type AppLockChoice, createAppLock } from "@waltning/client/security/app-lock";
@@ -147,6 +148,14 @@ export function setLivePivotReader(reader: () => CurrencyCode | null): void {
   livePivotReader = reader;
 }
 
+/** The codes the ledger holds — wired beside `livePivotReader`, for the same ordering reason. */
+let liveHeldReader: () => readonly CurrencyCode[] | null = () => null;
+
+/** Called once by the phone's ledger session: every currency code its replica holds. */
+export function setLiveHeldReader(reader: () => readonly CurrencyCode[] | null): void {
+  liveHeldReader = reader;
+}
+
 /**
  * M2 — the same indirection as `livePivotReader`, for the ledger's write
  * notifications. `displayCurrency`'s own `subscribe` calls through this on
@@ -162,9 +171,39 @@ export function setLivePivotSubscriber(subscribe: (listener: () => void) => () =
 }
 
 /**
+ * The currency of the device's region — what the display currency opens in
+ * when nothing has been chosen (§7.0). A browser reports a language tag and
+ * no currency, so the tag's region is resolved by the pure table; a tag with
+ * no region, or a region with no known currency, answers `null` and the pivot
+ * stands in.
+ */
+function readRegionCurrency(): CurrencyCode | null {
+  return currencyOfTags(typeof navigator === "undefined" ? [] : [...(navigator.languages ?? [])]);
+}
+
+const ANCHOR_DECIDED_KEY = "waltning.anchorDecided";
+
+/**
+ * Whether this device has already decided its ledger's anchor currency — set the
+ * first time first-start anchoring runs (whatever it did) and whenever a person
+ * changes the anchor, so a ledger found empty later is never anchored again.
+ */
+export const anchorDecided = createDevicePreference<"decided">(
+  {
+    get: () => AsyncStorage.getItem(ANCHOR_DECIDED_KEY),
+    set: (value) => AsyncStorage.setItem(ANCHOR_DECIDED_KEY, value),
+  },
+  { parse: (raw) => (raw === "decided" ? "decided" : null), serialize: (value) => value },
+  mobileDiagnostics,
+);
+
+/** The device region's currency, read once — the display default and the first-start anchor. */
+export const deviceRegionCurrency: CurrencyCode | null = readRegionCurrency();
+
+/**
  * `SPEC.md` §7.0's header toggle — a device preference, never a registry
- * write. The live pivot (`livePivotReader`) is the fallback until something
- * is chosen or `initializeFromPinned` runs; `pivotCurrency.code`
+ * write. With nothing chosen it is the device region's currency when the
+ * ledger holds it, else the live pivot (`livePivotReader`); `pivotCurrency.code`
  * (`@waltning/core/currencies` — USD) is only the seed used before the
  * ledger session is ready to answer at all (H1 — a fresh install whose
  * ledger pivot is PLN must render PLN, not this build-time seed).
@@ -179,6 +218,8 @@ export const displayCurrency = createDisplayCurrencyPreference(
   {
     subscribeToLedger: (listener) => livePivotSubscribe(listener),
     diagnostics: mobileDiagnostics,
+    regionCurrency: deviceRegionCurrency,
+    readHeld: () => liveHeldReader(),
   },
 );
 

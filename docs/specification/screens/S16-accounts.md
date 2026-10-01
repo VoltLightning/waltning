@@ -264,13 +264,22 @@ second is gated (`architecture/14` §14.6). An account opens in any currency the
 replica holds; a *transaction* in a non-pivot currency needs a rate, and a
 replica that has never synced may have none.
 
-So the create form states it where the choice is made rather than letting the
-executor refuse one capture at a time later: under the currency grid, a
-currency whose `capturable` is false draws a line naming it — *"BYN has no
-exchange rate yet. The account opens fine; transactions in it cannot be
-recorded until one is set."* — and offers **Set a BYN rate**, which opens S18
-on that currency and on today's date. Save is never blocked by it: refusing an
-account for a missing rate would refuse the thing that is legal.
+So the create form takes the rate where the choice is made, rather than sending
+anyone to another screen mid-form or letting the executor refuse one capture at
+a time later. Under the currency grid, a non-pivot currency with no usable rate
+for today draws **one line** — a sentence saying so, and the rate field in the
+direction S18 states, *Rate · BYN per USD* — pre-filled with the last real rate
+the ledger held for that pair when there is one, empty when there never was.
+**Save writes both in one action**: the rate for today (`set_manual_rate`, the
+same operation S18 uses), then the account (`create_account`); a pivot
+currency, or a currency that already has a usable rate, draws no line.
+
+**The form never leaves.** A missing rate is a field error on the rate line
+(*Required*) and nothing is written; a refusal of either write is stated on the
+form and everything typed — the name, the rate, *More details* — is kept. The
+rate goes first, so an account is never created in a currency it cannot yet
+value; a rate left behind by an account that then refuses is a true statement
+about the currency and harmless.
 
 ### Opening balance and opening date
 

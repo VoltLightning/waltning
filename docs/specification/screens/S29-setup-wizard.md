@@ -39,7 +39,8 @@ Five steps, **four of them skippable**:
 ```
 
 Steps 1 and 2 are preferences with no weight — the display currency is a header
-toggle afterwards, and the USD pivot is set silently and never surfaced (§7.0).
+toggle afterwards, and the anchor currency (the pivot) is set silently at first
+start to the device region's currency, before any account exists (§7.0).
 
 ### Both surfaces — b · Migration import
 

@@ -1,5 +1,6 @@
 import { useHoldings } from "@waltning/client/accounts/use-holdings";
 import { openDebtLines } from "@waltning/client/counterparties/open-debts";
+import { useDisplayBasis } from "@waltning/client/currencies/use-display-basis";
 import { useDevicePreference } from "@waltning/client/device/use-device-preference";
 import { deviceRuntime } from "@waltning/client/ledger/device-runtime";
 import { isPagerPageKey } from "@waltning/client/ledger/pager-date";
@@ -82,7 +83,7 @@ import { Text as RNText, useWindowDimensions, View } from "react-native";
 import { useSharedValue } from "react-native-reanimated";
 import { HomeListPage } from "./home-list-page";
 import { openUnsettled } from "./open-unsettled.ts";
-import { dayTickHaptic, floatPosition } from "./platform";
+import { dayTickHaptic, displayCurrency, floatPosition } from "./platform";
 import { useHeaderOffset } from "./use-header-offset.ts";
 import { usePagerRoute } from "./use-pager-route.ts";
 
@@ -531,6 +532,15 @@ export default function Today() {
   // The period's day rows — the same read Months folds, so the card and that
   // month's row add up the same rows and cannot disagree.
   const periodFlows = useDayFlows(ledger, period, snapshot);
+  // §7.0 — what every figure below is stated in: the display currency, each
+  // row at its own date's rate; the pivot where that cannot be stated.
+  const basis = useDisplayBasis(
+    ledger,
+    snapshot.currencies,
+    displayCurrency,
+    today,
+    snapshot.revision,
+  );
 
   const leadNetWorth = snapshot.netWorth[0];
   /**
@@ -546,8 +556,12 @@ export default function Today() {
    * one-currency ledger, which is why it stood.
    */
   const pivotCurrency = useMemo(
-    () => snapshot.currencies.find((currency) => currency.isPivot),
-    [snapshot.currencies],
+    () => (basis === null ? undefined : { code: basis.currency, decimals: basis.decimals }),
+    [basis],
+  );
+  const shownPeriodFlows = useMemo(
+    () => (basis === null ? periodFlows : basis.rebaseFlows(periodFlows)),
+    [basis, periodFlows],
   );
   /**
    * The month card's figures: every currency, in the pivot, each transaction
@@ -556,8 +570,11 @@ export default function Today() {
    */
   const periodFigures = useMemo(
     () =>
-      periodInPivot(periodFlows, pivotCurrency?.code ?? leadNetWorth?.currency ?? LEAD_FALLBACK),
-    [periodFlows, pivotCurrency, leadNetWorth],
+      periodInPivot(
+        shownPeriodFlows,
+        pivotCurrency?.code ?? leadNetWorth?.currency ?? LEAD_FALLBACK,
+      ),
+    [shownPeriodFlows, pivotCurrency, leadNetWorth],
   );
 
   const unsettledModel = useUnsettledBanner(snapshot.unsettledClearing);
@@ -591,10 +608,31 @@ export default function Today() {
    * §3's fold — own accounts, counted, at today's rate, loans apart — and it
    * is a balance, so the period stepper does not move it.
    */
+  // In the display currency: a balance is converted at today's rate, which
+  // `unitsPerDisplay` states in the direction `holdings` reads (§7.0).
+  const holdingsRates = useMemo(
+    () => ({
+      readRate: ({ quote, date }: { quote: money.CurrencyCode; date: AccountingDate }) => {
+        if (basis === null) return null;
+        const rate = basis.unitsPerDisplay(quote, date);
+        return rate === null ? null : { rate };
+      },
+    }),
+    [basis],
+  );
+  const holdingsCurrencies = useMemo(
+    () =>
+      snapshot.currencies.map((currency) => ({
+        code: currency.code,
+        decimals: currency.decimals,
+        isPivot: basis === null ? currency.isPivot : currency.code === basis.currency,
+      })),
+    [snapshot.currencies, basis],
+  );
   const holdings = useHoldings(
-    ledger,
+    holdingsRates,
     snapshot.accounts,
-    snapshot.currencies,
+    holdingsCurrencies,
     today,
     snapshot.revision,
   );
@@ -657,6 +695,7 @@ export default function Today() {
           currency={pivotCurrency?.code ?? leadNetWorth.currency}
           decimals={pivotCurrency?.decimals ?? leadNetWorth.decimals}
           otherCurrencies={periodFigures.otherCurrencies}
+          estimated={periodFigures.estimated}
           layout="compact"
         />
       ) : null,
@@ -685,7 +724,13 @@ export default function Today() {
    * `ownership` and `isBusiness` are different axes and only `"business"`
    * reads the second, so the business half stays in both figures.
    */
-  const spendByCategory = useSpendByCategory(ledger, period, "mine", snapshot.revision);
+  const spendByCategory = useSpendByCategory(
+    ledger,
+    period,
+    "mine",
+    snapshot.revision,
+    basis?.spendRebase,
+  );
   const labelOf = useCategoryLabel();
   // Names as drawn (`categoryLabel`): a starter reads in the app's language.
   const labelledTree = useMemo(
@@ -718,10 +763,13 @@ export default function Today() {
     () =>
       pivotCurrency === undefined
         ? []
-        : toLedgerItems(recentRows, pivotCurrency.code)
+        : toLedgerItems(
+            basis === null ? recentRows : basis.rebaseRows(recentRows),
+            pivotCurrency.code,
+          )
             .filter((item) => item.kind === "day")
             .slice(0, RECENT_DAYS),
-    [recentRows, pivotCurrency],
+    [recentRows, pivotCurrency, basis],
   );
   /**
    * **No last days is not by itself a first run.** `recentDays` is a page read
@@ -751,10 +799,11 @@ export default function Today() {
             rows={whereItWentRows}
             currency={pivotCurrency?.code ?? leadNetWorth.currency}
             decimals={pivotCurrency?.decimals ?? leadNetWorth.decimals}
+            estimated={spendByCategory.some((row) => row.estimated === true)}
           />
         </Card>
       ),
-    [whereItWentRows, pivotCurrency, leadNetWorth, t],
+    [whereItWentRows, spendByCategory, pivotCurrency, leadNetWorth, t],
   );
 
   // S04 §3 draws exactly one banner row, and `Banner`'s own doc is explicit —
@@ -1134,8 +1183,11 @@ export default function Today() {
    * and a figure genuinely in the pivot flagged approximate.
    */
   const dayEntries = useMemo(
-    () => (pivotCurrency ? toLedgerItems(dayRows, pivotCurrency.code) : []),
-    [dayRows, pivotCurrency],
+    () =>
+      pivotCurrency
+        ? toLedgerItems(basis === null ? dayRows : basis.rebaseRows(dayRows), pivotCurrency.code)
+        : [],
+    [dayRows, pivotCurrency, basis],
   );
   /**
    * **The blank half of the calendar page, which meant three different things
@@ -1357,7 +1409,11 @@ export default function Today() {
     }),
     [shownYear],
   );
-  const yearFlows = useDayFlows(ledger, yearPeriod, snapshot);
+  const rawYearFlows = useDayFlows(ledger, yearPeriod, snapshot);
+  const yearFlows = useMemo(
+    () => (basis === null ? rawYearFlows : basis.rebaseFlows(rawYearFlows)),
+    [basis, rawYearFlows],
+  );
   const yearMatchDays = useMatchDays(ledger, yearPeriod, pager.state.query, snapshot);
   const monthMatches = useMemo(
     () => (pager.state.query === null ? null : matchesByMonth(yearMatchDays)),
@@ -1386,9 +1442,14 @@ export default function Today() {
       currency: pivotCurrency?.code ?? leadNetWorth?.currency ?? "",
       decimals: pivotCurrency?.decimals ?? leadNetWorth?.decimals ?? 2,
       note:
-        row.otherCurrencies === 0
-          ? null
-          : t("shell.plusOtherCurrencies", { count: row.otherCurrencies }),
+        [
+          row.otherCurrencies === 0
+            ? null
+            : t("shell.plusOtherCurrencies", { count: row.otherCurrencies }),
+          row.estimated ? t("shell.estimatedAtToday") : null,
+        ]
+          .filter((part) => part !== null)
+          .join(" · ") || null,
       ahead: row.ahead,
       // Absent from the map is nothing found, which is a fact worth drawing —
       // §7's *how often, and when* includes *not in this month*.
@@ -1438,7 +1499,11 @@ export default function Today() {
       yearFlows,
       pivotCurrency?.code ?? leadNetWorth?.currency ?? LEAD_FALLBACK,
     );
-    return others === 0 ? undefined : t("shell.plusOtherCurrencies", { count: others });
+    const parts = [
+      others === 0 ? null : t("shell.plusOtherCurrencies", { count: others }),
+      yearFlows.some((flow) => flow.estimated === true) ? t("shell.estimatedAtToday") : null,
+    ].filter((part) => part !== null);
+    return parts.length === 0 ? undefined : parts.join(" · ");
   }, [yearFlows, pivotCurrency, leadNetWorth, t]);
 
   const thisYear = Number(today.slice(0, 4));
@@ -1523,6 +1588,7 @@ export default function Today() {
           // fallback every other page here makes.
           pivotCurrency={pivotCurrency?.code ?? leadNetWorth?.currency ?? LEAD_FALLBACK}
           pivotDecimals={pivotCurrency?.decimals ?? leadNetWorth?.decimals ?? 2}
+          basis={basis}
           onPickDay={handlePickDay}
           onOpenTransaction={handleOpenTransaction}
           onReturnToToday={returnToToday}
@@ -1547,6 +1613,7 @@ export default function Today() {
       today,
       snapshot.revision,
       pivotCurrency,
+      basis,
       handlePickDay,
       returnToToday,
       pager.state.query,

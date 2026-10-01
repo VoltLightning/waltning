@@ -45,7 +45,7 @@ export const Expanded: Story = { args: { defaultExpanded: true } };
 
 /**
  * §14.6 — a currency the replica holds but cannot value a capture in. The
- * account still opens; the note says what that costs, and offers S18.
+ * form asks for its rate on one line, saved together with the account.
  */
 export const CurrencyWithoutRate: Story = {
   args: {
@@ -53,7 +53,10 @@ export const CurrencyWithoutRate: Story = {
       { code: currencyCode("BYN"), name: "Belarusian Ruble", symbol: "Br", capturable: false },
       { code: currencyCode("PLN"), name: "Polish Złoty", symbol: "zł", capturable: true },
     ],
-    onSetRate: noop,
+    pivot: currencyCode("USD"),
+  },
+  play: async ({ canvasElement }) => {
+    await userEvent.click(await within(canvasElement).findByRole("radio", { name: /^BYN/ }));
   },
 };
 

@@ -76,6 +76,8 @@ export type MonthSummaryProps = {
    * period and a note would be about an emptiness that is not there.
    */
   otherCurrencies?: number;
+  /** Some day was stated at a rate that is not its own — says so, once, under the figures. */
+  estimated?: boolean;
   /**
    * What the three figures are called, where they are not a month's.
    *
@@ -115,6 +117,7 @@ export function MonthSummary({
   currency,
   decimals = 2,
   otherCurrencies = 0,
+  estimated = false,
   labels,
   signed = true,
   layout = "hero",
@@ -264,6 +267,7 @@ export function MonthSummary({
           {t("shell.plusOtherCurrencies", { count: otherCurrencies })}
         </Text>
       ) : null}
+      {estimated ? <Text style={styles.otherCurrencies}>{t("shell.estimatedAtToday")}</Text> : null}
     </Card>
   );
 }

@@ -85,8 +85,7 @@ export const pl: Messages = {
     archivedNone: "Brak zarchiwizowanych kont.",
     archivedNoMatches: "Brak pasujących zarchiwizowanych kont.",
     currencyNotCapturable:
-      "Waluta {{currency}} nie ma jeszcze kursu wymiany. Konto założysz bez przeszkód; transakcji w tej walucie nie zapiszesz, dopóki kurs nie zostanie ustawiony.",
-    setRate: "Ustaw kurs waluty {{currency}}",
+      "Dla waluty {{currency}} nie ma dziś kursu wymiany. Proszę wpisać go poniżej; zostanie zapisany razem z kontem, dzięki czemu będzie można zapisywać w tej walucie transakcje.",
     moreDetails: "Więcej szczegółów",
     fewerDetails: "Mniej szczegółów",
     kind: "Rodzaj",
@@ -701,6 +700,7 @@ export const pl: Messages = {
     plusOtherCurrencies_few: "+ {{count}} inne waluty",
     plusOtherCurrencies_many: "+ {{count}} innych walut",
     plusOtherCurrencies_other: "+ {{count}} innych walut",
+    estimatedAtToday: "≈ część dni po dzisiejszym kursie",
     keptSoFar: "Zostało do tej pory",
     cameIn: "Wpłynęło",
     wentOut: "Wypłynęło",
@@ -982,34 +982,42 @@ export const pl: Messages = {
     symbolBefore: "Przed kwotą",
     symbolAfter: "Po kwocie",
     decimals: "Miejsca dziesiętne",
-    pivotLabel: "Waluta bazowa: {{code}}",
-    pivotKicker: "Waluta, w której liczone jest wszystko",
-    pivotName: "{{name}} · waluta bazowa",
+    pivotLabel: "Waluta odniesienia: {{code}}",
+    pivotKicker: "Waluta odniesienia",
+    pivotName: "{{name}} · odniesienie",
     pivotExplained:
-      "Każda kwota w aplikacji jest liczona w tej walucie. Zmiana przelicza cały rejestr, więc ustawia się ją raz.",
-    changePivotStart: "Zmień walutę bazową…",
+      "Kursy wymiany są zapisywane względem tej waluty, aby dało się wyliczyć każdą parę. Nie wpływa ona na to, co widać na ekranie; kwoty są pokazywane w walucie wybranej wyżej.",
+    displayExplained:
+      "Dopóki nic nie zostanie wybrane, wynika to z regionu telefonu. Zmiana wpływa tylko na sposób pokazywania kwot; zapisane transakcje się nie zmieniają.",
+    displayNeedsRate:
+      "Jeszcze nie zastosowano: dla waluty {{currency}} nie ma kursu, więc kwoty pozostają w {{shown}}. Aby jej użyć, trzeba ustawić kurs waluty {{currency}}.",
+    changePivotStart: "Zmień walutę odniesienia…",
     groupShown: "W przełączniku nagłówka",
     groupHeld: "Posiadane, poza przełącznikiem",
-    changePivot: "Zmień walutę bazową",
-    pivotConfirmTitle: "Zmienić walutę bazową?",
+    changePivot: "Zmień walutę odniesienia",
+    pivotConfirmTitle: "Zmienić walutę odniesienia?",
     pivotConfirmBody:
-      "Waluta bazowa to techniczny punkt odniesienia, względem którego przechowywany jest każdy kurs. Odmówiona, jeśli istnieje choć jedna transakcja — telefon sam nie ma jak przeliczyć historii, która by po niej została. Zmiana jest rzadka, audytowana i nigdy nie jest wymagana tylko dlatego, że się przeprowadziłeś.",
+      "Waluta odniesienia to techniczny punkt, względem którego zapisywany jest każdy kurs. Można ją zmienić tylko wtedy, gdy nie ma żadnej transakcji, bo ten telefon nie potrafi przeliczyć istniejącej historii. Zmiana jest rzadka i zapisywana w dzienniku.",
     pivotConfirmSubmit: "Tak, zmień",
-    pivotChangeRefused: "Waluty bazowej nie można zmienić, dopóki istnieje transakcja.",
+    pivotChangeRefused:
+      "Waluty odniesienia nie można już zmienić, gdy istnieje transakcja: ten telefon nie potrafi przeliczyć istniejącej historii. Zmiana jest możliwa tylko wtedy, gdy księga nie zawiera transakcji.",
     // 1 → data, 2–4 → daty, 5+ (and 0) → dat. `droppedDates` is always a whole
     // count, so `_other` (fractional) never actually renders — it carries the
     // `_many` form rather than invent an untested one.
     pivotChangeDroppedDates_one:
-      "Waluta bazowa zmieniona · {{count}} data bez kursu do przeliczenia została pominięta",
+      "Waluta odniesienia zmieniona · {{count}} data bez kursu do przeliczenia została pominięta",
     pivotChangeDroppedDates_few:
-      "Waluta bazowa zmieniona · {{count}} daty bez kursu do przeliczenia zostały pominięte",
+      "Waluta odniesienia zmieniona · {{count}} daty bez kursu do przeliczenia zostały pominięte",
     pivotChangeDroppedDates_many:
-      "Waluta bazowa zmieniona · {{count}} dat bez kursu do przeliczenia zostało pominiętych",
+      "Waluta odniesienia zmieniona · {{count}} dat bez kursu do przeliczenia zostało pominiętych",
     pivotChangeDroppedDates_other:
-      "Waluta bazowa zmieniona · {{count}} dat bez kursu do przeliczenia zostało pominiętych",
-    pivotAlreadyPivot: "Ta waluta jest już walutą bazową.",
-    pivotTarget: "Nowa waluta bazowa",
+      "Waluta odniesienia zmieniona · {{count}} dat bez kursu do przeliczenia zostało pominiętych",
+    pivotAlreadyPivot: "Ta waluta jest już walutą odniesienia.",
+    pivotTarget: "Nowa waluta odniesienia",
     pivotTargetPlaceholder: "Wybierz walutę",
+    displayShowIn: "Pokazuj kwoty w",
+    anchorBlocked:
+      "Zablokowane: księga zawiera już transakcje, a ten telefon nie potrafi ich przeliczyć. Walutę odniesienia można zmienić tylko wtedy, gdy ich nie ma.",
     pairLabel: "Waluta notowana, względem {{base}}",
     sourceStopped: "{{source}} nie odpowiada od {{date}}.",
     sourceStoppedWhy:
@@ -1023,7 +1031,7 @@ export const pl: Messages = {
     tileDays_other: "{{count}} dnia",
     pairChip: "{{quote}}/{{base}}",
     pairPlaceholder: "Wybierz walutę",
-    noQuoteCurrency: "Brak jeszcze waluty do porównania z walutą bazową.",
+    noQuoteCurrency: "Brak jeszcze waluty do porównania z walutą odniesienia.",
     range30d: "30 dni",
     range90d: "90 dni",
     rangeYear: "Rok",

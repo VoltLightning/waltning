@@ -11,12 +11,13 @@
  * (S17 §9.2, `update_currency`) — §9.2's "editable, but not prominent".
  *
  * **The card is the rows, and nothing else.** The list of rows is the one
- * grouped-rows card; *Add currency*, the pivot block and the screen's own
+ * grouped-rows card; *Add currency*, the display and pivot blocks and the screen's own
  * title sit on the ground (`design-system/05` §5.1). The card carries no
  * title of its own — the navigation header already says *Currencies*, and
  * saying it twice, 40 px apart, is chrome.
  *
- * Pivot shown read-only at the bottom, its one write (`change_pivot`) behind
+ * The display currency is chosen first — the same device preference the
+ * header's toggle writes. The anchor (the pivot) is shown last, its one write (`change_pivot`) behind
  * `ConfirmDialog` — E3's executor refuses it once any transaction exists, and
  * the dialog now says so before offering (S17 §7).
  *
@@ -32,10 +33,13 @@
  * pressable inside a pressable is one gesture with two meanings.
  */
 
+import { useDisplayCurrency } from "@waltning/client/currencies/display-currency";
+import { useDisplayBasis } from "@waltning/client/currencies/use-display-basis";
 import type { CurrencyPatch } from "@waltning/client/ledger/create-phone-ledger";
 import { deviceRuntime } from "@waltning/client/ledger/device-runtime";
 import { useLedgerController } from "@waltning/client/ledger/use-ledger-controller";
 import { usePhoneLedger } from "@waltning/client/ledger/use-phone-ledger";
+import { currencyCode } from "@waltning/core/money";
 import {
   CurrencyRow,
   type CurrencyRowCoverage,
@@ -57,6 +61,7 @@ import { space } from "@waltning/ui/tokens";
 import { router } from "expo-router";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { Text, View } from "react-native";
+import { anchorDecided, displayCurrency } from "./platform";
 import { PushedPage } from "./pushed-page";
 
 type Draft = { code: string; name: string; symbol: string };
@@ -78,7 +83,7 @@ export default function SettingsCurrenciesScreen() {
   const t = useT();
   const styles = useStyles();
   const ledger = useLedgerController();
-  usePhoneLedger(ledger);
+  const snapshot = usePhoneLedger(ledger);
 
   const today = deviceRuntime().capture().date;
   const rows = ledger.listCurrencySettings();
@@ -154,6 +159,32 @@ export default function SettingsCurrenciesScreen() {
   );
 
   const pivotRow = rows.find((row) => row.isPivot);
+  const display = useDisplayCurrency(displayCurrency);
+  // What is actually applied: the display currency, or the anchor when it has no rate today.
+  const basis = useDisplayBasis(
+    ledger,
+    snapshot.currencies,
+    displayCurrency,
+    today,
+    snapshot.revision,
+  );
+  const displayOptions: SelectOption[] = useMemo(
+    () => rows.map((row) => ({ value: row.code, label: `${row.code} · ${row.name}` })),
+    [rows],
+  );
+  const handleChangeDisplay = useCallback((value: string) => {
+    void displayCurrency.set(currencyCode(value));
+  }, []);
+  /**
+   * §7: the anchor can change only while the ledger holds no transaction — the
+   * phone cannot re-rate history. Asked on demand, so the card says why *before*
+   * the press rather than refusing after a confirmation.
+   */
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `revision` invalidates the on-demand read by identity, not by being read.
+  const hasTransactions = useMemo(
+    () => ledger.searchTransactions({}).total.count > 0,
+    [ledger, snapshot.revision],
+  );
   const otherRows = rows.filter((row) => !row.isPivot);
   // S17 §3: what the header's toggle shows, and what is only held.
   const shownRows = otherRows.filter((row) => row.pinned);
@@ -293,6 +324,8 @@ export default function SettingsCurrenciesScreen() {
   const handleConfirmPivotChange = useCallback(() => {
     setPivotConfirmOpen(false);
     if (!selectedPivotTarget) return;
+    // A person's own change settles the anchor: first-start anchoring never runs again.
+    void anchorDecided.set("decided");
     // C1 — the *target*, non-pivot currency, never `pivotRow.code` (the
     // current pivot): the executor refuses that as "already the pivot".
     const result = ledger.changePivot({ code: selectedPivotTarget });
@@ -321,47 +354,29 @@ export default function SettingsCurrenciesScreen() {
   return (
     <PushedPage title={t("routes.currencies")} subtitle={t("pages.currencies")}>
       {/*
-        **The pivot first, as its own card** (S17 §3) — every figure in the app
-        is this currency underneath, so it is the first thing the screen says,
-        and changing it is an action inside that card, behind its own tap and a
-        confirmation, rather than a form at the bottom of a list.
+        **The display currency first** (S17 §3) — what the screen's reader sees
+        their figures in is the one currency fact they bring here. It is chosen
+        here as well as in the header's toggle: one device preference, two ways
+        to reach it (§8, §7.0), which is what a phone — with no header toggle
+        in reach of this screen — needs.
       */}
-      {pivotRow ? (
-        <Card>
-          <View style={styles.pivot}>
-            <Text style={styles.kicker}>{t("fx.pivotKicker")}</Text>
-            <View style={styles.pivotHead}>
-              <Text style={styles.pivotCode}>{pivotRow.code}</Text>
-              <Text style={styles.pivotName}>{t("fx.pivotName", { name: pivotRow.name })}</Text>
-            </View>
-            <Text style={styles.pivotBody}>{t("fx.pivotExplained")}</Text>
-            {otherRows.length === 0 ? null : changingPivot ? (
-              <View style={styles.pivotChange}>
-                <Select
-                  label={t("fx.pivotTarget")}
-                  placeholder={t("fx.pivotTargetPlaceholder")}
-                  options={pivotTargetOptions}
-                  value={selectedPivotTarget}
-                  onChange={handleChangePivotTarget}
-                />
-                <Button
-                  label={t("fx.changePivot")}
-                  onPress={handleOpenPivotConfirm}
-                  variant="secondary"
-                  size="sm"
-                />
-              </View>
-            ) : (
-              <Button
-                label={t("fx.changePivotStart")}
-                onPress={handleStartPivotChange}
-                variant="ghost"
-                size="sm"
-              />
-            )}
-          </View>
-        </Card>
-      ) : null}
+      <Card>
+        <View style={styles.pivot}>
+          <Select
+            label={t("fx.displayShowIn")}
+            placeholder=""
+            options={displayOptions}
+            value={display.currency}
+            onChange={handleChangeDisplay}
+          />
+          <Text style={styles.pivotBody}>{t("fx.displayExplained")}</Text>
+          {basis !== null && basis.currency !== display.currency ? (
+            <Text style={styles.pivotBody}>
+              {t("fx.displayNeedsRate", { currency: display.currency, shown: basis.currency })}
+            </Text>
+          ) : null}
+        </View>
+      </Card>
 
       {/*
         The two groups a held currency is in: shown in the header's toggle
@@ -429,6 +444,61 @@ export default function SettingsCurrenciesScreen() {
       )}
 
       <Button label={t("fx.addCurrency")} onPress={handleOpenAdd} variant="secondary" size="sm" />
+
+      {/*
+        **The anchor currency last, as its own card** (S17 §3) — the technical
+        hub every rate is stored against. It decides nothing a reader sees, so it
+        comes after everything they can act on; changing it is a visible action
+        inside that card, behind a confirmation, and — once a transaction exists —
+        a stated reason instead.
+      */}
+      {pivotRow ? (
+        <Card>
+          <View style={styles.pivot}>
+            <Text style={styles.kicker}>{t("fx.pivotKicker")}</Text>
+            <View style={styles.pivotHead}>
+              <Text style={styles.pivotCode}>{pivotRow.code}</Text>
+              <Text style={styles.pivotName}>{t("fx.pivotName", { name: pivotRow.name })}</Text>
+            </View>
+            <Text style={styles.pivotBody}>{t("fx.pivotExplained")}</Text>
+            {otherRows.length === 0 ? null : hasTransactions ? (
+              <>
+                <Text style={styles.pivotBody}>{t("fx.anchorBlocked")}</Text>
+                <Button
+                  label={t("fx.changePivotStart")}
+                  onPress={handleStartPivotChange}
+                  variant="secondary"
+                  size="sm"
+                  disabled
+                />
+              </>
+            ) : changingPivot ? (
+              <View style={styles.pivotChange}>
+                <Select
+                  label={t("fx.pivotTarget")}
+                  placeholder={t("fx.pivotTargetPlaceholder")}
+                  options={pivotTargetOptions}
+                  value={selectedPivotTarget}
+                  onChange={handleChangePivotTarget}
+                />
+                <Button
+                  label={t("fx.changePivot")}
+                  onPress={handleOpenPivotConfirm}
+                  variant="secondary"
+                  size="sm"
+                />
+              </View>
+            ) : (
+              <Button
+                label={t("fx.changePivotStart")}
+                onPress={handleStartPivotChange}
+                variant="secondary"
+                size="sm"
+              />
+            )}
+          </View>
+        </Card>
+      ) : null}
 
       <BottomSheet visible={addOpen} title={t("fx.addCurrency")} onDismiss={handleCloseAdd}>
         <TextField
