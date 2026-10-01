@@ -50,8 +50,25 @@ export const RELOCK_AFTER_MS = 30_000;
  */
 export const ENROLMENT_TIMEOUT_MS = 5_000;
 
+/**
+ * How long the stored answer (and the ledger-history probe) may take to come
+ * back. **Separate from `ENROLMENT_TIMEOUT_MS` because it fails the other
+ * way**: a platform that cannot say whether it is enrolled cannot gate, so the
+ * ledger opens; a store that cannot say what the owner chose has not said *no*,
+ * so the ledger locks.
+ */
+export const CHOICE_TIMEOUT_MS = 5_000;
+
 /** What the device can ask for. `none` is a device with no secret set — nothing to gate with. */
 export type AppLockEnrolment = "none" | "secret" | "biometric";
+
+/**
+ * What the device will ask of the person — the words the first-run question
+ * and the Settings row use. `either` is a device that offers both a
+ * fingerprint and a face, or one that cannot say which; `passcode` is a
+ * device with a secret but no biometric enrolled.
+ */
+export type AppLockMethod = "fingerprint" | "face" | "either" | "passcode";
 
 /** Why an attempt did not unlock — the words the screen chooses from. */
 export type AppLockFailure = "cancelled" | "failed" | "lockout" | "unavailable";
@@ -64,6 +81,11 @@ export type AppLockPrompt = { message: string; cancel: string };
 export type AppLockAuthenticator = {
   enrolment: () => Promise<AppLockEnrolment>;
   authenticate: (prompt: AppLockPrompt) => Promise<AppLockAttempt>;
+  /**
+   * Which biometric the device offers, for the wording of the first-run
+   * question. A platform that cannot say is `either`.
+   */
+  method?: () => Promise<AppLockMethod>;
 };
 
 /** The three states a platform reports; `inactive` is iOS's own transitional one. */
@@ -89,12 +111,36 @@ export type AppLockPlatform = {
    * the stay from then rather than never.
    */
   currentAppState?: () => AppActivity;
+  /**
+   * The owner's answer to the first-run question, stored on this device and
+   * never synced. **Absent, the gate is always on** where the device can gate.
+   * Only a clean "nothing stored" on a device with no ledger data may ask;
+   * every other reading — a failed read, a timeout, a value that is neither
+   * `on` nor `off`, nothing stored beside existing ledger data — is a locked
+   * gate, because an unreadable answer is not a *no*.
+   */
+  choice?: AppLockChoice;
+};
+
+export type AppLockChoice = {
+  /** The raw stored string, `null` when nothing is stored. Rejects when the store cannot be read. */
+  read: () => Promise<string | null>;
+  /** Rejects when the answer could not be stored. */
+  write: (enabled: boolean) => Promise<void>;
+  /** Whether this device already holds ledger data — an install older than the question. */
+  hasHistory: () => Promise<boolean>;
 };
 
 export type AppLockSnapshot =
   /** Enrolment not yet answered. Nothing is drawn but the blank. */
   | { status: "checking" }
-  /** Nothing to gate with — no device secret, or no device. */
+  /**
+   * The device can gate and the person has not been asked whether to. The
+   * first-run question stands where the ledger would; no biometric is
+   * requested until it is answered.
+   */
+  | { status: "asking"; method: AppLockMethod }
+  /** No gate — no device secret, no device, or the owner chose none. */
   | { status: "open" }
   | {
       status: "locked";
@@ -124,6 +170,25 @@ export type AppLockController = {
   unlock: (prompt: AppLockPrompt) => Promise<void>;
   /** Locks now, from wherever the app is — a setting's own control, later. */
   lock: () => void;
+  /**
+   * The owner's answer — the first-run question's Yes / Not now, and
+   * Settings' switch. Accepted only from `asking`, `open` and `unlocked`,
+   * never from `locked`. Yes arms the gate and opens the ledger for this
+   * launch (they have just said so; the prompt comes on the next lock).
+   * **Turning a gate off asks the device first** — whoever holds an unlocked
+   * phone must not be able to disarm the lock with a tap — except from a
+   * fresh device that has no ledger data to protect. Resolves `false` when
+   * nothing changed (refused, cancelled, or not accepted in this state).
+   */
+  answer: (enabled: boolean, prompt: AppLockPrompt) => Promise<boolean>;
+  /** Whether the gate is on — what Settings' row says. */
+  enabled: () => boolean;
+  /**
+   * What the device would gate with, or `null` where there is nothing to
+   * gate with (no secret, or the browser) — Settings shows the switch only
+   * for a device that can honour it. Settled once `start` has.
+   */
+  method: () => AppLockMethod | null;
   /** Stops listening to the platform. */
   dispose: () => void;
 };
@@ -135,6 +200,9 @@ export function createAppLock(
   let snapshot: AppLockSnapshot = { status: "checking" };
   let started: Promise<void> | undefined;
   let gated = false;
+  // What the device can gate with; `null` until enrolment answers, and where
+  // there is nothing to gate with.
+  let deviceMethod: AppLockMethod | null = null;
   let opened = false;
   let hiddenAt: number | null = null;
   // Which lock a prompt was raised for: a lock by hand while the prompt is
@@ -186,6 +254,12 @@ export function createAppLock(
     if (current !== undefined && current !== "active") onAppState(current);
   };
 
+  const arm = () => {
+    gated = true;
+    listen();
+    lockNow();
+  };
+
   const start = () => {
     // A second start — StrictMode's, or a remount's — reads nothing again
     // but must listen again: `dispose` took the listener with it.
@@ -211,7 +285,7 @@ export function createAppLock(
       );
     });
     started = Promise.race([authenticator.enrolment(), timeout]).then(
-      (enrolment) => {
+      async (enrolment) => {
         emitClientDiagnostic(diagnostics, {
           scope: "client_state",
           update: "app_lock_enrolment",
@@ -221,9 +295,43 @@ export function createAppLock(
           publish({ status: "open" });
           return;
         }
-        gated = true;
-        listen();
-        lockNow();
+        deviceMethod = await methodOf(authenticator, enrolment);
+        const { choice } = platform;
+        if (choice === undefined) {
+          arm();
+          return;
+        }
+        let stored: string | null;
+        try {
+          stored = await within(choice.read(), CHOICE_TIMEOUT_MS);
+        } catch (error) {
+          // An answer that cannot be read is not a *no*.
+          emitClientDiagnostic(diagnostics, {
+            scope: "client_state",
+            update: "app_lock_choice",
+            phase: "failure",
+            error: clientFailure(error),
+          });
+          arm();
+          return;
+        }
+        if (stored === "off") {
+          publish({ status: "open" });
+          return;
+        }
+        if (stored === null) {
+          // Nothing stored is a fresh device only if there is nothing to
+          // protect: an install older than the question has a ledger and no
+          // answer, and it is locked rather than asked.
+          const history = await within(choice.hasHistory(), CHOICE_TIMEOUT_MS).catch(() => true);
+          if (!history) {
+            // Ask, and request nothing from the device until the answer is in.
+            publish({ status: "asking", method: deviceMethod });
+            return;
+          }
+        }
+        // `on`, a history with no answer, or a value that is neither: locked.
+        arm();
       },
       (error) => {
         // A platform that cannot say whether it is enrolled cannot gate
@@ -239,6 +347,63 @@ export function createAppLock(
       },
     );
     return started;
+  };
+
+  let answering = false;
+  const answer = async (enabled: boolean, prompt: AppLockPrompt): Promise<boolean> => {
+    const { status } = snapshot;
+    if (status !== "asking" && status !== "open" && status !== "unlocked") return false;
+    if (deviceMethod === null || answering) return false;
+    answering = true;
+    try {
+      if (!enabled) {
+        const { authenticator, choice } = platform;
+        // Disarming an armed gate, or a question on a device that holds
+        // ledger data, is the owner's to do — so the device is asked.
+        const protectsSomething =
+          status === "unlocked" ||
+          (status === "asking" && (await choice?.hasHistory().catch(() => true)) !== false);
+        if (protectsSomething) {
+          if (authenticator === null) return false;
+          let attempt: AppLockAttempt;
+          try {
+            attempt = await authenticator.authenticate(prompt);
+          } catch {
+            attempt = { ok: false, reason: "unavailable" };
+          }
+          if (!attempt.ok) return false;
+        }
+      }
+      // A retry before giving up: a failed write after Yes must not leave the
+      // next launch to be asked again where it could have been locked.
+      if (platform.choice !== undefined) {
+        try {
+          await platform.choice.write(enabled).catch(() => platform.choice?.write(enabled));
+        } catch (error) {
+          emitClientDiagnostic(diagnostics, {
+            scope: "client_state",
+            update: "app_lock_choice",
+            phase: "failure",
+            error: clientFailure(error),
+          });
+        }
+      }
+      if (enabled) {
+        gated = true;
+        opened = true;
+        hiddenAt = null;
+        listen();
+        publish({ status: "unlocked", covered: false });
+      } else {
+        gated = false;
+        unsubscribe?.();
+        unsubscribe = null;
+        publish({ status: "open" });
+      }
+      return true;
+    } finally {
+      answering = false;
+    }
   };
 
   const unlock = async (prompt: AppLockPrompt) => {
@@ -303,9 +468,42 @@ export function createAppLock(
     lock: () => {
       if (snapshot.status === "unlocked" || snapshot.status === "locked") lockNow();
     },
+    answer,
+    enabled: () => gated,
+    method: () => deviceMethod,
     dispose: () => {
       unsubscribe?.();
       unsubscribe = null;
     },
   };
+}
+
+/** `promise`, or a rejection once `ms` have passed — with the timer cleared either way. */
+function within<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`did not answer within ${ms}ms`)), ms);
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error) => {
+        clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+}
+
+/** The device's biometric, or `either` where it cannot say — the words, not the gate. */
+async function methodOf(
+  authenticator: AppLockAuthenticator,
+  enrolment: AppLockEnrolment,
+): Promise<AppLockMethod> {
+  if (enrolment === "secret") return "passcode";
+  try {
+    return (await authenticator.method?.()) ?? "either";
+  } catch {
+    return "either";
+  }
 }

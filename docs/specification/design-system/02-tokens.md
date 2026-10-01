@@ -678,6 +678,7 @@ nudge.
 | `motion-move` | 220ms | `cubic-bezier(.77,0,.175,1)` | Something already visible **moving** — the title sliding into its collapsed place. Ease-in-out: a visible thing leaves gently too |
 | `motion-fold` | 260ms | `cubic-bezier(.2,0,0,1)` | The header collapsing and expanding; its moving parts use `move` |
 | `motion-sheet` | 280ms | `cubic-bezier(.32,.72,0,1)` | Bottom sheet rise — the iOS drawer curve: quick off the edge, long settle |
+| `motion-screen` | 150ms | the platform's fade | **A pushed screen arriving** — a short fade, never a slide, so a tap on a card does not swap the page with nothing in between. On a phone it is the navigator's own transition; **the web build's navigator draws none, so each screen fades itself in on mount** (Reanimated, same duration). Sheets and modals keep their own motion. Under the OS Reduce motion setting it is `motion-none` |
 | `motion-none` | 0 | — | `prefers-reduced-motion` branch |
 
 **Three rules from the practitioners, adopted.** Nothing on a UI element runs

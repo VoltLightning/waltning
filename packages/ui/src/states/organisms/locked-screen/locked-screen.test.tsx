@@ -35,6 +35,23 @@ it("waits while the platform's prompt is up rather than raising a second one", (
   expect(screen.getByRole("button", { name: "Unlock" })).toHaveProperty("disabled", true);
 });
 
+it("asks once, names the device's own biometric, and gives the reason", () => {
+  const onYes = vi.fn();
+  const onNotNow = vi.fn();
+  draw({ mode: "ask", method: "fingerprint", onYes, onNotNow });
+  expect(screen.getByText("Lock the app with your fingerprint?")).toBeDefined();
+  expect(screen.getByText(/Anyone holding this unlocked phone/)).toBeDefined();
+  fireEvent.click(screen.getByRole("button", { name: "Yes" }));
+  expect(onYes).toHaveBeenCalledOnce();
+  fireEvent.click(screen.getByRole("button", { name: "Not now" }));
+  expect(onNotNow).toHaveBeenCalledOnce();
+});
+
+it("names the face, or the passcode, as the device offers them", () => {
+  draw({ mode: "ask", method: "face", onYes: vi.fn(), onNotNow: vi.fn() });
+  expect(screen.getByText("Lock the app with your face?")).toBeDefined();
+});
+
 it("is a cover with nothing to press while the app is away", () => {
   draw({ mode: "cover" });
   expect(screen.getByText("Locked")).toBeDefined();

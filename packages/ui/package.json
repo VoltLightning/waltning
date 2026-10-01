@@ -95,6 +95,7 @@
     "./primitives/radio": "./src/primitives/atoms/radio/radio.tsx",
     "./primitives/rate-field": "./src/primitives/atoms/rate-field/rate-field.tsx",
     "./primitives/reduced-motion": "./src/primitives/reduced-motion.ts",
+    "./primitives/stack-motion": "./src/primitives/stack-motion.ts",
     "./primitives/safe-area": "./src/primitives/safe-area.tsx",
     "./primitives/scroll-settle": "./src/primitives/scroll-settle.ts",
     "./primitives/search-field": "./src/primitives/atoms/search-field/search-field.tsx",
