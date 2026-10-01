@@ -12,7 +12,7 @@ accumulated inventions.
 | **D2** | `Card`, `Shell`, `GroundPanel`, rows, `TabBar`, `BottomSheet`, `DualTotal` | Structure for every screen. `DualTotal` belongs here rather than later because *mine* and *ours* appear on every headline figure (§6.7) |
 | **D3** | `DiffCard` + `ToolResultCard` | **One gate, three call sites** — agent, voice, receipt. Build before any of them, or three variants appear (P3) |
 | **D4** | States and recovery — `EmptyState`×3, `ErrorState`×3, `Skeleton`, `Banner`, `UndoToast`, `MatchWarning`, `ThinkingIndicator`, `RefusalCard`, `ThresholdSlider`, `RuleHealthTag` | Builds §8. Larger than it first looked: fourteen undesigned states resolved to **eleven shared components**, every one used by two or more screens. Built per-screen they would have become eleven near-duplicates |
-| **D5** | Data surfaces — `FilterBar`, `SwipeAction`, `AuditHistory`, `ComparisonTable` (§5.6) | `FilterBar` feeds `EmptyState(filtered)`'s excluded count, so it lands after D4 rather than before |
+| **D5** | Data surfaces — `FilterBar`, `AuditHistory`, `ComparisonTable` (§5.6) | `FilterBar` feeds `EmptyState(filtered)`'s excluded count, so it lands after D4 rather than before |
 | **D6** | Charts + `Legend` + `PeriodPicker` | Unblocked — 5 segments + *other*, directly labelled; the line chart pairs hue with marker shape (§7) |
 | **D7** | `Calendar` + cells + both navigation modes (§6) | Virtualization is the hard part — ~2,100 days from 2020. Build it once for continuous and stepped |
 | **D8** | Debt — `BalanceLedger`, `SettleSheet`, `CounterpartyPicker`, `AgeingBar` (§5.5) | Depends on D0's money components. `BalanceLedger` owns the cash-flow-sign negation so no screen repeats it (§6.6) |

@@ -63,7 +63,6 @@ scrolling one.
 | `TransactionRow` / `TransferRow` | `BIZ` where business; `FxAmount` where foreign. An entry paid in another currency than its account's (`SPEC.md` §7.8) draws what was paid, small and muted, under the figure the account was charged — *−14,02 €* over *350,00 CZK* — on the phone row and in the desk table's amount column; the row's own figure, and every total, is the charged one. Search finds either figure and a currency filter either currency |
 | `TransactionRow` title | **The entered name; failing that the category; failing that the kind** — *Income*, *Expense*, *Transfer*, *Adjustment*. An imported or quickly captured row often has no payee, and a dash over a `?` says the row is broken when it is only unnamed. The line beneath never repeats what became the title, and the monogram follows the title. The desk table's identity column follows the same rule; its category column still shows the category |
 | `BrandIcon` | The leading mark on both surfaces — `TransactionRow`'s on mobile, and the desk table's identity column, between the date and the entered name. Same component and catalogue as S04 (§14.4b); an unrecognised entered name falls back to its monogram rather than to nothing |
-| `SwipeAction` | Mobile — short swipe categorize, long swipe edit. **Never delete** |
 | `EmptyState(filtered)` | Names the excluding filter and its hidden count |
 | `EmptyState(first-run)` | Nothing has ever existed |
 | `SegmentControl` | Scope — a partition, so subtotals always sum to All |
@@ -83,7 +82,7 @@ act on, and that is what keeps the filter drainable to zero.
 
 | Reads | Writes |
 |---|---|
-| `search_transactions(filter, page)` | `update_transaction` — via swipe-categorize |
+| `search_transactions(filter, page)` | — (a row's own edits are S09's) |
 | Running total for the active filter | `categorize_batch` — web multi-select. **The total is a sum of the filtered rows, not a period figure**, so it includes a repayment of an existing debt (`SPEC.md` §6.6) when the filter shows it; the period figures elsewhere leave those out |
 
 ## 6. States
@@ -100,8 +99,12 @@ act on, and that is what keeps the filter drainable to zero.
 ## 7. Interaction
 
 ### Mobile
-Virtualized infinite scroll. Short swipe → category sheet; long swipe → edit.
-Nothing destructive on a swipe (`design-system/05` §5.6). Pull to refresh.
+Virtualized infinite scroll. **A row answers a tap and nothing else**: it
+opens the transaction (S09), where the category is changed. Rows do not
+swipe — a gesture nothing on screen names is one a reader triggers by
+accident (`design-system/05` §5.6). Below desk width there is no
+multi-select; recategorising several rows at once is the desk's (§7 web).
+Pull to refresh.
 
 ### Web
 `J`/`K` move, `Enter` opens. The rail is persistent (§3), so `/` and `F` both

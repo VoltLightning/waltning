@@ -71,7 +71,7 @@ One rule set, chosen per sheet by what the sheet holds. *Sized* is the sheet as 
 
 | Component | Notes |
 |---|---|
-| `TransactionList` | **The column.** Owns the separators and the keys; rows are given as data, not as children |
+| `DayGroup` | **The column.** Owns the separators of one day's rows; the rows are its children |
 | `TransactionRow` | Date · entered name · category · `Amount`. Empty entered name falls back to category, then Expense/Income/Transfer; a linked current name can be secondary when the saved text differs. `BIZ` tag when business. Entered name at weight 500, so the identity reads before its metadata. Leads with `BrandIcon` once a screen passes `brandKey` (§14.4b) |
 | `BrandIcon` | A transaction's own recognised-merchant mark — ORLEN, YouTube, or another the bundled catalogue carries (§14.4b), resolved offline at write time, never from a network fetch. Unknown or absent key → the same deterministic monogram `CounterpartyRow`'s own fallback gives an unmatched name, never blank. Sizes: row (24) and widget (20) — the same two `ServiceIcon` below already uses, and the seam S34 reuses to add a real vector mark without another transaction-facing change |
 | `CategorySheet` option | **A white tile wearing its category's mark** — the hue's `solid` square (`02-tokens` §2.1) with the category's letter, the same square a ledger row wears for that category, then the name on up to two lines and its count. Ten outlined tiles with only a name were ten of one thing, and a reader found *Groceries* by reading all of them. **The chosen option is said in its own colour**: the hue's wash for a fill and its solid for a two-pixel edge, never the accent. Group chips above wear their group's hue as a wash; the chosen one takes the solid as its edge. The mark is decorative — the name is already there |
@@ -87,14 +87,14 @@ One rule set, chosen per sheet by what the sheet holds. *Sized* is the sheet as 
 **A ledger is read as a column, and a separator belongs to the gap between two
 rows.** `<TransactionRow>` drew its own bottom hairline, so every list ended
 with a rule under nothing — dangling in the card's bottom padding. The row is
-now separator-free and `<TransactionList>` draws the line on the top of every
+now separator-free and `<DayGroup>` draws the line on the top of every
 row after the first, which is the structure React Native has instead of
 `:not(:first-child)`.
 
-It takes data rather than children: `React.Children.map` cannot tell a row from
-a heading, so the day a screen puts anything else in the list the separators
-land in the wrong places and nothing says so. Taking data also moves the key off
-the screens, which were each constructing one.
+It takes the rows as children and flattens them with `Children.toArray`, which
+drops `null` and `false`: a hidden row leaves no hairline above the next one,
+and the first row actually drawn is the one without a line. The group holds
+rows only — a heading or anything else among them would take a separator too.
 
 ### 5.3 The approval gate
 
@@ -212,10 +212,17 @@ parties agreed — not the rate a central bank published.
 
 ### 5.6 Data surfaces
 
+**Nothing destructive is ever on a swipe.** A gesture can be performed by
+accident, and one that removes a financial record removes it with no moment to
+see what is going; deletion is a control on the detail screen. **And no list
+row takes a gesture nothing on screen names** — a reader cannot discover it,
+so it fires by accident — which is why ledger rows answer a tap and nothing
+else. Every action is a visible control on the row or its sheet; none is
+swipe-only or long-press-only.
+
 | Component | Notes |
 |---|---|
 | `FilterBar` | Account · category · scope · currency · date range · counterparty. Each filter is a `Chip` carrying its **value**, not its name — `Business` rather than `Scope`. An active filter shows the count it excludes, which is what `EmptyState(filtered)` reads from (§8.1). Clear-one and clear-all are separate affordances |
-| `SwipeAction` | Row gestures, **on a list that does not itself swipe** — S10's ledger, never S04's pages, where a sideways swipe already turns the page and a row that slid would take it. Short swipe → categorize; long swipe → edit. **Nothing destructive is ever on a swipe** — deletion requires the detail screen, because a gesture you can perform by accident should not be able to remove a financial record. Haptic on commit; the web equivalent is the keyboard map, not a hover control |
 | `AuditHistory` | Chronological `audit_log` entries for one entity: actor · action · before/after. Agent-originated changes are marked, as are `import` and `migration`. This is the component that answers *"why is this categorized this way?"* eighteen months later (`SPEC.md` §6.1), so it renders a **diff**, not a sentence |
 | `ComparisonTable` | Period × metric with deltas. Increases in spend take `negative` ink (§7). Rows excluded as capital state the exclusion inline — `34 200 · excludes 1 one-off` — never silently (§6.8) |
 | `LedgerTable` | S10's own desk-width ledger — date · entered name · category · account · scope · amount, sortable by header, `J`/`K`/`Enter`/`F` keyboard-navigable. A plain `FlatList`, not a virtualisation library — S10's own risk note names the trade. Not `FilterBar`'s rail (a sibling, not a child) and not S33's own smaller `Table` — three data surfaces named separately because each answers a different density question, not one grid dressed three ways |

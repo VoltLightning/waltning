@@ -39,7 +39,7 @@ test("a warm account chip needs no tap the second time", async ({ page }) => {
   await typeAmount(page, "48.90");
   await page.getByRole("button", { name: "Save expense" }).click();
 
-  // Both captures, each its own Recent row (`TransactionList`'s own signed
+  // Both captures, each its own Recent row (the row's own signed
   // amount) — the period's aggregate spent/net stat tiles now read 60.90,
   // so this asserts the two individual rows rather than that sum.
   await expect(page).toHaveURL("/");

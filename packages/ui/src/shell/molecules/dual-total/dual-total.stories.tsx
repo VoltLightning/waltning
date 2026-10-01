@@ -1,6 +1,6 @@
 /**
  * `DualTotal` — `design-system/05` §5. C2's hero: `money.netWorth`, per
- * currency, stacked the way `CurrencyTotals` stacks its own rest.
+ * currency, stacked one per currency and never summed.
  */
 
 import type { Meta, StoryObj } from "@storybook/react-native-web-vite";

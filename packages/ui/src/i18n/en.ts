@@ -536,7 +536,7 @@ export const en = {
     transferKind: "Transfer",
     /** A row with no entered name and no category is titled by what it is. */
     adjustmentKind: "Adjustment",
-    /** Short swipe's action (S10 §4, §7) — announced, not only shown. */
+    /** The selection bar's batch-categorise action (S10 §7) — announced, not only shown. */
     categorise: "Categorise",
     /** `Skeleton`'s accessible label while a page loads. */
     loadingTransactions: "Loading transactions",

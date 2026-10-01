@@ -1,7 +1,7 @@
 /**
  * `<Shell>` — `design-system/05` §5.1. The sage band — `theme.shell`, one
  * flat colour, no gradient — holding the header row and the hero figure
- * every screen with one leads with (`DualTotal`, `CurrencyTotals`).
+ * every screen with one leads with (`DualTotal`).
  *
  * `TodayFrame` used to draw this band itself; it now composes `Shell`, and
  * the split is what lets a second screen (S04's own hero row, a future

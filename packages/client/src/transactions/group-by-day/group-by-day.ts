@@ -1,10 +1,10 @@
 /**
  * S10 §3: "Rows group by date" — `Today` / `Yesterday` / a bare date.
  *
- * **The screen builds sections, not `TransactionList`.** Two reasons, not
+ * **The screen builds sections, not `DayGroup`.** Two reasons, not
  * one: the header text needs the device's own `today` (`deviceRuntime()`,
  * a platform read) and `useT()` (a hook), neither of which a `packages/ui`
- * component may reach for on its own; and `TransactionList` is a plain,
+ * component may reach for on its own; and `DayGroup` is a plain,
  * un-virtualised column (`View`, not `FlatList`) — S10's list needs real
  * virtualisation over pages that grow by `loadMore`, which is exactly the
  * `FlatList` the plan names and exactly the platform composition

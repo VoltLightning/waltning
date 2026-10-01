@@ -148,8 +148,9 @@ should never require re-photographing anything (§10.2).
 
 ### Mobile
 Shutter is thumb-anchored. Capture is optimistic — the queue row appears before
-the file is written. Tap a queue row to review; swipe to discard **only before
-extraction**, and with an `UndoToast`.
+the file is written. Tap a queue row to review. Each queue row carries a visible *Discard* button,
+offered **only before extraction**; it asks for confirmation, and the discard
+is undoable through an `UndoToast`. No action is swipe-only.
 
 ### Web
 Review only. Arrows move between queued receipts, `Enter` commits, `S` splits.

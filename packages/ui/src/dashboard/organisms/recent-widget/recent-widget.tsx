@@ -1,7 +1,7 @@
 /**
  * `<RecentWidget>` — `S01` §4/§14.5's `recent` widget.
  *
- * **Its own row, not `transactions/transaction-list.tsx`'s `TransactionList`.**
+ * **Its own row, not `transactions/`' `TransactionRow`.**
  * Same reason `balances-widget.tsx` draws its own line rather than reaching
  * for `BalanceRow`: `tests/module-boundaries.test.ts` refuses a domain-to-
  * domain relative import inside `packages/ui/src`, and this row needs none of

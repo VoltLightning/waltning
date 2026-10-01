@@ -11,10 +11,10 @@
  *
  * **A write resets the list to its first page.** The controller's own
  * `subscribe` fires after every successful write (`refresh()` inside
- * `createPhoneLedger`), and a swipe-categorize is exactly such a write — the
- * row the gesture touched must stop matching a category filter immediately,
+ * `createPhoneLedger`), and a batch categorise is exactly such a write — the
+ * rows it touched must stop matching a category filter immediately,
  * not after the next explicit search. Trading the scroll position for that is
- * the same choice `TransactionList` already makes implicitly by having none to
+ * the same choice the list already makes implicitly by having none to
  * lose; a longer list paying that cost is the follow-up worth naming rather
  * than solving here.
  *

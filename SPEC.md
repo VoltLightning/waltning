@@ -3359,8 +3359,8 @@ them rather than fetched (§7.5).
 ### 9.4 Review
 
 Today this is editing CSVs in Excel. It becomes a screen: proposed rows with
-confidence and reason, swipe to accept, tap to recategorize, long-press to
-split, bulk-accept above a confidence threshold. `import_rows.raw` is never
+confidence and reason, a visible *Accept* button on each row, tap to recategorize, a visible
+*Split* button, bulk-accept above a confidence threshold. `import_rows.raw` is never
 mutated, so a reparse after a prompt change is always possible.
 
 ---
@@ -4382,7 +4382,7 @@ circumstances before it is relied on.
 | Scan | Camera, queue status, extraction review |
 | **Calendar** | Day / week / month / year, with both continuous scroll and stepped paging (§14.4) |
 | **Debt** | Counterparties, per-currency balances, settle flow (§6.6) |
-| Transactions | Search, filter, infinite list, swipe to edit |
+| Transactions | Search, filter, infinite list; a row opens its detail on a tap |
 | Transaction detail | Full edit, receipt view, line splits, audit history |
 | Accounts | Register, balances, archive toggle |
 | Transfer | Two accounts, two amounts; live rate shown, editable inline (§7.5) |

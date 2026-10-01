@@ -48,8 +48,7 @@ export function ComparisonTable({ rows }: ComparisonTableProps) {
       {rows.map((row, index) => (
         <View
           // Rows are a fixed, caller-ordered list with no identity of their
-          // own beyond position — the same reasoning `TransactionList` uses
-          // for a key that is not a domain id.
+          // own beyond position, so position is the key.
           // biome-ignore lint/suspicious/noArrayIndexKey: position is the identity here
           key={index}
           style={[styles.row, index === rows.length - 1 ? null : styles.divider]}

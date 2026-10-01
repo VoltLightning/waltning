@@ -1,6 +1,6 @@
 /**
  * `<CategorySheet>` — `screens/S06-category-sheet.md`. One sheet to pick a
- * category, used from Quick add, a ledger row's swipe, and the detail screen.
+ * category, used from Quick add and the detail screen.
  *
  * **Pure presentation over the whole tree.** `readCategoryTree` (`A3`) is the
  * shape this mirrors — groups and leaves both, flattened, `parentId` self-
