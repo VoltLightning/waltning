@@ -641,13 +641,21 @@ export function FieldsCard({
             </FieldDisclosureRow>
           ) : null}
 
-          {/* Who it was *with* — the commoner fact, and the plainer label. */}
-          <FieldDisclosureRow
-            label={t("transactions.counterparty")}
-            value={counterpartyName}
-            placeholder={t("transactions.noCounterparty")}
-            onPress={handleOpenIdentityPicker}
-          />
+          {/*
+            Who it was *with* — the commoner fact, and the plainer label. **Not
+            drawn on a debt category**: there the person is both who it was
+            with and who the debt is with, so the *Who?* row below is the one
+            row and its pick writes both links (§6.6.1). Leaving the category
+            takes the debt away and this row reads that person again.
+          */}
+          {debtCategory ? null : (
+            <FieldDisclosureRow
+              label={t("transactions.counterparty")}
+              value={counterpartyName}
+              placeholder={t("transactions.noCounterparty")}
+              onPress={handleOpenIdentityPicker}
+            />
+          )}
 
           {transfer ? null : (
             <FieldDisclosureRow

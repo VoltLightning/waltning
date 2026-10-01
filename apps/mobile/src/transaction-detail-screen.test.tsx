@@ -561,10 +561,34 @@ describe("TransactionDetail — a debt category", () => {
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
     expect(updateTransaction).toHaveBeenCalledOnce();
+    // One row, one pick: the person is who it was with and who the debt is with.
     expect(updateTransaction.mock.calls[0]?.[0].patch).toMatchObject({
       categoryId: LENT,
+      counterpartyId: NINA,
       obligationCounterpartyId: NINA,
       obligationRole: "debt",
     });
+  });
+
+  it("draws one row for the person, and With whom is back on the category you leave for", () => {
+    withLedger(<TransactionDetail />, debtLedger(vi.fn()));
+
+    expect(screen.getByRole("button", { name: /^With whom/ })).toBeDefined();
+    pickLentOut();
+    expect(screen.queryByRole("button", { name: /^With whom/ })).toBeNull();
+    expect(screen.getByRole("button", { name: "Who?" })).toBeDefined();
+  });
+
+  it("keeps the person as With whom when the held category is switched back", () => {
+    const updateTransaction = vi.fn();
+    withLedger(<TransactionDetail />, debtLedger(updateTransaction));
+
+    pickLentOut();
+    fireEvent.click(screen.getByRole("button", { name: "Who?" }));
+    fireEvent.click(screen.getByRole("button", { name: "Nina" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Category/ }));
+    fireEvent.click(screen.getByRole("radio", { name: "Groceries" }));
+
+    expect(screen.getByRole("button", { name: "With whom: Nina" })).toBeDefined();
   });
 });

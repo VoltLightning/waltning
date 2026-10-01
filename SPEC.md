@@ -1523,7 +1523,10 @@ side (`obligation_counterparty_id`): a debt with nobody on the other end is not
 a debt. Every claim below names the layer that enforces it:
 
 - **The capture surfaces** ask **Who?** where the category is picked and refuse
-  to save without it (Quick add on phone and desk, and S09) — *UI*.
+  to save without it (Quick add on phone and desk, and S09) — *UI*. It is the
+  one row for the person on these categories: the person picked is both who the
+  entry was with (`counterparty_id`) and who the debt is with, and no *With
+  whom* row is drawn beside it.
 - **A row under one of the four carries the `debt` role and a person** —
   `create_transaction`, `update_transaction` and `supersede_transaction`
   refuse otherwise with a message naming the field, and `categorize_batch`

@@ -258,6 +258,20 @@ it("offers a person once the ledger holds one, and never defaults the role (§6.
   expect(props.onCounterpartyChange).toHaveBeenCalledWith("cp-a");
 });
 
+it("draws one row for the person on a debt category — Who?, and no Person row behind More details", () => {
+  draw({ debtCategory: true, counterparties: [{ id: "cp-a", name: "Corner Café" }] });
+  expect(screen.getByRole("button", { name: /^Who\?/ })).toBeDefined();
+  openMore();
+  expect(screen.queryByRole("button", { name: /^Person/ })).toBeNull();
+});
+
+it("draws the Person row, and no Who?, on any other category", () => {
+  draw({ counterparties: [{ id: "cp-a", name: "Corner Café" }] });
+  expect(screen.queryByRole("button", { name: /^Who\?/ })).toBeNull();
+  openMore();
+  expect(screen.getByRole("button", { name: /^Person/ })).toBeDefined();
+});
+
 it("spells out a missing role on the person row rather than leaving it to a form error", () => {
   draw({ counterparties: [{ id: "cp-a", name: "Corner Café" }], obligationCounterpartyId: "cp-a" });
   openMore();
