@@ -54,7 +54,7 @@ something no list row can.
   ┌ details ──────────────────────────────┐
   │ Category      [Eating out]          › │
   │ Date          6 Aug 2026            › │
-  │ Paid from     Cash · PLN            › │
+  │ Account       Cash · PLN            › │
   │ Amount        48.90                 › │
   │ With whom     Café A                › │
   │ Shop / payee  Café A                › │
@@ -62,6 +62,15 @@ something no list row can.
   └───────────────────────────────────────┘
   [+ Someone owes]  [+ Business]  [+ One-off]
                                    [ Save ]  ← only once something changed
+
+  ┌ details · a debt category (Lent out) ─┐   ← one row for the person
+  │ Category      [Lent out]            › │
+  │ Date          6 Aug 2026            › │
+  │ Account       Cash · PLN            › │
+  │ Amount        48.90                 › │
+  │ Who?          Nina                  › │   ← both links, no With whom
+  │ Note          —                     › │
+  └───────────────────────────────────────┘
 
   ┌ details · paid in another currency ───┐   ← income and expense only
   │ Charged to the account  14.02       › │   ← the account side; every balance reads it
@@ -182,7 +191,7 @@ between two of your own accounts would be picking a side; its line names both
 accounts instead.
 
 **With whom and Owes are two rows, and this screen is the only place they
-can name different parties.** `SPEC.md` §6.6.1 defines the pair: *With whom*
+can name different parties, except on a debt category, where they are one row.** `SPEC.md` §6.6.1 defines the pair: *With whom*
 (the counterparty) is the identity link — who the transaction was with — and naming somebody there
 owes them nothing, so no role appears. *Owes* is the obligation, and only it
 brings a role with it. Paying a shop for a friend names the shop on the first
@@ -190,15 +199,18 @@ row and the friend on the second; S05's one chip row cannot express that, which
 is why it writes the same party to both when a role is chosen and leaves this
 screen to separate them.
 
-**A debt category turns *Owes* into a required *Who?*.** Picking *Borrowed*,
-*Lent out*, *Repayment received* or *Repayment made* (read from the category's
-seed tag, never its name) makes the role `debt` — the role row goes, there is
-nothing to choose — and the obligation row is drawn as **Who?** whether or not
-somebody is named yet. The pick is held in the card until Save, because the
-category, the person and the role are written together; Save with nobody named
-is refused with an error on Who?. Moving the row to any other category takes the
-role back and clears the person it was asked for, while a role chosen by hand
-stays. Any other category pick is written at once, as it always was.
+**A debt category folds the two rows into one, a required *Who?*.** Picking
+*Borrowed*, *Lent out*, *Repayment received* or *Repayment made* (read from the
+category's seed tag, never its name) makes the role `debt` — the role row goes,
+there is nothing to choose — and *With whom* and *Owes* are replaced by the one
+row **Who?**, drawn whether or not somebody is named yet. A debt is between you
+and one person, so the person picked there is both who the entry was with and who
+the debt is with: one pick writes both links, and no *With whom* row is drawn
+beside it. The pick is held in the card until Save, because the category, the
+person and the role are written together; Save with nobody named is refused with
+an error on Who?. Moving the row to any other category takes the role back and
+clears the obligation, while the person stays as *With whom* and a role chosen by
+hand stays. Any other category pick is written at once, as it always was.
 
 **Picking *Repayment received* or *Repayment made* is not a patch.** The row's
 own figures settle the person's open debt in the matching direction (S14,

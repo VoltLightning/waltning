@@ -104,6 +104,23 @@ export type ObligationFields = {
 };
 
 /**
+ * **The obligation is a pair: a person and what is owed with them, both or
+ * neither** (`transactions_obligation_pair_shape` on Postgres, and the
+ * replica's `transactions_obligation_pair_shape_*` triggers). A person with no
+ * role is a row the server would refuse when the outbox drains, so it is
+ * refused here, where the device can say why.
+ */
+export function assertObligationPair(obligation: ObligationFields, where: string): void {
+  const person = obligation.obligationCounterpartyId != null;
+  const role = obligation.obligationRole != null;
+  if (person === role) return;
+  throw new LocalRefusal(
+    `${where}: an obligation and its role travel together (SPEC §6.6) — ` +
+      "obligation_counterparty_id and obligation_role are both set or both empty",
+  );
+}
+
+/**
  * Refuses a debt category without its debt: `where` is what the operation and
  * field are called in the message (`"create_transaction: category_id"`).
  */

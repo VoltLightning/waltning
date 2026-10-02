@@ -1780,6 +1780,8 @@ describe("a constraint declared in the schema is present on the device", () => {
       "transactions_debt_category_shape_insert",
       "transactions_debt_category_shape_update",
       "transactions_lines_sum_matches_update",
+      "transactions_obligation_pair_shape_insert",
+      "transactions_obligation_pair_shape_update",
       "transactions_opening_link_shape_insert",
       "transactions_opening_link_shape_update",
       "transactions_paid_amount_ceiling_insert",

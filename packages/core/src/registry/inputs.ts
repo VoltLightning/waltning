@@ -425,7 +425,8 @@ export const createTransactionInput = z
      * the transaction was with. Paired with the role by
      * `transactions_obligation_pair_shape`, and tied to `counterpartyId` by
      * nothing at all: the two may name the same counterparty, different ones,
-     * or one without the other.
+     * or one without the other — except on a debt category, where they are one
+     * row and name the one person.
      */
     obligationCounterpartyId: zId<"counterparties">().optional(),
     obligationRole: z.enum(OBLIGATION_ROLE).optional(),

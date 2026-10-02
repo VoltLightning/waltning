@@ -11,7 +11,7 @@ it("shows the Polish title and the migrator's own message, verbatim", () => {
     </I18nProvider>,
   );
 
-  expect(screen.getByText("Nie udało się otworzyć księgi")).toBeDefined();
+  expect(screen.getByText("Nie udało się otworzyć danych")).toBeDefined();
   expect(screen.getByText("placeholder failure reason")).toBeDefined();
 });
 
@@ -54,7 +54,7 @@ it("keeps the browser's own sentence off the recoverable screen", () => {
 
   expect(screen.queryByText(refusal.message)).toBeNull();
   expect(
-    screen.getByText("Księga jest wciąż otwarta w innej karcie. Zamknij ją i spróbuj ponownie."),
+    screen.getByText("Dane są otwarte w innej karcie. Proszę ją zamknąć i spróbować ponownie."),
   ).toBeDefined();
 });
 

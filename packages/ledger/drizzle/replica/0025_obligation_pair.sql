@@ -1,0 +1,5 @@
+-- No statements, on purpose: this step exists to carry an `objects` hook.
+-- `transactions_obligation_pair_shape_*` is created by
+-- `REPLICA_BACKFILLS["0025_obligation_pair"].objects` in `src/migrate.ts`,
+-- because a trigger cannot live in a step's statements — a later rebuild of its
+-- table would drop it with nothing to re-create it.

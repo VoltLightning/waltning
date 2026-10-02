@@ -393,11 +393,14 @@ describe("a debt category on the desk's form", () => {
     fireEvent.click(screen.getByRole("button", { name: "Who?" }));
     fireEvent.click(screen.getByRole("radio", { name: "Counterparty A" }));
     expect(screen.queryByRole("radiogroup", { name: "Role" })).toBeNull();
+    // One row for the person: With whom is not drawn beside Who?.
+    expect(screen.queryByRole("button", { name: "With whom" })).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
     expect(onSave).toHaveBeenCalledWith(
       expect.objectContaining({
         categoryId: "cat-borrowed",
+        counterpartyId: "cp-a",
         obligationCounterpartyId: "cp-a",
         obligationRole: "debt",
       }),

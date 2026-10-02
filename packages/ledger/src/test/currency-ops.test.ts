@@ -186,9 +186,9 @@ describe("archive_currency", () => {
 
   // BLOCKER — a live transaction can reference a currency through
   // `debt_currency` alone (§7, `coalesce(debt_currency, currency)`): a
-  // `currency: USD` transaction with `obligationRole: 'debt'` and
-  // `debtCurrency: EUR` names EUR, and archiving EUR must be refused just as
-  // it would be if EUR were the transaction's own `currency`.
+  // `currency: USD` transaction with `debtCurrency: EUR` names EUR, and
+  // archiving EUR must be refused just as it would be if EUR were the
+  // transaction's own `currency`.
   it("refuses a currency a live transaction references only through debt_currency", () => {
     s.ledger.replica.db
       .insert(transactions)
@@ -200,7 +200,6 @@ describe("archive_currency", () => {
         amountOriginal: money.toMoney("10.00"),
         currency: USD,
         fxRate: money.pivotPerUnit("1"),
-        obligationRole: "debt",
         debtCurrency: EUR,
         debtAmount: money.toMoney("10.00"),
       })

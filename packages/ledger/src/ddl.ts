@@ -681,6 +681,10 @@ WHERE \`deleted_at\` IS NULL
       `ALTER TABLE \`transactions\` ADD \`paid_currency\` text REFERENCES currencies(code)`,
     ],
   },
+  {
+    tag: "0025_obligation_pair",
+    statements: [],
+  },
 ];
 
 /** One step per file in `drizzle/outbox`, filename order — the queue, its index, and the counter `claimSeq` allocates from. */

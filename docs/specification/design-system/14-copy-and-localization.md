@@ -53,7 +53,7 @@ catalogue that mixes registers reads as if two people wrote it, and one did.
 | German | *Sie* | *Sie*, *Ihr*, *Ihnen*; imperatives with *Sie* or an infinitive on buttons |
 | Russian | *вы*, lowercase | *вы*, *ваш*; *Вы* is capitalised only at the start of a sentence |
 | Belarusian | *вы*, lowercase | *вы*, *ваш*; never *ты*, *цябе*, *твой* |
-| Polish | impersonal or formal | infinitive and impersonal forms (*Należy wybrać*, *Wybrano*), *Proszę …* for a request; avoid *Pan/Pani*, never *ty*, *twój* |
+| Polish | impersonal or formal | sentences in infinitive and impersonal forms (*Należy wybrać*, *Wybrano*), *Proszę …* for a request; a button or short action takes the short command every Polish bank puts there (*Zapisz*, *Usuń*, *Spróbuj ponownie*); avoid *Pan/Pani*, never *ty*, *twój* |
 | English | — | *you*, plain |
 
 **German**
@@ -109,19 +109,20 @@ first is the noun and the second the short label or verb.
 | Contact details (the field on a person's page — never the page's own word) | contact details | Kontaktdaten | контактные данные | dane kontaktowe | кантактныя даныя |
 | Debt | debt | Schuld | долг | dług | доўг |
 | Repayment | repayment | Rückzahlung | возврат долга | spłata | вяртанне доўгу |
-| Existing debt (from before the ledger) | existing debt | bestehende Schuld | долг до начала учёта | dług sprzed rozpoczęcia ewidencji | доўг да пачатку ўліку |
+| Towards (the debt a repayment settles) | towards | — | — | na poczet | — |
+| Existing debt (from before the ledger) | existing debt | bestehende Schuld | долг до начала учёта | dług sprzed rozpoczęcia ewidencji · *dług początkowy* (a label) | доўг да пачатку ўліку |
 | Anchor currency | anchor currency | Bezugswährung | опорная валюта | waluta odniesienia | апорная валюта |
 | In-transit account (an account kind: money waiting to be split) | in transit | Zwischenkonto | транзитный счёт | konto przejściowe | транзітны рахунак |
 | Display currency | *Show figures in* | *Beträge anzeigen in* | *Показывать суммы в* | *Pokazuj kwoty w* | *Паказваць сумы ў* |
 | Exchange rate | exchange rate · rate | Wechselkurs · Kurs | курс | kurs | курс |
-| Charged (to the account) | charged | abgebucht | списано | pobrano | спісана |
+| Charged (to the account) | charged | gebucht | списано | pobrano | спісана |
 | Paid (in another currency) | paid | bezahlt | оплачено | zapłacono | аплачана |
 | Split | split | aufteilen | разделить | podzielić | падзяліць |
 | Archive | archive | archivieren | в архив · архивировать | archiwizuj · zarchiwizować | у архіў · архіваваць |
 | Delete | delete | löschen | удалить | usuń · usunąć | выдаліць |
 | Overdrawn | overdrawn | überzogen | в минусе | na debecie · debet | у мінусе |
 | Owed — on a card or loan account | owed | geschuldet | задолженность | do spłaty | запазычанасць |
-| Owed — between people | owed | geschuldet | долг | do spłaty | доўг |
+| Owed — between people | owed | geschuldet | долг | należne mi · mój dług | доўг |
 | Balance | balance | Kontostand · Saldo | баланс | saldo | баланс |
 | Net worth | net worth | Vermögen | капитал | majątek | капітал |
 | Backup | backup · back up | Sicherung · sichern | резервная копия | kopia zapasowa | рэзервовая копія |
@@ -132,6 +133,14 @@ first is the noun and the second the short label or verb.
 would read as paying someone: Polish *przelew* and Russian or Belarusian
 *перевод* alone are what a bank calls a payment out. The short form is for a
 tag or a column where the two accounts stand beside it.
+
+**German keeps direction out of the words both directions share.** *Charged*
+is *gebucht* (*Gebucht auf Konto A*), not *abgebucht*: the same row names the
+account an income was credited to, and *abgebucht* would say the money left
+it. A debt's direction has two forms and never mixes them: before a figure or
+as a label it is a sentence — *Man schuldet Ihnen* · *Sie schulden*; after a
+figure it is a suffix — *50,00 PLN zu Ihren Gunsten* · *zu Ihren Lasten*. The
+two loan account kinds are *Forderung* and *Verbindlichkeit*.
 
 **The page and its parts never share a word.** *Contacts* is the page; *People*
 and *Companies* are its groups; the field on one person's page is *Contact
@@ -182,7 +191,9 @@ that is the display currency, and the anchor *decides nothing a reader sees*.
   a heading, or as the subject: *Existing debt: Nina*, not *Existing debt with
   {{name}}*, which Russian, Polish and Belarusian would need in the instrumental
   and the catalogue cannot decline. The same goes for a possessive (*{{name}}'s
-  share* → *Share: {{name}}*).
+  share* → *Share: {{name}}*). German does not decline a name after a
+  preposition, so a German sentence places one there as it would any noun
+  (*Ausgleich mit {{name}}*).
 - **Dates come from `Intl`**, through `locales.ts`. A date is never spelled in a
   catalogue, and a month name is never a translation.
 - **Keys never change for a wording change.** Only values move; a key renamed
@@ -195,7 +206,8 @@ that is the display currency, and the anchor *decides nothing a reader sees*.
 capitalised *Вы* mid-sentence) and §14.3's ruled-out words as patterns, run
 over every user-facing value of every catalogue with placeholders removed;
 §14.4's name rule runs on the value with its placeholders, looking for a
-preposition (or an English possessive) against `{{name}}`. A pattern may
+preposition (or an English possessive) against `{{name}}`, in every
+catalogue but German, which is exempt from it (§14.4). A pattern may
 exempt a key where the word is used in another sense, and says why — the
 person's *record* in a merge is not a transaction. Each pattern
 carries an example it must catch and one it must spare, so a pattern that has

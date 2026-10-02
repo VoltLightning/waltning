@@ -365,6 +365,12 @@ export function FieldsCard({
   // An empty fee is no fee, not an invalid one.
   const feeValid = fee.trim() === "" || parsedFee !== null;
 
+  // A role that went with its category takes the person it was asked for.
+  const owedAfter =
+    shownRole === null && fields.obligationRole !== null ? null : obligationCounterpartyId;
+  // §6.6 — a person under *Owes* with no role is not an obligation: Save asks for the role.
+  const roleMissing = owedAfter !== null && shownRole === null;
+  const [roleAsked, setRoleAsked] = useState(false);
   const patch = useMemo<TransactionFieldsPatch>(() => {
     const next: TransactionFieldsPatch = {};
     if (dateValid && date !== fields.date) next.date = date;
@@ -403,8 +409,7 @@ export function FieldsCard({
     if (counterpartyId !== fields.counterpartyId) next.counterpartyId = counterpartyId;
     // §6.6 — the pair is both or neither: no role, nobody owed. A debt category's
     // role going away with its category clears the person it was asked for.
-    const owed =
-      shownRole === null && fields.obligationRole !== null ? null : obligationCounterpartyId;
+    const owed = owedAfter;
     if (owed !== fields.obligationCounterpartyId) {
       next.obligationCounterpartyId = owed;
       // §6.6 — a role belongs to the person it is about. Whoever is picked
@@ -433,7 +438,6 @@ export function FieldsCard({
     feeValid,
     categoryId,
     counterpartyId,
-    obligationCounterpartyId,
     date,
     dateValid,
     fields,
@@ -442,6 +446,7 @@ export function FieldsCard({
     note,
     enteredName,
     shownRole,
+    owedAfter,
   ]);
   const hasChanges = Object.keys(patch).length > 0;
   const draftValid = amountValid && toAmountValid && feeValid && paidValid;
@@ -457,8 +462,14 @@ export function FieldsCard({
       setWhoAsked(true);
       return;
     }
+    if (roleMissing) {
+      // Nothing is sent: the Role row opens and says what is missing.
+      setRoleAsked(true);
+      setOpen((current) => new Set(current).add("role"));
+      return;
+    }
     onSave(patch);
-  }, [draftValid, hasChanges, onSave, patch, saving, whoMissing]);
+  }, [draftValid, hasChanges, onSave, patch, roleMissing, saving, whoMissing]);
 
   const formLevelErrors = fieldErrors?.formLevel ?? [];
 
@@ -641,13 +652,21 @@ export function FieldsCard({
             </FieldDisclosureRow>
           ) : null}
 
-          {/* Who it was *with* — the commoner fact, and the plainer label. */}
-          <FieldDisclosureRow
-            label={t("transactions.counterparty")}
-            value={counterpartyName}
-            placeholder={t("transactions.noCounterparty")}
-            onPress={handleOpenIdentityPicker}
-          />
+          {/*
+            Who it was *with* — the commoner fact, and the plainer label. **Not
+            drawn on a debt category**: there the person is both who it was
+            with and who the debt is with, so the *Who?* row below is the one
+            row and its pick writes both links (§6.6.1). Leaving the category
+            takes the debt away and this row reads that person again.
+          */}
+          {debtCategory ? null : (
+            <FieldDisclosureRow
+              label={t("transactions.counterparty")}
+              value={counterpartyName}
+              placeholder={t("transactions.noCounterparty")}
+              onPress={handleOpenIdentityPicker}
+            />
+          )}
 
           {transfer ? null : (
             <FieldDisclosureRow
@@ -717,6 +736,7 @@ export function FieldsCard({
                   placeholder={t("transactions.chooseRole")}
                   open={open.has("role")}
                   onPress={handleToggleRole}
+                  {...(roleAsked && roleMissing ? { error: t("common.chooseOne") } : {})}
                 >
                   <RadioGroup
                     label={t("transactions.role")}

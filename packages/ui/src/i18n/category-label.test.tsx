@@ -37,11 +37,9 @@ it("a starter category with its canonical name reads in the app's language", () 
 
 it("Uncategorized and the groups translate too", () => {
   expect(shown("de", { name: "Uncategorized", externalId: "seed:uncategorized" })).toBe(
-    "Nicht kategorisiert",
+    "Ohne Kategorie",
   );
-  expect(shown("de", { name: "Employment", externalId: "seed:employment" })).toBe(
-    "Nichtselbständige Arbeit",
-  );
+  expect(shown("de", { name: "Employment", externalId: "seed:employment" })).toBe("Arbeit");
 });
 
 it("a renamed starter is the person's own text and does not translate", () => {
