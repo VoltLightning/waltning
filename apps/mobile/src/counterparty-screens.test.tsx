@@ -1159,7 +1159,7 @@ describe("CounterpartyDetail (S13)", () => {
 
       fireEvent.click(screen.getByRole("button", { name: locale === "pl" ? "Rozlicz" : "Settle" }));
       const sheet = within(
-        screen.getByLabelText(locale === "pl" ? "Rozliczenie z Nina" : "Settle up: Nina"),
+        screen.getByLabelText(locale === "pl" ? "Rozliczenie: Nina" : "Settle up: Nina"),
       );
       fireEvent.click(sheet.getByRole("button", { name: locale === "pl" ? "Na konto" : "Into" }));
       fireEvent.click(screen.getByRole("radio", { name: "Cash · PLN" }));
@@ -1169,7 +1169,7 @@ describe("CounterpartyDetail (S13)", () => {
       fireEvent.click(sheet.getByRole("button", { name: "5" }));
       fireEvent.click(sheet.getByRole("button", { name: "0" }));
       fireEvent.click(
-        sheet.getByRole("button", { name: locale === "pl" ? "Rozlicza: 0" : "Towards: 0" }),
+        sheet.getByRole("button", { name: locale === "pl" ? "Na poczet: 0" : "Towards: 0" }),
       );
       fireEvent.click(sheet.getByRole("button", { name: "5" }));
       fireEvent.click(sheet.getByRole("button", { name: "0" }));
@@ -1187,7 +1187,7 @@ describe("CounterpartyDetail (S13)", () => {
     it("renders the Polish one — the key resolved, never the English `message` passed through", () => {
       const sheet = renderWithRefusal("pl");
       expect(
-        sheet.getByText("To konto obsługuje tylko PLN — rozlicz w tej walucie."),
+        sheet.getByText("To konto jest prowadzone tylko w PLN — proszę rozliczyć w tej walucie."),
       ).toBeDefined();
       expect(
         sheet.queryByText("This account only holds PLN — settle in that currency."),

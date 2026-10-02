@@ -82,7 +82,7 @@ describe("RateField", () => {
     );
     expect(
       screen.getByText(
-        (_, element) => element?.textContent === "referencyjny 4,3120 · nbp · 2026-08-10",
+        (_, element) => element?.textContent === "kurs referencyjny 4,3120 · nbp · 2026-08-10",
       ),
     ).toBeDefined();
   });
