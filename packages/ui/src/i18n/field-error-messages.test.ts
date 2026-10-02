@@ -30,7 +30,7 @@ describe("resolveFieldErrorMessage", () => {
   it("says a bad date in the reader's own language, not Zod's English", () => {
     const error = { message: "not a real calendar date", messageKey: "transactions.badDate" };
     expect(resolveFieldErrorMessage(en, error)).toBe("That date isn't a real calendar day.");
-    expect(resolveFieldErrorMessage(pl, error)).toBe("To nie jest prawdziwy dzień kalendarzowy.");
+    expect(resolveFieldErrorMessage(pl, error)).toBe("Taki dzień nie istnieje w kalendarzu.");
     // The English literal is what a reader would otherwise have been shown.
     expect(resolveFieldErrorMessage(pl, error)).not.toBe(error.message);
   });
