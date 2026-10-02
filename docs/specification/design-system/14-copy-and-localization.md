@@ -115,7 +115,7 @@ first is the noun and the second the short label or verb.
 | In-transit account (an account kind: money waiting to be split) | in transit | Zwischenkonto | транзитный счёт | konto przejściowe | транзітны рахунак |
 | Display currency | *Show figures in* | *Beträge anzeigen in* | *Показывать суммы в* | *Pokazuj kwoty w* | *Паказваць сумы ў* |
 | Exchange rate | exchange rate · rate | Wechselkurs · Kurs | курс | kurs | курс |
-| Charged (to the account) | charged | abgebucht | списано | pobrano | спісана |
+| Charged (to the account) | charged | gebucht | списано | pobrano | спісана |
 | Paid (in another currency) | paid | bezahlt | оплачено | zapłacono | аплачана |
 | Split | split | aufteilen | разделить | podzielić | падзяліць |
 | Archive | archive | archivieren | в архив · архивировать | archiwizuj · zarchiwizować | у архіў · архіваваць |
@@ -133,6 +133,14 @@ first is the noun and the second the short label or verb.
 would read as paying someone: Polish *przelew* and Russian or Belarusian
 *перевод* alone are what a bank calls a payment out. The short form is for a
 tag or a column where the two accounts stand beside it.
+
+**German keeps direction out of the words both directions share.** *Charged*
+is *gebucht* (*Gebucht auf Konto A*), not *abgebucht*: the same row names the
+account an income was credited to, and *abgebucht* would say the money left
+it. A debt's direction has two forms and never mixes them: before a figure or
+as a label it is a sentence — *Man schuldet Ihnen* · *Sie schulden*; after a
+figure it is a suffix — *50,00 PLN zu Ihren Gunsten* · *zu Ihren Lasten*. The
+two loan account kinds are *Forderung* and *Verbindlichkeit*.
 
 **The page and its parts never share a word.** *Contacts* is the page; *People*
 and *Companies* are its groups; the field on one person's page is *Contact
@@ -183,7 +191,9 @@ that is the display currency, and the anchor *decides nothing a reader sees*.
   a heading, or as the subject: *Existing debt: Nina*, not *Existing debt with
   {{name}}*, which Russian, Polish and Belarusian would need in the instrumental
   and the catalogue cannot decline. The same goes for a possessive (*{{name}}'s
-  share* → *Share: {{name}}*).
+  share* → *Share: {{name}}*). German does not decline a name after a
+  preposition, so a German sentence places one there as it would any noun
+  (*Ausgleich mit {{name}}*).
 - **Dates come from `Intl`**, through `locales.ts`. A date is never spelled in a
   catalogue, and a month name is never a translation.
 - **Keys never change for a wording change.** Only values move; a key renamed
@@ -196,7 +206,8 @@ that is the display currency, and the anchor *decides nothing a reader sees*.
 capitalised *Вы* mid-sentence) and §14.3's ruled-out words as patterns, run
 over every user-facing value of every catalogue with placeholders removed;
 §14.4's name rule runs on the value with its placeholders, looking for a
-preposition (or an English possessive) against `{{name}}`. A pattern may
+preposition (or an English possessive) against `{{name}}`, in every
+catalogue but German, which is exempt from it (§14.4). A pattern may
 exempt a key where the word is used in another sense, and says why — the
 person's *record* in a merge is not a transaction. Each pattern
 carries an example it must catch and one it must spare, so a pattern that has
