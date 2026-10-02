@@ -182,7 +182,9 @@ that is the display currency, and the anchor *decides nothing a reader sees*.
   a heading, or as the subject: *Existing debt: Nina*, not *Existing debt with
   {{name}}*, which Russian, Polish and Belarusian would need in the instrumental
   and the catalogue cannot decline. The same goes for a possessive (*{{name}}'s
-  share* → *Share: {{name}}*).
+  share* → *Share: {{name}}*). German does not decline a name, so a German
+  sentence places one after a preposition as it would any noun (*Ausgleich mit
+  {{name}}*), and the name rule does not run on the German catalogue.
 - **Dates come from `Intl`**, through `locales.ts`. A date is never spelled in a
   catalogue, and a month name is never a translation.
 - **Keys never change for a wording change.** Only values move; a key renamed
