@@ -39,7 +39,7 @@ it("Uncategorized and the groups translate too", () => {
   expect(shown("de", { name: "Uncategorized", externalId: "seed:uncategorized" })).toBe(
     "Ohne Kategorie",
   );
-  expect(shown("de", { name: "Employment", externalId: "seed:employment" })).toBe("Beruf");
+  expect(shown("de", { name: "Employment", externalId: "seed:employment" })).toBe("Arbeit");
 });
 
 it("a renamed starter is the person's own text and does not translate", () => {
