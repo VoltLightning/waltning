@@ -53,7 +53,7 @@ catalogue that mixes registers reads as if two people wrote it, and one did.
 | German | *Sie* | *Sie*, *Ihr*, *Ihnen*; imperatives with *Sie* or an infinitive on buttons |
 | Russian | *вы*, lowercase | *вы*, *ваш*; *Вы* is capitalised only at the start of a sentence |
 | Belarusian | *вы*, lowercase | *вы*, *ваш*; never *ты*, *цябе*, *твой* |
-| Polish | impersonal or formal | infinitive and impersonal forms (*Należy wybrać*, *Wybrano*), *Proszę …* for a request; avoid *Pan/Pani*, never *ty*, *twój* |
+| Polish | impersonal or formal | sentences in infinitive and impersonal forms (*Należy wybrać*, *Wybrano*), *Proszę …* for a request; a button or short action takes the short command every Polish bank puts there (*Zapisz*, *Usuń*, *Spróbuj ponownie*); avoid *Pan/Pani*, never *ty*, *twój* |
 | English | — | *you*, plain |
 
 **German**
@@ -109,7 +109,8 @@ first is the noun and the second the short label or verb.
 | Contact details (the field on a person's page — never the page's own word) | contact details | Kontaktdaten | контактные данные | dane kontaktowe | кантактныя даныя |
 | Debt | debt | Schuld | долг | dług | доўг |
 | Repayment | repayment | Rückzahlung | возврат долга | spłata | вяртанне доўгу |
-| Existing debt (from before the ledger) | existing debt | bestehende Schuld | долг до начала учёта | dług sprzed rozpoczęcia ewidencji | доўг да пачатку ўліку |
+| Towards (the debt a repayment settles) | towards | — | — | na poczet | — |
+| Existing debt (from before the ledger) | existing debt | bestehende Schuld | долг до начала учёта | dług sprzed rozpoczęcia ewidencji · *dług początkowy* (a label) | доўг да пачатку ўліку |
 | Anchor currency | anchor currency | Bezugswährung | опорная валюта | waluta odniesienia | апорная валюта |
 | In-transit account (an account kind: money waiting to be split) | in transit | Zwischenkonto | транзитный счёт | konto przejściowe | транзітны рахунак |
 | Display currency | *Show figures in* | *Beträge anzeigen in* | *Показывать суммы в* | *Pokazuj kwoty w* | *Паказваць сумы ў* |
@@ -121,7 +122,7 @@ first is the noun and the second the short label or verb.
 | Delete | delete | löschen | удалить | usuń · usunąć | выдаліць |
 | Overdrawn | overdrawn | überzogen | в минусе | na debecie · debet | у мінусе |
 | Owed — on a card or loan account | owed | geschuldet | задолженность | do spłaty | запазычанасць |
-| Owed — between people | owed | geschuldet | долг | do spłaty | доўг |
+| Owed — between people | owed | geschuldet | долг | należne mi · mój dług | доўг |
 | Balance | balance | Kontostand · Saldo | баланс | saldo | баланс |
 | Net worth | net worth | Vermögen | капитал | majątek | капітал |
 | Backup | backup · back up | Sicherung · sichern | резервная копия | kopia zapasowa | рэзервовая копія |

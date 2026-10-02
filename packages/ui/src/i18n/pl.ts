@@ -16,9 +16,11 @@
  *
  * **Register (`design-system/14` §14.2):** sentences are impersonal or use
  * *Proszę …* (*Proszę wybrać konto*, *Należy wpisać*, *Zapisano*); the reader
- * is never *ty*. Buttons keep the short imperative every Polish banking app
- * puts on them (*Zapisz*, *Anuluj*, *Usuń*). Debts are said from the owner's
- * side without a pronoun: *należne mi* / *do spłaty*.
+ * is never *ty*. Buttons, short actions and short placeholders keep the
+ * short command every Polish banking app puts on them (*Zapisz*, *Usuń*,
+ * *Wybierz walutę*). Debts between people are said from the owner's side
+ * without a pronoun: *należne mi* / *mój dług*; *do spłaty* belongs to a
+ * card or a loan account.
  *
  * **Counts.** `one` is 1; `few` 2–4, 22–24…; `many` 0, 5–21, 25–31…; `other`
  * is fractional (*1,5 dnia*) and never renders for a whole count. The
@@ -86,7 +88,7 @@ export const pl: Messages = {
     decline: "Odrzuć",
     formIncomplete: "Formularz jest niekompletny — proszę sprawdzić zaznaczone pola.",
     required: "Wymagane",
-    chooseOne: "Proszę wybrać jedną z opcji.",
+    chooseOne: "Proszę wybrać",
   },
   accounts: {
     noneTitle: "Brak kont",
@@ -107,7 +109,7 @@ export const pl: Messages = {
     kindBank: "Bank",
     kindCard: "Karta",
     kindLoanReceivable: "Należności",
-    kindLoanPayable: "Do spłaty",
+    kindLoanPayable: "Zobowiązania",
     kindClearing: "Konto przejściowe",
     kindInvestment: "Inwestycje",
     byKind: "Według rodzaju",
@@ -198,19 +200,19 @@ export const pl: Messages = {
     noTotalToday: "Brak sumy — kurs z tego dnia nie jest jeszcze znany",
     /** `DayRibbon`'s accessible name — the full date and what happened on it. */
     ribbonDayOne: "{{date}}, {{count}} transakcja",
-    ribbonDayMany: "{{date}}, transakcje: {{count}}",
+    ribbonDayMany: "{{date}}, liczba transakcji: {{count}}",
     ribbonDayEmpty: "{{date}}, brak transakcji",
     ribbonDayMatched: "{{date}}, są wyniki",
     nothingThatDay: "brak",
-    notYet: "jeszcze przed nami",
+    notYet: "w przyszłości",
     matchesCountOne: "{{count}} wynik",
     matchesCountMany: "wyniki: {{count}}",
     searchThisLedger: "Szukaj w transakcjach",
     backToToday: "Powrót do dzisiaj — lista pokazuje {{date}}",
     quietRunOne: "{{count}} dzień · bez transakcji",
     quietRunMany: "{{count}} dni · bez transakcji",
-    aheadRunOne: "{{count}} dzień · jeszcze przed nami",
-    aheadRunMany: "{{count}} dni · jeszcze przed nami",
+    aheadRunOne: "{{count}} dzień · w przyszłości",
+    aheadRunMany: "{{count}} dni · w przyszłości",
     noMatchesHere: "Nic tutaj nie pasuje do „{{query}}”.",
     accountEmptyTitle: "{{account}}: brak transakcji",
     accountEmptyBody:
@@ -272,7 +274,7 @@ export const pl: Messages = {
     role: "Rola",
     obligationRoleMissing: "{{name}} · rola?",
     "role.none": "Tylko udział — bez długu",
-    "role.debt": "Dług — do zwrotu",
+    "role.debt": "Dług — należne mi",
     "role.contribution": "Wpłata na konto wspólne",
     modeKeypad: "Klawiatura",
     modeVoice: "Głos",
@@ -298,9 +300,9 @@ export const pl: Messages = {
     filterEveryCurrency: "Wszystkie waluty",
     filterEveryCounterparty: "Wszyscy",
     totalCountOne: "{{count}} transakcja",
-    totalCountMany: "Transakcje: {{count}}",
+    totalCountMany: "Liczba transakcji: {{count}}",
     totalExcludingCapitalOne: "{{amount}} bez {{count}} transakcji jednorazowej",
-    totalExcludingCapitalMany: "{{amount}} bez jednorazowych: {{count}}",
+    totalExcludingCapitalMany: "{{amount}} bez transakcji jednorazowych ({{count}})",
     transferArrow: "→",
     transferTo: "Na konto {{account}}",
     transferKind: "Przelew własny",
@@ -352,7 +354,7 @@ export const pl: Messages = {
     costsYou: "Koszt",
     savesYou: "Oszczędność",
     rateProvenance: "{{source}} · {{date}}",
-    rateProvenanceCarried: "{{source}} · przeniesiony z {{date}} ({{count}} dn.)",
+    rateProvenanceCarried: "{{source}} · przeniesiony z {{date}} (dni: {{count}})",
     transferSpreadNote:
       "Różnica względem kursu referencyjnego — widoczna od razu, a nie dopiero w raporcie po kilku miesiącach.",
     transferLinkedNote: "Zapisano na obu kontach i powiązano — żadna z części nie jest przychodem",
@@ -398,7 +400,7 @@ export const pl: Messages = {
     realized: "Kurs rzeczywisty",
     referenceRate: "kurs referencyjny {{rate}} · {{source}} · {{date}}",
     referenceRateCarried:
-      "kurs referencyjny {{rate}} · {{source}} · przeniesiony z {{date}} ({{count}} dn.)",
+      "kurs referencyjny {{rate}} · {{source}} · przeniesiony z {{date}} (dni: {{count}})",
     manualRate: "Ręczny",
     from: "Z konta",
     to: "Na konto",
@@ -412,7 +414,7 @@ export const pl: Messages = {
     newCounterparty: "+ Nowa osoba lub firma",
     /** §6.6 — a debt category asks who the other side is, and cannot be saved without. */
     who: "Kto?",
-    whoPlaceholder: "Proszę wybrać osobę",
+    whoPlaceholder: "Proszę wybrać osobę lub firmę",
     whoRequired: "Proszę wskazać, kogo dotyczy ta transakcja.",
     /** S09 — a legacy row under a debt category that names nobody. */
     notCountedAsDebt: "Jeszcze nie jest liczone jako dług. Będzie, gdy zostanie wskazana osoba.",
@@ -462,7 +464,7 @@ export const pl: Messages = {
     sortedByCurrency: "wg waluty, potem kwoty",
     categorizeBatchFromTo: "{{from}} → {{to}}",
     categorizeBatchAlreadyOne: "{{count}} transakcja ma już kategorię {{category}}",
-    categorizeBatchAlreadyMany: "Mają już kategorię {{category}}: {{count}}",
+    categorizeBatchAlreadyMany: "Transakcje z kategorią {{category}}: {{count}}",
     uncategorised: "Bez kategorii",
     mixedKindSelection:
       "Zaznaczono zarówno przychody, jak i wydatki. Kategorie należy przypisywać osobno dla każdego rodzaju — kategorii wydatku nie można przypisać przychodowi.",
@@ -490,7 +492,7 @@ export const pl: Messages = {
     modeShares: "Udziały",
     modeCustom: "Ręcznie",
     you: "Ja",
-    chooseCategory: "Proszę wybrać kategorię",
+    chooseCategory: "Wybierz kategorię",
     addSomeone: "+ Dodaj osobę",
     leftToAllocate: "pozostało do podziału",
     commit: "Podziel {{amount}} {{currency}}",
@@ -517,18 +519,18 @@ export const pl: Messages = {
     notFound:
       "Tej osoby lub firmy już nie ma. Mogła zostać scalona z innym kontaktem lub usunięta.",
     settlingWith: "Rozliczenie: {{name}}",
-    existingDebtAdd: "Dodaj dług sprzed rozpoczęcia ewidencji",
-    existingDebtTitle: "Dług sprzed rozpoczęcia ewidencji: {{name}}",
+    existingDebtAdd: "Dodaj dług początkowy",
+    existingDebtTitle: "Dług początkowy: {{name}}",
     existingDebtHint:
       "Dług, który istniał, zanim rozpoczęto ewidencję. Ustala saldo początkowe i nie jest ani przychodem, ani wydatkiem — podobnie jak spłaty na jego poczet. Należy wpisać pierwotną kwotę, a nie to, co pozostało. Ponowne zapisanie w tej samej walucie zastępuje dotychczasowy dług.",
     existingDebtDirection: "Kto jest komu winien",
     existingDebtTheyOwe: "Należne mi",
-    existingDebtYouOwe: "Do spłaty",
+    existingDebtYouOwe: "Mój dług",
     existingDebtCurrency: "Waluta",
     existingDebtDate: "Data powstania długu",
     existingDebtSave: "Zapisz dług",
     existingDebtSaved: "Dług zapisany",
-    existingDebtRow: "Dług sprzed rozpoczęcia ewidencji",
+    existingDebtRow: "Dług początkowy",
     existingDebtRowMeta: "{{direction}} · od {{date}}",
     existingDebtReplaces: "Zastąpi to dotychczasowy dług w walucie {{currency}}.",
     existingDebtDelete: "Usuń ten dług",
@@ -547,7 +549,7 @@ export const pl: Messages = {
     existingDebtDateFuture: "Data długu nie może być późniejsza niż dzisiejsza.",
     discharges: "Na poczet",
     theyOweYou: "należne mi",
-    youOweThem: "do spłaty",
+    youOweThem: "mój dług",
     asOf: "stan na {{date}}",
     into: "Na konto",
     settle: "Rozlicz",
@@ -560,7 +562,7 @@ export const pl: Messages = {
 
     nothingToSettle: "Nie ma nic do rozliczenia.",
     owesYou: "należne mi",
-    youOwe: "do spłaty",
+    youOwe: "mój dług",
     settled: "rozliczone",
     kindPerson: "osoba",
     kindCompany: "firma",
@@ -569,17 +571,17 @@ export const pl: Messages = {
     settlesIn: "rozliczenia w {{currency}}",
     settlementLabel: "Waluta rozliczeń",
     noSettlementCurrency: "Bez preferencji",
-    ageingDays: "{{days}} dn. od powstania",
+    ageingDays: "Dni od powstania: {{days}}",
     groupPeople: "Osoby",
     groupCompanies: "Firmy",
     segmentOpen: "Otwarte",
     segmentEveryone: "Wszyscy",
     theyOweTotal: "należne mi",
-    youOweTotal: "do spłaty",
-    comesBack: "Do odzyskania",
-    youLent: "Pożyczone",
-    youOweLabel: "Do spłaty",
-    owedNet: "Do spłaty per saldo",
+    youOweTotal: "mój dług",
+    comesBack: "Należne mi per saldo",
+    youLent: "Pożyczone innym",
+    youOweLabel: "Mój dług",
+    owedNet: "Mój dług per saldo",
     unallocated: "Do podziału: {{amount}} {{currency}}",
     unallocatedNamed: "Do podziału: {{amount}} {{currency}} · {{enteredName}} · {{date}}",
     allocate: "Podziel",
@@ -650,7 +652,7 @@ export const pl: Messages = {
     fromHistory: "Z historii: {{enteredName}}",
     noMatchTitle: "Brak pasującej kategorii",
     noMatchBody: "Nic nie pasuje do „{{query}}”.",
-    chooseGroup: "Proszę wybrać grupę",
+    chooseGroup: "Wybierz grupę",
     showArchived: "Pokaż zarchiwizowane",
     newCategory: "Nowa kategoria",
     kind: "Rodzaj",
@@ -675,13 +677,13 @@ export const pl: Messages = {
     merge: "Scal",
     archive: "Archiwizuj",
     moveTargetLabel: "Grupa",
-    moveTargetPlaceholder: "Proszę wybrać grupę",
+    moveTargetPlaceholder: "Wybierz grupę",
     moveAcrossKindsExpense:
       "{{name}} należy do wydatków — kategorii nie można przenieść do przychodów",
     moveAcrossKindsIncome:
       "{{name}} należy do przychodów — kategorii nie można przenieść do wydatków",
     mergeWinnerLabel: "Kategoria docelowa",
-    mergeWinnerPlaceholder: "Proszę wybrać kategorię",
+    mergeWinnerPlaceholder: "Wybierz kategorię",
     mergeRowTransactions: "Transakcje",
     mergeRowLines: "Pozycje",
     mergeRowRules: "Reguły",
@@ -721,7 +723,7 @@ export const pl: Messages = {
     noLayoutBody:
       "Panel nie ma układu do wyświetlenia. Ponowna instalacja aplikacji przywróci układ domyślny.",
     noActivity: "Brak danych w tym zakresie",
-    flowRange: "Pełne miesiące: {{count}} + bieżący do dziś",
+    flowRange: "{{count}} mies. + bieżący do dziś",
   },
   shell: {
     /** The bar's first tab. S04, which is *Today* inside it and *Home* on the bar. */
@@ -799,17 +801,17 @@ export const pl: Messages = {
     spent: "wydano",
     net: "netto",
     unsettled: "Do podziału: {{amount}} {{currency}} · {{account}}",
-    unsettledMore: "Do podziału: {{amount}} {{currency}} · {{account}} · kolejne konta: {{count}}",
+    unsettledMore: "Do podziału: {{amount}}\u00a0{{currency}} · {{account}} · i jeszcze {{count}}",
     unsettledNamed: "Do podziału: {{remainder}} {{currency}} · {{enteredName}}",
     unsettledNamedMore:
-      "Do podziału: {{remainder}} {{currency}} · {{enteredName}} · kolejne: {{count}}",
+      "Do podziału: {{remainder}}\u00a0{{currency}} · {{enteredName}} · i jeszcze {{count}}",
     unsettledNamedDiffers:
       "Do podziału: {{remainder}} {{currency}} · {{enteredName}} (saldo konta: {{amount}} {{currency}})",
     unsettledNamedDiffersMore:
-      "Do podziału: {{remainder}} {{currency}} · {{enteredName}} (saldo konta: {{amount}} {{currency}}) · kolejne: {{count}}",
+      "Do podziału: {{remainder}}\u00a0{{currency}} · {{enteredName}} (saldo konta: {{amount}}\u00a0{{currency}}) · i jeszcze {{count}}",
     unsettledOpening: "Do podziału: {{remainder}} {{currency}} · saldo początkowe",
     unsettledOpeningMore:
-      "Do podziału: {{remainder}} {{currency}} · saldo początkowe · kolejne: {{count}}",
+      "Do podziału: {{remainder}}\u00a0{{currency}} · saldo początkowe · i jeszcze {{count}}",
     unsettledOpen: "Otwórz",
     balanceQueryFailed: "Nie udało się odświeżyć",
     balanceQueryFailedBody: "Widoczne są dane z ostatniego udanego wczytania.",
@@ -920,7 +922,7 @@ export const pl: Messages = {
     cancel: "Nie ten plik",
     working: "Przywracanie…",
     doneTitle: "Przywrócono",
-    doneBody: "Dane zostały przywrócone. Zanim się im zaufa, warto sprawdzić jakieś znane saldo.",
+    doneBody: "Warto sprawdzić znane saldo, zanim zacznie się korzystać z danych.",
     failed: "Nie udało się przywrócić",
     failedCost: "Nic nie zostało zapisane — dane pozostały bez zmian.",
   },
@@ -992,7 +994,7 @@ export const pl: Messages = {
     rateTableDateHeader: "Data",
     rateTableRateHeader: "{{quote}} za {{base}}",
     rateTableSourceHeader: "Źródło",
-    rateTableCarried: "Przeniesiony · {{count}} dn.",
+    rateTableCarried: "Przeniesiony · dni: {{count}}",
     rateTableCarriedUnknown: "Przeniesiony · wiek nieznany",
     rateEditorTitle: "Kurs {{quote}} za {{base}}, {{from}} … {{to}}",
     rateEditorRateLabel: "Kurs · {{quote}} za {{base}}",
@@ -1033,7 +1035,8 @@ export const pl: Messages = {
     rateSource: "Źródło kursu",
     rateSourceNone: "Brak",
     sourceNbp: "NBP",
-    sourceEcb: "ECB",
+    // Polish abbreviates the European Central Bank as EBC (Europejski Bank Centralny).
+    sourceEcb: "EBC",
     sourceNbrb: "NBRB",
     sourceNbg: "NBG",
     sourceManual: "Ręczny",
@@ -1086,7 +1089,7 @@ export const pl: Messages = {
       "Zmieniono walutę odniesienia · {{count}} dat bez kursu względem niej zostało usuniętych",
     pivotAlreadyPivot: "Ta waluta już jest walutą odniesienia.",
     pivotTarget: "Nowa waluta odniesienia",
-    pivotTargetPlaceholder: "Proszę wybrać walutę",
+    pivotTargetPlaceholder: "Wybierz walutę",
     displayShowIn: "Pokazuj kwoty w",
     anchorBlocked:
       "Zablokowane: w tej ewidencji są już transakcje, a ten telefon nie może przeliczyć ich kursów. Walutę odniesienia można zmienić tylko przed zapisaniem pierwszej transakcji.",
@@ -1102,7 +1105,7 @@ export const pl: Messages = {
     tileDays_many: "{{count}} dni",
     tileDays_other: "{{count}} dnia",
     pairChip: "{{quote}}/{{base}}",
-    pairPlaceholder: "Proszę wybrać walutę",
+    pairPlaceholder: "Wybierz walutę",
     noQuoteCurrency: "Nie ma jeszcze waluty do porównania z walutą odniesienia.",
     range30d: "30 dni",
     range90d: "90 dni",
@@ -1154,8 +1157,8 @@ export const pl: Messages = {
     "rule.neverPosted": "Jeszcze nie wystąpiła",
   },
   lock: {
-    title: "Zablokowano",
-    body: "Aby otworzyć dane, należy odblokować aplikację.",
+    title: "Aplikacja zablokowana",
+    body: "Aby zobaczyć dane, należy odblokować aplikację.",
     unlock: "Odblokuj",
     prompt: "Odblokuj Waltning",
     cancelled: "Odblokowanie zostało anulowane.",
@@ -1253,7 +1256,7 @@ export const pl: Messages = {
     "business-other": "Inne wydatki firmowe",
     "debt-giving": "Długi i darowizny",
     "lent-out": "Pożyczka udzielona",
-    "repayment-made": "Spłata długu",
+    "repayment-made": "Spłata dokonana",
     charity: "Cele charytatywne",
     uncategorized: "Bez kategorii",
   },

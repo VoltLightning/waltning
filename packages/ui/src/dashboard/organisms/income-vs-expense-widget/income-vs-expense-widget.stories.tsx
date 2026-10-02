@@ -157,7 +157,7 @@ export const WithOtherCurrencies: Story = {
 /** L6 — the longest label either shipped language can produce, laid out for once. */
 export const Localised: Story = {
   args: {
-    period: "Pełne miesiące: 5 + bieżący do dziś",
+    period: "5 mies. + bieżący do dziś",
     scope: "Moje",
     incomeLabel: "Przychody",
     expenseLabel: "Wydatki",
