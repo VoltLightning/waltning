@@ -2051,6 +2051,11 @@ describe("phone ledger controller — transaction detail writes (C5)", () => {
           `update_transaction: stale version — read ${input.version}, row is at ${row?.version}`,
         );
       }
+      if ("obligationCounterpartyId" in input.patch && !("obligationRole" in input.patch)) {
+        throw new Error(
+          "update_transaction: obligation_counterparty_id: an obligation and its role travel together (SPEC §6.6)",
+        );
+      }
       row = {
         ...row,
         ...("enteredName" in input.patch
@@ -2257,6 +2262,16 @@ describe("phone ledger controller — transaction detail writes (C5)", () => {
         messageKey: "transactions.changedElsewhere",
       },
     ]);
+  });
+
+  it("a person with no role reaches fieldErrors as a choice to make, not the executor's text", () => {
+    const { controller } = detailHarness();
+
+    const result = controller.updateTransaction(TXN, 1, {
+      obligationCounterpartyId: id<"counterparties">("00000000-0000-4000-8000-0000000000b1"),
+    });
+
+    expect("fieldErrors" in result && result.fieldErrors[0]?.messageKey).toBe("common.chooseOne");
   });
 
   it("deleteTransaction succeeds with the version it was given", () => {

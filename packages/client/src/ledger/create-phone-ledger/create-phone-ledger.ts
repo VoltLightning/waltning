@@ -2093,6 +2093,10 @@ function refusalFromThrow<Caught>(error: Caught): readonly FieldError[] {
   if (message.includes("split against an existing debt")) {
     return [{ path: "", message, messageKey: "transactions.splitPayment" }];
   }
+  // §6.6 — a person under an obligation with no role (or the reverse): a role is chosen.
+  if (message.includes("an obligation and its role travel together")) {
+    return [{ path: "", message, messageKey: "common.chooseOne" }];
+  }
   if (message.includes("transactions_opening_link_shape")) {
     return [{ path: "", message, messageKey: "transactions.openingLinkShape" }];
   }

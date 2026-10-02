@@ -341,7 +341,10 @@ export default function TransactionDetail() {
         // Leaving a debt category takes the debt away: the person picked for it
         // stays as who the entry was with, and the obligation goes back to the
         // saved row's — a person with no role is not a pair (§6.6).
-        if (debtIntentOfCategory(categoryId) === null) {
+        if (
+          debtIntentOfCategory(categoryId) === null &&
+          debtIntentOfCategory(pickedCategoryId ?? detail.categoryId) !== null
+        ) {
           setPickedCounterparty((current) =>
             current.identity === undefined ? {} : { identity: current.identity },
           );

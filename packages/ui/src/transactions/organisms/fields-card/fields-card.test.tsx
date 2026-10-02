@@ -173,6 +173,15 @@ it("carries a counterparty and the role picked for them in one patch", () => {
   });
 });
 
+it("asks for the role, on the Role row, and sends nothing, when somebody owes and no role is chosen", () => {
+  const { onSave } = renderCard({ obligationCounterpartyId: "cp-nina", counterpartyName: "Nina" });
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
+  expect(onSave).not.toHaveBeenCalled();
+  expect(screen.getByText("Choose one")).toBeDefined();
+  // The row opened, so the choice is in front of the person.
+  expect(screen.getByRole("radio", { name: "Debt — expected back" })).toBeDefined();
+});
+
 /** Clearing the person clears the role with them — a role belongs to someone. */
 it("drops the role when the counterparty is cleared", () => {
   const { onSave } = renderCard({
