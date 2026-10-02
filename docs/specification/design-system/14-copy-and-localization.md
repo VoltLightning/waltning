@@ -104,7 +104,7 @@ first is the noun and the second the short label or verb.
 | Income | income | Einnahme | доход | przychód | даход |
 | Transfer (between own accounts) | transfer | Umbuchung | перевод между своими счетами · перевод | przelew własny | перавод паміж сваімі рахункамі · перавод |
 | Category | category | Kategorie | категория | kategoria | катэгорыя |
-| Person or company | person or company · *Contacts* (the page) · *People* / *Companies* (its groups) · *With whom* (a transaction's field) | Person oder Firma · *Kontakte* · *Personen* / *Firmen* · *Mit wem* | человек или компания · *Контакты* · *Люди* / *Компании* · *С кем* | osoba lub firma · *Kontakty* · *Osoby* / *Firmy* · *Z kim* | чалавек або кампанія · *Кантакты* · *Людзі* / *Кампаніі* · *З кім* |
+| Person or company | person or company · *Contacts* (the page) · *People* / *Companies* (its groups) · *With whom* (a transaction's field) | Person oder Firma · *Kontakte* · *Personen* / *Firmen* · *Mit wem* | человек или компания · *Контакты* · *контакт* (one of them: *Контакт*, *Новый контакт*, *Изменить контакт*) · *Люди* / *Компании* · *С кем* | osoba lub firma · *Kontakty* · *Osoby* / *Firmy* · *Z kim* | чалавек або кампанія · *Кантакты* · *Людзі* / *Кампаніі* · *З кім* |
 | Shop / payee (the name the receipt or statement prints) | shop / payee | Geschäft / Empfänger | магазин / получатель | sklep / odbiorca | крама / атрымальнік |
 | Contact details (the field on a person's page — never the page's own word) | contact details | Kontaktdaten | контактные данные | dane kontaktowe | кантактныя даныя |
 | Debt | debt | Schuld | долг | dług | доўг |
