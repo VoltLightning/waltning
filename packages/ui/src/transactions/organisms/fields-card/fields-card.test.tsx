@@ -173,6 +173,15 @@ it("carries a counterparty and the role picked for them in one patch", () => {
   });
 });
 
+it("asks for the role, on the Role row, and sends nothing, when somebody owes and no role is chosen", () => {
+  const { onSave } = renderCard({ obligationCounterpartyId: "cp-nina", counterpartyName: "Nina" });
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
+  expect(onSave).not.toHaveBeenCalled();
+  expect(screen.getByText("Choose one")).toBeDefined();
+  // The row opened, so the choice is in front of the person.
+  expect(screen.getByRole("radio", { name: "Debt — expected back" })).toBeDefined();
+});
+
 /** Clearing the person clears the role with them — a role belongs to someone. */
 it("drops the role when the counterparty is cleared", () => {
   const { onSave } = renderCard({
@@ -340,6 +349,35 @@ describe("a debt category — Who? is required, the role follows the category", 
     });
   });
 
+  it("draws one row for the person — With whom is not there, and Who? is the one that opens the picker", () => {
+    const { onOpenCounterpartyPicker } = renderCard(DEBT);
+    expect(screen.queryByRole("button", { name: /^With whom/ })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Who?" }));
+    expect(onOpenCounterpartyPicker).toHaveBeenCalledWith("obligation");
+  });
+
+  it("draws With whom again on any other category", () => {
+    renderCard();
+    expect(screen.getByRole("button", { name: /^With whom/ })).toBeDefined();
+  });
+
+  it("writes the one person to both links — who it was with, and who the debt is with", () => {
+    // The screen answers the Who? pick by naming the person on both props.
+    const { onSave } = renderCard({
+      ...DEBT,
+      ...NINA,
+      counterpartyId: "cp-nina",
+      counterpartyName: "Nina",
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(onSave).toHaveBeenCalledWith({
+      categoryId: "cat-borrowed",
+      counterpartyId: "cp-nina",
+      obligationCounterpartyId: "cp-nina",
+      obligationRole: "debt",
+    });
+  });
+
   /** The saved row is a debt under a debt category; the pick moves it to a plain one. */
   function renderSavedDebt(obligationRole: "debt" | "contribution") {
     const saved: TransactionFields = {
@@ -374,6 +412,28 @@ describe("a debt category — Who? is required, the role follows the category", 
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
     expect(onSave).toHaveBeenCalledWith({
       categoryId: "cat-salary",
+      obligationCounterpartyId: null,
+      obligationRole: null,
+    });
+  });
+
+  it("keeps the person as With whom when the category stops being a debt", () => {
+    const { onSave, view, props } = renderSavedDebt("debt");
+    view.rerender(
+      <FieldsCard
+        {...props}
+        counterpartyId="cp-nina"
+        counterpartyName="Nina"
+        categoryId="cat-salary"
+        categoryName="Salary"
+        debtCategory={false}
+      />,
+    );
+    expect(screen.getByRole("button", { name: "With whom: Nina" })).toBeDefined();
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(onSave).toHaveBeenCalledWith({
+      categoryId: "cat-salary",
+      counterpartyId: "cp-nina",
       obligationCounterpartyId: null,
       obligationRole: null,
     });

@@ -1523,7 +1523,10 @@ side (`obligation_counterparty_id`): a debt with nobody on the other end is not
 a debt. Every claim below names the layer that enforces it:
 
 - **The capture surfaces** ask **Who?** where the category is picked and refuse
-  to save without it (Quick add on phone and desk, and S09) — *UI*.
+  to save without it (Quick add on phone and desk, and S09) — *UI*. It is the
+  one row for the person on these categories: the person picked is both who the
+  entry was with (`counterparty_id`) and who the debt is with, and no *With
+  whom* row is drawn beside it.
 - **A row under one of the four carries the `debt` role and a person** —
   `create_transaction`, `update_transaction` and `supersede_transaction`
   refuse otherwise with a message naming the field, and `categorize_batch`
@@ -2007,7 +2010,8 @@ link and an empty obligation pair say — so keeping it would leave a value
 inside `obligation_role` whose meaning is "not one". Its rows moved onto
 `counterparty_id` in the same migration that dropped it.
 
-The two links may equal one another; they do not have to. Debt calculations
+The two links may equal one another; they do not have to — except on a debt
+category, where they are one row and name the one person. Debt calculations
 read only the `debt`-role obligation. A named merchant must not receive a
 receivable merely because another person owes the payment back.
 

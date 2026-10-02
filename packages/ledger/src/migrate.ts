@@ -876,6 +876,31 @@ END`,
 ];
 
 /**
+ * `transactions_obligation_pair_shape` on the replica — a person on the other
+ * side of an obligation and the role it is owed in, both or neither (§6.6).
+ * Postgres states it as a CHECK; a CHECK on an existing table is a rebuild here,
+ * so it is an insert/update trigger pair, the shape `OPENING_LINK_TRIGGERS` has.
+ * The service check is `assertObligationPair`
+ * (`transactions/debt-categories.ts`); this holds when it is wrong. `0025`
+ * rebuilds nothing, so its hook creates these; **a later step that rebuilds
+ * `transactions` must re-create them**, which `migrate.test.ts` censuses.
+ */
+const OBLIGATION_PAIR_TRIGGERS: readonly string[] = [
+  `CREATE TRIGGER IF NOT EXISTS \`transactions_obligation_pair_shape_insert\`
+BEFORE INSERT ON \`transactions\`
+FOR EACH ROW WHEN (NEW.\`obligation_counterparty_id\` IS NULL) <> (NEW.\`obligation_role\` IS NULL)
+BEGIN
+	SELECT RAISE(ABORT, 'an obligation must say what it means, and a role needs a person (transactions_obligation_pair_shape)');
+END`,
+  `CREATE TRIGGER IF NOT EXISTS \`transactions_obligation_pair_shape_update\`
+BEFORE UPDATE OF \`obligation_counterparty_id\`, \`obligation_role\` ON \`transactions\`
+FOR EACH ROW WHEN (NEW.\`obligation_counterparty_id\` IS NULL) <> (NEW.\`obligation_role\` IS NULL)
+BEGIN
+	SELECT RAISE(ABORT, 'an obligation must say what it means, and a role needs a person (transactions_obligation_pair_shape)');
+END`,
+];
+
+/**
  * §7.8 — the paid pair on the replica: both or neither
  * (`transactions_paid_shape`), a currency other than the entry's own
  * (`transactions_paid_distinct`), on an income or an expense only
@@ -1104,6 +1129,11 @@ export const REPLICA_BACKFILLS: Readonly<Record<string, Backfill>> = {
     objects: (tx) => {
       for (const statement of PAID_TRIGGERS) tx.run(sql.raw(statement));
       for (const statement of PAID_CEILING_TRIGGERS) tx.run(sql.raw(statement));
+    },
+  },
+  "0025_obligation_pair": {
+    objects: (tx) => {
+      for (const statement of OBLIGATION_PAIR_TRIGGERS) tx.run(sql.raw(statement));
     },
   },
   "0021_debt_categories": {

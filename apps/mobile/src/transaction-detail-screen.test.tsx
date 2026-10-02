@@ -477,7 +477,9 @@ describe("TransactionDetail — a debt category", () => {
   const GROUP = id<"categories">("aaaaaaaa-aaaa-4aaa-8aaa-000000000010");
   const LENT = id<"categories">("aaaaaaaa-aaaa-4aaa-8aaa-000000000011");
   const GROCERIES = id<"categories">("aaaaaaaa-aaaa-4aaa-8aaa-000000000012");
+  const TRAVEL = id<"categories">("aaaaaaaa-aaaa-4aaa-8aaa-000000000013");
   const NINA = id<"counterparties">("bbbbbbbb-bbbb-4bbb-8bbb-000000000001");
+  const TOMASZ = id<"counterparties">("bbbbbbbb-bbbb-4bbb-8bbb-000000000002");
   const node = (
     nodeId: typeof LENT,
     name: string,
@@ -493,14 +495,18 @@ describe("TransactionDetail — a debt category", () => {
     externalId,
   });
 
-  function debtLedger(updateTransaction: PhoneLedgerPort["updateTransaction"]) {
+  function debtLedger(
+    updateTransaction: PhoneLedgerPort["updateTransaction"],
+    detail: Partial<NonNullable<FakeDetail>> = {},
+  ) {
     return fakeController(
-      { ...DETAIL, categoryId: GROCERIES, categoryName: "Groceries" },
+      { ...DETAIL, categoryId: GROCERIES, categoryName: "Groceries", ...detail },
       {
         updateTransaction,
         listCategories: () => [
           { id: LENT, name: "Money I handed over", kind: "expense", externalId: "seed:lent-out" },
           { id: GROCERIES, name: "Groceries", kind: "expense", externalId: "seed:groceries" },
+          { id: TRAVEL, name: "Travel", kind: "expense", externalId: "seed:travel" },
         ],
         listCategoryTree: () => [
           {
@@ -514,11 +520,22 @@ describe("TransactionDetail — a debt category", () => {
           },
           node(LENT, "Money I handed over", "seed:lent-out"),
           node(GROCERIES, "Groceries", "seed:groceries"),
+          node(TRAVEL, "Travel", "seed:travel"),
         ],
         listCounterparties: () => [
           {
             id: NINA,
             name: "Nina",
+            kind: "person" as const,
+            settlementCurrency: null,
+            contact: null,
+            note: "",
+            archived: false,
+            version: 1,
+          },
+          {
+            id: TOMASZ,
+            name: "Tomasz",
             kind: "person" as const,
             settlementCurrency: null,
             contact: null,
@@ -561,10 +578,85 @@ describe("TransactionDetail — a debt category", () => {
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
     expect(updateTransaction).toHaveBeenCalledOnce();
+    // One row, one pick: the person is who it was with and who the debt is with.
     expect(updateTransaction.mock.calls[0]?.[0].patch).toMatchObject({
       categoryId: LENT,
+      counterpartyId: NINA,
       obligationCounterpartyId: NINA,
       obligationRole: "debt",
     });
+  });
+
+  it("draws one row for the person, and With whom is back on the category you leave for", () => {
+    withLedger(<TransactionDetail />, debtLedger(vi.fn()));
+
+    expect(screen.getByRole("button", { name: /^With whom/ })).toBeDefined();
+    pickLentOut();
+    expect(screen.queryByRole("button", { name: /^With whom/ })).toBeNull();
+    expect(screen.getByRole("button", { name: "Who?" })).toBeDefined();
+  });
+
+  it("keeps the person as With whom when the held category is switched back", () => {
+    const updateTransaction = vi.fn<PhoneLedgerPort["updateTransaction"]>();
+    withLedger(<TransactionDetail />, debtLedger(updateTransaction));
+
+    pickLentOut();
+    fireEvent.click(screen.getByRole("button", { name: "Who?" }));
+    fireEvent.click(screen.getByRole("button", { name: "Nina" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Category/ }));
+    fireEvent.click(screen.getByRole("radio", { name: "Groceries" }));
+
+    expect(screen.getByRole("button", { name: "With whom: Nina" })).toBeDefined();
+
+    // The held pick is gone, so what is saved is the person as With whom and no
+    // obligation at all — a person with no role is a row that cannot sync.
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(updateTransaction).toHaveBeenCalledOnce();
+    const patch = updateTransaction.mock.calls[0]?.[0].patch;
+    expect(patch).toMatchObject({ counterpartyId: NINA });
+    expect(patch).not.toHaveProperty("obligationCounterpartyId");
+    expect(patch).not.toHaveProperty("obligationRole");
+  });
+
+  it("keeps an obligation picked by hand when one plain category is swapped for another", () => {
+    const updateTransaction = vi.fn<PhoneLedgerPort["updateTransaction"]>();
+    // A saved Lent out row: leaving it holds every later pick in the card.
+    withLedger(
+      <TransactionDetail />,
+      debtLedger(updateTransaction, {
+        categoryId: LENT,
+        categoryName: "Money I handed over",
+        obligationCounterpartyId: NINA,
+        counterpartyName: "Nina",
+        obligationRole: "debt",
+      }),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /^Category/ }));
+    fireEvent.click(screen.getByRole("radio", { name: "Groceries" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Owes/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Tomasz" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Category/ }));
+    fireEvent.click(screen.getByRole("radio", { name: "Travel" }));
+
+    // Groceries to Travel never left a debt category, so the person on Owes stays.
+    expect(screen.getByRole("button", { name: "Owes: Tomasz" })).toBeDefined();
+  });
+
+  it("does the same when the held debt is followed by a third category", () => {
+    const updateTransaction = vi.fn<PhoneLedgerPort["updateTransaction"]>();
+    withLedger(<TransactionDetail />, debtLedger(updateTransaction));
+
+    pickLentOut();
+    fireEvent.click(screen.getByRole("button", { name: "Who?" }));
+    fireEvent.click(screen.getByRole("button", { name: "Nina" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Category/ }));
+    fireEvent.click(screen.getByRole("radio", { name: "Travel" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    const patch = updateTransaction.mock.calls[0]?.[0].patch;
+    expect(patch).toMatchObject({ categoryId: TRAVEL, counterpartyId: NINA });
+    expect(patch).not.toHaveProperty("obligationCounterpartyId");
+    expect(patch).not.toHaveProperty("obligationRole");
   });
 });

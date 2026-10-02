@@ -176,6 +176,13 @@
       "when": 1790876081305,
       "tag": "0024_schema",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "6",
+      "when": 1790897854244,
+      "tag": "0025_obligation_pair",
+      "breakpoints": true
     }
   ]
 }

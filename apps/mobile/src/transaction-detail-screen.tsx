@@ -282,29 +282,6 @@ export default function TransactionDetail() {
     [accountPickerFor],
   );
 
-  const handleOpenCounterpartyPicker = useCallback(
-    (target: "identity" | "obligation") => setPickerTarget(target),
-    [],
-  );
-  const handleDismissCounterpartyPicker = useCallback(() => setPickerTarget(null), []);
-  const handlePickCounterparty = useCallback(
-    (next: string) => {
-      const picked = snapshot.counterparties.find((row) => row.id === next);
-      if (picked !== undefined && pickerTarget !== null) {
-        setPickedCounterparty((current) => ({
-          ...current,
-          [pickerTarget]: { id: picked.id, name: picked.name },
-        }));
-      }
-      setPickerTarget(null);
-    },
-    [pickerTarget, snapshot.counterparties],
-  );
-  const handleCreateCounterparty = useCallback(() => {
-    setPickerTarget(null);
-    router.push({ pathname: "/counterparty/new", params: { returnTo: "transaction" } });
-  }, []);
-
   /**
    * §6.6 — a category pick that touches a debt category (into one, or out of
    * one) is **held in the card until Save**, because the role and the person
@@ -318,11 +295,60 @@ export default function TransactionDetail() {
       debtIntentOf(snapshot.categories.find((category) => category.id === categoryId)?.externalId),
     [snapshot.categories],
   );
+  const handleOpenCounterpartyPicker = useCallback(
+    (target: "identity" | "obligation") => setPickerTarget(target),
+    [],
+  );
+  const handleDismissCounterpartyPicker = useCallback(() => setPickerTarget(null), []);
+  const handlePickCounterparty = useCallback(
+    (next: string) => {
+      const picked = snapshot.counterparties.find((row) => row.id === next);
+      if (picked !== undefined && pickerTarget !== null) {
+        const person = { id: picked.id, name: picked.name };
+        // A debt category has one row, *Who?*: its person is both who the entry
+        // was with and who the debt is with, so one pick writes both links.
+        const debt = debtIntentOfCategory(pickedCategoryId ?? detail?.categoryId ?? null) !== null;
+        setPickedCounterparty((current) =>
+          debt
+            ? { ...current, identity: person, obligation: person }
+            : { ...current, [pickerTarget]: person },
+        );
+      }
+      setPickerTarget(null);
+    },
+    [
+      debtIntentOfCategory,
+      detail?.categoryId,
+      pickedCategoryId,
+      pickerTarget,
+      snapshot.counterparties,
+    ],
+  );
+  const handleCreateCounterparty = useCallback(() => {
+    setPickerTarget(null);
+    router.push({ pathname: "/counterparty/new", params: { returnTo: "transaction" } });
+  }, []);
+
   const handlePickCategory = useCallback(
     (categoryId: string) => {
       if (!transactionId || !detail) return;
-      if (debtIntentOfCategory(categoryId) !== null || debtIntentOfCategory(detail.categoryId)) {
+      if (
+        pickedCategoryId !== null ||
+        debtIntentOfCategory(categoryId) !== null ||
+        debtIntentOfCategory(detail.categoryId) !== null
+      ) {
         setPickedCategoryId(categoryId === detail.categoryId ? null : categoryId);
+        // Leaving a debt category takes the debt away: the person picked for it
+        // stays as who the entry was with, and the obligation goes back to the
+        // saved row's — a person with no role is not a pair (§6.6).
+        if (
+          debtIntentOfCategory(categoryId) === null &&
+          debtIntentOfCategory(pickedCategoryId ?? detail.categoryId) !== null
+        ) {
+          setPickedCounterparty((current) =>
+            current.identity === undefined ? {} : { identity: current.identity },
+          );
+        }
         setCategorySheetOpen(false);
         return;
       }
@@ -335,7 +361,7 @@ export default function TransactionDetail() {
       }
       setFieldsErrors(toFormLevel(t, result.fieldErrors));
     },
-    [debtIntentOfCategory, detail, ledger, refetch, t, transactionId],
+    [debtIntentOfCategory, detail, ledger, pickedCategoryId, refetch, t, transactionId],
   );
 
   const handleCreateCategory = useCallback(

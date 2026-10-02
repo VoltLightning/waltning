@@ -216,3 +216,16 @@ export const Transfer: Story = {
     categoryName: null,
   },
 };
+
+/** §6.6 — a debt category folds *With whom* and *Owes* into the one row, *Who?*. */
+export const DebtCategory: Story = {
+  args: {
+    categoryId: "cat-lent-out",
+    categoryName: "Lent out",
+    debtCategory: true,
+    counterpartyId: "cp-nina",
+    counterpartyName: "Nina",
+    obligationCounterpartyId: "cp-nina",
+    obligationCounterpartyName: "Nina",
+  },
+};
