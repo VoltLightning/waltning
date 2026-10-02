@@ -1734,14 +1734,14 @@ describe("CategoriesScreen", () => {
       </I18nProvider>,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Działania dla Groceries" }));
+    fireEvent.click(screen.getByRole("button", { name: "Działania: Groceries" }));
     fireEvent.click(screen.getByRole("button", { name: "Przenieś" }));
     fireEvent.click(screen.getByRole("button", { name: "Grupa · Groceries" }));
     fireEvent.click(screen.getByRole("radio", { name: "Food" }));
     fireEvent.click(screen.getByRole("button", { name: "Zapisz" }));
 
     expect(
-      screen.getByText("Food należy do strony wydatków — kategoria nie może zmienić strony"),
+      screen.getByText("Food należy do wydatków — kategorii nie można przenieść do przychodów"),
     ).toBeDefined();
     expect(
       screen.queryByText("Food belongs to the expense side — a category cannot move across kinds"),
