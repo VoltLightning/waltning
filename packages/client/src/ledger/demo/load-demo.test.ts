@@ -79,8 +79,12 @@ describe("loading it", () => {
     expect(outcome.accounts).toBe(DEMO_ACCOUNTS.length);
     expect(outcome.categories).toBe(DEMO_CATEGORIES.length);
     // The patterns, plus one row per debt, the settlement that clears one,
-    // and the transfer that funds the unallocated pot (J08 §3).
-    expect(outcome.transactions).toBe(demoTransactions(TODAY, 3).length + DEMO_DEBTS.length + 2);
+    // each instalment repaid, and the transfer that funds the unallocated
+    // pot (J08 §3).
+    const instalments = DEMO_DEBTS.flatMap((debt) => debt.repaid?.daysAgo ?? []).length;
+    expect(outcome.transactions).toBe(
+      demoTransactions(TODAY, 3).length + DEMO_DEBTS.length + instalments + 2,
+    );
     expect(outcome.refused, "a healthy run refuses nothing").toBe(0);
   });
 
@@ -468,10 +472,12 @@ describe("the people money moves between", () => {
     const t = target();
     await loadDemo(t, TODAY, 1);
 
-    const settlements = vi.mocked(t.settleDebt).mock.calls;
+    const debt = DEMO_DEBTS.find((row) => row.settle === true);
+    const settlements = vi
+      .mocked(t.settleDebt)
+      .mock.calls.filter(([draft]) => draft.dischargesAmount === debt?.amount);
     expect(settlements).toHaveLength(1);
     const settlement = settlements[0]?.[0];
-    const debt = DEMO_DEBTS.find((row) => row.settle === true);
     expect(settlement?.dischargesAmount).toBe(debt?.amount);
     // `settle_debt` refuses an account holding another currency, and the
     // device's pivot is usually not the account's own.
@@ -486,6 +492,28 @@ describe("the people money moves between", () => {
       ),
       "the settlement lands after the debt, never on the same day",
     ).toBeGreaterThan(0);
+  });
+
+  /**
+   * §6.6 — a repayment is a settlement, never an ordinary row: the ledger
+   * refuses `Repayment received` through `create_transaction`, and a loader
+   * that wrote one stopped the Developer screen restarting after a load.
+   */
+  it("repays the loan through settle_debt, filed as a repayment", async () => {
+    const t = target();
+    await loadDemo(t, TODAY, 1);
+
+    const loan = DEMO_DEBTS.find((row) => row.repaid !== undefined);
+    const instalments = vi
+      .mocked(t.settleDebt)
+      .mock.calls.filter(([draft]) => draft.dischargesAmount === loan?.repaid?.amount);
+    expect(instalments).toHaveLength(loan?.repaid?.daysAgo.length ?? -1);
+    expect(
+      vi
+        .mocked(t.createTransaction)
+        .mock.calls.some(([draft]) => (draft.enteredName ?? "").includes("repayment")),
+      "no repayment written as an ordinary row",
+    ).toBe(false);
   });
 
   /** Both sides exist, so Debt has something in each of its segments. */

@@ -86,10 +86,9 @@ describe("the demo is named in the app's language", () => {
   it("names every debt note in every language", () => {
     for (const locale of ["pl", "de", "ru", "be"] as const) {
       for (const debt of DEMO_DEBTS) {
-        expect(
-          DEMO_NAMES[locale].text[debt.enteredName],
-          `${debt.enteredName} in ${locale}`,
-        ).toBeDefined();
+        for (const note of [debt.enteredName, ...(debt.repaid ? [debt.repaid.note] : [])]) {
+          expect(DEMO_NAMES[locale].text[note], `${note} in ${locale}`).toBeDefined();
+        }
       }
     }
   });
@@ -114,7 +113,7 @@ describe("the demo names no real brand", () => {
     const words: string[] = [
       ...DEMO_ACCOUNTS.map((a) => a.name),
       ...DEMO_COUNTERPARTIES.map((c) => c.name),
-      ...DEMO_DEBTS.map((d) => d.enteredName),
+      ...DEMO_DEBTS.flatMap((d) => [d.enteredName, ...(d.repaid ? [d.repaid.note] : [])]),
       ...demoTransactions(TODAY, 3).map((r) => r.enteredName),
     ];
     for (const locale of LOCALES) {
