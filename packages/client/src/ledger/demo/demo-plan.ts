@@ -531,6 +531,13 @@ export type DemoDebt = {
   daysAgo: number;
   /** Settled in full, by a settlement written straight after it. */
   settle?: boolean;
+  /**
+   * **Paid back in instalments, each one a `settle_debt`.** A repayment is
+   * never an ordinary row (§6.6): the ledger refuses a `Repayment received`
+   * written through `create_transaction`, so the instalments live on the
+   * debt they discharge rather than beside it as rows of their own.
+   */
+  repaid?: { note: string; amount: string; daysAgo: readonly number[] };
 };
 
 export const DEMO_DEBTS: readonly DemoDebt[] = [
@@ -545,19 +552,8 @@ export const DEMO_DEBTS: readonly DemoDebt[] = [
     type: "expense",
     amount: "4000.00",
     daysAgo: 160,
+    repaid: { note: "Tomasz · repayment", amount: "150.00", daysAgo: [132, 102, 72, 42, 12] },
   },
-  ...[132, 102, 72, 42, 12].map(
-    (daysAgo): DemoDebt => ({
-      counterparty: "lent",
-      role: "debt",
-      account: "bank-a",
-      category: "Repayment received",
-      enteredName: "Tomasz · repayment",
-      type: "income",
-      amount: "150.00",
-      daysAgo,
-    }),
-  ),
   // They owe you: you paid, on their behalf.
   {
     counterparty: "owing",

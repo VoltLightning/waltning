@@ -375,35 +375,54 @@ export async function loadDemo(
       continue;
     }
     outcome.transactions += 1;
-    if (debt.settle !== true) continue;
 
-    // Settled in full and dated after the debt, so S14 sorts this one into
-    // *settled* rather than leaving a third open balance.
-    //
     // **In the account's own currency, never the pivot.** `settle_debt`
     // refuses an account that holds something else — the balance being
     // discharged is in the currency it was created in, and the demo's pivot
     // is whatever the device bootstrapped, which is usually neither.
     const currency = DEMO_ACCOUNTS.find((account) => account.ref === debt.account)?.currency;
-    if (currency === undefined) {
-      outcome.refused += 1;
-      continue;
+    const settlements = [
+      // Settled in full and dated after the debt, so S14 sorts this one into
+      // *settled* rather than leaving a third open balance.
+      ...(debt.settle === true
+        ? [
+            {
+              date: addDays(accountingDate(date), 7),
+              amount: debt.amount,
+              note: "",
+              categoryId: null,
+            },
+          ]
+        : []),
+      // Instalments, each its own settlement against the same debt (§6.6).
+      ...(debt.repaid?.daysAgo ?? []).map((daysAgo) => ({
+        date: addDays(accountingDate(today), -daysAgo),
+        amount: debt.repaid?.amount ?? "0",
+        note: demoText(locale, debt.repaid?.note ?? ""),
+        categoryId: categoryIds.get("Repayment received") ?? null,
+      })),
+    ];
+    for (const settlement of settlements) {
+      if (currency === undefined) {
+        outcome.refused += 1;
+        continue;
+      }
+      const settled = accepted(() =>
+        target.settleDebt({
+          counterpartyId,
+          accountId,
+          date: settlement.date,
+          amount: settlement.amount,
+          currency,
+          dischargesCurrency: currency,
+          dischargesAmount: settlement.amount,
+          note: settlement.note,
+          categoryId: settlement.categoryId,
+        }),
+      );
+      if (settled === null) outcome.refused += 1;
+      else outcome.transactions += 1;
     }
-    const settled = accepted(() =>
-      target.settleDebt({
-        counterpartyId,
-        accountId,
-        date: addDays(accountingDate(date), 7),
-        amount: debt.amount,
-        currency,
-        dischargesCurrency: currency,
-        dischargesAmount: debt.amount,
-        note: "",
-        categoryId: null,
-      }),
-    );
-    if (settled === null) outcome.refused += 1;
-    else outcome.transactions += 1;
   }
 
   // ── the unallocated pot (J08 §3) ───────────────────────────────────────

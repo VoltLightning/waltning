@@ -54,11 +54,11 @@ describe("the demo ledger's accounts", () => {
 
     const lent = DEMO_DEBTS.filter((debt) => debt.category === "Lent out");
     expect(lent, "a loan to a person").toHaveLength(1);
-    const repaid = DEMO_DEBTS.filter(
-      (debt) => debt.counterparty === lent[0]?.counterparty && debt.type === "income",
-    );
-    expect(repaid.length, "repaid against the same debt").toBeGreaterThan(0);
-    expect(repaid.every((debt) => debt.role === "debt")).toBe(true);
+    expect(lent[0]?.repaid?.daysAgo.length, "repaid against the same debt").toBeGreaterThan(0);
+    expect(
+      lent.every((debt) => (debt.repaid?.daysAgo ?? []).every((daysAgo) => daysAgo < debt.daysAgo)),
+      "every instalment after the loan",
+    ).toBe(true);
   });
 
   /**
